@@ -55,7 +55,7 @@
     {
       "id": "software_nd",
       "group": "photography",
-      "icon": "shift",
+      "icon": "mod-software-nd-item",
       "title": "SOFTWARE ND",
       "path": ["DRIVE"],
       "summary": "Average a sequence of frames into one long-exposure JPEG.",
@@ -126,7 +126,7 @@
     {
       "id": "snap_focus",
       "group": "photography",
-      "icon": "snap",
+      "icon": "mod-snap-menu-item",
       "title": "MF SNAP FOCUS",
       "path": ["SHOOTING MENU"],
       "summary": "In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset distance.",
@@ -901,7 +901,7 @@
     {
       "id": "film_editor",
       "group": "recipes",
-      "icon": "film",
+      "icon": "mod-film-editor-item",
       "title": "FILM EDITOR",
       "path": ["SHOOTING MENU"],
       "summary": "Create and edit your own film simulations, saved as files on the memory card.",
@@ -1578,7 +1578,7 @@
     {
       "id": "disposable",
       "group": "recipes",
-      "icon": "ticket",
+      "icon": "mod-disposable-item",
       "title": "DISPOSABLE",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Shoot a roll of 24, 27 or 36 exposures before playback unlocks.",
@@ -2471,7 +2471,7 @@
         "ULTRAFINE+RAW": "Save a RAW file and an ULTRAFINE JPEG."
       },
       "related": [],
-      "changes": "Adds ULTRAFINE and ULTRAFINE+RAW JPEG quality.",
+      "changes": "New ULTRAFINE quality level preserves even more detail. Variable file size, may be as large as RAW files in rare cases.",
       "drive_mode": null,
       "credits": {
         "premiere": false,
@@ -3824,7 +3824,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "EDIT RATIO",
@@ -3833,7 +3834,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ENABLED",
@@ -3842,7 +3844,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SAVE ALL",
@@ -3851,7 +3854,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FUNCTION",
@@ -3860,7 +3864,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "POSITION",
@@ -3869,7 +3874,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "VALUE",
@@ -3878,7 +3884,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ACTION",
@@ -3887,7 +3894,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "COMPARE WITH CURRENT",
@@ -3896,7 +3904,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "COPY",
@@ -3905,7 +3914,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "EDIT CUSTOM NAME",
@@ -3914,7 +3924,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": "mod-recipes-setting-rename"
     },
     {
       "title": "EDIT/CHECK",
@@ -3923,7 +3934,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ERASE",
@@ -3932,7 +3944,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "MOVE TO HIDDEN",
@@ -3941,7 +3954,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "MOVE TO LIBRARY",
@@ -3950,7 +3964,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "PROTECT",
@@ -3959,7 +3974,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "RESET THE CHANGES",
@@ -3968,7 +3984,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SAVE THE CHANGES",
@@ -3977,7 +3994,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SELECT",
@@ -3986,7 +4004,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SELECT AS CURRENT",
@@ -3995,7 +4014,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SELECT FOR BRACKETING",
@@ -4004,7 +4024,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "1",
@@ -4013,7 +4034,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "2",
@@ -4022,7 +4044,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "3",
@@ -4031,7 +4054,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "4",
@@ -4040,7 +4064,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "5",
@@ -4049,7 +4074,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "DEVTOOLS",
@@ -4058,7 +4084,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FUJIMOD SET-UP",
@@ -4067,7 +4094,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "HDMI OUTPUT",
@@ -4076,7 +4104,8 @@
       "kind": "setting",
       "stock": false,
       "card": "hdmi_rec_behavior_item",
-      "feature": "hdmi_output"
+      "feature": "hdmi_output",
+      "icon": null
     },
     {
       "title": "MENU STYLE",
@@ -4085,7 +4114,8 @@
       "kind": "setting",
       "stock": false,
       "card": "menu_style_item",
-      "feature": "menu_theme"
+      "feature": "menu_theme",
+      "icon": null
     },
     {
       "title": "AE-L/AF-L",
@@ -4094,7 +4124,8 @@
       "kind": "setting",
       "stock": false,
       "card": "bindings_row_af_ae_lock_button",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "APERTURE RING",
@@ -4103,7 +4134,8 @@
       "kind": "page",
       "stock": false,
       "card": "bindings_row_aperture_ring",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "AUTO LEVER",
@@ -4112,7 +4144,8 @@
       "kind": "page",
       "stock": false,
       "card": "bindings_row_auto_mode_selector_lever",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "COMMAND CONTROL",
@@ -4121,7 +4154,8 @@
       "kind": "setting",
       "stock": false,
       "card": "bindings_row_command_control",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "COMMAND PRESS",
@@ -4130,7 +4164,8 @@
       "kind": "setting",
       "stock": false,
       "card": "bindings_row_command_control_press",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "CONTROL RING",
@@ -4139,7 +4174,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "DRIVE BUTTON",
@@ -4148,7 +4184,8 @@
       "kind": "setting",
       "stock": false,
       "card": "bindings_row_drive_button",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "EV DIAL",
@@ -4157,7 +4194,8 @@
       "kind": "page",
       "stock": false,
       "card": "bindings_row_exposure_compensation_dial",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "FOCUS MODE SELECTOR",
@@ -4166,7 +4204,8 @@
       "kind": "page",
       "stock": false,
       "card": "bindings_row_focus_mode_selector",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "Q BUTTON",
@@ -4175,7 +4214,8 @@
       "kind": "setting",
       "stock": false,
       "card": "bindings_row_quick_menu_button",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "SHUTTER DIAL",
@@ -4184,7 +4224,8 @@
       "kind": "page",
       "stock": false,
       "card": "bindings_row_shutter_speed_dial",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "BUG REPORT SHORTCUT",
@@ -4193,7 +4234,8 @@
       "kind": "setting",
       "stock": false,
       "card": "bug_report_shortcut",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "BUILD OVERLAY",
@@ -4202,7 +4244,8 @@
       "kind": "setting",
       "stock": false,
       "card": "build_overlay_item",
-      "feature": "build_overlay"
+      "feature": "build_overlay",
+      "icon": null
     },
     {
       "title": "OVERLAY RENDERING",
@@ -4211,7 +4254,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "USB DEBUGGING",
@@ -4220,7 +4264,8 @@
       "kind": "setting",
       "stock": false,
       "card": "usb_debug_item",
-      "feature": "usb_debugging"
+      "feature": "usb_debugging",
+      "icon": null
     },
     {
       "title": "PREVIEW POWER ON",
@@ -4229,7 +4274,8 @@
       "kind": "command",
       "stock": false,
       "card": "startup_power_on_preview_item",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SHUT DOWN STYLE",
@@ -4238,7 +4284,8 @@
       "kind": "setting",
       "stock": false,
       "card": "startup_power_off_item",
-      "feature": "power_screens"
+      "feature": "power_screens",
+      "icon": null
     },
     {
       "title": "START UP STYLE",
@@ -4247,7 +4294,8 @@
       "kind": "setting",
       "stock": false,
       "card": "startup_power_on_item",
-      "feature": "power_screens"
+      "feature": "power_screens",
+      "icon": null
     },
     {
       "title": "QUICK START",
@@ -4256,7 +4304,8 @@
       "kind": "setting",
       "stock": false,
       "card": "quick_start_item",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "DATE FOLDERS",
@@ -4265,7 +4314,8 @@
       "kind": "setting",
       "stock": false,
       "card": "date_folders_item",
-      "feature": "date_folders"
+      "feature": "date_folders",
+      "icon": null
     },
     {
       "title": "FORMAT CARD NAME",
@@ -4274,7 +4324,8 @@
       "kind": "setting",
       "stock": false,
       "card": "sd_volume_name_item",
-      "feature": "date_card_name"
+      "feature": "date_card_name",
+      "icon": null
     },
     {
       "title": "FILM ICONS",
@@ -4283,7 +4334,8 @@
       "kind": "setting",
       "stock": false,
       "card": "film_icons_item",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FRAMING GUIDELINE",
@@ -4292,7 +4344,8 @@
       "kind": "setting",
       "stock": true,
       "card": "c",
-      "feature": "framing_guideline"
+      "feature": "framing_guideline",
+      "icon": null
     },
     {
       "title": "INDICATOR OPACITY",
@@ -4301,7 +4354,8 @@
       "kind": "setting",
       "stock": false,
       "card": "opacity_indicators_item",
-      "feature": "overlay_opacity"
+      "feature": "overlay_opacity",
+      "icon": null
     },
     {
       "title": "MENU ANIMATIONS",
@@ -4310,7 +4364,8 @@
       "kind": "setting",
       "stock": false,
       "card": "menu_animations_item",
-      "feature": "menu_animations"
+      "feature": "menu_animations",
+      "icon": null
     },
     {
       "title": "MENU OPACITY",
@@ -4319,7 +4374,8 @@
       "kind": "setting",
       "stock": false,
       "card": "opacity_menu_item",
-      "feature": "overlay_opacity"
+      "feature": "overlay_opacity",
+      "icon": null
     },
     {
       "title": "AE/AF & SCENE",
@@ -4328,7 +4384,8 @@
       "kind": "page",
       "stock": false,
       "card": "ae_af_lock_item",
-      "feature": "menu_order"
+      "feature": "menu_order",
+      "icon": null
     },
     {
       "title": "CLARITY",
@@ -4337,7 +4394,8 @@
       "kind": "setting",
       "stock": false,
       "card": "clarity_item",
-      "feature": "clarity"
+      "feature": "clarity",
+      "icon": null
     },
     {
       "title": "COLOR",
@@ -4346,7 +4404,8 @@
       "kind": "setting",
       "stock": true,
       "card": "3",
-      "feature": "tone_steps"
+      "feature": "tone_steps",
+      "icon": null
     },
     {
       "title": "COLOR CHROME",
@@ -4355,7 +4414,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": "mod-color-chrome-item"
     },
     {
       "title": "CONTROL RING SETTING",
@@ -4364,7 +4424,8 @@
       "kind": "setting",
       "stock": true,
       "card": "control_ring_setting",
-      "feature": "unlocked_controls"
+      "feature": "unlocked_controls",
+      "icon": null
     },
     {
       "title": "CUSTOM SETTINGS BKT",
@@ -4373,7 +4434,8 @@
       "kind": "page",
       "stock": false,
       "card": "custom_settings_bkt_item",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "D RANGE PRIORITY",
@@ -4382,7 +4444,8 @@
       "kind": "setting",
       "stock": false,
       "card": "d_range_priority_item",
-      "feature": "d_range_priority"
+      "feature": "d_range_priority",
+      "icon": null
     },
     {
       "title": "EDIT/SAVE CUSTOM SETTING",
@@ -4391,7 +4454,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FILM EDITOR",
@@ -4400,7 +4464,8 @@
       "kind": "command",
       "stock": false,
       "card": "film_editor_item",
-      "feature": "film_editor"
+      "feature": "film_editor",
+      "icon": "mod-film-editor-item"
     },
     {
       "title": "FILM EFFECTS",
@@ -4409,7 +4474,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FILM SIMULATION",
@@ -4418,7 +4484,8 @@
       "kind": "setting",
       "stock": true,
       "card": "film_simulation",
-      "feature": "film_simulation"
+      "feature": "film_simulation",
+      "icon": null
     },
     {
       "title": "FUJIMOD",
@@ -4427,7 +4494,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "GRAIN EFFECT",
@@ -4436,7 +4504,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": "mod-film-grain-effect-item"
     },
     {
       "title": "HIGHLIGHT TONE",
@@ -4445,7 +4514,8 @@
       "kind": "setting",
       "stock": true,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "IMAGE QUALITY",
@@ -4454,7 +4524,8 @@
       "kind": "setting",
       "stock": true,
       "card": "image_quality",
-      "feature": "jpeg_max"
+      "feature": "jpeg_max",
+      "icon": null
     },
     {
       "title": "IMAGE SIZE",
@@ -4463,7 +4534,8 @@
       "kind": "setting",
       "stock": true,
       "card": "image_size",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "MF SNAP FOCUS",
@@ -4472,7 +4544,8 @@
       "kind": "setting",
       "stock": false,
       "card": "snap_menu_item",
-      "feature": "snap_focus"
+      "feature": "snap_focus",
+      "icon": "mod-snap-menu-item"
     },
     {
       "title": "NOISE REDUCTION",
@@ -4481,7 +4554,8 @@
       "kind": "setting",
       "stock": true,
       "card": "noise_reduction",
-      "feature": "noise_reduction"
+      "feature": "noise_reduction",
+      "icon": null
     },
     {
       "title": "PHOTOMETRY",
@@ -4490,7 +4564,8 @@
       "kind": "setting",
       "stock": true,
       "card": "photometry",
-      "feature": "highlight_metering"
+      "feature": "highlight_metering",
+      "icon": null
     },
     {
       "title": "SHADOW TONE",
@@ -4499,7 +4574,8 @@
       "kind": "setting",
       "stock": true,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SHAPE & ASPECT",
@@ -4508,7 +4584,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "TONE CURVE",
@@ -4517,7 +4594,8 @@
       "kind": "command",
       "stock": false,
       "card": "tone_curve_item",
-      "feature": "tone_curve"
+      "feature": "tone_curve",
+      "icon": null
     },
     {
       "title": "AE/AF-LOCK BUTTON",
@@ -4526,7 +4604,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": "menu_order"
+      "feature": "menu_order",
+      "icon": null
     },
     {
       "title": "AE/AF-LOCK MODE",
@@ -4535,7 +4614,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": "menu_order"
+      "feature": "menu_order",
+      "icon": null
     },
     {
       "title": "SCENE POSITION",
@@ -4544,7 +4624,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": "menu_order"
+      "feature": "menu_order",
+      "icon": null
     },
     {
       "title": "AF MISS",
@@ -4553,7 +4634,8 @@
       "kind": "setting",
       "stock": false,
       "card": "af_miss_item",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "AF RANGE",
@@ -4562,7 +4644,8 @@
       "kind": "setting",
       "stock": false,
       "card": "af_range_item",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "COLOR CHROME EFFECT",
@@ -4571,7 +4654,8 @@
       "kind": "setting",
       "stock": false,
       "card": "color_chrome_effect_item",
-      "feature": "color_chrome"
+      "feature": "color_chrome",
+      "icon": "mod-color-chrome-effect-item"
     },
     {
       "title": "COLOR CHROME FX BLUE",
@@ -4580,7 +4664,8 @@
       "kind": "setting",
       "stock": false,
       "card": "color_chrome_blue_item",
-      "feature": "color_chrome"
+      "feature": "color_chrome",
+      "icon": "mod-color-chrome-blue-item"
     },
     {
       "title": "1",
@@ -4589,7 +4674,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "2",
@@ -4598,7 +4684,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "3",
@@ -4607,7 +4694,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "4",
@@ -4616,7 +4704,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "5",
@@ -4625,7 +4714,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ANY COLOR",
@@ -4634,7 +4724,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ANY MONOCHROME",
@@ -4643,7 +4734,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "AUTO-UPDATE CURRENT",
@@ -4652,7 +4744,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "BY AUTHOR",
@@ -4661,7 +4754,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "BY FILM SIMULATION",
@@ -4670,7 +4764,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "BY NAME",
@@ -4679,7 +4774,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "CREATE NEW",
@@ -4688,7 +4784,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "CURRENT",
@@ -4697,7 +4794,8 @@
       "kind": "heading",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "CURRENT SETTINGS",
@@ -4706,7 +4804,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ERASE HIDDEN",
@@ -4715,7 +4814,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FAVORITES",
@@ -4724,7 +4824,8 @@
       "kind": "heading",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "HIDDEN",
@@ -4733,7 +4834,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": "mod-recipes-root-hidden"
     },
     {
       "title": "LIBRARY",
@@ -4742,7 +4844,8 @@
       "kind": "heading",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "MY RECIPES",
@@ -4751,7 +4854,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "NONE",
@@ -4760,7 +4864,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SAVE CURRENT AS NEW",
@@ -4769,7 +4874,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "UNSELECT",
@@ -4778,7 +4884,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "USES CUSTOM FILM",
@@ -4787,7 +4894,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": "mod-recipes-root-uses-custom"
     },
     {
       "title": "DATE STAMP",
@@ -4796,7 +4904,8 @@
       "kind": "page",
       "stock": false,
       "card": "date_stamp_item",
-      "feature": "date_stamp"
+      "feature": "date_stamp",
+      "icon": null
     },
     {
       "title": "FILM BORDERS",
@@ -4805,7 +4914,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "HALATION",
@@ -4814,7 +4924,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": "mod-halation-item"
     },
     {
       "title": "LIGHT LEAKS",
@@ -4823,7 +4934,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "NEGATIVE",
@@ -4832,7 +4944,8 @@
       "kind": "setting",
       "stock": false,
       "card": "negative_item",
-      "feature": "film_borders"
+      "feature": "film_borders",
+      "icon": null
     },
     {
       "title": "CORNER",
@@ -4841,7 +4954,8 @@
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_corner_item",
-      "feature": "date_stamp"
+      "feature": "date_stamp",
+      "icon": null
     },
     {
       "title": "FORMAT",
@@ -4850,7 +4964,8 @@
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_format_item",
-      "feature": "date_stamp"
+      "feature": "date_stamp",
+      "icon": null
     },
     {
       "title": "STAMP",
@@ -4859,7 +4974,8 @@
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_on_item",
-      "feature": "date_stamp"
+      "feature": "date_stamp",
+      "icon": null
     },
     {
       "title": "STYLE",
@@ -4868,7 +4984,8 @@
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_style_item",
-      "feature": "date_stamp"
+      "feature": "date_stamp",
+      "icon": null
     },
     {
       "title": "BORDERS",
@@ -4877,7 +4994,8 @@
       "kind": "setting",
       "stock": false,
       "card": "borders_enabled_item",
-      "feature": "film_borders"
+      "feature": "film_borders",
+      "icon": null
     },
     {
       "title": "STYLE",
@@ -4886,7 +5004,8 @@
       "kind": "setting",
       "stock": false,
       "card": "borders_style_item",
-      "feature": "film_borders"
+      "feature": "film_borders",
+      "icon": null
     },
     {
       "title": "COLOR",
@@ -4895,7 +5014,8 @@
       "kind": "setting",
       "stock": false,
       "card": "halation_color_item",
-      "feature": "halation"
+      "feature": "halation",
+      "icon": null
     },
     {
       "title": "STRENGTH",
@@ -4904,7 +5024,8 @@
       "kind": "setting",
       "stock": false,
       "card": "halation_strength_item",
-      "feature": "halation"
+      "feature": "halation",
+      "icon": null
     },
     {
       "title": "COLOR",
@@ -4913,7 +5034,8 @@
       "kind": "setting",
       "stock": false,
       "card": "light_leaks_color_item",
-      "feature": "light_leaks"
+      "feature": "light_leaks",
+      "icon": null
     },
     {
       "title": "EXPIRED",
@@ -4922,7 +5044,8 @@
       "kind": "setting",
       "stock": false,
       "card": "light_leaks_expired_item",
-      "feature": "light_leaks"
+      "feature": "light_leaks",
+      "icon": null
     },
     {
       "title": "LEAKS",
@@ -4931,7 +5054,8 @@
       "kind": "setting",
       "stock": false,
       "card": "light_leaks_level_item",
-      "feature": "light_leaks"
+      "feature": "light_leaks",
+      "icon": null
     },
     {
       "title": "FILM 1",
@@ -4940,7 +5064,8 @@
       "kind": "setting",
       "stock": true,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FILM 2",
@@ -4949,7 +5074,8 @@
       "kind": "setting",
       "stock": true,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "FILM 3",
@@ -4958,7 +5084,8 @@
       "kind": "setting",
       "stock": true,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "DISPOSABLE",
@@ -4967,7 +5094,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": "disposable"
+      "feature": "disposable",
+      "icon": "mod-disposable-item"
     },
     {
       "title": "HIDE FILMS",
@@ -4976,7 +5104,8 @@
       "kind": "page",
       "stock": false,
       "card": "hide_films_item",
-      "feature": "hide_films"
+      "feature": "hide_films",
+      "icon": null
     },
     {
       "title": "HUD LAYOUT",
@@ -4985,7 +5114,8 @@
       "kind": "setting",
       "stock": false,
       "card": "hud_layout_item",
-      "feature": "hud_layout"
+      "feature": "hud_layout",
+      "icon": null
     },
     {
       "title": "PIXEL MAPPING",
@@ -4994,7 +5124,8 @@
       "kind": "setting",
       "stock": false,
       "card": "pixel_map_item",
-      "feature": "pixel_map"
+      "feature": "pixel_map",
+      "icon": null
     },
     {
       "title": "RECIPE IN EXIF",
@@ -5003,7 +5134,8 @@
       "kind": "setting",
       "stock": false,
       "card": "recipe_exif_item",
-      "feature": "recipe_exif"
+      "feature": "recipe_exif",
+      "icon": null
     },
     {
       "title": "ZONE FOCUS",
@@ -5012,7 +5144,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": "zone_focus"
+      "feature": "zone_focus",
+      "icon": null
     },
     {
       "title": "RECIPE",
@@ -5021,7 +5154,8 @@
       "kind": "setting",
       "stock": false,
       "card": "disposable_recipe_item",
-      "feature": "disposable"
+      "feature": "disposable",
+      "icon": null
     },
     {
       "title": "ROLL",
@@ -5030,7 +5164,8 @@
       "kind": "setting",
       "stock": false,
       "card": "disposable_roll_item",
-      "feature": "disposable"
+      "feature": "disposable",
+      "icon": null
     },
     {
       "title": "START NEW ROLL",
@@ -5039,7 +5174,8 @@
       "kind": "command",
       "stock": false,
       "card": "disposable_start_item",
-      "feature": "disposable"
+      "feature": "disposable",
+      "icon": null
     },
     {
       "title": "FILM",
@@ -5048,7 +5184,8 @@
       "kind": "setting",
       "stock": false,
       "card": null,
-      "feature": "hide_films"
+      "feature": "hide_films",
+      "icon": null
     },
     {
       "title": "CIRCLE OF CONFUSION",
@@ -5057,7 +5194,8 @@
       "kind": "setting",
       "stock": false,
       "card": "zone_coc_item",
-      "feature": "zone_focus"
+      "feature": "zone_focus",
+      "icon": null
     },
     {
       "title": "SHOW IN AF",
@@ -5066,7 +5204,8 @@
       "kind": "setting",
       "stock": false,
       "card": "zone_in_af_item",
-      "feature": "zone_focus"
+      "feature": "zone_focus",
+      "icon": null
     },
     {
       "title": "UNITS",
@@ -5075,7 +5214,8 @@
       "kind": "setting",
       "stock": false,
       "card": "zone_units_item",
-      "feature": "zone_focus"
+      "feature": "zone_focus",
+      "icon": null
     },
     {
       "title": "ZONE READOUT",
@@ -5084,7 +5224,8 @@
       "kind": "setting",
       "stock": false,
       "card": "zone_readout_item",
-      "feature": "zone_focus"
+      "feature": "zone_focus",
+      "icon": null
     },
     {
       "title": "SIZE",
@@ -5093,7 +5234,8 @@
       "kind": "setting",
       "stock": false,
       "card": "film_grain_size_item",
-      "feature": "film_grain"
+      "feature": "film_grain",
+      "icon": null
     },
     {
       "title": "STRENGTH",
@@ -5102,7 +5244,8 @@
       "kind": "setting",
       "stock": false,
       "card": "film_grain_graininess_item",
-      "feature": "film_grain"
+      "feature": "film_grain",
+      "icon": null
     },
     {
       "title": "F-Log RECORDING",
@@ -5111,7 +5254,8 @@
       "kind": "setting",
       "stock": false,
       "card": "f_log_recording_item",
-      "feature": "f_log"
+      "feature": "f_log",
+      "icon": null
     },
     {
       "title": "ASPECT RATIO",
@@ -5120,7 +5264,8 @@
       "kind": "setting",
       "stock": false,
       "card": "shape_aspect_item",
-      "feature": "aspect_ratio"
+      "feature": "aspect_ratio",
+      "icon": null
     },
     {
       "title": "DESQUEEZE",
@@ -5129,7 +5274,8 @@
       "kind": "setting",
       "stock": false,
       "card": "shape_desqueeze_item",
-      "feature": "desqueeze"
+      "feature": "desqueeze",
+      "icon": null
     },
     {
       "title": "DESQUEEZE JPEG",
@@ -5138,7 +5284,8 @@
       "kind": "setting",
       "stock": false,
       "card": "shape_jpeg_item",
-      "feature": "desqueeze_jpeg"
+      "feature": "desqueeze_jpeg",
+      "icon": null
     },
     {
       "title": "EDIT ASPECT RATIOS",
@@ -5147,7 +5294,8 @@
       "kind": "page",
       "stock": false,
       "card": "shape_aspect_ratios_editor",
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "SURROUND VIEW",
@@ -5156,7 +5304,8 @@
       "kind": "setting",
       "stock": false,
       "card": "shape_surround_item",
-      "feature": "surround_view"
+      "feature": "surround_view",
+      "icon": null
     },
     {
       "title": "ADD RATIO",
@@ -5165,7 +5314,8 @@
       "kind": "command",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     },
     {
       "title": "ASPECT RATIO",
@@ -5174,7 +5324,8 @@
       "kind": "page",
       "stock": false,
       "card": null,
-      "feature": null
+      "feature": null,
+      "icon": null
     }
   ]
 }

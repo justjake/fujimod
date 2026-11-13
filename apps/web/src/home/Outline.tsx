@@ -216,7 +216,9 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
   return (
     <li class={{ heading: props.node.row?.kind === 'heading' }}>
       <div class="outline-row">
-        <Show when={feature()}>{(tile) => <FeatureIcon name={tile().icon} />}</Show>
+        <Show when={props.node.row?.icon ?? feature()?.icon}>
+          {(name) => <FeatureIcon name={name()} />}
+        </Show>
         <span class="outline-title">{props.node.title}</span>
         <Show when={switched()}>
           <span class="outline-switch">ON/OFF</span>

@@ -1,4 +1,4 @@
-// Measures every symbol in the feature icon sprite and writes the sizes that give
+// Measures every symbol in the feature icon sprite and the generated mod icon sprite, and writes the sizes that give
 // all icons the same optical size (src/ui/assets/feature-icon-metrics.generated.json).
 //
 //   node scripts/icon-metrics.ts           # regenerate
@@ -12,7 +12,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const sprite = new URL('../src/ui/assets/feature-icons.svg', import.meta.url);
+const sprites = {
+  feature: new URL('../src/ui/assets/feature-icons.svg', import.meta.url),
+  mod: new URL('../src/ui/assets/mod-icons.generated.svg', import.meta.url),
+};
 const output = new URL('../src/ui/assets/feature-icon-metrics.generated.json', import.meta.url);
 
 /** Ink coverage of a typical outline icon; fuller icons are optically heavier. */
@@ -26,7 +29,13 @@ const MAX_WIDTH = 1.556;
 type Box = [number, number, number, number];
 type Measured = { box: Box; view: Box; coverage: number };
 /** Ink box and the symbol's own viewBox (symbol units), and the optical width and height. */
-export type IconMetric = { box: Box; view: Box; width: number; height: number };
+export type IconMetric = {
+  sprite: keyof typeof sprites;
+  box: Box;
+  view: Box;
+  width: number;
+  height: number;
+};
 
 async function measure(svg: string): Promise<Record<string, Measured>> {
   const browser = await chromium.launch();
@@ -82,23 +91,25 @@ async function measure(svg: string): Promise<Record<string, Measured>> {
 
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
-function size({ box, view, coverage }: Measured): IconMetric {
+function size(sprite: IconMetric['sprite'], { box, view, coverage }: Measured): IconMetric {
   const [, , w, h] = box;
   let s = 1 / Math.sqrt(w * h);
   s *= Math.max(MIN_SOLID_SCALE, Math.min(1, 1 - SOLID_CORRECTION * (coverage - OUTLINE_COVERAGE)));
   s = Math.min(s, MAX_HEIGHT / h, MAX_WIDTH / w);
-  return { box: box.map(round) as Box, view, width: round(w * s), height: round(h * s) };
+  return { sprite, box: box.map(round) as Box, view, width: round(w * s), height: round(h * s) };
 }
 
-const measured = await measure(await readFile(sprite, 'utf8'));
-const metrics = Object.fromEntries(Object.entries(measured).map(([id, m]) => [id, size(m)]));
+const metrics: Record<string, IconMetric> = {};
+for (const [name, url] of Object.entries(sprites) as [IconMetric['sprite'], URL][])
+  for (const [id, m] of Object.entries(await measure(await readFile(url, 'utf8'))))
+    metrics[id] = size(name, m);
 // The repository formatter's layout: one object per icon, number arrays on one line.
 const text =
   '{\n' +
   Object.entries(metrics)
     .map(
       ([id, m]) =>
-        `  ${JSON.stringify(id)}: {\n` +
+        `  ${JSON.stringify(id)}: {\n    "sprite": ${JSON.stringify(m.sprite)},\n` +
         `    "box": [${m.box.join(', ')}],\n    "view": [${m.view.join(', ')}],\n` +
         `    "width": ${m.width},\n    "height": ${m.height}\n  }`,
     )

@@ -56,6 +56,8 @@ export type MenuRow = {
   stock: boolean;
   card: string | null;
   feature: string | null;
+  /** The row's own menu icon, when its mod draws one. */
+  icon: string | null;
 };
 
 export const catalog = catalogData as Catalog;
