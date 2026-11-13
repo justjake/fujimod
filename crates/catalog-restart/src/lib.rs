@@ -345,6 +345,27 @@ pub struct PowerOff {
     pub rollover_parameter: Option<u32>,
     /// The interval the power-off arms instead of a request deadline.
     pub fixed_interval: Option<AlarmInterval>,
+    /// Wake header bit the alarm boot tests before a normal boot, where the
+    /// power-off tests one.
+    pub boot_flag: Option<BootFlag>,
+}
+
+/// A byte the alarm boot tests for a normal boot. Without the bit, the wake
+/// takes a boot that never reaches USB. The restart sets the bit before the
+/// request; the power-off publishes it and the firmware clears it after the
+/// wake.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct BootFlag {
+    /// Address of the byte.
+    pub address: u64,
+    /// The single bit the restart ORs into the byte before the request.
+    pub mask: u8,
 }
 
 /// Constant alarm values a power-off writes instead of taking a deadline.
@@ -452,6 +473,14 @@ impl FirmwareRestart {
         }
         if m.power_off.alarm.seconds.is_empty() {
             return fail("alarm seconds registers are required");
+        }
+        if let Some(flag) = &m.power_off.boot_flag {
+            if m.transport.is_none() {
+                return fail("a boot flag is set only before a request");
+            }
+            if !flag.mask.is_power_of_two() {
+                return fail("a boot flag is a single bit");
+            }
         }
         if let Some(EarlyBootMechanism::Exr2PolledAlarm {
             spi_channel,

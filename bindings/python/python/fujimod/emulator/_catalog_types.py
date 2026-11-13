@@ -410,6 +410,11 @@ class BootCombination(TypedDict, total=False):
     usb: NotRequired[bool | None]
 
 
+class BootFlag(TypedDict, total=False):
+    address: Required[int]
+    mask: Required[int]
+
+
 class BootHold(TypedDict, total=False):
     id: Required[str]
     stage: NotRequired[str | None]
@@ -4199,6 +4204,7 @@ class PowerControlAssembly(TypedDict, total=False):
 
 class PowerOff(TypedDict, total=False):
     alarm: Required[AlarmRegisters]
+    boot_flag: NotRequired[BootFlag | None]
     deadline_parameter: NotRequired[int | None]
     entry: Required[int]
     fixed_interval: NotRequired[AlarmInterval | None]
