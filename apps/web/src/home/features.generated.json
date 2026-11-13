@@ -1790,21 +1790,13 @@
       "id": "menu_order",
       "group": "system",
       "icon": "controls",
-      "title": "AE/AF & SCENE",
-      "path": ["SHOOTING MENU"],
-      "summary": "Put the SHOOTING MENU rows in the X100VI order, with AE/AF & SCENE replacing three rows.",
-      "card": "ae_af_lock_item",
+      "title": "Menu Order",
+      "path": [],
+      "summary": "Put the SHOOTING MENU rows in the X100VI order.",
+      "card": null,
       "attached": false,
-      "media_cards": ["ae_af_lock_item"],
-      "controls": [
-        {
-          "title": "AE/AF & SCENE",
-          "primary": true,
-          "card": "ae_af_lock_item",
-          "choices": [],
-          "actions": ["AE/AF-LOCK MODE", "AE/AF-LOCK BUTTON", "SCENE POSITION"]
-        }
-      ],
+      "media_cards": [],
+      "controls": [],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3676,21 +3668,6 @@
       },
       "choice_credits": {}
     },
-    "ae_af_lock_item": {
-      "title": "AE/AF & SCENE",
-      "path": ["SHOOTING MENU"],
-      "summary": "One row for AE/AF-LOCK MODE, AE/AF-LOCK BUTTON and SCENE POSITION, as on the X100VI.",
-      "choices": {},
-      "related": [],
-      "changes": null,
-      "drive_mode": null,
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      },
-      "choice_credits": {}
-    },
     "pixel_map_item": {
       "title": "PIXEL MAPPING",
       "path": ["SHOOTING MENU", "FUJIMOD"],
@@ -4523,16 +4500,6 @@
       "icon": null
     },
     {
-      "title": "AE/AF & SCENE",
-      "path": ["SHOOTING MENU"],
-      "order": 87,
-      "kind": "page",
-      "stock": false,
-      "card": "ae_af_lock_item",
-      "feature": "menu_order",
-      "icon": null
-    },
-    {
       "title": "CLARITY",
       "path": ["SHOOTING MENU"],
       "order": 323,
@@ -4750,36 +4717,6 @@
       "stock": false,
       "card": "tone_curve_item",
       "feature": "tone_curve",
-      "icon": null
-    },
-    {
-      "title": "AE/AF-LOCK BUTTON",
-      "path": ["SHOOTING MENU", "AE/AF & SCENE"],
-      "order": 2,
-      "kind": "setting",
-      "stock": false,
-      "card": null,
-      "feature": "menu_order",
-      "icon": null
-    },
-    {
-      "title": "AE/AF-LOCK MODE",
-      "path": ["SHOOTING MENU", "AE/AF & SCENE"],
-      "order": 1,
-      "kind": "setting",
-      "stock": false,
-      "card": null,
-      "feature": "menu_order",
-      "icon": null
-    },
-    {
-      "title": "SCENE POSITION",
-      "path": ["SHOOTING MENU", "AE/AF & SCENE"],
-      "order": 3,
-      "kind": "setting",
-      "stock": false,
-      "card": null,
-      "feature": "menu_order",
       "icon": null
     },
     {
