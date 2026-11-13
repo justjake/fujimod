@@ -153,7 +153,7 @@ impl Device for Gpio {
             return pins.special as u64;
         }
         if let Some((p, r)) = self.address(offset) {
-            if r == 5 {
+            if r == 5 && !self.special {
                 pins.word(p) as u64
             } else {
                 pins.ports[p].registers[r] as u64
@@ -285,6 +285,8 @@ mod tests {
             assert_eq!(cx.refusal(), None, "{offset:#x}");
         }
         assert_eq!(pins.lock().unwrap().ports[3].registers[5], 0x3ff2);
+        // The bank has no pad word: +0x14 reads back what was written.
+        assert_eq!(control.read(&mut cx, 0xff90b000 + 0x14, 4), 0x3ff2);
         // The bank's data ports stay input-only: an ordinary port refuses the same store.
         let mut ports = Gpio::new(0xff907000, pins, false, Vec::new()).unwrap();
         ports.write(&mut cx, 0xff907000 + 0x14, 4, 1);
