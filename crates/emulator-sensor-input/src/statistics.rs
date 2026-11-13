@@ -194,6 +194,11 @@ pub struct Statistics {
     state: Arc<Mutex<State>>,
     base: u64,
     bank_size: usize,
+    /// Banks live in guest RAM, which owns their addresses, instead of in a
+    /// device aperture. Bodies whose boot image occupies the same SRAM need
+    /// this form: the boot code loads there, then the imaging DMA overwrites
+    /// it with statistics that the guest reads straight out of RAM.
+    ram_backed: bool,
 }
 impl Statistics {
     pub fn new(base: u64, bank_size: usize) -> Result<Self, String> {
@@ -212,7 +217,18 @@ impl Statistics {
             })),
             base,
             bank_size,
+            ram_backed: false,
         })
+    }
+    /// Statistics whose banks are guest RAM: every DMA destination is written
+    /// through the bus, so no aperture may be registered for these banks.
+    pub fn ram_backed(bank_size: usize) -> Result<Self, String> {
+        let mut statistics = Self::new(0, bank_size)?;
+        statistics.ram_backed = true;
+        Ok(statistics)
+    }
+    pub fn is_ram_backed(&self) -> bool {
+        self.ram_backed
     }
 
     pub fn complete(
@@ -234,7 +250,8 @@ impl Statistics {
         if !matches!(planes, Planes::Color) {
             bytes.truncate(0xc00);
         }
-        if destination >= self.base
+        if !self.ram_backed
+            && destination >= self.base
             && destination
                 .checked_add(bytes.len() as u64)
                 .is_some_and(|end| end <= self.base + (self.bank_size * 2) as u64)
@@ -254,6 +271,11 @@ impl Device for Statistics {
         "imaging-statistics-sram"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if self.ram_backed {
+            // The banks are guest RAM; a registered aperture would hide them.
+            cx.unmodeled();
+            return 0;
+        }
         let Some(at) = address
             .checked_sub(self.base)
             .and_then(|n| usize::try_from(n).ok())
@@ -283,6 +305,10 @@ impl Device for Statistics {
         u64::from_le_bytes(bytes)
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if self.ram_backed {
+            cx.unmodeled();
+            return;
+        }
         let Some(at) = address
             .checked_sub(self.base)
             .and_then(|n| usize::try_from(n).ok())

@@ -139,10 +139,25 @@ pub fn register_all(
         }
     }
     let io = preview::Io::default();
-    let statistics = statistics::Statistics::new(STATISTICS_BASE, STATISTICS_BANK_SIZE)?;
+    // Bodies whose boot image occupies the statistics SRAM declare `ram` on
+    // the window: the block stays guest RAM, the imaging DMA writes the banks
+    // through the bus, and the guest reads them back from memory. Registering
+    // an aperture there would hide the RAM and refuse the boot writes.
+    let ram_backed = windows
+        .iter()
+        .filter(|w| w.kind == "imaging-statistics")
+        .any(|w| w.options.get("ram").and_then(toml::Value::as_bool) == Some(true));
+    let statistics = if ram_backed {
+        statistics::Statistics::ram_backed(STATISTICS_BANK_SIZE)?
+    } else {
+        statistics::Statistics::new(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
+    };
     for w in windows.iter().filter(|w| w.kind == "imaging-statistics") {
         if w.base != STATISTICS_BASE || w.size != (STATISTICS_BANK_SIZE * 2) as u64 {
             return Err("invalid statistics SRAM window".into());
+        }
+        if ram_backed {
+            continue;
         }
         bus.register(w.base, w.size, Box::new(statistics.clone()))?;
     }

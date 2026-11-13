@@ -12,6 +12,7 @@ use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_devices::parts::read_fifo::ReadFifo;
 use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_devices::parts::sd_card::faults::{DataDirection, DataFault, DataFaultEvent};
+use fujimod_emulator_devices::parts::sdio::SdioCard;
 use fujimod_emulator_devices::storage_reads::StorageReads;
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use serde::{Deserialize, Serialize};
@@ -41,6 +42,23 @@ pub enum InitializationFault {
     /// so a host cannot adopt an identified card and must identify it again.
     RejectStandbyCmd3AndCmd8OnceAfter(u32),
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotName {
+    /// The camera's SD card slot.
+    #[default]
+    MemoryCard,
+    /// A Wi-Fi part's SDIO slot, which keeps its own checkpoint.
+    Wifi,
+}
+impl SlotName {
+    fn device_name(self) -> &'static str {
+        match self {
+            Self::MemoryCard => "sdhci-memory-card",
+            Self::Wifi => "sdhci-wifi",
+        }
+    }
+}
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -50,6 +68,9 @@ pub struct Options {
     pub clock_ticks: u64,
     pub rca: u16,
     pub ram_bytes: u64,
+    /// The device name this host registers and checkpoints under.
+    #[serde(default)]
+    pub name: SlotName,
     #[serde(default)]
     pub initialization_fault: InitializationFault,
     /// The card offers high speed (CMD6 group 1 function 1). Without it the
@@ -64,10 +85,200 @@ const MAX_DATA_FAULTS: usize = 32;
 const COMMAND_TIMEOUT_ERROR: u16 = 1;
 const DATA_CRC_ERROR: u16 = 0x20;
 const ERROR_INTERRUPT: u16 = 0x8000;
+/// Normal interrupt status: a function asserted the card interrupt. The bit
+/// does not hold a new command until the function's own interrupt is cleared.
+const CARD_INTERRUPT: u16 = 0x100;
 pub struct Wiring {
     pub card: Card,
     pub contacts: Contacts,
     pub irq: InterruptLine,
+}
+/// A device answerable in the SDHCI card slot. The host reaches either a
+/// memory SD card or an SDIO card through the same register bank, and only the
+/// memory command paths use a medium.
+pub trait CardDevice {
+    /// Diagnostic state. Binary content stays in the typed checkpoint, so this
+    /// is never a restore source unless the device says otherwise.
+    fn state(&self) -> serde_json::Value;
+    /// Rebuild the device from the value `state` recorded, or from the recorded
+    /// form the device documents.
+    fn restore(state: &serde_json::Value) -> Result<Self, String>
+    where
+        Self: Sized;
+    /// Whether the modeled part occupies the slot.
+    fn present(&self) -> bool;
+    /// Whether the card asserts the slot's interrupt.
+    fn interrupt(&self) -> bool;
+    /// The SDIO function device, when the card has one.
+    fn sdio(&mut self) -> Option<&mut dyn SdioFunction>;
+}
+/// The card side of an SDIO slot: the initialization answer, direct register
+/// access, register or block access, and the interrupt.
+pub trait SdioFunction {
+    /// The I/O OCR the card answers in its R4 response.
+    fn ocr(&self) -> u32;
+    /// The number of functions the card declares in its R4 response.
+    fn functions(&self) -> u8;
+    /// One direct register access; `write` carries the byte to store and the
+    /// returned byte is the value read back.
+    fn command(&mut self, function: u8, address: u32, write: Option<u8>) -> Result<u8, String>;
+    /// Read from one function register window.
+    fn read(
+        &mut self,
+        function: u8,
+        address: u32,
+        increment: bool,
+        out: &mut [u8],
+    ) -> Result<(), String>;
+    /// Write to one function register window.
+    fn write(
+        &mut self,
+        function: u8,
+        address: u32,
+        increment: bool,
+        bytes: &[u8],
+    ) -> Result<(), String>;
+    /// The block size one function declares.
+    fn block_size(&self, function: u8) -> Result<usize, String>;
+    /// Whether the function asserts the card's interrupt.
+    fn interrupt(&self) -> bool;
+}
+/// The device in the card slot. The memory variant keeps the memory card's
+/// recorded form unchanged for both diagnostics and checkpoints; the SDIO
+/// variant records its own shape.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CardSlotCard {
+    Memory(Card),
+    Sdio(SdioCard),
+}
+impl CardSlotCard {
+    /// Diagnostic state of the inserted card.
+    pub fn state(&self) -> serde_json::Value {
+        match self {
+            Self::Memory(card) => card.state(),
+            Self::Sdio(card) => card.state(),
+        }
+    }
+    /// Whether the modeled part occupies the slot.
+    pub fn present(&self) -> bool {
+        match self {
+            Self::Memory(card) => card.present(),
+            Self::Sdio(card) => card.present(),
+        }
+    }
+    /// Whether the card asserts the slot's interrupt.
+    pub fn interrupt(&self) -> bool {
+        match self {
+            Self::Memory(card) => card.interrupt(),
+            Self::Sdio(card) => card.interrupt(),
+        }
+    }
+    /// The SDIO function device, when the card has one.
+    pub fn sdio(&mut self) -> Option<&mut dyn SdioFunction> {
+        match self {
+            Self::Memory(_) => None,
+            Self::Sdio(card) => card.sdio(),
+        }
+    }
+    /// Rebuild a slot from a recorded state value: an SDIO shape builds an SDIO
+    /// card, any other value is the memory card's recorded JSON form, which
+    /// keeps its sector contents. `Card::state` diagnostics keep extents only
+    /// and do not restore.
+    pub fn restore(state: &serde_json::Value) -> Result<Self, String> {
+        if SdioCard::is_state(state) {
+            SdioCard::restore(state).map(Self::Sdio)
+        } else {
+            Card::restore(state).map(Self::Memory)
+        }
+    }
+    /// The memory medium. An SDIO card has none.
+    pub fn memory(&self) -> Result<&Card, String> {
+        match self {
+            Self::Memory(card) => Ok(card),
+            Self::Sdio(_) => Err("SDHCI card is not a memory medium".into()),
+        }
+    }
+    pub fn memory_mut(&mut self) -> Result<&mut Card, String> {
+        match self {
+            Self::Memory(card) => Ok(card),
+            Self::Sdio(_) => Err("SDHCI card is not a memory medium".into()),
+        }
+    }
+}
+impl CardDevice for Card {
+    fn state(&self) -> serde_json::Value {
+        Card::state(self)
+    }
+    /// The memory card's recorded JSON form, which keeps its sector contents.
+    /// The `Card::state` diagnostics keep extents only and do not restore.
+    fn restore(state: &serde_json::Value) -> Result<Self, String> {
+        let card: Self = serde_json::from_value(state.clone())
+            .map_err(|e| format!("SD memory card state: {e}"))?;
+        card.validate()?;
+        Ok(card)
+    }
+    fn present(&self) -> bool {
+        true
+    }
+    fn interrupt(&self) -> bool {
+        false
+    }
+    fn sdio(&mut self) -> Option<&mut dyn SdioFunction> {
+        None
+    }
+}
+impl CardDevice for SdioCard {
+    fn state(&self) -> serde_json::Value {
+        SdioCard::state(self)
+    }
+    fn restore(state: &serde_json::Value) -> Result<Self, String> {
+        SdioCard::restore(state)
+    }
+    fn present(&self) -> bool {
+        SdioCard::present(self)
+    }
+    fn interrupt(&self) -> bool {
+        SdioCard::interrupt(self)
+    }
+    fn sdio(&mut self) -> Option<&mut dyn SdioFunction> {
+        Some(self)
+    }
+}
+impl SdioFunction for SdioCard {
+    fn ocr(&self) -> u32 {
+        SdioCard::ocr(self)
+    }
+    fn functions(&self) -> u8 {
+        SdioCard::functions(self)
+    }
+    fn command(&mut self, function: u8, address: u32, write: Option<u8>) -> Result<u8, String> {
+        self.direct(function, address, write)
+    }
+    fn read(
+        &mut self,
+        function: u8,
+        address: u32,
+        increment: bool,
+        out: &mut [u8],
+    ) -> Result<(), String> {
+        SdioCard::read(self, function, address, increment, out)
+    }
+    fn write(
+        &mut self,
+        function: u8,
+        address: u32,
+        increment: bool,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        SdioCard::write_regs(self, function, address, increment, bytes)
+    }
+    fn block_size(&self, function: u8) -> Result<usize, String> {
+        SdioCard::block_size(self, function)
+    }
+    fn interrupt(&self) -> bool {
+        SdioCard::interrupt(self)
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum State {
@@ -87,6 +298,14 @@ enum Payload {
     },
     Read(u32),
     Write(u32),
+    /// An SDIO function register or block transfer. `address` is the card's
+    /// 17-bit SDIO address the transfer starts at.
+    Sdio {
+        function: u8,
+        address: u32,
+        increment: bool,
+        write: bool,
+    },
 }
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Transfer {
@@ -137,7 +356,7 @@ pub struct SdHost {
     // Guest media transfers since the last explicit card replacement. Host
     // inspection and contact removal do not affect this passive ledger.
     reads: StorageReads,
-    card: Card,
+    card: CardSlotCard,
     contacts: Contacts,
     irq: Option<InterruptLine>,
     regs: Registers,
@@ -162,11 +381,21 @@ pub struct SdHost {
 /// Function 15 keeps a group unchanged; an unsupported request reads 15.
 /// A switch (bit 31) selects the access mode; bus timing is not modeled.
 /// Returns the status and the group 1 selection.
-/// Bytes of one PIO block: a fixed-size status block or one sector.
+/// Bytes of one PIO block: a fixed-size status block, one sector, or the block
+/// size the SDIO command declared.
 fn pio_block(r: &Request) -> usize {
     match r.payload {
         Payload::Metadata { len, .. } => len,
+        Payload::Sdio { .. } => r.block_length,
         _ => 512,
+    }
+}
+/// The card address of one block or chunk inside an SDIO data transfer.
+fn sdio_address(address: u32, cursor: usize, increment: bool) -> u32 {
+    if increment {
+        address.wrapping_add(cursor as u32)
+    } else {
+        address
     }
 }
 fn switch_status(argument: u32, access_mode: u8) -> ([u8; 64], u8) {
@@ -210,16 +439,31 @@ impl SdHost {
             .is_none_or(|gate| gate.load(Ordering::Relaxed))
     }
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        Self::construct(options, wiring.card, wiring.contacts, Some(wiring.irq))
+        Self::construct(
+            options,
+            CardSlotCard::Memory(wiring.card),
+            wiring.contacts,
+            Some(wiring.irq),
+        )
     }
     /// An explicitly unconnected interrupt output. Polling is supported; an
     /// enabled interrupt assertion refuses rather than inventing a route.
     pub fn new_polled(options: Options, card: Card, contacts: Contacts) -> Result<Self, String> {
-        Self::construct(options, card, contacts, None)
+        Self::construct(options, CardSlotCard::Memory(card), contacts, None)
+    }
+    /// Construct a host around whichever card occupies the slot, including a
+    /// card that is not a memory medium.
+    pub fn new_slot_card(
+        options: Options,
+        card: CardSlotCard,
+        contacts: Contacts,
+        irq: InterruptLine,
+    ) -> Result<Self, String> {
+        Self::construct(options, card, contacts, Some(irq))
     }
     fn construct(
         options: Options,
-        card: Card,
+        card: CardSlotCard,
         contacts: Contacts,
         irq: Option<InterruptLine>,
     ) -> Result<Self, String> {
@@ -261,12 +505,20 @@ impl SdHost {
             cmd8_responses: 0,
         })
     }
+    /// The memory medium in the slot, for the card paths that need one.
+    fn memory(&self) -> Result<&Card, String> {
+        self.card.memory()
+    }
+    fn memory_mut(&mut self) -> Result<&mut Card, String> {
+        self.card.memory_mut()
+    }
     /// Declare a data CRC failure for later multi-block transfers.
     pub fn inject_data_fault(&mut self, fault: DataFault) -> Result<(), String> {
         if self.busy() {
             return Err("configure SD data faults while the host is idle".into());
         }
-        if fault.sector.is_some_and(|s| s >= self.card.sectors())
+        let sectors = self.memory()?.sectors();
+        if fault.sector.is_some_and(|s| s >= sectors)
             || fault.after_sectors > 0xffff
             || !(1..=0x10000).contains(&fault.occurrences)
             || self.faults.len() >= MAX_DATA_FAULTS
@@ -345,15 +597,17 @@ impl SdHost {
         self.latch_error(DATA_CRC_ERROR);
         self.finish(cx, r, 0)
     }
+    /// The memory medium in the slot. An SDIO slot has none and offers no
+    /// CardSlot capability, so this is reached only for a memory card.
     pub fn card(&self) -> &Card {
-        &self.card
+        self.memory().expect("SDIO card has no memory medium")
     }
     /// Session construction assigns an external medium's initial identity.
     pub fn initialize_revision(&mut self, revision: u64) -> Result<(), String> {
         if self.busy() {
             return Err("SD medium is busy".into());
         }
-        self.card.initialize_revision(revision);
+        self.memory_mut()?.initialize_revision(revision);
         Ok(())
     }
     /// A reset input pulse: the same effect as Software Reset For All.
@@ -372,17 +626,25 @@ impl SdHost {
         if self.busy() {
             return Err("SD medium is busy".into());
         }
-        card.supersede(self.card.revision())?;
+        card.supersede(self.memory()?.revision())?;
+        self.reads = StorageReads::default();
+        Ok(std::mem::replace(self.memory_mut()?, card))
+    }
+    /// Swap the card in the slot, memory or SDIO, and clear the read ledger.
+    pub fn replace_slot_card(&mut self, card: CardSlotCard) -> Result<CardSlotCard, String> {
+        if self.busy() {
+            return Err("SD medium is busy".into());
+        }
         self.reads = StorageReads::default();
         Ok(std::mem::replace(&mut self.card, card))
     }
     /// A new, unexecuted board reconnects its external medium without editing
     /// content or manufacturing a revision. The session checks cold ownership.
     pub fn retain_card(&mut self, card: Card) -> Result<(), String> {
-        if self.busy() || card.sectors() != self.card.sectors() {
+        if self.busy() || card.sectors() != self.memory()?.sectors() {
             return Err("retained SD medium differs or host is busy".into());
         }
-        self.card = card;
+        *self.memory_mut()? = card;
         Ok(())
     }
     pub fn readable_card(&self, revision: Option<u64>) -> Result<&Card, String> {
@@ -392,12 +654,19 @@ impl SdHost {
         if self.busy() {
             return Err("SD medium is busy".into());
         }
-        if revision.is_some_and(|r| r != self.card.revision()) {
+        let card = self.memory()?;
+        if revision.is_some_and(|r| r != card.revision()) {
             return Err("SD medium revision changed".into());
         }
-        Ok(&self.card)
+        Ok(card)
     }
-    fn signal(&self, cx: &mut Cx<'_>) -> Result<(), String> {
+    /// Drive the interrupt output the enabled status bits assert. A function
+    /// that asserts the card interrupt latches the card interrupt bit first, so
+    /// a polled host sees it in the normal status.
+    fn signal(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        if self.card.interrupt() {
+            self.regs.set(0x30, self.regs.get(0x30) | CARD_INTERRUPT);
+        }
         match self.irq {
             Some(irq) => irq.drive(cx, self.regs.asserted()),
             None if self.regs.asserted() => Err("SD interrupt output is unconnected".into()),
@@ -594,7 +863,7 @@ impl SdHost {
                     | 0x32u128 << 96
                     | 0x515u128 << 84
                     | 9u128 << 80
-                    | (self.card.sectors() as u128 / 1024 - 1) << 48
+                    | (self.memory()?.sectors() as u128 / 1024 - 1) << 48
                     | 1u128 << 46
                     | 0x7fu128 << 39
                     | 9u128 << 22
@@ -676,7 +945,7 @@ impl SdHost {
                     let count = self.regs.get(6);
                     if count == 0 { 65536 } else { count as u32 }
                 };
-                self.card.range(argument, count)?;
+                self.memory()?.range(argument, count)?;
                 request.payload = if command == 25 {
                     Payload::Write(argument)
                 } else {
@@ -714,6 +983,9 @@ impl SdHost {
         Ok(request)
     }
     fn start(&mut self, cx: &mut Cx<'_>, word: u32) -> Result<(), String> {
+        if matches!(self.card, CardSlotCard::Sdio(_)) {
+            return self.start_sdio(cx, word);
+        }
         let rom = self.options.protocol == Protocol::Rom;
         if self.busy() || self.regs.get(0x30) != 0 || self.regs.get(0x32) != 0 {
             return Err("SD command requires idle controller and cleared status".into());
@@ -805,7 +1077,8 @@ impl SdHost {
                 }
             }
             if let Payload::Write(first) = r.payload {
-                self.card.reserve_write(first, (r.quantity / 512) as u32)?;
+                self.memory()?
+                    .reserve_write(first, (r.quantity / 512) as u32)?;
             }
         }
         r.due = Some(
@@ -816,6 +1089,227 @@ impl SdHost {
         self.select_fault(&mut r)?;
         self.regs.put_word(12, word);
         self.request = Some(r);
+        Ok(())
+    }
+    /// SDIO command handling: card initialization (CMD5, CMD3, CMD7), one
+    /// direct register access (CMD52) and one register or block transfer
+    /// (CMD53) reaching the card's function. A card-side refusal reaches the
+    /// host as an unsupported command: an error response the card cannot make
+    /// is not invented.
+    fn start_sdio(&mut self, cx: &mut Cx<'_>, word: u32) -> Result<(), String> {
+        // A pending card interrupt does not hold a new command; command and
+        // data completion must be acknowledged.
+        if self.busy() || self.regs.get(0x30) & !CARD_INTERRUPT != 0 || self.regs.get(0x32) != 0 {
+            return Err("SDIO command requires idle controller and cleared status".into());
+        }
+        let clock = self.clocks.read(cx, self.options.base + 0x2c, 2);
+        if clock & 7 != 7 || self.regs.get(0x28) & 0x100 == 0 {
+            return Err("SDIO command before clock/power setup".into());
+        }
+        if !self.contacts.present() {
+            // No card answers: the controller reports a command timeout.
+            self.latch_error(COMMAND_TIMEOUT_ERROR);
+            return self.signal(cx);
+        }
+        let command = (word >> 24 & 63) as u8;
+        let data = word & 0x0020_0000 != 0;
+        let response = (word >> 16) & 3;
+        // CMD5 answers without a CRC check and CMD3, CMD7, CMD52 and CMD53
+        // check their index and CRC; only selecting the card waits for busy.
+        let checked = word & 0x0018_0000 == 0x0018_0000;
+        let well_formed = match command {
+            0 => !data && response == 0,
+            5 => !data && response == 2,
+            3 | 52 => !data && response == 2 && checked,
+            7 => !data && response == 3 && checked,
+            53 => data && response == 2 && checked,
+            _ => false,
+        };
+        if word & 0x00c0_0000 != 0 || !well_formed {
+            return Err(format!("Unsupported SDIO command word {word:#x}"));
+        }
+        let argument = self.regs.word(8);
+        let rca = u32::from(self.options.rca) << 16;
+        let mut request = Request {
+            state: self.state,
+            app: false,
+            block_length: self.regs.get(4) as usize,
+            bus_width: self.bus_width,
+            access_mode: self.access_mode,
+            response: [0; 16],
+            payload: Payload::None,
+            transfer: Transfer::Dma,
+            quantity: 0,
+            cursor: 0,
+            address: self.regs.word(0),
+            phase: Phase::Command,
+            due: None,
+            command,
+            fault: None,
+        };
+        let mut answered = 0;
+        let bad = match command {
+            0 => {
+                request.state = State::Idle;
+                argument != 0
+            }
+            5 => {
+                // R4 carries the number of functions above the I/O OCR. A
+                // zero window only queries the card; a named window
+                // initializes it, and readiness follows (SDIO Simplified
+                // Specification 3.00 5.1).
+                let window = argument & 0x00ff_ffff;
+                let card = self.card.sdio().ok_or("SDHCI slot has no SDIO function")?;
+                let ocr = card.ocr();
+                let functions = card.functions();
+                if window != 0 && window & ocr == 0 {
+                    return Err(format!(
+                        "SDIO card answers {ocr:#x}, not window {window:#x}"
+                    ));
+                }
+                answered =
+                    u32::from(functions) << 28 | ocr | if window == 0 { 0 } else { 0x8000_0000 };
+                request.state = if window == 0 {
+                    State::Idle
+                } else {
+                    State::Ready
+                };
+                !matches!(self.state, State::Idle | State::Ready)
+            }
+            3 => {
+                answered = rca;
+                request.state = State::Standby;
+                argument != 0 || self.state != State::Ready
+            }
+            7 => {
+                if argument != 0 && argument != rca {
+                    return Err(format!("SDIO CMD7 selects RCA {argument:#x}, not {rca:#x}"));
+                }
+                answered = if argument == 0 { 0x600 } else { 0x900 };
+                request.state = if argument == 0 {
+                    State::Standby
+                } else {
+                    State::Transfer
+                };
+                !matches!(self.state, State::Standby | State::Transfer)
+            }
+            52 => {
+                if self.state != State::Transfer {
+                    true
+                } else {
+                    let write = argument & 0x8000_0000 != 0;
+                    let function = (argument >> 28 & 7) as u8;
+                    let raw = argument & 0x0800_0000 != 0;
+                    let address = (argument >> 9) & 0x1ffff;
+                    let data = if write {
+                        Some((argument & 0xff) as u8)
+                    } else {
+                        None
+                    };
+                    let card = self.card.sdio().ok_or("SDHCI slot has no SDIO function")?;
+                    let value = card.command(function, address, data)?;
+                    // A read-after-write reports the byte the card holds, a
+                    // plain write reports zero, and a read reports the byte.
+                    answered = if write && !raw { 0 } else { u32::from(value) };
+                    false
+                }
+            }
+            53 => {
+                if self.state != State::Transfer {
+                    true
+                } else {
+                    let write = argument & 0x8000_0000 != 0;
+                    let function = (argument >> 28 & 7) as u8;
+                    let block = argument & 0x0800_0000 != 0;
+                    let increment = argument & 0x0400_0000 != 0;
+                    let address = (argument >> 9) & 0x1ffff;
+                    let count = match argument & 511 {
+                        0 => 512,
+                        count => count,
+                    };
+                    let dma = word & 1 != 0;
+                    if (word & 0x10 != 0) == write {
+                        return Err("SDIO transfer direction differs from its command".into());
+                    }
+                    let block_length = request.block_length;
+                    let quantity = if block {
+                        let declared = self
+                            .card
+                            .sdio()
+                            .ok_or("SDHCI slot has no SDIO function")?
+                            .block_size(function)?;
+                        if block_length != declared {
+                            return Err(format!(
+                                "SDIO block transfer uses {block_length}-byte blocks, not function {function}'s {declared}"
+                            ));
+                        }
+                        count as usize * block_length
+                    } else {
+                        if block_length != count as usize {
+                            return Err(format!(
+                                "SDIO byte transfer of {count} bytes programs {block_length}"
+                            ));
+                        }
+                        count as usize
+                    };
+                    if dma && self.regs.get(0x28) & 0x18 != 0 {
+                        return Err("SDIO ADMA mode unsupported".into());
+                    }
+                    if dma {
+                        self.physical(request.address, quantity, false)?;
+                        let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
+                        let signalled = if self.regs.get(0x38) == 0 {
+                            self.regs.get(0x34)
+                        } else {
+                            self.regs.get(0x34) & self.regs.get(0x38)
+                        };
+                        if quantity > boundary - request.address as usize % boundary
+                            && signalled & 8 == 0
+                        {
+                            return Err("SDIO SDMA boundary interrupt disabled".into());
+                        }
+                    } else if block_length == 0
+                        || block_length > 512
+                        || block_length % 4 != 0
+                        || quantity % 4 != 0
+                    {
+                        return Err(format!(
+                            "SDIO PIO transfer of {quantity} bytes in {block_length}-byte blocks is not a whole number of words"
+                        ));
+                    }
+                    request.transfer = if dma {
+                        Transfer::Dma
+                    } else if write {
+                        Transfer::PioWrite
+                    } else {
+                        Transfer::PioRead
+                    };
+                    request.payload = Payload::Sdio {
+                        function,
+                        address,
+                        increment,
+                        write,
+                    };
+                    request.quantity = quantity;
+                    false
+                }
+            }
+            _ => true,
+        };
+        if bad {
+            return Err(format!(
+                "Unsupported SDIO CMD{command} argument {argument:#x} in card state {:?}",
+                self.state
+            ));
+        }
+        request.response[..4].copy_from_slice(&answered.to_le_bytes());
+        request.due = Some(
+            cx.now()
+                .checked_add(self.options.transfer_ticks)
+                .ok_or("SDIO deadline overflow")?,
+        );
+        self.regs.put_word(12, word);
+        self.request = Some(request);
         Ok(())
     }
     fn finish(&mut self, cx: &mut Cx<'_>, r: Request, status: u16) -> Result<(), String> {
@@ -903,16 +1397,33 @@ impl SdHost {
                 self.latch_normal(1);
                 return self.signal(cx);
             }
-            if r.phase == Phase::Sector && r.transfer == Transfer::PioWrite {
-                if let Payload::Write(first) = r.payload {
-                    self.card.write_bytes(
-                        first as u64 * 512 + r.cursor as u64,
-                        &self.fifo.snapshot().0,
-                    )?;
-                }
-                r.cursor += 512;
-            }
             let block = pio_block(&r);
+            if r.phase == Phase::Sector && r.transfer == Transfer::PioWrite {
+                let bytes = self.fifo.snapshot().0;
+                match r.payload {
+                    Payload::Write(first) => self
+                        .card
+                        .memory_mut()?
+                        .write_bytes(first as u64 * 512 + r.cursor as u64, &bytes[..block])?,
+                    Payload::Sdio {
+                        function,
+                        address,
+                        increment,
+                        ..
+                    } => self
+                        .card
+                        .sdio()
+                        .ok_or("SDHCI slot has no SDIO function")?
+                        .write(
+                            function,
+                            sdio_address(address, r.cursor, increment),
+                            increment,
+                            &bytes[..block],
+                        )?,
+                    _ => {}
+                }
+                r.cursor += block;
+            }
             self.regs.set(6, ((r.quantity - r.cursor) / block) as u16);
             if r.fault == Some(r.cursor) {
                 return self.data_error(cx, r);
@@ -924,7 +1435,7 @@ impl SdHost {
                 let mut bytes = [0; 512];
                 match r.payload {
                     Payload::Read(first) => read_media(
-                        &self.card,
+                        self.card.memory()?,
                         &mut self.reads,
                         first as u64 * 512 + r.cursor as u64,
                         &mut bytes,
@@ -933,6 +1444,21 @@ impl SdHost {
                     Payload::Metadata { bytes: status, len } => {
                         bytes[..len].copy_from_slice(&status[..len])
                     }
+                    Payload::Sdio {
+                        function,
+                        address,
+                        increment,
+                        ..
+                    } => self
+                        .card
+                        .sdio()
+                        .ok_or("SDHCI slot has no SDIO function")?
+                        .read(
+                            function,
+                            sdio_address(address, r.cursor, increment),
+                            increment,
+                            &mut bytes[..block],
+                        )?,
                     _ => {}
                 }
                 self.fifo.restore(&bytes, 0)?;
@@ -967,14 +1493,14 @@ impl SdHost {
         match r.payload {
             Payload::Write(first) => {
                 cx.ram_read(physical, &mut self.scratch[..length])?;
-                self.card.write_bytes(
+                self.card.memory_mut()?.write_bytes(
                     first as u64 * 512 + r.cursor as u64,
                     &self.scratch[..length],
                 )?;
             }
             Payload::Read(first) => {
                 read_media(
-                    &self.card,
+                    self.card.memory()?,
                     &mut self.reads,
                     first as u64 * 512 + r.cursor as u64,
                     &mut self.scratch[..length],
@@ -984,12 +1510,28 @@ impl SdHost {
             Payload::Metadata { bytes, .. } => {
                 cx.ram_write(physical, &bytes[r.cursor..r.cursor + length])?
             }
+            Payload::Sdio {
+                function,
+                address,
+                increment,
+                write,
+            } => {
+                let at = sdio_address(address, r.cursor, increment);
+                let card = self.card.sdio().ok_or("SDHCI slot has no SDIO function")?;
+                if write {
+                    cx.ram_read(physical, &mut self.scratch[..length])?;
+                    card.write(function, at, increment, &self.scratch[..length])?;
+                } else {
+                    card.read(function, at, increment, &mut self.scratch[..length])?;
+                    cx.ram_write(physical, &self.scratch[..length])?;
+                }
+            }
             Payload::None => unreachable!(),
         }
         r.cursor += length;
         self.regs.set(
             6,
-            (r.quantity.div_ceil(self.block_length) - r.cursor / self.block_length) as u16,
+            (r.quantity.div_ceil(r.block_length) - r.cursor / r.block_length) as u16,
         );
         self.regs.put_word(0, r.address + r.cursor as u32);
         if r.fault == Some(r.cursor) {
@@ -1296,7 +1838,7 @@ impl SdHost {
 }
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
-    card: Card,
+    card: CardSlotCard,
     reads: StorageReads,
     contacts: u8,
     initialization_fault: InitializationFault,
@@ -1323,18 +1865,26 @@ struct Snapshot {
 }
 impl Device for SdHost {
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
-        Some(self)
+        if matches!(self.card, CardSlotCard::Memory(_)) {
+            Some(self)
+        } else {
+            None
+        }
     }
     fn card_slot_mut(
         &mut self,
     ) -> Option<&mut (dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
-        Some(self)
+        if matches!(self.card, CardSlotCard::Memory(_)) {
+            Some(self)
+        } else {
+            None
+        }
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let (fifo, fifo_position) = self.fifo.snapshot();
         #[derive(Serialize)]
         struct View<'a> {
-            card: &'a Card,
+            card: &'a CardSlotCard,
             reads: &'a StorageReads,
             contacts: u8,
             initialization_fault: InitializationFault,
@@ -1391,9 +1941,9 @@ impl Device for SdHost {
         if state.initialization_fault != self.options.initialization_fault {
             return Err("SD initialization fault policy differs".into());
         }
-        state
-            .reads
-            .validate(u64::from(state.card.sectors()) * 512)?;
+        if let CardSlotCard::Memory(card) = &state.card {
+            state.reads.validate(u64::from(card.sectors()) * 512)?;
+        }
         let mut clocks = Clocks::new(&[(self.options.base + 0x2c, self.options.clock_ticks)])?;
         clocks.restore(&state.clocks.save())?;
         self.fifo.validate(&state.fifo, state.fifo_position)
@@ -1434,6 +1984,8 @@ impl Device for SdHost {
                 Payload::Read(lba) => serde_json::json!({"kind":"read","lba":lba}),
                 Payload::Write(lba) => serde_json::json!({"kind":"write","lba":lba}),
                 Payload::Metadata { bytes, len } => serde_json::json!({"kind":"metadata","bytes":fujimod_emulator_devices::state::bytes(&bytes),"len":len}),
+                Payload::Sdio { function, address, increment, write } => serde_json::json!({
+                    "kind":"sdio","function":function,"address":address,"increment":increment,"write":write}),
             };
             serde_json::json!({"state":r.state,"app":r.app,"block_length":r.block_length,"bus_width":r.bus_width,"response":r.response,
                 "payload":payload,"transfer":r.transfer,"quantity":r.quantity,"cursor":r.cursor,"address":r.address,"phase":r.phase,
@@ -1451,7 +2003,7 @@ impl Device for SdHost {
         Ok(value)
     }
     fn name(&self) -> &'static str {
-        "sdhci-memory-card"
+        self.options.name.device_name()
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if !self.registers_enabled() {
@@ -1526,6 +2078,14 @@ impl Device for SdHost {
         if let Err(reason) = self.complete(cx) {
             cx.fail(reason);
         }
+        // A function interrupt latches the card interrupt bit whenever the
+        // host looks, which is what a level-sensitive line does.
+        if cx.refusal().is_none()
+            && self.card.interrupt()
+            && let Err(reason) = self.signal(cx)
+        {
+            cx.fail(reason);
+        }
         if cx.refusal().is_none() {
             self.publish_reads();
         }
@@ -1542,11 +2102,18 @@ impl Device for SdHost {
             .min()
     }
     fn save(&self) -> serde_json::Value {
+        let card = match &self.card {
+            CardSlotCard::Memory(card) => serde_json::json!({
+                "present":self.contacts.present(), "protected":self.contacts.protected(),
+                "sectors":card.sectors(), "revision":card.revision(),
+                "dirty_sectors":card.dirty_sectors()}),
+            CardSlotCard::Sdio(card) => serde_json::json!({
+                "present":self.contacts.present(), "protected":self.contacts.protected(),
+                "sdio":card.state()}),
+        };
         serde_json::json!({
             "reads": self.reads,
-            "card": {"present":self.contacts.present(), "protected":self.contacts.protected(),
-                "sectors":self.card.sectors(), "revision":self.card.revision(),
-                "dirty_sectors":self.card.dirty_sectors()},
+            "card": card,
             "busy":self.busy(), "response":self.response, "registers":self.regs.0.as_slice(),
             "request":self.request.as_ref().map(|r| serde_json::json!({"command":r.command,
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
@@ -1703,19 +2270,12 @@ mod tests {
     fn host(protocol: Protocol) -> SdHost {
         host_at(protocol, BASE)
     }
+    fn memory(host: &mut SdHost) -> &mut Card {
+        host.memory_mut().unwrap()
+    }
     fn host_at(protocol: Protocol, base: u64) -> SdHost {
         SdHost::new(
-            Options {
-                base,
-                protocol,
-                transfer_ticks: 10,
-                clock_ticks: 2,
-                rca: 0x1234,
-                ram_bytes: 0x10000,
-                initialization_fault: InitializationFault::None,
-                high_speed: false,
-                ram_banks: vec![],
-            },
+            options(base, protocol),
             Wiring {
                 card: Card::new(sd_card::Options {
                     sectors: 0x800000,
@@ -1727,6 +2287,356 @@ mod tests {
             },
         )
         .unwrap()
+    }
+    fn options(base: u64, protocol: Protocol) -> Options {
+        Options {
+            base,
+            protocol,
+            transfer_ticks: 10,
+            clock_ticks: 2,
+            rca: 0x1234,
+            ram_bytes: 0x10000,
+            name: SlotName::MemoryCard,
+            initialization_fault: InitializationFault::None,
+            high_speed: false,
+            ram_banks: vec![],
+        }
+    }
+    fn sdio_host_at(base: u64) -> SdHost {
+        let mut options = options(base, Protocol::Sdhc);
+        options.name = SlotName::Wifi;
+        SdHost::new_slot_card(
+            options,
+            CardSlotCard::Sdio(SdioCard::cyw43455().unwrap()),
+            Contacts::new(true, false),
+            InterruptLine::Shared(78),
+        )
+        .unwrap()
+    }
+    fn sdio_host() -> SdHost {
+        sdio_host_at(BASE)
+    }
+    fn sdio(m: &mut SdHost) -> &mut SdioCard {
+        match &mut m.card {
+            CardSlotCard::Sdio(card) => card,
+            CardSlotCard::Memory(_) => panic!("slot holds a memory card"),
+        }
+    }
+    /// Send one command and let it complete, without data.
+    fn send(m: &mut SdHost, h: &mut Ram, word: u32, argument: u32) {
+        command(m, h, word, argument);
+        due(m, h);
+    }
+    /// Initialize the card through CMD5, CMD3 and CMD7 into the Transfer state.
+    fn select(m: &mut SdHost, h: &mut Ram) {
+        send(m, h, 0x05020000, 0x0020_0000);
+        send(m, h, 0x031a0000, 0);
+        send(m, h, 0x071b0000, 0x1234_0000);
+        assert_eq!(m.state, State::Transfer);
+    }
+    /// One CMD52 argument: bit 31 writes, bits 30-28 name the function, bit 27
+    /// reads after writing, bits 25-9 the address, bits 7-0 the byte.
+    fn direct(function: u8, address: u32, write: Option<u8>, raw: bool) -> u32 {
+        let mut argument = u32::from(function) << 28 | address << 9;
+        if let Some(value) = write {
+            argument |= 0x8000_0000 | u32::from(value);
+        }
+        if raw {
+            argument |= 0x0800_0000;
+        }
+        argument
+    }
+    #[test]
+    fn a_memory_slot_checkpoint_encodes_exactly_as_the_card_did() {
+        let mut card = Card::new(sd_card::Options {
+            sectors: 0x800000,
+            max_dirty_sectors: 65536,
+        })
+        .unwrap();
+        card.write_bytes(512, &[0x42; 1024]).unwrap();
+        assert_eq!(
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("card", &card).unwrap(),
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+                "card",
+                &CardSlotCard::Memory(card.clone())
+            )
+            .unwrap()
+        );
+    }
+    #[test]
+    fn an_sdio_slot_has_no_memory_medium_and_keeps_its_own_device_name() {
+        let sdio = SdioCard::cyw43455().unwrap();
+        let mut m = sdio_host();
+        assert_eq!(m.name(), "sdhci-wifi");
+        assert_eq!(m.card.state(), sdio.state());
+        assert!(m.card_slot().is_none());
+        assert!(m.card_slot_mut().is_none());
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        select(&mut m, &mut h);
+        let saved = m.checkpoint().unwrap();
+        m.restore_checkpoint(&saved).unwrap();
+        assert_eq!(m.checkpoint().unwrap(), saved);
+        let sdio = CardSlotCard::Sdio(sdio);
+        assert_eq!(m.replace_slot_card(sdio.clone()).unwrap(), sdio);
+        assert_eq!(
+            CardSlotCard::restore(&serde_json::to_value(&sdio).unwrap()).unwrap(),
+            sdio
+        );
+        let memory = CardSlotCard::Memory(
+            Card::new(sd_card::Options {
+                sectors: 0x800000,
+                max_dirty_sectors: 65536,
+            })
+            .unwrap(),
+        );
+        assert_eq!(
+            CardSlotCard::restore(&serde_json::to_value(&memory).unwrap()).unwrap(),
+            memory
+        );
+    }
+    #[test]
+    fn sdio_initialization_answers_functions_voltage_and_selection() {
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        // A zero window only queries the card: one function, the 3.3 V window
+        // and no ready bit.
+        send(&mut m, &mut h, 0x05020000, 0);
+        assert_eq!(read(&mut m, &mut h, 16, 4), 0x1020_0000);
+        assert_eq!(m.state, State::Idle);
+        // A named window initializes the card.
+        send(&mut m, &mut h, 0x05020000, 0x0020_0000);
+        assert_eq!(read(&mut m, &mut h, 16, 4), 0x9020_0000);
+        assert_eq!(m.state, State::Ready);
+        // A window the card does not answer is not negotiated.
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        let mut cx = h.cx();
+        m.regs.put_word(8, 0x0010_0000);
+        assert!(m.start(&mut cx, 0x05020000).unwrap_err().contains("window"));
+        // The card publishes its RCA and answers only that selection.
+        send(&mut m, &mut h, 0x031a0000, 0);
+        assert_eq!(read(&mut m, &mut h, 16, 4), 0x1234_0000);
+        assert_eq!(m.state, State::Standby);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        let mut cx = h.cx();
+        m.regs.put_word(8, 0x5678_0000);
+        assert!(m.start(&mut cx, 0x071b0000).unwrap_err().contains("RCA"));
+        send(&mut m, &mut h, 0x071b0000, 0x1234_0000);
+        assert_eq!(read(&mut m, &mut h, 16, 4), 0x900);
+        assert_eq!(m.state, State::Transfer);
+        // An SDIO command before the card is selected is refused.
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        send(&mut m, &mut h, 0x05020000, 0x0020_0000);
+        send(&mut m, &mut h, 0x031a0000, 0);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        let mut cx = h.cx();
+        m.regs.put_word(8, direct(0, 0x00, None, false));
+        assert!(m.start(&mut cx, 0x341a0000).is_err());
+    }
+    #[test]
+    fn sdio_direct_access_reaches_cccr_and_function_bytes() {
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        select(&mut m, &mut h);
+        // Read the CCCR revision and the basic register that names the class.
+        send(&mut m, &mut h, 0x341a0000, direct(0, 0x00, None, false));
+        assert_eq!(read(&mut m, &mut h, 16, 4) & 0xff, 0x33);
+        send(&mut m, &mut h, 0x341a0000, direct(0, 0x100, None, false));
+        assert_eq!(read(&mut m, &mut h, 16, 4) & 0xff, 0x07);
+        // A plain write answers zero; a read-after-write answers the byte.
+        send(
+            &mut m,
+            &mut h,
+            0x341a0000,
+            direct(0, 0x04, Some(0x01), false),
+        );
+        assert_eq!(read(&mut m, &mut h, 16, 4), 0);
+        send(
+            &mut m,
+            &mut h,
+            0x341a0000,
+            direct(0, 0x04, Some(0x01), true),
+        );
+        assert_eq!(read(&mut m, &mut h, 16, 4) & 0xff, 0x01);
+        // Function one's window takes a byte at its own address.
+        send(
+            &mut m,
+            &mut h,
+            0x341a0000,
+            direct(1, 0x10004, Some(0x5a), true),
+        );
+        assert_eq!(read(&mut m, &mut h, 16, 4) & 0xff, 0x5a);
+        // The card owns its read-only bytes; a write to one is refused rather
+        // than answered with an error response the model does not make.
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        let mut cx = h.cx();
+        m.regs.put_word(8, direct(0, 0x09, Some(0), false));
+        assert!(
+            m.start(&mut cx, 0x341a0000)
+                .unwrap_err()
+                .contains("read-only")
+        );
+    }
+    #[test]
+    fn sdio_pio_byte_transfer_reaches_a_function_window() {
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        select(&mut m, &mut h);
+        // Byte mode: the block-size register carries the byte count.
+        write(&mut m, &mut h, 4, 2, 4);
+        command(
+            &mut m,
+            &mut h,
+            0x353a0000,
+            0x8000_0000 | 1 << 28 | 1 << 26 | (0x10000 << 9) | 4,
+        );
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 1, 1);
+        write(&mut m, &mut h, 0x30, 2, 1);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x10, 0x10);
+        write(&mut m, &mut h, 0x20, 4, 0x4433_2211);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 2);
+        assert_eq!(sdio(&mut m).direct(1, 0x10002, None).unwrap(), 0x33);
+        // Read the same four bytes back through the host's FIFO.
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        command(
+            &mut m,
+            &mut h,
+            0x353a0010,
+            1 << 28 | 1 << 26 | (0x10000 << 9) | 4,
+        );
+        due(&mut m, &mut h);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x20, 0x20);
+        write(&mut m, &mut h, 0x30, 2, 0x20);
+        assert_eq!(read(&mut m, &mut h, 0x20, 4), 0x4433_2211);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 2);
+        // A block transfer programs the block size the function declares.
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        let mut cx = h.cx();
+        m.regs
+            .put_word(8, 1 << 28 | 0x0800_0000 | (0x10000 << 9) | 2);
+        assert!(
+            m.start(&mut cx, 0x353a0011)
+                .unwrap_err()
+                .contains("block transfer")
+        );
+    }
+    #[test]
+    fn sdio_block_transfer_uses_sdma_during_and_across_blocks() {
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        select(&mut m, &mut h);
+        for (at, byte) in (0..1024u32).map(|at| (at, at as u8)) {
+            sdio(&mut m)
+                .write_regs(1, 0x10000 + at, true, &[byte])
+                .unwrap();
+        }
+        // Two blocks of 512 bytes from the card to RAM.
+        write(&mut m, &mut h, 0, 4, 0x1000);
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 2);
+        command(
+            &mut m,
+            &mut h,
+            0x353a0033,
+            1 << 28 | 1 << 26 | 0x0800_0000 | (0x10000 << 9) | 2,
+        );
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 2);
+        assert_eq!(&h.bytes[0x1000..0x1004], &[0, 1, 2, 3]);
+        assert_eq!(&h.bytes[0x13fc..0x1400], &[0xfc, 0xfd, 0xfe, 0xff]);
+        assert_eq!(read(&mut m, &mut h, 6, 2), 0);
+        // Two blocks back from RAM into the card.
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        h.bytes[0x2000..0x2400].fill(0xa5);
+        write(&mut m, &mut h, 0, 4, 0x2000);
+        write(&mut m, &mut h, 6, 2, 2);
+        command(
+            &mut m,
+            &mut h,
+            0x353a0023,
+            0x8000_0000 | 1 << 28 | 1 << 26 | 0x0800_0000 | (0x10000 << 9) | 2,
+        );
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 2);
+        assert_eq!(sdio(&mut m).direct(1, 0x10000, None).unwrap(), 0xa5);
+        assert_eq!(sdio(&mut m).direct(1, 0x103ff, None).unwrap(), 0xa5);
+    }
+    #[test]
+    fn sdio_card_interrupt_latches_until_the_function_releases_it() {
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        select(&mut m, &mut h);
+        write(&mut m, &mut h, 0x34, 2, 0xffff);
+        write(&mut m, &mut h, 0x38, 2, 0xffff);
+        sdio(&mut m).set_interrupt(1, true).unwrap();
+        // The CCCR master interrupt enable gates the card's line.
+        assert!(!m.card.interrupt());
+        send(
+            &mut m,
+            &mut h,
+            0x341a0000,
+            direct(0, 0x04, Some(0x01), false),
+        );
+        assert!(m.card.interrupt());
+        m.advance(&mut h.cx());
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x100, 0x100);
+        assert!(h.effects.contains(&Effect::Irq(78, true)));
+        // The pending card interrupt does not hold a new command.
+        send(&mut m, &mut h, 0x341a0000, direct(0, 0x00, None, false));
+        assert_eq!(read(&mut m, &mut h, 16, 4) & 0xff, 0x33);
+        // Acknowledging it re-latches while the function still asserts.
+        write(&mut m, &mut h, 0x30, 2, 0x100);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x100, 0x100);
+        sdio(&mut m).set_interrupt(1, false).unwrap();
+        write(&mut m, &mut h, 0x30, 2, 0x100);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x100, 0);
+    }
+    #[test]
+    fn an_sdio_request_and_its_card_survive_a_checkpoint() {
+        let mut m = sdio_host();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        select(&mut m, &mut h);
+        sdio(&mut m)
+            .write_regs(1, 0x10000, true, &[9, 8, 7, 6])
+            .unwrap();
+        write(&mut m, &mut h, 4, 2, 4);
+        command(
+            &mut m,
+            &mut h,
+            0x353a0010,
+            1 << 28 | 1 << 26 | (0x10000 << 9) | 4,
+        );
+        let saved = m.checkpoint().unwrap();
+        let mut other = sdio_host();
+        other.restore_checkpoint(&saved).unwrap();
+        assert_eq!(other.checkpoint().unwrap(), saved);
+        assert_eq!(other.fingerprint().unwrap(), m.fingerprint().unwrap());
+        let mut elsewhere = Ram::new(0x10000);
+        for (host, ram) in [(&mut m, &mut h), (&mut other, &mut elsewhere)] {
+            // The response interrupts first, then the buffer becomes ready.
+            for _ in 0..2 {
+                ram.now = host.next_deadline(ram.now).unwrap();
+                host.advance(&mut ram.cx());
+                assert_eq!(ram.cx().refusal(), None);
+            }
+            assert_eq!(read(host, ram, 0x30, 2) & 0x20, 0x20);
+            assert_eq!(read(host, ram, 0x20, 4), 0x0607_0809);
+        }
+        assert_eq!(m.checkpoint().unwrap(), other.checkpoint().unwrap());
     }
     #[test]
     fn rca_commands_ignore_reserved_bits_but_keep_card_selection() {
@@ -1879,14 +2789,14 @@ mod tests {
     fn state_distinguishes_media_with_the_same_diagnostic_summary() {
         let mut a = host(Protocol::Sdhc);
         let mut b = host(Protocol::Sdhc);
-        a.card.write_bytes(512, &[1; 512]).unwrap();
-        b.card.write_bytes(512, &[2; 512]).unwrap();
+        memory(&mut a).write_bytes(512, &[1; 512]).unwrap();
+        memory(&mut b).write_bytes(512, &[2; 512]).unwrap();
         assert_eq!(a.save(), b.save());
         assert_ne!(a.checkpoint().unwrap(), b.checkpoint().unwrap());
         let stable = a.checkpoint().unwrap();
         assert_eq!(a.checkpoint().unwrap(), stable);
         let mut bytes = [0; 512];
-        a.card.read_bytes(512, &mut bytes).unwrap();
+        memory(&mut a).read_bytes(512, &mut bytes).unwrap();
         assert_eq!(bytes, [1; 512]);
     }
     #[test]
@@ -1895,7 +2805,7 @@ mod tests {
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
         m.state = State::Transfer;
-        m.card.write_bytes(512, &[0x42; 1024]).unwrap();
+        memory(&mut m).write_bytes(512, &[0x42; 1024]).unwrap();
         write(&mut m, &mut h, 4, 2, 512);
         write(&mut m, &mut h, 6, 2, 1);
         command(&mut m, &mut h, 0x113a0010, 1);
@@ -1971,7 +2881,16 @@ mod tests {
         }
     }
     fn due(m: &mut SdHost, h: &mut Ram) {
-        h.now = m.next_deadline(h.now).unwrap();
+        let Some(deadline) = m.next_deadline(h.now) else {
+            panic!(
+                "no deadline at {} (state {:?}, status {:#x}, block size {})",
+                h.now,
+                m.state,
+                m.regs.get(0x30),
+                m.regs.get(4)
+            );
+        };
+        h.now = deadline;
         let mut cx = h.cx();
         m.advance(&mut cx);
         assert_eq!(cx.refusal(), None);
@@ -2015,7 +2934,7 @@ mod tests {
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
         m.state = State::Transfer;
-        m.card.write_bytes(0, &vec![0x5a; 1024]).unwrap();
+        memory(&mut m).write_bytes(0, &vec![0x5a; 1024]).unwrap();
         write(&mut m, &mut h, 0, 4, 0xf00);
         write(&mut m, &mut h, 4, 2, 512);
         write(&mut m, &mut h, 6, 2, 2);
@@ -2055,7 +2974,7 @@ mod tests {
         write(&mut m, &mut h, 0x36, 2, 0xffff);
         write(&mut m, &mut h, 0x3a, 2, 0xffff);
         m.state = State::Transfer;
-        m.card.write_bytes(512 * 8, &[0x5a; 1024]).unwrap();
+        memory(&mut m).write_bytes(512 * 8, &[0x5a; 1024]).unwrap();
         m.inject_data_fault(fault(DataDirection::Read, Some(9), 1))
             .unwrap();
         write(&mut m, &mut h, 0, 4, 0x1000);
@@ -2126,8 +3045,8 @@ mod tests {
         write(&mut m, &mut h, 6, 2, 2);
         command(&mut m, &mut h, 0x193a0027, 4);
         due(&mut m, &mut h);
-        assert_eq!(m.card.sector(4).unwrap(), [0x77; 512]);
-        assert_eq!(m.card.sector(5).unwrap(), [0; 512]);
+        assert_eq!(memory(&mut m).sector(4).unwrap(), [0x77; 512]);
+        assert_eq!(memory(&mut m).sector(5).unwrap(), [0; 512]);
         assert_eq!(read(&mut m, &mut h, 0x32, 2), 0x20);
         write(&mut m, &mut h, 0x32, 2, 0xffff);
         write(&mut m, &mut h, 6, 2, 1);
@@ -2164,7 +3083,7 @@ mod tests {
                 }
                 m.state = State::Transfer;
                 let bytes = (0..128u32).flat_map(u32::to_le_bytes).collect::<Vec<_>>();
-                m.card.write_bytes(0, &bytes).unwrap();
+                memory(m).write_bytes(0, &bytes).unwrap();
                 write(m, h, 4, 2, 512);
                 write(m, h, 6, 2, 1);
                 if protocol == Protocol::Rom {
@@ -2255,7 +3174,7 @@ mod tests {
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
         m.state = State::Transfer;
-        m.card.write_bytes(4 * 512, &[0x5a; 1024]).unwrap();
+        memory(&mut m).write_bytes(4 * 512, &[0x5a; 1024]).unwrap();
         // X-T20 2.11 signals command complete only (0xee01) when it writes
         // the command, then enables buffer read ready and transfer complete.
         write(&mut m, &mut h, 0x38, 2, 0xee01);
@@ -2310,9 +3229,12 @@ mod tests {
             write(&mut m, &mut h, 0x20, 4, 0x12345678);
         }
         assert_eq!(read(&mut m, &mut h, 0x30, 2) & 0x10, 0x10);
-        assert_eq!(m.card.sector(4).unwrap(), [0; 512]);
+        assert_eq!(memory(&mut m).sector(4).unwrap(), [0; 512]);
         due(&mut m, &mut h);
-        assert_eq!(&m.card.sector(4).unwrap()[..4], &[0x78, 0x56, 0x34, 0x12]);
+        assert_eq!(
+            &memory(&mut m).sector(4).unwrap()[..4],
+            &[0x78, 0x56, 0x34, 0x12]
+        );
         write(&mut m, &mut h, 0x30, 2, 0xffff);
         write(&mut m, &mut h, 6, 2, 1);
         command(&mut m, &mut h, 0x123a0036, 4);
@@ -2356,7 +3278,7 @@ mod tests {
             due(&mut m, &mut h);
         }
         assert_eq!(m.state, State::Transfer);
-        m.card.write_bytes(0, &[0x42; 512]).unwrap();
+        memory(&mut m).write_bytes(0, &[0x42; 512]).unwrap();
         write(&mut m, &mut h, 0x30, 2, 0xffff);
         write(&mut m, &mut h, 4, 2, 512);
         write(&mut m, &mut h, 6, 2, 1);
@@ -2373,7 +3295,7 @@ mod tests {
         command(&mut m, &mut h, 0, 0);
         due(&mut m, &mut h);
         assert_eq!(m.state, State::Idle);
-        assert_eq!(m.card.sector(0).unwrap(), [0x42; 512]);
+        assert_eq!(memory(&mut m).sector(0).unwrap(), [0x42; 512]);
     }
     #[test]
     fn busy_select_ends_with_enabled_transfer_complete() {
@@ -2395,7 +3317,7 @@ mod tests {
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
         m.state = State::Transfer;
-        m.card.write_bytes(0, &[0x7b; 512]).unwrap();
+        memory(&mut m).write_bytes(0, &[0x7b; 512]).unwrap();
         write(&mut m, &mut h, 4, 2, 512);
         write(&mut m, &mut h, 6, 2, 1);
         write(&mut m, &mut h, 12, 2, 0x10);
