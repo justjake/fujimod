@@ -1,0 +1,33 @@
+.install-steps a,
+.recovery-steps a {
+  color: #64d2ff;
+  text-underline-offset: 2px;
+}
+.install-combo {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 18px;
+  font-size: 13px;
+}
+.install-format {
+  margin-top: 4px;
+  font-size: 15px;
+}
+.install-format summary {
+  cursor: pointer;
+  color: #64d2ff;
+}
+.install-format[open] summary {
+  margin-bottom: 12px;
+}
+.install-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.install-error {
+  color: #ff6961;
+}

@@ -19,27 +19,6 @@
 .sd-contents[open] > summary {
   margin-bottom: 22px;
 }
-.sd-boot-steps {
-  margin: 0 0 18px;
-  text-align: left;
-  padding-left: 20px;
-  color: #aeaeb2;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.sd-boot-steps li + li {
-  margin-top: 8px;
-}
-.sd-boot-steps a {
-  color: #0a84ff;
-}
-.sd-boot-instructions {
-  display: grid;
-  gap: 8px;
-  margin: 10px 0 4px;
-  font-size: 12px;
-  color: #f2f2f7;
-}
 .sd-tree .sd-twist {
   display: grid;
   place-items: center;
@@ -269,18 +248,16 @@
 }
 
 .sd-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
   margin-top: 36px;
-  padding: 20px 22px 22px;
+  padding: 24px 22px;
   border-radius: 16px;
   background: rgb(255 255 255 / 5%);
   border: 1px solid rgb(255 255 255 / 9%);
 }
-.sd-actions .sd-boot-steps {
-  align-self: stretch;
+.sd-download-step {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
 }
 .sd-download-button {
   display: inline-flex;

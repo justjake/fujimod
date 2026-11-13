@@ -1,8 +1,6 @@
-import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
-import { catalog as reference, initialize, type PhysicalControls } from 'fujimod';
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
-import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { reportDownload } from '../../downloads/report.ts';
@@ -22,38 +20,8 @@ import {
 } from './plan';
 import { buildCard } from './build';
 import { SdBootV2Shape } from './SdBootV2Shape';
+import { InstallSteps } from '../../install/InstallSteps';
 import './sd-card.css';
-
-function BootInstructions(props: { camera: CardCamera }) {
-  const [controls, setControls] = createSignal<PhysicalControls>();
-  const [error, setError] = createSignal('');
-  onSettled(() => {
-    void initialize()
-      .then(() => {
-        const controls = reference
-          .selections()
-          .find(
-            (selection) => selection.firmware.id.toUpperCase() === props.camera.id,
-          )?.physical_controls;
-        if (!controls?.boot?.sd) throw Error('SD boot buttons are unavailable for this camera.');
-        setControls(controls);
-      })
-      .catch((reason: unknown) => setError(shownError(reason)));
-  });
-  return (
-    <div class="sd-boot-instructions">
-      <b>
-        {props.camera.model} · {props.camera.version}
-      </b>
-      <Show when={controls()}>
-        {(controls) => <PowerComboKeys controls={controls()} modes={['sd']} />}
-      </Show>
-      <Show when={error()}>
-        <p role="alert">{error()}</p>
-      </Show>
-    </div>
-  );
-}
 
 function Check(props: {
   checked: boolean;
@@ -516,60 +484,38 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             </div>
           </details>
           <div class="sd-actions">
-            <ol class="sd-boot-steps">
-              <li>
-                Check your camera is running the latest firmware from Fujifilm. Turn the camera on while
-                holding DISP/BACK to see its firmware version. Latest:{' '}
-                <For each={shown()} keyed={(camera) => camera.id}>
-                  {(camera, index) => (
-                    <>
-                      {index() ? ', ' : ''}
-                      <a href={camera().download_url} target="_blank" rel="noopener noreferrer">
-                        {camera().model} {camera().version}
-                      </a>
-                    </>
-                  )}
-                </For>
-              </li>
-              <li>
-                Unzip download onto your SD card. You need to see{' '}
-                {['FUJIMOD', ...rootFiles()].join(', ')} at the root directory
-              </li>
-              <li>
-                Insert the SD card into the camera and turn it off, then remove and re-insert the
-                battery. This guarantees the camera is fully off even if you run in Performance
-                Mode
-              </li>
-              <li>
-                Hold these buttons while switching the camera on. After the switch is in ON
-                position, you can release the buttons
-                <For each={shown()} keyed={(camera) => camera.id}>
-                  {(camera) => <BootInstructions camera={camera()} />}
-                </For>
-              </li>
-              <li>
-                You should see FujiMod on the LCD screen in the top-left corner. This overlay can
-                be disabled in SET-UP › DEVTOOLS › BUILD OVERLAY.
-              </li>
-            </ol>
-
-            <button
-              type="button"
-              class="sd-download-button"
-              disabled={!chosen().length || pending() || !!problem() || busy()}
-              onClick={() => void download()}
-            >
-              <Icon name="download" />
-              {busy() ? progress() || 'Preparing…' : 'Download'}
-              <Show when={!busy() && chosen().length && !pending() && !problem()}>
-                <span>{formatBytes(plannedBytes(plan().files))}</span>
-              </Show>
-            </button>
-            <Show when={problem() || error()}>
-              <p class="sd-problem" role="alert">
-                {error() || problem()}
-              </p>
-            </Show>
+            <InstallSteps
+              kind="sd-boot-v2"
+              cameras={shown().map((camera) => ({
+                firmwareId: camera.id,
+                name: `${camera.model} version ${camera.version}`,
+              }))}
+              files={['FUJIMOD', ...rootFiles()]}
+              loader={processors()
+                .map((processor) => sdBootV2For(processor)?.stage2)
+                .find(Boolean)}
+              download={
+                <div class="sd-download-step">
+                  <button
+                    type="button"
+                    class="sd-download-button"
+                    disabled={!chosen().length || pending() || !!problem() || busy()}
+                    onClick={() => void download()}
+                  >
+                    <Icon name="download" />
+                    {busy() ? progress() || 'Preparing…' : 'Download'}
+                    <Show when={!busy() && chosen().length && !pending() && !problem()}>
+                      <span>{formatBytes(plannedBytes(plan().files))}</span>
+                    </Show>
+                  </button>
+                  <Show when={problem() || error()}>
+                    <p class="sd-problem" role="alert">
+                      {error() || problem()}
+                    </p>
+                  </Show>
+                </div>
+              }
+            />
           </div>
         </div>
       </section>

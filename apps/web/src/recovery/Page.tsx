@@ -1,22 +1,21 @@
 import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
-import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { catalog as reference, initialize } from 'fujimod';
-import { SegmentedControl } from '@fujimod/emulator-ui/ui/SegmentedControl';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 
 import { recoveryCameras, recoveryPlan } from './identify';
 import type { LibraryFirmware } from '../cameras/store';
 import { FirmwarePicker } from '../cameras/FirmwarePicker';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
-import { Steps, Step, FileList } from './Steps';
+import { Steps, Step, FileList } from '../install/Steps';
+import { FormatGuide } from '../install/FormatGuide';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
 import { buildSdCardUtility, type SdCardUtilityDownload } from './card';
 import { SiteHeader } from '../ui/site-header';
-import { SYSTEMS, FORMAT_STEPS, detectSystem, type System } from './format-guide';
 import '../home/site.css';
 import '../navigation.css';
 import './recovery.css';
@@ -27,7 +26,6 @@ declare const __FUJIMOD_BUILD_SHA__: string;
 export default function Recovery() {
   const library = createFirmwareLibrary();
   const store = library.store;
-  const [system, setSystem] = createSignal<System>('macOS');
   const [catalogReady, setCatalogReady] = createSignal(false);
   const [error, setError] = createSignal('');
   const [building, setBuilding] = createSignal(false);
@@ -56,7 +54,6 @@ export default function Recovery() {
         setCatalogReady(true);
       })
       .catch((caught: unknown) => setError(shownError(caught)));
-    setSystem(detectSystem(navigator.userAgent));
   });
 
   async function download(firmware: LibraryFirmware, kind: SdCardUtilityDownload) {
@@ -101,15 +98,7 @@ export default function Recovery() {
 
         <Steps>
           <Step title="Format an SD card as FAT32">
-            <SegmentedControl
-              label="System"
-              options={SYSTEMS.map((name) => ({ value: name, label: name }))}
-              value={system()}
-              onSelect={setSystem}
-            />
-            <ol class="recovery-sub">
-              <For each={FORMAT_STEPS[system()]}>{(step) => <li>{step}</li>}</For>
-            </ol>
+            <FormatGuide />
           </Step>
 
           <Step title="Choose the official Fujifilm firmware">
@@ -216,9 +205,7 @@ export default function Recovery() {
                           the ON position, release them. The green LED lights while the card starts:
                         </p>
                         {keys(['sd'])}
-                        <p>
-                          Then hold this until the screen lights, which can take a few minutes:
-                        </p>
+                        <p>Then hold this until the screen lights, which can take a few minutes:</p>
                         {keys(['firmware_update'])}
                       </Show>
                     );
