@@ -531,7 +531,7 @@
           "device-4",
           "device-5",
           "device-6",
-          "device-7",
+          "sensor",
           "device-8"
         ],
         "imaging": {
@@ -640,7 +640,53 @@
               4992,
               3300
             ],
-            "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase, spectral response, exposure and physical cadence are unmeasured on this body."
+            "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase and spectral response are unmeasured on this body. Radiometry is the X70's X-Trans CMOS II sensor law (same sensor, same mode-236 drive). No lens is mounted (SHOOT WITHOUT LENS), so there is no projection. The scene is a 250 cd/m2 room. The focal-plane second curtain closes 3 ms after its drive at every aperture; that latency is unmeasured.",
+            "radiometry": {
+              "pixel_clock_hz": 33000000,
+              "saturation_lux_seconds": 1.0,
+              "white_luminance": 250.0,
+              "shutter": {
+                "closing_delay_seconds": [
+                  [
+                    1.0,
+                    0.003
+                  ],
+                  [
+                    64.0,
+                    0.003
+                  ]
+                ]
+              },
+              "shutter_output": 0,
+              "mode_change_frames": 2,
+              "rolling_references": [
+                {
+                  "mode": 236,
+                  "horizontal": 706,
+                  "vertical": 9348,
+                  "lines": 857
+                },
+                {
+                  "mode": 236,
+                  "horizontal": 734,
+                  "vertical": 1671,
+                  "lines": 1671
+                },
+                {
+                  "mode": 236,
+                  "horizontal": 737,
+                  "vertical": 8955,
+                  "lines": 820
+                },
+                {
+                  "mode": 236,
+                  "horizontal": 750,
+                  "vertical": 1760,
+                  "lines": 1760
+                }
+              ],
+              "ticks_per_second": 12000000
+            }
           }
         }
       },
@@ -948,7 +994,7 @@
           "device-4",
           "device-5",
           "device-6",
-          "device-7",
+          "sensor",
           "device-8"
         ]
       },
@@ -1173,7 +1219,7 @@
           "device-4",
           "device-5",
           "device-6",
-          "device-7",
+          "sensor",
           "device-8"
         ]
       },
@@ -1736,7 +1782,7 @@
           "device-4",
           "device-5",
           "device-6",
-          "device-7",
+          "sensor",
           "device-8"
         ],
         "card_contacts": {
@@ -1809,7 +1855,16 @@
   },
   "ram_regions": [],
   "nand": null,
-  "sensor": null,
+  "sensor": {
+    "part_id": "x70-image-sensor",
+    "connection_id": "sensor-bus",
+    "control_bus": {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 28,
+      "polarity_selector": 1
+    }
+  },
   "lens": null,
   "display": null,
   "microcontroller": null,
@@ -1870,13 +1925,6 @@
       "address": 12,
       "polarity_selector": 1,
       "id": "device-6"
-    },
-    {
-      "controller_id": "control-bus0",
-      "channel": 0,
-      "address": 28,
-      "polarity_selector": 1,
-      "id": "device-7"
     },
     {
       "controller_id": "control-bus1",
@@ -2118,11 +2166,30 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "sensor-bus",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "serial",
+          "block_id": "control-bus0",
+          "channel": 0,
+          "address": 28
+        }
+      ]
     }
   ],
   "parts": [
     "sd-card",
-    "banked-lens"
+    "banked-lens",
+    "x70-image-sensor"
   ],
-  "wiring": []
+  "wiring": [
+    {
+      "source_id": "sensor-bus",
+      "target_id": "x70-image-sensor",
+      "signal": "serial_data"
+    }
+  ]
 }

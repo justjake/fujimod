@@ -2976,7 +2976,7 @@ class HardwareProjection(TypedDict, total=False):
 class HardwareRadiometry(TypedDict, total=False):
     mode_change_frames: Required[int]
     pixel_clock_hz: Required[int]
-    projection: Required[HardwareProjection]
+    projection: NotRequired[HardwareProjection | None]
     rolling_references: Required[list[HardwareRollingReference]]
     saturation_lux_seconds: Required[int]
     shutter: Required[HardwareShutter]
