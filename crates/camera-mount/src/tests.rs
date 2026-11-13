@@ -485,6 +485,20 @@ fn file_commands_list_patterns_read_prefixes_and_rewrite_any_size() {
         device.0.lock().unwrap().files["A:\\FUJIMOD\\NEW.JSN"],
         b"new"
     );
+    files::remove(&mut fs, "FUJIMOD/NEW.JSN").unwrap();
+    assert!(
+        !device
+            .0
+            .lock()
+            .unwrap()
+            .files
+            .contains_key("A:\\FUJIMOD\\NEW.JSN")
+    );
+    assert_eq!(
+        files::remove(&mut fs, "FUJIMOD/NEW.JSN").err(),
+        Some(libc::ENOENT)
+    );
+    files::put(&mut fs, "FUJIMOD/NEW.JSN", b"new").unwrap();
     assert_eq!(
         files::put(&mut fs, "FUJIMOD/*.JSN", b"x").err(),
         Some(libc::EINVAL)

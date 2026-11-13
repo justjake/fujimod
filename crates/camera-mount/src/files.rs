@@ -100,3 +100,14 @@ pub fn put<D: Device>(fs: &mut CameraFs<D>, path: &str, data: &[u8]) -> Result<S
     }
     Ok(expected)
 }
+
+/// Deletes the file at `path`.
+pub fn remove<D: Device>(fs: &mut CameraFs<D>, path: &str) -> Result<()> {
+    let parts = components(path);
+    let (name, parents) = parts.split_last().ok_or(libc::EINVAL)?;
+    if name.contains(['*', '?']) {
+        return Err(libc::EINVAL);
+    }
+    let parent = folder(fs, parents)?;
+    fs.remove(parent, name)
+}

@@ -10,6 +10,7 @@ const USAGE: &str = "Usage: fujimod-card --firmware ID [--device BUS-OR-SERIAL] 
                                      save each matching file's first BYTES (default: all)
   put LOCAL=PATH...                  write each local file as the whole card file,
                                      creating or resizing it, and verify it by readback
+  rm PATH...                         delete each card file
 Paths are card paths such as DCIM/100_FUJI/DSCF*.JPG; only the last component
 may hold * or ?. Each file prints one JSON line with its SHA-256.";
 
@@ -87,6 +88,13 @@ fn run<D: Device>(
             }
             Ok(())
         }
+        "rm" if !args.is_empty() => {
+            for path in &args {
+                files::remove(&mut fs, path).map_err(|e| errno(path, e))?;
+                println!("{}", serde_json::json!({"path": path, "removed": true}));
+            }
+            Ok(())
+        }
         _ => Err(USAGE.to_owned()),
     })();
     let shutdown = fs.shutdown().map_err(|e| errno("shutdown", e));
@@ -100,7 +108,7 @@ fn main() {
         match args.next().as_deref() {
             Some("--firmware") => firmware = args.next(),
             Some("--device") => device = args.next(),
-            Some(command @ ("list" | "get" | "put")) => break command.to_owned(),
+            Some(command @ ("list" | "get" | "put" | "rm")) => break command.to_owned(),
             Some("--help" | "-h") => {
                 println!("{USAGE}");
                 return;
@@ -121,8 +129,8 @@ fn main() {
         None,
     )
     .unwrap_or_else(|e| fail(e));
-    // Only put may change the card.
-    let result = if command == "put" {
+    // Only put and rm may change the card.
+    let result = if command == "put" || command == "rm" {
         run(usb, regions, &command, rest)
     } else {
         run(ReadOnly(usb), regions, &command, rest)
