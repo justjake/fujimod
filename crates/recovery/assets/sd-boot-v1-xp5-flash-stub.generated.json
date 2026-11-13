@@ -1,9 +1,0 @@
-{
-  "schema": 1,
-  "image_bytes": 288,
-  "symbols": {
-    "fail_entry": 0,
-    "release_entry": 184,
-    "stub_params": 216
-  }
-}
