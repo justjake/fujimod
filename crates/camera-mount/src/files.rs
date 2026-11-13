@@ -1,6 +1,7 @@
-//! Path-addressed SD card file reads over [`CameraFs`], for hosts that
+//! Path-addressed SD card file commands over [`CameraFs`], for hosts that
 //! cannot mount it.
 use crate::{CameraFs, Device, IO_BYTES, Node, Result, SD};
+use sha2::{Digest, Sha256};
 
 /// `DCIM/100_FUJI/DSCF*.JPG`, with `/` or `\` separators and an optional `A:\`
 /// prefix. Only the last component may hold `*` or `?`.
@@ -66,4 +67,36 @@ pub fn get<D: Device>(fs: &mut CameraFs<D>, node: &Node, limit: Option<u64>) -> 
         data.extend(chunk);
     }
     Ok(data)
+}
+
+/// Writes `data` as the whole file at `path`, creating it when missing and
+/// shrinking it when it was longer, then reads it back from the card and
+/// returns its SHA-256. An existing file is rewritten in place.
+pub fn put<D: Device>(fs: &mut CameraFs<D>, path: &str, data: &[u8]) -> Result<String> {
+    let parts = components(path);
+    let (name, parents) = parts.split_last().ok_or(libc::EINVAL)?;
+    if name.contains(['*', '?']) {
+        return Err(libc::EINVAL);
+    }
+    let parent = folder(fs, parents)?;
+    let node = match fs.lookup(parent, name) {
+        Ok(node) => node,
+        Err(libc::ENOENT) => fs.create(parent, name, false)?,
+        Err(error) => return Err(error),
+    };
+    if node.directory {
+        return Err(libc::EISDIR);
+    }
+    for (index, chunk) in data.chunks(IO_BYTES).enumerate() {
+        fs.write(node.id, (index * IO_BYTES) as u64, chunk)?;
+    }
+    fs.truncate(node.id, data.len() as u64)?;
+    fs.listings.remove(&parent);
+    let written = fs.lookup(parent, name)?;
+    let readback = get(fs, &written, None)?;
+    let expected = format!("{:x}", Sha256::digest(data));
+    if written.size != data.len() as u64 || format!("{:x}", Sha256::digest(&readback)) != expected {
+        return Err(libc::EIO);
+    }
+    Ok(expected)
 }

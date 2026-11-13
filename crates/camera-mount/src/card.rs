@@ -1,5 +1,4 @@
-//! `fujimod-card`: read SD card files over the debug-USB file service, without a mount.
-//! Every device call goes through `ReadOnly`, so it never changes the card.
+//! `fujimod-card`: SD card files over the debug-USB file service, without a mount.
 use fujimod_camera_mount::{CameraFs, Device, Node, files, read_only::ReadOnly, usb::UsbDevice};
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
 use sha2::{Digest, Sha256};
@@ -9,6 +8,8 @@ const USAGE: &str = "Usage: fujimod-card --firmware ID [--device BUS-OR-SERIAL] 
   list PATTERN...                    print each matching file's or folder's name and size
   get [--limit BYTES] --out DIR PATTERN...
                                      save each matching file's first BYTES (default: all)
+  put LOCAL=PATH...                  write each local file as the whole card file,
+                                     creating or resizing it, and verify it by readback
 Paths are card paths such as DCIM/100_FUJI/DSCF*.JPG; only the last component
 may hold * or ?. Each file prints one JSON line with its SHA-256.";
 
@@ -74,6 +75,18 @@ fn run<D: Device>(
             }
             Ok(())
         }
+        "put" if !args.is_empty() => {
+            for pair in &args {
+                let (local, path) = pair.split_once('=').ok_or(USAGE)?;
+                let data = std::fs::read(local).map_err(|e| format!("{local}: {e}"))?;
+                let sha256 = files::put(&mut fs, path, &data).map_err(|e| errno(path, e))?;
+                println!(
+                    "{}",
+                    serde_json::json!({"path": path, "local": local, "bytes": data.len(), "sha256": sha256, "verified": true})
+                );
+            }
+            Ok(())
+        }
         _ => Err(USAGE.to_owned()),
     })();
     let shutdown = fs.shutdown().map_err(|e| errno("shutdown", e));
@@ -87,7 +100,7 @@ fn main() {
         match args.next().as_deref() {
             Some("--firmware") => firmware = args.next(),
             Some("--device") => device = args.next(),
-            Some(command @ ("list" | "get")) => break command.to_owned(),
+            Some(command @ ("list" | "get" | "put")) => break command.to_owned(),
             Some("--help" | "-h") => {
                 println!("{USAGE}");
                 return;
@@ -108,7 +121,13 @@ fn main() {
         None,
     )
     .unwrap_or_else(|e| fail(e));
-    if let Err(error) = run(ReadOnly(usb), regions, &command, rest) {
+    // Only put may change the card.
+    let result = if command == "put" {
+        run(usb, regions, &command, rest)
+    } else {
+        run(ReadOnly(usb), regions, &command, rest)
+    };
+    if let Err(error) = result {
         fail(error);
     }
 }
