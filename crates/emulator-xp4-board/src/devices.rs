@@ -552,9 +552,9 @@ impl Devices {
         Ok(())
     }
     pub fn functional_system_control(
-        &mut self, config: fujimod_emulator_xp4_io::system_control::Config,
+        &mut self, config: fujimod_emulator_xp4_system::system_control::Config,
     ) -> Result<(), String> {
-        let model = fujimod_emulator_xp4_io::system_control::SystemControl::new(config)?;
+        let model = fujimod_emulator_xp4_system::system_control::SystemControl::new(config)?;
         let windows = model.windows();
         if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
             return Err("Overlapping XP4 functional system-control window".into());

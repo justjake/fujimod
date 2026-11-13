@@ -58,11 +58,13 @@ members = [
   "crates/emulator-sensor-input",
   "crates/emulator-image-codecs",
   "crates/emulator-exr2-isp-output",
+  "crates/emulator-exr2-image-transfer",
   "crates/emulator-exr2-isp-statistics",
   "crates/emulator-exr2-isp-testing",
   "crates/emulator-exr2-isp-face",
   "crates/emulator-exr2-isp-input",
   "crates/emulator-xp4-io",
+  "crates/emulator-xp4-system",
   "crates/emulator-xp4-display",
   "crates/emulator-xp4-storage",
   "crates/emulator-xpp",
@@ -72,6 +74,7 @@ members = [
   "crates/emulator-xp5-storage",
   "crates/emulator-xp5-imaging",
   "crates/emulator-parts-io",
+  "crates/emulator-parts-wifi",
   "crates/emulator-parts-controls",
   "crates/emulator-parts-sensor",
   "crates/emulator-parts-lens",
@@ -181,11 +184,13 @@ fujimod-virtual-scene = { path = "crates/virtual-scene", version = "0.1.0" }
 fujimod-emulator-sensor-input = { path = "crates/emulator-sensor-input", version = "0.1.0" }
 fujimod-emulator-image-codecs = { path = "crates/emulator-image-codecs", version = "0.1.0" }
 fujimod-emulator-exr2-isp-output = { path = "crates/emulator-exr2-isp-output", version = "0.1.0" }
+fujimod-emulator-exr2-image-transfer = { path = "crates/emulator-exr2-image-transfer", version = "0.1.0" }
 fujimod-emulator-exr2-isp-statistics = { path = "crates/emulator-exr2-isp-statistics", version = "0.1.0" }
 fujimod-emulator-exr2-isp-testing = { path = "crates/emulator-exr2-isp-testing", version = "0.1.0" }
 fujimod-emulator-exr2-isp-face = { path = "crates/emulator-exr2-isp-face", version = "0.1.0" }
 fujimod-emulator-exr2-isp-input = { path = "crates/emulator-exr2-isp-input", version = "0.1.0" }
 fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
+fujimod-emulator-xp4-system = { path = "crates/emulator-xp4-system", version = "0.1.0" }
 fujimod-emulator-xp4-display = { path = "crates/emulator-xp4-display", version = "0.1.0" }
 fujimod-emulator-xp4-storage = { path = "crates/emulator-xp4-storage", version = "0.1.0" }
 fujimod-emulator-xpp = { path = "crates/emulator-xpp", version = "0.1.0" }
@@ -195,6 +200,7 @@ fujimod-emulator-xp5-display = { path = "crates/emulator-xp5-display", version =
 fujimod-emulator-xp5-storage = { path = "crates/emulator-xp5-storage", version = "0.1.0" }
 fujimod-emulator-xp5-imaging = { path = "crates/emulator-xp5-imaging", version = "0.1.0" }
 fujimod-emulator-parts-io = { path = "crates/emulator-parts-io", version = "0.1.0" }
+fujimod-emulator-parts-wifi = { path = "crates/emulator-parts-wifi", version = "0.1.0" }
 fujimod-emulator-parts-controls = { path = "crates/emulator-parts-controls", version = "0.1.0" }
 fujimod-emulator-parts-sensor = { path = "crates/emulator-parts-sensor", version = "0.1.0" }
 fujimod-emulator-parts-lens = { path = "crates/emulator-parts-lens", version = "0.1.0" }

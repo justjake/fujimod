@@ -20,6 +20,7 @@
       "fujimod-emulator-exr2-isp-face",
       "fujimod-emulator-exr2-isp-input",
       "fujimod-emulator-exr2-isp-output",
+      "fujimod-emulator-exr2-image-transfer",
       "fujimod-emulator-exr2-isp-statistics",
       "fujimod-emulator-exr2-serial",
       "fujimod-emulator-exr2-storage",
@@ -34,11 +35,13 @@
       "fujimod-emulator-ip-dmp",
       "fujimod-emulator-parts-controls",
       "fujimod-emulator-parts-io",
+      "fujimod-emulator-parts-wifi",
       "fujimod-emulator-parts-lens",
       "fujimod-emulator-parts-sensor",
       "fujimod-emulator-sensor-input",
       "fujimod-emulator-xp4-display",
       "fujimod-emulator-xp4-io",
+      "fujimod-emulator-xp4-system",
       "fujimod-emulator-xp4-storage",
       "fujimod-emulator-xp5-display",
       "fujimod-emulator-xp5-imaging",
@@ -88,7 +91,8 @@
       "fujimod-python-graphics",
       "fujimod-python-host-image",
       "fujimod-python-module",
-      "fujimod-python-xp4"
+      "fujimod-python-xp4",
+      "xt5-bringup"
     ],
     "other": [
       "fujimod-bindgen",
@@ -135,7 +139,9 @@
       "fujimod-perf",
       "fujimod-raw-conversion",
       "fujimod-recovery",
-      "fujimod-runtime-install"
+      "fujimod-runtime-install",
+      "fujimod-catalog-memory-reservations",
+      "fujimod-sync-protocol"
     ]
   },
   "remaining": {
@@ -161,7 +167,8 @@
         "fujimod-emulator-sensor-input",
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
-        "fujimod-emulator-xp4-storage"
+        "fujimod-emulator-xp4-storage",
+        "fujimod-emulator-xp4-system"
       ],
       "fujimod-emulator-xpp": [
         "fujimod-emulator-graphics",

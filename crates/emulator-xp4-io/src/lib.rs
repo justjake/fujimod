@@ -1,4 +1,4 @@
-//! XP4 power serial links, SPI, ADC, RTC, timers, requests, temperature, SD host, USB PHY, face detector and filter engine.
+//! XP4 power serial links, SPI, I2C, ADC, RTC, timers, requests, temperature, SD host, USB PHY, face detector and filter engine.
 pub mod adc;
 pub mod checksum_power_serial;
 pub mod countdown_timers;
@@ -11,15 +11,8 @@ pub mod rtc;
 pub mod register_bank;
 pub mod sd;
 pub mod spi;
-pub mod system_control;
 pub mod temperature;
 pub mod usb_condition;
 pub mod usb_phy;
-
-pub mod configuration_request;
-
-pub mod selection_special;
-
-pub mod base_parameter;
 
 pub mod i2c;

@@ -339,3 +339,6 @@ impl Device for ImageTransfer {
             "last_output":self.state.last_output.as_ref().map(Receipt::json)})
     }
 }
+
+#[cfg(test)]
+mod tests;

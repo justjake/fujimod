@@ -3,7 +3,7 @@
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use fujimod_emulator_ip::sdhci::Clocks;
 use fujimod_emulator_ip::sdhci::registers::Registers;
-use fujimod_emulator_parts_io::wifi_module::{Operation, Protocol, WifiModule};
+use fujimod_emulator_parts_wifi::{Operation, Protocol, WifiModule};
 use serde::{Deserialize, Serialize};
 pub const BASE: u64 = 0xfff51000;
 #[derive(Clone, Debug, Deserialize)]
@@ -525,7 +525,6 @@ impl Device for SdioHost {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
-    use fujimod_emulator_parts_io::wifi_module;
     fn model(protocol: Protocol) -> SdioHost {
         SdioHost::new(
             Options {
@@ -535,11 +534,11 @@ mod tests {
                 ram_bytes: 0x10000,
             },
             Wiring {
-                module: WifiModule::new(wifi_module::Options {
+                module: WifiModule::new(fujimod_emulator_parts_wifi::Options {
                     protocol,
                     firmware_bytes: 64,
                     mt5931: (protocol == Protocol::Mt5931).then_some(
-                        wifi_module::mt5931::Options {
+                        fujimod_emulator_parts_wifi::mt5931::Options {
                             mac_address: [2, 0, 0, 0, 0, 1],
                             access_point: None,
                             capability_reply: None,

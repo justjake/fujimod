@@ -9,6 +9,7 @@ license.workspace = true
 description = "Photo sync wire format shared with the camera's sync-client library"
 
 [lib]
+test = false
 doctest = false
 
 [dependencies]

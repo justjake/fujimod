@@ -6,7 +6,6 @@ pub mod output;
 pub mod scaler;
 mod shading;
 pub mod still;
-pub mod transfer;
 pub mod warp;
 pub use avc::AvcCodec;
 pub use output::OutputChannel;

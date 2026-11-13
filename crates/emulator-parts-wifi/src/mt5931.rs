@@ -2,8 +2,8 @@
 //! Protocol references are in README.md. The endpoint has no RF peers unless
 //! an access point is configured, and it consumes only register and FIFO
 //! transactions.
-use crate::wifi_module::virtual_network::{AccessPoint, Network};
-use crate::wifi_module::wpa2::{self, Authenticator, Phase};
+use crate::virtual_network::{AccessPoint, Network};
+use crate::wpa2::{self, Authenticator, Phase};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -1132,7 +1132,7 @@ mod tests {
         assert!(e.station.associated);
         assert_eq!(read_rx1(&mut e)[4], EVENT_TX_DONE);
 
-        let dhcp = crate::wifi_module::virtual_network::test_dhcp_discover(station);
+        let dhcp = crate::virtual_network::test_dhcp_discover(station);
         transmit(&mut e, 0, &dhcp);
         let reply = read_rx1(&mut e);
         assert_eq!(reply[2], 0);
@@ -1199,7 +1199,7 @@ mod tests {
         while !e.rx1.is_empty() {
             read_rx1(&mut e);
         }
-        let dhcp = crate::wifi_module::virtual_network::test_dhcp_discover(station);
+        let dhcp = crate::virtual_network::test_dhcp_discover(station);
         transmit(&mut e, 0, &dhcp);
         assert!(e.rx1.iter().all(|packet| packet[4] == EVENT_TX_DONE));
         assert!(e.network.lease().is_none());

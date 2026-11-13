@@ -76,7 +76,7 @@ pub struct Definition {
     pub control_requests: Vec<(u64, u64)>,
     /// Explicit, unmeasured functional hypotheses; absent keeps strict refusal.
     #[serde(default)]
-    pub xp4_functional_system_control: Option<fujimod_emulator_xp4_io::system_control::Config>,
+    pub xp4_functional_system_control: Option<fujimod_emulator_xp4_system::system_control::Config>,
     #[serde(default)]
     pub storage_geometry: Option<(usize, usize, u64, u64)>,
     #[serde(default)]

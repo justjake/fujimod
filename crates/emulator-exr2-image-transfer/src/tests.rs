@@ -1,4 +1,4 @@
-use crate::transfer::ImageTransfer;
+use crate::ImageTransfer;
 use fujimod_emulator_devices::{Device, exr2::irq_routes::Irq, test_host::*};
 fn configured(h: &mut TestHost, destination: u32, pitch: u32) -> ImageTransfer {
     let mut d = ImageTransfer::new(Irq { core: 0, line: 73 });
