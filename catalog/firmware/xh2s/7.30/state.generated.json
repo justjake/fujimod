@@ -5,6 +5,12 @@
   "firmware_id": "xh2s-730",
   "regions": [
     {
+      "name": "dram",
+      "address": 0,
+      "size": 2147483648,
+      "constant": false
+    },
+    {
       "name": "boot-rom",
       "address": 4290772992,
       "size": 262144,
