@@ -761,6 +761,7 @@
               "name": "imagescaler",
               "kind": "ImageScaler",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -769,6 +770,7 @@
               "name": "windowanalysis",
               "kind": "WindowAnalysisControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -938,6 +940,7 @@
               "name": "rawcapture",
               "kind": "X70SensorCaptureDMA",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {
@@ -957,6 +960,7 @@
               "name": "rawstatistics",
               "kind": "RawStatisticsControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -965,6 +969,7 @@
               "name": "stillisp",
               "kind": "X70StillISPControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -973,6 +978,7 @@
               "name": "imagewarp",
               "kind": "ImageWarpControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -981,6 +987,7 @@
               "name": "imagetransfer",
               "kind": "ImageTransferControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -989,6 +996,7 @@
               "name": "avccodec",
               "kind": "AvcCodecControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -997,6 +1005,7 @@
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {
@@ -1696,6 +1705,7 @@
               "name": "imagescaler",
               "kind": "ImageScaler",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1704,6 +1714,7 @@
               "name": "windowanalysis",
               "kind": "WindowAnalysisControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1873,6 +1884,7 @@
               "name": "rawcapture",
               "kind": "X70SensorCaptureDMA",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {
@@ -1892,6 +1904,7 @@
               "name": "rawstatistics",
               "kind": "RawStatisticsControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1900,6 +1913,7 @@
               "name": "stillisp",
               "kind": "X70StillISPControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1908,6 +1922,7 @@
               "name": "imagewarp",
               "kind": "ImageWarpControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1916,6 +1931,7 @@
               "name": "imagetransfer",
               "kind": "ImageTransferControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1924,6 +1940,7 @@
               "name": "avccodec",
               "kind": "AvcCodecControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -1932,6 +1949,7 @@
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {
@@ -4592,6 +4610,7 @@
               "name": "imagescaler",
               "kind": "ImageScaler",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4600,6 +4619,7 @@
               "name": "windowanalysis",
               "kind": "WindowAnalysisControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4769,6 +4789,7 @@
               "name": "rawcapture",
               "kind": "X70SensorCaptureDMA",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {
@@ -4788,6 +4809,7 @@
               "name": "rawstatistics",
               "kind": "RawStatisticsControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4796,6 +4818,7 @@
               "name": "stillisp",
               "kind": "X70StillISPControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4804,6 +4827,7 @@
               "name": "imagewarp",
               "kind": "ImageWarpControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4812,6 +4836,7 @@
               "name": "imagetransfer",
               "kind": "ImageTransferControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4820,6 +4845,7 @@
               "name": "avccodec",
               "kind": "AvcCodecControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -4828,6 +4854,7 @@
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {
