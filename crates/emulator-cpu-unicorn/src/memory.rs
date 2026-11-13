@@ -82,9 +82,8 @@ impl Iterator for Chunks<'_> {
 }
 struct Page {
     bits: Box<[u64; 64]>,
-    invalid: bool,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Invalidation {
     core: usize,
     address: u64,
@@ -98,7 +97,6 @@ struct State {
     pages: HashMap<usize, Page>,
     watches: Vec<(usize, u64)>,
     invalidations: Vec<Invalidation>,
-    dirty_pages: Vec<usize>,
     active: HashSet<usize>,
     run_policies: HashMap<usize, (ExecutionPolicy, bool)>,
     parked: HashMap<usize, usize>,
@@ -403,31 +401,9 @@ impl Memory {
         s.views.retain(|v| v.core != core);
         s.bindings.retain(|v| v.core != core);
         s.watches.retain(|(id, _)| *id != core);
-        let mut dirty = Vec::new();
-        s.invalidations.retain(|invalidation| {
-            if invalidation.core == core {
-                dirty.push(invalidation.backing);
-                false
-            } else {
-                true
-            }
-        });
+        s.invalidations.retain(|invalidation| invalidation.core != core);
         s.cores[core] = false;
         self.local.cores.borrow_mut().remove(&core);
-        dirty.sort_unstable();
-        dirty.dedup();
-        for backing in dirty {
-            if !s
-                .invalidations
-                .iter()
-                .any(|invalidation| invalidation.backing == backing)
-            {
-                if let Some(page) = s.pages.get_mut(&backing) {
-                    page.invalid = false;
-                }
-                s.dirty_pages.retain(|page| *page != backing);
-            }
-        }
     }
     pub(crate) fn map(
         &self,
@@ -523,11 +499,16 @@ impl Memory {
             let first = (v.address + (begin - v.pointer) as u64) >> 12;
             let last = (v.address + (end - v.pointer - 1) as u64) >> 12;
             for page in first..=last {
-                out.push(Invalidation {
+                let invalidation = Invalidation {
                     core: v.core,
                     address: page << 12,
                     backing,
-                });
+                };
+                // One queued invalidation covers every translation made
+                // before its processor flushes; do not grow the bounded queue.
+                if !out.contains(&invalidation) {
+                    out.push(invalidation);
+                }
             }
         }
     }
@@ -601,7 +582,6 @@ impl Memory {
             pages,
             watches,
             invalidations,
-            dirty_pages,
             ..
         } = &mut *s;
         let old = watches.len();
@@ -628,7 +608,6 @@ impl Memory {
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         let mut page = Page {
                             bits: Box::new([0; 64]),
-                            invalid: false,
                         };
                         Self::mark_code_range(page.bits.as_mut(), begin_offset, end_offset);
                         entry.insert(page);
@@ -639,7 +618,6 @@ impl Memory {
                     Self::aliases(views, base, watches);
                     let capacity = pages.len() * views.len() * 2;
                     invalidations.reserve(capacity.saturating_sub(invalidations.len()));
-                    dirty_pages.reserve(pages.len().saturating_sub(dirty_pages.len()));
                 }
                 cursor = page_end;
             }
@@ -710,7 +688,6 @@ impl Memory {
             bindings,
             pages,
             invalidations,
-            dirty_pages,
             ..
         } = &mut *s;
         let mut changed = false;
@@ -723,8 +700,7 @@ impl Memory {
                     .map_err(|_| "exclusive monitors poisoned")?
                     .written(Some((physical, count)))?;
             }
-            changed |=
-                Self::record_backing(views, pages, invalidations, dirty_pages, pointer, count);
+            changed |= Self::record_backing(views, pages, invalidations, pointer, count);
         }
         Ok(changed)
     }
@@ -748,14 +724,12 @@ impl Memory {
             views,
             pages,
             invalidations,
-            dirty_pages,
             ..
         } = &mut *s;
         Ok(Self::record_backing(
             views,
             pages,
             invalidations,
-            dirty_pages,
             pointer,
             bytes,
         ))
@@ -764,7 +738,6 @@ impl Memory {
         views: &[View],
         pages: &mut HashMap<usize, Page>,
         invalidations: &mut Vec<Invalidation>,
-        dirty_pages: &mut Vec<usize>,
         pointer: usize,
         bytes: usize,
     ) -> bool {
@@ -773,9 +746,9 @@ impl Memory {
             let Some(page) = pages.get_mut(&base) else {
                 continue;
             };
-            if page.invalid {
-                continue;
-            }
+            // Cleared bits mark code invalidated by an earlier write. Bits set
+            // again come from a later translation, which this write must
+            // invalidate even while a peer's earlier invalidation is queued.
             let touched = (pointer.max(base)..(pointer + bytes).min(base + 4096)).any(|p| {
                 let offset = p & 4095;
                 page.bits[offset / 64] & (1 << (offset % 64)) != 0
@@ -783,10 +756,8 @@ impl Memory {
             if !touched {
                 continue;
             }
-            page.invalid = true;
             page.bits.fill(0);
             changed = true;
-            dirty_pages.push(base);
             Self::invalidation_aliases(views, base, invalidations);
         }
         changed
@@ -848,17 +819,6 @@ impl Memory {
             };
             if let Some(core) = core {
                 core.invalidate_code_page(invalidation.address)?;
-            }
-            let mut s = self.state();
-            if !s
-                .invalidations
-                .iter()
-                .any(|queued| queued.backing == invalidation.backing)
-            {
-                if let Some(page) = s.pages.get_mut(&invalidation.backing) {
-                    page.invalid = false;
-                }
-                s.dirty_pages.retain(|page| *page != invalidation.backing);
             }
         }
         Ok(())
