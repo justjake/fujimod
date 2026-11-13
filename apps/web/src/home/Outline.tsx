@@ -1,5 +1,14 @@
 import { For, Show } from 'solid-js';
-import { catalog, type Card, type Feature, type MenuRow } from './catalog';
+import {
+  catalog,
+  type Card,
+  type Choice,
+  type Credits,
+  type Feature,
+  type MenuRow,
+} from './catalog';
+import { ChipIcon, CreditList, Premiere, Prose } from './catalog-parts';
+import { FeatureIcon } from './FeatureIcon';
 import './outline.css';
 
 type Section = 'shooting' | 'recipes' | 'setup';
@@ -20,8 +29,21 @@ const PAGE_SECTIONS: Record<string, Section> = {
   'COMPARE WITH CURRENT': 'recipes',
   CONTROL: 'setup',
 };
+/** Pages that open from a list entry, by the row whose entries open them. */
+const OPENED_FROM: Record<string, string> = { 'CUSTOM SETTING': 'LIBRARY' };
+const TOP_ORDER = ['SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP'];
+const TOP_MENUS = new Set(TOP_ORDER);
 
 const features = new Map(catalog.features.map((feature) => [feature.id, feature]));
+/** The feature whose tile is this card's menu row. */
+const tiles = new Map(
+  catalog.features.filter((feature) => feature.card).map((feature) => [feature.card!, feature]),
+);
+/** Each card's options with their stock flag and icon, from the features that list its control. */
+const options = new Map<string, Choice[]>();
+for (const feature of catalog.features)
+  for (const control of feature.controls)
+    if (control.card && !options.has(control.card)) options.set(control.card, control.choices);
 const rowPlace = (row: MenuRow) => [...row.path, row.title];
 
 function ruledSection(row: MenuRow): Section | undefined {
@@ -29,45 +51,32 @@ function ruledSection(row: MenuRow): Section | undefined {
   if (feature) return GROUP_SECTIONS[feature.group];
   const place = rowPlace(row);
   if (place.some((title) => title.includes('CUSTOM SETTING'))) return 'recipes';
-  if (PAGE_SECTIONS[place[0]!]) return PAGE_SECTIONS[place[0]!];
-  return undefined;
+  return PAGE_SECTIONS[place[0]!];
 }
 
 /** A row without a rule takes the section of its first ruled descendant, else its top menu's. */
 function sectionOf(row: MenuRow): Section {
   const ruled = ruledSection(row);
   if (ruled) return ruled;
-  const place = rowPlace(row).join('\u0000');
+  const place = rowPlace(row).join('\u0000') + '\u0000';
   const child = catalog.menus.find(
-    (other) =>
-      other !== row &&
-      rowPlace(other)
-        .join('\u0000')
-        .startsWith(place + '\u0000') &&
-      ruledSection(other),
+    (other) => rowPlace(other).join('\u0000').startsWith(place) && ruledSection(other),
   );
   if (child) return ruledSection(child)!;
   return row.path[0] === 'SET-UP' ? 'setup' : 'shooting';
 }
 
-/** One node of a section's menu tree. */
-type Node = { title: string; card?: Card; children: Map<string, Node> };
-
-const TOP_MENUS = new Set(['SHOOTING MENU', 'SET-UP', 'PLAYBACK MENU']);
-
-/** Pages that open from a list entry, by the row whose entries open them. */
-const OPENED_FROM: Record<string, string> = { 'CUSTOM SETTING': 'LIBRARY' };
+/** One node of a section's menu tree; `row` is absent for menus FujiMod only passes through. */
+type Node = { title: string; row?: MenuRow; children: Map<string, Node> };
 
 /** The deepest node with this title: the page a partial path's first title opens. */
 function opener(root: Node, title: string): Node | undefined {
   const from = OPENED_FROM[title];
   if (from) {
     const list = opener(root, from);
-    return (
-      list &&
-      (list.children.get(title) ??
-        list.children.set(title, { title, children: new Map() }).get(title))
-    );
+    if (!list) return undefined;
+    if (!list.children.has(title)) list.children.set(title, { title, children: new Map() });
+    return list.children.get(title);
   }
   let best: { node: Node; depth: number } | undefined;
   const visit = (node: Node, depth: number) => {
@@ -80,76 +89,138 @@ function opener(root: Node, title: string): Node | undefined {
   return best?.node;
 }
 
-function insert(start: Node, titles: readonly string[], card: string | null) {
+function insert(start: Node, titles: readonly string[], row: MenuRow) {
   let node = start;
   for (const title of titles) {
     let next = node.children.get(title);
     if (!next) node.children.set(title, (next = { title, children: new Map() }));
     node = next;
   }
-  if (card) node.card = catalog.cards[card];
+  node.row = row;
 }
 
 /** The section's menu tree; a page reached from a list entry hangs under the row it opens from. */
 function tree(rows: readonly MenuRow[]) {
   const root: Node = { title: '', children: new Map() };
   const rooted = (row: MenuRow) => TOP_MENUS.has(row.path[0] ?? '');
-  for (const row of rows.filter(rooted)) insert(root, rowPlace(row), row.card);
+  for (const row of rows.filter(rooted)) insert(root, rowPlace(row), row);
   // A page can open from another such page, so place those whose opener is placed first.
   let waiting = rows.filter((row) => !rooted(row));
   while (waiting.length) {
     const placed = waiting.filter((row) => {
       const [head, ...rest] = rowPlace(row);
       const page = opener(root, head!);
-      if (page) insert(page, rest, row.card);
+      if (page) insert(page, rest, row);
       return page;
     });
     if (!placed.length) break;
     waiting = waiting.filter((row) => !placed.includes(row));
   }
-  for (const row of waiting) insert(root, rowPlace(row), row.card);
+  for (const row of waiting) insert(root, rowPlace(row), row);
   return root;
 }
 
-/** Labels of the options FujiMod adds to a control, from the features that list it. */
-const added = new Map<string, Set<string>>();
-for (const feature of catalog.features)
-  for (const control of feature.controls)
-    if (control.card)
-      for (const choice of control.choices)
-        if (!choice.stock)
-          (added.get(control.card) ?? added.set(control.card, new Set()).get(control.card)!).add(
-            choice.label,
-          );
+/** Children in menu order, with the rows after each heading gathered under it. */
+function ordered(node: Node): Node[] {
+  const rank = (child: Node) =>
+    child.row ? child.row.order : TOP_MENUS.has(child.title) ? TOP_ORDER.indexOf(child.title) : 0;
+  const children = [...node.children.values()].sort((a, b) => rank(a) - rank(b));
+  const out: Node[] = [];
+  let heading: Node | undefined;
+  for (const child of children) {
+    if (child.row?.kind === 'heading') {
+      heading = { ...child, children: new Map() };
+      out.push(heading);
+    } else if (heading) heading.children.set(child.title + heading.children.size, child);
+    else out.push(child);
+  }
+  return out;
+}
 
-function OutlineNode(props: { node: Node }) {
-  const cardKey = () =>
-    Object.entries(catalog.cards).find(([, card]) => card === props.node.card)?.[0];
+const NO_CREDITS: Credits = { premiere: false, inspired: [], thanks: [] };
+
+function Kind(props: { row?: MenuRow; inside: boolean }) {
   return (
-    <li>
-      <span class="outline-title">{props.node.title}</span>
-      <Show when={props.node.card?.summary}>
-        <span class="outline-summary">{props.node.card!.summary}</span>
+    <>
+      <Show when={props.row?.kind === 'command'}>
+        <span class="outline-badge">cmd</span>
       </Show>
-      <Show when={props.node.card && Object.keys(props.node.card.choices).length}>
-        <ul class="outline-choices">
-          <For each={Object.entries(props.node.card!.choices)}>
-            {([label, text]) => (
-              <li>
-                <span class="outline-choice">{label}</span>
-                <Show when={cardKey() && added.get(cardKey()!)?.has(label)}>
-                  <span class="outline-new">NEW</span>
-                </Show>{' '}
-                <span class="outline-summary">{text}</span>
-              </li>
-            )}
-          </For>
-        </ul>
+      <Show when={props.row && !props.row.stock && !props.inside}>
+        <span class="outline-new">NEW</span>
       </Show>
+    </>
+  );
+}
+
+function Options(props: { cardKey: string; card: Card }) {
+  const list = () =>
+    options.get(props.cardKey) ??
+    Object.keys(props.card.choices).map((label) => ({ label, stock: false, icon: null }));
+  return (
+    <ul class="outline-choices">
+      <For each={list().filter((choice) => props.card.choices[choice.label] || !choice.stock)}>
+        {(choice) => (
+          <li>
+            <span class={choice.stock ? 'catalog-chip stock' : 'catalog-chip'}>
+              <Show when={choice.icon}>{(name) => <ChipIcon name={name()} />}</Show>
+              {choice.label}
+            </span>
+            <Show when={props.card.choices[choice.label]}>
+              <span class="outline-summary">{props.card.choices[choice.label]}</span>
+            </Show>
+          </li>
+        )}
+      </For>
+    </ul>
+  );
+}
+
+/** A menu row with everything the catalog knows about it. `inside` marks rows within a row FujiMod adds. */
+function OutlineNode(props: { node: Node; inside: boolean }) {
+  const cardKey = () => props.node.row?.card ?? undefined;
+  const card = () => (cardKey() ? catalog.cards[cardKey()!] : undefined);
+  const feature = (): Feature | undefined => (cardKey() ? tiles.get(cardKey()!) : undefined);
+  const added = () => !!props.node.row && !props.node.row.stock;
+  const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
+  return (
+    <li class={{ heading: props.node.row?.kind === 'heading' }}>
+      <div class="outline-row">
+        <Show when={feature()}>{(tile) => <FeatureIcon name={tile().icon} />}</Show>
+        <span class="outline-title">{props.node.title}</span>
+        <Kind row={props.node.row} inside={props.inside} />
+        <Show when={credits().premiere}>
+          <Premiere />
+        </Show>
+      </div>
+      <Show when={feature()?.summary}>
+        <p class="outline-text">
+          <Prose text={feature()!.summary} />
+        </p>
+      </Show>
+      <Show when={card()}>
+        {(found) => (
+          <>
+            <Show
+              when={found().changes ?? (found().summary !== feature()?.summary && found().summary)}
+            >
+              {(text) => (
+                <p class="outline-text">
+                  {found().changes ? 'In FujiMod: ' : ''}
+                  <Prose text={text()} />
+                </p>
+              )}
+            </Show>
+            <Show when={Object.keys(found().choices).length || options.has(cardKey()!)}>
+              <Options cardKey={cardKey()!} card={found()} />
+            </Show>
+          </>
+        )}
+      </Show>
+      <CreditList credits={credits()} />
       <Show when={props.node.children.size}>
         <ul>
-          <For each={[...props.node.children.values()]}>
-            {(child) => <OutlineNode node={child} />}
+          <For each={ordered(props.node)}>
+            {(child) => <OutlineNode node={child} inside={props.inside || added()} />}
           </For>
         </ul>
       </Show>
@@ -160,14 +231,23 @@ function OutlineNode(props: { node: Node }) {
 function MenuFree(props: { features: Feature[] }) {
   return (
     <Show when={props.features.length}>
-      <li>
-        <span class="outline-title">Without a menu</span>
+      <li class="heading">
+        <div class="outline-row">
+          <span class="outline-title">Without a menu</span>
+        </div>
         <ul>
           <For each={props.features}>
             {(feature) => (
               <li>
-                <span class="outline-title">{feature.title}</span>
-                <span class="outline-summary">{feature.summary}</span>
+                <div class="outline-row">
+                  <FeatureIcon name={feature.icon} />
+                  <span class="outline-title">{feature.title}</span>
+                  <span class="outline-new">NEW</span>
+                </div>
+                <p class="outline-text">
+                  <Prose text={feature.summary} />
+                </p>
+                <CreditList credits={feature.credits} />
               </li>
             )}
           </For>
@@ -194,8 +274,8 @@ export function FeatureOutline() {
             <details class="outline-section" open>
               <summary>{section.title}</summary>
               <ul class="outline-tree">
-                <For each={[...tree(rows).children.values()]}>
-                  {(node) => <OutlineNode node={node} />}
+                <For each={ordered(tree(rows))}>
+                  {(node) => <OutlineNode node={node} inside={false} />}
                 </For>
                 <MenuFree features={free} />
               </ul>

@@ -14,7 +14,7 @@
 .outline-tree,
 .outline-tree ul {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 20px;
   list-style: none;
 }
 .outline-tree {
@@ -23,37 +23,78 @@
 }
 .outline-tree ul {
   border-left: 1px solid rgb(255 255 255 / 9%);
-  margin-left: 2px;
+  margin-left: 4px;
 }
 .outline-tree li {
-  padding: 3px 0;
+  padding: 5px 0;
   font-size: 13.5px;
   line-height: 1.45;
+}
+.outline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.outline-row .catalog-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.outline-row .catalog-premiere {
+  margin: 0;
 }
 .outline-title {
   font-weight: 600;
   color: #f2f2f7;
 }
-.outline-title + .outline-summary {
-  margin-left: 10px;
+.outline-tree li.heading > .outline-row .outline-title {
+  color: rgb(235 235 245 / 60%);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.outline-text {
+  max-width: 72ch;
+  margin: 2px 0 0;
+  color: rgb(235 235 245 / 65%);
 }
 .outline-summary {
-  color: rgb(235 235 245 / 60%);
+  color: rgb(235 235 245 / 65%);
 }
 .outline-choices li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
   font-size: 13px;
 }
-.outline-choice {
-  font-weight: 500;
-  color: rgb(235 235 245 / 85%);
+.outline-choices .catalog-chip {
+  flex: none;
 }
+.outline-tree .catalog-credits {
+  margin: 4px 0 0;
+}
+.outline-badge,
 .outline-new {
-  margin-left: 6px;
   padding: 0 5px;
   border-radius: 4px;
-  background: rgb(10 132 255 / 25%);
-  color: #64d2ff;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
+  line-height: 16px;
+}
+.outline-badge {
+  background: rgb(118 118 128 / 30%);
+  color: rgb(235 235 245 / 75%);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-weight: 500;
+}
+.outline-new {
+  background: rgb(10 132 255 / 25%);
+  color: #64d2ff;
+}
+.outline-choices .catalog-chip svg {
+  width: auto;
+  height: 14px;
+  max-width: 28px;
 }

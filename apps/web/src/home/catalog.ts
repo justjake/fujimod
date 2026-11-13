@@ -47,6 +47,11 @@ export type Catalog = {
 export type MenuRow = {
   title: string;
   path: string[];
+  /** Position among its siblings in the camera's menu. */
+  order: number;
+  kind: 'page' | 'setting' | 'command' | 'heading';
+  /** A stock row whose options FujiMod changes. */
+  stock: boolean;
   card: string | null;
   feature: string | null;
 };
