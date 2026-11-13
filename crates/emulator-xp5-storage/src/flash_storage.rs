@@ -23,6 +23,8 @@ pub struct Session {
 pub struct Storage {
     image: Vec<u8>,
     pub session: Session,
+    /// Overlay pages written (seed, program, erase) since the last `take_dirty_pages`.
+    dirty: std::collections::BTreeSet<u64>,
 }
 impl Storage {
     pub fn new(image: Vec<u8>) -> Result<Self, String> {
@@ -32,6 +34,7 @@ impl Storage {
         Ok(Self {
             image,
             session: Session::default(),
+            dirty: Default::default(),
         })
     }
     fn extent(offset: u64, n: usize) -> Result<(), String> {
@@ -70,7 +73,13 @@ impl Storage {
         self.session.reads.record(offset, n as u64, SIZE)?;
         Ok(bytes)
     }
+    /// Indices (4 KiB) of the pages changed since the previous call. A caller that keeps its own
+    /// copy of the linear image refreshes exactly these.
+    pub fn take_dirty_pages(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.dirty).into_iter().collect()
+    }
     fn page(&mut self, index: u64) -> &mut Vec<u8> {
+        self.dirty.insert(index);
         self.session.pages.entry(index).or_insert_with(|| {
             let start = index as usize * PAGE;
             (start..start + PAGE)
@@ -253,5 +262,17 @@ mod tests {
         assert_eq!(s.image[PAGE - 1], 0xa5);
         assert_eq!(s.read(SIZE - 1, 1).unwrap(), [0xff]);
         assert!(s.read(SIZE - 1, 2).is_err());
+    }
+
+    #[test]
+    fn programmed_and_erased_pages_are_reported_once() {
+        let mut storage = Storage::new(vec![0; 3 * 4096]).unwrap();
+        assert!(storage.take_dirty_pages().is_empty());
+        storage.seed(5000, 1).unwrap();
+        storage.session.write_enable = true;
+        storage.erase(8192, 4096).unwrap();
+        assert_eq!(storage.take_dirty_pages(), vec![1, 2]);
+        assert!(storage.take_dirty_pages().is_empty());
+        assert_eq!(storage.read(5000, 1).unwrap(), vec![1]);
     }
 }

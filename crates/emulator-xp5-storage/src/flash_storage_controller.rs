@@ -42,17 +42,24 @@ impl Controller {
             o,
             0 | 4
                 | 8
+                | 0xc
                 | 0x10
                 | 0x14
                 | 0x18
                 | 0x20
                 | 0x24
+                | 0x28
+                | 0x2c
+                | 0x30
                 | 0x34
                 | 0x40
                 | 0x44
                 | 0x48
                 | 0x50
+                | 0x64
+                | 0x68
                 | 0x74
+                | 0x78
                 | 0x80
                 | 0x94
                 | 0x98
@@ -301,6 +308,35 @@ mod tests {
     use super::*;
     use crate::flash_storage::Storage;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn configuration_latches_written_by_serial_flash_setup_read_back() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0; 16]).unwrap()));
+        let mut controller = Controller::new(storage, 0x20bb20);
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // Aperture window words and the per-opcode format fields a setup program writes.
+        for (offset, value) in [
+            (0xc, 2),
+            (0x24, 0xf000_0000),
+            (0x28, u32::MAX),
+            (0x2c, u32::MAX),
+            (0x30, u32::MAX),
+            (0x34, 0xf800_0000),
+            (0x64, 0),
+            (0x68, 0x12),
+            (0x78, 0x34),
+        ] {
+            controller.write(&mut cx, 0xff90a000 + offset, 4, value.into());
+            assert_eq!(
+                controller.read(&mut cx, 0xff90a000 + offset, 4),
+                u64::from(value),
+                "{offset:#x}"
+            );
+        }
+        assert_eq!(cx.refusal(), None);
+    }
 
     #[test]
     fn pio_reads_count_transferred_bytes_once_and_exclude_identity_commands() {
