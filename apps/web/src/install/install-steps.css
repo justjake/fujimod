@@ -1,0 +1,56 @@
+.install-steps a,
+.recovery-steps a {
+  color: #64d2ff;
+  text-underline-offset: 2px;
+}
+.install-combo {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 18px;
+  font-size: 13px;
+}
+.install-format {
+  margin-top: 4px;
+  font-size: 15px;
+}
+.install-format summary {
+  cursor: pointer;
+  color: #64d2ff;
+}
+.install-format[open] summary {
+  margin-bottom: 12px;
+}
+.install-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.install-error {
+  color: #ff6961;
+}
+.install-aside {
+  margin-top: 28px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgb(118 118 128 / 14%);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.install-aside h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.install-aside p {
+  margin: 0 0 10px;
+}
+.install-aside p:last-child {
+  margin-bottom: 0;
+}
+.install-steps .battery-cycle-icon,
+.recovery-steps .battery-cycle-icon {
+  margin-inline: 0.15em 0;
+}

@@ -15,7 +15,10 @@ export interface CardCamera {
   model: string;
   version: string;
   processor: string;
-  mods: number;
+  /** The mods built into this camera's release. */
+  mods: readonly string[];
+  /** Fujifilm's page for the camera's latest stock firmware. */
+  download_url: string;
 }
 
 /** Processor generations whose SD boot files the card documents. */
@@ -39,21 +42,20 @@ export function releaseCameras(
   return firmwares
     .flatMap((entry) => {
       const processor = catalog.find((known) => known.sha256 === entry.sha256)?.processor;
-      return processor &&
-        sdBootV2For(processor) &&
-        !sdBootV2Files(card, processor).missing.length
+      return processor && sdBootV2For(processor) && !sdBootV2Files(card, processor).missing.length
         ? [
             {
               id: sdBootV2Firmware(entry.id),
               model: entry.model,
               version: entry.version,
               processor,
-              mods: entry.mods.length,
+              mods: entry.mods,
+              download_url: entry.download_url,
             },
           ]
         : [];
     })
-    .sort((a, b) => b.mods - a.mods || a.model.localeCompare(b.model));
+    .sort((a, b) => b.mods.length - a.mods.length || a.model.localeCompare(b.model));
 }
 
 /** Root files written for one processor: the release's files, and the documented names it lacks. */
@@ -91,6 +93,15 @@ export function conflicting(
   );
 }
 
+/** Optional card folders and the mod that reads them; other folders are always offered. */
+const folderMods: Readonly<Record<string, string>> = { RECIPES: 'recipes', FILMS: 'card-films' };
+
+/** Whether an optional card file is useful to any of the cameras, by the mod that reads its folder. */
+export function offered(file: SdCardFile, cameras: readonly CardCamera[]) {
+  const mod = folderMods[file.path.split('/')[1] ?? ''];
+  return !mod || cameras.some((camera) => camera.mods.includes(mod));
+}
+
 /** One file of the download and where its bytes come from. */
 export type PlannedFile = { path: string } & (
   | { from: 'release'; asset: string; sha256: string; bytes: number }
@@ -120,7 +131,11 @@ export function sdBootV2Plan(input: CardPlanInput): { files: PlannedFile[]; prob
     for (const file of boot.files) files.push({ ...file, from: 'release' });
   }
   for (const file of input.card)
-    if (file.processor === undefined && !input.excluded.has(file.path))
+    if (
+      file.processor === undefined &&
+      !input.excluded.has(file.path) &&
+      offered(file, input.cameras)
+    )
       files.push({ ...file, from: 'release' });
   const store = new Map<string, PlannedFile>();
   for (const camera of input.cameras) {

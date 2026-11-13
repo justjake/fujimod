@@ -1,13 +1,10 @@
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { sha256 } from '../../patch/patcher';
-import { gitRepository, type GitFile } from './git';
 import type { PlannedFile } from './plan';
 
 export interface CardBuildOptions {
   /** Absolute `/releases/<tag>/` URL. */
   assetBase: string;
-  release: string;
-  git: boolean;
   fetcher?: typeof fetch;
   progress?: (done: number, total: number) => void;
 }
@@ -21,10 +18,10 @@ async function fetchChecked(url: URL, sha: string, bytes: number, fetcher: typeo
   return data;
 }
 
-/** Fetch and check every planned file, add the Git repository if asked, and zip the card's root. */
+/** Fetch and check every planned file, and zip the card's root. */
 export async function buildCard(files: readonly PlannedFile[], options: CardBuildOptions) {
   const fetcher = options.fetcher ?? fetch;
-  const written: GitFile[] = [];
+  const entries: { path: string; data: Blob }[] = [];
   let done = 0;
   for (const file of files) {
     const data =
@@ -39,22 +36,8 @@ export async function buildCard(files: readonly PlannedFile[], options: CardBuil
             file.bytes,
             fetcher,
           );
-    written.push({ path: file.path, data });
+    entries.push({ path: file.path, data: new Blob([data.slice()]) });
     options.progress?.(++done, files.length);
-  }
-  const entries = written.map((file) => ({ path: file.path, data: new Blob([file.data.slice()]) }));
-  if (options.git) {
-    const tracked = written
-      .filter((file) => file.path.startsWith('FUJIMOD/'))
-      .map((file) => ({ path: file.path.slice('FUJIMOD/'.length), data: file.data }));
-    const repository = await gitRepository(tracked, {
-      name: 'FujiMod',
-      email: 'noreply@fujimod.com',
-      message: `FujiMod ${options.release}`,
-      time: Date.now() / 1000,
-    });
-    for (const file of repository)
-      entries.push({ path: `FUJIMOD/.git/${file.path}`, data: new Blob([file.data.slice()]) });
   }
   return zipBlob(entries);
 }

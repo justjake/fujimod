@@ -2,7 +2,14 @@ import { expect, test } from 'vite-plus/test';
 import type { SdCardFile, PatchFirmware } from '../../patch/catalog';
 import type { Firmware } from '../../catalog';
 import { storeName, validateOtaRelease, type SdBootV2Release } from '../../ota/release';
-import { sdBootV2Files, sdBootV2Plan, conflicting, releaseCameras, type CardCamera } from './plan';
+import {
+  sdBootV2Files,
+  sdBootV2Plan,
+  conflicting,
+  offered,
+  releaseCameras,
+  type CardCamera,
+} from './plan';
 
 const digest = (c: string) => c.repeat(64);
 const release = (id: string, mods: number, sha: string) =>
@@ -18,7 +25,8 @@ const camera = (id: string, processor = 'EXR Processor II'): CardCamera => ({
   model: id,
   version: '1.00',
   processor,
-  mods: 1,
+  mods: ['recipes'],
+  download_url: 'https://example.org/',
 });
 const file = (path: string, sha: string, processor?: string): SdCardFile => ({
   path,
@@ -47,7 +55,7 @@ test('the checklist lists cameras whose processor has complete SD boot files, mo
     catalog,
     card,
   );
-  expect(cameras.map((entry) => [entry.id, entry.mods])).toEqual([
+  expect(cameras.map((entry) => [entry.id, entry.mods.length])).toEqual([
     ['XE2-411', 9],
     ['X70-110', 3],
   ]);
@@ -152,4 +160,18 @@ test('cameras whose root files differ from the chosen cameras’ cannot join the
   const all = [camera('X70-110'), camera('XE2-411'), camera('XT20-211', 'X-Processor Pro')];
   expect([...conflicting(all, [all[0]], card)]).toEqual(['XT20-211']);
   expect([...conflicting(all, [], card)]).toEqual([]);
+});
+
+test('recipe and film files are offered only to cameras whose release has the mod that reads them', () => {
+  const recipe = file('FUJIMOD/RECIPES/A.JSN', digest('a'));
+  const film = file('FUJIMOD/FILMS/A.FLM', digest('b'));
+  const other = file('FUJIMOD/NOTES.TXT', digest('c'));
+  const plain = { ...camera('X70-110'), mods: ['fujimod'] };
+  expect([recipe, film, other].map((entry) => offered(entry, [plain]))).toEqual([
+    false,
+    false,
+    true,
+  ]);
+  expect(offered(recipe, [plain, camera('XE2-411')])).toBe(true);
+  expect(offered(film, [{ ...plain, mods: ['card-films'] }])).toBe(true);
 });

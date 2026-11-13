@@ -134,7 +134,16 @@ try {
             0,
           );
           assert.equal(await page.locator('#camera-table').count(), 0);
-          assert.equal(await page.locator('.release-bodies li').count(), 3);
+          assert.equal(await page.locator('header .site-nav').count(), 1);
+          assert.equal(await page.locator('.personal-note').count(), 1);
+          assert.equal(await page.locator('#features').count(), 1);
+          assert.equal(await page.locator('.sd-download').count(), 1);
+          assert.equal(
+            await page
+              .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
+              .count(),
+            0,
+          );
         }
         await page.close();
       }
@@ -252,12 +261,16 @@ try {
         await page.evaluate(() => window.__hydrationDOM === document.querySelector('#workspace')),
         'hydrate existing homepage nodes',
       );
-      const showcase = page.locator('.release-showcase');
+      assert.equal(await page.locator('header .site-nav').count(), 1);
       assert.equal(await page.locator('.personal-note').count(), 1);
       assert.equal(await page.locator('h1').count(), 0);
-      assert.equal(await showcase.locator('.release-highlight').count(), 6);
-      await showcase.getByRole('link', { name: 'Get started', exact: true }).click();
-      assert.equal(new URL(page.url()).hash, '#quickstart');
+      assert.equal(await page.locator('.sd-download').count(), 1);
+      assert.equal(
+        await page
+          .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
+          .count(),
+        0,
+      );
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
       await page.keyboard.press('Escape');

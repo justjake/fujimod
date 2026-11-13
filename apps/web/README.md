@@ -46,11 +46,11 @@ checks mobile Chromium and WebKit against a running development server, includin
 a retained stale unversioned page response, repeated visits, and working inputs.
 Set `FUJIMOD_WEB_URL` to check another development endpoint.
 
-`node scripts/test-release-showcase.ts` checks the 0.1.0 preview in desktop
+`node scripts/test-homepage.ts` checks the 0.1.0 preview in desktop
 and mobile Chromium and WebKit. It exercises feature search, detail cards,
 release notes and camera selection, and verifies a browser-built SD card
 download against every declared asset hash. Screenshots go to
-`build/release-showcase/`; set `FUJIMOD_REVIEW_OUTPUT` to choose another directory.
+`build/homepage/`; set `FUJIMOD_REVIEW_OUTPUT` to choose another directory.
 
 ## Camera sign-in
 
