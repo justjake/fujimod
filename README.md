@@ -101,3 +101,11 @@ adapters handle execution and language boundaries.
 
 See [CI.md](CI.md) for the required checks, local commands, coverage reports and
 the distinction between public tests and firmware-dependent rehearsals.
+
+## License
+
+FujiMod is distributed under the GNU General Public License, version 2. See
+[LICENSE](LICENSE). The emulator runtime links Unicorn Engine, which is GPLv2
+as well; the source and modifications we use are in the
+[`justjake/unicorn`](https://github.com/justjake/unicorn) fork at the commit
+recorded as `unicorn_commit` in the runtime's `build.json`.

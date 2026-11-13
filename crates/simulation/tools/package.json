@@ -1,6 +1,7 @@
 {
   "name": "fujimod-simulation-assets",
   "private": true,
+  "license": "GPL-2.0-only",
   "type": "module",
   "dependencies": {
     "@gltf-transform/core": "4.5.1",

@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Camera settings banks built from a firmware's catalog layout and its update file"
 
 [lib]

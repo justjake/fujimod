@@ -2,6 +2,7 @@
   "name": "fujimod-web",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-2.0-only",
   "type": "module",
   "scripts": {
     "auth:generate": "auth generate --config src/auth/cli.ts --adapter drizzle --dialect sqlite --output src/db/auth-schema.generated.ts --yes",

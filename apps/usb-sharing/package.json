@@ -1,6 +1,7 @@
 {
   "name": "fujimod-usb-sharing",
   "private": true,
+  "license": "GPL-2.0-only",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

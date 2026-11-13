@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Camera SD files, read-only live memory and internal storage as a mounted filesystem"
 
 [dependencies]

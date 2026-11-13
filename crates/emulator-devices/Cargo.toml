@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
+license.workspace = true
 description = "Camera processor device models with guest virtual time and explicit hardware inputs."
 
 [lib]

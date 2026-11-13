@@ -135,6 +135,7 @@ edition = "2024"
 rust-version = "1.88"
 repository = "https://github.com/justjake/fujimod"
 publish = false
+license = "GPL-2.0-only"
 
 [workspace.dependencies]
 fujimod-framebuffer-xp5 = { path = "crates/framebuffer-xp5", version = "0.1.0" }
