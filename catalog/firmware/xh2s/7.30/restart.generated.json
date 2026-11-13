@@ -121,7 +121,11 @@
       },
       "deadline_parameter": null,
       "rollover_parameter": 5,
-      "fixed_interval": null
+      "fixed_interval": null,
+      "boot_flag": {
+        "address": 42478748,
+        "mask": 32
+      }
     }
   }
 }
