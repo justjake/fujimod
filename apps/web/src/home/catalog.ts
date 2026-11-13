@@ -33,6 +33,8 @@ export type Feature = {
   path: string[];
   summary: string;
   card: string | null;
+  /** Changes the row at its path, which another feature documents. */
+  attached: boolean;
   media_cards: string[];
   controls: Control[];
   credits: Credits;

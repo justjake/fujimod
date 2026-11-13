@@ -27,17 +27,13 @@ const GROUP_SECTIONS: Record<string, Section> = {
 const PAGE_SECTIONS: Record<string, Section> = {
   'CUSTOM SETTING': 'recipes',
   'COMPARE WITH CURRENT': 'recipes',
-  CONTROL: 'setup',
 };
 /** Pages that open from a list entry, by the row whose entries open them. */
 const OPENED_FROM: Record<string, string> = {
   'CUSTOM SETTING': 'LIBRARY',
-  CONTROL: 'BUTTON/DIAL SETTING',
-  'ASPECT RATIO': 'EDIT ASPECT RATIOS',
 };
-/** Rows whose own pages the outline leaves out. */
-const COLLAPSED = new Set(['EDIT ASPECT RATIOS']);
-const TOP_ORDER = ['SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP'];
+/** Top menus, and the DRIVE button's popup, in the order the outline lists them. */
+const TOP_ORDER = ['DRIVE', 'SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP'];
 const TOP_MENUS = new Set(TOP_ORDER);
 
 const features = new Map(catalog.features.map((feature) => [feature.id, feature]));
@@ -54,6 +50,18 @@ const rowPlace = (row: MenuRow) => [...row.path, row.title];
 /** Stock rows FujiMod leaves as they are. */
 const shownRows = catalog.menus.filter((row) => !row.stock || row.card);
 const placed = new Set(shownRows.map((row) => row.feature));
+const placeKey = (place: readonly string[]) => place.join('\u0000');
+/** Features without a row of their own that change a row: listed on it (RAW on DIGITAL TELE-CONV.). */
+const attached = new Map<string, Feature[]>();
+/** Features without a row whose path still leads to a shown row are not menu-free. */
+const reached = new Set<string>();
+for (const feature of catalog.features) {
+  if (placed.has(feature.id) || !feature.path.length) continue;
+  const at = placeKey(feature.path);
+  if (!shownRows.some((row) => placeKey(rowPlace(row)).startsWith(at))) continue;
+  reached.add(feature.id);
+  if (feature.attached) attached.set(at, [...(attached.get(at) ?? []), feature]);
+}
 
 /** Effects and recipes, and the pages opened from them, join CUSTOM SETTINGS / RECIPES. */
 function recipeRow(row: MenuRow) {
@@ -206,11 +214,17 @@ function Options(props: { choices: Choice[]; card: Card }) {
 function OutlineNode(props: { node: Node; inside: boolean }) {
   const cardKey = () => props.node.row?.card ?? undefined;
   const card = () => (cardKey() ? catalog.cards[cardKey()!] : undefined);
-  const feature = (): Feature | undefined => (cardKey() ? tiles.get(cardKey()!) : undefined);
+  /** The feature whose tile is this row, or that the row stands for (DRIVE > SOFTWARE ND). */
+  const feature = (): Feature | undefined => {
+    if (cardKey()) return tiles.get(cardKey()!);
+    const own = props.node.row?.feature ? features.get(props.node.row.feature) : undefined;
+    return own && !own.card && own.title === props.node.title ? own : undefined;
+  };
   const added = () => !!props.node.row && !props.node.row.stock;
   const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
-  /** One description: the card's, else its stock change, else the tile's. */
-  const text = () => card()?.summary ?? card()?.changes ?? feature()?.summary;
+  /** One description: what FujiMod changes in a stock row, else the card's, else the tile's. */
+  const text = () => card()?.changes ?? card()?.summary ?? feature()?.summary;
+  const also = () => (props.node.row ? (attached.get(placeKey(rowPlace(props.node.row))) ?? []) : []);
   const choices = () => (card() ? choicesOf(cardKey()!, card()!) : []);
   const switched = () => isSwitch(choices());
   return (
@@ -238,11 +252,18 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
           </p>
         )}
       </Show>
+      <For each={also()}>
+        {(extra) => (
+          <p class="outline-text">
+            <Prose text={extra.summary} />
+          </p>
+        )}
+      </For>
       <Show when={card() && choices().length && !switched()}>
         <Options choices={choices()} card={card()!} />
       </Show>
       <CreditList credits={credits()} />
-      <Show when={props.node.children.size && !COLLAPSED.has(props.node.title)}>
+      <Show when={props.node.children.size}>
         <ul>
           <For each={ordered(props.node)}>
             {(child) => <OutlineNode node={child} inside={props.inside || added()} />}
@@ -293,7 +314,10 @@ export function FeatureOutline() {
         {(section) => {
           const rows = shownRows.filter((row) => sectionOf(row) === section.id);
           const free = catalog.features.filter(
-            (feature) => !placed.has(feature.id) && GROUP_SECTIONS[feature.group] === section.id,
+            (feature) =>
+              !placed.has(feature.id) &&
+              !reached.has(feature.id) &&
+              GROUP_SECTIONS[feature.group] === section.id,
           );
           return (
             <details class="outline-section" open>

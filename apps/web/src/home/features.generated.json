@@ -10,6 +10,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.",
       "card": "photometry",
+      "attached": false,
       "media_cards": ["photometry"],
       "controls": [
         {
@@ -60,6 +61,7 @@
       "path": ["DRIVE"],
       "summary": "Average a sequence of frames into one long-exposure JPEG.",
       "card": "software_nd_item",
+      "attached": false,
       "media_cards": ["software_nd_item"],
       "controls": [
         {
@@ -115,6 +117,7 @@
       "path": ["DRIVE"],
       "summary": "Each shutter press records one JPEG for the current settings and one for each chosen custom setting.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -131,6 +134,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset distance.",
       "card": "snap_menu_item",
+      "attached": false,
       "media_cards": ["snap_menu_item"],
       "controls": [],
       "credits": {
@@ -147,6 +151,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Show the focus distance, the near and far limits of sharp focus and the hyperfocal distance on the shooting display, and set the hyperfocal distance with a button.",
       "card": null,
+      "attached": false,
       "media_cards": ["zone_readout_item", "zone_in_af_item", "zone_coc_item", "zone_units_item"],
       "controls": [
         {
@@ -236,6 +241,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose the aspect ratio of still pictures.",
       "card": "shape_aspect_item",
+      "attached": false,
       "media_cards": ["shape_aspect_item"],
       "controls": [
         {
@@ -306,6 +312,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Hide hot and stuck pixels in every photo, RAW and JPEG, from a list made with lens-cap test shots.",
       "card": "pixel_map_item",
+      "attached": false,
       "media_cards": ["pixel_map_item"],
       "controls": [
         {
@@ -341,6 +348,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose how the area outside the frame is shown.",
       "card": "shape_surround_item",
+      "attached": false,
       "media_cards": ["shape_surround_item"],
       "controls": [
         {
@@ -392,13 +400,14 @@
       "title": "DIGITAL TELE-CONV.",
       "path": ["SHOOTING MENU"],
       "summary": "Choose a focal length that stays selected.",
-      "card": "6b",
-      "media_cards": ["6b"],
+      "card": "digital_tele_conv",
+      "attached": false,
+      "media_cards": ["digital_tele_conv"],
       "controls": [
         {
           "title": "DIGITAL TELE-CONV.",
           "primary": true,
-          "card": "6b",
+          "card": "digital_tele_conv",
           "choices": [
             {
               "label": "28mm",
@@ -430,10 +439,11 @@
       "group": "photography",
       "icon": "aspect",
       "title": "RAW Teleconverter",
-      "path": [],
+      "path": ["SHOOTING MENU", "DIGITAL TELE-CONV."],
       "summary": "Use the digital teleconverter with RAW and RAW+JPEG pictures.",
       "card": null,
-      "media_cards": [],
+      "attached": true,
+      "media_cards": ["digital_tele_conv"],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -449,6 +459,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Choose ULTRAFINE or ULTRAFINE+RAW to save JPEGs with finer compression.",
       "card": "image_quality",
+      "attached": false,
       "media_cards": ["image_quality"],
       "controls": [
         {
@@ -509,6 +520,7 @@
       "path": [],
       "summary": "Assign RAW VIEW to a function button to see how close the brightest areas are to losing detail in the RAW file.",
       "card": "raw_view",
+      "attached": false,
       "media_cards": ["raw_view"],
       "controls": [],
       "credits": {
@@ -525,6 +537,7 @@
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Choose a guide to display in the shooting view, including Golden Ratio, four Golden Spiral focal points and Dynamic Symmetry.",
       "card": "c",
+      "attached": false,
       "media_cards": ["c"],
       "controls": [
         {
@@ -600,6 +613,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
       "card": null,
+      "attached": true,
       "media_cards": ["shape_jpeg_item"],
       "controls": [
         {
@@ -635,6 +649,7 @@
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
       "summary": "Record movies in F-Log format.",
       "card": "f_log_recording_item",
+      "attached": false,
       "media_cards": ["f_log_recording_item"],
       "controls": [],
       "credits": {
@@ -663,6 +678,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
       "card": null,
+      "attached": true,
       "media_cards": ["shape_desqueeze_item"],
       "controls": [
         {
@@ -726,6 +742,7 @@
       "path": ["SET-UP"],
       "summary": "Display the shooting view on an HDMI device.",
       "card": "hdmi_rec_behavior_item",
+      "attached": false,
       "media_cards": ["hdmi_rec_behavior_item"],
       "controls": [],
       "credits": {
@@ -739,15 +756,16 @@
       "group": "recipes",
       "icon": "recipes",
       "title": "Recipes",
-      "path": ["EDIT/SAVE CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
       "summary": "Keep up to 255 named custom settings on an SD card, with seven favorites for Q and Fn.",
       "card": null,
+      "attached": false,
       "media_cards": ["recipes", "recipes_setting_page", "recipes_compare_page"],
       "controls": [
         {
           "title": "EDIT/SAVE CUSTOM SETTING",
           "primary": true,
-          "card": "recipes",
+          "card": null,
           "choices": [],
           "actions": [
             "SAVE CURRENT AS NEW",
@@ -803,6 +821,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Simulate the effects of additional types of film. Create your own film simulations in FILM EDITOR.",
       "card": "film_simulation",
+      "attached": false,
       "media_cards": ["film_simulation"],
       "controls": [
         {
@@ -858,6 +877,7 @@
       "path": [],
       "summary": "Load film simulations from FUJIMOD/FILMS on the SD card, with LEICA X built in.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -874,6 +894,7 @@
       "path": [],
       "summary": "Develop films with separate color curves faster, and add Classic Neg. as a built-in film.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -890,6 +911,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Choose which film simulations appear in the pickers.",
       "card": "hide_films_item",
+      "attached": false,
       "media_cards": ["hide_films_item"],
       "controls": [],
       "credits": {
@@ -906,6 +928,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Create and edit your own film simulations, saved as files on the memory card.",
       "card": "film_editor_item",
+      "attached": false,
       "media_cards": ["film_editor_item"],
       "controls": [],
       "credits": {
@@ -922,6 +945,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Write the active recipe's name and settings into each photo, so shared pictures carry their recipe.",
       "card": "recipe_exif_item",
+      "attached": false,
       "media_cards": ["recipe_exif_item"],
       "controls": [],
       "credits": {
@@ -938,6 +962,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Protect highlights by combining DYNAMIC RANGE, HIGHLIGHT TONE and SHADOW TONE in one choice.",
       "card": "d_range_priority_item",
+      "attached": false,
       "media_cards": ["d_range_priority_item"],
       "controls": [
         {
@@ -983,6 +1008,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Choose how much luminance and color noise reduction is applied to still pictures.",
       "card": "noise_reduction",
+      "attached": false,
       "media_cards": ["noise_reduction"],
       "controls": [
         {
@@ -1028,6 +1054,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Set HIGHLIGHTS and SHADOWS together on one page, as on the X100VI.",
       "card": "tone_curve_item",
+      "attached": false,
       "media_cards": ["tone_curve_item"],
       "controls": [],
       "credits": {
@@ -1044,6 +1071,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Choose half steps for HIGHLIGHT TONE and SHADOW TONE, and COLOR beyond ±2.",
       "card": null,
+      "attached": false,
       "media_cards": ["3"],
       "controls": [
         {
@@ -1114,6 +1142,7 @@
       "path": ["SHOOTING MENU", "COLOR CHROME"],
       "summary": "Deepen saturated colors and blues in JPEG photographs, as the X100VI does.",
       "card": null,
+      "attached": false,
       "media_cards": ["color_chrome_effect_item", "color_chrome_blue_item"],
       "controls": [
         {
@@ -1177,6 +1206,7 @@
       "path": ["SHOOTING MENU", "GRAIN EFFECT"],
       "summary": "Add film-like grain to JPEG photographs.",
       "card": null,
+      "attached": false,
       "media_cards": ["film_grain_graininess_item", "film_grain_size_item"],
       "controls": [
         {
@@ -1243,6 +1273,7 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
       "summary": "Add a film-like red glow around light sources in JPEG photographs.",
       "card": null,
+      "attached": false,
       "media_cards": ["halation_strength_item", "halation_color_item"],
       "controls": [
         {
@@ -1316,6 +1347,7 @@
       "path": ["SHOOTING MENU", "CLARITY"],
       "summary": "Add or soften local midtone contrast in JPEG photographs, as the X100VI does.",
       "card": null,
+      "attached": false,
       "media_cards": ["clarity_item"],
       "controls": [
         {
@@ -1396,6 +1428,7 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
       "summary": "On the FILM EFFECTS page: frame JPEG photographs like a scanned negative, a slide, an instant print, a thin black border or a 35-to-120 conversion with the film simulation along the edge.",
       "card": null,
+      "attached": false,
       "media_cards": ["borders_enabled_item", "borders_style_item", "negative_item"],
       "controls": [
         {
@@ -1482,6 +1515,7 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
       "summary": "Add film-camera light leaks and an expired-film look to JPEG photographs.",
       "card": null,
+      "attached": false,
       "media_cards": [
         "light_leaks_level_item",
         "light_leaks_color_item",
@@ -1567,6 +1601,7 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
       "summary": "Print the date or time in a corner of JPEG photographs, like a point-and-shoot film camera.",
       "card": "date_stamp_item",
+      "attached": false,
       "media_cards": ["date_stamp_item"],
       "controls": [],
       "credits": {
@@ -1583,6 +1618,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Shoot a roll of 24, 27 or 36 exposures before playback unlocks.",
       "card": null,
+      "attached": false,
       "media_cards": ["disposable_roll_item", "disposable_recipe_item"],
       "controls": [
         {
@@ -1683,6 +1719,7 @@
       "path": [],
       "summary": "Assign stock and FujiMod settings to the camera's dials, selectors and unlocked buttons.",
       "card": null,
+      "attached": false,
       "media_cards": [
         "bindings_row_exposure_compensation_dial",
         "bindings_row_command_control",
@@ -1723,6 +1760,7 @@
       "path": ["SET-UP"],
       "summary": "Choose the menu renderer and appearance.",
       "card": "menu_style_item",
+      "attached": false,
       "media_cards": ["menu_style_item"],
       "controls": [],
       "credits": {
@@ -1739,6 +1777,7 @@
       "path": [],
       "summary": "A new menu and Q menu renderer with grouped setting pages, touch and drag.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -1755,6 +1794,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Put the SHOOTING MENU rows in the X100VI order, with AE/AF & SCENE replacing three rows.",
       "card": "ae_af_lock_item",
+      "attached": false,
       "media_cards": ["ae_af_lock_item"],
       "controls": [
         {
@@ -1779,6 +1819,7 @@
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Choose whether menu entry and exit animations play.",
       "card": "menu_animations_item",
+      "attached": false,
       "media_cards": ["menu_animations_item"],
       "controls": [
         {
@@ -1814,6 +1855,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP", "START UP STYLE"],
       "summary": "Choose what plays when the camera turns on and off.",
       "card": null,
+      "attached": false,
       "media_cards": ["startup_power_on_item", "startup_power_off_item"],
       "controls": [
         {
@@ -1867,6 +1909,7 @@
       "path": ["SET-UP", "DEVTOOLS"],
       "summary": "Show the running FujiMod version on the screen.",
       "card": "build_overlay_item",
+      "attached": false,
       "media_cards": ["build_overlay_item"],
       "controls": [
         {
@@ -1902,6 +1945,7 @@
       "path": ["SET-UP", "DEVTOOLS"],
       "summary": "Turn on the camera's diagnostic USB mode.",
       "card": "usb_debug_item",
+      "attached": false,
       "media_cards": ["usb_debug_item"],
       "controls": [
         {
@@ -1937,6 +1981,7 @@
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Set menu and shooting indicator opacity independently.",
       "card": null,
+      "attached": false,
       "media_cards": ["opacity_menu_item", "opacity_indicators_item"],
       "controls": [
         {
@@ -2015,6 +2060,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Check for and install a FujiMod update from the update server.",
       "card": null,
+      "attached": true,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2031,6 +2077,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Copy the camera's internal flash to the SD card.",
       "card": null,
+      "attached": true,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2047,6 +2094,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD", "HUD LAYOUT"],
       "summary": "Arrange the shooting display like a phone: the battery in the top-right corner, the film simulation and digital focal length in the bottom-right corner.",
       "card": null,
+      "attached": false,
       "media_cards": ["hud_layout_item"],
       "controls": [
         {
@@ -2082,6 +2130,7 @@
       "path": ["SET-UP", "TOUCH SCREEN SETTING"],
       "summary": "Tap a menu row, tab or option to choose it. Tap outside a pop-up to close it.",
       "card": null,
+      "attached": true,
       "media_cards": ["touch_screen_setting"],
       "controls": [],
       "credits": {
@@ -2098,6 +2147,7 @@
       "path": [],
       "summary": "In AF-S mode, when phase detection fails, the camera estimates focus and measures again before using contrast detection.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2114,6 +2164,7 @@
       "path": ["SET-UP", "SAVE DATA SET-UP"],
       "summary": "Name memory cards after the date they are formatted.",
       "card": "sd_volume_name_item",
+      "attached": false,
       "media_cards": ["sd_volume_name_item"],
       "controls": [],
       "credits": {
@@ -2130,6 +2181,7 @@
       "path": ["SET-UP", "SAVE DATA SET-UP"],
       "summary": "Keep each day's pictures in their own folder, named after the date.",
       "card": "date_folders_item",
+      "attached": false,
       "media_cards": ["date_folders_item"],
       "controls": [],
       "credits": {
@@ -2158,6 +2210,7 @@
       "path": ["SET-UP", "DEVTOOLS", "BUG REPORT SHORTCUT"],
       "summary": "Hold the delete button for 1.5 seconds to save a diagnostic report to the memory card and display a QR code.",
       "card": null,
+      "attached": false,
       "media_cards": ["bug_report_shortcut"],
       "controls": [],
       "credits": {
@@ -2174,6 +2227,7 @@
       "path": [],
       "summary": "Confirm a release selected at start, so the next start keeps it.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2190,6 +2244,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "On X70, choose MANUAL startup with the SD boot buttons or AUTOMATIC startup from the SD card. Automatic startup backs up internal data before it is enabled.",
       "card": null,
+      "attached": true,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2206,6 +2261,7 @@
       "path": [],
       "summary": "Divide values with the camera's hardware divider to cut live-view CPU time.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2222,6 +2278,7 @@
       "path": [],
       "summary": "Do repeated profile work with fewer instructions to cut live-view CPU time.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2491,7 +2548,7 @@
         "NR OFF": "Turn off all noise reduction."
       },
       "related": [],
-      "changes": "Adds four levels below -2.",
+      "changes": "Further control or completely disable noise reduction. We recommend SPECKLE NR ONLY.",
       "drive_mode": null,
       "credits": {
         "premiere": false,
@@ -3285,8 +3342,8 @@
     },
     "recipes": {
       "title": "EDIT/SAVE CUSTOM SETTING",
-      "path": [],
-      "summary": "SHOOTING MENU > EDIT/SAVE CUSTOM SETTING opens CURRENT, seven C1–C7 FAVORITES and the LIBRARY. Open a name to manage its file; SELECT AS CURRENT applies it. SAVE CURRENT AS NEW captures the camera settings into LIBRARY or a favorite slot. AUTO-UPDATE CURRENT saves live setting changes to the current file when writable. UNSELECT clears CURRENT without changing the live settings. Browse LIBRARY by name, film simulation, author, color, monochrome or custom film; MY RECIPES lists your own. A copy keeps its original's credits. HIDDEN keeps files out of the library lists; ERASE HIDDEN asks before deleting hidden files and skips protected ones.",
+      "path": ["SHOOTING MENU"],
+      "summary": "Store up to 255 custom settings (aka recipes) in your LIBRARY on the SD card. Move settings to your FAVORITES (C1-C7) for quick access. Download and share recipes in JSON format, browse BY AUTHOR and remix the original to make it your own. Yes, custom settings now include WHITE BALANCE SHIFT.",
       "choices": {},
       "related": [],
       "changes": null,
@@ -3586,13 +3643,13 @@
       },
       "choice_credits": {}
     },
-    "6b": {
+    "digital_tele_conv": {
       "title": "DIGITAL TELE-CONV.",
       "path": ["SHOOTING MENU"],
       "summary": "28mm is the lens without the teleconverter. With WIDE CONVERSION LENS on, the choices are 21mm, 26mm and 38mm. DIGITAL FOCAL LENGTH is also a button action: each press steps to the next focal length.",
       "choices": {},
       "related": [],
-      "changes": "Renamed DIGITAL FOCAL LENGTH. The choice survives turning the camera off, and returns after burst and other modes that turn the teleconverter off.",
+      "changes": "Remembers the chosen focal length after turning the camera off, and after burst and other modes that turn the teleconverter off.",
       "drive_mode": null,
       "credits": {
         "premiere": false,
@@ -3622,7 +3679,7 @@
     "ae_af_lock_item": {
       "title": "AE/AF & SCENE",
       "path": ["SHOOTING MENU"],
-      "summary": "AE/AF-LOCK MODE, AE/AF-LOCK BUTTON and SCENE POSITION share one row and open together. Their values, availability and effect are stock: SCENE POSITION is grayed in P, S, A and M and chosen with the AUTO lever. The other rows keep their names, values and behavior; only their positions change.",
+      "summary": "One row for AE/AF-LOCK MODE, AE/AF-LOCK BUTTON and SCENE POSITION, as on the X100VI.",
       "choices": {},
       "related": [],
       "changes": null,
@@ -3655,7 +3712,7 @@
     "usb_debug_item": {
       "title": "USB DEBUGGING",
       "path": ["SET-UP", "DEVTOOLS"],
-      "summary": "Enables the stock diagnostic USB path, which can change normal USB behavior. Disconnect USB before changing the setting, then reconnect it. The choice is not saved, so each start uses the camera's own configuration.",
+      "summary": "Enables the stock diagnostic USB path, which can change normal USB behavior. Disconnect USB before changing the setting, then reconnect it. The camera keeps the choice after it is turned off.",
       "choices": {
         "ON": "Enable the diagnostic USB path.",
         "OFF": "Use normal USB behavior."
@@ -3818,70 +3875,10 @@
   },
   "menus": [
     {
-      "title": "DELETE",
-      "path": ["ASPECT RATIO"],
-      "order": 2,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "EDIT RATIO",
-      "path": ["ASPECT RATIO"],
-      "order": 1,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "ENABLED",
-      "path": ["ASPECT RATIO"],
-      "order": 0,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
       "title": "SAVE ALL",
       "path": ["COMPARE WITH CURRENT"],
       "order": 0,
       "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "FUNCTION",
-      "path": ["CONTROL"],
-      "order": 0,
-      "kind": "setting",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "POSITION",
-      "path": ["CONTROL"],
-      "order": 20,
-      "kind": "setting",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "VALUE",
-      "path": ["CONTROL"],
-      "order": 1,
-      "kind": "setting",
       "stock": false,
       "card": null,
       "feature": null,
@@ -4018,63 +4015,23 @@
       "icon": null
     },
     {
-      "title": "SELECT FOR BRACKETING",
-      "path": ["CUSTOM SETTING"],
-      "order": 4294967295,
-      "kind": "page",
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["DRIVE"],
       "stock": false,
       "card": null,
-      "feature": null,
+      "feature": "custom_settings_bkt",
+      "order": 1000,
+      "kind": "setting",
       "icon": null
     },
     {
-      "title": "1",
-      "path": ["SELECT FOR BRACKETING"],
-      "order": 0,
-      "kind": "command",
+      "title": "SOFTWARE ND",
+      "path": ["DRIVE"],
       "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "2",
-      "path": ["SELECT FOR BRACKETING"],
-      "order": 1,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "3",
-      "path": ["SELECT FOR BRACKETING"],
-      "order": 2,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "4",
-      "path": ["SELECT FOR BRACKETING"],
-      "order": 3,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "5",
-      "path": ["SELECT FOR BRACKETING"],
-      "order": 4,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
+      "card": "software_nd_item",
+      "feature": "software_nd",
+      "order": 1000,
+      "kind": "setting",
       "icon": null
     },
     {
@@ -4115,6 +4072,16 @@
       "stock": false,
       "card": "menu_style_item",
       "feature": "menu_theme",
+      "icon": null
+    },
+    {
+      "title": "TOUCH SCREEN SETTING",
+      "path": ["SET-UP"],
+      "stock": true,
+      "card": "touch_screen_setting",
+      "feature": null,
+      "order": 1000,
+      "kind": "setting",
       "icon": null
     },
     {
@@ -4448,12 +4415,22 @@
       "icon": null
     },
     {
+      "title": "DIGITAL TELE-CONV.",
+      "path": ["SHOOTING MENU"],
+      "stock": true,
+      "card": "digital_tele_conv",
+      "feature": "digital_focal_length",
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
       "title": "EDIT/SAVE CUSTOM SETTING",
       "path": ["SHOOTING MENU"],
       "order": 105,
       "kind": "page",
       "stock": false,
-      "card": null,
+      "card": "recipes",
       "feature": null,
       "icon": null
     },
@@ -5178,16 +5155,6 @@
       "icon": null
     },
     {
-      "title": "FILM",
-      "path": ["SHOOTING MENU", "FUJIMOD", "HIDE FILMS"],
-      "order": 215,
-      "kind": "setting",
-      "stock": false,
-      "card": null,
-      "feature": "hide_films",
-      "icon": null
-    },
-    {
       "title": "CIRCLE OF CONFUSION",
       "path": ["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS"],
       "order": 3,
@@ -5305,26 +5272,6 @@
       "stock": false,
       "card": "shape_surround_item",
       "feature": "surround_view",
-      "icon": null
-    },
-    {
-      "title": "ADD RATIO",
-      "path": ["SHOOTING MENU", "SHAPE & ASPECT", "EDIT ASPECT RATIOS"],
-      "order": 19,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "ASPECT RATIO",
-      "path": ["SHOOTING MENU", "SHAPE & ASPECT", "EDIT ASPECT RATIOS"],
-      "order": 18,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
       "icon": null
     }
   ]
