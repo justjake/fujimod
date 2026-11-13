@@ -56,6 +56,13 @@ const ACK: u32 = 0x0800_8000;
 const READ_SESSION: u32 = 0x14;
 const WRITE_SESSION: u32 = 0x15;
 const PAGE_SIZE: u32 = 0x18;
+/// A read session of 2 KiB pages that X-T2 4.41 starts after the
+/// information pages: command 0xc0 with data 6, then 0xc8dd58 reads one
+/// 0x800-byte page (0x8000001: page size 0x800, request header 1) through
+/// 0xc8e674. What the pages hold is not known; this lens has none, so it
+/// answers the first request with the end header 0xffff.
+const DATA_SESSION: u32 = 0xc0;
+const DATA_PAGE_BYTES: usize = 0x800;
 /// Commands after which the lens moves and holds the ready line low.
 const MOVES: [u32; 2] = [0x40, 0x56];
 
@@ -257,6 +264,12 @@ impl LensPort {
         link.busy = true;
         link.out = match link.bulk {
             None => link.word.to_be_bytes().to_vec(),
+            Some(DATA_SESSION) => {
+                let mut out = vec![0xff, 0xff];
+                out.resize(2 + DATA_PAGE_BYTES, 0);
+                out.push(0xfe);
+                out
+            }
             Some(WRITE_SESSION) => {
                 let mut out = if link.page == 0 {
                     vec![0xff, 0xff]
@@ -284,6 +297,38 @@ impl LensPort {
     }
     fn end(&mut self, cx: &mut Cx<'_>, link: &mut Link) {
         link.busy = false;
+        let head = link
+            .transmitted
+            .iter()
+            .take(4)
+            .fold(0u128, |w, b| w << 8 | u128::from(*b));
+        cx.record(fujimod_emulator_devices::Record::new(
+            "X-Processor Pro lens frame end",
+            [
+                (
+                    "transmitted",
+                    fujimod_emulator_devices::Value::int(link.transmitted.len() as i128),
+                ),
+                ("head", fujimod_emulator_devices::Value::hex(head)),
+                (
+                    "received",
+                    fujimod_emulator_devices::Value::int(link.received as i128),
+                ),
+                (
+                    "bulk",
+                    fujimod_emulator_devices::Value::int(link.bulk.map_or(-1, i128::from)),
+                ),
+                (
+                    "page",
+                    fujimod_emulator_devices::Value::int(link.page as i128),
+                ),
+                (
+                    "page_size",
+                    fujimod_emulator_devices::Value::int(link.page_size as i128),
+                ),
+                ("tick", fujimod_emulator_devices::Value::int(cx.now())),
+            ],
+        ));
         if let Some(session) = link.bulk {
             let last: &[u8] = if session == WRITE_SESSION {
                 &[0xff, 0]
@@ -345,7 +390,8 @@ impl LensPort {
         } else {
             link.word = link.reply;
             link.acknowledge = false;
-            if is_message(link.sent) && [READ_SESSION, WRITE_SESSION].contains(&command(link.sent))
+            if is_message(link.sent)
+                && [READ_SESSION, WRITE_SESSION, DATA_SESSION].contains(&command(link.sent))
             {
                 link.bulk = Some(command(link.sent));
                 link.page = 0;
@@ -635,6 +681,26 @@ mod tests {
         write(&mut lens, &mut h, BASE + TRANSFER, 3);
         assert_eq!(data.read(BASE + RECEIVE, 2).unwrap(), [0xff, 0xff]);
         write(&mut lens, &mut h, BASE + TRANSFER, 0);
+        assert_eq!(lens.link.lock().unwrap().bulk, None);
+    }
+
+    #[test]
+    fn a_data_session_answers_one_empty_two_kib_page() {
+        let (mut lens, _) = lens();
+        let mut h = TestHost::new();
+        // X-T2 4.41: command 0xc0 with data 6, then one 0x803-byte read.
+        transfer(&mut lens, &mut h, seal(6 << 16 | DATA_SESSION << 6));
+        transfer(&mut lens, &mut h, 0);
+        transfer(&mut lens, &mut h, 0);
+        transfer(&mut lens, &mut h, 0);
+        assert_eq!(lens.link.lock().unwrap().bulk, Some(DATA_SESSION));
+        let data = data(&lens);
+        write(&mut lens, &mut h, BASE + TRANSFER, 3);
+        let page = data.read(BASE + RECEIVE, 2 + DATA_PAGE_BYTES + 1).unwrap();
+        write(&mut lens, &mut h, BASE + TRANSFER, 0);
+        assert_eq!(page[..2], [0xff, 0xff]);
+        assert!(page[2..2 + DATA_PAGE_BYTES].iter().all(|b| *b == 0));
+        assert_eq!(page[2 + DATA_PAGE_BYTES], 0xfe);
         assert_eq!(lens.link.lock().unwrap().bulk, None);
     }
 

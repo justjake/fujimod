@@ -4,10 +4,16 @@
 //! X-T20 2.11 section 5 programs the timing words +0x04..+0x58
 //! (0xc3fd10..0xc401b4) and +0x00: 0xc3fc98 writes bit 1, 0xc3fcb8 writes
 //! bits 0, 1 and 4, 0xc3fce0 clears bit 1. Seg6 0x16b91bc clears bit 0 and
-//! waits until it reads set, while bit 1 may be clear. Bit 0 is the frame
-//! flag: a frame starts every declared period counted from tick zero and sets
-//! it; the other bits read back their last write, and whether any of them
-//! gates the frames is not known. Each frame also latches the status
+//! waits until it reads set, while bit 1 may be clear. X-T2 4.41 makes the
+//! same check in the same place of the sensor start-up (0x186ff5c, the twin
+//! of X-T20 0x17fa3dc) with a bound: 0x1729820 clears bit 0 through 0xc49b98
+//! and reads it at most twelve times back to back (0xc49b60), else returns
+//! 0x86 and the start-up repeats. So bit 0 sets again within a few register
+//! reads of being cleared, not only on the next frame: a write that clears
+//! it sets it again one tick later. A frame, which starts every declared
+//! period counted from tick zero, also sets it. Its exact latency is not
+//! known. The other bits read back their last write, and whether any of
+//! them gates the frames is not known. Each frame also latches the status
 //! bits of the declared frame sources in +0x144. A source's line is high
 //! while its status and enable bits are both set; writing 1 to a status bit
 //! clears it (0xc359b4, called by the handlers 0xd09958 and 0xd099ec). All
@@ -24,6 +30,8 @@ pub const WINDOW: u64 = 0x100;
 pub const INTERRUPT_WINDOW: u64 = 8;
 const LAST_WORD: u64 = 0x58;
 const FRAME: u32 = 1;
+/// Ticks after a write that clears the frame flag until it reads set again.
+const FLAG_SETTLE_TICKS: u64 = 1;
 const ENABLE: u64 = 0;
 const STATUS: u64 = 4;
 /// Status and enable bit of each source.
@@ -36,6 +44,8 @@ struct State {
     enable: u32,
     status: u32,
     next: u64,
+    /// Tick at which a cleared frame flag sets again.
+    settle: Option<u64>,
     lines: [bool; 3],
 }
 pub struct Generator {
@@ -122,6 +132,12 @@ impl Device for Generator {
         match self.offset(address, size) {
             Some(Ok(o)) => {
                 self.state.words.insert(o, value);
+                if o == 0 && value & FRAME == 0 {
+                    match cx.now().checked_add(FLAG_SETTLE_TICKS) {
+                        Some(at) => self.state.settle = Some(at),
+                        None => return cx.fail("Frame flag deadline overflow"),
+                    }
+                }
             }
             Some(Err(ENABLE)) => self.state.enable = value,
             Some(Err(STATUS)) => self.state.status &= !value,
@@ -130,6 +146,10 @@ impl Device for Generator {
         self.update_lines(cx);
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.state.settle.is_some_and(|at| at <= cx.now()) {
+            self.state.settle = None;
+            *self.state.words.entry(0).or_default() |= FRAME;
+        }
         let next = self.state.next;
         if next > cx.now() {
             return;
@@ -149,7 +169,11 @@ impl Device for Generator {
         self.update_lines(cx);
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        Some(self.state.next)
+        Some(
+            self.state
+                .settle
+                .map_or(self.state.next, |at| at.min(self.state.next)),
+        )
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap_or(Value::Null)
@@ -191,10 +215,13 @@ mod tests {
         let mut h = TestHost::new();
         write(&mut sync, &mut h, BASE + 0x08, 0x0010_0020);
         assert_eq!(sync.next_deadline(0), Some(1000));
-        // 0x16b91bc: clear bit 0, then wait for the next frame.
+        // 0x1729820: clear bit 0, which reads set again a tick later.
         write(&mut sync, &mut h, BASE, 0x10);
-        advance(&mut sync, &mut h, 999);
         assert_eq!(read(&mut sync, &mut h, BASE), 0x10);
+        assert_eq!(sync.next_deadline(0), Some(1));
+        advance(&mut sync, &mut h, 1);
+        assert_eq!(read(&mut sync, &mut h, BASE), 0x11);
+        assert_eq!(read(&mut sync, &mut h, INTERRUPTS + 4), 0);
         write(&mut sync, &mut h, INTERRUPTS, 0x101);
         advance(&mut sync, &mut h, 1000);
         assert_eq!(read(&mut sync, &mut h, BASE), 0x11);
