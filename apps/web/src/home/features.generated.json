@@ -3961,15 +3961,6 @@
       "feature": "unlocked_controls"
     },
     {
-      "title": "UNLOCKED CONTROLS",
-      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
-      "order": 5,
-      "kind": "heading",
-      "stock": false,
-      "card": null,
-      "feature": null
-    },
-    {
       "title": "BUG REPORT SHORTCUT",
       "path": ["SET-UP", "DEVTOOLS"],
       "order": 3,
@@ -4112,15 +4103,6 @@
       "stock": false,
       "card": "ae_af_lock_item",
       "feature": "menu_order"
-    },
-    {
-      "title": "AE/AF-LOCK BUTTON",
-      "path": ["SHOOTING MENU"],
-      "order": 84,
-      "kind": "heading",
-      "stock": false,
-      "card": null,
-      "feature": null
     },
     {
       "title": "CLARITY",
@@ -4276,29 +4258,11 @@
       "feature": "highlight_metering"
     },
     {
-      "title": "SCENE POSITION",
-      "path": ["SHOOTING MENU"],
-      "order": 52,
-      "kind": "heading",
-      "stock": false,
-      "card": null,
-      "feature": null
-    },
-    {
-      "title": "SELECT CUSTOM SETTING",
-      "path": ["SHOOTING MENU"],
-      "order": 104,
-      "kind": "heading",
-      "stock": false,
-      "card": null,
-      "feature": null
-    },
-    {
       "title": "SHADOW TONE",
       "path": ["SHOOTING MENU"],
       "order": 30,
-      "kind": "heading",
-      "stock": false,
+      "kind": "setting",
+      "stock": true,
       "card": null,
       "feature": null
     },
