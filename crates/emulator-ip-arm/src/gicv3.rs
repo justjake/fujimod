@@ -31,6 +31,13 @@ struct Active {
 #[derive(Clone, Serialize, Deserialize)]
 struct Interface {
     system_register_enable: bool,
+    /// ICC_SRE_EL2.Enable: lets EL1 access ICC_SRE_EL1. Retained, not gating.
+    #[serde(default)]
+    hypervisor_enable: bool,
+    /// ICC_IGRPEN1_EL3 bits 1:0 (EnableGrp1NS, EnableGrp1S). Retained, not gating: the
+    /// security banks are not modeled, so the EL1 group enable alone controls delivery.
+    #[serde(default)]
+    el3_group1: u8,
     enabled: [bool; 2],
     pmr: u8,
     bpr: [u8; 2],
@@ -42,6 +49,8 @@ impl Default for Interface {
     fn default() -> Self {
         Self {
             system_register_enable: false,
+            hypervisor_enable: false,
+            el3_group1: 0,
             enabled: [false; 2],
             pmr: 0,
             bpr: [0; 2],
@@ -284,6 +293,25 @@ impl Gic {
                 // This implementation has no legacy interface: SRE/DIB/DFB
                 // are RAO/WI; Enable is retained per core.
                 Ok(7 | (u64::from(self.state.interfaces[core].system_register_enable) * 8))
+            }
+            0xe64d => {
+                if let Some(v) = value {
+                    if v & !15 != 0 {
+                        return Err("unsupported GICv3 ICC_SRE_EL2 bits".into());
+                    }
+                    self.state.interfaces[core].hypervisor_enable = v & 8 != 0;
+                }
+                // As ICC_SRE_EL3: SRE/DIB/DFB are RAO/WI; Enable is retained per core.
+                Ok(7 | (u64::from(self.state.interfaces[core].hypervisor_enable) * 8))
+            }
+            0xf667 => {
+                if let Some(v) = value {
+                    if v & !3 != 0 {
+                        return Err("unsupported GICv3 ICC_IGRPEN1_EL3 bits".into());
+                    }
+                    self.state.interfaces[core].el3_group1 = v as u8;
+                }
+                Ok(self.state.interfaces[core].el3_group1.into())
             }
             0xc230 => {
                 if let Some(v) = value {
@@ -673,6 +701,23 @@ mod tests {
         g.restore(&saved).unwrap();
         assert_eq!(g.system(0, 0xf665, None).unwrap(), 15);
         assert!(g.system(0, 0xf665, Some(16)).is_err());
+    }
+    #[test]
+    fn el2_sre_and_el3_group_enables_are_per_core_and_survive_checkpoint() {
+        let mut g = super::Gic::new(vec![0, 1], 128).unwrap();
+        assert_eq!(g.system(0, 0xe64d, None).unwrap(), 7);
+        assert_eq!(g.system(0, 0xe64d, Some(0xf)).unwrap(), 15);
+        assert_eq!(g.system(1, 0xe64d, None).unwrap(), 7);
+        assert_eq!(g.system(0, 0xf667, Some(3)).unwrap(), 3);
+        assert_eq!(g.system(1, 0xf667, None).unwrap(), 0);
+        let saved = g.save();
+        g.system(0, 0xe64d, Some(0)).unwrap();
+        g.system(0, 0xf667, Some(0)).unwrap();
+        g.restore(&saved).unwrap();
+        assert_eq!(g.system(0, 0xe64d, None).unwrap(), 15);
+        assert_eq!(g.system(0, 0xf667, None).unwrap(), 3);
+        assert!(g.system(0, 0xe64d, Some(16)).is_err());
+        assert!(g.system(0, 0xf667, Some(4)).is_err());
     }
     use super::*;
     fn enabled(affinities: Vec<u32>) -> Gic {

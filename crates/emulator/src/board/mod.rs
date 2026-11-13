@@ -1819,7 +1819,9 @@ impl State {
         };
         let write = if read { None } else { Some(value.unwrap_or(0)) };
         let value = if r == 0xc230
+            || r == 0xe64d
             || r == 0xf665
+            || r == 0xf667
             || (r >> 14 == 3
                 && (r >> 11) & 7 == 0
                 && (r >> 7) & 15 == 12
