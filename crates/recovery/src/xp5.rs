@@ -193,6 +193,29 @@ pub(crate) fn package_with_storage(
     inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
     storage: Option<&[u8]>,
 ) -> Result<Vec<File>> {
+    package_inner(inverted, setup, ram, success_hold_seconds, storage, false)
+}
+
+/// Startup with the installed flash left attached: the card supplies the RAM
+/// image only. The setup prelude initializes and scans the installed flash as
+/// stage one does, and the card-resident setup tables, namespace and unit
+/// cache are not used, so no per-unit storage image is involved.
+pub(crate) fn package_internal_flash(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32,
+) -> Result<Vec<File>> {
+    let mut setup = setup.clone();
+    setup.card_boot = None;
+    setup.banks = Banks {
+        copies: Vec::new(),
+        edits: Vec::new(),
+    };
+    package_inner(inverted, &setup, Some(ram), success_hold_seconds, None, true)
+}
+
+fn package_inner(
+    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
+    storage: Option<&[u8]>, probe_installed_flash: bool,
+) -> Result<Vec<File>> {
     let prefix = setup.verify(inverted)?;
     let copied_end = setup.base + setup.low_length as u64;
     // XP5 raw-entry SRAM reserves its upper workspace for the boot service.
@@ -314,7 +337,7 @@ pub(crate) fn package_with_storage(
         // two billion iterations per second, 2,048 units take >= 1.024 s.
         u64::from(success_hold_seconds) * 2_048,
     )?;
-    put64(&mut program, cfg + 200, u64::from(ram.is_none()))?;
+    put64(&mut program, cfg + 200, u64::from(ram.is_none() || probe_installed_flash))?;
     let restore = template::XP5_SETUP_RETURN_BRANCH;
     require(
         word(&program, restore)? == 0x14000000,
@@ -640,6 +663,90 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn internal_flash_startup_probes_flash_like_stage_one_and_drops_card_resident_tables() {
+        let (data, mut s, ram) = fixture();
+        let plain = s.clone();
+        s.banks = Banks {
+            copies: vec![banks::Copy {
+                source_offset: 0x1000,
+                destination_offset: 0x20000,
+                size: 16,
+                sha256: fujimod_firmware::sha256(&data[0x1000..0x1010]),
+            }],
+            edits: vec![],
+        };
+        let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
+        let flag = |raw: &[u8]| u64::from_le_bytes(raw[source..source + 8].try_into().unwrap());
+        let card = package(&data, &s, Some(ram.clone()), 0).unwrap();
+        let flash = package_internal_flash(&data, &s, ram.clone(), 0).unwrap();
+        assert_eq!(
+            flash.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            ["marble_init.bin", "ffboot.bin"]
+        );
+        assert_eq!(flash[1].bytes, ram);
+        assert_eq!((flag(&card[0].bytes), flag(&flash[0].bytes)), (0, 1));
+        // The card start relocates the setup tables into SRAM; the flash start does not.
+        assert_eq!(&card[0].bytes[0x20000..0x20010], &data[0x1000..0x1010]);
+        assert!(flash[0].bytes.len() < 0x20000);
+        // Against a card start with no extras, only the flash-probe word differs.
+        let bare = package(&data, &plain, Some(ram), 0).unwrap();
+        let mut expected = bare[0].bytes.clone();
+        put64(&mut expected, source, 1).unwrap();
+        assert_eq!(expected, flash[0].bytes);
+        assert_eq!(bare[1].bytes, flash[1].bytes);
+    }
+
+    #[test]
+    fn boot_files_never_include_the_update_and_internal_flash_takes_no_unit_storage() {
+        use crate::StartupOptions;
+        let (data, s, _) = fixture();
+        let update = fujimod_firmware::invert(&data);
+        let mut recipe = crate::Recipe::bundled("x100vi-131").unwrap().unwrap();
+        recipe.source_size = update.len();
+        recipe.source_sha256 = fujimod_firmware::sha256(&update);
+        recipe.updater = None;
+        recipe.plan = Some(image::Plan {
+            size: 0x1000,
+            entry: 0,
+            regions: vec![image::Region {
+                name: "reset".into(),
+                address: 0,
+                source: Source {
+                    dat_offset: 0x40000,
+                    size: 0x1000,
+                    compression: image::Compression::Raw,
+                    decoded_size: 0x1000,
+                    sha256: fujimod_firmware::sha256(&data[0x40000..0x41000]),
+                    initialized_prefix: None,
+                },
+            }],
+            bss: vec![],
+            edits: vec![image::Edit {
+                address: 0x40,
+                old: 1,
+                new: 0,
+                what: "preloaded selector".into(),
+            }],
+        });
+        recipe.xp5 = Some(s);
+        let options = StartupOptions {
+            internal_flash: true,
+            ..StartupOptions::default()
+        };
+        let names = |files: &[File]| files.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
+        let everything = recipe.build_startup_with_options(&update, options).unwrap();
+        assert_eq!(names(&everything), ["marble_init.bin", "ffboot.bin", "FPUPDATE.DAT"]);
+        let boot = recipe.build_boot_files(&update, options).unwrap();
+        assert_eq!(names(&boot), ["marble_init.bin", "ffboot.bin"]);
+        assert_eq!(boot[0].bytes, everything[0].bytes);
+        assert_eq!(boot[1].bytes, everything[1].bytes);
+        assert!(recipe.build_startup_with_storage(&update, &[0; 8], options).is_err());
+        let mut stage_one = recipe.clone();
+        stage_one.generation = crate::Generation::Xp4;
+        assert!(stage_one.build_boot_files(&update, options).is_err());
+    }
+
     #[test]
     fn success_hold_is_optional_and_changes_only_its_configuration() {
         let (data, s, ram) = fixture();

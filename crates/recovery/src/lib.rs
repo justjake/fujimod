@@ -30,6 +30,11 @@ pub use xp5::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct StartupOptions {
     pub success_hold_seconds: u32,
+    /// XP5 only: keep the installed flash attached. The card supplies the RAM
+    /// image alone; the prelude initializes and scans the installed flash as
+    /// stage one does, and no card-resident tables, namespace or unit storage
+    /// image are used (so none is needed).
+    pub internal_flash: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -356,6 +361,14 @@ impl Recipe {
     ) -> Result<Vec<File>> {
         self.startup_inputs(source, options, None)
     }
+    /// `build_startup_with_options` without the update: only the files the
+    /// boot ROM and the loader read (`marble_init.bin` and `ffboot.bin` for
+    /// XP5). The update is an independent updater input; this never returns it.
+    pub fn build_boot_files(&self, source: &[u8], options: StartupOptions) -> Result<Vec<File>> {
+        let mut files = self.build_startup_with_options(source, options)?;
+        files.retain(|file| !file.name.eq_ignore_ascii_case(&self.update_filename));
+        Ok(files)
+    }
     /// Include the unit's retained storage data in a checked card startup.
     pub fn build_startup_with_storage(
         &self, source: &[u8], storage: &[u8], options: StartupOptions,
@@ -406,6 +419,11 @@ impl Recipe {
         require(
             options.success_hold_seconds == 0 || matches!(self.generation, Generation::Xp5),
             "Success hold requires XP5",
+        )?;
+        require(
+            !options.internal_flash
+                || (matches!(self.generation, Generation::Xp5) && storage.is_none()),
+            "Internal-flash startup requires XP5 and takes no storage image",
         )?;
         require(
             source.len() == self.source_size,
@@ -491,13 +509,23 @@ impl Recipe {
                             "Missing XP5 post-setup SD loader and handoff facts".into(),
                         )
                     })?;
-                    xp5::package_with_storage(
-                        &inverted,
-                        setup,
-                        Some(image::transform(&inverted, plan)?),
-                        options.success_hold_seconds,
-                        storage,
-                    )?
+                    let ram = image::transform(&inverted, plan)?;
+                    if options.internal_flash {
+                        xp5::package_internal_flash(
+                            &inverted,
+                            setup,
+                            ram,
+                            options.success_hold_seconds,
+                        )?
+                    } else {
+                        xp5::package_with_storage(
+                            &inverted,
+                            setup,
+                            Some(ram),
+                            options.success_hold_seconds,
+                            storage,
+                        )?
+                    }
                 }
             };
         require(

@@ -174,7 +174,16 @@ optional runtime binding initializes the card and serves checked descriptor
 reads from that namespace; it uses the card’s retained training data and
 does not initialize the serial NOR controller.
 
-`sd-boot-v1-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-ram-startup FIRMWARE DAT NEW_DIRECTORY` (XP5) writes only the two files the boot ROM
+and the loader read, `marble_init.bin` and `ffboot.bin`, and never the update. The installed flash
+stays attached: the prelude initializes and scans it as `sd-boot-v1-stage-one` does, the card
+carries only the RAM image, and the card-resident setup tables, namespace and unit cache are not
+used, so no unit storage image is involved and none of the unit's data reaches the output
+(`StartupOptions::internal_flash` and `Recipe::build_boot_files` are the library forms). Without
+that option, a recipe that carries a card-resident setup (X100VI 1.31) refuses to build a startup
+without a unit storage image.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per

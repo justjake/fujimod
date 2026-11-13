@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
-            | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            | "sd-boot-v1-ram-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -66,9 +66,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 None
             };
             let (firmware, dat, output, success_hold_seconds) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one"))?;
+                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup"))?;
             let options = StartupOptions {
                 success_hold_seconds,
+                internal_flash: command == "sd-boot-v1-ram-startup",
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
@@ -84,6 +85,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 recipe.build_ota_startup(&source)?
             } else if command == "sd-boot-v1-stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
+            } else if command == "sd-boot-v1-ram-startup" {
+                // The update stays an independent input and is not written.
+                recipe.build_boot_files(&source, options)?
             } else {
                 recipe.build_startup_with_options(&source, options)?
             };
@@ -98,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
