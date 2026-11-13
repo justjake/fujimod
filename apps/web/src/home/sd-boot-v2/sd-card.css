@@ -234,7 +234,9 @@
 }
 .sd-source {
   color: inherit;
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: rgb(235 235 245 / 30%);
+  text-underline-offset: 3px;
 }
 .sd-source:hover {
   color: #64d2ff;
