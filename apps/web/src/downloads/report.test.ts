@@ -51,3 +51,14 @@ test('a refused beacon falls back to keepalive fetch', async () => {
   expect(fetcher.mock.calls[0]?.[0]).toBe('/api/downloads');
   expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', keepalive: true });
 });
+
+test('an invalid saved session is replaced instead of sent', () => {
+  const storage = sessionStorage();
+  storage.setItem('fujimod.download-session', 'not-a-uuid');
+  vi.stubGlobal('sessionStorage', storage);
+
+  const created = downloadSession();
+
+  expect(created).not.toBe('not-a-uuid');
+  expect(storage.getItem('fujimod.download-session')).toBe(created);
+});
