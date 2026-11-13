@@ -7098,6 +7098,15 @@
           "status": "available",
           "errors": []
         },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
+        },
         "controls": {
           "status": "available",
           "errors": []
@@ -7105,42 +7114,6 @@
         "facts": {
           "status": "unavailable",
           "errors": [
-            {
-              "locator": "ui_modes",
-              "reason": "ui_hdmi_allowed_in_current_mode: 1 candidates, 0 verified results (0xbf7b0c: HDMI predicate lacks one checked playback/SETUP playback pair)"
-            },
-            {
-              "locator": "menu_cursor",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "remote_menu",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ff80_limits",
-              "reason": "usb_service_debug_dispatch: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "usb_normal_ids",
-              "reason": "storage_read_fixed_slice: 1 candidates, 0 verified results (0xce45c8: Fixed factory storage reader lacks one bounded flash base)"
-            },
-            {
-              "locator": "app80",
-              "reason": "App80 writer lacks the mailbox offset check"
-            },
-            {
-              "locator": "debug_enable",
-              "reason": "usb_service_configuration_write: 0 verified results from 49 candidates (Configuration callback lacks its checked offset-1+count span; Not the service callback with the offset-80 special case)"
-            },
-            {
-              "locator": "service_entry.usb_condition",
-              "reason": "JIGBOOT producer or its complete USB/MCU conditions did not verify"
-            },
-            {
-              "locator": "service_exit.jig_deinit_link",
-              "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
-            },
             {
               "locator": "framebuffer",
               "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
@@ -7157,17 +7130,12 @@
           ]
         },
         "flash": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "flash_error",
-              "reason": "xpp: flash reader contract is not implemented"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
         },
         "progress": {
           "status": "unavailable",
@@ -7188,13 +7156,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "SettingsCatalogError: No settings profile is available for this firmware"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
@@ -7202,10 +7165,6 @@
             {
               "locator": "boot_rom_error",
               "reason": "xpp: no established safely readable boot ROM extent"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
             }
           ]
         },
@@ -7216,15 +7175,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
@@ -7237,6 +7187,15 @@
         "bulk": {
           "status": "available",
           "errors": []
+        },
+        "card-files": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "card_files.locate",
+              "reason": "ValueError: No stock card-call mechanism for this processor"
+            }
+          ]
         },
         "controls": {
           "status": "available",
@@ -7300,15 +7259,6 @@
         "versions": {
           "status": "available",
           "errors": []
-        },
-        "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
         }
       }
     },
