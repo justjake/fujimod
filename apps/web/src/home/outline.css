@@ -1,0 +1,59 @@
+.outline {
+  max-width: var(--content-width);
+  margin: 0 auto 56px;
+}
+.outline-section {
+  margin-top: 18px;
+}
+.outline-section > summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+.outline-tree,
+.outline-tree ul {
+  margin: 0;
+  padding-left: 18px;
+  list-style: none;
+}
+.outline-tree {
+  margin-top: 10px;
+  padding-left: 4px;
+}
+.outline-tree ul {
+  border-left: 1px solid rgb(255 255 255 / 9%);
+  margin-left: 2px;
+}
+.outline-tree li {
+  padding: 3px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.outline-title {
+  font-weight: 600;
+  color: #f2f2f7;
+}
+.outline-title + .outline-summary {
+  margin-left: 10px;
+}
+.outline-summary {
+  color: rgb(235 235 245 / 60%);
+}
+.outline-choices li {
+  font-size: 13px;
+}
+.outline-choice {
+  font-weight: 500;
+  color: rgb(235 235 245 / 85%);
+}
+.outline-new {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: rgb(10 132 255 / 25%);
+  color: #64d2ff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}

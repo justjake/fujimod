@@ -1,53 +1,22 @@
 import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { FeatureIcon as Icon } from './FeatureIcon';
-import catalogData from './features.generated.json';
+import {
+  catalog,
+  type Choice,
+  type Control,
+  type Credits,
+  type Feature,
+  type Inline,
+} from './catalog';
 import { FeatureTile } from './FeatureTile';
 import { fadeLoop } from './fade-loop';
 import { featureMedia, type Media } from './feature-media';
 import './features.css';
 
-/** Inline Markdown from the docs: text, bold, italic and links. */
-type Inline = string | { b: Inline[] } | { i: Inline[] } | { href: string; text: Inline[] };
-type Credits = { premiere: boolean; inspired: Inline[][]; thanks: Inline[][] };
-/** A hover card: one control, its options and what FujiMod changed. */
-type Card = {
-  title: string;
-  path: string[];
-  summary: string | null;
-  choices: Record<string, string>;
-  related: { card: string; reason: string }[];
-  changes: string | null;
-  credits: Credits;
-  choice_credits: Record<string, Credits>;
-};
-type Choice = { label: string; stock: boolean; icon: string | null };
-type Control = {
-  title: string;
-  primary: boolean;
-  card: string | null;
-  choices: Choice[];
-  actions: string[];
-};
-/** A catalog tile: one feature, its controls and the cards its preview may come from. */
-type Feature = {
-  id: string;
-  group: string;
-  icon: string;
-  title: string;
-  path: string[];
-  summary: string;
-  card: string | null;
-  media_cards: string[];
-  controls: Control[];
-  credits: Credits;
-};
-/** Generated feature descriptions and menu options. */
-type Catalog = { schema: 1; groups: string[]; features: Feature[]; cards: Record<string, Card> };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
-const catalog = catalogData as Catalog;
 const CARDS = catalog.cards;
 const GROUP_TITLES: Record<string, string> = {
   photography: 'Photography',
