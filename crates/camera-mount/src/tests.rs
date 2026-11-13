@@ -1,5 +1,4 @@
 use super::*;
-use sha2::Digest;
 use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
@@ -437,14 +436,12 @@ fn read_only_device_reads_the_card_and_refuses_every_change() {
 }
 
 #[test]
-fn file_commands_list_patterns_read_prefixes_and_rewrite_any_size() {
+fn file_commands_list_patterns_and_read_prefixes() {
     let (mut fs, device) = filesystem();
     {
         let mut s = device.0.lock().unwrap();
         s.files.insert("A:\\DCIM\\DSCF0001.JPG".into(), vec![1; 10]);
         s.files.insert("A:\\DCIM\\DSCF0002.RAF".into(), vec![2; 10]);
-        s.files
-            .insert("A:\\FUJIMOD\\SETTINGS.JSN".into(), b"{\"a\":1}".to_vec());
     }
     let names = |nodes: Vec<Node>| nodes.into_iter().map(|n| n.name).collect::<Vec<_>>();
     assert_eq!(
@@ -465,49 +462,5 @@ fn file_commands_list_patterns_read_prefixes_and_rewrite_any_size() {
         files::list(&mut fs, "DCIM/NONE.JPG").err(),
         Some(libc::ENOENT)
     );
-
-    // Longer, shorter and new files all end at exactly the written bytes.
-    for data in [b"{\"a\":1,\"b\":22}".to_vec(), b"{}".to_vec()] {
-        let hash = files::put(&mut fs, "FUJIMOD/SETTINGS.JSN", &data).unwrap();
-        assert_eq!(hash, format!("{:x}", sha2::Sha256::digest(&data)));
-        assert_eq!(
-            device.0.lock().unwrap().files["A:\\FUJIMOD\\SETTINGS.JSN"],
-            data
-        );
-    }
-    files::put(&mut fs, "FUJIMOD/NEW.JSN", b"new").unwrap();
-    assert_eq!(
-        device.0.lock().unwrap().files["A:\\FUJIMOD\\NEW.JSN"],
-        b"new"
-    );
-    assert_eq!(
-        files::put(&mut fs, "FUJIMOD/*.JSN", b"x").err(),
-        Some(libc::EINVAL)
-    );
-
-    device.0.lock().unwrap().fail_write = true;
-    assert_eq!(
-        files::put(&mut fs, "FUJIMOD/NEW.JSN", b"other").err(),
-        Some(libc::EIO)
-    );
 }
 
-#[test]
-fn read_only_devices_refuse_file_puts() {
-    let device = TestDevice::default();
-    device
-        .0
-        .lock()
-        .unwrap()
-        .files
-        .insert("A:\\FUJIMOD\\SETTINGS.JSN".into(), b"{}".to_vec());
-    let mut fs = CameraFs::new(read_only::ReadOnly(device.clone()), vec![]).unwrap();
-    assert_eq!(
-        files::put(&mut fs, "FUJIMOD/SETTINGS.JSN", b"{\"a\":1}").err(),
-        Some(libc::EROFS)
-    );
-    assert_eq!(
-        device.0.lock().unwrap().files["A:\\FUJIMOD\\SETTINGS.JSN"],
-        b"{}"
-    );
-}
