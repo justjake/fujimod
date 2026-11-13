@@ -282,6 +282,13 @@ def follow_pin(
     checkout.git("checkout", "-q", "--detach", new[1])
 
 
+def follows_superproject(repository: Repository) -> bool:
+    """A detached submodule checkout moves with its superproject's pin, not a branch."""
+    if repository.git("symbolic-ref", "-q", "HEAD", check=False).returncode == 0:
+        return False
+    return bool(repository.output("rev-parse", "--show-superproject-working-tree"))
+
+
 def merge_path(
     repository: Repository,
     path: str,
@@ -362,6 +369,10 @@ def main() -> None:
             return
         if args.install_service:
             print(f"installed {install_service(repository, args.interval)}")
+            return
+        if follows_superproject(repository):
+            if not args.quiet:
+                print("sync: detached submodule; the superproject's sync moves its pin")
             return
         ref = repository.branch()
         if args.quiet and remote_head(repository, ref) == repository.output(
