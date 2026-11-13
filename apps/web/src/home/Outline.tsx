@@ -152,26 +152,35 @@ function Kind(props: { row?: MenuRow; inside: boolean }) {
   );
 }
 
-function Options(props: { cardKey: string; card: Card }) {
-  const list = () =>
-    options.get(props.cardKey) ??
-    Object.keys(props.card.choices).map((label) => ({ label, stock: false, icon: null }));
+/** The card's options, or the control's from the features that list it. */
+function choicesOf(cardKey: string, card: Card): Choice[] {
   return (
-    <ul class="outline-choices">
-      <For each={list().filter((choice) => props.card.choices[choice.label] || !choice.stock)}>
+    options.get(cardKey) ??
+    Object.keys(card.choices).map((label) => ({ label, stock: false, icon: null }))
+  );
+}
+
+/** A plain switch reads as ON/OFF beside its title. */
+const isSwitch = (choices: readonly Choice[]) =>
+  choices.length === 2 &&
+  choices.every((choice) => choice.label === 'ON' || choice.label === 'OFF');
+
+/** Option chips on one line, as on the catalog tiles; each option's text is its tooltip. */
+function Options(props: { choices: Choice[]; card: Card }) {
+  return (
+    <div class="catalog-chips outline-chips">
+      <For each={props.choices}>
         {(choice) => (
-          <li>
-            <span class={choice.stock ? 'catalog-chip stock' : 'catalog-chip'}>
-              <Show when={choice.icon}>{(name) => <ChipIcon name={name()} />}</Show>
-              {choice.label}
-            </span>
-            <Show when={props.card.choices[choice.label]}>
-              <span class="outline-summary">{props.card.choices[choice.label]}</span>
-            </Show>
-          </li>
+          <span
+            class={choice.stock ? 'catalog-chip stock' : 'catalog-chip'}
+            title={props.card.choices[choice.label]}
+          >
+            <Show when={choice.icon}>{(name) => <ChipIcon name={name()} />}</Show>
+            {choice.label}
+          </span>
         )}
       </For>
-    </ul>
+    </div>
   );
 }
 
@@ -182,11 +191,16 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
   const feature = (): Feature | undefined => (cardKey() ? tiles.get(cardKey()!) : undefined);
   const added = () => !!props.node.row && !props.node.row.stock;
   const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
+  const choices = () => (card() ? choicesOf(cardKey()!, card()!) : []);
+  const switched = () => isSwitch(choices());
   return (
     <li class={{ heading: props.node.row?.kind === 'heading' }}>
       <div class="outline-row">
         <Show when={feature()}>{(tile) => <FeatureIcon name={tile().icon} />}</Show>
         <span class="outline-title">{props.node.title}</span>
+        <Show when={switched()}>
+          <span class="outline-switch">ON/OFF</span>
+        </Show>
         <Kind row={props.node.row} inside={props.inside} />
         <Show when={credits().premiere}>
           <Premiere />
@@ -210,8 +224,8 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
                 </p>
               )}
             </Show>
-            <Show when={Object.keys(found().choices).length || options.has(cardKey()!)}>
-              <Options cardKey={cardKey()!} card={found()} />
+            <Show when={choices().length && !switched()}>
+              <Options choices={choices()} card={found()} />
             </Show>
           </>
         )}
