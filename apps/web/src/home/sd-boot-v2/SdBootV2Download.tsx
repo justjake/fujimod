@@ -250,7 +250,6 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
     try {
       const zip = await buildCard(plan().files, {
         assetBase: release.assetBase,
-        base: location.origin,
         release: release.release,
         git: git(),
         progress: (done, total) => setProgress(`${done} of ${total} files`),

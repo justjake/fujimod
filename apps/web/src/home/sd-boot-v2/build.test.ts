@@ -19,7 +19,7 @@ test('the card ZIP holds every checked file and a clean Git repository of FUJIMO
   const served = new Map<string, Uint8Array>([
     ['/releases/1.0/STAGE2.BIN', boot],
     ['/releases/1.0/RECIPE.JSN', recipe],
-    [`/ota/store/${storeName(patchSha)}`, patch],
+    [`/releases/1.0/${storeName(patchSha)}`, patch],
   ]);
   const fetcher = (async (input: URL | RequestInfo) => {
     const data = served.get(new URL(input instanceof Request ? input.url : input).pathname);
@@ -58,7 +58,6 @@ test('the card ZIP holds every checked file and a clean Git repository of FUJIMO
   expect(plan.problems).toEqual([]);
   const zip = await buildCard(plan.files, {
     assetBase: 'https://fujimod.test/releases/1.0/',
-    base: 'https://fujimod.test/',
     release: '1.0',
     git: true,
     fetcher,
@@ -103,7 +102,6 @@ test('a file whose bytes differ from the release is refused', async () => {
       [{ path: 'FFBOOT.BIN', from: 'release', asset: 'A.BIN', sha256: 'a'.repeat(64), bytes: 8 }],
       {
         assetBase: 'https://fujimod.test/releases/1/',
-        base: 'https://fujimod.test/',
         release: '1',
         git: false,
         fetcher,

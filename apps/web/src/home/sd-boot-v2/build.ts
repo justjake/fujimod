@@ -6,8 +6,6 @@ import type { PlannedFile } from './plan';
 export interface CardBuildOptions {
   /** Absolute `/releases/<tag>/` URL. */
   assetBase: string;
-  /** Site origin serving `/ota/store/`. */
-  base: string;
   release: string;
   git: boolean;
   fetcher?: typeof fetch;
@@ -33,9 +31,10 @@ export async function buildCard(files: readonly PlannedFile[], options: CardBuil
       file.from === 'data'
         ? file.data
         : await fetchChecked(
-            file.from === 'release'
-              ? new URL(encodeURIComponent(file.asset), options.assetBase)
-              : new URL(`/ota/store/${file.name}`, options.base),
+            new URL(
+              encodeURIComponent(file.from === 'release' ? file.asset : file.name),
+              options.assetBase,
+            ),
             file.sha256,
             file.bytes,
             fetcher,
