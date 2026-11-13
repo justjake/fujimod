@@ -212,7 +212,14 @@ pub(crate) fn package_internal_flash(
     fallback_wait_seconds: Option<u32>,
 ) -> Result<Vec<File>> {
     let mut setup = setup.clone();
-    setup.card_boot = None;
+    // The reset stage with its preloaded selector would take its cold path and probe the serial
+    // NOR itself; the recipe's RAM edit sends it to the stock retained-metadata path that the
+    // update's own selector takes. That edit is not card-specific, so it is kept.
+    let ram_edits = setup
+        .card_boot
+        .take()
+        .map(|card| card.ram_edits)
+        .unwrap_or_default();
     setup.banks = Banks {
         copies: Vec::new(),
         edits: Vec::new(),
@@ -225,14 +232,36 @@ pub(crate) fn package_internal_flash(
         None,
         Some(InternalFlash {
             fallback_wait_seconds,
+            ram_edits,
         }),
     )
 }
 
 /// How an internal-flash startup differs from a card-resident one.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct InternalFlash {
     fallback_wait_seconds: Option<u32>,
+    /// Word edits of the RAM image, checked against it after the reset-copy comparison.
+    ram_edits: Vec<image::Edit>,
+}
+
+/// Apply checked word edits to the RAM image: every old word must match, none may repeat or
+/// touch the preloaded selector, and nothing changes unless all of them pass.
+fn edit_ram(ram: &mut [u8], edits: &[image::Edit], selector: usize) -> Result<()> {
+    let mut addresses = std::collections::BTreeSet::new();
+    for edit in edits {
+        require(
+            edit.address.is_multiple_of(4)
+                && !(selector..selector + 8).contains(&edit.address)
+                && addresses.insert(edit.address)
+                && word(ram, edit.address)? == edit.old,
+            "XP5 RAM edit differs from source",
+        )?;
+    }
+    for edit in edits {
+        put(ram, edit.address, edit.new)?;
+    }
+    Ok(())
 }
 
 fn package_inner(
@@ -378,7 +407,7 @@ fn package_inner(
         u64::from(ram.is_none() || internal_flash.is_some()),
     )?;
     let mut gate_target = address + template::A64_BOOT_ZERO_GATE as u64;
-    if let (Some(at), Some(flash)) = (stub_at, internal_flash) {
+    if let (Some(at), Some(flash)) = (stub_at, &internal_flash) {
         if let Some(gate) =
             flash_stub::install(&mut program, address, at, setup, flash.fallback_wait_seconds)?
         {
@@ -438,6 +467,9 @@ fn package_inner(
             reset == ram[..setup.reset_copy_size],
             "XP5 reset copy differs beyond preloaded selector",
         )?;
+        if let Some(flash) = &internal_flash {
+            edit_ram(&mut ram, &flash.ram_edits, setup.selector)?;
+        }
         require(
             word(&prefix, setup.bootstrap_offset + 36)?
                 == branch(call, setup.initializer.address as u64, true)?,
@@ -741,6 +773,84 @@ mod tests {
         let bare = package(&data, &plain, Some(ram), 0).unwrap();
         assert_eq!(bare[1].bytes, flash[1].bytes);
         assert_eq!(flag(&bare[0].bytes), 0);
+    }
+
+    #[test]
+    fn internal_flash_keeps_the_recipes_ram_edits_checked_and_in_the_crc() {
+        let (data, s, ram) = fixture();
+        // A card-resident recipe's RAM edit (the reset stage's branch to the retained-metadata
+        // path) is kept; the rest of the card-resident setup is not.
+        let payload = |at: usize| card_boot::Payload {
+            source: source(&data[at..at + 4]),
+            file_offset: 0,
+            destinations: [0, 0],
+        };
+        let proof = CodeProof {
+            address: 0xff800000,
+            size: 4,
+            sha256: fujimod_firmware::sha256(&data[..4]),
+        };
+        let edit = |old: u32| image::Edit {
+            address: 0x100,
+            old,
+            new: 0x1400_0068,
+            what: "branch to the retained-metadata path".into(),
+        };
+        let mut card = card_boot::CardBoot {
+            hooks: vec![],
+            dma: proof,
+            layout_marker: 0,
+            jedec_id: 1,
+            secondary_sgi: [0; 3],
+            payloads: [payload(0), payload(4), payload(8), payload(12)],
+            namespace: None,
+            unit_cache: None,
+            runtime: None,
+            ram_edits: vec![edit(0xffff_ffff)],
+        };
+        let mut with = s.clone();
+        with.card_boot = Some(card.clone());
+        let plain = package_internal_flash(&data, &s, ram.clone(), 0, None).unwrap();
+        let edited = package_internal_flash(&data, &with, ram.clone(), 0, None).unwrap();
+        let mut expected = ram.clone();
+        put(&mut expected, 0x100, 0x1400_0068).unwrap();
+        assert_eq!(edited[1].bytes, expected);
+        assert_eq!(plain[1].bytes, ram);
+        let request = 0xc000 + template::SETUP_SD_REQUEST;
+        assert_eq!(word(&edited[0].bytes, request + 16).unwrap(), crate::xp4::crc32(&expected));
+        assert_ne!(word(&edited[0].bytes, request + 16).unwrap(), word(&plain[0].bytes, request + 16).unwrap());
+        // The loader image and the rest of the card-resident recipe are not part of it.
+        assert_eq!(edited[0].bytes.len(), plain[0].bytes.len());
+        // A changed old word, a repeat or the selector refuses.
+        card.ram_edits = vec![edit(0x1234_5678)];
+        with.card_boot = Some(card.clone());
+        assert!(package_internal_flash(&data, &with, ram.clone(), 0, None).is_err());
+        card.ram_edits = vec![edit(0xffff_ffff), edit(0xffff_ffff)];
+        with.card_boot = Some(card.clone());
+        assert!(package_internal_flash(&data, &with, ram.clone(), 0, None).is_err());
+        let mut at_selector = edit(0);
+        at_selector.address = s.selector;
+        card.ram_edits = vec![at_selector];
+        with.card_boot = Some(card);
+        assert!(package_internal_flash(&data, &with, ram, 0, None).is_err());
+    }
+
+    #[test]
+    fn ram_edits_change_nothing_unless_every_one_passes() {
+        let mut ram = vec![0xff; 0x20];
+        let edit = |address: usize, old: u32| image::Edit {
+            address,
+            old,
+            new: 0,
+            what: "edit".into(),
+        };
+        let before = ram.clone();
+        assert!(edit_ram(&mut ram, &[edit(0, 0xffff_ffff), edit(4, 1)], 0x40).is_err());
+        assert_eq!(ram, before);
+        assert!(edit_ram(&mut ram, &[edit(2, 0xffff_ffff)], 0x40).is_err());
+        assert!(edit_ram(&mut ram, &[edit(0x20, 0xffff_ffff)], 0x40).is_err());
+        edit_ram(&mut ram, &[edit(0, 0xffff_ffff), edit(8, 0xffff_ffff)], 0x40).unwrap();
+        assert_eq!(&ram[..12], &[0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0]);
     }
 
     #[test]
