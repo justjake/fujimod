@@ -32,6 +32,20 @@ struct Loader {
     boot_ready: usize,
     boot_zero_gate: usize,
     externals: &'static [(usize, u32, &'static str)],
+    /// Offset of the internal-flash binding; only the internal-flash build has one.
+    internal_flash_binding: Option<usize>,
+}
+/// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
+/// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
+/// A frame anywhere else (the flash aperture below all of it, the flash controller above) would
+/// make the loader's interrupt-enable writes land on something that is not a GIC.
+const GICR_WINDOW: std::ops::Range<u64> = 0xfa000000..0xfb000000;
+const GICR_STRIDE: u64 = 0x20000;
+fn valid_secondary_sgi(frames: &[u64; 3]) -> bool {
+    frames
+        .iter()
+        .all(|&frame| GICR_WINDOW.contains(&frame) && frame % GICR_STRIDE == GICR_STRIDE / 2)
+        && frames.windows(2).all(|pair| pair[1] == pair[0] + GICR_STRIDE)
 }
 const CARD: Loader = Loader {
     image: template::IMAGE,
@@ -48,6 +62,7 @@ const CARD: Loader = Loader {
     boot_ready: template::A64_BOOT_READY,
     boot_zero_gate: template::A64_BOOT_ZERO_GATE,
     externals: template::EXTERNALS,
+    internal_flash_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -64,6 +79,7 @@ const INTERNAL_FLASH: Loader = Loader {
     boot_ready: flash_template::A64_BOOT_READY,
     boot_zero_gate: flash_template::A64_BOOT_ZERO_GATE,
     externals: flash_template::EXTERNALS,
+    internal_flash_binding: Some(flash_template::SETUP_SD_INTERNAL_FLASH),
 };
 /// Longest wait of the load-failure fallback; the loader refuses a binding above it.
 const MAX_FALLBACK_WAIT_SECONDS: u32 = 86_400;
@@ -343,23 +359,30 @@ fn edit_ram(ram: &mut [u8], edits: &[image::Edit], selector: usize) -> Result<()
 /// restores exactly what it overwrote (the gate stub and whatever of FFBOOT it had streamed).
 fn bind_internal_flash(
     program: &mut [u8], loader: &Loader, setup: &Setup, flash: &InternalFlash, ram: Option<&[u8]>,
+    inverted: &[u8],
 ) -> Result<()> {
-    let at = flash_template::SETUP_SD_INTERNAL_FLASH;
-    let empty = [1u64, 0, 0, 0, 0, 0, 0, 0].map(u64::to_le_bytes).concat();
+    let at = loader.internal_flash_binding.ok_or_else(|| {
+        image::Error::Invalid("This XP5 loader build has no internal-flash binding".into())
+    })?;
+    // Inputs, then the three words the loader writes (its fallback status and two CRCs).
+    let empty = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map(u64::to_le_bytes).concat();
     require(
-        extent(program, at, 64)? == empty,
+        extent(program, at, 96)? == empty,
         "XP5 internal-flash binding template changed",
     )?;
+    let page = |address: u64| address & !0xfff..(address & !0xfff) + 0x1000;
+    let (aperture, window) = (setup.flash.aperture, u64::from(!setup.flash.window_mask) + 1);
     require(
-        loader.image.len() == flash_template::IMAGE.len()
-            && flash.secondary_sgi.iter().enumerate().all(|(n, &address)| {
-                (0xf0000000..0xffff0000).contains(&address)
-                    && address.is_multiple_of(0x10000)
-                    && !flash.secondary_sgi[..n].contains(&address)
+        valid_secondary_sgi(&flash.secondary_sgi)
+            && flash.secondary_sgi.iter().all(|&frame| {
+                // Not the flash aperture and not the flash controller's page: a write there is
+                // a flash command, not an interrupt-enable.
+                !(aperture..aperture + window).contains(&frame)
+                    && !page(setup.flash.controller).contains(&frame)
             }),
         "Invalid parked-core interrupt frames",
     )?;
-    let (mut fallback, mut wait, mut source, mut bytes) = (0u64, 0u64, 0u64, 0u64);
+    let (mut fallback, mut wait, mut source, mut bytes, mut crc) = (0u64, 0u64, 0u64, 0u64, 0u64);
     if let Some(seconds) = flash.fallback_wait_seconds {
         let restore_offset = setup
             .reset_dat
@@ -382,8 +405,12 @@ fn bind_internal_flash(
         (fallback, wait) = (1, u64::from(seconds));
         source = setup.flash.aperture + restore_offset as u64;
         bytes = setup.reset_copy_size as u64;
+        // The loader checks the aperture against this before it gates RAM 0 and RAM 0 against it
+        // after a restore, so a flash holding anything but this update's reset image (another
+        // firmware, an unreadable aperture) never restores.
+        crc = u64::from(crate::xp4::crc32(extent(inverted, setup.reset_dat, setup.reset_copy_size)?));
     }
-    for (n, value) in [1, fallback, wait, source, bytes]
+    for (n, value) in [1, fallback, wait, source, bytes, crc]
         .into_iter()
         .chain(flash.secondary_sgi)
         .enumerate()
@@ -530,7 +557,7 @@ fn package_inner(
         u64::from(ram.is_none() || internal_flash.is_some()),
     )?;
     if let Some(flash) = &internal_flash {
-        bind_internal_flash(&mut program, loader, setup, flash, ram.as_deref())?;
+        bind_internal_flash(&mut program, loader, setup, flash, ram.as_deref(), inverted)?;
     }
     let restore = loader.setup_return_branch;
     require(
@@ -1050,7 +1077,7 @@ mod tests {
             flash_template::XP5_SETUP_CONFIGURATION..flash_template::XP5_SETUP_CONFIGURATION + 208,
             flash_template::SETUP_SD_BOARD..flash_template::SETUP_SD_BOARD + 16 + 32 * 24,
             flash_template::SETUP_SD_REQUEST..flash_template::SETUP_SD_REQUEST + 40,
-            flash_template::SETUP_SD_INTERNAL_FLASH..flash_template::SETUP_SD_INTERNAL_FLASH + 64,
+            flash_template::SETUP_SD_INTERNAL_FLASH..flash_template::SETUP_SD_INTERNAL_FLASH + 96,
             flash_template::XP5_SETUP_RETURN_BRANCH..flash_template::XP5_SETUP_RETURN_BRANCH + 4,
         ];
         ranges.extend(flash_template::EXTERNALS.iter().map(|&(at, _, _)| at..at + 4));
@@ -1074,15 +1101,20 @@ mod tests {
             assert!(raw.len() <= 0x38800);
             assert_eq!(field(raw, 0), 1);
             let restore = s.flash.aperture + (s.reset_dat - s.prefix.dat_offset) as u64;
+            let measured = u64::from(crate::xp4::crc32(
+                &data[s.reset_dat..s.reset_dat + s.reset_copy_size],
+            ));
             let expected = match wait {
-                None => [0, 0, 0, 0],
-                Some(wait) => [1, u64::from(wait), restore, s.reset_copy_size as u64],
+                None => [0, 0, 0, 0, 0],
+                Some(wait) => [1, u64::from(wait), restore, s.reset_copy_size as u64, measured],
             };
-            assert_eq!((1..5).map(|n| field(raw, n)).collect::<Vec<_>>(), expected);
+            assert_eq!((1..6).map(|n| field(raw, n)).collect::<Vec<_>>(), expected);
             assert_eq!(
-                (5..8).map(|n| field(raw, n)).collect::<Vec<_>>(),
+                (6..9).map(|n| field(raw, n)).collect::<Vec<_>>(),
                 [0xfa0b0000, 0xfa0d0000, 0xfa0f0000]
             );
+            // The loader's own status words start empty.
+            assert_eq!((9..12).map(|n| field(raw, n)).collect::<Vec<_>>(), [0, 0, 0]);
             // The bootstrap's gate is the loader's own.
             assert_eq!(
                 word(raw, gate).unwrap(),
@@ -1124,6 +1156,14 @@ mod tests {
             frames(&|sgi| sgi[2] = 0xfa0f0010),
             frames(&|sgi| sgi[0] = 0x1000_0000),
             frames(&|sgi| sgi[0] = 0),
+            // The flash aperture, the flash controller's page, a frame outside the
+            // redistributor window and frames that are not one stride apart are refused.
+            frames(&|sgi| sgi[0] = 0xf0010000),
+            frames(&|sgi| sgi[0] = 0xf7ff0000),
+            frames(&|sgi| sgi[1] = 0xff910000),
+            frames(&|sgi| sgi[2] = 0xfa110000),
+            frames(&|sgi| *sgi = [0xfb010000, 0xfb030000, 0xfb050000]),
+            frames(&|sgi| *sgi = [0xfa0b0000, 0xfa0f0000, 0xfa0d0000]),
         ] {
             assert!(package_internal_flash(&data, &bad, ram.clone(), 0, None).is_err());
         }
@@ -1146,9 +1186,11 @@ mod tests {
         assert_eq!(flash_template::SETUP_SD_INTERNAL_FLASH % 8, 0);
         assert_eq!(
             &flash_template::IMAGE[flash_template::SETUP_SD_INTERNAL_FLASH
-                ..flash_template::SETUP_SD_INTERNAL_FLASH + 64],
-            [1u64, 0, 0, 0, 0, 0, 0, 0].map(u64::to_le_bytes).concat()
+                ..flash_template::SETUP_SD_INTERNAL_FLASH + 96],
+            [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map(u64::to_le_bytes).concat()
         );
+        assert_eq!(INTERNAL_FLASH.internal_flash_binding, Some(flash_template::SETUP_SD_INTERNAL_FLASH));
+        assert_eq!(CARD.internal_flash_binding, None);
         // The default loader is the card-resident build: its layout names no such binding.
         let layout = include_str!("../assets/sd-boot-v1-xp5-loader.generated.json");
         assert!(!layout.contains("setup_sd_internal_flash"));
