@@ -191,23 +191,39 @@ default `sd-boot-v1-xp5-loader.generated.*` is unchanged. The internal-flash bui
 the card-resident one does while it loads: the cores the boot ROM parks in WFI are held (their
 SGI enables masked), RAM 0 holds a gate stub that sends any stray arrival to the bootstrap's
 wait, and the first 16 bytes of the image (the reset entry) are kept back until the CRC has
-passed. Only then does it write the entry, publish the image and wake the cores with SGI0 (after a
-`dsb sy`), which the image's preloaded reset stage expects to be awake. The loader reads its
-binding from `setup_sd_internal_flash` (the parked cores' interrupt frames, taken from the
-recipe's card-resident setup, and the fallback), which the packager fills after checking the
-empty template (`bind_internal_flash` in `src/xp5.rs`). A recipe with no card-resident setup has
-no frames to name, so the internal-flash startup refuses it.
+passed. Writes of RAM 0's first 16 bytes are atomic for a core fetching there (`b .` first, the
+entry's final word last). Only after the CRC does it write the entry, publish the image and wake
+the cores with SGI0 (after a `dsb sy`), which the image's preloaded reset stage expects to be awake.
+
+The loader reads its binding from `setup_sd_internal_flash`, which the packager fills after
+checking the empty template (`bind_internal_flash` in `src/xp5.rs`): the parked cores' interrupt
+frames, taken from the recipe's card-resident setup, and the fallback. The frames must lie in the
+redistributor window `0xfa000000..0xfb000000`, be the second page of a `0x20000`-aligned
+redistributor, follow each other at that stride and avoid the flash aperture and the flash
+controller's page (a write to either is a flash command), and the same check applies to the
+card-resident setup. The loader refuses a frame in the aperture and, before it writes one,
+checks that it is the redistributor of its core (`GICR_TYPER` affinity). A recipe with no
+card-resident setup has no frames to name, so the internal-flash startup refuses it.
 
 With `--fallback-wait-seconds N` (at most 86,400) the loader also continues from the installed
 flash after a failed load (no file, a length or CRC mismatch, a read error, a card
-initialization failure) instead of halting: it waits N seconds, copies the stock reset image
-(from flash `0x40000` of the X100VI 1.31 update, read through the aperture) back to RAM 0 (the
-whole image, so RAM 0 is the stock one even when nothing of FFBOOT was written, because the gate
-stub is already there), gives the parked cores their interrupt enables back without waking
-them (the stock reset stage wakes them itself), publishes `a64_boot_ready = 2` and returns to the
-stock bootstrap, whose gate releases to RAM 0. A failure that is not a load failure (the request
-check, the binding check, an unexpected exception level or MMU state) still halts, with the cores
-still held and the gate stub in place. Without `--fallback-wait-seconds`, every failure halts that way.
+initialization failure) instead of halting. The packager binds the CRC-32 of the stock reset
+image (`reset_copy_size` bytes at the update's reset offset, flash `0x40000` in the X100VI 1.31
+update). Before the loader gates RAM 0 it reads that image through the flash aperture with 32-bit
+loads, as the prelude's flash scan does, and compares the CRC: a different installed firmware
+turns the fallback off for the boot and a failed load halts. Otherwise a failed load waits N
+seconds and puts the stock reset image back at RAM 0 (only the 16 bytes saved before the gate when
+nothing beyond the held entry was written; else the image from the aperture, offset 16 on first,
+the entry last), reads RAM 0 back and halts if its CRC differs, gives the parked cores their
+interrupt enables back without waking them (the stock reset stage wakes them itself), publishes
+`a64_boot_ready = 2` and returns to the stock bootstrap, whose gate releases to RAM 0.
+
+What halts: a bad request or binding (`-100`, `-104`) or frames that are not the cores'
+redistributors (`-105`) halt before anything is held or gated, with the DDR untrained; an
+unexpected exception level or MMU state (`-101`, `-102`) halts with the cores held and no gate;
+every other failure without an armed fallback halts with the cores held and the gate in place; a
+restore that does not read back (`-106`) halts. The loader records the status of the fallback and
+the CRCs it measured in the last words of its binding.
 
 `sd-boot-v1-startup`, `sd-boot-v1-ram-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
