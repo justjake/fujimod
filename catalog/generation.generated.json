@@ -4777,13 +4777,8 @@
           ]
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match (0x169ffd0: no four settle calls with w0 = -6); 0 structural candidates "
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
