@@ -217,7 +217,10 @@ function CardVideo(props: { media: Media; choice?: string }) {
 
 const NO_CREDITS: Credits = { premiere: false, inspired: [], thanks: [] };
 
-function CardBody(props: { target: Target }) {
+function CardBody(props: {
+  target: Target;
+  reference: (card: string, title: string) => JSX.Element;
+}) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
   /** The menus above the title: a control's menus, and for an option its control too. */
@@ -252,7 +255,8 @@ function CardBody(props: { target: Target }) {
             <For each={card().related}>
               {(related) => (
                 <li>
-                  <b>{CARDS[related.card].title}</b>: {related.reason}
+                  <b>{props.reference(related.card, CARDS[related.card].title)}</b>:{' '}
+                  {related.reason}
                 </li>
               )}
             </For>
@@ -286,12 +290,25 @@ export function FeatureCatalog() {
   const [position, setPosition] = createSignal({ left: 0, top: 0 });
   let timer: ReturnType<typeof setTimeout> | undefined;
   let card: HTMLDivElement | undefined;
+  let heading: HTMLDivElement | undefined;
   let pinned = false;
   onCleanup(() => clearTimeout(timer));
-  const close = () => {
+  const cardLink = (id?: string) => {
+    const params = new URLSearchParams();
+    if (query()) params.set('search', query());
+    if (id) params.set('card', id);
+    history.replaceState(history.state, '', `#features${params.size ? `?${params}` : ''}`);
+  };
+  const close = (updateLink = true) => {
     clearTimeout(timer);
     pinned = false;
     setTarget();
+    if (
+      updateLink &&
+      location.hash.startsWith('#features?') &&
+      new URLSearchParams(location.hash.slice('#features?'.length)).has('card')
+    )
+      cardLink();
   };
   onSettled(() => {
     const searchFromLink = () => {
@@ -301,9 +318,15 @@ export function FeatureCatalog() {
         return;
       }
       if (!location.hash.startsWith('#features?')) return;
-      close();
-      setQuery(new URLSearchParams(location.hash.slice('#features?'.length)).get('search') ?? '');
+      const params = new URLSearchParams(location.hash.slice('#features?'.length));
+      close(false);
+      setQuery(params.get('search') ?? '');
       document.getElementById('features')?.scrollIntoView();
+      const id = params.get('card');
+      if (id && Object.hasOwn(CARDS, id) && heading) {
+        pinned = true;
+        show({ card: id, anchor: heading });
+      }
     };
     searchFromLink();
     window.addEventListener('hashchange', searchFromLink);
@@ -344,9 +367,11 @@ export function FeatureCatalog() {
   };
   const show = (next: Target) => {
     clearTimeout(timer);
-    setTarget(next);
-    place(next.anchor);
-    requestAnimationFrame(() => place(next.anchor));
+    // A Related trigger disappears when its card is replaced; keep the tile's anchor.
+    const anchor = (card?.contains(next.anchor) && target()?.anchor) || next.anchor;
+    setTarget({ ...next, anchor });
+    place(anchor);
+    requestAnimationFrame(() => place(anchor));
   };
   const later = (action: () => void, ms: number) => {
     clearTimeout(timer);
@@ -361,6 +386,7 @@ export function FeatureCatalog() {
       if (dismiss) close();
       else {
         pinned = true;
+        cardLink(props.card);
         show({ card: props.card, choice: props.choice, anchor });
       }
     };
@@ -386,6 +412,11 @@ export function FeatureCatalog() {
           if (event.pointerType === 'mouse' && !pinned) later(close, 150);
         }}
         onFocus={(event) => {
+          // Related references stay focusable until Enter or Space activates them.
+          if (card?.contains(event.currentTarget)) {
+            clearTimeout(timer);
+            return;
+          }
           // Opening during pointer focus can cover the trigger before mouseup
           // in Safari, retargeting the click. Let the completed tap open it.
           if (pointerPinned !== undefined) return;
@@ -488,7 +519,7 @@ export function FeatureCatalog() {
 
   return (
     <div class="catalog" id="features">
-      <div class="catalog-heading">
+      <div class="catalog-heading" ref={(element) => (heading = element)}>
         <div>
           <h2>Explore features</h2>
           <p>{catalog.features.length} features · X70 catalog. Availability varies by camera.</p>
@@ -538,7 +569,14 @@ export function FeatureCatalog() {
           if (event.pointerType === 'mouse' && !pinned) later(close, 150);
         }}
       >
-        <Show when={target()}>{(current) => <CardBody target={current()} />}</Show>
+        <Show when={target()} keyed>
+          {(current) => (
+            <CardBody
+              target={current}
+              reference={(card, title) => <Ref card={card}>{title}</Ref>}
+            />
+          )}
+        </Show>
       </div>
     </div>
   );
