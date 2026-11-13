@@ -641,9 +641,11 @@ impl Board {
         addresses.sort_unstable();
         addresses.dedup();
         // A skip belongs to the stop it resumes from. Once its address leaves
-        // the active set it would otherwise swallow that address's next hit.
+        // the active set, or the host has moved the core elsewhere, it would
+        // otherwise swallow that address's next hit.
         if let Some(pc) = points.entry.skip.get()
-            && addresses.binary_search(&pc).is_err()
+            && (addresses.binary_search(&pc).is_err()
+                || self.read_register(core, Register::Pc)? != pc)
         {
             points.entry.skip.set(None);
         }

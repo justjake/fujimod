@@ -1,6 +1,7 @@
 //! External resistor-key inputs with body-declared samples and pin wiring.
 //! No firmware memory or execution state is available at this boundary.
 //! The input is an explicit 12-bit resistor-ladder sample.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_devices::parts::pins::{DriveInput, Pin};
 use serde::{Deserialize, Serialize};
@@ -326,6 +327,13 @@ impl ResistorKeys {
     pub fn used(&self) -> bool {
         self.state.lock().unwrap().used
     }
+
+    fn validate_state(state: &InputState) -> Result<(), String> {
+        if state.rear_phase > 3 || state.front_phase > 3 {
+            return Err("physical controls checkpoint has an invalid dial phase".into());
+        }
+        Ok(())
+    }
 }
 impl Controls for ResistorKeys {
     fn next_deadline(&self) -> Option<u64> {
@@ -449,6 +457,18 @@ impl Controls for ResistorKeys {
     fn restore(&self, v: &Value) -> Result<(), String> {
         let state = serde_json::from_value(v.clone())
             .map_err(|e| format!("physical controls checkpoint: {e}"))?;
+        *self.state.lock().unwrap() = state;
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode("physical-controls", &*self.state.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        Self::validate_state(&saved.decode("physical-controls")?)
+    }
+    fn restore_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: InputState = saved.decode("physical-controls")?;
+        Self::validate_state(&state)?;
         *self.state.lock().unwrap() = state;
         Ok(())
     }
