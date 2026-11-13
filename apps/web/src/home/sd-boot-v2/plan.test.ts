@@ -20,19 +20,13 @@ const camera = (id: string, processor = 'EXR Processor II'): CardCamera => ({
   processor,
   mods: 1,
 });
-const file = (path: string, sha: string, processor?: string, firmware?: string): SdCardFile => ({
+const file = (path: string, sha: string, processor?: string): SdCardFile => ({
   path,
   asset: storeName(sha),
   sha256: sha,
   bytes: 3,
   ...(processor ? { processor } : {}),
-  ...(firmware ? { firmware } : {}),
 });
-const bootFiles = (processor: string, loader: string, firmware: string) => [
-  file('FFBOOT.BIN', loader, processor, firmware),
-  file('FFSYS.BIN', digest('2'), processor),
-  file('FM_EXR2.BIN', digest('3'), processor),
-];
 
 test('the checklist lists cameras whose processor has complete SD boot files, most mods first', () => {
   const catalog = [
@@ -40,8 +34,9 @@ test('the checklist lists cameras whose processor has complete SD boot files, mo
     { sha256: digest('b'), processor: 'EXR Processor II' },
   ] as Firmware[];
   const card = [
-    ...bootFiles('EXR Processor II', digest('1'), 'X70-110'),
-    ...bootFiles('EXR Processor II', digest('9'), 'XE2-411'),
+    file('FFBOOT.BIN', digest('1'), 'EXR Processor II'),
+    file('FFSYS.BIN', digest('2'), 'EXR Processor II'),
+    file('FM_EXR2.BIN', digest('3'), 'EXR Processor II'),
   ];
   const cameras = releaseCameras(
     [
@@ -56,9 +51,8 @@ test('the checklist lists cameras whose processor has complete SD boot files, mo
     ['XE2-411', 9],
     ['X70-110', 3],
   ]);
-  expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, card.slice(0, 2))).toEqual(
-    [],
-  );
+  const partial = card.slice(0, 2);
+  expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, partial)).toEqual([]);
   expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, [])).toEqual([]);
 });
 
@@ -135,57 +129,27 @@ test('the plan writes boot files, chosen card files, both manifests and one copy
 test('missing boot files or release manifests stop the download', () => {
   const plan = sdBootV2Plan({
     cameras: [camera('X70-110')],
-    card: [file('FFBOOT.BIN', digest('1'), 'EXR Processor II', 'X70-110')],
+    card: [file('FFBOOT.BIN', digest('1'), 'EXR Processor II')],
     releases: new Map(),
     excluded: new Set(),
   });
   expect(plan.problems).toEqual([
-    'This release has no FFSYS.BIN, FM_EXR2.BIN for the X70-110.',
+    'This release has no FFSYS.BIN, FM_EXR2.BIN for EXR Processor II cameras.',
     'The X70-110 release files are unavailable.',
   ]);
   expect(
     sdBootV2Plan({ cameras: [], card: [], releases: new Map(), excluded: new Set() }).problems,
   ).toHaveLength(1);
-  expect(sdBootV2Files([], 'Other', 'X70-110').missing).toEqual([]);
-});
-
-test('a per-body loader is written only for that body and cannot be shared', () => {
-  const card = [
-    file('FFBOOT.BIN', digest('1'), 'EXR Processor II', 'X70-110'),
-    file('FFBOOT.BIN', digest('9'), 'EXR Processor II', 'XE2-411'),
-    ...bootFiles('EXR Processor II', digest('2'), 'X70-110').slice(1),
-  ];
-  const releases = new Map<string, SdBootV2Release>([
-    ['X70-110', { firmware: 'X70-110', version: '1', fs: {} }],
-    ['XE2-411', { firmware: 'XE2-411', version: '1', fs: {} }],
-  ]);
-  const shared = sdBootV2Files(card, 'EXR Processor II', 'X70-110');
-  expect(shared.files.map((entry) => entry.sha256)).toEqual([
-    digest('1'),
-    digest('2'),
-    digest('3'),
-  ]);
-  const plan = sdBootV2Plan({
-    cameras: [camera('X70-110'), camera('XE2-411')],
-    card,
-    releases,
-    excluded: new Set(),
-  });
-  expect(plan.problems).toEqual([
-    'The XE2-411 needs a different FFBOOT.BIN than another chosen camera. Choose one of them.',
-  ]);
-  expect(plan.files.filter((entry) => entry.path === 'FFBOOT.BIN')).toHaveLength(1);
+  expect(sdBootV2Files([], 'Other').missing).toEqual([]);
 });
 
 test('cameras whose root files differ from the chosen cameras’ cannot join the card', () => {
   const card = [
-    file('FFBOOT.BIN', digest('1'), 'EXR Processor II', 'X70-110'),
-    file('FFBOOT.BIN', digest('9'), 'EXR Processor II', 'XE2-411'),
-    ...bootFiles('EXR Processor II', digest('1'), 'X70-110').slice(1),
+    file('FFBOOT.BIN', digest('1'), 'EXR Processor II'),
     file('FFBOOT.BIN', digest('2'), 'X-Processor Pro'),
     file('FM_XPP.BIN', digest('3'), 'X-Processor Pro'),
   ];
   const all = [camera('X70-110'), camera('XE2-411'), camera('XT20-211', 'X-Processor Pro')];
-  expect([...conflicting(all, [all[0]], card)].sort()).toEqual(['XE2-411', 'XT20-211']);
+  expect([...conflicting(all, [all[0]], card)]).toEqual(['XT20-211']);
   expect([...conflicting(all, [], card)]).toEqual([]);
 });

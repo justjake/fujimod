@@ -39,26 +39,26 @@ export function releaseCameras(
   return firmwares
     .flatMap((entry) => {
       const processor = catalog.find((known) => known.sha256 === entry.sha256)?.processor;
-      const id = sdBootV2Firmware(entry.id);
       return processor &&
         sdBootV2For(processor) &&
-        !sdBootV2Files(card, processor, id).missing.length
-        ? [{ id, model: entry.model, version: entry.version, processor, mods: entry.mods.length }]
+        !sdBootV2Files(card, processor).missing.length
+        ? [
+            {
+              id: sdBootV2Firmware(entry.id),
+              model: entry.model,
+              version: entry.version,
+              processor,
+              mods: entry.mods.length,
+            },
+          ]
         : [];
     })
     .sort((a, b) => b.mods - a.mods || a.model.localeCompare(b.model));
 }
 
-/** Root files for one camera: its own files, those shared by its processor, and what is missing.
- *
- * FFBOOT.BIN carries the body's early LED rows, so the release publishes one
- * per body; FFSYS.BIN and the stage-2 image are shared by the whole processor.
- * A file tagged with `firmware` is written only for that camera. */
-export function sdBootV2Files(card: readonly SdCardFile[], processor: string, firmware: string) {
-  const files = card.filter(
-    (file) =>
-      file.processor === processor && (file.firmware === undefined || file.firmware === firmware),
-  );
+/** Root files written for one processor: the release's files, and the documented names it lacks. */
+export function sdBootV2Files(card: readonly SdCardFile[], processor: string) {
+  const files = card.filter((file) => file.processor === processor);
   const boot = sdBootV2For(processor);
   const names = boot ? ['FFBOOT.BIN', 'FFSYS.BIN', boot.stage2] : [];
   return {
@@ -75,14 +75,16 @@ export function conflicting(
 ) {
   const required = new Map<string, string>();
   for (const camera of chosen)
-    for (const file of sdBootV2Files(card, camera.processor, camera.id).files)
-      required.set(file.path, file.sha256);
+    for (const file of card)
+      if (file.processor === camera.processor) required.set(file.path, file.sha256);
   return new Set(
     cameras
       .filter((camera) =>
-        sdBootV2Files(card, camera.processor, camera.id).files.some(
+        card.some(
           (file) =>
-            required.has(file.path) && required.get(file.path) !== file.sha256,
+            file.processor === camera.processor &&
+            required.has(file.path) &&
+            required.get(file.path) !== file.sha256,
         ),
       )
       .map((camera) => camera.id),
@@ -111,24 +113,11 @@ export function sdBootV2Plan(input: CardPlanInput): { files: PlannedFile[]; prob
   const files: PlannedFile[] = [],
     problems: string[] = [];
   if (!input.cameras.length) return { files, problems: ['Choose a camera.'] };
-  const boot = new Map<string, SdCardFile>();
-  for (const camera of input.cameras) {
-    const needed = sdBootV2Files(input.card, camera.processor, camera.id);
-    if (needed.missing.length)
-      problems.push(
-        `This release has no ${needed.missing.join(', ')} for the ${camera.model}.`,
-      );
-    for (const file of needed.files) {
-      const previous = boot.get(file.path);
-      if (previous && previous.sha256 !== file.sha256)
-        problems.push(
-          `The ${camera.model} needs a different ${file.path} than another chosen camera. Choose one of them.`,
-        );
-      else if (!previous) {
-        boot.set(file.path, file);
-        files.push({ ...file, from: 'release' });
-      }
-    }
+  for (const processor of new Set(input.cameras.map((camera) => camera.processor))) {
+    const boot = sdBootV2Files(input.card, processor);
+    if (boot.missing.length)
+      problems.push(`This release has no ${boot.missing.join(', ')} for ${processor} cameras.`);
+    for (const file of boot.files) files.push({ ...file, from: 'release' });
   }
   for (const file of input.card)
     if (file.processor === undefined && !input.excluded.has(file.path))

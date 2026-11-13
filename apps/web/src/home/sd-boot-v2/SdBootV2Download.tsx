@@ -21,8 +21,8 @@ import { buildCard } from './build';
 import { SdBootV2Shape } from './SdBootV2Shape';
 import './sd-card.css';
 
-/** The recipes list holds 255 files; seven are pinned to C1–C7 in the Q menu. */
-const recipeCapacity = 255;
+/** The recipes list holds 72 files; seven are pinned to C1–C7 in the Q menu. */
+const recipeCapacity = 72;
 
 function Check(props: {
   checked: boolean;
@@ -318,11 +318,11 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <For each={processors()}>
               {(processor) => {
                 const boot = () => sdBootV2For(processor);
-                const firmware = () =>
-                  shown().find((camera) => camera.processor === processor)?.id ?? '';
-                const files = () => sdBootV2Files(card(), processor, firmware());
+                const files = () => sdBootV2Files(card(), processor);
                 const size = (name: string) =>
                   files().files.find((file) => file.path === name)?.bytes;
+                const firmware = () =>
+                  shown().find((camera) => camera.processor === processor)?.id ?? '';
                 return (
                   <Show when={boot()}>
                     {(boot) => (
@@ -335,8 +335,10 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                             keys; the boot ROM will execute this file.
                           </p>
                           <p>
-                            This file carries the chosen camera’s own early boot indicator setup
-                            and is written only for it, so one SD card serves one camera body.
+                            This file is the same for all cameras with the {boot().name} processor.
+                            However, because this name is used in multiple generations, you cannot
+                            make a single FujiMod SD card that can SD boot both {boot().name} and
+                            X-Processor Pro cameras.
                           </p>
                           <p>
                             All it does is execute the appropriate FM_*.BIN file for the current
