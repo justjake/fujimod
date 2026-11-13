@@ -458,9 +458,10 @@ fn file_commands_list_patterns_and_read_prefixes() {
         [0, 1, 2, 3, 4]
     );
     assert_eq!(files::get(&mut fs, &image, None).unwrap().len(), 128);
+    assert_eq!(names(files::list(&mut fs, "*").unwrap()), ["DCIM"]);
+    assert!(files::list(&mut fs, "*").unwrap()[0].directory);
     assert_eq!(
         files::list(&mut fs, "DCIM/NONE.JPG").err(),
         Some(libc::ENOENT)
     );
 }
-

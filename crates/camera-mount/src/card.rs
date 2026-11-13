@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::{num::NonZeroU32, path::PathBuf};
 
 const USAGE: &str = "Usage: fujimod-card --firmware ID [--device BUS-OR-SERIAL] COMMAND
-  list PATTERN...                    print each matching file's name and size
+  list PATTERN...                    print each matching file's or folder's name and size
   get [--limit BYTES] --out DIR PATTERN...
                                      save each matching file's first BYTES (default: all)
 Paths are card paths such as DCIM/100_FUJI/DSCF*.JPG; only the last component
@@ -59,8 +59,8 @@ fn run<D: Device>(
                 let nodes: Vec<Node> =
                     files::list(&mut fs, pattern).map_err(|e| errno(pattern, e))?;
                 for node in nodes {
-                    let mut line = serde_json::json!({"path": node.path, "bytes": node.size});
-                    if let Some(out) = &out {
+                    let mut line = serde_json::json!({"path": node.path, "bytes": node.size, "directory": node.directory});
+                    if let Some(out) = out.as_ref().filter(|_| !node.directory) {
                         let data =
                             files::get(&mut fs, &node, limit).map_err(|e| errno(&node.name, e))?;
                         let file = out.join(&node.name);

@@ -34,7 +34,7 @@ fn folder<D: Device>(fs: &mut CameraFs<D>, parts: &[&str]) -> Result<u64> {
     Ok(id)
 }
 
-/// Files matching `path`, in the card's directory order.
+/// Files and folders matching `path`, in the card's directory order.
 pub fn list<D: Device>(fs: &mut CameraFs<D>, path: &str) -> Result<Vec<Node>> {
     let parts = components(path);
     let (last, parents) = parts.split_last().ok_or(libc::EINVAL)?;
@@ -46,7 +46,7 @@ pub fn list<D: Device>(fs: &mut CameraFs<D>, path: &str) -> Result<Vec<Node>> {
         .directory(parent, false)?
         .1
         .into_iter()
-        .filter(|n| !n.directory && matches(last.as_bytes(), n.name.as_bytes()))
+        .filter(|n| matches(last.as_bytes(), n.name.as_bytes()))
         .collect())
 }
 
