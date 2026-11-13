@@ -130,7 +130,10 @@ export function InstallSteps(props: {
           Unzip onto the SD card’s top level: <FileList files={props.files} />.
         </p>
         <details class="install-format">
-          <summary>Format an SD card as FAT32</summary>
+          <summary>
+            Format an SD card as FAT32. The camera's permanent built-in software does not support
+            boot from exFAT
+          </summary>
           <FormatGuide />
         </details>
       </Step>
