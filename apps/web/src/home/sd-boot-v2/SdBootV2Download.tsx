@@ -226,8 +226,9 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
       return next;
     });
     setError('');
-    if (!checked || releases().has(camera.id)) return;
-    void loadOtaRelease(location.origin, camera.id)
+    const base = props.release?.assetBase;
+    if (!checked || releases().has(camera.id) || !base) return;
+    void loadOtaRelease(base, camera.id)
       .catch((reason: unknown) => Error(shownError(reason)))
       .then((value) => setReleases((map) => new Map(map).set(camera.id, value)));
   }
@@ -347,7 +348,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                         <FileRow name="FFBOOT.BIN" bytes={size('FFBOOT.BIN')} dim={previewing()} />
                         <Note>
                           <p>
-                            The boot ROM reads this file before FFBOOT.BIN and applies its clock,
+                            The boot ROM reads this file before the loader and applies its clock,
                             memory and register settings.
                           </p>
                         </Note>
