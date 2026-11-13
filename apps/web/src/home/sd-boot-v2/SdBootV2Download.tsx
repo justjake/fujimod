@@ -335,10 +335,8 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                             keys; the boot ROM will execute this file.
                           </p>
                           <p>
-                            This file is the same for all cameras with the {boot().name} processor.
-                            However, because this name is used in multiple generations, you cannot
-                            make a single FujiMod SD card that can SD boot both {boot().name} and
-                            X-Processor Pro cameras.
+                            This file carries the chosen camera’s own early boot indicator setup
+                            and is written only for it, so one SD card serves one camera body.
                           </p>
                           <p>
                             All it does is execute the appropriate FM_*.BIN file for the current
