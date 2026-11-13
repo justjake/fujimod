@@ -26,6 +26,7 @@ import { DEVICE_PANEL_SCHEMA, type DevicePanel } from '@fujimod/emulator-ui/ui/l
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
+import { reportDownload } from '../downloads/report.ts';
 import type { HomeState, PreviewCredit } from './state';
 import type { HomeSetter } from './state';
 
@@ -448,6 +449,8 @@ export function startHome(
     });
     const download = await modifiedDownload(format, result, entry, __FUJIMOD_BUILD_SHA__);
     downloadBlob(download.blob, download.name);
+    if (format === 'installable' || format === 'sd-boot-v1')
+      reportDownload({ release: index.tag, kind: format, firmware: entry.sha256, cameras: 1 });
   }
   async function closeCamera() {
     if (state.cameraBusy) return;

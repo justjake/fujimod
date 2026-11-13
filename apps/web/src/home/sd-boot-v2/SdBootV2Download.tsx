@@ -3,6 +3,7 @@ import type { JSX } from '@solidjs/web';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
+import { reportDownload } from '../../downloads/report.ts';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Firmware } from '../../catalog';
 import type { SdCardFile } from '../../patch/catalog';
@@ -255,6 +256,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
         progress: (done, total) => setProgress(`${done} of ${total} files`),
       });
       downloadBlob(zip, `fujimod-sd-card-${release.release}.zip`);
+      reportDownload({ release: release.release, kind: 'sd-card', cameras: chosen().length });
     } catch (reason) {
       setError(shownError(reason));
     } finally {

@@ -9,7 +9,13 @@
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/auth/*", "/api/devices/*", "/releases/*", "/ota/*"],
+    "run_worker_first": [
+      "/api/auth/*",
+      "/api/devices/*",
+      "/api/downloads",
+      "/releases/*",
+      "/ota/*"
+    ],
     "not_found_handling": "404-page",
   },
   "kv_namespaces": [{ "binding": "RELEASES", "id": "0d69f6a209314bf899f93649577eb3e4" }],
