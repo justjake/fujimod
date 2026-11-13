@@ -33,6 +33,8 @@ export interface SdCardFile {
   bytes: number;
   /** Boot files belong to one processor and are written only for its cameras. */
   processor?: string;
+  /** Set when only one body's file may be written at that path, such as its loader. */
+  firmware?: string;
   title?: string;
   author?: string;
 }
@@ -65,10 +67,10 @@ function validateCard(value: unknown): SdCardFile[] {
       !hash.test(file.sha256) ||
       !Number.isSafeInteger(file.bytes) ||
       file.bytes < 0 ||
-      ![file.processor, file.title, file.author].every(optionalText)
+      ![file.processor, file.firmware, file.title, file.author].every(optionalText)
     )
       throw new Error('A release card file is invalid.');
-    const key = `${file.processor ?? ''}\n${file.path}`;
+    const key = `${file.processor ?? ''}\n${file.firmware ?? ''}\n${file.path}`;
     if (paths.has(key)) throw new Error('A release card file is listed twice.');
     paths.add(key);
   }

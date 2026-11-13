@@ -318,11 +318,11 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <For each={processors()}>
               {(processor) => {
                 const boot = () => sdBootV2For(processor);
-                const files = () => sdBootV2Files(card(), processor);
-                const size = (name: string) =>
-                  files().files.find((file) => file.path === name)?.bytes;
                 const firmware = () =>
                   shown().find((camera) => camera.processor === processor)?.id ?? '';
+                const files = () => sdBootV2Files(card(), processor, firmware());
+                const size = (name: string) =>
+                  files().files.find((file) => file.path === name)?.bytes;
                 return (
                   <Show when={boot()}>
                     {(boot) => (
