@@ -47,7 +47,8 @@ pub struct Payload {
     pub update_size: u64,
 }
 
-/// The XPP service callback is a 32-bit slot with an existing stock owner.
+/// The XPP service callback: a 32-bit slot and its stock value. Zero is an
+/// empty slot, which the stock dispatcher skips; `checks` then pin that dispatcher.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Callback {
@@ -129,9 +130,7 @@ impl Payload {
             "XPP executable, ABI, or callback ranges overlap",
         )?;
         require(
-            self.transport.address.is_multiple_of(4)
-                && self.transport.original != 0
-                && self.transport.original.is_multiple_of(4),
+            self.transport.address.is_multiple_of(4) && self.transport.original.is_multiple_of(4),
             "Invalid XPP callback slot or stock pointer",
         )?;
         bulk::memory_range(BulkRange {
@@ -220,10 +219,15 @@ impl Payload {
         require(
             self.control_sha256 == flash.control.sha256
                 && self.control_sha256.len() == 64
-                && self.transport.checks.iter().any(|check| {
-                    check.address <= u64::from(self.transport.original)
-                        && u64::from(self.transport.original) + 4 <= check.address + check.size
-                }),
+                && if self.transport.original == 0 {
+                    // An empty slot pins the dispatcher that skips it instead.
+                    !self.transport.checks.is_empty()
+                } else {
+                    self.transport.checks.iter().any(|check| {
+                        check.address <= u64::from(self.transport.original)
+                            && u64::from(self.transport.original) + 4 <= check.address + check.size
+                    })
+                },
             "XPP control identity or callback code check differs",
         )?;
         Ok(())

@@ -488,10 +488,10 @@ fn prepare_xpp(
     let callback = &profile["callback"];
     let callback_address = num(callback, "address")?;
     let callback_original = u32::try_from(num(callback, "original")?)?;
+    // An original of zero is an empty slot: its `body` is then the stock
+    // dispatcher that skips a zero slot, and restoration writes zero back.
     check(
-        callback_address.is_multiple_of(4)
-            && callback_original != 0
-            && callback_original.is_multiple_of(4),
+        callback_address.is_multiple_of(4) && callback_original.is_multiple_of(4),
         "XPP callback slot or original pointer is invalid",
     )?;
     let map = document(&input.load_map)?;
