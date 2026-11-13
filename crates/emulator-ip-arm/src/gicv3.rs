@@ -34,10 +34,11 @@ struct Interface {
     /// ICC_SRE_EL2.Enable: lets EL1 access ICC_SRE_EL1. Retained, not gating.
     #[serde(default)]
     hypervisor_enable: bool,
-    /// ICC_IGRPEN1_EL3 bits 1:0 (EnableGrp1NS, EnableGrp1S). Retained, not gating: the
-    /// security banks are not modeled, so the EL1 group enable alone controls delivery.
+    /// ICC_IGRPEN1_EL3.EnableGrp1S (bit 1). EnableGrp1NS (bit 0) is the Group 1 enable
+    /// `enabled[1]`, the one modeled security state, so an EL1 and an EL3 access agree.
+    /// Retained, not gating.
     #[serde(default)]
-    el3_group1: u8,
+    el3_group1_secure: bool,
     enabled: [bool; 2],
     pmr: u8,
     bpr: [u8; 2],
@@ -50,7 +51,7 @@ impl Default for Interface {
         Self {
             system_register_enable: false,
             hypervisor_enable: false,
-            el3_group1: 0,
+            el3_group1_secure: false,
             enabled: [false; 2],
             pmr: 0,
             bpr: [0; 2],
@@ -309,9 +310,11 @@ impl Gic {
                     if v & !3 != 0 {
                         return Err("unsupported GICv3 ICC_IGRPEN1_EL3 bits".into());
                     }
-                    self.state.interfaces[core].el3_group1 = v as u8;
+                    self.state.interfaces[core].enabled[1] = v & 1 != 0;
+                    self.state.interfaces[core].el3_group1_secure = v & 2 != 0;
                 }
-                Ok(self.state.interfaces[core].el3_group1.into())
+                let interface = &self.state.interfaces[core];
+                Ok(u64::from(interface.enabled[1]) | (u64::from(interface.el3_group1_secure) << 1))
             }
             0xc230 => {
                 if let Some(v) = value {
@@ -710,6 +713,12 @@ mod tests {
         assert_eq!(g.system(1, 0xe64d, None).unwrap(), 7);
         assert_eq!(g.system(0, 0xf667, Some(3)).unwrap(), 3);
         assert_eq!(g.system(1, 0xf667, None).unwrap(), 0);
+        // Bit 0 is the Group 1 enable the EL1 register also sets and clears.
+        assert_eq!(g.system(0, 0xc667, None).unwrap(), 1);
+        g.system(0, 0xc667, Some(0)).unwrap();
+        assert_eq!(g.system(0, 0xf667, None).unwrap(), 2);
+        g.system(0, 0xf667, Some(3)).unwrap();
+        assert_eq!(g.system(0, 0xc667, None).unwrap(), 1);
         let saved = g.save();
         g.system(0, 0xe64d, Some(0)).unwrap();
         g.system(0, 0xf667, Some(0)).unwrap();
