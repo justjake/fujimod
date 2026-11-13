@@ -184,16 +184,30 @@ are the library forms). Without that option, a recipe that carries a card-reside
 1.31) refuses to build a startup without a unit storage image. A recipe's
 `internal_flash_ram_edits` are applied to the image (and covered by the CRC the loader checks).
 
-The compiled loader is not changed for this. A small hand-written stub
-(`assets/sd-boot-v1-xp5-flash-stub.S`, assembled by `assets/build-sd-boot-v1-xp5-flash-stub.sh`
-with any AArch64 assembler) is appended to it and bound by redirecting a few loader words, each
-checked first (`src/xp5/flash_stub.rs`): once the image is complete it wakes the cores the boot ROM
-parks, which the image's preloaded reset stage expects to be awake. With `--fallback-wait-seconds N`
-it also replaces the loader's halt on a failed load (no file, a length or CRC mismatch, a
-read error): it waits N seconds, puts the stock reset image back at RAM 0 if FFBOOT had begun to
-overwrite it, and lets the stock bootstrap go on, which then starts the installed firmware. A
-failure that is not a load failure (the request check, an unexpected exception level or MMU state)
-still halts.
+This startup uses its own build of the post-DDR loader,
+`assets/sd-boot-v1-xp5-internal-flash-loader.generated.{bin,json}`: the same C sources as the
+card-resident loader, compiled with `-DXP5_INTERNAL_FLASH` by the pinned Arm GCC 9.2.1. The
+default `sd-boot-v1-xp5-loader.generated.*` is unchanged. The internal-flash build keeps what
+the card-resident one does while it loads: the cores the boot ROM parks in WFI are held (their
+SGI enables masked), RAM 0 holds a gate stub that sends any stray arrival to the bootstrap's
+wait, and the first 16 bytes of the image (the reset entry) are kept back until the CRC has
+passed. Only then does it write the entry, publish the image and wake the cores with SGI0 (after a
+`dsb sy`), which the image's preloaded reset stage expects to be awake. The loader reads its
+binding from `setup_sd_internal_flash` (the parked cores' interrupt frames, taken from the
+recipe's card-resident setup, and the fallback), which the packager fills after checking the
+empty template (`bind_internal_flash` in `src/xp5.rs`). A recipe with no card-resident setup has
+no frames to name, so the internal-flash startup refuses it.
+
+With `--fallback-wait-seconds N` (at most 86,400) the loader also continues from the installed
+flash after a failed load (no file, a length or CRC mismatch, a read error, a card
+initialization failure) instead of halting: it waits N seconds, copies the stock reset image
+(from flash `0x40000` of the X100VI 1.31 update, read through the aperture) back to RAM 0 (the
+whole image, so RAM 0 is the stock one even when nothing of FFBOOT was written, because the gate
+stub is already there), gives the parked cores their interrupt enables back without waking
+them (the stock reset stage wakes them itself), publishes `a64_boot_ready = 2` and returns to the
+stock bootstrap, whose gate releases to RAM 0. A failure that is not a load failure (the request
+check, the binding check, an unexpected exception level or MMU state) still halts, with the cores
+still held and the gate stub in place. Without `--fallback-wait-seconds`, every failure halts that way.
 
 `sd-boot-v1-startup`, `sd-boot-v1-ram-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
