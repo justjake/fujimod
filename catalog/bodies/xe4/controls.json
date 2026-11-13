@@ -526,7 +526,7 @@
       "pushable": true,
       "default_function": "Release the attached lens so it can be rotated and removed.",
       "role": null,
-      "mechanical": false,
+      "mechanical": true,
       "behavior": {
         "kind": "button",
         "press": null
@@ -545,7 +545,7 @@
       "pushable": false,
       "default_function": "Adjust the viewfinder display focus until its indicators appear sharp.",
       "role": null,
-      "mechanical": false,
+      "mechanical": true,
       "behavior": {
         "kind": "dial",
         "motion": {
@@ -731,7 +731,7 @@
       "pushable": false,
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
-      "mechanical": false,
+      "mechanical": true,
       "behavior": {
         "kind": "lever",
         "positions": [],
@@ -751,7 +751,7 @@
       "pushable": true,
       "default_function": "Press to release the battery for removal.",
       "role": null,
-      "mechanical": false,
+      "mechanical": true,
       "behavior": {
         "kind": "lever",
         "positions": [],
