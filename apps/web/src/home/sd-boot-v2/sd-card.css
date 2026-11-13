@@ -131,7 +131,7 @@
   flex-direction: column;
   /* A full-size SD card is 24 by 32 mm. */
   aspect-ratio: 3 / 4;
-  padding: 64px 20px 20px 24px;
+  padding: 64px 20px 40px 24px;
 }
 .sd-card > .sd-tree {
   flex: 1;
@@ -229,9 +229,11 @@
 }
 
 .sd-actions {
+  /* The button straddles the card's bottom edge. */
+  position: absolute;
+  inset: auto 0 -22px;
   display: flex;
   justify-content: center;
-  padding-top: 20px;
 }
 .sd-scroll {
   max-height: 300px;
@@ -250,7 +252,7 @@
 }
 @media (max-width: 560px) {
   .sd-card {
-    padding: 56px 12px 14px 16px;
+    padding: 56px 12px 36px 16px;
   }
   .sd-tree .sd-row,
   .sd-tree .sd-row .fold {
