@@ -74,9 +74,34 @@ impl Pins {
     pub fn level(&self, port: usize, pin: usize) -> u32 {
         (self.word(port) >> pin) & 1
     }
+    /// The pad-sampling word (+0x14): an output pin reads its output-data latch (+0), any other
+    /// pin its external level. +4 selects the outputs: the stock drive writer addresses the data
+    /// latch at +0 (selector 0) and a setup program makes a pin an output by setting its +4 bit
+    /// while clearing its +8 bit. Inferred from those writers, not read from hardware.
     pub fn word(&self, port: usize) -> u32 {
         let p = &self.ports[port];
-        let output = p.registers[2] & 0xffff;
-        (p.input as u32 & !output) | (p.registers[1] & output)
+        let output = p.registers[1] & 0xffff;
+        (p.input as u32 & !output) | (p.registers[0] & output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_output_pin_reads_its_data_latch_and_an_input_pin_its_pad() {
+        let mut pins = Pins::default();
+        pins.ports[0].registers[0] = 0x00f0; // +0: output data
+        pins.ports[0].registers[1] = 0x0030; // +4: pins 4 and 5 are outputs
+        pins.ports[0].registers[2] = 0xffff; // +8 does not select outputs
+        pins.set_input(0, 0, false); // an input pin follows its pad
+        pins.set_input(0, 4, false); // an output pin ignores its pad
+        assert_eq!(pins.word(0), 0xfffe);
+        assert_eq!(pins.level(0, 0), 0);
+        assert_eq!(pins.level(0, 4), 1);
+        // With no output enabled, every pin follows its pad whatever +8 holds.
+        pins.ports[0].registers[1] = 0;
+        assert_eq!(pins.word(0), 0xffee);
     }
 }
