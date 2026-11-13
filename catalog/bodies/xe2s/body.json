@@ -640,11 +640,11 @@
               4992,
               3300
             ],
-            "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase and spectral response are unmeasured on this body. Radiometry is the X70's X-Trans CMOS II sensor law (same sensor, same mode-236 drive). No lens is mounted (SHOOT WITHOUT LENS), so there is no projection. The scene is a 250 cd/m2 room. The focal-plane second curtain closes 3 ms after its drive at every aperture; that latency is unmeasured.",
+            "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase and spectral response are unmeasured on this body. Radiometry is the X70's X-Trans CMOS II sensor law (same sensor, same mode-236 drive). No lens is mounted (SHOOT WITHOUT LENS), so there is no projection. The 15 cd/m2 scene reproduces the camera's lens-off AE evaluation (+752..+800). The focal-plane second curtain closes 3 ms after its drive at every aperture; that latency is unmeasured.",
             "radiometry": {
               "pixel_clock_hz": 33000000,
               "saturation_lux_seconds": 1.0,
-              "white_luminance": 250.0,
+              "white_luminance": 15.0,
               "shutter": {
                 "closing_delay_seconds": [
                   [
