@@ -1831,7 +1831,8 @@
       "event": 8243,
       "debug_key": "VIEW",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "view_mode_button"
       },
       "scanner": {
         "index": 5,
@@ -1869,7 +1870,8 @@
       "event": 10,
       "debug_key": "K_PLAY",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "playback_button"
       },
       "scanner": {
         "index": 7,
@@ -1888,7 +1890,8 @@
       "event": 8251,
       "debug_key": "DELETE",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "delete_button"
       },
       "scanner": {
         "index": 8,
@@ -2116,7 +2119,8 @@
       "event": 2,
       "debug_key": "UP",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_up_button"
       },
       "scanner": {
         "index": 20,
@@ -2135,7 +2139,8 @@
       "event": 3,
       "debug_key": "DOWN",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_down_button"
       },
       "scanner": {
         "index": 21,
@@ -2154,7 +2159,8 @@
       "event": 4,
       "debug_key": "LEFT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_left_button"
       },
       "scanner": {
         "index": 22,
@@ -2173,7 +2179,8 @@
       "event": 5,
       "debug_key": "RIGHT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_right_button"
       },
       "scanner": {
         "index": 23,
@@ -2192,7 +2199,8 @@
       "event": 1,
       "debug_key": "EXE_M",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "menu_ok_button"
       },
       "scanner": {
         "index": 24,
@@ -2230,7 +2238,8 @@
       "event": 9,
       "debug_key": "DISP_B",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "disp_back_button"
       },
       "scanner": {
         "index": 26,
@@ -2287,7 +2296,8 @@
       "event": 12351,
       "debug_key": "E-D-3.0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 29,
@@ -2344,7 +2354,8 @@
       "event": 12348,
       "debug_key": "E-D-2.0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 32,
@@ -2401,7 +2412,8 @@
       "event": 12345,
       "debug_key": "E-D-1.0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 35,
@@ -2458,7 +2470,8 @@
       "event": 12342,
       "debug_key": "E-D=0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 38,
@@ -2515,7 +2528,8 @@
       "event": 12339,
       "debug_key": "E-D+1.0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 41,
@@ -2572,7 +2586,8 @@
       "event": 12336,
       "debug_key": "E-D+2.0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 44,
@@ -2629,7 +2644,8 @@
       "event": 12333,
       "debug_key": "E-D+3.0",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 47,
@@ -2648,7 +2664,8 @@
       "event": 12352,
       "debug_key": "E-D=C",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 48,
@@ -2667,7 +2684,8 @@
       "event": 12315,
       "debug_key": "S-A",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 49,
@@ -2686,7 +2704,8 @@
       "event": 12316,
       "debug_key": "S-1/8000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 50,
@@ -2705,7 +2724,8 @@
       "event": 12317,
       "debug_key": "S-1/4000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 51,
@@ -2724,7 +2744,8 @@
       "event": 12318,
       "debug_key": "S-1/2000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 52,
@@ -2743,7 +2764,8 @@
       "event": 12319,
       "debug_key": "S-1/1000",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 53,
@@ -2762,7 +2784,8 @@
       "event": 12320,
       "debug_key": "S-1/500",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 54,
@@ -2781,7 +2804,8 @@
       "event": 12321,
       "debug_key": "S-1/250",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 55,
@@ -2800,7 +2824,8 @@
       "event": 12323,
       "debug_key": "S-1/125",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 56,
@@ -2819,7 +2844,8 @@
       "event": 12324,
       "debug_key": "S-1/60",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 57,
@@ -2838,7 +2864,8 @@
       "event": 12325,
       "debug_key": "S-1/30",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 58,
@@ -2857,7 +2884,8 @@
       "event": 12326,
       "debug_key": "S-1/15",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 59,
@@ -2876,7 +2904,8 @@
       "event": 12327,
       "debug_key": "S-1/8",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 60,
@@ -2895,7 +2924,8 @@
       "event": 12328,
       "debug_key": "S-1/4",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 61,
@@ -2914,7 +2944,8 @@
       "event": 12329,
       "debug_key": "S-1/2",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 62,
@@ -2933,7 +2964,8 @@
       "event": 12330,
       "debug_key": "S-1/1",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 63,
@@ -2952,7 +2984,8 @@
       "event": 12331,
       "debug_key": "S-T",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 64,
@@ -2971,7 +3004,8 @@
       "event": 12332,
       "debug_key": "S-B",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_speed_dial"
       },
       "scanner": {
         "index": 65,
@@ -2990,7 +3024,8 @@
       "event": 20503,
       "debug_key": "ISO_A",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 66,
@@ -3009,7 +3044,8 @@
       "event": 20524,
       "debug_key": "ISO_H1",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 67,
@@ -3028,7 +3064,8 @@
       "event": 20523,
       "debug_key": "I12800",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 68,
@@ -3085,7 +3122,8 @@
       "event": 20520,
       "debug_key": "I6400",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 71,
@@ -3142,7 +3180,8 @@
       "event": 20517,
       "debug_key": "I3200",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 74,
@@ -3199,7 +3238,8 @@
       "event": 20514,
       "debug_key": "I1600",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 77,
@@ -3256,7 +3296,8 @@
       "event": 20511,
       "debug_key": "I800",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 80,
@@ -3313,7 +3354,8 @@
       "event": 20508,
       "debug_key": "I400",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 83,
@@ -3370,7 +3412,8 @@
       "event": 20505,
       "debug_key": "I200",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 86,
@@ -3389,7 +3432,8 @@
       "event": 20504,
       "debug_key": "ISO_L",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "sensitivity_dial"
       },
       "scanner": {
         "index": 87,
@@ -3408,7 +3452,8 @@
       "event": 20526,
       "debug_key": "DRV-PANO",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 88,
@@ -3427,7 +3472,8 @@
       "event": 20527,
       "debug_key": "DRV-ADV",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 89,
@@ -3446,7 +3492,8 @@
       "event": 20528,
       "debug_key": "DRV-MULTI",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 90,
@@ -3465,7 +3512,8 @@
       "event": 20529,
       "debug_key": "DRV-ONE",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 91,
@@ -3484,7 +3532,8 @@
       "event": 20530,
       "debug_key": "DRV-C_L",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 92,
@@ -3503,7 +3552,8 @@
       "event": 20531,
       "debug_key": "DRV-C_H",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 93,
@@ -3522,7 +3572,8 @@
       "event": 20532,
       "debug_key": "DRV-BKT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 94,
@@ -3541,7 +3592,8 @@
       "event": 20534,
       "debug_key": "DRV-MOV",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_dial"
       },
       "scanner": {
         "index": 95,
@@ -3560,7 +3612,8 @@
       "event": 8234,
       "debug_key": "MET_AV",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "metering_dial"
       },
       "scanner": {
         "index": 96,
@@ -3579,7 +3632,8 @@
       "event": 8233,
       "debug_key": "MET_MU",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "metering_dial"
       },
       "scanner": {
         "index": 97,
@@ -3598,7 +3652,8 @@
       "event": 8235,
       "debug_key": "MET_CN",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "metering_dial"
       },
       "scanner": {
         "index": 98,
@@ -3617,7 +3672,8 @@
       "event": 8232,
       "debug_key": "MET_SP",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "metering_dial"
       },
       "scanner": {
         "index": 99,
@@ -3636,7 +3692,8 @@
       "event": 8244,
       "debug_key": "FUNCTION2",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn2_button"
       },
       "scanner": {
         "index": 100,
@@ -3693,7 +3750,8 @@
       "event": 23,
       "debug_key": "MF_AF_A",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_mode_selector"
       },
       "scanner": {
         "index": 103,
@@ -3712,7 +3770,8 @@
       "event": 24,
       "debug_key": "MF_AF_C",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_mode_selector"
       },
       "scanner": {
         "index": 104,
@@ -3731,7 +3790,8 @@
       "event": 25,
       "debug_key": "MF_AF_M",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_mode_selector"
       },
       "scanner": {
         "index": 105,
@@ -4199,6 +4259,193 @@
           "upper": 1
         }
       },
+      "electrical": null
+    },
+    {
+      "id": "debug-7",
+      "event": 7,
+      "debug_key": "S1",
+      "target": {
+        "kind": "control",
+        "control_id": "shutter_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-8",
+      "event": 8,
+      "debug_key": "S2",
+      "target": {
+        "kind": "control",
+        "control_id": "shutter_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-32",
+      "event": 32,
+      "debug_key": "FUNCTION",
+      "target": {
+        "kind": "control",
+        "control_id": "fn1_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-35",
+      "event": 35,
+      "debug_key": "CMD_PUSH",
+      "target": {
+        "kind": "control",
+        "control_id": "front_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-36",
+      "event": 36,
+      "debug_key": "CMD_LEFT",
+      "target": {
+        "kind": "control",
+        "control_id": "front_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-37",
+      "event": 37,
+      "debug_key": "CMD_RIGHT",
+      "target": {
+        "kind": "control",
+        "control_id": "front_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-42",
+      "event": 42,
+      "debug_key": "K_Q",
+      "target": {
+        "kind": "control",
+        "control_id": "q_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-51",
+      "event": 51,
+      "debug_key": "8DIR_U",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_stick.up"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-53",
+      "event": 53,
+      "debug_key": "8DIR_R",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_stick.right"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-55",
+      "event": 55,
+      "debug_key": "8DIR_D",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_stick.down"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-57",
+      "event": 57,
+      "debug_key": "8DIR_L",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_stick.left"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-59",
+      "event": 59,
+      "debug_key": "8DIR_PUSH",
+      "target": {
+        "kind": "control",
+        "control_id": "focus_stick"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-60",
+      "event": 60,
+      "debug_key": "CMD2_L",
+      "target": {
+        "kind": "control",
+        "control_id": "rear_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-61",
+      "event": 61,
+      "debug_key": "CMD2_R",
+      "target": {
+        "kind": "control",
+        "control_id": "rear_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-8223",
+      "event": 8223,
+      "debug_key": "CMD2_PUSH",
+      "target": {
+        "kind": "control",
+        "control_id": "rear_command_dial"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-8227",
+      "event": 8227,
+      "debug_key": "AE-LOCK",
+      "target": {
+        "kind": "control",
+        "control_id": "ae_l_button"
+      },
+      "scanner": null,
+      "electrical": null
+    },
+    {
+      "id": "debug-8228",
+      "event": 8228,
+      "debug_key": "AF-LOCK",
+      "target": {
+        "kind": "control",
+        "control_id": "af_l_button"
+      },
+      "scanner": null,
       "electrical": null
     }
   ],

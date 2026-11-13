@@ -101,43 +101,67 @@
           "positions": [
             {
               "id": "C",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=C"
+              },
+              "asserted": true
             },
             {
               "id": "−3",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-3.0"
+              },
+              "asserted": true
             },
             {
               "id": "−2",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.0"
+              },
+              "asserted": true
             },
             {
               "id": "−1",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-1.0"
+              },
+              "asserted": true
             },
             {
               "id": "0",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=0"
+              },
+              "asserted": true
             },
             {
               "id": "+1",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+1.0"
+              },
+              "asserted": true
             },
             {
               "id": "+2",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.0"
+              },
+              "asserted": true
             },
             {
               "id": "+3",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+3.0"
+              },
+              "asserted": true
             }
           ]
         },
@@ -203,8 +227,22 @@
       "behavior": {
         "kind": "shutter",
         "stages": {
-          "half_press": null,
-          "full_press": null
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
         }
       },
       "positions": [],
@@ -224,7 +262,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
       },
       "positions": []
     },
@@ -247,88 +288,139 @@
           "positions": [
             {
               "id": "B",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-B"
+              },
+              "asserted": true
             },
             {
               "id": "T",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-T"
+              },
+              "asserted": true
             },
             {
               "id": "1",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1"
+              },
+              "asserted": true
             },
             {
               "id": "2",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2"
+              },
+              "asserted": true
             },
             {
               "id": "4",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4"
+              },
+              "asserted": true
             },
             {
               "id": "8",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8"
+              },
+              "asserted": true
             },
             {
               "id": "15",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/15"
+              },
+              "asserted": true
             },
             {
               "id": "30",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/30"
+              },
+              "asserted": true
             },
             {
               "id": "60",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/60"
+              },
+              "asserted": true
             },
             {
               "id": "125",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/125"
+              },
+              "asserted": true
             },
             {
               "id": "250",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/250"
+              },
+              "asserted": true
             },
             {
               "id": "500",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/500"
+              },
+              "asserted": true
             },
             {
               "id": "1000",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1000"
+              },
+              "asserted": true
             },
             {
               "id": "2000",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2000"
+              },
+              "asserted": true
             },
             {
               "id": "4000",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4000"
+              },
+              "asserted": true
             },
             {
               "id": "8000",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8000"
+              },
+              "asserted": true
             },
             {
               "id": "A",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "S-A"
+              },
+              "asserted": true
             }
           ]
         },
@@ -487,53 +579,83 @@
           "positions": [
             {
               "id": "A",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "ISO_A"
+              },
+              "asserted": true
             },
             {
               "id": "200",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I200"
+              },
+              "asserted": true
             },
             {
               "id": "400",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I400"
+              },
+              "asserted": true
             },
             {
               "id": "800",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I800"
+              },
+              "asserted": true
             },
             {
               "id": "1600",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I1600"
+              },
+              "asserted": true
             },
             {
               "id": "3200",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I3200"
+              },
+              "asserted": true
             },
             {
               "id": "6400",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I6400"
+              },
+              "asserted": true
             },
             {
               "id": "12800",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "I12800"
+              },
+              "asserted": true
             },
             {
               "id": "H",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "ISO_H1"
+              },
+              "asserted": true
             },
             {
               "id": "L",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "ISO_L"
+              },
+              "asserted": true
             }
           ]
         },
@@ -632,43 +754,67 @@
           "positions": [
             {
               "id": "movie",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-MOV"
+              },
+              "asserted": true
             },
             {
               "id": "BKT",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-BKT"
+              },
+              "asserted": true
             },
             {
               "id": "CH",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-C_H"
+              },
+              "asserted": true
             },
             {
               "id": "CL",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-C_L"
+              },
+              "asserted": true
             },
             {
               "id": "S",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-ONE"
+              },
+              "asserted": true
             },
             {
               "id": "multiple_exposure",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-MULTI"
+              },
+              "asserted": true
             },
             {
               "id": "ADV.",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-ADV"
+              },
+              "asserted": true
             },
             {
               "id": "panorama",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-PANO"
+              },
+              "asserted": true
             }
           ]
         },
@@ -736,18 +882,27 @@
         "positions": [
           {
             "id": "S",
-            "key": null,
-            "asserted": null
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_A"
+            },
+            "asserted": true
           },
           {
             "id": "C",
-            "key": null,
-            "asserted": null
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_C"
+            },
+            "asserted": true
           },
           {
             "id": "M",
-            "key": null,
-            "asserted": null
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_M"
+            },
+            "asserted": true
           }
         ]
       },
@@ -803,7 +958,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
       },
       "positions": []
     },
@@ -826,23 +984,35 @@
           "positions": [
             {
               "id": "spot",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "MET_SP"
+              },
+              "asserted": true
             },
             {
               "id": "center_weighted",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "MET_CN"
+              },
+              "asserted": true
             },
             {
               "id": "multi",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "MET_MU"
+              },
+              "asserted": true
             },
             {
               "id": "average",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "MET_AV"
+              },
+              "asserted": true
             }
           ]
         },
@@ -889,10 +1059,19 @@
         "kind": "dial",
         "motion": {
           "kind": "steps",
-          "decrease": null,
-          "increase": null
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD_LEFT"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD_RIGHT"
+          }
         },
-        "press": null,
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        },
         "endless": null
       },
       "positions": [],
@@ -952,7 +1131,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DELETE"
+        }
       },
       "positions": []
     },
@@ -970,7 +1152,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
       },
       "positions": []
     },
@@ -988,7 +1173,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "VIEW"
+        }
       },
       "positions": []
     },
@@ -1006,7 +1194,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "AE-LOCK"
+        }
       },
       "positions": []
     },
@@ -1026,10 +1217,19 @@
         "kind": "dial",
         "motion": {
           "kind": "steps",
-          "decrease": null,
-          "increase": null
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD2_L"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD2_R"
+          }
         },
-        "press": null,
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD2_PUSH"
+        },
         "endless": null
       },
       "positions": [],
@@ -1049,7 +1249,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "AF-LOCK"
+        }
       },
       "positions": []
     },
@@ -1067,7 +1270,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
       },
       "positions": []
     },
@@ -1106,12 +1312,27 @@
       "behavior": {
         "kind": "pad",
         "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
+          "up": {
+            "kind": "debug_key",
+            "name": "8DIR_U"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "8DIR_D"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "8DIR_L"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "8DIR_R"
+          }
         },
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "8DIR_PUSH"
+        }
       },
       "positions": [],
       "short_name": "FOCUS"
@@ -1130,7 +1351,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "UP"
+        }
       },
       "positions": [],
       "short_name": "UP"
@@ -1149,7 +1373,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "RIGHT"
+        }
       },
       "positions": [],
       "short_name": "RIGHT"
@@ -1168,7 +1395,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DOWN"
+        }
       },
       "positions": [],
       "short_name": "DOWN"
@@ -1187,7 +1417,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "LEFT"
+        }
       },
       "positions": [],
       "short_name": "LEFT"
@@ -1206,7 +1439,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
       },
       "positions": []
     },
@@ -1224,7 +1460,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
       },
       "positions": []
     },
