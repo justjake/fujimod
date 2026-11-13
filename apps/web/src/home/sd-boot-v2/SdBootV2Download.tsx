@@ -43,18 +43,6 @@ function Check(props: {
   );
 }
 
-/** Documentation for the rows below it, like a comment in the card's listing. */
-function Note(props: { title?: string; children: JSX.Element }) {
-  return (
-    <div class="sd-note">
-      <Show when={props.title}>
-        <b>{props.title}</b>
-      </Show>
-      {props.children}
-    </div>
-  );
-}
-
 function FileRow(props: {
   name: string;
   detail?: JSX.Element;
@@ -62,20 +50,14 @@ function FileRow(props: {
   dim?: boolean;
   folder?: boolean;
   check?: JSX.Element;
-  after?: JSX.Element;
 }) {
   return (
     <div class={{ r: true, 'sd-row': true, dim: props.dim, folder: props.folder }}>
       <span class="tw" />
       <span class="sd-slot">{props.check}</span>
       <Icon name={props.folder ? 'folder' : 'file'} />
-      <span class="n">
-        {props.name}
-        <Show when={props.detail}>
-          <span class="sd-detail">{props.detail}</span>
-        </Show>
-      </span>
-      {props.after}
+      <span class="n">{props.name}</span>
+      <span class="sd-detail">{props.detail}</span>
       <Show when={props.bytes !== undefined}>
         <span class="s">{formatBytes(props.bytes!)}</span>
       </Show>
@@ -85,6 +67,7 @@ function FileRow(props: {
 
 function Folder(props: {
   name: string;
+  detail?: string;
   /** Shown after the name, such as the count of included files. */
   count?: number;
   /** Caps the folder's listing height and scrolls it. */
@@ -120,9 +103,10 @@ function Folder(props: {
           <span class="n">
             {props.name}
             <Show when={props.count !== undefined}>
-              <span class="sd-detail">({props.count})</span>
+              <span class="sd-count"> ({props.count})</span>
             </Show>
           </span>
+          <span class="sd-detail">{props.detail}</span>
         </button>
       </div>
       <div class={{ kids: true, 'sd-scroll': props.scroll }} hidden={!open()}>
@@ -135,6 +119,7 @@ function Folder(props: {
 /** Optional card files in one folder, each with its own include box and one for the folder. */
 function OptionalFolder(props: {
   name: string;
+  detail: string;
   files: readonly SdCardFile[];
   excluded: ReadonlySet<string>;
   setExcluded: (paths: readonly string[], excluded: boolean) => void;
@@ -144,6 +129,7 @@ function OptionalFolder(props: {
   return (
     <Folder
       name={props.name}
+      detail={props.detail}
       count={included()}
       scroll
       dim={props.dim}
@@ -362,32 +348,28 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
           <div class="tree sd-tree" id="sd-card-files">
             <For each={processors()}>
               {(processor) => {
-                const boot = () => sdBootV2For(processor);
                 const files = () => sdBootV2Files(card(), processor);
                 const size = (name: string) =>
                   files().files.find((file) => file.path === name)?.bytes;
                 return (
-                  <Show when={boot()}>
+                  <Show when={sdBootV2For(processor)}>
                     {(boot) => (
                       <>
-                        <Note title="SD boot v2">
-                          <p>
-                            The {boot().name} loader starts FujiMod from the SD card. The initial
-                            boot does not change your installed firmware.
-                          </p>
-                        </Note>
-                        <FileRow name="FFBOOT.BIN" bytes={size('FFBOOT.BIN')} dim={previewing()} />
-                        <Note>
-                          <p>Startup settings for the SD boot loader.</p>
-                        </Note>
-                        <FileRow name="FFSYS.BIN" bytes={size('FFSYS.BIN')} dim={previewing()} />
-                        <Note title="FujiMod loader">
-                          <p>
-                            Loads the selected camera’s files from FUJIMOD/SYSTEM on the SD card.
-                          </p>
-                        </Note>
+                        <FileRow
+                          name="FFBOOT.BIN"
+                          detail={`FujiMod stage 1 boot loader. The boot ROM runs it when you hold the SD boot buttons; it hands off to ${boot().stage2}.`}
+                          bytes={size('FFBOOT.BIN')}
+                          dim={previewing()}
+                        />
+                        <FileRow
+                          name="FFSYS.BIN"
+                          detail="Used by the boot ROM to initialize RAM."
+                          bytes={size('FFSYS.BIN')}
+                          dim={previewing()}
+                        />
                         <FileRow
                           name={boot().stage2}
+                          detail="Loads the selected camera’s files from FUJIMOD/SYSTEM."
                           bytes={size(boot().stage2)}
                           dim={previewing()}
                         />
@@ -397,26 +379,15 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                 );
               }}
             </For>
-            <Note>
-              <p>To start stock firmware, turn the camera off and remove the SD card.</p>
-            </Note>
             <Folder name="FUJIMOD">
-              <Note>
-                <p>
-                  FujiMod settings are saved on the SD card. Stock camera settings remain in the
-                  camera’s internal storage.
-                </p>
-              </Note>
-              <FileRow name="SETTINGS.JSN" />
+              <FileRow
+                name="SETTINGS.JSN"
+                detail="FujiMod settings. Stock settings stay in the camera."
+              />
               <Show when={inFolder('RECIPES').length}>
-                <Note>
-                  <p>
-                    Optional recipe files. When available, EDIT/SAVE CUSTOM SETTING holds up to 255
-                    custom settings, with seven favorites in the Q menu.
-                  </p>
-                </Note>
                 <OptionalFolder
                   name="RECIPES"
+                  detail="Recipes for EDIT/SAVE CUSTOM SETTING, when available."
                   files={inFolder('RECIPES')}
                   excluded={excluded()}
                   setExcluded={setExcluded}
@@ -424,41 +395,37 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                 />
               </Show>
               <Show when={inFolder('FILMS').length}>
-                <Note>
-                  <p>Optional custom film simulations, loaded from the SD card.</p>
-                </Note>
                 <OptionalFolder
                   name="FILMS"
+                  detail="Custom film simulations."
                   files={inFolder('FILMS')}
                   excluded={excluded()}
                   setExcluded={setExcluded}
                   dim={false}
                 />
               </Show>
-              <Note>
-                <p>
-                  System files for each selected camera. Wi-Fi updates keep the previous version
-                  available if the new version fails to start.
-                </p>
-              </Note>
-              <Folder name="SYSTEM" dim={previewing()}>
+              <Folder
+                name="SYSTEM"
+                detail="Each camera’s system files. Wi-Fi updates keep the previous version."
+                dim={previewing()}
+              >
                 <For each={shown()} keyed={(camera) => camera.id}>
                   {(camera) => (
-                    <>
-                      <Note>
-                        <p>A.JSN lists the initial version’s files. STATE.JSN tracks startup.</p>
-                      </Note>
-                      <Folder name={camera().id} dim={previewing()}>
-                        <FileRow name="A.JSN" dim={previewing()} />
-                        <FileRow name="STATE.JSN" dim={previewing()} />
-                      </Folder>
-                    </>
+                    <Folder name={camera().id} dim={previewing()}>
+                      <FileRow
+                        name="A.JSN"
+                        detail="The installed version’s files."
+                        dim={previewing()}
+                      />
+                      <FileRow name="STATE.JSN" detail="Startup state." dim={previewing()} />
+                    </Folder>
                   )}
                 </For>
-                <Note>
-                  <p>Shared system files, named by their content.</p>
-                </Note>
-                <Folder name="STORE" dim={previewing()}>
+                <Folder
+                  name="STORE"
+                  detail="Shared system files, named by content."
+                  dim={previewing()}
+                >
                   <For each={store()} keyed={([name]) => name}>
                     {(entry) => (
                       <FileRow
