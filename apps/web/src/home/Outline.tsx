@@ -30,7 +30,10 @@ const PAGE_SECTIONS: Record<string, Section> = {
   CONTROL: 'setup',
 };
 /** Pages that open from a list entry, by the row whose entries open them. */
-const OPENED_FROM: Record<string, string> = { 'CUSTOM SETTING': 'LIBRARY' };
+const OPENED_FROM: Record<string, string> = {
+  'CUSTOM SETTING': 'LIBRARY',
+  CONTROL: 'BUTTON/DIAL SETTING',
+};
 const TOP_ORDER = ['SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP'];
 const TOP_MENUS = new Set(TOP_ORDER);
 
@@ -46,24 +49,33 @@ for (const feature of catalog.features)
     if (control.card && !options.has(control.card)) options.set(control.card, control.choices);
 const rowPlace = (row: MenuRow) => [...row.path, row.title];
 
-function ruledSection(row: MenuRow): Section | undefined {
+/** Effects and recipes, and the pages opened from them, join CUSTOM SETTINGS / RECIPES. */
+function recipeRow(row: MenuRow) {
   const feature = row.feature ? features.get(row.feature) : undefined;
-  if (feature) return GROUP_SECTIONS[feature.group];
-  const place = rowPlace(row);
-  if (place.some((title) => title.includes('CUSTOM SETTING'))) return 'recipes';
-  return PAGE_SECTIONS[place[0]!];
+  return (
+    feature?.group === 'recipes' ||
+    rowPlace(row).some((title) => title.includes('CUSTOM SETTING')) ||
+    PAGE_SECTIONS[row.path[0] ?? ''] === 'recipes'
+  );
 }
 
-/** A row without a rule takes the section of its first ruled descendant, else its top menu's. */
+/** A row's section: recipes for an effect or a menu holding one, else its top menu's. */
 function sectionOf(row: MenuRow): Section {
-  const ruled = ruledSection(row);
-  if (ruled) return ruled;
+  if (recipeRow(row)) return 'recipes';
   const place = rowPlace(row).join('\u0000') + '\u0000';
-  const child = catalog.menus.find(
-    (other) => rowPlace(other).join('\u0000').startsWith(place) && ruledSection(other),
+  const holds = catalog.menus.some(
+    (other) => rowPlace(other).join('\u0000').startsWith(place) && recipeRow(other),
   );
-  if (child) return ruledSection(child)!;
-  return row.path[0] === 'SET-UP' ? 'setup' : 'shooting';
+  const nested = catalog.menus.some(
+    (other) =>
+      rowPlace(other).join('\u0000').startsWith(place) && !!other.feature && !recipeRow(other),
+  );
+  if (holds && !nested) return 'recipes';
+  const top = row.path[0] ?? '';
+  if (TOP_MENUS.has(top)) return top === 'SET-UP' ? 'setup' : 'shooting';
+  if (PAGE_SECTIONS[top]) return PAGE_SECTIONS[top]!;
+  const feature = row.feature ? features.get(row.feature) : undefined;
+  return feature ? GROUP_SECTIONS[feature.group]! : 'shooting';
 }
 
 /** One node of a section's menu tree; `row` is absent for menus FujiMod only passes through. */
