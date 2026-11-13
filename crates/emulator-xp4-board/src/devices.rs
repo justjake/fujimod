@@ -54,11 +54,15 @@ pub struct Devices {
     pub log: Vec<Record>,
     prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
+    dials: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
     xpp_adc: Option<Arc<Mutex<fujimod_emulator_xpp::adc::Converter>>>,
     usb: Option<Arc<Mutex<Dwc3>>>,
+    usb_presence: Option<Arc<std::sync::atomic::AtomicBool>>,
     pub frames: BTreeMap<usize, Frame>,
     pub outputs: BTreeMap<usize, serde_json::Value>,
+    /// Single words owned by a declared model inside another block's range.
+    carved: Vec<(u64, u64)>,
 }
 struct PhysicalHost<'a> {
     cluster: &'a Cluster,
@@ -191,25 +195,53 @@ impl Devices {
             .set_input(port, pin, high);
         Ok(())
     }
+    pub fn dial(
+        &self,
+        name: &str,
+    ) -> Result<&fujimod_emulator_devices::parts::encoder_input::EncoderInput, String> {
+        self.dials.get(name).ok_or_else(|| format!("No XP4 command dial named {name}"))
+    }
     pub fn gpio_registers(&self) -> Option<Vec<[u32; 8]>> {
         let pins = self.pins.as_ref()?.lock().unwrap();
         Some((0..16).map(|port| pins.registers(port)).collect())
     }
-    pub fn gpio(&mut self, base: u64, inputs: [u16; 16]) -> Result<(), String> {
+    pub fn gpio(
+        &mut self,
+        base: u64,
+        inputs: [u16; 16],
+        interrupts: Vec<fujimod_emulator_devices::parts::gpio::InputIrq>,
+    ) -> Result<(), String> {
+        let end = base + 0x400;
+        let carved: Vec<(u64, u64)> = self
+            .carved
+            .iter()
+            .copied()
+            .filter(|&(lo, hi)| base <= lo && hi <= end)
+            .collect();
         if self.pins.is_some()
             || self
                 .windows
                 .iter()
-                .any(|&(lo, hi, _)| base < hi && lo < base + 0x400)
+                .any(|&(lo, hi, _)| base < hi && lo < end && !carved.contains(&(lo, hi)))
         {
             return Err("Overlapping GPIO wiring".into());
         }
         let pins = fujimod_emulator_ip::socionext::gpio::Pins::new(inputs);
         let id = self.models.len();
         self.models.push(Some(Box::new(
-            fujimod_emulator_ip::socionext::gpio::Gpio::new(base, pins.clone())?,
+            fujimod_emulator_ip::socionext::gpio::Gpio::new(base, pins.clone())?
+                .with_interrupts(interrupts)?,
         )));
-        self.windows.push((base, base + 0x400, id));
+        let mut lo = base;
+        for &(a, b) in carved.iter().collect::<std::collections::BTreeSet<_>>() {
+            if lo < a {
+                self.windows.push((lo, a, id));
+            }
+            lo = b;
+        }
+        if lo < end {
+            self.windows.push((lo, end, id));
+        }
         self.pins = Some(pins);
         Ok(())
     }
@@ -365,7 +397,12 @@ impl Devices {
             .unwrap())
     }
     pub fn usb_link(&self, now: u64, connected: bool) -> Result<(), String> {
-        self.usb_model()?.link(now, connected)
+        self.usb_model()?.link(now, connected)?;
+        // The condition strap the stock USB task reads follows the cable.
+        if let Some(presence) = &self.usb_presence {
+            presence.store(connected, std::sync::atomic::Ordering::SeqCst);
+        }
+        Ok(())
     }
     pub fn usb_reset(&self, now: u64) -> Result<(), String> {
         self.usb_model()?.bus_reset(now)
@@ -395,7 +432,13 @@ impl Devices {
         {
             return Err("Invalid or overlapping XP4 DMP wiring".into());
         }
-        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq)?;
+        // The X-T3 LCD pixmap holds the renderer's RGBA8 words unchanged
+        // (memory bytes A,B,G,R): see PixmapReadback::PreservesWords.
+        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(
+            base,
+            irq,
+            fujimod_emulator_ip_dmp::smaph::PixmapReadback::PreservesWords,
+        )?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x3000, id));
@@ -418,8 +461,8 @@ impl Devices {
         }
         let picture = match layout {
             None => None,
-            Some("bgra8888-straight") => {
-                Some(fujimod_framebuffer_xp4::Picture::Bgra8888Straight)
+            Some("abgr8888-straight") => {
+                Some(fujimod_framebuffer_xp4::Picture::Abgr8888Straight)
             }
             _ => return Err("Unsupported XP4 LCDC picture layout".into()),
         };
@@ -434,6 +477,64 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x604, id));
         Ok(())
+    }
+    pub fn sd_host(
+        &mut self,
+        host: crate::definition::SdHost,
+        files: &[(String, Vec<u8>)],
+        medium: Option<fujimod_emulator_devices::parts::sd_card::Card>,
+    ) -> Result<(), String> {
+        let base = host.options.base;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < base.saturating_add(0x1000))
+        {
+            return Err("Overlapping XP4 SD host".into());
+        }
+        let card = match medium {
+            Some(mut card) => {
+                if !files.is_empty() {
+                    return Err("An SD host takes SD card files or an SD card medium, not both".into());
+                }
+                card.validate()?;
+                if card.sectors() != host.card.sectors {
+                    return Err("SD card medium capacity differs from the declared SD card".into());
+                }
+                card.set_allocation_limit(host.card.max_dirty_sectors)?;
+                card
+            }
+            None => fujimod_emulator_storage::fat::format(&host.card, files)?,
+        };
+        let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
+        let model = fujimod_emulator_xp4_io::sd::Controller::new(
+            host.options,
+            card,
+            contacts,
+            host.irq
+                .map(fujimod_emulator_devices::bus::InterruptLine::Shared),
+        )?;
+        let id = self.models.len();
+        self.models.push(Some(Box::new(model)));
+        self.windows.push((base, base + 0x1000, id));
+        Ok(())
+    }
+    /// The medium in the `host`th SD card slot (declaration order), once the host is idle.
+    pub fn card_medium(
+        &self,
+        host: usize,
+    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        let slot = self
+            .models
+            .iter()
+            .flatten()
+            .filter_map(|model| model.card_slot())
+            .nth(host)
+            .ok_or("No SD card slot with that index")?;
+        if slot.busy() {
+            return Err("SD host is busy; the medium is not at rest".into());
+        }
+        Ok(slot.card().clone())
     }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
         if words.iter().any(|&(address, _)| {
@@ -491,6 +592,126 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn countdown_timers(
+        &mut self,
+        base: u64,
+        routes: &[(usize, u32)],
+        dials: &[crate::definition::CountdownDial],
+    ) -> Result<(), String> {
+        use fujimod_emulator_xp4_io::countdown_timers::{CountdownTimers, DialWiring};
+        let wiring: Vec<_> = dials
+            .iter()
+            .map(|d| DialWiring { channel: d.channel, phase_ticks: d.phase_ticks, rest_phase: d.rest_phase })
+            .collect();
+        let model = CountdownTimers::new(base, routes, &wiring)?;
+        for d in dials {
+            if d.name.is_empty() || self.dials.contains_key(&d.name) {
+                return Err("Invalid XP4 countdown dial name".into());
+            }
+            self.dials.insert(d.name.clone(), model.dial_input(d.channel).ok_or("Unwired XP4 countdown dial")?);
+        }
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 countdown timer window".into());
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn jpeg_encoder(&mut self, wiring: &crate::definition::JpegEncoder) -> Result<(), String> {
+        let model = fujimod_emulator_ip::jpeg::Encoder::new(
+            "xp4-jpeg-encoder",
+            wiring.base,
+            wiring.irq,
+            wiring.run_ticks,
+            fujimod_emulator_ip::jpeg::Registers::Declared(crate::jpeg::contract(
+                wiring.memory_type,
+            )),
+        )?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 JPEG encoder window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn still_engine(&mut self, wiring: &crate::definition::StillEngine) -> Result<(), String> {
+        let model =
+            crate::still::Engine::new(wiring.engine, wiring.base, wiring.irq, wiring.run_ticks)?;
+        let (lo, hi) = model.window();
+        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+            return Err("Overlapping XP4 still engine window".into());
+        }
+        let id = self.models.len();
+        self.windows.push((lo, hi, id));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn dsp(&mut self, wiring: &crate::definition::Dsp) -> Result<(), String> {
+        let model = crate::dsp::Dsp::new(wiring.irq, wiring.run_ticks)?;
+        let windows = model.windows();
+        for &(lo, hi) in &windows {
+            if let Some(&(a, b, id)) = self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi) {
+                let owner = self.models[id].as_ref().map_or("?", |m| m.name());
+                return Err(format!(
+                    "XP4 DSP window {lo:#x}..{hi:#x} overlaps {owner} {a:#x}..{b:#x}"
+                ));
+            }
+        }
+        let id = self.models.len();
+        self.windows.extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn face_detector(&mut self, wiring: &crate::definition::FaceDetector) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::face_detector::FaceDetector::new(
+            wiring.base,
+            wiring.irq,
+            wiring.run_ticks,
+        )?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 face detector window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
+    pub fn filter_engine(&mut self, wiring: &crate::definition::FilterEngine) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::filter_engine::FilterEngine::new(
+            wiring.base,
+            wiring.memory_types,
+            wiring.irq,
+            wiring.run_ticks,
+        )?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 filter engine window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
         if self
             .windows
@@ -500,6 +721,7 @@ impl Devices {
             return Err("Overlapping XP4 USB condition register".into());
         }
         let model = fujimod_emulator_xp4_io::usb_condition::UsbCondition::new(base, present)?;
+        self.usb_presence = Some(model.presence());
         let id = self.models.len();
         self.windows.push((base, base + 4, id));
         self.models.push(Some(Box::new(model)));
@@ -524,42 +746,55 @@ impl Devices {
     }
     pub fn imaging(
         &mut self,
-        map: (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>),
+        map: (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>),
         timing: (u64, u64, u64, u64),
         read_gate: (u16, u8),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
+        statistics_in_memory: bool,
     ) -> Result<(), String> {
         use fujimod_emulator_sensor_input::{sensor, slvs};
-        let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs) = map;
+        let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs, raw_dma_irqs) =
+            map;
         let (period, active, command_ticks, reset_ticks) = timing;
+        let raw_dma = raw_dma_irqs.as_deref().unwrap_or(&[]);
         if command_base != 0xfff6c000
             || receiver_base != 0xfff69000
             || normal_irqs.len() != 2
             || error_irqs.len() != 2
             || timing_irqs.len() != 2
+            || raw_dma_irqs.as_ref().is_some_and(|irqs| irqs.len() != 2)
             || normal_irqs
                 .iter()
                 .chain(&error_irqs)
                 .chain(&timing_irqs)
+                .chain(raw_dma)
                 .any(|i| !(32..512).contains(i))
         {
             return Err("Invalid XP4 imaging map".into());
         }
+        // Declared RAW read-out DMA lines let the receiver write each frame
+        // into the buffer an enabled channel names; without them the
+        // channel windows refuse.
+        let dma: Option<[u32; 2]> = raw_dma_irqs.map(|irqs| irqs.try_into().unwrap());
         let sensor = sensor::Sensor::new(
             Some(sensor::ImageRoutes {
-                dma: None,
+                dma,
                 timing: timing_irqs.try_into().unwrap(),
+                // The X-T3 5.11 sensor driver writes the stride with the
+                // buffer address: +0x58 = 0x31e0 for 6276 samples.
+                line_stride: true,
             }),
             read_gate,
         );
-        let command = sensor::Command::new(command_base, sensor.clone(), command_ticks)?;
+        let command =
+            sensor::Command::new(command_base, sensor.clone(), command_ticks)?.with_retained_words();
         let mut receiver = slvs::Receiver::new(
             sensor,
             slvs::Wiring {
                 base: receiver_base,
                 normal_irqs,
                 error_irqs,
-                output_channels: vec![],
+                output_channels: if dma.is_some() { vec![0, 1] } else { vec![] },
                 timing_output: true,
                 control: slvs::Control {
                     run_mask: 0x11,
@@ -585,7 +820,11 @@ impl Devices {
             {
                 return Err("Invalid XP4 input-buffer wiring".into());
             }
-            let mut statistics = Statistics::new(sram, bank_size as usize)?;
+            let mut statistics = if statistics_in_memory {
+                Statistics::in_memory(sram, bank_size as usize)?
+            } else {
+                Statistics::new(sram, bank_size as usize)?
+            };
             statistics.set_scene(
                 &serde_json::from_str(&scene).map_err(|e| format!("statistics scene: {e}"))?,
             )?;
@@ -598,7 +837,7 @@ impl Devices {
                     ready: 0x2e8,
                     max_offset: 0x2e8,
                     write_limit: 0x2e4,
-                    enables: [0x100, 0],
+                    enables: [0x3ff, 0x3df],
                     causes: [0x100, 0],
                     outputs: vec![Output {
                         enable_word: 0,
@@ -617,7 +856,9 @@ impl Devices {
             )?;
             receiver = receiver.with_input_buffer(input.clone());
             extra.push((base, 0x2ec, Box::new(input)));
-            extra.push((sram, bank_size * 2, Box::new(statistics)));
+            if !statistics_in_memory {
+                extra.push((sram, bank_size * 2, Box::new(statistics)));
+            }
         }
         for (base, size, model) in [
             (command_base, 0x244, Box::new(command) as Box<dyn Device>),
@@ -647,11 +888,14 @@ impl Devices {
             log: vec![],
             prior_records: 0,
             pins: None,
+            dials: BTreeMap::new(),
             adc: None,
             xpp_adc: None,
             usb: None,
+            usb_presence: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
+            carved: Vec::new(),
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
@@ -733,6 +977,8 @@ impl Devices {
         irq: u32,
         receiver_input: Option<super::definition::DiscoveryTxReceiver>,
         prefix: Option<storage::ImmutablePrefix>,
+        mapped_read: Option<storage::MappedReadGate>,
+        write_protect: bool,
     ) -> Result<(Self, Option<storage::ImmutableView>), String> {
         let routes: [u32; 16] = routes
             .try_into()
@@ -754,6 +1000,7 @@ impl Devices {
             },
         )?;
         if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
+        if write_protect { nor = nor.with_write_protect(); }
         let view = nor.immutable_view();
         let port = storage::port_from_nor(nor);
         let mut dma = DmaController::new(port.clone(), routes);
@@ -766,18 +1013,25 @@ impl Devices {
             dma = dma.with_receiver(std::sync::Arc::new(std::sync::Mutex::new(receiver)));
         }
 
-        Ok((Self {
+        let mut controller = SerialFlashController::new(port.clone(), irq);
+        if let Some(gate) = mapped_read {
+            controller = controller.with_mapped_read_gate(gate)?;
+        }
+        let pad = controller.pad_register();
+        let mut devices = Self {
             models: vec![
-                Some(Box::new(SerialFlashController::new(port.clone(), irq))),
+                Some(Box::new(controller)),
                 Some(Box::new(dma)),
             ],
             events: Default::default(),
             log: Vec::new(),
             prior_records: 0,
             pins: None,
+            dials: BTreeMap::new(),
             adc: None,
             xpp_adc: None,
             usb: None,
+            usb_presence: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
             windows: vec![
@@ -787,7 +1041,18 @@ impl Devices {
                 (0xfff4a500, 0xfff4a520, 1),
                 (0xfff4a800, 0xfff4a880, 1),
             ],
-        }, view))
+            carved: Vec::new(),
+        };
+        if let Some(pad) = pad {
+            if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {
+                return Err("Flash pad register overlaps the flash controller windows".into());
+            }
+            // One word the controller owns inside another block's register
+            // range; that block is wired around it.
+            devices.windows.push((pad, pad + 4, 0));
+            devices.carved.push((pad, pad + 4));
+        }
+        Ok((devices, view))
     }
     /// X-Processor Pro flash controller, its read aperture and the PL330 that
     /// copies from it. The flash contents are an explicit board input.
@@ -1642,6 +1907,27 @@ mod decompressor_admission_tests {
         for base in [0xfff79000,0xfff78fff,0xfff7906b] {
             assert!(devices.decompressor(base,128).is_err());
             assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        }
+    }
+}
+
+#[cfg(test)]
+mod imaging_admission_tests {
+    use super::*;
+    fn map(raw_dma: Option<Vec<u32>>) -> (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>) {
+        (0xfff6c000, 0xfff69000, vec![296, 298], vec![297, 297], vec![102, 100], raw_dma)
+    }
+    #[test]
+    fn raw_dma_lines_are_two_valid_interrupts_or_absent() {
+        for raw_dma in [Some(vec![97]), Some(vec![97, 98, 99]), Some(vec![97, 600])] {
+            let mut devices = Devices::empty();
+            assert!(devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).is_err());
+            assert!(devices.models.is_empty() && devices.windows.is_empty());
+        }
+        for raw_dma in [None, Some(vec![97, 98])] {
+            let mut devices = Devices::empty();
+            devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).unwrap();
+            assert_eq!(devices.windows.len(), 2);
         }
     }
 }

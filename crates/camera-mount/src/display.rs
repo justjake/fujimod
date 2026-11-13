@@ -291,7 +291,7 @@ impl Profile {
                 let decode = |r: &[u32]| {
                     fujimod_framebuffer_xp4::decode(
                         r,
-                        picture.then_some(fujimod_framebuffer_xp4::Picture::Bgra8888Straight),
+                        picture.then_some(fujimod_framebuffer_xp4::Picture::Abgr8888Straight),
                         video.then_some(fujimod_framebuffer_xp4::Video::YyCbCr422),
                     )
                 };

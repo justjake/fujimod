@@ -2800,6 +2800,7 @@ class HardwareImagingRegisters(TypedDict, total=False):
     error_irqs: Required[list[int]]
     input_buffer: Required[HardwareInputBuffer]
     normal_irqs: Required[list[int]]
+    raw_dma_irqs: NotRequired[list[int] | None]
     receiver_base: Required[int]
     reset_ticks: Required[int]
     timing_irqs: Required[list[int]]
@@ -3066,11 +3067,13 @@ class HardwareRegisterLayouts(TypedDict, total=False):
     register_blocks: NotRequired[list[HardwareRegisterBlock]]
     reset_gates: NotRequired[HardwareResetGates | None]
     sd_host_clocks: NotRequired[HardwareSdHostClocks | None]
+    sd_hosts: NotRequired[list[HardwareSdHost]]
     serial_flash: NotRequired[HardwareSerialFlash | None]
     serial_ports: NotRequired[HardwareSerialPorts | None]
     spi: NotRequired[dict[str, HardwareSpi] | None]
     temperature: NotRequired[HardwareAdc | None]
     usb: NotRequired[HardwareUsbRegisters | None]
+    usb_phy: NotRequired[HardwareUsbPhy | None]
     xpp_i2c: NotRequired[HardwareXppI2cBuses | None]
     xpp_sd: NotRequired[HardwareXppSdHost | None]
     xpp_usb: NotRequired[HardwareXppUsb | None]
@@ -3110,6 +3113,19 @@ class HardwareRollingReference(TypedDict, total=False):
     lines: Required[int]
     mode: Required[int]
     vertical: Required[int]
+
+
+class HardwareSdHost(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    capabilities: Required[int]
+    capabilities_2: Required[int]
+    clock_ticks: Required[int]
+    irq_route: NotRequired[int | None]
+    size: Required[int]
+    slot_and_version: Required[int]
+    transfer_ticks: Required[int]
+    vendor_offsets: NotRequired[list[int]]
 
 
 class HardwareSdHostClocks(TypedDict, total=False):
@@ -3242,6 +3258,12 @@ class HardwareUsb(TypedDict, total=False):
     out_endpoints: Required[list[list[int]]]
     packet_bytes: Required[int]
     transfer_ticks: Required[int]
+
+
+class HardwareUsbPhy(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    size: Required[int]
 
 
 class HardwareUsbRegisters(TypedDict, total=False):
@@ -4183,7 +4205,7 @@ class PhysicalControlsVariant0(TypedDict, total=False):
     service: NotRequired[BootCombination]
 
 
-type PictureLayout = Literal["bgra8888-straight"]
+type PictureLayout = Literal["abgr8888-straight"]
 
 
 type PixelFormat = Literal["bgra8888"]

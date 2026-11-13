@@ -58,6 +58,13 @@ pub struct Definition {
     /// Immutable executable prefix of the connected XP4 NOR array.
     #[serde(default)]
     pub storage_immutable_prefix: Option<NorImmutablePrefix>,
+    /// Declared controller and pad states under which CPU reads of the mapped
+    /// NOR return array data; absent serves every mapped read.
+    #[serde(default)]
+    pub storage_mapped_read: Option<fujimod_emulator_xp4_storage::storage::MappedReadGate>,
+    /// Refuse every write-enable, erase and program request to the NOR.
+    #[serde(default)]
+    pub storage_write_protect: bool,
     /// DMA-only connection with explicitly declared reset and timing hypotheses.
     #[serde(default)]
     pub standalone_dma: Option<StandaloneDma>,
@@ -175,6 +182,9 @@ pub struct Definition {
     /// GPIO bank base; the XP4 0xfff41000 when absent.
     #[serde(default)]
     pub gpio_base: Option<u64>,
+    /// GPIO pads wired to level-sensitive interrupt inputs.
+    #[serde(default)]
+    pub gpio_interrupts: Vec<fujimod_emulator_devices::parts::gpio::InputIrq>,
     #[serde(default)]
     pub temperature: Option<(i32, u64)>,
     #[serde(default)]
@@ -196,7 +206,7 @@ pub struct Definition {
     )>,
     #[serde(default)]
     pub imaging: Option<(
-        (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>),
+        (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>),
         (u64, u64, u64, u64),
         (u16, u8),
         Option<(u64, u32, u64, u64, u64, String)>,
@@ -205,12 +215,36 @@ pub struct Definition {
     pub movdc: Vec<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
     pub sd_clocks: Vec<(u64, u64)>,
+    /// SD hosts with the card in their slot; each owns its page, clock halfword included.
+    #[serde(default)]
+    pub sd_hosts: Vec<SdHost>,
     /// Card-controller register windows, each excluding its clock halfword.
     #[serde(default)]
     pub register_banks: Vec<(u64, u64)>,
     /// The USB condition register `(base, cable present)`, when declared.
     #[serde(default)]
     pub usb_condition: Option<(u64, bool)>,
+    /// The countdown timer bank `(base, [(channel, interrupt line)])`, when declared.
+    #[serde(default)]
+    pub countdown_timers: Option<(u64, Vec<(usize, u32)>)>,
+    /// Command dials wired to countdown timer channels' count inputs.
+    #[serde(default)]
+    pub countdown_dials: Vec<CountdownDial>,
+    /// The JPEG encoder with the XP4 driver's register contract, when declared.
+    #[serde(default)]
+    pub jpeg_encoder: Option<JpegEncoder>,
+    /// Declared still-processing engines (see `crate::still`).
+    #[serde(default)]
+    pub still_engines: Vec<StillEngine>,
+    /// The still DSP's host interface (see `crate::dsp`), when declared.
+    #[serde(default)]
+    pub dsp: Option<Dsp>,
+    /// The face detection engine with the XP4 driver's register contract, when declared.
+    #[serde(default)]
+    pub face_detector: Option<FaceDetector>,
+    /// The filter engine with the XP4 driver's register contract, when declared.
+    #[serde(default)]
+    pub filter_engine: Option<FilterEngine>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -224,6 +258,69 @@ pub struct Definition {
     /// Declared (port base, send word, receive word) replies.
     #[serde(default)]
     pub xpp_serial_replies: Vec<(u64, u32, u32)>,
+}
+
+/// A command dial whose quadrature phases drive a countdown timer channel's
+/// count inputs, the host's name for it, and the time between its edges.
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CountdownDial {
+    pub name: String,
+    pub channel: usize,
+    pub phase_ticks: u64,
+    pub rest_phase: u8,
+}
+
+/// The XP4 JPEG encoder: register page base, completion interrupt line,
+/// run time in ticks and the address of its memory type word.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JpegEncoder {
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+    pub memory_type: u64,
+}
+
+/// One declared XP4 still-processing engine: which contract, its register
+/// page base, completion interrupt line and the ticks a job takes.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StillEngine {
+    pub engine: crate::still::Kind,
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
+/// The XP4 still DSP host interface: completion interrupt line and the
+/// ticks a command takes.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Dsp {
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
+/// The XP4 face detection engine: register page base, finished-run
+/// interrupt line and run time in ticks.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FaceDetector {
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
+/// The XP4 filter engine: register page base, address of its two memory
+/// type words, finished-run interrupt line and run time in ticks.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilterEngine {
+    pub base: u64,
+    pub memory_types: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
 }
 
 /// Register layout of the interval timer at `timer_base`.
@@ -337,6 +434,16 @@ pub struct XppSd {
     /// SD channel of the reset-gate line; requires `xpp_reset_gates`.
     #[serde(default)]
     pub reset_channel: Option<usize>,
+}
+
+/// An XP4 SD host with a freshly formatted card in its slot.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SdHost {
+    pub options: fujimod_emulator_xp4_io::sd::Options,
+    pub card: fujimod_emulator_storage::fat::Options,
+    #[serde(default)]
+    pub irq: Option<u32>,
 }
 
 /// X-Processor Pro imaging frame sync: register base, the address of the

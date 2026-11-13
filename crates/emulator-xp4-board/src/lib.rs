@@ -9,6 +9,9 @@ pub use definition::{Definition, GicCpuInitial, GicInitial, NorImmutablePrefix};
 pub mod observation;
 use observation::Call;
 mod devices;
+mod jpeg;
+mod dsp;
+mod still;
 mod timer;
 use fujimod_emulator::board::discovery::Discovery;
 use fujimod_emulator::board::harness::arm32 as driver_guard;
@@ -157,7 +160,7 @@ impl Cluster {
     }
 
     fn record_memory(&self, core: usize, access: Access, address: u64, size: i32, value: i64) {
-        if unsafe { (*self.state.get()).memory_watch.is_none() } {
+        if unsafe { (*self.state.get()).memory_watch.as_ref().is_none_or(|w| w.writes_only && access != Access::Write) } {
             return;
         }
         let result = (|| -> Result<Option<observation::MemoryRecord>, String> {
@@ -498,10 +501,21 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
             return Ok(());
         }
     }
-    if size != 4 {
-        return Err(format!(
-            "Unimplemented ARMv7-A Thumb instrumentation at {address:#x}"
-        ));
+    // The XP4 boot ROM runs Thumb code. Count it and advance guest time, but skip the ARM-encoded decode below.
+    // Only the ROM window is checked for 32-bit Thumb-2 encodings; firmware outside the ROM is ARM.
+    let thumb = size != 4
+        || ((0xfff0_0000..0xfff0_8000).contains(&address) && c.reg(core, arm::CPSR)? & 0x20 != 0);
+    if thumb {
+        c.due();
+        c.healthy()?;
+        let state = unsafe { &mut *c.state.get() };
+        state.instructions += 1;
+        let (ticks, phase) = c.instruction_rate.advance_phase(state.tick_phase, 1)?;
+        state.ticks = state.ticks.checked_add(ticks as u64).ok_or("A7 guest time overflow")?;
+        state.tick_phase = phase;
+        state.per_core[core] += 1;
+        state.waiting[core] = 0;
+        return Ok(());
     }
     c.due();
     c.healthy()?;
@@ -1034,6 +1048,29 @@ impl Session {
         storage_image: Option<Vec<u8>>,
         card_files: Vec<(String, Vec<u8>)>,
     ) -> Result<Self, String> {
+        Self::new_with_media(definition, storage_image, card_files, Vec::new())
+    }
+    /// The medium (by SD host declaration order) in the `host`th SD card slot.
+    pub fn card_medium(
+        &self,
+        host: usize,
+    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        unsafe {
+            (*self.inner.state.get())
+                .devices
+                .as_ref()
+                .ok_or("Board has no devices")?
+                .card_medium(host)
+        }
+    }
+    /// Like `new`, with an existing medium in place of the formatted SD card of the
+    /// listed SD hosts (index in declaration order).
+    pub fn new_with_media(
+        definition: Definition,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+        card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
+    ) -> Result<Self, String> {
         let Definition {
             byte_i2c,
             ram_size,
@@ -1050,6 +1087,8 @@ impl Session {
             discovery_tx_receiver,
             storage_jedec,
             storage_immutable_prefix,
+            storage_mapped_read,
+            storage_write_protect,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
@@ -1093,6 +1132,7 @@ impl Session {
             adc,
             gpio,
             gpio_base,
+            gpio_interrupts,
             temperature,
             power_spi,
             power_spi_command_output,
@@ -1100,7 +1140,15 @@ impl Session {
             imaging,
             movdc,
             sd_clocks,
+            sd_hosts,
             register_banks,
+            countdown_timers,
+            countdown_dials,
+            jpeg_encoder,
+            still_engines,
+            dsp,
+            face_detector,
+            filter_engine,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1120,7 +1168,7 @@ impl Session {
             || pmu_cycles_per_tick == Some(0)
             || ram_size < 0x10000
             || ram_size & 4095 != 0
-            || ram_size > 0x80000000
+            || ram_size > 0xf000_0000
         {
             return Err("ARMv7-A needs 1..4 cores and page aligned physical RAM".to_owned());
         }
@@ -1237,6 +1285,13 @@ impl Session {
         if storage_immutable_prefix.is_some() && storage_jedec.is_none() {
             return Err("Immutable NOR prefix requires an XP4 NOR owner".into());
         }
+        if (storage_mapped_read.is_some() || storage_write_protect) && storage_jedec.is_none() {
+            return Err("NOR read gate and write protection require an XP4 NOR owner".into());
+        }
+        if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
+            // The prefix is mapped as memory, so its reads would bypass the gate.
+            return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
+        }
         if discovery_tx_receiver.is_some() && (!discovery || storage_jedec.is_none()) {
             return Err("Transmit receiver input requires discovery and XP4 storage DMA".into());
         }
@@ -1252,6 +1307,8 @@ impl Session {
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
                 discovery_tx_receiver,
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
+                storage_mapped_read,
+                storage_write_protect,
             )?;
             frozen_nor = view;
             Some(devices)
@@ -1388,7 +1445,10 @@ impl Session {
                 None => None,
             }
         };
+        // Card files go on the first host's card.
+        let mut card_files = Some(card_files);
         if let Some(sd) = xpp_sd {
+            let card_files = card_files.take().unwrap_or_default();
             let reset = match (sd.reset_channel, &reset_gates) {
                 (Some(channel), Some(lines)) => Some(
                     lines
@@ -1404,8 +1464,26 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset, &card_files)?;
-        } else if !card_files.is_empty() {
-            return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
+        }
+        let mut card_media = card_media;
+        if card_media.iter().any(|(index, _)| *index >= sd_hosts.len()) {
+            return Err("SD card medium names an undeclared SD host".into());
+        }
+        for (index, host) in sd_hosts.into_iter().enumerate() {
+            let files = card_files.take().unwrap_or_default();
+            let medium = card_media
+                .iter()
+                .position(|(slot, _)| *slot == index)
+                .map(|position| card_media.swap_remove(position).1);
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .sd_host(host, &files, medium)?;
+        }
+        if !card_media.is_empty() {
+            return Err("Two SD card media name the same SD host".into());
+        }
+        if card_files.is_some_and(|files| !files.is_empty()) {
+            return Err("SD card files require an SD host".to_owned());
         }
         if let Some((unit, ..)) = xpp_live_view_image
             && !xpp_register_blocks
@@ -1519,9 +1597,17 @@ impl Session {
                 .adc(inputs, sample_ticks)?;
         }
         if let Some((map, timing, read_gate, ibuf)) = imaging {
+            // The statistics banks are guest memory when a declared memory
+            // region holds them (the boot ROM start keeps its SRAM there).
+            let statistics_in_memory = ibuf.as_ref().is_some_and(|(_, _, _, sram, bank, _)| {
+                memory.iter().any(|window| {
+                    window.base <= *sram
+                        && sram + bank * 2 <= window.base + window.data.len() as u64
+                })
+            });
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .imaging(map, timing, read_gate, ibuf)?;
+                .imaging(map, timing, read_gate, ibuf, statistics_in_memory)?;
         }
         if !movdc.is_empty() {
             devices
@@ -1543,9 +1629,13 @@ impl Session {
             )?;
         }
         if let Some(inputs) = gpio {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
+            devices.get_or_insert_with(devices::Devices::empty).gpio(
+                gpio_base.unwrap_or(0xfff41000),
+                inputs,
+                gpio_interrupts,
+            )?;
+        } else if !gpio_interrupts.is_empty() {
+            return Err("GPIO interrupts require GPIO wiring".into());
         }
         if let Some(keys) = xpp_key_lines {
             let lines = external_lines
@@ -1631,6 +1721,38 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .register_banks(register_banks)?;
+        }
+        if let Some((base, routes)) = countdown_timers {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .countdown_timers(base, &routes, &countdown_dials)?;
+        } else if !countdown_dials.is_empty() {
+            return Err("XP4 countdown dials require the countdown timer bank".into());
+        }
+        if let Some(encoder) = jpeg_encoder {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .jpeg_encoder(&encoder)?;
+        }
+        for engine in &still_engines {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .still_engine(engine)?;
+        }
+        if let Some(wiring) = dsp {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .dsp(&wiring)?;
+        }
+        if let Some(detector) = face_detector {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .face_detector(&detector)?;
+        }
+        if let Some(engine) = filter_engine {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .filter_engine(&engine)?;
         }
         if let Some((base, present)) = usb_condition {
             devices
@@ -2000,7 +2122,8 @@ impl Session {
         }
         Ok(())
     }
-    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> Result<(), String> {
+    /// `writes_only` records stores alone, so reads and fetches of hot ranges do not consume the record bound.
+    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> Result<(), String> {
         self.inner.host_mutation()?;
         if ranges.is_empty()
             || ranges.len() > 256
@@ -2037,13 +2160,14 @@ impl Session {
             records: Vec::new(),
             violation: None,
             hooks: Vec::new(),
+            writes_only,
         };
         for (core, cpu) in self.inner.cpus.iter().enumerate() {
             let data = (&*self.inner.hooks[core] as *const Hook).cast_mut().cast();
             let hook = CpuHook::Memory {
                 callback: memory_access,
                 data,
-                read: true,
+                read: !writes_only,
                 write: true,
                 range: HookRange::Inclusive {
                     begin: 0,
@@ -2201,7 +2325,8 @@ impl Session {
         }
         let result = (|| {
             c.flush_dma()?;
-            let start = c.reg(core, arm::PC)?;
+            // The PC register reads without the Thumb bit; a run resumes in Thumb state only when it is set.
+            let start = c.reg(core, arm::PC)? | (c.reg(core, arm::CPSR)? >> 5 & 1);
             unsafe {
                 (*c.state.get()).redirected = None;
             }
@@ -2306,6 +2431,23 @@ impl Session {
             .as_mut()
             .ok_or_else(|| "XP4 GPIO is not wired".to_owned())?
             .set_gpio_input(port, pin, high)
+    }
+    /// Turn a declared command dial by `edges` quadrature edges (negative turns
+    /// the other way); the edges follow each other at the dial's edge period.
+    pub fn turn_dial(&self, name: &str, edges: i32) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        if state.driver_guard.is_some() {
+            return Err("Guarded routine cannot turn command dials".to_owned());
+        }
+        let now = state.ticks;
+        state.device_scan_at = 0;
+        state
+            .devices
+            .as_ref()
+            .ok_or_else(|| "XP4 command dials are not wired".to_owned())?
+            .dial(name)?
+            .queue_edges(now, edges)
     }
     pub fn set_usb_connected(&self, connected: bool) -> Result<(), String> {
         self.inner

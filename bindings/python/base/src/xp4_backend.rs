@@ -1,5 +1,6 @@
 //! What the emulator bindings call on an XP4 session. `fujimod-python-xp4` implements it and
 //! registers its factory, so the emulator bindings depend on no XP4 crate.
+use fujimod_emulator_devices::parts::sd_card::Card;
 use crate::discovery::{FrontierEntry, Intervention};
 use fujimod_emulator_cpu::{Register, arm};
 use pyo3::{
@@ -40,13 +41,14 @@ pub trait Xp4Backend {
         return_sites: Option<Vec<u64>>,
         quota_per_edge: bool,
     ) -> PyResult<()>;
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()>;
+    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()>;
     fn memory_watch_end(&self) -> PyResult<()>;
     fn cpr_read(&self, core: usize, crn: u32, crm: u32, opc1: u32, opc2: u32) -> PyResult<u64>;
     fn write(&self, address: usize, data: &[u8]) -> PyResult<()>;
     fn run(&self, core: usize, budget: usize) -> PyResult<()>;
     fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()>;
     fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()>;
+    fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()>;
     fn set_usb_connected(&self, connected: bool) -> PyResult<()>;
     fn usb_bus_reset(&self) -> PyResult<()>;
     fn usb_transaction(
@@ -95,11 +97,19 @@ pub trait Xp4Backend {
     fn frontier(&self, by_count: bool) -> Vec<FrontierEntry>;
     fn discovery_shadow(&self) -> Vec<(u64, u8)>;
     fn interventions(&self) -> Vec<Intervention>;
+    /// A copy of the medium in the `host`th SD card slot, refused while the host is mid-transfer.
+    fn card_medium(&self, host: usize) -> PyResult<Card>;
 }
 
-/// Builds an XP4 session from its definition JSON, optional storage image and card files.
-pub type Xp4Factory =
-    fn(&str, Option<Vec<u8>>, Vec<(String, Vec<u8>)>) -> PyResult<Box<dyn Xp4Backend>>;
+/// Builds an XP4 session from its definition JSON, optional storage image, SD card files and
+/// existing SD card media (SD host index, medium) that replace the formatted SD card of those
+/// hosts.
+pub type Xp4Factory = fn(
+    &str,
+    Option<Vec<u8>>,
+    Vec<(String, Vec<u8>)>,
+    Vec<(usize, Card)>,
+) -> PyResult<Box<dyn Xp4Backend>>;
 static FACTORY: OnceLock<Xp4Factory> = OnceLock::new();
 
 /// Set the factory `Board.from_xp4` uses; later calls are ignored.
@@ -111,9 +121,10 @@ pub fn open(
     definition: &str,
     storage_image: Option<Vec<u8>>,
     card_files: Vec<(String, Vec<u8>)>,
+    card_media: Vec<(usize, Card)>,
 ) -> PyResult<Box<dyn Xp4Backend>> {
     let open = FACTORY.get().ok_or_else(|| {
         pyo3::exceptions::PyRuntimeError::new_err("XP4 boards need the fujimod-python-xp4 bindings")
     })?;
-    open(definition, storage_image, card_files)
+    open(definition, storage_image, card_files, card_media)
 }

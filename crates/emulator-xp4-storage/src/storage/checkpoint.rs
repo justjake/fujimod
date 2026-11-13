@@ -22,6 +22,8 @@ enum Pending {
 struct NorState {
     #[serde(default)]
     immutable_prefix: Option<usize>,
+    #[serde(default)]
+    write_protect: bool,
     jedec: u32,
     write_enable: bool,
     pending: Option<Pending>,
@@ -41,6 +43,7 @@ impl Nor {
     fn restore_state(&mut self, state: NorState) -> Result<(), String> {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
+            || state.write_protect != self.write_protect
             || state.jedec != self.jedec
             || state.erase_bytes != g.erase_bytes
             || state.page_bytes != g.page_bytes
@@ -104,6 +107,12 @@ struct FlashState {
     program_fifo: Option<(u64, Vec<u8>)>,
     irq: u32,
     irq_level: bool,
+    #[serde(default)]
+    mapped_read_gate: Option<MappedReadGate>,
+    #[serde(default)]
+    pad: u32,
+    #[serde(default)]
+    mapped_misses: u64,
 }
 impl SerialFlashController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
@@ -114,6 +123,8 @@ impl SerialFlashController {
             .map_err(|_| "Invalid XP4 flash register count")?;
         let geometry = self.port.lock().unwrap().nor.geometry;
         if state.irq != self.irq
+            || state.mapped_read_gate != self.gate
+            || self.gate.is_none() && (state.pad != 0 || state.mapped_misses != 0)
             || state.jedec != state.nor.jedec
             || state
                 .next
@@ -164,6 +175,8 @@ impl SerialFlashController {
         self.due = state.next;
         self.operations = state.operations;
         self.irq_level = state.irq_level;
+        self.pad = state.pad;
+        self.mapped_misses = state.mapped_misses;
         Ok(())
     }
 }

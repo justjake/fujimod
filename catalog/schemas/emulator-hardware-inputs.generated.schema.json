@@ -37,6 +37,17 @@
           ],
           "description": "Declared battery gauge."
         },
+        "countdown_dials": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetCountdownDials"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared command dials on countdown timer channels."
+        },
         "dram_refresh": {
           "anyOf": [
             {
@@ -98,6 +109,17 @@
             }
           ],
           "description": "Declared gpio input."
+        },
+        "gpio_interrupts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetGpioInterrupts"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared GPIO pads wired to level-sensitive interrupt inputs."
         },
         "i2c_parts": {
           "description": "Declared register-file parts on the I2C buses.",
@@ -219,6 +241,13 @@
           ],
           "description": "Declared SD card in the slot at power-on."
         },
+        "sd_cards": {
+          "description": "Declared SD cards in the slots of the SD hosts at power-on.",
+          "items": {
+            "$ref": "#/$defs/ResetSdSlotCard"
+          },
+          "type": "array"
+        },
         "sensor_frame": {
           "anyOf": [
             {
@@ -316,6 +345,17 @@
             }
           ],
           "description": "Declared USB port: the cable's VBUS pin and the link speed a host\nnegotiates."
+        },
+        "usb_phy_input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetUsbPhy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared USB PHY programming-port state."
         },
         "zone_statistics": {
           "anyOf": [
@@ -710,6 +750,64 @@
       ],
       "type": "object"
     },
+    "ResetCountdownDial": {
+      "additionalProperties": false,
+      "description": "One command dial wired to a countdown timer channel's count inputs.",
+      "properties": {
+        "channel": {
+          "description": "Countdown timer channel that counts its edges.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Physical control id the host turns.",
+          "type": "string"
+        },
+        "phase_ticks": {
+          "description": "Ticks between successive edges of one turn.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rest_phase": {
+          "description": "Gray-code phase at rest (A in bit 1, B in bit 0).",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "control",
+        "channel",
+        "phase_ticks",
+        "rest_phase"
+      ],
+      "type": "object"
+    },
+    "ResetCountdownDials": {
+      "additionalProperties": false,
+      "description": "Command dials whose quadrature phases drive countdown timer channels' count inputs.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "dials": {
+          "description": "Each dial and the channel that counts it.",
+          "items": {
+            "$ref": "#/$defs/ResetCountdownDial"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "dials"
+      ],
+      "type": "object"
+    },
     "ResetDiagnostic": {
       "additionalProperties": false,
       "description": "Declared diagnostics facts.",
@@ -1017,6 +1115,63 @@
       "required": [
         "basis",
         "levels"
+      ],
+      "type": "object"
+    },
+    "ResetGpioInterruptRoute": {
+      "additionalProperties": false,
+      "description": "One GPIO pad held onto a processor interrupt input while at its active level.",
+      "properties": {
+        "active_high": {
+          "description": "Whether the input is asserted while the pad is high.",
+          "type": "boolean"
+        },
+        "line": {
+          "description": "Processor interrupt input.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pin": {
+          "description": "Pin within the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin",
+        "line",
+        "active_high"
+      ],
+      "type": "object"
+    },
+    "ResetGpioInterrupts": {
+      "additionalProperties": false,
+      "description": "GPIO pads wired to level-sensitive processor interrupt inputs.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "routes": {
+          "description": "Pad of each interrupt input and its active level.",
+          "items": {
+            "$ref": "#/$defs/ResetGpioInterruptRoute"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "routes"
       ],
       "type": "object"
     },
@@ -2286,6 +2441,27 @@
       ],
       "type": "object"
     },
+    "ResetSdSlotCard": {
+      "additionalProperties": false,
+      "description": "The card in the slot of one SD host at power-on.",
+      "properties": {
+        "card": {
+          "$ref": "#/$defs/ResetSdCardInput",
+          "description": "The card."
+        },
+        "host_base": {
+          "description": "Base of the SD host whose slot holds the card.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "card",
+        "host_base"
+      ],
+      "type": "object"
+    },
     "ResetSelect": {
       "additionalProperties": false,
       "description": "Declared select facts.",
@@ -2989,6 +3165,38 @@
         "vbus_bank",
         "vbus_pin",
         "speed"
+      ],
+      "type": "object"
+    },
+    "ResetUsbPhy": {
+      "additionalProperties": false,
+      "description": "USB PHY programming-port state at reset: the 32 indexed register bytes and\nthe parallel-interface configuration word.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "parallel": {
+          "description": "Parallel-interface configuration word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "description": "Register bytes selected by the control word's index.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "basis",
+        "parallel",
+        "registers"
       ],
       "type": "object"
     },

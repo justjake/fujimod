@@ -69,7 +69,7 @@ fn guest_fault_is_sticky_and_does_not_complete_a_due_device_request() {
     assert_eq!(session.write_register(0, arm::CORE[0], 0).unwrap_err(), error);
     assert_eq!(session.coprocessor(0, dacr(), Some(0)).unwrap_err(), error);
     assert_eq!(session.instruction_points(0, vec![]).unwrap_err(), error);
-    assert_eq!(session.memory_watch_begin(vec![(0, 65536)], 8).unwrap_err(), error);
+    assert_eq!(session.memory_watch_begin(vec![(0, 65536)], 8, false).unwrap_err(), error);
     assert_eq!(session.set_gpio_input(0, 0, true).unwrap_err(), error);
     assert_eq!(session.set_usb_connected(true).unwrap_err(), error);
     assert_eq!(state(&session), before);
@@ -118,7 +118,7 @@ fn observer_register_updates_remain_supported_but_host_work_cannot_reenter() {
             !session.idle(),
             session.write(0x4000, &[99]).is_err(),
             session.instruction_points(core, vec![]).is_err(),
-            session.memory_watch_begin(vec![(0, 65536)], 8).is_err(),
+            session.memory_watch_begin(vec![(0, 65536)], 8, false).is_err(),
             session.function_watch_begin(vec![], 1, 8, 8, None, false).is_err(),
             session.set_gpio_input(0, 0, true).is_err(),
         ];

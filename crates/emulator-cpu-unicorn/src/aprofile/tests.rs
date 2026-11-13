@@ -436,3 +436,76 @@ fn high_code_aliases_keep_shared_backing_dependencies() {
     run(&cpu, high, 1);
     assert_eq!(value(&cpu, Register::X(0)), 2);
 }
+
+fn a32_code_rewritten_in_place_runs_the_new_code(base: u64) {
+    // Code runs at `base`, then a routine elsewhere overwrites it in place with
+    // a CPU store and branches back: the new code must run.
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x8000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes()).unwrap();
+    let words = |address: u64, words: &[u32]| {
+        let bytes = words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>();
+        cpu.write_memory(address, &bytes).unwrap();
+    };
+    let routine = base + 0x2000;
+    let branch = |from: u64, to: u64| {
+        0xea00_0000 | (((to as i64 - from as i64 - 8) >> 2) as u32 & 0x00ff_ffff)
+    };
+    // base: mov r0, #1; b routine
+    words(base, &[0xe3a00001, branch(base + 4, routine)]);
+    // routine: ldr r1, [pc, #8]; ldr r2, [pc, #8]; str r1, [r2]; bx r2; mov r0, #2; base
+    words(
+        routine,
+        &[0xe59f1008, 0xe59f2008, 0xe5821000, 0xe12fff12, 0xe3a00002, base as u32],
+    );
+    run(&cpu, base, 7);
+    assert_eq!(value(&cpu, arm::CORE[0]), 2);
+}
+
+#[test]
+fn a32_code_rewritten_in_place_at_physical_page_zero_runs_the_new_code() {
+    a32_code_rewritten_in_place_runs_the_new_code(0);
+}
+
+#[test]
+fn a32_code_rewritten_in_place_above_page_zero_runs_the_new_code() {
+    a32_code_rewritten_in_place_runs_the_new_code(0x4000);
+}
+
+#[test]
+fn code_rewritten_again_while_a_peer_has_not_flushed_runs_the_new_code() {
+    // Two processors map one RAM backing. The peer never runs, so it keeps its
+    // queued invalidation of the first rewrite; later rewrites of code the
+    // running processor translated again must still reach that processor.
+    use crate::memory::SharedMemory;
+    use fujimod_emulator_cpu::memory::Backing;
+    let shared = SharedMemory::default();
+    let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+    let core = |memory| {
+        let raw = crate::test_support::library()
+            .open(Model::CortexA7, 1 << 20)
+            .unwrap();
+        let cpu = Core::new(raw, memory).unwrap();
+        unsafe {
+            cpu.map_backing(0, 0x4000, 7, NonNull::new(backing.as_ptr()).unwrap())
+                .unwrap()
+        }
+        cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes()).unwrap();
+        cpu
+    };
+    let cpu = core(shared.processor());
+    let _peer = core(shared.processor());
+    for n in 1..=3u32 {
+        // mov r0, #n
+        cpu.write_memory(0, &(0xe3a00000 | n).to_le_bytes())
+            .unwrap();
+        run(&cpu, 0, 1);
+        assert_eq!(value(&cpu, arm::CORE[0]), u64::from(n));
+    }
+}

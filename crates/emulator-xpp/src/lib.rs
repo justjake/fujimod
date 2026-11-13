@@ -17,7 +17,6 @@ pub mod flash;
 pub mod h264;
 pub mod i2c;
 pub mod imaging;
-pub mod jpeg;
 pub mod keys;
 pub mod lens;
 pub mod power;

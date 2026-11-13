@@ -4,19 +4,28 @@
 //! board strap, not a writable register.
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct UsbCondition {
     base: u64,
-    present: bool,
+    present: Arc<AtomicBool>,
 }
 impl UsbCondition {
     pub fn new(base: u64, present: bool) -> Result<Self, String> {
         if base & 3 != 0 || base > u32::MAX as u64 - 4 {
             return Err("Invalid XP4 USB condition register".into());
         }
-        Ok(Self { base, present })
+        Ok(Self {
+            base,
+            present: Arc::new(AtomicBool::new(present)),
+        })
+    }
+    /// The cable presence the register reports; the board switches it with the USB link.
+    pub fn presence(&self) -> Arc<AtomicBool> {
+        self.present.clone()
     }
 }
 impl Device for UsbCondition {
@@ -28,7 +37,7 @@ impl Device for UsbCondition {
             cx.unmodeled();
             return 0;
         }
-        u64::from(self.present as u32)
+        u64::from(self.present.load(Ordering::SeqCst))
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, _value: u64) {
         // A strap: the value is the cable's, not the writer's.
@@ -37,7 +46,7 @@ impl Device for UsbCondition {
         }
     }
     fn save(&self) -> Value {
-        serde_json::json!({ "base": self.base })
+        serde_json::json!({ "base": self.base, "present": self.present.load(Ordering::SeqCst) })
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let base = value
@@ -46,6 +55,9 @@ impl Device for UsbCondition {
             .ok_or("Invalid XP4 USB condition checkpoint")?;
         if base != self.base {
             return Err("Invalid XP4 USB condition checkpoint".into());
+        }
+        if let Some(present) = value.get("present").and_then(Value::as_bool) {
+            self.present.store(present, Ordering::SeqCst);
         }
         Ok(())
     }

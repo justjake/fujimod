@@ -30,10 +30,11 @@ impl Xp4Session {
         definition: &str,
         storage_image: Option<Vec<u8>>,
         card_files: Vec<(String, Vec<u8>)>,
+        card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     ) -> PyResult<Self> {
         let definition: Definition = serde_json::from_str(definition)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        let inner = Session::new(definition, storage_image, card_files)
+        let inner = Session::new_with_media(definition, storage_image, card_files, card_media)
             .map_err(fujimod_python_base::error)?;
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
@@ -127,7 +128,7 @@ impl Xp4Session {
             .map(|saved| fujimod_python_base::observation::snapshot(py, &saved))
             .transpose()
     }
-    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize) -> ());
+    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> ());
     forward!(memory_watch_end() -> ());
     pub fn memory_watch_enabled(&self) -> bool {
         self.inner.memory_watch_enabled()
@@ -187,6 +188,7 @@ impl Xp4Session {
     }
     forward!(set_adc_input(channel: usize, sample: u16) -> ());
     forward!(set_gpio_input(port: usize, pin: usize, high: bool) -> ());
+    forward!(turn_dial(name: &str, edges: i32) -> ());
     forward!(set_usb_connected(connected: bool) -> ());
     forward!(usb_bus_reset() -> ());
     forward!(usb_transaction(physical_endpoint: usize, setup: bool, out: Option<Vec<u8>>) -> u64);
@@ -297,8 +299,8 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
             quota_per_edge,
         )
     }
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()> {
-        Xp4Session::memory_watch_begin(self, ranges, limit)
+    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()> {
+        Xp4Session::memory_watch_begin(self, ranges, limit, writes_only)
     }
     fn memory_watch_end(&self) -> PyResult<()> {
         Xp4Session::memory_watch_end(self)
@@ -317,6 +319,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()> {
         Xp4Session::set_gpio_input(self, port, pin, high)
+    }
+    fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()> {
+        Xp4Session::turn_dial(self, name, edges)
     }
     fn set_usb_connected(&self, connected: bool) -> PyResult<()> {
         Xp4Session::set_usb_connected(self, connected)
@@ -430,6 +435,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn interventions(&self) -> Vec<fujimod_python_base::discovery::Intervention> {
         Xp4Session::interventions(self)
+    }
+    fn card_medium(&self, host: usize) -> PyResult<fujimod_emulator_devices::parts::sd_card::Card> {
+        self.inner.card_medium(host).map_err(fujimod_python_base::error)
     }
 }
 
