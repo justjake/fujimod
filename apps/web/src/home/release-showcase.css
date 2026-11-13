@@ -17,25 +17,10 @@
 }
 .release-eyebrow span {
   padding: 3px 7px;
-  border: 1px solid #385945;
+  border: 1px solid var(--line);
   border-radius: 4px;
-  color: #b1d6b9;
+  color: var(--dim);
   letter-spacing: 0.04em;
-}
-.release-intro h1 {
-  margin: 24px 0 20px;
-  font-size: clamp(36px, 5vw, 58px);
-  font-weight: 500;
-  line-height: 1.07;
-  letter-spacing: -0.045em;
-}
-.release-lede {
-  max-width: 47ch;
-  margin: 0;
-  color: #aeaeb2;
-  font-size: 17px;
-  line-height: 1.65;
-  text-wrap: pretty;
 }
 .release-links {
   display: flex;
@@ -52,10 +37,10 @@
   display: inline-flex;
   gap: 32px;
   padding: 11px 16px;
-  border: 1px solid #42684d;
+  border: 1px solid var(--edge);
   border-radius: 6px;
-  background: #263d2d;
-  color: #e7f5df;
+  background: var(--key);
+  color: inherit;
 }
 .release-bodies {
   display: grid;
@@ -94,7 +79,7 @@
 .release-highlight > .catalog-icon {
   display: block;
   margin-bottom: 18px;
-  color: #b1d6b9;
+  color: #eee;
 }
 .release-highlight h2 {
   max-width: 21ch;
@@ -112,7 +97,7 @@
   text-wrap: pretty;
 }
 .release-explore {
-  color: #a5b9aa;
+  color: var(--dim);
   font-size: 11px;
 }
 .release-highlight:hover h2,
@@ -141,7 +126,7 @@
   content: '0' counter(steps);
   display: block;
   margin-bottom: 8px;
-  color: #a5b9aa;
+  color: var(--dim);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }

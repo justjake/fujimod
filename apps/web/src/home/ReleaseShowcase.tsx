@@ -48,20 +48,11 @@ export function ReleaseShowcase(props: { release?: LoadedRelease }) {
   return (
     <section class="release-showcase" aria-labelledby="release-title">
       <div class="release-intro">
-        <p class="release-eyebrow">
+        <p class="release-eyebrow" id="release-title">
           FUJIMOD / 0.1.0
           <Show when={!current() || props.release?.prerelease}>
             <span>Preview</span>
           </Show>
-        </p>
-        <h1 id="release-title">
-          A familiar camera.
-          <br />
-          New possibilities.
-        </h1>
-        <p class="release-lede">
-          New films, new textures, and more ways to make your camera yours. FujiMod brings a new
-          chapter to three Fujifilm classics.
         </p>
         <nav class="release-links" aria-label="On this page">
           <a class="release-primary" href="#quickstart">

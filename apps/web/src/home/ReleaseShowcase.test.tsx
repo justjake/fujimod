@@ -1,7 +1,10 @@
 import { render } from '@solidjs/web';
+import { readFileSync } from 'node:fs';
 import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { ReleaseShowcase } from './ReleaseShowcase';
+import { PersonalNote } from '../ui/personal-note';
+import homeSource from './Page.tsx?raw';
 import { FeatureCatalog } from './Features';
 import catalog from './features.generated.json';
 import metrics from '../ui/assets/feature-icon-metrics.generated.json';
@@ -29,10 +32,22 @@ const release: LoadedRelease = {
   notesText: '## Known issues\n- Preview limitation.',
 };
 
-test('release overview scopes camera support and distinguishes an unpublished preview', () => {
-  dispose = render(() => <ReleaseShowcase />, document.body);
+test('the original opening note precedes the retained release highlights', () => {
+  expect(homeSource).toMatch(/<PersonalNote\s*\/>\s*<ReleaseShowcase/);
+  dispose = render(
+    () => (
+      <>
+        <PersonalNote />
+        <ReleaseShowcase />
+      </>
+    ),
+    document.body,
+  );
   flush();
-  expect(document.querySelector('h1')?.textContent).toMatch(/A familiar camera/);
+  expect(document.querySelector('.personal-note')?.textContent).toContain('Hey,');
+  expect(document.querySelector('.signature-name')?.textContent).toBe('Jake');
+  expect(document.querySelector('h1')).toBeNull();
+  expect(document.body.textContent).not.toContain('A familiar camera.');
   expect(document.querySelector('.release-eyebrow')?.textContent).toContain('Preview');
   expect(
     [...document.querySelectorAll('.release-bodies li')].map((node) => node.textContent),
@@ -42,6 +57,14 @@ test('release overview scopes camera support and distinguishes an unpublished pr
   expect(document.body.textContent).toContain('catalog below describes X70');
   expect(document.querySelector('#release-notes')).toBeNull();
   expect(document.querySelector('a[href="#quickstart"]')).not.toBeNull();
+});
+
+test('release accents use the existing neutral site palette', () => {
+  const showcaseStyle = readFileSync('src/home/release-showcase.css', 'utf8');
+  expect(showcaseStyle).not.toMatch(/#(?:385945|b1d6b9|42684d|263d2d|e7f5df|a5b9aa)\b/i);
+  expect(showcaseStyle).toContain('background: var(--key)');
+  expect(showcaseStyle).toContain('border: 1px solid var(--edge)');
+  expect(showcaseStyle).toMatch(/\.release-highlight > \.catalog-icon\s*\{[^}]*color: #eee;/);
 });
 
 test('release notes come from the loaded release, without calling a candidate published', () => {

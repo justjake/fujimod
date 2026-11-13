@@ -6,6 +6,7 @@ import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
 import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { ReleaseShowcase } from './ReleaseShowcase';
+import { PersonalNote } from '../ui/personal-note';
 import { SiteHeader } from '../ui/site-header';
 import { FeatureCatalog } from './Features';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
@@ -64,6 +65,7 @@ export default function Home() {
       <div class="shell">
         <SiteHeader root="" />
         <main>
+          <PersonalNote />
           <ReleaseShowcase release={state.release} />
           <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
           <FeatureCatalog />

@@ -108,7 +108,7 @@ try {
       }
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'A familiar camera.'],
+        ['/', 'I’m making FujiMod to unlock your camera’s full potential.'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -253,7 +253,8 @@ try {
         'hydrate existing homepage nodes',
       );
       const showcase = page.locator('.release-showcase');
-      assert.match(await showcase.innerText(), /A familiar camera/);
+      assert.equal(await page.locator('.personal-note').count(), 1);
+      assert.equal(await page.locator('h1').count(), 0);
       assert.equal(await showcase.locator('.release-highlight').count(), 6);
       await showcase.getByRole('link', { name: 'Get started', exact: true }).click();
       assert.equal(new URL(page.url()).hash, '#quickstart');
