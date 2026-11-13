@@ -273,3 +273,16 @@ fn spatial_filter_configuration_is_retained_and_its_gap_still_refuses() {
     }
     assert!(h.effects.is_empty());
 }
+
+#[test]
+fn start_bit_4_output_refuses_before_any_effect() {
+    let (mut d, mut h) = raw_writeback();
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff40004, 4, 0x12);
+    assert_eq!(
+        cx.refusal(),
+        Some("still processor START 0x12: bit 4 main-window output is unmodeled")
+    );
+    assert!(d.next_deadline(0).is_none());
+    assert!(h.effects.is_empty());
+}
