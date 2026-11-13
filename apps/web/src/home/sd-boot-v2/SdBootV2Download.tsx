@@ -348,7 +348,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                         <FileRow name="FFBOOT.BIN" bytes={size('FFBOOT.BIN')} dim={previewing()} />
                         <Note>
                           <p>
-                            The boot ROM reads this file before the loader and applies its clock,
+                            The boot ROM reads this file before FFBOOT.BIN and applies its clock,
                             memory and register settings.
                           </p>
                         </Note>
