@@ -283,9 +283,21 @@ impl Device for StillProcessor {
             self.r[o / 4] = v as u32 | 0x10001;
             return;
         }
+        // START's low bits select the pass's outputs: bit 0 the color window
+        // at 0x58/0x38, bit 1 the RAW writeback window at 0x60/0x40. Bit 4
+        // replaces bit 0 with a second main-window output kind; with bit 1
+        // (0x12) the firmware writes the RAW back in place and programs the
+        // main window as one row of one-byte samples. That output's content
+        // is not derivable from register programming, so 0x12 refuses.
         if o == 0x10004 {
+            if v & 0x10 != 0 {
+                cx.fail(format!(
+                    "still processor START {v:#x}: bit 4 main-window output is unmodeled"
+                ));
+                return;
+            }
             if !matches!(v, 1 | 3) {
-                cx.fail(format!("unknown still processor START {v:#x}"));
+                cx.fail(format!("unmodeled still processor START {v:#x}"));
                 return;
             }
             if let Err(e) = self.start(cx, v as u32) {
