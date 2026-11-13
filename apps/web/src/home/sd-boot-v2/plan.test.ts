@@ -19,6 +19,7 @@ const camera = (id: string, processor = 'EXR Processor II'): CardCamera => ({
   version: '1.00',
   processor,
   mods: 1,
+  download_url: 'https://example.org/',
 });
 const file = (path: string, sha: string, processor?: string): SdCardFile => ({
   path,

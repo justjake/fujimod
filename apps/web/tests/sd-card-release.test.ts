@@ -154,6 +154,7 @@ async function selectedPlan(release: LoadedRelease, fetcher: typeof fetch) {
     version: entry.version,
     processor: 'EXR Processor II',
     mods: entry.mods.length,
+    download_url: entry.download_url,
   }));
   const manifests = await Promise.all(
     cameras.map(

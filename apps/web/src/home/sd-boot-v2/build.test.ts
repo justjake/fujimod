@@ -27,7 +27,7 @@ test('the card ZIP holds every checked file and a clean Git repository of FUJIMO
   }) as typeof fetch;
   const processor = 'EXR Processor II';
   const plan = sdBootV2Plan({
-    cameras: [{ id: 'X70-110', model: 'X70', version: '1.10', processor, mods: 1 }],
+    cameras: [{ id: 'X70-110', model: 'X70', version: '1.10', processor, mods: 1, download_url: 'https://example.org/' }],
     card: [
       ...['FFBOOT.BIN', 'FFSYS.BIN', 'FM_EXR2.BIN'].map((path) => ({
         path,

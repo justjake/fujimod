@@ -96,8 +96,8 @@ function FileRow(props: {
 }) {
   return (
     <div class={{ r: true, 'sd-row': true, dim: props.dim, folder: props.folder }}>
-      <span class="sd-slot">{props.check}</span>
       <span class="tw" />
+      <span class="sd-slot">{props.check}</span>
       <Icon name={props.folder ? 'folder' : 'file'} />
       <span class="n">
         {props.name}
@@ -123,10 +123,9 @@ function Folder(props: {
   return (
     <>
       <div class={{ r: true, 'sd-row': true, folder: true, dim: props.dim }}>
-        <span class="sd-slot">{props.check}</span>
         <button
           type="button"
-          class="fold"
+          class="sd-twist"
           aria-expanded={open() ? 'true' : 'false'}
           aria-label={props.name}
           onClick={() => setOpen((value) => !value)}
@@ -134,6 +133,15 @@ function Folder(props: {
           <span class={['tw', { closed: !open() }]}>
             <Icon name="chevron" size={13} />
           </span>
+        </button>
+        <span class="sd-slot">{props.check}</span>
+        <button
+          type="button"
+          class="fold"
+          tabindex={-1}
+          aria-hidden="true"
+          onClick={() => setOpen((value) => !value)}
+        >
           <Icon name="folder" />
           <span class="n">{props.name}</span>
         </button>
@@ -190,6 +198,21 @@ function OptionalFolder(props: {
             detail={[file().title, file().author].filter(Boolean).join(' · ')}
             bytes={file().bytes}
             dim={props.dim || props.excluded.has(file().path)}
+            after={
+              <Show when={file().source}>
+                {(source) => (
+                  <a
+                    class="sd-source"
+                    href={source()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${file().title ?? file().path} source`}
+                  >
+                    <Icon name="external" size={13} />
+                  </a>
+                )}
+              </Show>
+            }
             check={
               <Check
                 label={`Include ${file().path.split('/').at(-1)}`}
@@ -225,6 +248,14 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   const shown = createMemo(() => (chosen().length ? chosen() : cameras().slice(0, 1)));
   const previewing = () => !chosen().length;
   const processors = createMemo(() => [...new Set(shown().map((camera) => camera.processor))]);
+  const rootFiles = createMemo(() => [
+    ...new Set(
+      processors().flatMap((processor) => {
+        const boot = sdBootV2For(processor);
+        return boot ? ['FFBOOT.BIN', 'FFSYS.BIN', boot.stage2] : [];
+      }),
+    ),
+  ]);
   const optional = createMemo(() => card().filter((file) => file.processor === undefined));
   const inFolder = (folder: string) =>
     optional().filter((file) => file.path.startsWith(`FUJIMOD/${folder}/`));
@@ -352,13 +383,41 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <span>FAT32</span>
           </div>
           <Show when={chosen().length}>
-            <p class="sd-boot-intro">
-              With the camera off, insert the SD card. Hold these controls only while switching the
-              camera on, then release them.
-            </p>
-            <For each={chosen()} keyed={(camera) => camera.id}>
-              {(camera) => <BootInstructions camera={camera()} />}
-            </For>
+            <ol class="sd-boot-steps">
+              <li>
+                Check your camera is running the latest firmware from Fujifilm:{' '}
+                <For each={chosen()} keyed={(camera) => camera.id}>
+                  {(camera, index) => (
+                    <>
+                      {index() ? ', ' : ''}
+                      <a href={camera().download_url} target="_blank" rel="noopener noreferrer">
+                        {camera().model} {camera().version}
+                      </a>
+                    </>
+                  )}
+                </For>
+              </li>
+              <li>
+                Unzip download onto your SD card. You need to see{' '}
+                {['FUJIMOD', ...rootFiles()].join(', ')} at the root directory
+              </li>
+              <li>
+                Insert the SD card into the camera and turn it off, then remove and re-insert the
+                battery. This guarantees the camera is fully off even if you run in Performance
+                Mode
+              </li>
+              <li>
+                Hold these buttons while switching the camera on. After the switch is in ON
+                position, you can release the buttons
+                <For each={chosen()} keyed={(camera) => camera.id}>
+                  {(camera) => <BootInstructions camera={camera()} />}
+                </For>
+              </li>
+              <li>
+                You should see FujiMod on the LCD screen in the top-left corner. This overlay can
+                be disabled in SET-UP › DEVTOOLS › BUILD OVERLAY.
+              </li>
+            </ol>
           </Show>
           <details class="sd-contents">
             <summary>SD card contents &amp; optional files</summary>

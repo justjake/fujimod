@@ -19,17 +19,44 @@
 .sd-contents[open] > summary {
   margin-bottom: 22px;
 }
-.sd-boot-intro {
-  margin: 0 0 16px;
+.sd-boot-steps {
+  margin: 0 0 22px;
+  padding-left: 20px;
   color: #aeaeb2;
   font-size: 12px;
   line-height: 1.6;
 }
+.sd-boot-steps li + li {
+  margin-top: 8px;
+}
+.sd-boot-steps a {
+  color: #0a84ff;
+}
 .sd-boot-instructions {
   display: grid;
   gap: 8px;
-  margin-bottom: 22px;
+  margin: 10px 0 4px;
   font-size: 12px;
+  color: #f2f2f7;
+}
+.sd-tree .sd-twist {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.sd-source {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--file-dim);
+}
+.sd-source:hover {
+  color: #0a84ff;
 }
 
 /* Round selection marks, as in iOS lists. */
@@ -170,8 +197,9 @@
 .sd-tree .sd-row {
   gap: 7px;
 }
-.sd-tree .sd-row.dim > :not(.sd-slot),
-.sd-tree .sd-row.dim .fold > * {
+.sd-tree .sd-row.dim > :not(.sd-slot, .sd-twist),
+.sd-tree .sd-row.dim .fold > *,
+.sd-tree .sd-row.dim .sd-twist > * {
   opacity: 0.38;
 }
 .sd-tree .sd-slot {

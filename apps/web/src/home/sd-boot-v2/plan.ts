@@ -16,6 +16,8 @@ export interface CardCamera {
   version: string;
   processor: string;
   mods: number;
+  /** Fujifilm's page for the camera's latest stock firmware. */
+  download_url: string;
 }
 
 /** Processor generations whose SD boot files the card documents. */
@@ -49,6 +51,7 @@ export function releaseCameras(
               version: entry.version,
               processor,
               mods: entry.mods.length,
+              download_url: entry.download_url,
             },
           ]
         : [];
