@@ -157,7 +157,7 @@ impl Cluster {
     }
 
     fn record_memory(&self, core: usize, access: Access, address: u64, size: i32, value: i64) {
-        if unsafe { (*self.state.get()).memory_watch.is_none() } {
+        if unsafe { (*self.state.get()).memory_watch.as_ref().is_none_or(|w| w.writes_only && access != Access::Write) } {
             return;
         }
         let result = (|| -> Result<Option<observation::MemoryRecord>, String> {
