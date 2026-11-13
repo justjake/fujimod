@@ -339,6 +339,25 @@
       ],
       "type": "object"
     },
+    "AlarmInterval": {
+      "additionalProperties": false,
+      "description": "Constant alarm values a power-off writes instead of taking a deadline.",
+      "properties": {
+        "seconds": {
+          "description": "Values written to the alarm's seconds registers, least significant first.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "type": "object"
+    },
     "AlarmRegisters": {
       "additionalProperties": false,
       "description": "Power-controller registers the power-off writes for the wake alarm.",
@@ -1368,6 +1387,30 @@
       },
       "required": [
         "hold"
+      ],
+      "type": "object"
+    },
+    "BootFlag": {
+      "additionalProperties": false,
+      "description": "A byte the alarm boot tests for a normal boot. Without the bit, the wake\ntakes a boot that never reaches USB. The restart sets the bit before the\nrequest; the power-off publishes it and the firmware clears it after the\nwake.",
+      "properties": {
+        "address": {
+          "description": "Address of the byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mask": {
+          "description": "The single bit the restart ORs into the byte before the request.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "mask"
       ],
       "type": "object"
     },
@@ -15917,7 +15960,7 @@
       ]
     },
     "InputBinding": {
-      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "description": "A debug key, native input name, or exact located scanner-row identity.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -15954,6 +15997,25 @@
           "required": [
             "kind",
             "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Stable identity of a located scanner row, even when it has no command name.",
+          "properties": {
+            "kind": {
+              "const": "scanner_row",
+              "type": "string"
+            },
+            "row": {
+              "description": "Generated scanner row identity, such as `row-69`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "row"
           ],
           "type": "object"
         }
@@ -19450,6 +19512,17 @@
           "$ref": "#/$defs/AlarmRegisters",
           "description": "Power-controller registers for the alarm."
         },
+        "boot_flag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BootFlag"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Wake header bit the alarm boot tests before a normal boot, where the\npower-off tests one."
+        },
         "deadline_parameter": {
           "description": "Persistent power-controller parameter offset of the saved deadline\nword, where the power-off saves it.",
           "format": "uint32",
@@ -19464,6 +19537,17 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "fixed_interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlarmInterval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The interval the power-off arms instead of a request deadline."
         },
         "halt": {
           "description": "Its final self-branch, reached after the power cut.",
@@ -19481,22 +19565,26 @@
           "description": "Byte offset of the deadline in the request the power-off receives.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "rollover_parameter": {
           "description": "Persistent parameter offset of the alarm's rollover byte.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
         "entry",
         "halt",
         "power_cut",
-        "request_deadline_offset",
-        "alarm",
-        "rollover_parameter"
+        "alarm"
       ],
       "type": "object"
     },
@@ -20500,7 +20588,10 @@
           "description": "Byte offset of the wake deadline in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "deferred_timer": {
           "anyOf": [
@@ -20528,7 +20619,10 @@
           "description": "Bytes of sender parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "power_off": {
           "$ref": "#/$defs/PowerOff",
@@ -20538,23 +20632,39 @@
           "description": "Request word that selects power-off with a wake.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "request_offset": {
           "description": "Byte offset of the request word in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "sender": {
           "description": "Stock routine that sends the power-off request; its first argument is\nthe address of the request parameters.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "transport": {
-          "$ref": "#/$defs/RequestTransport",
-          "description": "How the host reaches the sender."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestTransport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the host reaches the sender, where the firmware takes a request.\nA firmware whose power-off arms a fixed-interval alarm instead carries\nnone of the request fields, and `power_off.fixed_interval` says so."
         },
         "ui": {
           "$ref": "#/$defs/RecIdle",
@@ -20562,12 +20672,6 @@
         }
       },
       "required": [
-        "transport",
-        "sender",
-        "request",
-        "request_offset",
-        "deadline_offset",
-        "parameter_bytes",
         "ui",
         "power_off"
       ],

@@ -52,6 +52,30 @@
       ],
       "type": "object"
     },
+    "BootFlag": {
+      "additionalProperties": false,
+      "description": "A byte the alarm boot tests for a normal boot. Without the bit, the wake\ntakes a boot that never reaches USB. The restart sets the bit before the\nrequest; the power-off publishes it and the firmware clears it after the\nwake.",
+      "properties": {
+        "address": {
+          "description": "Address of the byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mask": {
+          "description": "The single bit the restart ORs into the byte before the request.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "mask"
+      ],
+      "type": "object"
+    },
     "CodeCheck": {
       "additionalProperties": false,
       "description": "Stock code bytes identified by their SHA-256.",
@@ -468,6 +492,17 @@
         "alarm": {
           "$ref": "#/$defs/AlarmRegisters",
           "description": "Power-controller registers for the alarm."
+        },
+        "boot_flag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BootFlag"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Wake header bit the alarm boot tests before a normal boot, where the\npower-off tests one."
         },
         "deadline_parameter": {
           "description": "Persistent power-controller parameter offset of the saved deadline\nword, where the power-off saves it.",

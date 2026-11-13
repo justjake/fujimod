@@ -7,13 +7,15 @@
 //! wake deadline, either through a borrowed diagnostic query or through the
 //! debug console's command callback and a short stub. The stock power-off arms
 //! the power controller's alarm and cuts power; the alarm boots the camera
-//! again. The host observes the camera return.
+//! again. Where the firmware publishes a boot flag, its bit is set and read
+//! back just before the request, so the alarm boot takes its normal path. The
+//! host observes the camera return.
 use crate::{
     Limits,
     bulk::{Access, BulkError, Result, check_camera, hex},
 };
 use fujimod_catalog_restart::{
-    DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
+    BootFlag, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
 };
 use fujimod_usb::{
     ff80::{
@@ -172,6 +174,41 @@ async fn require_idle(access: &mut Access<'_>, ui: &RecIdle, alias: u64) -> Resu
     )
 }
 
+/// What was done to the published boot flag before the request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BootFlagStep {
+    /// The firmware publishes no boot flag; nothing was read or written.
+    NotPublished,
+    /// The bit was already set; nothing was written.
+    AlreadySet { value: u8 },
+    /// The bit was set and read back.
+    Set { before: u8, after: u8 },
+}
+
+/// Set the boot flag's bit, leaving the byte's other bits as they are, and
+/// require it to read back. The power-off publishes the header with the bit
+/// set, so the alarm boot takes its normal path.
+async fn set_boot_flag(access: &mut Access<'_>, flag: Option<&BootFlag>) -> Result<BootFlagStep> {
+    let Some(flag) = flag else {
+        return Ok(BootFlagStep::NotPublished);
+    };
+    let before = access.raw(flag.address, 1).await?[0];
+    if before & flag.mask != 0 {
+        return Ok(BootFlagStep::AlreadySet { value: before });
+    }
+    let value = before | flag.mask;
+    access.write(flag.address, &[value]).await?;
+    let after = access.raw(flag.address, 1).await?[0];
+    require(
+        after == value,
+        &format!(
+            "Boot flag {:#x} reads {after:#04x} after writing {value:#04x}",
+            flag.address
+        ),
+    )?;
+    Ok(BootFlagStep::Set { before, after })
+}
+
 async fn require_words(access: &mut Access<'_>, words: &[WordValue], message: &str) -> Result<()> {
     for w in words {
         require(
@@ -245,6 +282,7 @@ pub async fn request(
                 vec![(0, 0)],
                 fields,
             )?;
+            set_boot_flag(&mut access, m.power_off.boot_flag.as_ref()).await?;
             match borrowed.invoke(access.session, limits.memory).await {
                 Ok(_) => Ok(Requested::Accepted),
                 // The whole sequence ran and restored both words; the send was refused.
@@ -326,6 +364,7 @@ pub async fn request(
                 u32::try_from(*slot).is_ok(),
                 "Console callback slot beyond 32-bit addressing",
             )?;
+            set_boot_flag(&mut access, m.power_off.boot_flag.as_ref()).await?;
             // Write the stub, clean it out to memory on every core, then drop
             // stale instructions.
             let mut clean = call(*data_cache_clean, true);
@@ -356,6 +395,88 @@ pub async fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bulk::tests::{limits, opened, read, write};
+    use futures_lite::future::block_on;
+
+    const FLAG: BootFlag = BootFlag {
+        address: 0x2882c9c,
+        mask: 0x20,
+    };
+
+    fn boot_flag(
+        steps: Vec<fujimod_usb::testing::Exchange>,
+        flag: Option<&BootFlag>,
+    ) -> (Result<BootFlagStep>, usize) {
+        let (mut session, script) = opened(steps);
+        let mut access = Access {
+            session: &mut session,
+            limits: limits(),
+        };
+        let step = block_on(set_boot_flag(&mut access, flag));
+        (step, script.remaining())
+    }
+
+    #[test]
+    fn absent_boot_flag_touches_nothing() {
+        let (step, remaining) = boot_flag(vec![], None);
+        assert_eq!(step.unwrap(), BootFlagStep::NotPublished);
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn clear_boot_flag_is_set_with_one_write_and_read_back() {
+        let mut steps = read(0x2882c9c, &[0x0f]);
+        steps.extend(write(0x2882c9c, &[0x2f]));
+        steps.extend(read(0x2882c9c, &[0x2f]));
+        let (step, remaining) = boot_flag(steps, Some(&FLAG));
+        assert_eq!(
+            step.unwrap(),
+            BootFlagStep::Set {
+                before: 0x0f,
+                after: 0x2f,
+            }
+        );
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn set_boot_flag_is_not_written_again() {
+        let (step, remaining) = boot_flag(read(0x2882c9c, &[0x2f]), Some(&FLAG));
+        assert_eq!(step.unwrap(), BootFlagStep::AlreadySet { value: 0x2f });
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn boot_flag_that_does_not_read_back_stops_before_the_request() {
+        let mut steps = read(0x2882c9c, &[0x0f]);
+        steps.extend(write(0x2882c9c, &[0x2f]));
+        steps.extend(read(0x2882c9c, &[0x0f]));
+        let (step, remaining) = boot_flag(steps, Some(&FLAG));
+        assert!(matches!(step, Err(BulkError::Check(message)) if message.contains("Boot flag")));
+        // Nothing past the readback was sent: the caller's `?` returns before the request.
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn boot_flag_validates_as_one_bit_on_a_request_restart() {
+        let mut restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x70/1.10/restart.generated.json"
+        ))
+        .unwrap();
+        assert!(restart.mechanism.power_off.boot_flag.is_none());
+        restart.mechanism.power_off.boot_flag = Some(FLAG);
+        restart.validate().unwrap();
+        for mask in [0, 0x21] {
+            restart.mechanism.power_off.boot_flag = Some(BootFlag { mask, ..FLAG });
+            assert!(restart.validate().is_err());
+        }
+        let mut fixed: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x100s/1.21/restart.generated.json"
+        ))
+        .unwrap();
+        fixed.mechanism.power_off.boot_flag = Some(FLAG);
+        assert!(fixed.validate().is_err());
+    }
 
     #[test]
     fn stub_loads_its_parameters_and_branches_to_the_sender() {
