@@ -3871,6 +3871,114 @@
         "thanks": []
       },
       "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/MODS": {
+      "title": "MODS",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Lists the mods in this FujiMod version. Mods this camera cannot run are listed apart.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/SHOW WELCOME MESSAGE": {
+      "title": "SHOW WELCOME MESSAGE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Show the welcome message again.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/APPEARANCE": {
+      "title": "APPEARANCE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Choose the REC, SET-UP and PLAY colors and the BACKGROUND COLOR of the FUJIMOD menu style.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP": {
+      "title": "BOOT SETUP",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Optionally modify the internal firmware to boot FM_EXR2.BIN if present on the SD card. If there is a problem during start-up, the camera boots its original internal firmware instead.",
+      "choices": {
+        "MANUAL": "Hold Fn + dial while switching power on to start FujiMod.",
+        "AUTOMATIC": "Boot FM_EXR2.BIN if present on the SD card. Backs up internal data first."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES": {
+      "title": "CHECK FOR UPDATES",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Connect to fujimod.com over Wi-Fi to update FUJIMOD on your SD card. Keeps your current version installed, and automatically reverts to it if new version crashes during start-up.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI": {
+      "title": "CONNECT WI-FI",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "summary": "Join a Wi-Fi network. Connection details are kept on internal storage shared with PC AUTO SAVE.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/BACK UP INTERNAL DATA": {
+      "title": "BACK UP INTERNAL DATA",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Saves a copy of internal storage to /BACKUP on the SD card. Includes camera settings, custom settings, and unique factory calibration data.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
     }
   },
   "menus": [
@@ -4235,6 +4343,56 @@
       "icon": null
     },
     {
+      "title": "APPEARANCE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/APPEARANCE",
+      "feature": null,
+      "order": -1,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "BACK UP INTERNAL DATA",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/BACK UP INTERNAL DATA",
+      "feature": "internal_data_backup",
+      "order": -3,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "BOOT SETUP",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP",
+      "feature": "bootloader_install",
+      "order": -4,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "CHECK FOR UPDATES",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES",
+      "feature": "updates",
+      "order": -5,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "MODS",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/MODS",
+      "feature": null,
+      "order": -6,
+      "kind": "setting",
+      "icon": null
+    },
+    {
       "title": "PREVIEW POWER ON",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "order": 3,
@@ -4242,6 +4400,16 @@
       "stock": false,
       "card": "startup_power_on_preview_item",
       "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SHOW WELCOME MESSAGE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/SHOW WELCOME MESSAGE",
+      "feature": null,
+      "order": -2,
+      "kind": "setting",
       "icon": null
     },
     {
@@ -4262,6 +4430,16 @@
       "stock": false,
       "card": "startup_power_on_item",
       "feature": "power_screens",
+      "icon": null
+    },
+    {
+      "title": "CONNECT WI-FI",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI",
+      "feature": null,
+      "order": 1000,
+      "kind": "setting",
       "icon": null
     },
     {

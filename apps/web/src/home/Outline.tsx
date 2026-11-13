@@ -218,7 +218,8 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
   const feature = (): Feature | undefined => {
     if (cardKey()) return tiles.get(cardKey()!);
     const own = props.node.row?.feature ? features.get(props.node.row.feature) : undefined;
-    return own && !own.card && own.title === props.node.title ? own : undefined;
+    const stands = props.node.row?.card?.startsWith('row:') || own?.title === props.node.title;
+    return own && (!own.card || props.node.row?.card?.startsWith('row:')) && stands ? own : undefined;
   };
   const added = () => !!props.node.row && !props.node.row.stock;
   const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
