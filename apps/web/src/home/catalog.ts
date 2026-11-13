@@ -11,6 +11,8 @@ export type Card = {
   choices: Record<string, string>;
   related: { card: string; reason: string }[];
   changes: string | null;
+  /** The drive mode the row works in. */
+  drive_mode: 'single' | null;
   credits: Credits;
   choice_credits: Record<string, Credits>;
 };

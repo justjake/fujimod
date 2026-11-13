@@ -57,7 +57,7 @@
       "group": "photography",
       "icon": "shift",
       "title": "SOFTWARE ND",
-      "path": [],
+      "path": ["DRIVE"],
       "summary": "Average a sequence of frames into one long-exposure JPEG.",
       "card": "software_nd_item",
       "media_cards": ["software_nd_item"],
@@ -101,6 +101,22 @@
           "actions": []
         }
       ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "custom_settings_bkt",
+      "group": "photography",
+      "icon": "recipes",
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["DRIVE"],
+      "summary": "Each shutter press records one JPEG for the current settings and one for each chosen custom setting.",
+      "card": null,
+      "media_cards": [],
+      "controls": [],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -285,7 +301,7 @@
     {
       "id": "pixel_map",
       "group": "photography",
-      "icon": "highlight",
+      "icon": "pixel-map",
       "title": "PIXEL MAPPING",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Hide hot and stuck pixels in every photo, RAW and JPEG, from a list made with lens-cap test shots.",
@@ -617,7 +633,7 @@
       "icon": "movie",
       "title": "F-Log RECORDING",
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "summary": "Record movies with the F-Log transfer and F-Gamut color matrix.",
+      "summary": "Record movies in F-Log format.",
       "card": "f_log_recording_item",
       "media_cards": ["f_log_recording_item"],
       "controls": [],
@@ -962,7 +978,7 @@
     {
       "id": "noise_reduction",
       "group": "recipes",
-      "icon": "film",
+      "icon": "noise-reduction",
       "title": "NOISE REDUCTION",
       "path": ["SHOOTING MENU"],
       "summary": "Choose how much luminance and color noise reduction is applied to still pictures.",
@@ -1007,7 +1023,7 @@
     {
       "id": "tone_curve",
       "group": "recipes",
-      "icon": "highlight",
+      "icon": "tone-curve",
       "title": "TONE CURVE",
       "path": ["SHOOTING MENU"],
       "summary": "Set HIGHLIGHTS and SHADOWS together on one page, as on the X100VI.",
@@ -1758,7 +1774,7 @@
     {
       "id": "menu_animations",
       "group": "system",
-      "icon": "theme",
+      "icon": "animation",
       "title": "MENU ANIMATIONS",
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Choose whether menu entry and exit animations play.",
@@ -2216,6 +2232,43 @@
     }
   ],
   "cards": {
+    "af_range_item": {
+      "title": "AF RANGE",
+      "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
+      "summary": "Limits how close the camera focuses, so AF finds distant subjects faster.",
+      "choices": {
+        "FULL": "Focus over the full range.",
+        "0.3 M - INF": "Focus from 0.3 m to infinity.",
+        "1 M - INF": "Focus from 1 m to infinity."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "af_miss_item": {
+      "title": "AF MISS",
+      "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
+      "summary": "Choose where the lens rests when AF cannot find focus.",
+      "choices": {
+        "HOLD": "The lens stays where it is.",
+        "HYPERFOCAL": "The lens moves to the hyperfocal distance."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
     "build_overlay_item": {
       "title": "BUILD OVERLAY",
       "path": ["SET-UP", "DEVTOOLS"],
@@ -2226,6 +2279,26 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "quick_start_item": {
+      "title": "QUICK START",
+      "path": ["SET-UP", "POWER MANAGEMENT"],
+      "summary": "Keeps the camera ready after it is turned off, so it starts shooting at once when turned on again. Uses more battery.",
+      "choices": {
+        "OFF": "The camera shuts down fully.",
+        "10 MIN": "Ready to start quickly for 10 minutes after turning off.",
+        "23 MIN": "Ready to start quickly for 23 minutes after turning off."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2239,7 +2312,8 @@
       "summary": null,
       "choices": {},
       "related": [],
-      "changes": "Aspect ratio selection moved to ASPECT RATIO in the shooting menu; IMAGE SIZE now sets L, M or S only.",
+      "changes": "Controls image max size only. Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2269,6 +2343,7 @@
         }
       ],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2318,6 +2393,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2336,6 +2412,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2362,6 +2439,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2376,6 +2454,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2393,6 +2472,7 @@
       },
       "related": [],
       "changes": "Adds ULTRAFINE and ULTRAFINE+RAW JPEG quality.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2412,6 +2492,7 @@
       },
       "related": [],
       "changes": "Adds four levels below -2.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2434,6 +2515,7 @@
       },
       "related": [],
       "changes": "Adds NONE to hide the guide, GOLDEN RATIO, four GOLDEN SPIRAL focal-point placements and DYNAMIC SYMMETRY. All guides follow the selected image bounds and aspect ratio.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2534,6 +2616,7 @@
       "choices": {},
       "related": [],
       "changes": "Adds ETERNA, Classic Negative calibrated for the X70, Neutral and approximations of three film simulations from newer cameras, and films saved on the memory card. Monochrome and SEPIA move to the end of the list.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2552,6 +2635,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2566,6 +2650,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2580,6 +2665,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2594,6 +2680,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2608,6 +2695,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2622,6 +2710,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2636,6 +2725,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2650,6 +2740,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2664,6 +2755,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2678,6 +2770,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2692,6 +2785,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2706,6 +2800,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2720,6 +2815,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2730,10 +2826,11 @@
     "negative_item": {
       "title": "NEGATIVE",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "summary": "Record every JPEG as an unconverted C-41 color negative: inverted, on an orange film base, with the low contrast of negative film. Invert it in Negative Lab Pro or a similar tool to get the positive back. With 35MM NEGATIVE borders the rebate is the film base to sample. Bursts in continuous drive are recorded as positives.",
+      "summary": "Records JPEGs as color negatives on an orange film base, ready to invert in Negative Lab Pro or a similar tool.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": "single",
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2748,6 +2845,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2758,10 +2856,11 @@
     "tone_curve_item": {
       "title": "TONE CURVE",
       "path": ["SHOOTING MENU"],
-      "summary": "Replaces HIGHLIGHT TONE and SHADOW TONE with one TONE CURVE row. Its screen sets HIGHLIGHTS on the left and SHADOWS on the right, each from -2 to +2, and live view follows each change. LEFT and RIGHT choose a side, UP and DOWN change it. MENU/OK keeps the values; DISP/BACK restores the values the screen opened with.",
+      "summary": "Adjusts HIGHLIGHTS and SHADOWS from -2 to +2 on one screen, replacing HIGHLIGHT TONE and SHADOW TONE.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2781,6 +2880,7 @@
       },
       "related": [],
       "changes": "Adds +3, +4, -3 and -4.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2800,6 +2900,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2822,6 +2923,7 @@
         }
       ],
       "changes": "Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [["Ricoh GRIII"]],
@@ -2854,6 +2956,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2864,13 +2967,14 @@
     "f_log_recording_item": {
       "title": "F-Log RECORDING",
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "summary": "Choose F-Log processing for movies.",
+      "summary": "Record movies in F-Log format. NOTE: Suffers from 8-bit clipping. We recommend ETERNA instead.",
       "choices": {
         "OFF": "Use the selected picture settings.",
         "ON": "Use F-Log movie processing."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2900,6 +3004,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2914,6 +3019,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2940,6 +3046,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2954,6 +3061,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2968,6 +3076,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2982,6 +3091,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2990,12 +3100,13 @@
       "choice_credits": {}
     },
     "bindings_row_focus_mode_selector": {
-      "title": "FOCUS MODE",
+      "title": "FOCUS MODE SELECTOR",
       "path": ["SET-UP", "BUTTON/DIAL SETTING"],
       "summary": "Choose an action and the value S, C and M each select.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3010,6 +3121,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3024,6 +3136,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3038,6 +3151,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3052,6 +3166,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3066,6 +3181,7 @@
       "choices": {},
       "related": [],
       "changes": "Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3078,10 +3194,16 @@
       "path": ["SET-UP"],
       "summary": "Choose the menu renderer and appearance.",
       "choices": {
-        "FUJIMOD": "Grouped setting pages and Q tiles with touch and drag controls."
+        "STOCK": "The original camera menus.",
+        "X100VI": "Dark panels with thin row outlines and a white selection, as on the X100VI.",
+        "CUPERTINO": "Black background, gray cards and a rounded blue selection.",
+        "TEENAGE": "Light gray background, dark rules and a square orange selection.",
+        "EVA-01": "Dark violet panels, orange headings and a green selection.",
+        "FUJIMOD": "Familiar layout with all-new high performance rendering, and multi-touch input."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3102,6 +3224,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3116,6 +3239,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3133,6 +3257,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3150,6 +3275,7 @@
       },
       "related": [],
       "changes": "Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3164,6 +3290,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3178,6 +3305,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3192,6 +3320,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3206,6 +3335,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3220,6 +3350,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [["Ricoh GRIII"]],
@@ -3237,6 +3368,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3251,6 +3383,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3265,6 +3398,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3279,6 +3413,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3293,6 +3428,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3307,6 +3443,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3324,6 +3461,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3342,6 +3480,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3361,6 +3500,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3378,6 +3518,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3392,6 +3533,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3406,6 +3548,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3420,6 +3563,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3434,6 +3578,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3448,6 +3593,7 @@
       "choices": {},
       "related": [],
       "changes": "Renamed DIGITAL FOCAL LENGTH. The choice survives turning the camera off, and returns after burst and other modes that turn the teleconverter off.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3465,6 +3611,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3479,6 +3626,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3496,6 +3644,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3513,6 +3662,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3527,6 +3677,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3544,6 +3695,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3554,13 +3706,14 @@
     "date_folders_item": {
       "title": "DATE FOLDERS",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "summary": "Choose whether the first picture of each day starts a new folder named after the date.",
+      "summary": "Keep each day's pictures in their own folder, named after the date.",
       "choices": {
         "ON": "Each day starts a new folder, such as 101_1022 for October 22.",
         "OFF": "Pictures are stored in folders as on an unmodified camera."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3594,6 +3747,22 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "custom_settings_bkt_item": {
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose up to five custom settings to bracket. Shown in the CUSTOM SETTINGS BKT drive mode.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3608,6 +3777,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3622,6 +3792,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3636,6 +3807,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3826,6 +3998,60 @@
       "feature": null
     },
     {
+      "title": "SELECT FOR BRACKETING",
+      "path": ["CUSTOM SETTING"],
+      "order": 4294967295,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "1",
+      "path": ["SELECT FOR BRACKETING"],
+      "order": 0,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "2",
+      "path": ["SELECT FOR BRACKETING"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "3",
+      "path": ["SELECT FOR BRACKETING"],
+      "order": 2,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "4",
+      "path": ["SELECT FOR BRACKETING"],
+      "order": 3,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "5",
+      "path": ["SELECT FOR BRACKETING"],
+      "order": 4,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
       "title": "DEVTOOLS",
       "path": ["SET-UP"],
       "order": 368,
@@ -3934,7 +4160,7 @@
       "feature": "unlocked_controls"
     },
     {
-      "title": "FOCUS MODE",
+      "title": "FOCUS MODE SELECTOR",
       "path": ["SET-UP", "BUTTON/DIAL SETTING"],
       "order": 12,
       "kind": "page",
@@ -4029,7 +4255,7 @@
       "order": 272,
       "kind": "setting",
       "stock": false,
-      "card": null,
+      "card": "quick_start_item",
       "feature": null
     },
     {
@@ -4139,6 +4365,15 @@
       "stock": true,
       "card": "control_ring_setting",
       "feature": "unlocked_controls"
+    },
+    {
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["SHOOTING MENU"],
+      "order": 432,
+      "kind": "page",
+      "stock": false,
+      "card": "custom_settings_bkt_item",
+      "feature": null
     },
     {
       "title": "D RANGE PRIORITY",
@@ -4317,7 +4552,7 @@
       "order": 328,
       "kind": "setting",
       "stock": false,
-      "card": null,
+      "card": "af_miss_item",
       "feature": null
     },
     {
@@ -4326,7 +4561,7 @@
       "order": 327,
       "kind": "setting",
       "stock": false,
-      "card": null,
+      "card": "af_range_item",
       "feature": null
     },
     {
@@ -4346,6 +4581,51 @@
       "stock": false,
       "card": "color_chrome_blue_item",
       "feature": "color_chrome"
+    },
+    {
+      "title": "1",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 15,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "2",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 17,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "3",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 19,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "4",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 21,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "5",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 23,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null
     },
     {
       "title": "ANY COLOR",
@@ -4415,6 +4695,15 @@
       "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
       "order": 0,
       "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null
+    },
+    {
+      "title": "CURRENT SETTINGS",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 13,
+      "kind": "page",
       "stock": false,
       "card": null,
       "feature": null

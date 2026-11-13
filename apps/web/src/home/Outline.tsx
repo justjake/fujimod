@@ -33,7 +33,10 @@ const PAGE_SECTIONS: Record<string, Section> = {
 const OPENED_FROM: Record<string, string> = {
   'CUSTOM SETTING': 'LIBRARY',
   CONTROL: 'BUTTON/DIAL SETTING',
+  'ASPECT RATIO': 'EDIT ASPECT RATIOS',
 };
+/** Rows whose own pages the outline leaves out. */
+const COLLAPSED = new Set(['EDIT ASPECT RATIOS']);
 const TOP_ORDER = ['SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP'];
 const TOP_MENUS = new Set(TOP_ORDER);
 
@@ -48,6 +51,9 @@ for (const feature of catalog.features)
   for (const control of feature.controls)
     if (control.card && !options.has(control.card)) options.set(control.card, control.choices);
 const rowPlace = (row: MenuRow) => [...row.path, row.title];
+/** Stock rows FujiMod leaves as they are. */
+const shownRows = catalog.menus.filter((row) => !row.stock || row.card);
+const placed = new Set(shownRows.map((row) => row.feature));
 
 /** Effects and recipes, and the pages opened from them, join CUSTOM SETTINGS / RECIPES. */
 function recipeRow(row: MenuRow) {
@@ -63,10 +69,10 @@ function recipeRow(row: MenuRow) {
 function sectionOf(row: MenuRow): Section {
   if (recipeRow(row)) return 'recipes';
   const place = rowPlace(row).join('\u0000') + '\u0000';
-  const holds = catalog.menus.some(
+  const holds = shownRows.some(
     (other) => rowPlace(other).join('\u0000').startsWith(place) && recipeRow(other),
   );
-  const nested = catalog.menus.some(
+  const nested = shownRows.some(
     (other) =>
       rowPlace(other).join('\u0000').startsWith(place) && !!other.feature && !recipeRow(other),
   );
@@ -203,6 +209,8 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
   const feature = (): Feature | undefined => (cardKey() ? tiles.get(cardKey()!) : undefined);
   const added = () => !!props.node.row && !props.node.row.stock;
   const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
+  /** One description: the card's, else its stock change, else the tile's. */
+  const text = () => card()?.summary ?? card()?.changes ?? feature()?.summary;
   const choices = () => (card() ? choicesOf(cardKey()!, card()!) : []);
   const switched = () => isSwitch(choices());
   return (
@@ -213,37 +221,26 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
         <Show when={switched()}>
           <span class="outline-switch">ON/OFF</span>
         </Show>
+        <Show when={card()?.drive_mode}>
+          <FeatureIcon name="drive-single" />
+        </Show>
         <Kind row={props.node.row} inside={props.inside} />
         <Show when={credits().premiere}>
           <Premiere />
         </Show>
       </div>
-      <Show when={feature()?.summary}>
-        <p class="outline-text">
-          <Prose text={feature()!.summary} />
-        </p>
-      </Show>
-      <Show when={card()}>
+      <Show when={text()}>
         {(found) => (
-          <>
-            <Show
-              when={found().changes ?? (found().summary !== feature()?.summary && found().summary)}
-            >
-              {(text) => (
-                <p class="outline-text">
-                  {found().changes ? 'In FujiMod: ' : ''}
-                  <Prose text={text()} />
-                </p>
-              )}
-            </Show>
-            <Show when={choices().length && !switched()}>
-              <Options choices={choices()} card={found()} />
-            </Show>
-          </>
+          <p class="outline-text">
+            <Prose text={found()} />
+          </p>
         )}
       </Show>
+      <Show when={card() && choices().length && !switched()}>
+        <Options choices={choices()} card={card()!} />
+      </Show>
       <CreditList credits={credits()} />
-      <Show when={props.node.children.size}>
+      <Show when={props.node.children.size && !COLLAPSED.has(props.node.title)}>
         <ul>
           <For each={ordered(props.node)}>
             {(child) => <OutlineNode node={child} inside={props.inside || added()} />}
@@ -259,7 +256,7 @@ function MenuFree(props: { features: Feature[] }) {
     <Show when={props.features.length}>
       <li class="heading">
         <div class="outline-row">
-          <span class="outline-title">Without a menu</span>
+          <span class="outline-title">Outside the menus</span>
         </div>
         <ul>
           <For each={props.features}>
@@ -267,7 +264,7 @@ function MenuFree(props: { features: Feature[] }) {
               <li>
                 <div class="outline-row">
                   <FeatureIcon name={feature.icon} />
-                  <span class="outline-title">{feature.title}</span>
+                  <span class="outline-title">{[...feature.path, feature.title].join(' > ')}</span>
                   <span class="outline-new">NEW</span>
                 </div>
                 <p class="outline-text">
@@ -292,9 +289,9 @@ export function FeatureOutline() {
       </h2>
       <For each={SECTIONS}>
         {(section) => {
-          const rows = catalog.menus.filter((row) => sectionOf(row) === section.id);
+          const rows = shownRows.filter((row) => sectionOf(row) === section.id);
           const free = catalog.features.filter(
-            (feature) => !feature.path.length && GROUP_SECTIONS[feature.group] === section.id,
+            (feature) => !placed.has(feature.id) && GROUP_SECTIONS[feature.group] === section.id,
           );
           return (
             <details class="outline-section" open>
