@@ -418,14 +418,17 @@ impl Endpoint {
         if packet_type == 0 {
             if self.access_point.is_some() {
                 let access_point = self.access_point.clone().unwrap();
-                let data = if frame.get(12..14) == Some(&[0x88, 0x8e]) {
+                frames = if frame.get(12..14) == Some(&[0x88, 0x8e]) {
                     self.eapol(&access_point, frame)
                 } else if self.wpa2_ready() {
-                    self.network.receive(&access_point, frame, self.ticks)
+                    self.network
+                        .receive(&access_point, frame, self.ticks)
+                        .into_iter()
+                        .map(|frame| (0, frame))
+                        .collect()
                 } else {
                     Vec::new()
                 };
-                frames = data.into_iter().map(|frame| (0, frame)).collect();
             }
         } else {
             frames = self.management(frame);
@@ -455,7 +458,10 @@ impl Endpoint {
                 .is_some_and(|state| state.phase == Phase::Complete)
     }
 
-    fn eapol(&mut self, access_point: &AccessPoint, frame: &[u8]) -> Vec<Vec<u8>> {
+    /// The access point's answer to an EAPOL frame: the next key message as
+    /// data, or, for a key whose MIC fails, a deauthentication as a
+    /// management frame, which the host's MLME reports as the link lost.
+    fn eapol(&mut self, access_point: &AccessPoint, frame: &[u8]) -> Vec<(u8, Vec<u8>)> {
         let Some(station) = self.station.address else {
             return Vec::new();
         };
@@ -471,7 +477,7 @@ impl Endpoint {
                     }
                     return Vec::new();
                 };
-                vec![message3]
+                vec![(0, message3)]
             }
             Phase::WaitingForMessage4 => {
                 let complete = state.message4(frame);
@@ -492,7 +498,11 @@ impl Endpoint {
         }
     }
 
-    fn deauthenticate(&mut self, access_point: &AccessPoint, station: [u8; 6]) -> Vec<Vec<u8>> {
+    fn deauthenticate(
+        &mut self,
+        access_point: &AccessPoint,
+        station: [u8; 6],
+    ) -> Vec<(u8, Vec<u8>)> {
         self.station.associated = false;
         let mut frame = vec![0u8; 26];
         frame[..2].copy_from_slice(&0x00c0u16.to_le_bytes());
@@ -500,7 +510,7 @@ impl Endpoint {
         frame[10..16].copy_from_slice(&access_point.bssid);
         frame[16..22].copy_from_slice(&access_point.bssid);
         frame[24..26].copy_from_slice(&2u16.to_le_bytes());
-        vec![frame]
+        vec![(3, frame)]
     }
 
     fn management(&mut self, frame: &[u8]) -> Vec<(u8, Vec<u8>)> {
@@ -1193,6 +1203,33 @@ mod tests {
         transmit(&mut e, 0, &dhcp);
         assert!(e.rx1.iter().all(|packet| packet[4] == EVENT_TX_DONE));
         assert!(e.network.lease().is_none());
+        while !e.rx1.is_empty() {
+            read_rx1(&mut e);
+        }
+
+        // Message 2/4 whose MIC the key does not produce: the access point
+        // deauthenticates, as a management frame the host's MLME reads.
+        let bssid = e.access_point.as_ref().unwrap().bssid;
+        let mut message2 = Vec::new();
+        message2.extend_from_slice(&bssid);
+        message2.extend_from_slice(&station);
+        message2.extend_from_slice(&[0x88, 0x8e]);
+        let mut eapol = vec![0u8; 4 + 95];
+        eapol[..4].copy_from_slice(&[2, 3, 0, 95]);
+        eapol[4] = 2;
+        eapol[5..7].copy_from_slice(&0x010au16.to_be_bytes());
+        message2.extend_from_slice(&eapol);
+        transmit(&mut e, 0, &message2);
+        assert!(e.wpa2_rejected);
+        assert!(!e.station.associated);
+        let deauth = e
+            .rx1
+            .iter()
+            .find(|packet| packet[2] == 3)
+            .expect("no deauthentication was queued");
+        assert_eq!(u16::from_le_bytes([deauth[12], deauth[13]]), 0x00c0);
+        assert_eq!(deauth[16..22], station);
+        assert!(e.rx1.iter().all(|packet| packet[2] != 0));
     }
 
     #[test]
