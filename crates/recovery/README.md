@@ -189,7 +189,7 @@ The compiled loader is not changed for this. A small hand-written stub
 with any AArch64 assembler) is appended to it and bound by redirecting a few loader words, each
 checked first (`src/xp5/flash_stub.rs`): once the image is complete it wakes the cores the boot ROM
 parks, which the image's preloaded reset stage expects to be awake. With `--fallback-wait-seconds N`
-it also replaces the loader's halt on a failed load (no card, no file, a length or CRC mismatch, a
+it also replaces the loader's halt on a failed load (no file, a length or CRC mismatch, a
 read error): it waits N seconds, puts the stock reset image back at RAM 0 if FFBOOT had begun to
 overwrite it, and lets the stock bootstrap go on, which then starts the installed firmware. A
 failure that is not a load failure (the request check, an unexpected exception level or MMU state)

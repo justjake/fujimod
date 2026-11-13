@@ -209,7 +209,7 @@ pub(crate) fn package_with_storage(
 ///
 /// The loader is bound to a small stub (`flash_stub`) that wakes the cores the boot ROM parks
 /// once the image is complete, which the image's reset stage needs. With
-/// `fallback_wait_seconds`, a failed FFBOOT load (no card, no file, a length or CRC mismatch,
+/// `fallback_wait_seconds`, a failed FFBOOT load (no file, a length or CRC mismatch,
 /// a read error) also waits that long and then continues the stock boot from the installed
 /// flash instead of halting.
 pub(crate) fn package_internal_flash(

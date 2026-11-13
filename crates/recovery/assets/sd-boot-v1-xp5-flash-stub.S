@@ -90,6 +90,7 @@ halt:
     .global release_entry
 release_entry:
     mov     x0, #0xe                    // Aff0 1..3 of the boot cluster
+    dsb     sy                          // the whole image is written before the cores can wake
     msr     S3_0_C12_C11_7, x0          // ICC_SGI0R_EL1, INTID 0
     isb
     sev                                 // the instruction this entry replaced
