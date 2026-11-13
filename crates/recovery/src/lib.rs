@@ -35,6 +35,10 @@ pub struct StartupOptions {
     /// stage one does, and no card-resident tables, namespace or unit storage
     /// image are used (so none is needed).
     pub internal_flash: bool,
+    /// With `internal_flash`: when the FFBOOT load fails (no card, no file, a length or CRC
+    /// mismatch, a read error), wait this many seconds and continue the stock boot from the
+    /// installed flash. `None` keeps the loader's halt on any failure.
+    pub fallback_wait_seconds: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -426,6 +430,10 @@ impl Recipe {
             "Internal-flash startup requires XP5 and takes no storage image",
         )?;
         require(
+            options.fallback_wait_seconds.is_none() || options.internal_flash,
+            "The load-failure fallback requires an internal-flash startup",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -516,6 +524,7 @@ impl Recipe {
                             setup,
                             ram,
                             options.success_hold_seconds,
+                            options.fallback_wait_seconds,
                         )?
                     } else {
                         xp5::package_with_storage(

@@ -44,4 +44,32 @@ fn main() {
     }
     rust += "];\n";
     fs::write(out.join("xp5_sd_loader.rs"), rust).unwrap();
+
+    // The hand-written internal-flash startup stub, assembled from
+    // assets/sd-boot-v1-xp5-flash-stub.S by assets/build-sd-boot-v1-xp5-flash-stub.sh.
+    let image = root.join("assets/sd-boot-v1-xp5-flash-stub.generated.bin");
+    let layout = root.join("assets/sd-boot-v1-xp5-flash-stub.generated.json");
+    println!("cargo:rerun-if-changed={}", image.display());
+    println!("cargo:rerun-if-changed={}", layout.display());
+    let layout: serde_json::Value =
+        serde_json::from_slice(&fs::read(&layout).expect("XP5 flash stub layout")).unwrap();
+    assert_eq!(layout["schema"], 1, "XP5 flash stub layout schema");
+    let image_bytes = fs::metadata(&image).expect("XP5 flash stub image").len();
+    assert_eq!(
+        layout["image_bytes"].as_u64(),
+        Some(image_bytes),
+        "XP5 flash stub image size"
+    );
+    let mut rust = format!(
+        "pub const IMAGE: &[u8] = include_bytes!({:?});\n",
+        image.display().to_string()
+    );
+    for (name, offset) in layout["symbols"].as_object().unwrap() {
+        rust += &format!(
+            "pub const {}: usize = {:#x};\n",
+            name.to_uppercase(),
+            offset.as_u64().unwrap()
+        );
+    }
+    fs::write(out.join("xp5_flash_stub.rs"), rust).unwrap();
 }
