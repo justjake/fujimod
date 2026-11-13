@@ -1163,6 +1163,9 @@ mod tests {
             frames(&|sgi| sgi[1] = 0xff910000),
             frames(&|sgi| sgi[2] = 0xfa110000),
             frames(&|sgi| *sgi = [0xfb010000, 0xfb030000, 0xfb050000]),
+            // Correctly strided, second-page frames that lie wholly in the flash aperture: only
+            // the window clause refuses them.
+            frames(&|sgi| *sgi = [0xf0010000, 0xf0030000, 0xf0050000]),
             frames(&|sgi| *sgi = [0xfa0b0000, 0xfa0f0000, 0xfa0d0000]),
         ] {
             assert!(package_internal_flash(&data, &bad, ram.clone(), 0, None).is_err());

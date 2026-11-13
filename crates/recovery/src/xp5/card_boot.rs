@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn checked_hooks_and_card_bytes_reject_mutated_code_payload_or_binding() {
-        for case in 0..12 {
+        for case in 0..13 {
             let (mut card, mut stock, bytes, mut ram) = fixture();
             let mut raw = stock.clone();
             let mut program = template::IMAGE.to_vec();
@@ -418,6 +418,8 @@ mod tests {
                 // frames that are not one stride apart.
                 10 => card.secondary_sgi[0] = 0xf0010000,
                 11 => card.secondary_sgi = [0xfa0b0000, 0xfa0f0000, 0xfa0d0000],
+                // Correctly strided second-page frames wholly inside the aperture.
+                12 => card.secondary_sgi = [0xf0010000, 0xf0030000, 0xf0050000],
                 _ => (),
             }
             let result = card.install(
