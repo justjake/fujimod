@@ -88,7 +88,9 @@
       "manual_page": 92,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-7"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Adjust exposure compensation. At C, use the front command dial to set compensation; press that dial to switch between compensation and aperture.",
@@ -275,7 +277,9 @@
       "manual_page": 64,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Set shutter speed; A selects automatic shutter speed, T selects timed exposure, and B selects bulb exposure.",
@@ -566,7 +570,9 @@
       "manual_page": 88,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Set sensitivity; A uses automatic sensitivity, 200–12800 are manual values, and H and L use the values assigned in setup.",
@@ -741,7 +747,9 @@
       "manual_page": 5,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Select the drive mode: movie, bracketing, high-speed or low-speed burst, single frame, multiple exposure, advanced filter, or panorama.",
@@ -971,7 +979,9 @@
       "manual_page": 91,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Select the metering mode.",
@@ -1343,7 +1353,9 @@
       "manual_page": 256,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn3 default: AF mode; can instead be used to position the focus area.",
@@ -1365,7 +1377,9 @@
       "manual_page": 256,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn5 default: White balance; can instead be used to position the focus area.",
@@ -1387,7 +1401,9 @@
       "manual_page": 256,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn6 default: Performance; can instead be used to position the focus area.",
@@ -1409,7 +1425,9 @@
       "manual_page": 256,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn4 default: Film simulation; can instead be used to position the focus area.",
@@ -1431,7 +1449,9 @@
       "manual_page": 4,
       "face": "MENU/OK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and confirm selections; press and hold to lock or unlock the selector and Q button during shooting.",
@@ -1452,7 +1472,9 @@
       "manual_page": 18,
       "face": "DISP/BACK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle display modes or go back.",

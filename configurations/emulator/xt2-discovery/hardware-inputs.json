@@ -11,7 +11,7 @@
         1014,
         1022,
         842,
-        599,
+        91,
         656,
         711,
         439,
@@ -19,7 +19,7 @@
         372,
         600
       ],
-      "basis": "Channel 6 is the X-T2 shutter-speed dial (controls map rows 49-65, kind 1, source 6): its windows are configuration words 14016-14082 (S-A 993-1023, 1/8000 931-992, ... 1/250 627-686, ... T 89-148, B 30-88). The borrowed X-T20 value 59 is the X-T2's B (bulb), so the dial is declared at 1/250 (656, the window's middle), a value not measured on an X-T2. The other channels are Borrowed discovery input from xt20-discovery, not measured on an X-T2. X-T20 basis: Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read over the live service in REC after a normal power-on with all keys released (X-T20 2.11, 2026-10-29), assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. Channels 0, 1, 7, 8, 10 and 11 vary between power-ons. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
+      "basis": "Channel 6 is the X-T2 shutter-speed dial (controls map rows 49-65, kind 1, source 6): its windows are configuration words 14016-14082 (S-A 993-1023, 1/8000 931-992, ... 1/250 627-686, ... T 89-148, B 30-88). The borrowed X-T20 value 59 is the X-T2's B (bulb), so the dial is declared at 1/250 (656, the window's middle), a value not measured on an X-T2. Channel 5 is the X-T2 ISO dial (controls map rows 66-87, kind 1, source 5; configuration words 14184-14270): the dial's declared positions read A 999-1023, H 951-998, 12800 903-950, 6400 761-807, 3200 621-666, 1600 483-528, 800 345-390, 400 207-252, 200 69-114 and L 30-68, with the third-stop rows between them. The borrowed X-T20 value 599 is in no declared dial position, so the dial is declared at 200 (91, the window's middle), a value not measured on an X-T2. The other channels are Borrowed discovery input from xt20-discovery, not measured on an X-T2. X-T20 basis: Measured: the twelve key-row values seg5 0xc8ce9c keeps at 0xfdb018, read over the live service in REC after a normal power-on with all keys released (X-T20 2.11, 2026-10-29), assigned to channels 0-11 in order (the xpro-lab emulator model). Channel 3 is the ladder for the 4-way pad, OK, Q and DISP/BACK; channel 2 carries the S1/S2 thresholds 0x28/0x1d0. Channels 0, 1, 7, 8, 10 and 11 vary between power-ons. The channel order and the values of channels 10 and 11 are not confirmed against the converter registers."
     },
     "battery_gauge": {
       "port": 4294098944,

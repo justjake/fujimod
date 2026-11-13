@@ -2100,7 +2100,8 @@
       "event": 59,
       "debug_key": "8DIR_PUSH",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick"
       },
       "scanner": {
         "index": 19,
@@ -2132,7 +2133,19 @@
           "upper": 14352
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14354,
+            "upper": 14352
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-21",
@@ -2152,7 +2165,19 @@
           "upper": 14348
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14350,
+            "upper": 14348
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-22",
@@ -2172,7 +2197,19 @@
           "upper": 14344
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14346,
+            "upper": 14344
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-23",
@@ -2192,7 +2229,19 @@
           "upper": 14340
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14342,
+            "upper": 14340
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-24",
@@ -2212,14 +2261,27 @@
           "upper": 14336
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14338,
+            "upper": 14336
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-25",
       "event": 42,
       "debug_key": "K_Q",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "q_button"
       },
       "scanner": {
         "index": 25,
@@ -2231,7 +2293,19 @@
           "upper": 14332
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14334,
+            "upper": 14332
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-26",
@@ -2251,7 +2325,19 @@
           "upper": 14328
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14330,
+            "upper": 14328
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-27",
@@ -2309,7 +2395,19 @@
           "upper": 14104
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14106,
+            "upper": 14104
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-30",
@@ -2328,7 +2426,19 @@
           "upper": 14108
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14110,
+            "upper": 14108
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-31",
@@ -2347,7 +2457,19 @@
           "upper": 14112
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14114,
+            "upper": 14112
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-32",
@@ -2367,7 +2489,19 @@
           "upper": 14116
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14118,
+            "upper": 14116
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-33",
@@ -2386,7 +2520,19 @@
           "upper": 14120
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14122,
+            "upper": 14120
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-34",
@@ -2405,7 +2551,19 @@
           "upper": 14124
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14126,
+            "upper": 14124
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-35",
@@ -2425,7 +2583,19 @@
           "upper": 14128
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14130,
+            "upper": 14128
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-36",
@@ -2444,7 +2614,19 @@
           "upper": 14132
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14134,
+            "upper": 14132
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-37",
@@ -2463,7 +2645,19 @@
           "upper": 14136
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14138,
+            "upper": 14136
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-38",
@@ -2483,7 +2677,19 @@
           "upper": 14140
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14142,
+            "upper": 14140
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-39",
@@ -2502,7 +2708,19 @@
           "upper": 14144
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14146,
+            "upper": 14144
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-40",
@@ -2521,7 +2739,19 @@
           "upper": 14148
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14150,
+            "upper": 14148
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-41",
@@ -2541,7 +2771,19 @@
           "upper": 14152
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14154,
+            "upper": 14152
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-42",
@@ -2560,7 +2802,19 @@
           "upper": 14156
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14158,
+            "upper": 14156
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-43",
@@ -2579,7 +2833,19 @@
           "upper": 14160
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14162,
+            "upper": 14160
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-44",
@@ -2599,7 +2865,19 @@
           "upper": 14164
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14166,
+            "upper": 14164
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-45",
@@ -2618,7 +2896,19 @@
           "upper": 14168
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14170,
+            "upper": 14168
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-46",
@@ -2637,7 +2927,19 @@
           "upper": 14172
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14174,
+            "upper": 14172
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-47",
@@ -2657,7 +2959,19 @@
           "upper": 14176
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14178,
+            "upper": 14176
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-48",
@@ -2677,7 +2991,19 @@
           "upper": 14180
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-7",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14182,
+            "upper": 14180
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-49",
@@ -2697,7 +3023,19 @@
           "upper": 14016
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14018,
+            "upper": 14016
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-50",
@@ -2717,7 +3055,19 @@
           "upper": 14020
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14022,
+            "upper": 14020
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-51",
@@ -2737,7 +3087,19 @@
           "upper": 14024
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14026,
+            "upper": 14024
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-52",
@@ -2757,7 +3119,19 @@
           "upper": 14028
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14030,
+            "upper": 14028
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-53",
@@ -2777,7 +3151,19 @@
           "upper": 14032
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14034,
+            "upper": 14032
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-54",
@@ -2797,7 +3183,19 @@
           "upper": 14036
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14038,
+            "upper": 14036
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-55",
@@ -2817,7 +3215,19 @@
           "upper": 14040
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14042,
+            "upper": 14040
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-56",
@@ -2837,7 +3247,19 @@
           "upper": 14044
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14046,
+            "upper": 14044
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-57",
@@ -2857,7 +3279,19 @@
           "upper": 14048
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14050,
+            "upper": 14048
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-58",
@@ -2877,7 +3311,19 @@
           "upper": 14052
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14054,
+            "upper": 14052
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-59",
@@ -2897,7 +3343,19 @@
           "upper": 14056
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14058,
+            "upper": 14056
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-60",
@@ -2917,7 +3375,19 @@
           "upper": 14060
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14062,
+            "upper": 14060
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-61",
@@ -2937,7 +3407,19 @@
           "upper": 14064
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14066,
+            "upper": 14064
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-62",
@@ -2957,7 +3439,19 @@
           "upper": 14068
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14070,
+            "upper": 14068
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-63",
@@ -2977,7 +3471,19 @@
           "upper": 14072
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14074,
+            "upper": 14072
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-64",
@@ -2997,7 +3503,19 @@
           "upper": 14076
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14078,
+            "upper": 14076
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-65",
@@ -3017,7 +3535,19 @@
           "upper": 14080
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-6",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14082,
+            "upper": 14080
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-66",
@@ -3037,7 +3567,19 @@
           "upper": 14184
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14186,
+            "upper": 14184
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-67",
@@ -3057,7 +3599,19 @@
           "upper": 14188
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14190,
+            "upper": 14188
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-68",
@@ -3077,7 +3631,19 @@
           "upper": 14192
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14194,
+            "upper": 14192
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-69",
@@ -3096,7 +3662,19 @@
           "upper": 14196
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14198,
+            "upper": 14196
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-70",
@@ -3115,7 +3693,19 @@
           "upper": 14200
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14202,
+            "upper": 14200
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-71",
@@ -3135,7 +3725,19 @@
           "upper": 14204
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14206,
+            "upper": 14204
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-72",
@@ -3154,7 +3756,19 @@
           "upper": 14208
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14210,
+            "upper": 14208
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-73",
@@ -3173,7 +3787,19 @@
           "upper": 14212
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14214,
+            "upper": 14212
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-74",
@@ -3193,7 +3819,19 @@
           "upper": 14216
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14218,
+            "upper": 14216
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-75",
@@ -3212,7 +3850,19 @@
           "upper": 14220
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14222,
+            "upper": 14220
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-76",
@@ -3231,7 +3881,19 @@
           "upper": 14224
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14226,
+            "upper": 14224
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-77",
@@ -3251,7 +3913,19 @@
           "upper": 14228
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14230,
+            "upper": 14228
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-78",
@@ -3270,7 +3944,19 @@
           "upper": 14232
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14234,
+            "upper": 14232
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-79",
@@ -3289,7 +3975,19 @@
           "upper": 14236
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14238,
+            "upper": 14236
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-80",
@@ -3309,7 +4007,19 @@
           "upper": 14240
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14242,
+            "upper": 14240
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-81",
@@ -3328,7 +4038,19 @@
           "upper": 14244
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14246,
+            "upper": 14244
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-82",
@@ -3347,7 +4069,19 @@
           "upper": 14248
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14250,
+            "upper": 14248
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-83",
@@ -3367,7 +4101,19 @@
           "upper": 14252
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14254,
+            "upper": 14252
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-84",
@@ -3386,7 +4132,19 @@
           "upper": 14256
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14258,
+            "upper": 14256
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-85",
@@ -3405,7 +4163,19 @@
           "upper": 14260
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14262,
+            "upper": 14260
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-86",
@@ -3425,7 +4195,19 @@
           "upper": 14264
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14266,
+            "upper": 14264
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-87",
@@ -3445,7 +4227,19 @@
           "upper": 14268
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-5",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14270,
+            "upper": 14268
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-88",
@@ -3465,7 +4259,19 @@
           "upper": 14272
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14274,
+            "upper": 14272
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-89",
@@ -3485,7 +4291,19 @@
           "upper": 14276
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14278,
+            "upper": 14276
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-90",
@@ -3505,7 +4323,19 @@
           "upper": 14280
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14282,
+            "upper": 14280
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-91",
@@ -3525,7 +4355,19 @@
           "upper": 14284
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14286,
+            "upper": 14284
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-92",
@@ -3545,7 +4387,19 @@
           "upper": 14288
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14290,
+            "upper": 14288
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-93",
@@ -3565,7 +4419,19 @@
           "upper": 14292
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14294,
+            "upper": 14292
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-94",
@@ -3585,7 +4451,19 @@
           "upper": 14296
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14298,
+            "upper": 14296
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-95",
@@ -3605,7 +4483,19 @@
           "upper": 14300
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-1",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14302,
+            "upper": 14300
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-96",
@@ -3625,7 +4515,19 @@
           "upper": 14304
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-2",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14306,
+            "upper": 14304
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-97",
@@ -3645,7 +4547,19 @@
           "upper": 14308
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-2",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14310,
+            "upper": 14308
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-98",
@@ -3665,7 +4579,19 @@
           "upper": 14312
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-2",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14314,
+            "upper": 14312
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-99",
@@ -3685,7 +4611,19 @@
           "upper": 14316
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "controls-adc-2",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14318,
+            "upper": 14316
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-100",
@@ -4328,17 +5266,6 @@
       "electrical": null
     },
     {
-      "id": "debug-42",
-      "event": 42,
-      "debug_key": "K_Q",
-      "target": {
-        "kind": "control",
-        "control_id": "q_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
       "id": "debug-51",
       "event": 51,
       "debug_key": "8DIR_U",
@@ -4378,17 +5305,6 @@
       "target": {
         "kind": "control",
         "control_id": "focus_stick.left"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-59",
-      "event": 59,
-      "debug_key": "8DIR_PUSH",
-      "target": {
-        "kind": "control",
-        "control_id": "focus_stick"
       },
       "scanner": null,
       "electrical": null
