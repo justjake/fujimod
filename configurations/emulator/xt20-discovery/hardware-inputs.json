@@ -70,7 +70,11 @@
         "little_endian": true,
         "registers": [],
         "select_mask": 255,
-        "width": 1
+        "width": 1,
+        "touch_panel": {
+          "report_register": 0,
+          "input_ready_irq": 155
+        }
       },
       {
         "address": 27,

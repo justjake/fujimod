@@ -16,10 +16,29 @@ pub const MAX_INSTRUCTION_POINTS: usize = 16_384;
 pub struct Records {
     ranges: Vec<Span>,
     limit: usize,
-    rows: Vec<Value>,
+    // Each record is kept as its serialized JSON object: a bound of millions of
+    // records stays near 300 bytes each instead of a multi-kilobyte `Value` map.
+    rows: Vec<Box<str>>,
     violation: Option<String>,
+    // CPU accesses whose program counter lies in one of these spans are not
+    // recorded (a caller that discards its own code's accesses anyway).
+    excluded_pcs: Vec<Span>,
 }
 impl Records {
+    /// Stop recording CPU accesses made by instructions inside `spans`.
+    pub fn exclude_pcs(&mut self, spans: Vec<Span>) -> Result<(), String> {
+        if spans.iter().any(|&(lo, hi)| lo >= hi) {
+            return Err("Memory watch PC exclusion needs non-empty spans".into());
+        }
+        self.excluded_pcs = union(spans);
+        Ok(())
+    }
+    fn pc_excluded(&self, pc: u64) -> bool {
+        let index = self.excluded_pcs.partition_point(|&(_, hi)| hi <= pc);
+        self.excluded_pcs
+            .get(index)
+            .is_some_and(|&(lo, _)| lo <= pc)
+    }
     fn overlaps(&self, address: u64, bytes: u64) -> bool {
         let end = address.saturating_add(bytes);
         let index = self.ranges.partition_point(|&(_, hi)| hi <= address);
@@ -35,7 +54,7 @@ impl Records {
                 self.limit
             ));
         } else {
-            self.rows.push(row);
+            self.rows.push(row.to_string().into_boxed_str());
         }
     }
     pub(super) fn transfer(&mut self, source: &str, physical: u64, address: u64, bytes: usize) {
@@ -47,7 +66,27 @@ impl Records {
         }
     }
     pub fn state(&self) -> Value {
-        json!({"enabled":true,"ranges":self.ranges,"records":self.rows,"violation":self.violation})
+        serde_json::from_str(&self.state_json(None)).expect("memory watch state is valid JSON")
+    }
+    /// Serialize the state without building `Value`s for the records.
+    /// `violation` is reported when the watch itself recorded none.
+    pub fn state_json(&self, violation: Option<&str>) -> String {
+        let violation = self.violation.as_deref().or(violation);
+        let size = self.rows.iter().map(|row| row.len() + 1).sum::<usize>();
+        let mut out = String::with_capacity(size + 256);
+        out.push_str(r#"{"enabled":true,"ranges":"#);
+        out.push_str(&json!(self.ranges).to_string());
+        out.push_str(r#","records":["#);
+        for (index, row) in self.rows.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push_str(row);
+        }
+        out.push_str(r#"],"violation":"#);
+        out.push_str(&json!(violation).to_string());
+        out.push('}');
+        out
     }
 }
 pub struct MemoryWatch {
@@ -108,6 +147,10 @@ impl MemoryContext {
         };
         let mut records = self.records.borrow_mut();
         if !records.overlaps(physical, size) {
+            return Ok(());
+        }
+        let pc = scalar(&*cpu, Register::Pc)?;
+        if records.pc_excluded(pc) {
             return Ok(());
         }
         // Only an R-profile core can hide physical RAM behind a private TCM
@@ -194,7 +237,7 @@ impl MemoryContext {
         records.push(
             json!({"sample":sample,"sample_path":sample_path,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
-            "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,"sp":stack_pointer(&*cpu)?,
+            "core":self.core,"pc":pc,"sp":stack_pointer(&*cpu)?,
             "instructions":instructions,"tick":tick}),
         );
         Ok(())

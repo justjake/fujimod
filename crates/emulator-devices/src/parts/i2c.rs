@@ -26,3 +26,11 @@ pub trait Bus: Send + 'static {
         Err("I2C bus has no exact checkpoint implementation".into())
     }
 }
+
+/// Change one declared register value supplied by an attached I2C part.
+///
+/// Host input APIs use this to model external register changes; firmware still
+/// observes the value only through ordinary I2C reads.
+pub trait RegisterInput {
+    fn set_register_input(&mut self, address: u16, register: u8, value: u16) -> Result<(), String>;
+}

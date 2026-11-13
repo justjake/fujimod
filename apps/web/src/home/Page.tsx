@@ -18,7 +18,7 @@ import { identify } from '../recovery/identify';
 import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
 import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
-import generations from '../../devices/generations.json';
+import generations from '../../devices/generations.generated.json';
 import owners from '../../devices/owners.json';
 import '../home/site.css';
 import '../navigation.css';

@@ -405,6 +405,9 @@ pub enum Model {
         protected: bool,
         irq: InterruptLine,
     },
+    SataHost {
+        options: fujimod_emulator_devices::exr2::sata_host::Options,
+    },
     SdioHost {
         options: serde_json::Value,
         module: serde_json::Value,
@@ -569,6 +572,7 @@ impl Model {
             Model::HdmiSink { .. } => "hdmi-sink",
             Model::SerialAudio { .. } => "serial-audio",
             Model::SdHost { .. } => "sd-host",
+            Model::SataHost { .. } => "sata-host",
             Model::SdioHost { .. } => "sdio-host",
             Model::UsbEndpoints { .. } => "usb-endpoints",
             Model::ImageInput { .. } => "image-input",

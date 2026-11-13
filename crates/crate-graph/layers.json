@@ -188,6 +188,7 @@
       "fujimod-emulator-devices/src/exr/command_gpu.rs",
       "fujimod-emulator-devices/src/exr/display_pipe.rs",
       "fujimod-emulator-devices/src/exr/register_stub.rs",
+      "fujimod-emulator-devices/src/exr2/sata_host.rs",
       "fujimod-emulator-devices/src/exr2/clock.rs",
       "fujimod-emulator-devices/src/exr2/gpio.rs",
       "fujimod-emulator-devices/src/exr2/irq.rs",

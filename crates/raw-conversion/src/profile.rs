@@ -419,7 +419,7 @@ impl Settings {
             ));
         }
         if let Some(v) = self.color_chrome_blue {
-            out.push((Field::ColorChromeBlue, strength(v) - 1));
+            out.push((Field::ColorChromeBlue, strength(v)));
         }
         if let Some(v) = self.clarity {
             out.push((Field::Clarity, tenths(v, -5, 5, "clarity")?));
@@ -518,7 +518,7 @@ mod tests {
         assert_eq!(get(Field::MonochromeWarmCool), 90);
         assert_eq!(get(Field::MonochromeMagentaGreen), (-90i32) as u32);
         assert_eq!(get(Field::Clarity), (-50i32) as u32);
-        assert_eq!(get(Field::ColorChromeBlue), 1);
+        assert_eq!(get(Field::ColorChromeBlue), 2);
         assert_eq!(get(Field::WhiteBalanceAsShot), 1);
         assert_eq!(get(Field::Highlight), (-15i32) as u32);
         assert!(!w.iter().any(|(f, _)| *f == Field::WhiteBalanceMode));

@@ -2,16 +2,20 @@
 //!
 //! Header forms: 0 writes consecutive registers (register in bits 27:16, count-1 in 7:0), 1 writes one register
 //! repeatedly, 2 writes the registers selected by mask bits 15:0, 4 writes GPU-side state memory
-//! ((count-1) in 23:20, word address in 17:0; retained only), 0xf ends a batch and 0xffffffff is the list fence.
+//! ((count-1) in 23:20, word address in 17:0; retained, read for gradient paint), 0xf ends a batch and 0xffffffff is
+//! the list fence.
 //!
 //! Registers executed here: 0x200..0x207 destination surface and 0x220..0x227 source image (address, stride at +4,
 //! (w-1) | (h-1) << 16 at +5, format at +6); 0x440..0x448 the 3x3 path matrix, applied when 0x400 bit 15 is set;
-//! 0x548 the paint color (RGBA, red in bits 31:24); 0x604 = 0x140 selects image paint through the surface-to-image
-//! matrix 0x550..0x558; 0x410 segment ops (1 move, 2 line, 3 horizontal, 4 vertical, 5 quadratic, 6 cubic, 0 close,
+//! 0x548 the paint color (RGBA, red in bits 31:24); 0x604 = 0x140 or 0x150 selects image paint through the
+//! surface-to-image matrix 0x550..0x558, always blended source-over; 0x410 segment ops (1 move, 2 line, 3 horizontal, 4 vertical, 5 quadratic, 6 cubic, 0 close,
 //! 0xf draw, 0xe integer rectangle from 0x412/0x413) with coordinates in 0x414..0x419. Surfaces have their origin at
-//! the bottom-left. Pixels are 32-bit, bytes B, G, R, A in memory. Fill is non-zero. With 0x400 bit 7 set the paint
-//! is blended source-over; otherwise it replaces the destination pixels, alpha included.
-//! Blend modes (0x600), paint control words other than image paint, stroking, scissor lists and antialiasing are
+//! the bottom-left. Pixels are 32-bit, bytes B, G, R, A in memory. Fill is non-zero. With 0x400 bit 7 set flat and
+//! gradient paint is blended source-over; otherwise it replaces the destination pixels, alpha included.
+//! 0x604 with bits 15 and 13 set selects linear-gradient paint: the gradient and its color ramp come from state
+//! memory (`STATE_GRADIENT`, `STATE_RAMP`), through the surface-to-paint matrix 0x574..0x57c (decoded from the
+//! X-Pro1 3.82 menu's lists; the ramp's 1/(width) words agree with the stop positions; no register manual).
+//! Blend modes (0x600), radial gradients, other paint control words, stroking, scissor lists and antialiasing are
 //! not modeled.
 use crate::Cx;
 use serde::{Deserialize, Serialize};
@@ -21,10 +25,25 @@ const CURVE_STEPS: usize = 12;
 /// 0x400 bit 7: source-over blending. Without it the paint replaces the destination, alpha included, which is how
 /// the firmware clears OSD areas (fills with paint 0x00000000).
 const BLEND: u32 = 0x80;
+/// 0x604 = 0x140 or 0x150: image paint. The images are RGBA with transparent backgrounds (pre-rendered labels and
+/// icons); they blend source-over whatever 0x400 bit 7 says, so a label keeps the row background behind its text.
+const IMAGE: u32 = 0x140;
+const IMAGE_VARIANT: u32 = 0x10;
+/// 0x604 bits 15 and 13: linear-gradient paint (flat paint is 0x50040, gradients 0x5a040). Bits 31:26 hold the
+/// index of the last color-ramp stop; the flat color 0x548 then carries only a black placeholder.
+const GRADIENT: u32 = 0xa000;
+/// GPU state memory, written by header form 4: the gradient (start x, y, direction dx, dy, 1/(dx²+dy²)) and the
+/// color-ramp stops, 4 words apart: (position << 5 | stop index, RGBA color, 1/(next position - position)), with
+/// positions 0..255 along the gradient.
+const STATE_GRADIENT: usize = 0x67;
+const STATE_RAMP: usize = 0x6e;
+const STATE_WORDS: usize = 0x40000;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Renderer {
     registers: Vec<u32>,
+    #[serde(default)]
+    state: Vec<u32>,
     subpaths: Vec<Vec<(f32, f32)>>,
     open: bool,
     last: (f32, f32),
@@ -34,6 +53,34 @@ pub struct Renderer {
 
 fn f(v: u32) -> f32 {
     f32::from_bits(v)
+}
+
+/// A linear gradient through the surface-to-paint matrix 0x574..0x57c, with its color ramp (bytes B, G, R, A).
+struct Gradient {
+    matrix: [f32; 6],
+    start: (f32, f32),
+    direction: (f32, f32),
+    scale: f32,
+    stops: Vec<(f32, [f32; 4])>,
+}
+
+impl Gradient {
+    fn at(&self, x: f32, y: f32) -> [u8; 4] {
+        let m = &self.matrix;
+        let (px, py) = (m[0] * x + m[1] * y + m[2], m[3] * x + m[4] * y + m[5]);
+        let t = ((px - self.start.0) * self.direction.0 + (py - self.start.1) * self.direction.1) * self.scale * 255.0;
+        // Pad outside the ramp.
+        let k = self.stops.iter().rposition(|(p, _)| *p <= t).unwrap_or(0);
+        let (p0, c0) = self.stops[k];
+        let color = match self.stops.get(k + 1) {
+            Some(&(p1, c1)) if t > p0 && p1 > p0 => {
+                let u = ((t - p0) / (p1 - p0)).clamp(0.0, 1.0);
+                std::array::from_fn(|c| c0[c] + (c1[c] - c0[c]) * u)
+            }
+            _ => c0,
+        };
+        color.map(|v| v.round().clamp(0.0, 255.0) as u8)
+    }
 }
 
 struct Surface {
@@ -115,7 +162,19 @@ impl Renderer {
                     }
                     i = k;
                 }
-                4 => i += 1 + ((h >> 20) & 15) as usize + 1,
+                4 => {
+                    let n = ((h >> 20) & 15) as usize + 1;
+                    let at = (h & 0x3ffff) as usize;
+                    let body = &words[(i + 1).min(words.len())..(i + 1 + n).min(words.len())];
+                    if at + body.len() > STATE_WORDS {
+                        return Err(format!("EXR GPU state memory write at {at:#x} runs past the state memory"));
+                    }
+                    if self.state.len() < at + body.len() {
+                        self.state.resize(at + body.len(), 0);
+                    }
+                    self.state[at..at + body.len()].copy_from_slice(body);
+                    i += 1 + n
+                }
                 form => return Err(format!("EXR GPU command header form {form:#x} is not decoded ({h:#010x})")),
             }
         }
@@ -130,6 +189,36 @@ impl Renderer {
             width: i64::from(size & 0xffff) + 1,
             height: i64::from(size >> 16) + 1,
         }
+    }
+
+    fn word(&self, at: usize) -> u32 {
+        self.state.get(at).copied().unwrap_or(0)
+    }
+
+    /// The linear-gradient paint selected by 0x604, or None for flat paint.
+    fn gradient(&self) -> Option<Gradient> {
+        let control = self.reg(0x604);
+        if control & GRADIENT != GRADIENT {
+            return None;
+        }
+        let last = (control >> 26) as usize;
+        let stops = (0..=last)
+            .map(|k| {
+                let at = STATE_RAMP + 4 * k;
+                let color = self.word(at + 1);
+                let rgba = [(color >> 8) as u8, (color >> 16) as u8, (color >> 24) as u8, color as u8];
+                ((self.word(at) >> 5) as f32, rgba.map(f32::from))
+            })
+            .collect();
+        let g = |k: usize| f(self.word(STATE_GRADIENT + k));
+        let m = |k: usize| f(self.reg(0x574 + k));
+        Some(Gradient {
+            matrix: [m(0), m(1), m(2), m(3), m(4), m(5)],
+            start: (g(0), g(1)),
+            direction: (g(2), g(3)),
+            scale: g(4),
+            stops,
+        })
     }
 
     fn transform(&self, x: f32, y: f32) -> (f32, f32) {
@@ -251,15 +340,16 @@ impl Renderer {
         if d.address == 0 || d.stride < d.width as u64 * 4 {
             return Ok(());
         }
-        let image = self.reg(0x604) == 0x140;
+        let image = self.reg(0x604) & !IMAGE_VARIANT == IMAGE;
         let src = self.surface(0x220);
         let m: Vec<f32> = (0..9).map(|k| f(self.reg(0x550 + k))).collect();
         let color = self.reg(0x548);
         let flat = [(color >> 8) as u8, (color >> 16) as u8, (color >> 24) as u8, color as u8];
-        let blend = self.reg(0x400) & BLEND != 0;
-        if blend && !image && flat[3] == 0 {
+        let blend = image || self.reg(0x400) & BLEND != 0;
+        if blend && !image && flat[3] == 0 && self.reg(0x604) & GRADIENT != GRADIENT {
             return Ok(());
         }
+        let gradient = (!image).then(|| self.gradient()).flatten();
         let mut src_row = vec![0u8; if image { src.stride as usize } else { 0 }];
         for &(row, x0, x1) in spans {
             if row < 0 || row >= d.height || x1 <= x0 {
@@ -284,6 +374,8 @@ impl Renderer {
                     }
                     let o = u as usize * 4;
                     [src_row[o], src_row[o + 1], src_row[o + 2], src_row[o + 3]]
+                } else if let Some(g) = &gradient {
+                    g.at((x0 + k as i64) as f32 + 0.5, vy)
                 } else {
                     flat
                 };
@@ -336,6 +428,82 @@ mod tests {
         ];
         let mut cx = host.cx();
         renderer.execute(&mut cx, &words).unwrap();
+    }
+
+    #[test]
+    fn image_paint_blends_over_the_destination_without_control_bit_7() {
+        const IMAGE_SURFACE: usize = 0x3000;
+        for variant in [IMAGE, IMAGE | IMAGE_VARIANT] {
+            let mut renderer = Renderer::default();
+            renderer
+                .seed(&[
+                    (0x200, SURFACE as u32),
+                    (0x204, 16),
+                    (0x205, 3 | 3 << 16),
+                    (0x220, IMAGE_SURFACE as u32),
+                    (0x224, 16),
+                    (0x225, 3 | 3 << 16),
+                    (0x550, 1f32.to_bits()),
+                    (0x554, 1f32.to_bits()),
+                    (0x558, 1f32.to_bits()),
+                    (0x604, variant),
+                ])
+                .unwrap();
+            let mut host = TestHost::new();
+            host.ram[SURFACE..SURFACE + 64].fill(0x80);
+            // A label image: one opaque black text pixel, the rest transparent.
+            host.ram[IMAGE_SURFACE..IMAGE_SURFACE + 4].copy_from_slice(&[0, 0, 0, 0xff]);
+            rectangle(&mut renderer, &mut host, 0, 0xff);
+            // Image row 0 lands on the bottom surface row (origin bottom-left).
+            let bottom = SURFACE + 3 * 16;
+            assert_eq!(&host.ram[bottom..bottom + 4], &[0, 0, 0, 0xff]);
+            assert!(host.ram[bottom + 4..bottom + 16].iter().all(|b| *b == 0x80));
+            assert!(host.ram[SURFACE..bottom].iter().all(|b| *b == 0x80));
+        }
+    }
+
+    #[test]
+    fn gradient_paint_reads_the_ramp_from_state_memory() {
+        let mut renderer = Renderer::default();
+        renderer
+            .seed(&[
+                (0x200, SURFACE as u32),
+                (0x204, 16),
+                (0x205, 3 | 3 << 16),
+                // Identity surface-to-paint matrix.
+                (0x574, 1f32.to_bits()),
+                (0x578, 1f32.to_bits()),
+                (0x57c, 1f32.to_bits()),
+            ])
+            .unwrap();
+        let mut host = TestHost::new();
+        let words = [
+            // Gradient along x from 0 to 4: start (0, 0), direction (4, 0), 1/16.
+            0x4040_0067,
+            0,
+            0,
+            4f32.to_bits(),
+            0,
+            (1.0f32 / 16.0).to_bits(),
+            // Two stops: black at 0, white at 255.
+            0x4020_006e,
+            0,
+            0x0000_00ff,
+            (1.0f32 / 255.0).to_bits(),
+            0x4020_0072,
+            255 << 5 | 1,
+            0xffff_ffff,
+            0,
+            // Gradient paint with stop index 1 last, black placeholder color.
+            0x0604_0000,
+            1 << 26 | 0x5a040,
+        ];
+        renderer.execute(&mut host.cx(), &words).unwrap();
+        rectangle(&mut renderer, &mut host, BLEND, 0xff);
+        // Pixel centers 0.5, 1.5, 2.5, 3.5 of 4 along the ramp; opaque throughout.
+        let row: Vec<u8> = (0..4).map(|k| host.ram[SURFACE + 4 * k]).collect();
+        assert_eq!(row, [32, 96, 159, 223]);
+        assert!((0..4).all(|k| host.ram[SURFACE + 4 * k + 3] == 0xff));
     }
 
     #[test]

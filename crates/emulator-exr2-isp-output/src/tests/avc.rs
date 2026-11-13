@@ -25,8 +25,8 @@ fn configured_backend(
         (0xe04, 0x2000 | 32),
         (0xe08, 1000),
         (0xe0c, 30),
-        (0xe10, 30),
-        (0xe34, 3),
+        (0xe10, 3),
+        (0xe34, 42),
         (0xe38, 0x8000),
         (0xe44, 4),
         (0xe48, 0x400),
@@ -246,6 +246,35 @@ fn restored_gop_produces_identical_successor_bytes() {
     let b = frame(&mut d, &mut h);
     assert_eq!(a, b);
     assert_eq!(d.fingerprint().unwrap(), final_state);
+}
+#[test]
+fn e10_is_the_gop_length_and_e34_the_sequence_level() {
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h);
+    write(&mut d, &mut h, 0xfff60e10, 2);
+    write(&mut d, &mut h, 0xfff60e34, 40);
+    let mut types = Vec::new();
+    for i in 0..4 {
+        input(&mut h, i % 2 == 1);
+        let bytes = frame(&mut d, &mut h);
+        if i == 0 {
+            assert_eq!(&bytes[..5], &[0, 0, 0, 1, 0x67]);
+            assert_eq!(bytes[7], 40, "SPS level_idc comes from E34");
+            types.push(5);
+        } else {
+            types.push(bytes[4] & 31);
+        }
+        write(&mut d, &mut h, 0xfff60c24, 0xffff);
+    }
+    assert_eq!(types, [5, 1, 5, 1], "an IDR starts every E10 frames");
+
+    let mut h = TestHost::new();
+    let mut d = configured(&mut h);
+    input(&mut h, false);
+    write(&mut d, &mut h, 0xfff60e34, 3);
+    let mut cx = h.cx();
+    d.write(&mut cx, 0xfff60c00, 4, 0x8000);
+    assert!(cx.refusal().is_some(), "E34 must hold an H.264 level_idc");
 }
 #[test]
 fn unsupported_modes_and_invalid_dma_produce_no_completion() {

@@ -1,0 +1,1327 @@
+{
+  "$schema": "https://fujimod.com/schemas/progress.generated.schema.json",
+  "schema": 3,
+  "firmware_id": "xs20-330",
+  "model": "X-S20",
+  "version": "3.30",
+  "facts": {
+    "located": 17,
+    "total": 18
+  },
+  "boot_rom": null,
+  "tracks": [
+    {
+      "id": "static",
+      "title": "Static analysis",
+      "phase": "research",
+      "weight": 10,
+      "cells": false,
+      "stages": [
+        {
+          "id": "research",
+          "title": "Update file registered, unpacked and its corpus exported",
+          "result": "pass"
+        },
+        {
+          "id": "analysis",
+          "title": "Function index built and facts located",
+          "result": "pass"
+        },
+        {
+          "id": "catalog",
+          "title": "Catalog firmware record published",
+          "result": "pass"
+        },
+        {
+          "id": "service-facts",
+          "title": "Service-mode entry, debug gate and FF80 memory access located",
+          "result": "pass"
+        },
+        {
+          "id": "bulk-source",
+          "title": "Bulk read source located",
+          "result": "stale"
+        },
+        {
+          "id": "flash-reader",
+          "title": "Flash reader located",
+          "result": "stale"
+        },
+        {
+          "id": "state-regions",
+          "title": "State-dump regions located",
+          "result": "stale"
+        },
+        {
+          "id": "restart-facts",
+          "title": "USB restart request located",
+          "result": "stale"
+        },
+        {
+          "id": "card-files",
+          "title": "Optional card file access located",
+          "result": "stale"
+        },
+        {
+          "id": "controls",
+          "title": "Physical controls mapped to firmware inputs",
+          "result": "stale"
+        },
+        {
+          "id": "settings-layout",
+          "title": "Settings layout located",
+          "result": "stale"
+        },
+        {
+          "id": "sd-facts",
+          "title": "SD-boot load map and packaging located",
+          "result": "pass"
+        },
+        {
+          "id": "nand-boot-facts",
+          "title": "EXR II NAND bootloader facts located",
+          "result": "not-run"
+        },
+        {
+          "id": "boot-patch-facts",
+          "title": "Boot-patch triggers, clears and free spaces located",
+          "result": "not-run"
+        }
+      ],
+      "steps": [
+        {
+          "id": "research",
+          "label": "Update file registered, unpacked and its corpus exported",
+          "stage": "research",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "analysis",
+          "label": "Function index built and facts located",
+          "stage": "analysis",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "catalog",
+          "label": "Catalog firmware record published",
+          "stage": "catalog",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "service-facts",
+          "label": "Service-mode entry, debug gate and FF80 memory access located",
+          "stage": "service-facts",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "bulk-source",
+          "label": "Bulk read source located",
+          "stage": "bulk-source",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "flash-reader",
+          "label": "Flash reader located",
+          "stage": "flash-reader",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "state-regions",
+          "label": "State-dump regions located",
+          "stage": "state-regions",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "restart-facts",
+          "label": "USB restart request located",
+          "stage": "restart-facts",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "card-files",
+          "label": "Optional card file access located",
+          "stage": "card-files",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "controls",
+          "label": "Physical controls mapped to firmware inputs",
+          "stage": "controls",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "settings-layout",
+          "label": "Settings layout located",
+          "stage": "settings-layout",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-facts",
+          "label": "SD-boot load map and packaging located",
+          "stage": "sd-facts",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "nand-boot-facts",
+          "label": "EXR II NAND bootloader facts located",
+          "stage": "nand-boot-facts",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "boot-patch-facts",
+          "label": "Boot-patch triggers, clears and free spaces located",
+          "stage": "boot-patch-facts",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "boot-rom",
+          "label": "Boot ROM",
+          "stage": "research",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        }
+      ]
+    },
+    {
+      "id": "emulator",
+      "title": "Emulator",
+      "phase": "emulator",
+      "weight": 35,
+      "cells": true,
+      "stages": [
+        {
+          "id": "rec",
+          "title": "Boots to the shooting screen",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-autostart-starts-in-emulator",
+          "title": "SD boot v2: autostart starts in the emulator",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
+          "title": "SD boot v2: patch triggers fire in the emulator",
+          "result": "not-run"
+        },
+        {
+          "id": "menu",
+          "title": "Menus respond to remote control",
+          "result": "not-run"
+        },
+        {
+          "id": "stock",
+          "title": "Stock features reproduced",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v1-stock-boots-in-emulator",
+          "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-stock-installs-in-emulator",
+          "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-boots-in-emulator",
+          "title": "SD boot v2: FujiMod boots from an SD card in the emulator",
+          "result": "not-run"
+        }
+      ],
+      "steps": [
+        {
+          "id": "rec",
+          "label": "Boot",
+          "stage": "rec",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/record-picture",
+          "label": "Record picture",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/record-movie",
+          "label": "Record movie",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/control-input",
+          "label": "Control input",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/control-layout",
+          "label": "Control layout",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "menu",
+          "label": "Menus",
+          "stage": "menu",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/focus",
+          "label": "Focus",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/lens",
+          "label": "Lens",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/film-simulations",
+          "label": "Film simulations",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/playback-picture",
+          "label": "Playback picture",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/playback-movie",
+          "label": "Playback movie",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/develop-raw",
+          "label": "Develop RAW",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/sd",
+          "label": "SD",
+          "stage": "stock",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "sd-boot-v2-autostart-starts-in-emulator",
+          "label": "SD boot v2: autostart starts in the emulator",
+          "stage": "sd-boot-v2-autostart-starts-in-emulator",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
+          "label": "SD boot v2: patch triggers fire in the emulator",
+          "stage": "sd-boot-v2-patch-triggers-fire-in-emulator",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v1-stock-boots-in-emulator",
+          "label": "SD boot v1: stock firmware boots from an SD card in the emulator",
+          "stage": "sd-boot-v1-stock-boots-in-emulator",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "firmware-update-stock-installs-in-emulator",
+          "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
+          "stage": "firmware-update-stock-installs-in-emulator",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v2-fujimod-boots-in-emulator",
+          "label": "SD boot v2: FujiMod boots from an SD card in the emulator",
+          "stage": "sd-boot-v2-fujimod-boots-in-emulator",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        }
+      ]
+    },
+    {
+      "id": "camera",
+      "title": "Camera",
+      "phase": "camera",
+      "weight": 20,
+      "cells": false,
+      "stages": [
+        {
+          "id": "camera-identity",
+          "title": "Identified over FF80 in service mode",
+          "result": "pass"
+        },
+        {
+          "id": "camera-read-gate",
+          "title": "Debug read gate enabled in RAM",
+          "result": "pass"
+        },
+        {
+          "id": "camera-code",
+          "title": "Uploaded code runs in RAM and is cleaned up",
+          "result": "pass"
+        },
+        {
+          "id": "camera-bulk",
+          "title": "Bulk reads at 1 MiB/s or more",
+          "result": "pass"
+        },
+        {
+          "id": "camera-backup",
+          "title": "Internal flash backed up",
+          "result": "pass"
+        },
+        {
+          "id": "camera-snapshot",
+          "title": "Camera state dumped (RAM at least)",
+          "result": "pass"
+        },
+        {
+          "id": "camera-fast-memory",
+          "title": "Memory capture measured at 8 MiB/s or more",
+          "result": "stale"
+        },
+        {
+          "id": "camera-fast-flash",
+          "title": "Flash capture measured at 8 MiB/s or more",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-debug",
+          "title": "Debug mode saved persistently",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-normal",
+          "title": "FF80 answers in normal mode",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-restart",
+          "title": "Restarts itself on a USB request",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-menu",
+          "title": "Menus driven over FF80",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-mods",
+          "title": "FujiMod runs from RAM",
+          "result": "not-run"
+        }
+      ],
+      "steps": [
+        {
+          "id": "camera-identity",
+          "label": "Identified over FF80 in service mode",
+          "stage": "camera-identity",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "camera-read-gate",
+          "label": "Debug read gate enabled in RAM",
+          "stage": "camera-read-gate",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "camera-code",
+          "label": "Uploaded code runs in RAM and is cleaned up",
+          "stage": "camera-code",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "camera-bulk",
+          "label": "Bulk reads at 1 MiB/s or more",
+          "stage": "camera-bulk",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "camera-backup",
+          "label": "Internal flash backed up",
+          "stage": "camera-backup",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "camera-snapshot",
+          "label": "Camera state dumped (RAM at least)",
+          "stage": "camera-snapshot",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
+          "id": "camera-fast-memory",
+          "label": "Memory capture measured at 8 MiB/s or more",
+          "stage": "camera-fast-memory",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-fast-flash",
+          "label": "Flash capture measured at 8 MiB/s or more",
+          "stage": "camera-fast-flash",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-debug",
+          "label": "Debug mode saved persistently",
+          "stage": "camera-debug",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-normal",
+          "label": "FF80 answers in normal mode",
+          "stage": "camera-normal",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-restart",
+          "label": "Restarts itself on a USB request",
+          "stage": "camera-restart",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-menu",
+          "label": "Menus driven over FF80",
+          "stage": "camera-menu",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-mods",
+          "label": "FujiMod runs from RAM",
+          "stage": "camera-mods",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        }
+      ]
+    },
+    {
+      "id": "fujimod",
+      "title": "FujiMod",
+      "phase": "mods",
+      "weight": 25,
+      "cells": false,
+      "stages": [
+        {
+          "id": "language-font-bank",
+          "title": "Language font bank located and kept out of mod memory",
+          "result": "stale"
+        },
+        {
+          "id": "mod-target",
+          "title": "Mod target generated from facts",
+          "result": "stale"
+        },
+        {
+          "id": "mod-build",
+          "title": "Every shipped mod built",
+          "result": "not-run"
+        },
+        {
+          "id": "walkthroughs",
+          "title": "Mod walkthroughs pass",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v1-fujimod-built",
+          "title": "SD boot v1: FujiMod SD image built",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-fujimod-built",
+          "title": "Firmware update: FujiMod update built",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-built",
+          "title": "SD boot v2: FujiMod release built",
+          "result": "not-run"
+        }
+      ],
+      "steps": [
+        {
+          "id": "language-font-bank",
+          "label": "Language font bank located and kept out of mod memory",
+          "stage": "language-font-bank",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "mod-target",
+          "label": "Mod target generated from facts",
+          "stage": "mod-target",
+          "result": "stale",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "mod-build",
+          "label": "Every shipped mod built",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v1-fujimod-built",
+          "label": "SD boot v1: FujiMod SD image built",
+          "stage": "sd-boot-v1-fujimod-built",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "firmware-update-fujimod-built",
+          "label": "Firmware update: FujiMod update built",
+          "stage": "firmware-update-fujimod-built",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v2-fujimod-built",
+          "label": "SD boot v2: FujiMod release built",
+          "stage": "sd-boot-v2-fujimod-built",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "walkthroughs/fujimod",
+          "label": "fujimod",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/aspect-ratio",
+          "label": "aspect-ratio",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/raw-teleconverter",
+          "label": "raw-teleconverter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/surround-view",
+          "label": "surround-view",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/desqueeze",
+          "label": "desqueeze",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/desqueeze-jpeg",
+          "label": "desqueeze-jpeg",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/jpeg-max",
+          "label": "jpeg-max",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/noise-reduction",
+          "label": "noise-reduction",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/framing-guideline",
+          "label": "framing-guideline",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/film-sims",
+          "label": "film-sims",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/card-films",
+          "label": "card-films",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/multipass-curves",
+          "label": "multipass-curves",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/film-editor",
+          "label": "film-editor",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/film-grain",
+          "label": "film-grain",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/color-chrome",
+          "label": "color-chrome",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/halation",
+          "label": "halation",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/light-leaks",
+          "label": "light-leaks",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/film-borders",
+          "label": "film-borders",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/clarity",
+          "label": "clarity",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/tone-curve",
+          "label": "tone-curve",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/tone-steps",
+          "label": "tone-steps",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/d-range-priority",
+          "label": "d-range-priority",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/highlight-meter",
+          "label": "highlight-meter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/raw-view",
+          "label": "raw-view",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/f-log",
+          "label": "f-log",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/raw-exposure",
+          "label": "raw-exposure",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hdmi-rec",
+          "label": "hdmi-rec",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/controls",
+          "label": "controls",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/menu-theme",
+          "label": "menu-theme",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/overlay-opacity",
+          "label": "overlay-opacity",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/menu-animations",
+          "label": "menu-animations",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/menu-tap",
+          "label": "menu-tap",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/focalized-ui",
+          "label": "focalized-ui",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/recipes",
+          "label": "recipes",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/snap-focus",
+          "label": "snap-focus",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/recipe-exif",
+          "label": "recipe-exif",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hide-films",
+          "label": "hide-films",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/disposable",
+          "label": "disposable",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/date-stamp",
+          "label": "date-stamp",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/zone-focus",
+          "label": "zone-focus",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/digital-focal-length",
+          "label": "digital-focal-length",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hud-layout",
+          "label": "hud-layout",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/menu-order",
+          "label": "menu-order",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/pixel-map",
+          "label": "pixel-map",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/usb-debug",
+          "label": "usb-debug",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/bug-report",
+          "label": "bug-report",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/sd-volume-name",
+          "label": "sd-volume-name",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/date-folders",
+          "label": "date-folders",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/software-nd",
+          "label": "software-nd",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/sd-boot-v2-runtime",
+          "label": "sd-boot-v2-runtime",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/sd-boot-v2-stage1-internal-flash-install",
+          "label": "sd-boot-v2-stage1-internal-flash-install",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/ota-update",
+          "label": "ota-update",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/internal-data-backup",
+          "label": "internal-data-backup",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/startup-shutdown-screen",
+          "label": "startup-shutdown-screen",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hardware-divide",
+          "label": "hardware-divide",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/live-view-speedups",
+          "label": "live-view-speedups",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        }
+      ]
+    },
+    {
+      "id": "sd",
+      "title": "SD card and install",
+      "phase": "sd-card",
+      "weight": 10,
+      "cells": false,
+      "stages": [
+        {
+          "id": "boot-rom-loads-sd-card-on-camera",
+          "title": "Boot ROM: loads an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v1-stock-boots-on-camera",
+          "title": "SD boot v1: stock firmware boots from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v1-fujimod-boots-on-camera",
+          "title": "SD boot v1: FujiMod boots from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-fujimod-boots-on-camera",
+          "title": "SD boot v2: FujiMod boots from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "sd-boot-v2-autostart-installs-on-camera",
+          "title": "SD boot v2: autostart installs on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-stock-installs-on-camera",
+          "title": "Firmware update: stock updater installs an update from an SD card on a camera",
+          "result": "not-run"
+        },
+        {
+          "id": "firmware-update-fujimod-installs-on-camera",
+          "title": "Firmware update: FujiMod installs on a camera",
+          "result": "not-run"
+        }
+      ],
+      "steps": [
+        {
+          "id": "boot-rom-loads-sd-card-on-camera",
+          "label": "Boot ROM: loads an SD card on a camera",
+          "stage": "boot-rom-loads-sd-card-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v1-stock-boots-on-camera",
+          "label": "SD boot v1: stock firmware boots from an SD card on a camera",
+          "stage": "sd-boot-v1-stock-boots-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v1-fujimod-boots-on-camera",
+          "label": "SD boot v1: FujiMod boots from an SD card on a camera",
+          "stage": "sd-boot-v1-fujimod-boots-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v2-fujimod-boots-on-camera",
+          "label": "SD boot v2: FujiMod boots from an SD card on a camera",
+          "stage": "sd-boot-v2-fujimod-boots-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "sd-boot-v2-autostart-installs-on-camera",
+          "label": "SD boot v2: autostart installs on a camera",
+          "stage": "sd-boot-v2-autostart-installs-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "firmware-update-stock-installs-on-camera",
+          "label": "Firmware update: stock updater installs an update from an SD card on a camera",
+          "stage": "firmware-update-stock-installs-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "firmware-update-fujimod-installs-on-camera",
+          "label": "Firmware update: FujiMod installs on a camera",
+          "stage": "firmware-update-fujimod-installs-on-camera",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        }
+      ]
+    }
+  ],
+  "stock": {
+    "record-picture": {
+      "result": "not-run"
+    },
+    "record-movie": {
+      "result": "not-run"
+    },
+    "control-input": {
+      "result": "not-run"
+    },
+    "focus": {
+      "result": "not-run"
+    },
+    "lens": {
+      "result": "not-run"
+    },
+    "film-simulations": {
+      "result": "not-run"
+    },
+    "playback-picture": {
+      "result": "not-run"
+    },
+    "playback-movie": {
+      "result": "not-run"
+    },
+    "develop-raw": {
+      "result": "not-run"
+    },
+    "sd": {
+      "result": "not-run"
+    },
+    "control-layout": {
+      "result": "not-run"
+    }
+  },
+  "mods": {
+    "fujimod": "not-run",
+    "aspect-ratio": "not-run",
+    "raw-teleconverter": "not-run",
+    "surround-view": "not-run",
+    "desqueeze": "not-run",
+    "desqueeze-jpeg": "not-run",
+    "jpeg-max": "not-run",
+    "noise-reduction": "not-run",
+    "framing-guideline": "not-run",
+    "film-sims": "not-run",
+    "card-films": "not-run",
+    "multipass-curves": "not-run",
+    "film-editor": "not-run",
+    "film-grain": "not-run",
+    "color-chrome": "not-run",
+    "halation": "not-run",
+    "light-leaks": "not-run",
+    "film-borders": "not-run",
+    "clarity": "not-run",
+    "tone-curve": "not-run",
+    "tone-steps": "not-run",
+    "d-range-priority": "not-run",
+    "highlight-meter": "not-run",
+    "raw-view": "not-run",
+    "f-log": "not-run",
+    "raw-exposure": "not-run",
+    "hdmi-rec": "not-run",
+    "controls": "not-run",
+    "menu-theme": "not-run",
+    "overlay-opacity": "not-run",
+    "menu-animations": "not-run",
+    "menu-tap": "not-run",
+    "focalized-ui": "not-run",
+    "recipes": "not-run",
+    "snap-focus": "not-run",
+    "recipe-exif": "not-run",
+    "hide-films": "not-run",
+    "disposable": "not-run",
+    "date-stamp": "not-run",
+    "zone-focus": "not-run",
+    "digital-focal-length": "not-run",
+    "hud-layout": "not-run",
+    "menu-order": "not-run",
+    "pixel-map": "not-run",
+    "usb-debug": "not-run",
+    "bug-report": "not-run",
+    "sd-volume-name": "not-run",
+    "date-folders": "not-run",
+    "software-nd": "not-run",
+    "sd-boot-v2-runtime": "not-run",
+    "sd-boot-v2-stage1-internal-flash-install": "not-run",
+    "ota-update": "not-run",
+    "internal-data-backup": "not-run",
+    "startup-shutdown-screen": "not-run",
+    "hardware-divide": "not-run",
+    "live-view-speedups": "not-run"
+  }
+}

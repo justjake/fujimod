@@ -14,6 +14,9 @@ use decode::{DecodeInput, DecodeOutput, DecodeRuntime, DecodeState};
 
 pub use fujimod_catalog_construction::AvcCodecOptions as Options;
 use fujimod_catalog_construction::VideoEncoderBackend as Backend;
+/// Starting quantizer of the software rate-control approximation. The
+/// register set exposes no quantizer limit to model.
+const SOFTWARE_QP: u8 = 30;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Pending {
@@ -151,8 +154,11 @@ impl AvcCodec {
                 .r(0xe08)
                 .checked_mul(1024)
                 .ok_or("H.264 bitrate overflow")?,
-            max_qp: u8::try_from(self.r(0xe10)).map_err(|_| "H.264 QP range")?,
-            gop: self.r(0xe34) as usize,
+            // No quantizer register is identified; this is the software
+            // approximation's fixed starting quantizer.
+            max_qp: SOFTWARE_QP,
+            gop: self.r(0xe10) as usize,
+            level_idc: u8::try_from(self.r(0xe34)).map_err(|_| "H.264 level range")?,
         };
         config.validate()?;
         Ok(config)

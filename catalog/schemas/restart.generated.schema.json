@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "AlarmInterval": {
+      "additionalProperties": false,
+      "description": "Constant alarm values a power-off writes instead of taking a deadline.",
+      "properties": {
+        "seconds": {
+          "description": "Values written to the alarm's seconds registers, least significant first.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "type": "object"
+    },
     "AlarmRegisters": {
       "additionalProperties": false,
       "description": "Power-controller registers the power-off writes for the wake alarm.",
@@ -465,6 +484,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "fixed_interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlarmInterval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The interval the power-off arms instead of a request deadline."
+        },
         "halt": {
           "description": "Its final self-branch, reached after the power cut.",
           "format": "uint64",
@@ -481,22 +511,26 @@
           "description": "Byte offset of the deadline in the request the power-off receives.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "rollover_parameter": {
           "description": "Persistent parameter offset of the alarm's rollover byte.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
         "entry",
         "halt",
         "power_cut",
-        "request_deadline_offset",
-        "alarm",
-        "rollover_parameter"
+        "alarm"
       ],
       "type": "object"
     },
@@ -682,7 +716,10 @@
           "description": "Byte offset of the wake deadline in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "deferred_timer": {
           "anyOf": [
@@ -710,7 +747,10 @@
           "description": "Bytes of sender parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "power_off": {
           "$ref": "#/$defs/PowerOff",
@@ -720,23 +760,39 @@
           "description": "Request word that selects power-off with a wake.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "request_offset": {
           "description": "Byte offset of the request word in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "sender": {
           "description": "Stock routine that sends the power-off request; its first argument is\nthe address of the request parameters.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "transport": {
-          "$ref": "#/$defs/RequestTransport",
-          "description": "How the host reaches the sender."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestTransport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the host reaches the sender, where the firmware takes a request.\nA firmware whose power-off arms a fixed-interval alarm instead carries\nnone of the request fields, and `power_off.fixed_interval` says so."
         },
         "ui": {
           "$ref": "#/$defs/RecIdle",
@@ -744,12 +800,6 @@
         }
       },
       "required": [
-        "transport",
-        "sender",
-        "request",
-        "request_offset",
-        "deadline_offset",
-        "parameter_bytes",
         "ui",
         "power_off"
       ],

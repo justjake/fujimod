@@ -38,6 +38,11 @@
           "type": "string"
         },
         {
+          "const": "inapplicable",
+          "description": "The camera's hardware or stock settings cannot support this mod.",
+          "type": "string"
+        },
+        {
           "const": "stale",
           "description": "Recorded, but its inputs changed since.",
           "type": "string"
@@ -86,6 +91,79 @@
         {
           "const": "stale",
           "description": "Recorded, but its inputs changed since.",
+          "type": "string"
+        }
+      ]
+    },
+    "StepProgress": {
+      "additionalProperties": false,
+      "description": "One rendered step of a track.",
+      "properties": {
+        "detail": {
+          "description": "Human-readable detail for a partial step.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "Stable step identifier, including a stock feature or mod suffix.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Step label shown in the progress bar.",
+          "type": "string"
+        },
+        "passed": {
+          "description": "Graded parts that pass.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "result": {
+          "$ref": "#/$defs/StepResult"
+        },
+        "stage": {
+          "description": "Graph stage that owns this step.",
+          "type": "string"
+        },
+        "total": {
+          "description": "Graded parts in total.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "stage",
+        "result",
+        "passed",
+        "total"
+      ],
+      "type": "object"
+    },
+    "StepResult": {
+      "description": "Latest result of one rendered step.",
+      "oneOf": [
+        {
+          "enum": [
+            "pass",
+            "fail",
+            "stale",
+            "not-run"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "partial",
+          "description": "Some graded parts pass.",
+          "type": "string"
+        },
+        {
+          "const": "unavailable",
+          "description": "The mod cannot be built for this firmware.",
           "type": "string"
         }
       ]
@@ -148,8 +226,16 @@
       "additionalProperties": false,
       "description": "One bring-up track: static analysis, emulator, camera, FujiMod, or SD card and install.",
       "properties": {
+        "cells": {
+          "description": "Draw each step as its own cell instead of a single fill.",
+          "type": "boolean"
+        },
         "id": {
           "description": "Stable track identifier.",
+          "type": "string"
+        },
+        "phase": {
+          "description": "CSS phase identifier used by the website's progress bars.",
           "type": "string"
         },
         "stages": {
@@ -159,15 +245,32 @@
           },
           "type": "array"
         },
+        "steps": {
+          "description": "The ordered steps the website draws, resolved from the graph.",
+          "items": {
+            "$ref": "#/$defs/StepProgress"
+          },
+          "type": "array"
+        },
         "title": {
           "description": "Track title as the bring-up runner prints it.",
           "type": "string"
+        },
+        "weight": {
+          "description": "Share of the progress bar assigned to this track.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "id",
         "title",
-        "stages"
+        "phase",
+        "weight",
+        "cells",
+        "stages",
+        "steps"
       ],
       "type": "object"
     }
@@ -212,7 +315,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/ModProgress"
       },
-      "description": "Walkthrough result of every shipped mod, by mod name.",
+      "description": "Walkthrough result of every shipped mod, by mod name; a mod the body cannot run is `inapplicable`.",
       "type": "object"
     },
     "schema": {

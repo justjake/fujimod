@@ -342,7 +342,7 @@ impl Board {
         serde_json::to_string(&batch).map_err(|e| error(e.to_string()))
     }
 
-    #[pyo3(signature=(ranges,limit=1_000_000,sample_addresses=None,sample_offsets=None,sample_bounds=None))]
+    #[pyo3(signature=(ranges,limit=1_000_000,sample_addresses=None,sample_offsets=None,sample_bounds=None,exclude_pcs=None))]
     fn memory_watch_begin(
         &mut self,
         ranges: Vec<(u64, u64)>,
@@ -350,6 +350,7 @@ impl Board {
         sample_addresses: Option<Vec<u64>>,
         sample_offsets: Option<Vec<u64>>,
         sample_bounds: Option<(u64, u64)>,
+        exclude_pcs: Option<Vec<(u64, u64)>>,
     ) -> PyResult<()> {
         if self.memory_watch.is_some() {
             return Err(error("Another memory watch is active".into()));
@@ -369,6 +370,20 @@ impl Board {
                 )
                 .map_err(error)?,
         );
+        if let Some(spans) = exclude_pcs {
+            let excluded = self
+                .memory_watch
+                .as_ref()
+                .unwrap()
+                .records
+                .borrow_mut()
+                .exclude_pcs(spans);
+            if let Err(message) = excluded {
+                let mut watch = self.memory_watch.take().unwrap();
+                self.board()?.memory_watch_end(&mut watch).map_err(error)?;
+                return Err(error(message));
+            }
+        }
         Ok(())
     }
     fn memory_watch_enabled(&self) -> bool {
@@ -380,18 +395,14 @@ impl Board {
             .memory_watch
             .as_ref()
             .map(|w| {
-                let mut state = w.records.borrow().state();
-                if !w.is_live() && state["violation"].is_null() {
-                    state["violation"] =
-                        serde_json::json!("boot restarted while the memory watch was active");
-                }
-                state
+                w.records.borrow().state_json(
+                    (!w.is_live()).then_some("boot restarted while the memory watch was active"),
+                )
             })
-            .unwrap_or_else(
-                || serde_json::json!({"enabled":false,"ranges":[],"records":[],"violation":null}),
-            );
-        py.import("json")?
-            .call_method1("loads", (value.to_string(),))
+            .unwrap_or_else(|| {
+                r#"{"enabled":false,"ranges":[],"records":[],"violation":null}"#.to_owned()
+            });
+        py.import("json")?.call_method1("loads", (value,))
     }
     fn memory_watch_end(&mut self) -> PyResult<()> {
         if let Some(mut watch) = self.memory_watch.take()
@@ -1715,6 +1726,57 @@ impl Board {
                 gpio.set_input(port, pin, high)
             })
             .map_err(error)
+    }
+    /// Change a declared register supplied by an X-Processor Pro I2C part.
+    /// Firmware sees the new value only through its normal I2C transactions.
+    fn xpp_i2c_part_input(
+        &mut self,
+        node: &str,
+        address: u16,
+        register: u8,
+        value: u16,
+    ) -> PyResult<()> {
+        let id = self.xpp_node(node)?;
+        let model_kind = self
+            .session()?
+            .definition
+            .get("devices")
+            .and_then(|devices| devices.get("nodes"))
+            .and_then(serde_json::Value::as_array)
+            .and_then(|nodes| {
+                nodes.iter().find(|candidate| {
+                    candidate.get("name").and_then(serde_json::Value::as_str) == Some(node)
+                })
+            })
+            .and_then(|candidate| candidate.get("model"))
+            .and_then(|model| model.get("kind"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| error(format!("XPP I2C model for node {node} is not declared")))?
+            .to_owned();
+        let result = match model_kind.as_str() {
+            "i2c" => self
+                .board_mut()?
+                .with_device_inputs::<
+                    fujimod_emulator_ip::dw_i2c::Controller<
+                        fujimod_emulator_xpp::i2c::Parts,
+                    >,
+                    _,
+                >(id, |controller, _| {
+                    controller.set_register_input(address, register, value)
+                }),
+            "xt20-touch-i2c" => self
+                .board_mut()?
+                .with_device_inputs::<fujimod_emulator_xpp::touch_xt20::Xt20TouchI2c, _>(
+                    id,
+                    |controller, _| controller.set_register_input(address, register, value),
+                ),
+            _ => {
+                return Err(error(format!(
+                    "XPP I2C input is unsupported for node {node} model {model_kind}"
+                )));
+            }
+        };
+        result.map_err(error)
     }
     /// Scale the scene light a device declares (1.0 = the declared scene) on
     /// the stopped board.

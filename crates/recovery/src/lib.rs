@@ -373,8 +373,8 @@ impl Recipe {
         })
     }
     /// Build an EXR II card entry that loads stage 1 from NAND, then stage 2.
-    /// The board's memory setup header and the early LED rows are verified
-    /// against the supplied update before the universal loaders are packaged.
+    /// The board's memory setup header is verified against the supplied update;
+    /// the packaged loaders are the same for every EXR II body.
     pub fn build_ota_startup(&self, source: &[u8]) -> Result<Vec<File>> {
         require(
             matches!(self.generation, Generation::Exr2),
@@ -390,8 +390,9 @@ impl Recipe {
             .as_ref()
             .ok_or_else(|| image::Error::Invalid("Missing SD header packaging".into()))?;
         let inverted = fujimod_firmware::invert(source);
-        let mut stage1 = include_bytes!("../assets/sd-boot-v2-stage1-sd-card.generated.bin").to_vec();
-        early_led::stage(self, source, &mut stage1, 0, 0, 0xffff)?;
+        // One universal stage-1 loader for every EXR II body: no early LED
+        // table is staged in, so the same FFBOOT.BIN boots any of them.
+        let stage1 = include_bytes!("../assets/sd-boot-v2-stage1-sd-card.generated.bin").to_vec();
         let mut files = packaging.package_bytes(&inverted, packaging.entry, stage1)?;
         files.push(File::new(
             "FM_EXR2.BIN",

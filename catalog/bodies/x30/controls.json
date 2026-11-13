@@ -598,7 +598,9 @@
       "manual_page": 68,
       "face": null,
       "icon": "record",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-4-5"
+      ],
       "assignable": true,
       "default_function": "Starts and stops movie recording by default; its function-button role is assignable.",
       "role": null,
@@ -606,8 +608,8 @@
       "behavior": {
         "kind": "button",
         "press": {
-          "kind": "debug_key",
-          "name": "MOVIE_REC"
+          "kind": "native_input",
+          "name": "KEY_FUNCTION3"
         }
       },
       "pushable": true,

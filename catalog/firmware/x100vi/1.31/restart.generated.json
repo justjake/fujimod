@@ -119,7 +119,8 @@
         "enable_value": 257
       },
       "deadline_parameter": null,
-      "rollover_parameter": 5
+      "rollover_parameter": 5,
+      "fixed_interval": null
     }
   }
 }
