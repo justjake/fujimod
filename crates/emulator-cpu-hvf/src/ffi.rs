@@ -98,6 +98,7 @@ unsafe extern "C" {
     pub fn hv_vcpu_set_trap_debug_exceptions(cpu: u64, value: bool) -> u32;
     pub fn hv_vcpu_set_trap_debug_reg_accesses(cpu: u64, value: bool) -> u32;
     pub fn hv_vcpu_set_vtimer_mask(cpu: u64, value: bool) -> u32;
+    pub fn hv_vcpu_get_exec_time(cpu: u64, time: *mut u64) -> u32;
 }
 pub fn check(status: u32, operation: &str) -> Result<(), String> {
     if status == 0 {
