@@ -153,7 +153,7 @@ async function selectedPlan(release: LoadedRelease, fetcher: typeof fetch) {
     model: entry.model,
     version: entry.version,
     processor: 'EXR Processor II',
-    mods: entry.mods.length,
+    mods: entry.mods,
     download_url: entry.download_url,
   }));
   const manifests = await Promise.all(
@@ -198,8 +198,6 @@ test.each([false, true])(
     const start = server.publicPaths.length;
     const download = buildCard(plan.files, {
       assetBase: selected.assetBase,
-      release: selected.release,
-      git: false,
       fetcher: server.fetch,
     });
     if (tampered) {
@@ -256,8 +254,6 @@ test.skipIf(!artifacts)(
     server.cold();
     const zip = await buildCard(plan.files, {
       assetBase: selected.assetBase,
-      release: selected.release,
-      git: false,
       fetcher: server.fetch,
     });
     const files = unzipSync(new Uint8Array(await zip.arrayBuffer()));
