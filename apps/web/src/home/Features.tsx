@@ -1,7 +1,6 @@
 import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import featureIcons from '../ui/assets/feature-icons.svg?url';
-import iconMetrics from '../ui/assets/feature-icon-metrics.generated.json';
+import { FeatureIcon as Icon } from './FeatureIcon';
 import catalogData from './features.generated.json';
 import { FeatureTile } from './FeatureTile';
 import { fadeLoop } from './fade-loop';
@@ -43,10 +42,8 @@ type Feature = {
   controls: Control[];
   credits: Credits;
 };
-/** The docs' website copy (python -m tools.walkthroughs docs --site-data). */
+/** Generated feature descriptions and menu options. */
 type Catalog = { schema: 1; groups: string[]; features: Feature[]; cards: Record<string, Card> };
-/** Ink box and the symbol's own viewBox (symbol units), and the optical width and height (scripts/icon-metrics.ts). */
-type IconMetric = { box: number[]; view: number[]; width: number; height: number };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
@@ -61,27 +58,6 @@ const GROUP_TITLES: Record<string, string> = {
 const MEDIA = '/artifacts/docs/';
 const media = featureMedia();
 const RATIO = /^ratio:(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/;
-
-/** A sprite icon cropped to its ink, sized by the context's --icon-size so every icon has the same optical size. */
-function Icon(props: { name: string }) {
-  const metric = () => (iconMetrics as Record<string, IconMetric>)[props.name];
-  return (
-    <svg
-      class="catalog-icon"
-      aria-hidden="true"
-      viewBox={metric().box.join(' ')}
-      style={{ '--w': metric().width, '--h': metric().height }}
-    >
-      <use
-        href={`${featureIcons}#${props.name}`}
-        x={metric().view[0]}
-        y={metric().view[1]}
-        width={metric().view[2]}
-        height={metric().view[3]}
-      />
-    </svg>
-  );
-}
 
 /** An aspect ratio choice drawn as its frame. */
 function Ratio(props: { width: number; height: number }) {
@@ -288,6 +264,24 @@ function CardBody(props: { target: Target }) {
 }
 
 export function FeatureCatalog() {
+  const [query, setQuery] = createSignal('');
+  const features = () => {
+    const words = query().trim().toLowerCase().split(/\s+/);
+    return catalog.features.filter((feature) => {
+      const text = [
+        feature.title,
+        feature.summary,
+        ...feature.path,
+        ...feature.controls.flatMap((control) => [
+          control.title,
+          ...control.choices.map((choice) => choice.label),
+        ]),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return words.every((word) => text.includes(word));
+    });
+  };
   const [target, setTarget] = createSignal<Target>();
   const [position, setPosition] = createSignal({ left: 0, top: 0 });
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -300,6 +294,19 @@ export function FeatureCatalog() {
     setTarget();
   };
   onSettled(() => {
+    const searchFromLink = () => {
+      if (location.hash === '#features') {
+        setQuery('');
+        close();
+        return;
+      }
+      if (!location.hash.startsWith('#features?')) return;
+      close();
+      setQuery(new URLSearchParams(location.hash.slice('#features?'.length)).get('search') ?? '');
+      document.getElementById('features')?.scrollIntoView();
+    };
+    searchFromLink();
+    window.addEventListener('hashchange', searchFromLink);
     const outside = (event: Event) => {
       const anchor = target()?.anchor;
       if (
@@ -317,6 +324,7 @@ export function FeatureCatalog() {
     document.addEventListener('focusin', outside);
     document.addEventListener('keydown', escape);
     return () => {
+      window.removeEventListener('hashchange', searchFromLink);
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('focusin', outside);
       document.removeEventListener('keydown', escape);
@@ -480,12 +488,36 @@ export function FeatureCatalog() {
 
   return (
     <div class="catalog" id="features">
-      <For each={catalog.groups.filter((group) => catalog.features.some((f) => f.group === group))}>
+      <div class="catalog-heading">
+        <div>
+          <h2>Explore features</h2>
+          <p>{catalog.features.length} features · X70 catalog. Availability varies by camera.</p>
+          <p>Menu previews may show earlier builds.</p>
+        </div>
+        <label class="catalog-search">
+          <span>Find a feature</span>
+          <input
+            type="search"
+            value={query()}
+            onInput={(event) => {
+              close();
+              setQuery(event.currentTarget.value);
+            }}
+            placeholder="Film, focus, custom settings…"
+          />
+        </label>
+      </div>
+      <p class="catalog-results" role="status" hidden={!query().trim()}>
+        {features().length
+          ? `${features().length} of ${catalog.features.length} features`
+          : 'No matching features.'}
+      </p>
+      <For each={catalog.groups.filter((group) => features().some((f) => f.group === group))}>
         {(group) => (
           <section class="catalog-group" aria-labelledby={`catalog-${group}-heading`}>
             <h2 id={`catalog-${group}-heading`}>{GROUP_TITLES[group]}</h2>
             <div class="catalog-grid">
-              <For each={catalog.features.filter((f) => f.group === group)}>
+              <For each={features().filter((f) => f.group === group)}>
                 {(feature) => <Tile feature={feature} />}
               </For>
             </div>

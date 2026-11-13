@@ -6,7 +6,7 @@ worker CPU captures, Wasm symbols, instruction rates and repeatable timing.
 This app lives in `apps/web/` of the FujiMod repository. Run the commands
 below from that directory.
 
-Try camera firmware and build SD boot v1 files in your browser. Firmware is
+Try camera firmware and build an SD boot v2 SD card in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
 on review branches; `main` is deployed nightly and by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
 
@@ -45,6 +45,12 @@ generated entries and hashed build assets. `node scripts/test-development.ts`
 checks mobile Chromium and WebKit against a running development server, including
 a retained stale unversioned page response, repeated visits, and working inputs.
 Set `FUJIMOD_WEB_URL` to check another development endpoint.
+
+`node scripts/test-release-showcase.ts` checks the 0.1.0 preview in desktop
+and mobile Chromium and WebKit. It exercises feature search, detail cards,
+release notes and camera selection, and verifies a browser-built SD card
+download against every declared asset hash. Screenshots go to
+`build/release-showcase/`; set `FUJIMOD_REVIEW_OUTPUT` to choose another directory.
 
 ## Camera sign-in
 

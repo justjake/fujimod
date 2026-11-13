@@ -1,6 +1,8 @@
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
+import { catalog as reference, initialize, type PhysicalControls } from 'fujimod';
 import type { JSX } from '@solidjs/web';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
+import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { reportDownload } from '../../downloads/report.ts';
@@ -22,8 +24,36 @@ import { buildCard } from './build';
 import { SdBootV2Shape } from './SdBootV2Shape';
 import './sd-card.css';
 
-/** The recipes list holds 72 files; seven are pinned to C1–C7 in the Q menu. */
-const recipeCapacity = 72;
+function BootInstructions(props: { camera: CardCamera }) {
+  const [controls, setControls] = createSignal<PhysicalControls>();
+  const [error, setError] = createSignal('');
+  onSettled(() => {
+    void initialize()
+      .then(() => {
+        const controls = reference
+          .selections()
+          .find(
+            (selection) => selection.firmware.id.toUpperCase() === props.camera.id,
+          )?.physical_controls;
+        if (!controls?.boot?.sd) throw Error('SD boot buttons are unavailable for this camera.');
+        setControls(controls);
+      })
+      .catch((reason: unknown) => setError(shownError(reason)));
+  });
+  return (
+    <div class="sd-boot-instructions">
+      <b>
+        {props.camera.model} · {props.camera.version}
+      </b>
+      <Show when={controls()}>
+        {(controls) => <PowerComboKeys controls={controls()} modes={['sd']} />}
+      </Show>
+      <Show when={error()}>
+        <p role="alert">{error()}</p>
+      </Show>
+    </div>
+  );
+}
 
 function Check(props: {
   checked: boolean;
@@ -182,7 +212,9 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   const [chosenIds, setChosenIds] = createSignal<ReadonlySet<string>>(new Set());
   const [excluded, setExcludedPaths] = createSignal<ReadonlySet<string>>(new Set());
   const [git, setGit] = createSignal(false);
-  const [releases, setReleases] = createSignal<ReadonlyMap<string, SdBootV2Release | Error>>(new Map());
+  const [releases, setReleases] = createSignal<ReadonlyMap<string, SdBootV2Release | Error>>(
+    new Map(),
+  );
   const [busy, setBusy] = createSignal(false);
   const [progress, setProgress] = createSignal('');
   const [error, setError] = createSignal('');
@@ -277,8 +309,12 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
     <Show when={cameras().length}>
       <section class="sd-download" aria-labelledby="download">
         <h2 class="section-heading" id="download">
-          Download
+          Build your SD card
         </h2>
+        <p class="sd-release-version">
+          FujiMod {props.release?.tag}
+          {props.release?.prerelease ? ' · Preview release' : ''} · SD boot v2
+        </p>
         <div class="sd-cameras" role="group" aria-label="Cameras">
           <For each={cameras()} keyed={(camera) => camera.id}>
             {(camera) => (
@@ -315,179 +351,148 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <img src="/brand.png" alt="FujiMod" width="110" height="28" />
             <span>FAT32</span>
           </div>
-          <div class="tree sd-tree" id="sd-card-files">
-            <For each={processors()}>
-              {(processor) => {
-                const boot = () => sdBootV2For(processor);
-                const files = () => sdBootV2Files(card(), processor);
-                const size = (name: string) =>
-                  files().files.find((file) => file.path === name)?.bytes;
-                const firmware = () =>
-                  shown().find((camera) => camera.processor === processor)?.id ?? '';
-                return (
-                  <Show when={boot()}>
-                    {(boot) => (
-                      <>
-                        <Note title="SD boot v2 loader (stage 1)">
-                          <p>
-                            Your camera’s built-in boot ROM is the first code that runs when you
-                            turn your camera on. Hold the special key combination only while turning
-                            the power switch on. Once the switch is in the ON position, release the
-                            keys; the boot ROM will execute this file.
-                          </p>
-                          <p>
-                            This file is the same for all cameras with the {boot().name} processor.
-                            However, because this name is used in multiple generations, you cannot
-                            make a single FujiMod SD card that can SD boot both {boot().name} and
-                            X-Processor Pro cameras.
-                          </p>
-                          <p>
-                            All it does is execute the appropriate FM_*.BIN file for the current
-                            camera.
-                          </p>
-                        </Note>
-                        <FileRow name="FFBOOT.BIN" bytes={size('FFBOOT.BIN')} dim={previewing()} />
-                        <Note>
-                          <p>
-                            The boot ROM reads this file before FFBOOT.BIN and applies its clock,
-                            memory and register settings.
-                          </p>
-                        </Note>
-                        <FileRow name="FFSYS.BIN" bytes={size('FFSYS.BIN')} dim={previewing()} />
-                        <Note title="FujiMod bootloader (Stage 2)">
-                          <p>
-                            If you like FujiMod and trust it enough to modify your camera’s internal
-                            firmware, it can modify your camera’s firmware to automatically check
-                            for this file during boot and execute it if it exists. If the file
-                            doesn’t exist, your camera will boot into the original Fujifilm
-                            firmware. This is the smallest change we can make to your camera’s
-                            internal storage to enable automatic boot of FujiMod.
-                          </p>
-                          <p>
-                            This file is the same for all cameras with the {boot().name} processor.
-                            We use a different name per processor so that you can share a single
-                            FujiMod SD card between any supported cameras.
-                          </p>
-                          <p>
-                            This file executes the FujiMod firmware patcher specific to the current
-                            camera’s original firmware, named by /FUJIMOD/SYSTEM/{firmware()}/A.JSN
-                            or B.JSN.
-                          </p>
-                        </Note>
-                        <FileRow
-                          name={boot().stage2}
-                          bytes={size(boot().stage2)}
-                          dim={previewing()}
-                        />
-                      </>
-                    )}
-                  </Show>
-                );
-              }}
+          <Show when={chosen().length}>
+            <p class="sd-boot-intro">
+              With the camera off, insert the SD card. Hold these controls only while switching the
+              camera on, then release them.
+            </p>
+            <For each={chosen()} keyed={(camera) => camera.id}>
+              {(camera) => <BootInstructions camera={camera()} />}
             </For>
-            <Note>
-              <p>FujiMod lives on your SD card. Eject or format the card to uninstall.</p>
-            </Note>
-            <Folder name="FUJIMOD">
+          </Show>
+          <details class="sd-contents">
+            <summary>SD card contents &amp; optional files</summary>
+            <div class="tree sd-tree" id="sd-card-files">
+              <For each={processors()}>
+                {(processor) => {
+                  const boot = () => sdBootV2For(processor);
+                  const files = () => sdBootV2Files(card(), processor);
+                  const size = (name: string) =>
+                    files().files.find((file) => file.path === name)?.bytes;
+                  return (
+                    <Show when={boot()}>
+                      {(boot) => (
+                        <>
+                          <Note title="SD boot v2">
+                            <p>
+                              The {boot().name} loader starts FujiMod from the SD card. The initial
+                              boot does not change your installed firmware.
+                            </p>
+                          </Note>
+                          <FileRow
+                            name="FFBOOT.BIN"
+                            bytes={size('FFBOOT.BIN')}
+                            dim={previewing()}
+                          />
+                          <Note>
+                            <p>Startup settings for the SD boot loader.</p>
+                          </Note>
+                          <FileRow name="FFSYS.BIN" bytes={size('FFSYS.BIN')} dim={previewing()} />
+                          <Note title="FujiMod loader">
+                            <p>
+                              Loads the selected camera’s files from FUJIMOD/SYSTEM on the SD card.
+                            </p>
+                          </Note>
+                          <FileRow
+                            name={boot().stage2}
+                            bytes={size(boot().stage2)}
+                            dim={previewing()}
+                          />
+                        </>
+                      )}
+                    </Show>
+                  );
+                }}
+              </For>
               <Note>
-                <p>
-                  Create your FujiMod install folder with an initial Git commit, so you can use
-                  tools like git diff to see everything that’s changed. The camera itself doesn’t
-                  create commits.
-                </p>
+                <p>To start stock firmware, turn the camera off and remove the SD card.</p>
               </Note>
-              <label class="sd-git">
-                <FileRow
-                  name=".git"
-                  folder
-                  dim={!git()}
-                  check={<Check label="Track changes with Git" checked={git()} onChange={setGit} />}
-                  after={<span class="sd-git-label">Track changes with Git</span>}
-                />
-              </label>
-              <Note>
-                <p>
-                  The settings from original Fujifilm firmware features remain stored on your
-                  camera’s internal storage. All FujiMod settings are stored in this JSON file. Why?
-                  We want to avoid touching your internal storage as much as possible. It also makes
-                  it easier for anyone to back up, restore, or edit their settings on the computer.
-                </p>
-              </Note>
-              <FileRow name="SETTINGS.JSN" />
-              <Note>
-                <p>
-                  Custom settings, aka recipes, are also stored as JSON files. You can have{' '}
-                  {recipeCapacity} of them. 7 can be accessed at a time from the Q menu. You swap
-                  them in the Recipes menu like Pokémon at the Pokémon Center PC.
-                </p>
-              </Note>
-              <OptionalFolder
-                name="RECIPES"
-                files={inFolder('RECIPES')}
-                excluded={excluded()}
-                setExcluded={setExcluded}
-                dim={false}
-              />
-              <Note>
-                <p>
-                  You can use custom film simulations to take more in-depth control of how your
-                  images look. Film simulation configuration is passed directly to your camera’s
-                  image signal processor chip.
-                </p>
-              </Note>
-              <OptionalFolder
-                name="FILMS"
-                files={inFolder('FILMS')}
-                excluded={excluded()}
-                setExcluded={setExcluded}
-                dim={false}
-              />
-              <Note>
-                <p>
-                  FujiMod implements a concept known as “atomic updates” (similar to blue-green
-                  deploys). When you download a new version of FujiMod (B), we keep the previous
-                  version (A) around until another update arrives.
-                </p>
-              </Note>
-              <Folder name="SYSTEM" dim={previewing()}>
-                <For each={shown()} keyed={(camera) => camera.id}>
-                  {(camera) => (
-                    <>
-                      <Note>
-                        <p>
-                          A.JSN and B.JSN each list one FujiMod version’s files by their content
-                          hash. {sdBootV2For(camera().processor)?.stage2 ?? 'Stage 2'} starts the newer
-                          one and counts its boot attempts in STATE.JSN. A version that fails to
-                          start twice is skipped for the other.
-                        </p>
-                      </Note>
-                      <Folder name={camera().id} dim={previewing()}>
-                        <FileRow name="A.JSN" dim={previewing()} />
-                        <FileRow name="STATE.JSN" dim={previewing()} />
-                      </Folder>
-                    </>
-                  )}
-                </For>
+              <Folder name="FUJIMOD">
                 <Note>
                   <p>
-                    Files are de-duplicated between FujiMod versions by storing them named based on
-                    the file contents in this directory.
+                    Optional Git history lets you compare changes to files on your SD card. The
+                    camera does not create commits.
                   </p>
                 </Note>
-                <Folder name="STORE" dim={previewing()}>
-                  <For each={store()} keyed={([name]) => name}>
-                    {(entry) => (
-                      <FileRow
-                        name={entry()[0]}
-                        detail={entry()[1].paths.join(', ')}
-                        bytes={entry()[1].bytes}
-                      />
+                <label class="sd-git">
+                  <FileRow
+                    name=".git"
+                    folder
+                    dim={!git()}
+                    check={
+                      <Check label="Track changes with Git" checked={git()} onChange={setGit} />
+                    }
+                    after={<span class="sd-git-label">Track changes with Git</span>}
+                  />
+                </label>
+                <Note>
+                  <p>
+                    FujiMod settings are saved on the SD card. Stock camera settings remain in the
+                    camera’s internal storage.
+                  </p>
+                </Note>
+                <FileRow name="SETTINGS.JSN" />
+                <Note>
+                  <p>
+                    Optional recipe files. On X70, EDIT/SAVE CUSTOM SETTING holds up to 255 custom
+                    settings, with seven favorites in the Q menu.
+                  </p>
+                </Note>
+                <OptionalFolder
+                  name="RECIPES"
+                  files={inFolder('RECIPES')}
+                  excluded={excluded()}
+                  setExcluded={setExcluded}
+                  dim={false}
+                />
+                <Note>
+                  <p>Optional custom film simulations, loaded from the SD card.</p>
+                </Note>
+                <OptionalFolder
+                  name="FILMS"
+                  files={inFolder('FILMS')}
+                  excluded={excluded()}
+                  setExcluded={setExcluded}
+                  dim={false}
+                />
+                <Note>
+                  <p>
+                    System files for each selected camera. X70 Wi-Fi updates keep the previous
+                    version available if the new version fails to start.
+                  </p>
+                </Note>
+                <Folder name="SYSTEM" dim={previewing()}>
+                  <For each={shown()} keyed={(camera) => camera.id}>
+                    {(camera) => (
+                      <>
+                        <Note>
+                          <p>A.JSN lists the initial version’s files. STATE.JSN tracks startup.</p>
+                        </Note>
+                        <Folder name={camera().id} dim={previewing()}>
+                          <FileRow name="A.JSN" dim={previewing()} />
+                          <FileRow name="STATE.JSN" dim={previewing()} />
+                        </Folder>
+                      </>
                     )}
                   </For>
+                  <Note>
+                    <p>Shared system files, named by their content.</p>
+                  </Note>
+                  <Folder name="STORE" dim={previewing()}>
+                    <For each={store()} keyed={([name]) => name}>
+                      {(entry) => (
+                        <FileRow
+                          name={entry()[0]}
+                          detail={entry()[1].paths.join(', ')}
+                          bytes={entry()[1].bytes}
+                        />
+                      )}
+                    </For>
+                  </Folder>
                 </Folder>
               </Folder>
-            </Folder>
-          </div>
+            </div>
+          </details>
           <div class="sd-actions">
             <button
               type="button"
