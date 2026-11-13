@@ -20,7 +20,8 @@
   margin-bottom: 22px;
 }
 .sd-boot-steps {
-  margin: 0 0 22px;
+  margin: 0 0 18px;
+  text-align: left;
   padding-left: 20px;
   color: #aeaeb2;
   font-size: 12px;
@@ -273,6 +274,13 @@
   align-items: center;
   gap: 10px;
   margin-top: 36px;
+  padding: 20px 22px 22px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 9%);
+}
+.sd-actions .sd-boot-steps {
+  align-self: stretch;
 }
 .sd-download-button {
   display: inline-flex;

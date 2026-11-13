@@ -382,43 +382,6 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <img src="/brand.png" alt="FujiMod" width="110" height="28" />
             <span>FAT32</span>
           </div>
-          <Show when={chosen().length}>
-            <ol class="sd-boot-steps">
-              <li>
-                Check your camera is running the latest firmware from Fujifilm:{' '}
-                <For each={chosen()} keyed={(camera) => camera.id}>
-                  {(camera, index) => (
-                    <>
-                      {index() ? ', ' : ''}
-                      <a href={camera().download_url} target="_blank" rel="noopener noreferrer">
-                        {camera().model} {camera().version}
-                      </a>
-                    </>
-                  )}
-                </For>
-              </li>
-              <li>
-                Unzip download onto your SD card. You need to see{' '}
-                {['FUJIMOD', ...rootFiles()].join(', ')} at the root directory
-              </li>
-              <li>
-                Insert the SD card into the camera and turn it off, then remove and re-insert the
-                battery. This guarantees the camera is fully off even if you run in Performance
-                Mode
-              </li>
-              <li>
-                Hold these buttons while switching the camera on. After the switch is in ON
-                position, you can release the buttons
-                <For each={chosen()} keyed={(camera) => camera.id}>
-                  {(camera) => <BootInstructions camera={camera()} />}
-                </For>
-              </li>
-              <li>
-                You should see FujiMod on the LCD screen in the top-left corner. This overlay can
-                be disabled in SET-UP › DEVTOOLS › BUILD OVERLAY.
-              </li>
-            </ol>
-          </Show>
           <details class="sd-contents">
             <summary>SD card contents &amp; optional files</summary>
             <div class="tree sd-tree" id="sd-card-files">
@@ -553,6 +516,43 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             </div>
           </details>
           <div class="sd-actions">
+            <ol class="sd-boot-steps">
+              <li>
+                Check your camera is running the latest firmware from Fujifilm. Turn the camera on while
+                holding DISP/BACK to see its firmware version. Latest:{' '}
+                <For each={shown()} keyed={(camera) => camera.id}>
+                  {(camera, index) => (
+                    <>
+                      {index() ? ', ' : ''}
+                      <a href={camera().download_url} target="_blank" rel="noopener noreferrer">
+                        {camera().model} {camera().version}
+                      </a>
+                    </>
+                  )}
+                </For>
+              </li>
+              <li>
+                Unzip download onto your SD card. You need to see{' '}
+                {['FUJIMOD', ...rootFiles()].join(', ')} at the root directory
+              </li>
+              <li>
+                Insert the SD card into the camera and turn it off, then remove and re-insert the
+                battery. This guarantees the camera is fully off even if you run in Performance
+                Mode
+              </li>
+              <li>
+                Hold these buttons while switching the camera on. After the switch is in ON
+                position, you can release the buttons
+                <For each={shown()} keyed={(camera) => camera.id}>
+                  {(camera) => <BootInstructions camera={camera()} />}
+                </For>
+              </li>
+              <li>
+                You should see FujiMod on the LCD screen in the top-left corner. This overlay can
+                be disabled in SET-UP › DEVTOOLS › BUILD OVERLAY.
+              </li>
+            </ol>
+
             <button
               type="button"
               class="sd-download-button"
