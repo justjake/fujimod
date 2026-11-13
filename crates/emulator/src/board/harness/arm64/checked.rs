@@ -32,6 +32,9 @@ pub enum ReadSize {
 fn default_observer_limit() -> usize {
     4096
 }
+fn default_transaction_limit() -> usize {
+    4096
+}
 #[derive(Serialize)]
 pub struct RegisterObservation {
     pub pc: u64,
@@ -59,6 +62,14 @@ pub struct CheckedOptions {
     pub executable: Vec<Span>,
     pub readable: Vec<Span>,
     pub writable: Vec<Span>,
+    /// Identity-mapped device windows whose loads and stores dispatch through
+    /// the board's device bus. Empty for a device-free board; every other
+    /// MMIO address stays refused before execution.
+    #[serde(default)]
+    pub devices: Vec<Span>,
+    /// Bound on recorded bus transactions inside `devices`.
+    #[serde(default = "default_transaction_limit")]
+    pub transaction_limit: usize,
     pub store_limit: usize,
     pub stubs: Vec<Stub>,
     /// Explicit initial values for x0..x30; omitted registers use zero.
@@ -125,6 +136,9 @@ pub struct CheckedResult {
     pub observations: Vec<RegisterObservation>,
     pub system_read_model_values: Vec<(String, u64)>,
     pub system_read_observations: Vec<SystemReadObservation>,
+    /// Bus transactions inside the declared device windows, in order.
+    pub device_transactions: Vec<crate::board::bus::Transaction>,
+    pub device_transactions_omitted: u64,
 }
 struct Guard {
     cpu: Weak<dyn Cpu>,
@@ -263,6 +277,40 @@ impl Guard {
             });
             return Ok(());
         }
+        // Exclusive load/store on declared RAM: this single-core routine has no
+        // other observer, so the native monitor's outcome is the routine's.
+        // Exclusive access to device windows stays refused.
+        if let Some(exclusive) = arm64::decode_exclusive(word)
+            .map_err(|e| format!("Unsupported exclusive instruction at {pc:#x}: {e}"))?
+        {
+            let address = scalar(
+                &*cpu,
+                if exclusive.base == 31 {
+                    Register::Sp
+                } else {
+                    Register::X(exclusive.base)
+                },
+            )?;
+            let width = u64::from(exclusive.bytes) * if exclusive.pair { 2 } else { 1 };
+            let allowed = if exclusive.load {
+                &self.options.readable
+            } else {
+                &self.options.writable
+            };
+            if address % width != 0 || !contains(allowed, address, width) {
+                return Err(format!(
+                    "exclusive {} outside declared RAM at {address:#x} width {width} (pc {pc:#x})",
+                    if exclusive.load { "read" } else { "store" }
+                ));
+            }
+            if !exclusive.load
+                && self.observed.borrow().stores.len() + width.div_ceil(8) as usize
+                    > self.options.store_limit
+            {
+                return Err("Store limit reached before instruction".into());
+            }
+            return Ok(());
+        }
         if word & 0x0a00_0000 == 0x0800_0000 {
             let decoded = arm64::decode_load_store(word, pc, |r| {
                 scalar(
@@ -286,7 +334,9 @@ impl Guard {
                 } else {
                     &self.options.writable
                 };
-                if !contains(allowed, address, width) {
+                if !contains(allowed, address, width)
+                    && !contains(&self.options.devices, address, width)
+                {
                     return Err(format!(
                         "{} outside declared range at {address:#x} width {width} (pc {pc:#x})",
                         if decoded.load { "read" } else { "store" }
@@ -390,7 +440,8 @@ fn cpu_registers(cpu: &dyn Cpu) -> Result<std::collections::BTreeMap<String, u64
         .map(|(name, r)| Ok((name, scalar(cpu, r)?)))
         .collect()
 }
-/// Run a device-free, identity-mapped, MMU-off caller with strict guards.
+/// Run an identity-mapped, MMU-off caller with strict guards. Device access
+/// is limited to the caller's declared windows on the board's strict bus.
 /// This API models no architectural handoff, cache or hardware behavior.
 pub fn checked_call(board: &mut Board, options: CheckedOptions) -> Result<CheckedResult, String> {
     checked_call_with(board, options, |_, _| {
@@ -402,7 +453,7 @@ pub fn checked_call_with(
     options: CheckedOptions,
     mut callback: impl FnMut(&StubHit, &StubSnapshot) -> Result<StubResponse, String>,
 ) -> Result<CheckedResult, String> {
-    if !board.state.borrow().bus.is_empty()
+    if (options.devices.is_empty() && !board.state.borrow().bus.is_empty())
         || board.cpus.len() != 1
         || board.cpu(0)?.model() != Model::ArmV8A
         || board.execution_policy() != fujimod_emulator_cpu::ExecutionPolicy::Exact
@@ -417,6 +468,24 @@ pub fn checked_call_with(
         .collect::<Vec<_>>();
     for ranges in [&options.executable, &options.readable, &options.writable] {
         validate_ranges(ranges, &backing)?
+    }
+    // Device windows must be identity-mapped bus dispatch on the routine's
+    // core. Holes inside them are refused by the strict bus, not here.
+    let dispatched = board
+        .mmio_mappings()
+        .iter()
+        .filter(|&&(core, address, _, physical)| core == 0 && address == physical)
+        .map(|&(_, address, bytes, _)| (address, address + bytes as u64))
+        .collect::<Vec<_>>();
+    if options.devices.len() > 4096
+        || options
+            .devices
+            .iter()
+            .any(|&(a, b)| a >= b || !contains(&dispatched, a, b - a))
+        || options.transaction_limit == 0
+        || options.transaction_limit > 1 << 20
+    {
+        return Err("Device windows must be nonempty identity-mapped MMIO spans".into());
     }
     if !contains(&options.executable, options.entry, 4) {
         return Err("Initial entry must lie within declared executable code".into());
@@ -571,6 +640,16 @@ pub fn checked_call_with(
             return Err(error);
         }
     };
+    if !guard.options.devices.is_empty()
+        && let Err(error) = board.transaction_watch_begin(
+            guard.options.devices.clone(),
+            guard.options.transaction_limit,
+        )
+    {
+        cpu.remove_hook(code_hook)?;
+        cpu.remove_hook(write_hook)?;
+        return Err(error);
+    }
     board.harness_interrupt_delivery(0, false);
     let execution = (|| -> Result<(), String> {
         loop {
@@ -686,8 +765,17 @@ pub fn checked_call_with(
     let cleanup_code = cpu.remove_hook(code_hook);
     let cleanup_write = cpu.remove_hook(write_hook);
     board.harness_interrupt_delivery(0, true);
+    let watched = if guard.options.devices.is_empty() {
+        Ok(crate::board::bus::TransactionBatch {
+            transactions: vec![],
+            omitted: 0,
+        })
+    } else {
+        board.transaction_watch_end()
+    };
     cleanup_code?;
     cleanup_write?;
+    let watched = watched?;
     if let Err(error) = execution {
         guard.observed.borrow_mut().failure.get_or_insert(error);
     }
@@ -726,6 +814,8 @@ pub fn checked_call_with(
         observations: std::mem::take(&mut observed.observations),
         system_read_model_values: guard.options.system_reads.clone(),
         system_read_observations: std::mem::take(&mut observed.system_reads),
+        device_transactions: watched.transactions,
+        device_transactions_omitted: watched.omitted,
     })
 }
 

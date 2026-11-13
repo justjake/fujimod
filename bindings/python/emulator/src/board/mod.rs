@@ -809,11 +809,8 @@ impl Board {
         {
             return Err(PyValueError::new_err("isolated call is already active"));
         }
-        if self.session()?.definition["devices"] != serde_json::json!({"kind":"none"}) {
-            return Err(PyValueError::new_err(
-                "Checked routines require a device-free board",
-            ));
-        }
+        // The checked caller admits device access only inside the windows
+        // the options declare; a board with devices and none declared refuses.
         let result=fujimod_emulator::board::harness::arm64::checked::checked_call_with(self.board_mut()?,json(options)?,|hit,snapshots| {
             let callback=callback.as_ref().ok_or("Missing dynamic stub callback")?;
             let snapshots=snapshots.iter().map(|(address,bytes)|(*address,PyBytes::new(py,bytes))).collect::<Vec<_>>();
