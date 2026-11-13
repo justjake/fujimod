@@ -20,16 +20,17 @@
 //                  - waits params.wait_seconds seconds with the stock setup timer,
 //                  - puts the stock reset image back at RAM 0 if the loader had already
 //                    streamed any of FFBOOT over it,
-//                  - publishes a64_boot_ready = 2 (a successful load publishes 1),
+//                  - publishes a64_boot_ready = 2 (a successful load publishes 1; the loader's
+//                    zero gate releases on either),
 //                  - unwinds setup_sd_initialize, so the stock bootstrap goes on.
 //                  A failure that is not a load failure (the request check before the stock
 //                  initializer ran, or an unexpected exception level or MMU state) halts as
 //                  `fail()` always did.
 //
-//   gate_entry     (only with a fallback) replaces the branch to a64_boot_zero_gate at the
-//                  bootstrap's continuation. Like that gate it waits for a64_boot_ready,
-//                  touches only x30 and no flag, and returns to RAM 0 for ready == 1; for
-//                  ready == 2 it returns to the stock continuation in flash.
+//   There is no gate of its own: the loader's a64_boot_zero_gate releases for any nonzero
+//   a64_boot_ready, and the stock continuation it replaces is `ldr x30, =0; ret` (the literal at
+//   flash 0x27140 of the X100VI 1.31 update is 0), so a fallback reaches RAM 0, holding the
+//   restored stock reset image, exactly as the stock bootstrap does.
 //
 // params is filled by the packager.
 
@@ -84,25 +85,6 @@ halt:
     dsb     sy
 6:  wfi
     b       6b
-
-    .balign 4
-    .global gate_entry
-gate_entry:
-1:  adr     x30, params
-    ldr     x30, [x30, #0x08]           // &a64_boot_ready
-    ldar    w30, [x30]
-    cbz     w30, 2f
-    sub     w30, w30, #2                // no flags
-    cbz     w30, 3f
-    mov     x30, xzr                    // loaded: RAM 0
-    isb
-    ret
-3:  adr     x30, params
-    ldr     x30, [x30, #0x18]           // continuation in flash
-    isb
-    ret
-2:  wfe
-    b       1b
 
     .balign 4
     .global release_entry

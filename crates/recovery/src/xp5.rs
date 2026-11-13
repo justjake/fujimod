@@ -91,6 +91,11 @@ pub struct Setup {
     pub banks: Banks,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_boot: Option<CardBoot>,
+    /// Word edits of the RAM image for a startup that keeps the installed flash attached
+    /// (`StartupOptions::internal_flash`). The image selects the reset stage's preloaded mode,
+    /// whose other differences from the update's own selector have to be undone here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub internal_flash_ram_edits: Vec<image::Edit>,
 }
 fn put64(data: &mut [u8], at: usize, value: u64) -> Result<()> {
     extent(data, at, 8)?;
@@ -212,14 +217,8 @@ pub(crate) fn package_internal_flash(
     fallback_wait_seconds: Option<u32>,
 ) -> Result<Vec<File>> {
     let mut setup = setup.clone();
-    // The reset stage with its preloaded selector would take its cold path and probe the serial
-    // NOR itself; the recipe's RAM edit sends it to the stock retained-metadata path that the
-    // update's own selector takes. That edit is not card-specific, so it is kept.
-    let ram_edits = setup
-        .card_boot
-        .take()
-        .map(|card| card.ram_edits)
-        .unwrap_or_default();
+    let ram_edits = std::mem::take(&mut setup.internal_flash_ram_edits);
+    setup.card_boot = None;
     setup.banks = Banks {
         copies: Vec::new(),
         edits: Vec::new(),
@@ -406,13 +405,8 @@ fn package_inner(
         cfg + 200,
         u64::from(ram.is_none() || internal_flash.is_some()),
     )?;
-    let mut gate_target = address + template::A64_BOOT_ZERO_GATE as u64;
     if let (Some(at), Some(flash)) = (stub_at, &internal_flash) {
-        if let Some(gate) =
-            flash_stub::install(&mut program, address, at, setup, flash.fallback_wait_seconds)?
-        {
-            gate_target = gate;
-        }
+        flash_stub::install(&mut program, address, at, setup, flash.fallback_wait_seconds)?;
     }
     let restore = template::XP5_SETUP_RETURN_BRANCH;
     require(
@@ -549,7 +543,7 @@ fn package_inner(
         put(
             &mut raw,
             (gate - setup.base) as usize,
-            branch(gate, gate_target, false)?,
+            branch(gate, address + template::A64_BOOT_ZERO_GATE as u64, false)?,
         )?;
         if let Some(card) = &setup.card_boot {
             card.copy_unit_cache(storage, &mut raw, setup.low_length,
@@ -688,6 +682,7 @@ mod tests {
                 edits: vec![],
             },
             card_boot: None,
+            internal_flash_ram_edits: vec![],
         };
         let mut ram = data[0x40000..].to_vec();
         put64(&mut ram, 0x40, 0).unwrap();
@@ -776,63 +771,45 @@ mod tests {
     }
 
     #[test]
-    fn internal_flash_keeps_the_recipes_ram_edits_checked_and_in_the_crc() {
+    fn internal_flash_applies_the_recipes_ram_edits_checked_and_in_the_crc() {
         let (data, s, ram) = fixture();
-        // A card-resident recipe's RAM edit (the reset stage's branch to the retained-metadata
-        // path) is kept; the rest of the card-resident setup is not.
-        let payload = |at: usize| card_boot::Payload {
-            source: source(&data[at..at + 4]),
-            file_offset: 0,
-            destinations: [0, 0],
-        };
-        let proof = CodeProof {
-            address: 0xff800000,
-            size: 4,
-            sha256: fujimod_firmware::sha256(&data[..4]),
-        };
-        let edit = |old: u32| image::Edit {
-            address: 0x100,
+        let edit = |address: usize, old: u32| image::Edit {
+            address,
             old,
             new: 0x1400_0068,
             what: "branch to the retained-metadata path".into(),
         };
-        let mut card = card_boot::CardBoot {
-            hooks: vec![],
-            dma: proof,
-            layout_marker: 0,
-            jedec_id: 1,
-            secondary_sgi: [0; 3],
-            payloads: [payload(0), payload(4), payload(8), payload(12)],
-            namespace: None,
-            unit_cache: None,
-            runtime: None,
-            ram_edits: vec![edit(0xffff_ffff)],
+        let with = |edits: Vec<image::Edit>| {
+            let mut setup = s.clone();
+            setup.internal_flash_ram_edits = edits;
+            setup
         };
-        let mut with = s.clone();
-        with.card_boot = Some(card.clone());
         let plain = package_internal_flash(&data, &s, ram.clone(), 0, None).unwrap();
-        let edited = package_internal_flash(&data, &with, ram.clone(), 0, None).unwrap();
+        let edited =
+            package_internal_flash(&data, &with(vec![edit(0x100, 0xffff_ffff)]), ram.clone(), 0, None)
+                .unwrap();
         let mut expected = ram.clone();
         put(&mut expected, 0x100, 0x1400_0068).unwrap();
         assert_eq!(edited[1].bytes, expected);
         assert_eq!(plain[1].bytes, ram);
         let request = 0xc000 + template::SETUP_SD_REQUEST;
         assert_eq!(word(&edited[0].bytes, request + 16).unwrap(), crate::xp4::crc32(&expected));
-        assert_ne!(word(&edited[0].bytes, request + 16).unwrap(), word(&plain[0].bytes, request + 16).unwrap());
-        // The loader image and the rest of the card-resident recipe are not part of it.
+        assert_ne!(
+            word(&edited[0].bytes, request + 16).unwrap(),
+            word(&plain[0].bytes, request + 16).unwrap()
+        );
         assert_eq!(edited[0].bytes.len(), plain[0].bytes.len());
+        // A card start does not use them.
+        let card = package(&data, &with(vec![edit(0x100, 0xffff_ffff)]), Some(ram.clone()), 0).unwrap();
+        assert_eq!(card[1].bytes, ram);
         // A changed old word, a repeat or the selector refuses.
-        card.ram_edits = vec![edit(0x1234_5678)];
-        with.card_boot = Some(card.clone());
-        assert!(package_internal_flash(&data, &with, ram.clone(), 0, None).is_err());
-        card.ram_edits = vec![edit(0xffff_ffff), edit(0xffff_ffff)];
-        with.card_boot = Some(card.clone());
-        assert!(package_internal_flash(&data, &with, ram.clone(), 0, None).is_err());
-        let mut at_selector = edit(0);
-        at_selector.address = s.selector;
-        card.ram_edits = vec![at_selector];
-        with.card_boot = Some(card);
-        assert!(package_internal_flash(&data, &with, ram, 0, None).is_err());
+        for edits in [
+            vec![edit(0x100, 0x1234_5678)],
+            vec![edit(0x100, 0xffff_ffff), edit(0x100, 0xffff_ffff)],
+            vec![edit(s.selector, 0)],
+        ] {
+            assert!(package_internal_flash(&data, &with(edits), ram.clone(), 0, None).is_err());
+        }
     }
 
     #[test]
@@ -955,13 +932,18 @@ mod tests {
                 .collect::<Vec<_>>();
             let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
             changed.retain(|&at| at != source);
+            // The bootstrap's gate is the loader's own in every build.
+            assert_eq!(word(raw, gate).unwrap(), zero_gate);
+            assert_eq!(field(raw, 1), address + template::A64_BOOT_READY as u64);
             match wait {
                 None => {
                     assert_eq!(changed, vec![0xc000 + release]);
-                    assert_eq!(word(raw, gate).unwrap(), zero_gate);
+                    for n in [0, 2, 3, 4, 5, 6, 7] {
+                        assert_eq!(field(raw, n), 0, "{n}");
+                    }
                 }
                 Some(wait) => {
-                    assert_eq!(changed, vec![gate, 0xc000 + release, 0xc000 + fail]);
+                    assert_eq!(changed, vec![0xc000 + release, 0xc000 + fail]);
                     assert_eq!(
                         word(raw, 0xc000 + fail).unwrap(),
                         branch(
@@ -971,19 +953,8 @@ mod tests {
                         )
                         .unwrap()
                     );
-                    assert_eq!(
-                        word(raw, gate).unwrap(),
-                        branch(
-                            s.base + gate as u64,
-                            address + (stub + flash_stub::GATE_ENTRY) as u64,
-                            false
-                        )
-                        .unwrap()
-                    );
                     assert_eq!(field(raw, 0), address + template::SETUP_SD_PROGRESS as u64);
-                    assert_eq!(field(raw, 1), address + template::A64_BOOT_READY as u64);
                     assert_eq!(field(raw, 2), s.delay.address as u64);
-                    assert_eq!(field(raw, 3), s.continuation);
                     assert_eq!(
                         field(raw, 4),
                         s.flash.aperture + (s.reset_dat - s.prefix.dat_offset) as u64

@@ -10,7 +10,7 @@
 //!   still holds the stock firmware, so a stub can wait, put the stock reset image back if FFBOOT
 //!   was already streaming over it, and let the stock bootstrap continue in flash.
 //!
-//! Both are a small hand-written stub (`assets/sd-boot-v1-xp5-flash-stub.S`) appended to the
+//! Both are one small hand-written stub (`assets/sd-boot-v1-xp5-flash-stub.S`) appended to the
 //! loader and bound by redirecting a few loader words. The fallback unwinds `setup_sd_initialize`
 //! by its compiled frame layout, so every word either binding depends on is checked against the
 //! loader image first: a loader built differently refuses here instead of being patched blindly.
@@ -159,15 +159,16 @@ pub(super) fn verify_loader(loader: &[u8], address: u64) -> Result<usize> {
 
 /// Bind the stub at `at` in `program` (the loader image starts at `program[0]`, run at
 /// `address`): its parameters filled and the readiness `sev` redirected into it. With
-/// `fallback_wait_seconds`, `fail()` is redirected too. Returns the address the bootstrap's
-/// continuation gate should branch to for the fallback, if there is one.
+/// `fallback_wait_seconds`, `fail()` is redirected too. The bootstrap's gate stays the loader's
+/// own: it releases for the fallback's `ready = 2` as for `1`, and the stock continuation it
+/// replaces returns to RAM 0 like the gate does.
 pub(super) fn install(
     program: &mut [u8],
     address: u64,
     at: usize,
     setup: &Setup,
     fallback_wait_seconds: Option<u32>,
-) -> Result<Option<u64>> {
+) -> Result<()> {
     let loader = &program[..template::IMAGE.len()];
     let release = locate_release(loader)?;
     let fail = fallback_wait_seconds
@@ -185,37 +186,41 @@ pub(super) fn install(
     let jump = |from: usize, entry: usize| {
         super::branch(address + from as u64, address + (at + entry) as u64, false)
     };
-    put64(program, params + 0x40, address + release as u64 + 4)?;
-    put(program, release, jump(release, RELEASE_ENTRY)?)?;
-    let (Some(fail), Some(wait_seconds)) = (fail, fallback_wait_seconds) else {
-        return Ok(None);
-    };
-    let restore_offset = setup
-        .reset_dat
-        .checked_sub(setup.prefix.dat_offset)
-        .ok_or_else(|| crate::image::Error::Invalid("XP5 reset image precedes the update".into()))?;
-    let window = u64::from(!setup.flash.window_mask) + 1;
-    require(
-        setup.reset_copy_size > 0
-            && setup.reset_copy_size % 8 == 0
-            && restore_offset % 8 == 0
-            && (restore_offset as u64)
-                .checked_add(setup.reset_copy_size as u64)
-                .is_some_and(|end| end <= window),
-        "XP5 reset image is not a flash-aperture extent",
-    )?;
     for (offset, value) in [
-        (0x00, address + template::SETUP_SD_PROGRESS as u64),
         (0x08, address + template::A64_BOOT_READY as u64),
-        (0x10, setup.delay.address as u64),
-        (0x18, setup.continuation),
-        (0x20, setup.flash.aperture + restore_offset as u64),
-        (0x28, setup.reset_copy_size as u64),
-        (0x30, u64::from(wait_seconds)),
-        (0x38, UNITS_PER_SECOND),
+        (0x40, address + release as u64 + 4),
     ] {
         put64(program, params + offset, value)?;
     }
-    put(program, fail, jump(fail, FAIL_ENTRY)?)?;
-    Ok(Some(address + (at + GATE_ENTRY) as u64))
+    put(program, release, jump(release, RELEASE_ENTRY)?)?;
+    if let (Some(fail), Some(wait_seconds)) = (fail, fallback_wait_seconds) {
+        let restore_offset = setup
+            .reset_dat
+            .checked_sub(setup.prefix.dat_offset)
+            .ok_or_else(|| {
+                crate::image::Error::Invalid("XP5 reset image precedes the update".into())
+            })?;
+        let window = u64::from(!setup.flash.window_mask) + 1;
+        require(
+            setup.reset_copy_size > 0
+                && setup.reset_copy_size % 8 == 0
+                && restore_offset % 8 == 0
+                && (restore_offset as u64)
+                    .checked_add(setup.reset_copy_size as u64)
+                    .is_some_and(|end| end <= window),
+            "XP5 reset image is not a flash-aperture extent",
+        )?;
+        for (offset, value) in [
+            (0x00, address + template::SETUP_SD_PROGRESS as u64),
+            (0x10, setup.delay.address as u64),
+            (0x20, setup.flash.aperture + restore_offset as u64),
+            (0x28, setup.reset_copy_size as u64),
+            (0x30, u64::from(wait_seconds)),
+            (0x38, UNITS_PER_SECOND),
+        ] {
+            put64(program, params + offset, value)?;
+        }
+        put(program, fail, jump(fail, FAIL_ENTRY)?)?;
+    }
+    Ok(())
 }
