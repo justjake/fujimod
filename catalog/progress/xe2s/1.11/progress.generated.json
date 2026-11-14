@@ -417,7 +417,7 @@
         {
           "id": "camera-identity",
           "title": "Identified over FF80 in service mode",
-          "result": "pass"
+          "result": "not-run"
         },
         {
           "id": "camera-read-gate",
@@ -485,9 +485,9 @@
           "id": "camera-identity",
           "label": "Identified over FF80 in service mode",
           "stage": "camera-identity",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "camera-read-gate",
