@@ -527,10 +527,7 @@
       "default_function": "Release the attached lens so it can be rotated and removed.",
       "role": null,
       "mechanical": true,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
+      "behavior": null,
       "positions": [],
       "short_name": "LENS"
     },
@@ -546,16 +543,7 @@
       "default_function": "Adjust the viewfinder display focus until its indicators appear sharp.",
       "role": null,
       "mechanical": true,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
-        },
-        "press": null,
-        "endless": null
-      },
+      "behavior": null,
       "positions": [],
       "short_name": "DIOPTER"
     },
@@ -732,11 +720,7 @@
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
       "mechanical": true,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "behavior": null,
       "positions": [],
       "short_name": "COVER"
     },
@@ -752,11 +736,7 @@
       "default_function": "Press to release the battery for removal.",
       "role": null,
       "mechanical": true,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "behavior": null,
       "positions": [],
       "short_name": "BATTERY"
     }
