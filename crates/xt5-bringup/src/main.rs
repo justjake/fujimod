@@ -595,18 +595,6 @@ fn run() -> Result<(), String> {
         if w.kind == "imaging-resize" {
             w.options.entry("completion_us").or_insert(toml_int(1000));
         }
-        if w.kind == "gpio" && !w.options.contains_key("feedback") {
-            // GPIO 4/4 is the first image-sensor power enable (power table
-            // index 1, driven by the sensor power-up sequence). The
-            // REC task reads the same pad back to tell whether the
-            // sensor is already powered, so the read must follow the drive.
-            w.options.insert(
-                "feedback".into(),
-                toml::Value::try_from(json!([{"port": 4, "register": 0, "bit": 4,
-                                              "input_port": 4, "input_pin": 4}]))
-                .map_err(|e| e.to_string())?,
-            );
-        }
         if w.kind == "imaging-receiver" {
             // The REC start sequence gives up after about 1 s without a frame, so
             // the receiver must deliver frames at a camera-like rate (default 30 fps).
@@ -827,13 +815,9 @@ fn run() -> Result<(), String> {
         session.restore(&snapshot)?;
         eprintln!("restored snapshot {} at t={}", path.display(), session.board.now());
     }
-    // The sensor power enable (GPIO 4/4) reads low until the power sequence
-    // drives it; the catalog default of high makes the REC task skip sensor
-    // power-up. --gpio 4:4=1 restores the old behavior.
-    let mut gpio_inputs = vec![(4usize, 4usize, false)];
-    gpio_inputs.retain(|&(p, q, _)| !args.gpio_inputs.iter().any(|&(a, b, _)| (a, b) == (p, q)));
-    gpio_inputs.extend(args.gpio_inputs.iter().copied());
-    for &(port, pin, high) in &gpio_inputs {
+    // The sensor power enable (GPIO 4/4) is wired back to its pad by the
+    // body's gpio_feedback declaration, so it needs no input here.
+    for &(port, pin, high) in &args.gpio_inputs {
         inputs.gpio(&mut session, port, pin, high)?;
         eprintln!("gpio input {port}:{pin} = {}", high as u8);
     }
