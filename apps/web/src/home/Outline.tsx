@@ -233,21 +233,21 @@ export function FeatureOutline() {
             <div class="outline-column">
               <For each={tops.filter((top) => column.includes(top.title))}>
                 {(top) => (
-                  <details class="outline-section" open>
-                    <summary>{top.title}</summary>
+                  <section class="outline-section">
+                    <h3>{top.title}</h3>
                     <ul class="outline-tree">
                       <For each={ordered(top)}>{(node) => <OutlineNode node={node} />}</For>
                     </ul>
-                  </details>
+                  </section>
                 )}
               </For>
               <Show when={index() === COLUMNS.length - 1 && free.length}>
-                <details class="outline-section" open>
-                  <summary>OUTSIDE THE MENUS</summary>
+                <section class="outline-section">
+                  <h3>OUTSIDE THE MENUS</h3>
                   <ul class="outline-tree">
                     <MenuFree features={free} />
                   </ul>
-                </details>
+                </section>
               </Show>
             </div>
           )}

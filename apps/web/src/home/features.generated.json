@@ -2031,8 +2031,8 @@
       "id": "autofocus",
       "group": "system",
       "icon": "autofocus",
-      "title": "Autofocus",
-      "path": [],
+      "title": "AUTOFOCUS",
+      "path": ["SYSTEM CHANGES"],
       "summary": "In AF-S mode, when phase detection fails, the camera estimates focus and measures again before using contrast detection.",
       "card": null,
       "attached": false,
@@ -4859,6 +4859,16 @@
       "card": "shape_surround_item",
       "feature": "surround_view",
       "icon": "mod-shape-surround-item"
+    },
+    {
+      "title": "AUTOFOCUS",
+      "path": ["SYSTEM CHANGES"],
+      "stock": false,
+      "card": null,
+      "feature": "autofocus",
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
     },
     {
       "title": "BOOT RESILIENCE",
