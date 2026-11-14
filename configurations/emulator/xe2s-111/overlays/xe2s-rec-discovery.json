@@ -27,7 +27,8 @@
         "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
         "movrsz_ticks": 50000,
         "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
-        "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured"
+        "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured",
+        "sensor_frame_clock": "sensor"
       },
       "execution": {
         "mode": "strict",
