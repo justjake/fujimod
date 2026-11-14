@@ -4717,20 +4717,15 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "inputs",
-              "reason": "firmware image not available"
+              "locator": "framebuffer",
+              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
             }
           ]
         },
@@ -4766,13 +4761,8 @@
           ]
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match (0x169ffd0: no four settle calls with w0 = -6); 0 structural candidates "
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -4784,13 +4774,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",

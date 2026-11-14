@@ -96,7 +96,8 @@ fn xp5_bodies_declare_their_own_bus_drain() {
     };
     let cores: Vec<String> = (0..4).map(|n| format!("core{n}")).collect();
     assert_eq!(drain("x100vi"), (0x6800_0000, cores.clone()));
-    assert_eq!(drain("xt5"), (0x6000_0000, cores));
+    assert_eq!(drain("xt5"), (0x6000_0000, cores.clone()));
+    assert_eq!(drain("xh2s"), (0x8000_0000, cores));
 }
 
 #[test]
