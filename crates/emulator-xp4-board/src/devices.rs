@@ -645,6 +645,25 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn jpeg_decoder(&mut self, wiring: &crate::definition::JpegDecoder) -> Result<(), String> {
+        let model = fujimod_emulator_ip::jpeg::Decoder::new(
+            "xp4-jpeg-decoder",
+            wiring.base,
+            wiring.irq,
+            wiring.run_ticks,
+        )?;
+        let lo = wiring.base;
+        let hi = lo
+            .checked_add(fujimod_emulator_ip::jpeg::WINDOW)
+            .ok_or("Invalid JPEG decoder")?;
+        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+            return Err("Overlapping XP4 JPEG decoder window".into());
+        }
+        let id = self.models.len();
+        self.windows.push((lo, hi, id));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn still_engine(&mut self, wiring: &crate::definition::StillEngine) -> Result<(), String> {
         let model =
             crate::still::Engine::new(wiring.engine, wiring.base, wiring.irq, wiring.run_ticks)?;

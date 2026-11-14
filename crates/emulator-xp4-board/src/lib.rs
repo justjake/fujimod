@@ -1145,6 +1145,7 @@ impl Session {
             countdown_timers,
             countdown_dials,
             jpeg_encoder,
+            jpeg_decoder,
             still_engines,
             dsp,
             face_detector,
@@ -1733,6 +1734,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .jpeg_encoder(&encoder)?;
+        }
+        if let Some(decoder) = jpeg_decoder {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .jpeg_decoder(&decoder)?;
         }
         for engine in &still_engines {
             devices

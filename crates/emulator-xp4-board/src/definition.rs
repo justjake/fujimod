@@ -233,6 +233,9 @@ pub struct Definition {
     /// The JPEG encoder with the XP4 driver's register contract, when declared.
     #[serde(default)]
     pub jpeg_encoder: Option<JpegEncoder>,
+    /// The JPEG decoder with the X-Processor Pro register contract, when declared.
+    #[serde(default)]
+    pub jpeg_decoder: Option<JpegDecoder>,
     /// Declared still-processing engines (see `crate::still`).
     #[serde(default)]
     pub still_engines: Vec<StillEngine>,
@@ -280,6 +283,17 @@ pub struct JpegEncoder {
     pub irq: u32,
     pub run_ticks: u64,
     pub memory_type: u64,
+}
+
+/// The XP4 JPEG decoder: register page base, completion interrupt line and
+/// the ticks a run takes. Its registers follow the X-Processor Pro decoder
+/// contract of `fujimod_emulator_ip::jpeg::Decoder`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JpegDecoder {
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
 }
 
 /// One declared XP4 still-processing engine: which contract, its register
