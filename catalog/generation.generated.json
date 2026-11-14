@@ -4768,6 +4768,10 @@
             }
           ]
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
