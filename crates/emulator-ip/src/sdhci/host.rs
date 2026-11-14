@@ -59,6 +59,9 @@ pub struct Options {
     /// Further DRAM banks SDMA reaches: (physical base, bytes).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ram_banks: Vec<(u64, u64)>,
+    /// Optional card timing model (see `latency`); none = `transfer_ticks`.
+    #[serde(default)]
+    pub latency: Option<super::latency::Latency>,
 }
 const MAX_DATA_FAULTS: usize = 32;
 const COMMAND_TIMEOUT_ERROR: u16 = 1;
@@ -156,6 +159,7 @@ pub struct SdHost {
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
     cmd8_responses: u64,
+    latency: Option<super::latency::Model>,
 }
 /// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
 /// default and high speed and whose groups 2-6 offer function 0 only.
@@ -236,7 +240,13 @@ impl SdHost {
             return Err("Invalid SD latency, RCA or DRAM extent".into());
         }
         let clocks = Clocks::new(&[(options.base + 0x2c, options.clock_ticks)])?;
+        let latency = options
+            .latency
+            .clone()
+            .map(super::latency::Model::new)
+            .transpose()?;
         Ok(Self {
+            latency,
             options,
             register_gate: None,
             reads: StorageReads::default(),
@@ -713,6 +723,38 @@ impl SdHost {
         }
         Ok(request)
     }
+    /// Ticks until a request's next event under the timing model, or
+    /// `transfer_ticks` without one. `phase`: 0 the command starts, 1 a PIO
+    /// response is in, 2 a later data step; `pio_block`: a PIO step moving
+    /// one block.
+    fn delay(&mut self, now: u64, r: &Request, phase: u8, pio_block: bool) -> u64 {
+        if self.latency.is_none() {
+            return self.options.transfer_ticks;
+        }
+        let dir = match r.payload {
+            Payload::Read(_) => Some(false),
+            Payload::Write(_) => Some(true),
+            _ => None,
+        };
+        let pio = r.transfer != Transfer::Dma;
+        let (blocks, last) = if dir.is_none() {
+            (0, false)
+        } else if !pio {
+            let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
+            let address = r.address as usize + r.cursor;
+            let len = (r.quantity - r.cursor).min(boundary - address % boundary);
+            (len.div_ceil(512) as u64, r.cursor + len >= r.quantity)
+        } else if pio_block {
+            (1, r.cursor + 512 >= r.quantity)
+        } else {
+            (0, false)
+        };
+        let last_write = dir == Some(true) && last && (!pio || pio_block);
+        self.latency
+            .as_mut()
+            .unwrap()
+            .step(now, r.command, dir, blocks, phase, pio, last_write)
+    }
     fn start(&mut self, cx: &mut Cx<'_>, word: u32) -> Result<(), String> {
         let rom = self.options.protocol == Protocol::Rom;
         if self.busy() || self.regs.get(0x30) != 0 || self.regs.get(0x32) != 0 {
@@ -808,9 +850,10 @@ impl SdHost {
                 self.card.reserve_write(first, (r.quantity / 512) as u32)?;
             }
         }
+        let ticks = self.delay(cx.now(), &r, 0, false);
         r.due = Some(
             cx.now()
-                .checked_add(self.options.transfer_ticks)
+                .checked_add(ticks)
                 .ok_or("SD deadline overflow")?,
         );
         self.select_fault(&mut r)?;
@@ -894,9 +937,10 @@ impl SdHost {
                 && r.command != 17
             {
                 r.phase = Phase::Response;
+                let ticks = self.delay(cx.now(), &r, 1, r.transfer == Transfer::PioRead);
                 r.due = Some(
                     cx.now()
-                        .checked_add(self.options.transfer_ticks)
+                        .checked_add(ticks)
                         .ok_or("SD PIO deadline overflow")?,
                 );
                 self.request = Some(r);
@@ -1037,11 +1081,19 @@ impl SdHost {
                 r.cursor += block;
             }
             r.phase = Phase::Sector;
+            let r = self.request.take().unwrap();
+            let ticks = if !is_write && r.cursor >= r.quantity {
+                self.delay(cx.now(), &r, 2, false)
+            } else {
+                self.delay(cx.now(), &r, 2, true)
+            };
+            let mut r = r;
             r.due = Some(
                 cx.now()
-                    .checked_add(self.options.transfer_ticks)
+                    .checked_add(ticks)
                     .ok_or("SD PIO deadline overflow")?,
             );
+            self.request = Some(r);
         }
         Ok(value)
     }
@@ -1230,11 +1282,15 @@ impl SdHost {
                 return Err("SDMA resume requires boundary ACK and current address".into());
             }
             r.phase = Phase::Command;
+            let r = self.request.take().unwrap();
+            let ticks = self.delay(cx.now(), &r, 2, false);
+            let mut r = r;
             r.due = Some(
                 cx.now()
-                    .checked_add(self.options.transfer_ticks)
+                    .checked_add(ticks)
                     .ok_or("SD deadline overflow")?,
             );
+            self.request = Some(r);
             return Ok(());
         }
         // Status and signal enables only mask latched status bits and their
@@ -1552,7 +1608,8 @@ impl Device for SdHost {
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
             "clocks":self.clocks.save(), "initialization_fault":self.options.initialization_fault,
             "cmd8_responses":self.cmd8_responses,
-            "data_faults":self.faults, "fault_history":self.fault_history
+            "data_faults":self.faults, "fault_history":self.fault_history,
+            "latency":self.latency.as_ref().map(|m| serde_json::json!({"stats":m.stats,"busy_until":m.busy_until}))
         })
     }
     fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
@@ -1713,6 +1770,7 @@ mod tests {
                 rca: 0x1234,
                 ram_bytes: 0x10000,
                 initialization_fault: InitializationFault::None,
+                latency: None,
                 high_speed: false,
                 ram_banks: vec![],
             },
