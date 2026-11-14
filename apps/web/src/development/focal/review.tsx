@@ -9,8 +9,6 @@ import {
   OLDER,
   RELEASE_FILES,
   SetupPage,
-  SHUT_DOWN_STYLES,
-  START_UP_STYLES,
   SWATCH_INDEX,
   UpdatePage,
   setupTargets,
@@ -141,10 +139,6 @@ function Device() {
         });
       case 'background':
         return patch({ popup: { kind: 'hue', original: s.hue } });
-      case 'startUp':
-        return patch({ popup: { kind: 'choice', row: 'startUp', cursor: s.startUp } });
-      case 'shutDown':
-        return patch({ popup: { kind: 'choice', row: 'shutDown', cursor: s.shutDown } });
       default:
         return;
     }
@@ -180,16 +174,6 @@ function Device() {
       }
       if (key === 'Enter') return patch({ popup: undefined });
       if (key === 'Escape') return patch({ hue: popup.original, popup: undefined });
-      return;
-    }
-    if (popup?.kind === 'choice') {
-      const count = (popup.row === 'startUp' ? START_UP_STYLES : SHUT_DOWN_STYLES).length;
-      if (key === 'ArrowUp' || key === 'ArrowDown') {
-        const cursor = (popup.cursor + (key === 'ArrowUp' ? -1 : 1) + count) % count;
-        return patch({ popup: { ...popup, cursor } });
-      }
-      if (key === 'Enter') return patch({ [popup.row]: popup.cursor, popup: undefined });
-      if (key === 'Escape') return patch({ popup: undefined });
       return;
     }
     const targets = setupTargets(s);
@@ -372,7 +356,7 @@ export const STATES: { id: string; title: string; note?: string; view: () => JSX
   {
     id: 'setup-bottom',
     title: 'Bottom',
-    view: () => <SetupPage state={setupState({ focus: 'shutDown' })} />,
+    view: () => <SetupPage state={setupState({ focus: 'background' })} />,
   },
   {
     id: 'color-picker',
@@ -381,18 +365,6 @@ export const STATES: { id: string; title: string; note?: string; view: () => JSX
     view: () => (
       <SetupPage
         state={setupState({ focus: 'rec', popup: { kind: 'swatch', row: 'rec', cursor: 1 } })}
-      />
-    ),
-  },
-  {
-    id: 'start-up-style',
-    title: 'START UP STYLE',
-    view: () => (
-      <SetupPage
-        state={setupState({
-          focus: 'startUp',
-          popup: { kind: 'choice', row: 'startUp', cursor: 0 },
-        })}
       />
     ),
   },
