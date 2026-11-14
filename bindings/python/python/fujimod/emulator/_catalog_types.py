@@ -2556,6 +2556,12 @@ class HardwareCoreWindow(TypedDict, total=False):
     size: Required[int]
 
 
+class HardwareCurtains(TypedDict, total=False):
+    first_output: Required[int]
+    light_offset_seconds: Required[int]
+    second_output: Required[int]
+
+
 class HardwareDecompressor(TypedDict, total=False):
     base: Required[int]
     basis: NotRequired[str | None]
@@ -2974,12 +2980,13 @@ class HardwareProjection(TypedDict, total=False):
 
 
 class HardwareRadiometry(TypedDict, total=False):
+    curtains: NotRequired[HardwareCurtains | None]
     mode_change_frames: Required[int]
     pixel_clock_hz: Required[int]
     projection: NotRequired[HardwareProjection | None]
     rolling_references: Required[list[HardwareRollingReference]]
     saturation_lux_seconds: Required[int]
-    shutter: Required[HardwareShutter]
+    shutter: NotRequired[HardwareShutter | None]
     shutter_output: Required[int]
     ticks_per_second: Required[int]
     white_luminance: Required[int]

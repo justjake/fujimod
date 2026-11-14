@@ -30,6 +30,18 @@ pub struct Options {
     /// Full preview field containing command 0B..0E's selected rows. Register
     /// 0A selects two-row (2) or four-row (3) window-count units.
     pub preview_field: Option<[usize; 2]>,
+    /// Focal-plane curtains released by receiver comparator outputs. Under
+    /// global reset, light falls from the first curtain's edge to the second
+    /// curtain's edge plus a declared mechanical offset.
+    #[serde(default)]
+    pub curtains: Option<Curtains>,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Curtains {
+    pub first_output: usize,
+    pub second_output: usize,
+    pub light_offset_seconds: f64,
 }
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -43,6 +55,9 @@ struct State {
     rolling_seconds: Option<f64>,
     /// Invalid frames still to come after the last drive-mode change.
     settling: u8,
+    /// Guest tick of the first curtain's comparator edge, until the second.
+    #[serde(default)]
+    first_curtain: Option<u64>,
 }
 pub struct Sensor {
     state: State,
@@ -61,6 +76,13 @@ impl Sensor {
         if options.pixel_clock_hz == 0 {
             return Err("sensor needs a physical pixel clock".into());
         }
+        if let Some(c) = &options.curtains
+            && (c.first_output == c.second_output
+                || !c.light_offset_seconds.is_finite()
+                || c.light_offset_seconds < 0.)
+        {
+            return Err("focal-plane curtains need two outputs and a finite offset".into());
+        }
         Ok(Self {
             state: State {
                 registers: vec![0; 256],
@@ -70,6 +92,7 @@ impl Sensor {
                 global_seconds: None,
                 rolling_seconds: None,
                 settling: 0,
+                first_curtain: None,
             },
             shutter: options
                 .shutter
@@ -88,6 +111,7 @@ impl Sensor {
             && self.state.horizontal != 0
             && self.state.vertical != 0
             && self.state.global_seconds.is_none()
+            && self.options.curtains.is_none()
         {
             let shutter = self
                 .shutter
@@ -287,12 +311,14 @@ impl Controls for Sensor {
                 let restarted = b[2] & 1 == 0 && self.state.registers[0] & 1 != 0;
                 if changed || restarted {
                     self.state.global_seconds = None;
+                    self.state.first_curtain = None;
                     self.state.rolling_seconds = None;
                     self.state.settling = self.options.mode_change_frames;
                 }
             }
             if b[1] == 1 && b[2] & 4 != 0 && self.state.registers[1] & 4 == 0 {
                 self.state.global_seconds = None;
+                self.state.first_curtain = None;
             }
             self.state.registers[b[1] as usize] = b[2];
         }
@@ -345,6 +371,37 @@ impl Controls for Sensor {
         self.state.vertical = vertical;
         self.publish()
     }
+    fn pixel_clock_ticks(&self, clocks: u64) -> Option<u64> {
+        let (_, tick_hz) = self.frame_clock.as_ref()?;
+        let ticks = (u128::from(clocks) * u128::from(*tick_hz)
+            + u128::from(self.options.pixel_clock_hz) / 2)
+            / u128::from(self.options.pixel_clock_hz);
+        u64::try_from(ticks).ok()
+    }
+    fn comparator_edge(&mut self, output: usize, tick: u64) -> Result<(), String> {
+        let Some(curtains) = &self.options.curtains else {
+            return Ok(());
+        };
+        if output == curtains.first_output {
+            self.state.first_curtain = Some(tick);
+        } else if output == curtains.second_output
+            && let Some(first) = self.state.first_curtain.take()
+            && self.state.registers[1] & 4 != 0
+            && self.state.global_seconds.is_none()
+        {
+            let (_, tick_hz) = self
+                .frame_clock
+                .as_ref()
+                .ok_or("focal-plane curtains need the sensor frame clock")?;
+            if tick <= first {
+                return Err("second curtain precedes the first".into());
+            }
+            self.state.global_seconds =
+                Some((tick - first) as f64 / *tick_hz as f64 + curtains.light_offset_seconds);
+            self.publish()?;
+        }
+        Ok(())
+    }
     fn save(&self) -> serde_json::Value {
         serde_json::to_value(&self.state).unwrap()
     }
@@ -372,6 +429,7 @@ mod tests {
                 rolling_references: vec![],
                 mode_change_frames: 0,
                 preview_field: Some([2496, 3344]),
+                curtains: None,
             },
             exposure,
             aperture,
@@ -433,6 +491,7 @@ mod tests {
                     }],
                     mode_change_frames: 0,
                     preview_field: None,
+                    curtains: None,
                 },
                 wire.clone(),
                 std::sync::Arc::new(std::sync::Mutex::new(64.)),
@@ -511,6 +570,7 @@ mod tests {
                 rolling_references: vec![],
                 mode_change_frames: 0,
                 preview_field: None,
+                curtains: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -567,6 +627,7 @@ mod tests {
                 }],
                 mode_change_frames: 0,
                 preview_field: None,
+                curtains: None,
             },
             exposure.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -616,6 +677,7 @@ mod tests {
                 rolling_references: vec![],
                 mode_change_frames: 0,
                 preview_field: None,
+                curtains: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -653,6 +715,7 @@ mod tests {
                 }],
                 mode_change_frames: 0,
                 preview_field: None,
+                curtains: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -700,6 +763,7 @@ mod tests {
                 rolling_references: vec![],
                 mode_change_frames: 2,
                 preview_field: None,
+                curtains: None,
             },
             wire.clone(),
             std::sync::Arc::new(std::sync::Mutex::new(32.)),
@@ -751,6 +815,7 @@ mod tests {
                 rolling_references: vec![],
                 mode_change_frames: 2,
                 preview_field: None,
+                curtains: None,
             },
             wire,
             std::sync::Arc::new(std::sync::Mutex::new(8.)),
@@ -779,5 +844,57 @@ mod tests {
         sensor.command(&mode(0x28)).unwrap();
         let frames: Vec<bool> = (0..3).map(|_| sensor.frame().unwrap()).collect();
         assert_eq!(frames, [false, false, true]);
+    }
+
+    #[test]
+    fn focal_plane_curtains_expose_from_comparator_edges() {
+        // X-E2S, lens off. Card 38 read image-input comparators 0 and 1 during
+        // each still (line, clock at 1482 clocks per line): 1/4000 started 0 at
+        // (0, 0x5c8) and 1 at (3, 0x39c); 1/250 started 0 at (0, 0x5c8) and 1
+        // at (85, 0x170). Card 34's RAW levels put light at the nominal time
+        // plus 0.2..0.3 ms at the same dial positions.
+        let exposure = std::sync::Arc::new(std::sync::Mutex::new(Exposure::default()));
+        let aperture = std::sync::Arc::new(std::sync::Mutex::new(1.));
+        let mut sensor = Sensor::new(
+            Options {
+                pixel_clock_hz: 33_000_000,
+                shutter: None,
+                rolling_references: vec![],
+                mode_change_frames: 0,
+                preview_field: None,
+                curtains: Some(Curtains {
+                    first_output: 0,
+                    second_output: 1,
+                    light_offset_seconds: 0.00042,
+                }),
+            },
+            exposure.clone(),
+            aperture,
+        )
+        .unwrap();
+        sensor
+            .attach_frame_clock(std::sync::Arc::new(std::sync::Mutex::new(0)), 12_000_000)
+            .unwrap();
+        sensor.timing(1482, 3374, None).unwrap();
+        let first = sensor.pixel_clock_ticks(0x5c8).unwrap();
+        let shots = [
+            (1. / 4000., sensor.pixel_clock_ticks(3 * 1482 + 0x39c).unwrap()),
+            (1. / 250., sensor.pixel_clock_ticks(85 * 1482 + 0x170).unwrap()),
+        ];
+        for (nominal, second) in shots {
+            sensor.command(&[0x81, 1, 0, 0, 0, 0, 0, 0]).unwrap();
+            sensor.command(&[0x81, 1, 4, 0, 0, 0, 0, 0]).unwrap();
+            assert_eq!(exposure.lock().unwrap().seconds, 0.);
+            sensor.comparator_edge(0, 1000 + first).unwrap();
+            sensor.comparator_edge(1, 1000 + second).unwrap();
+            let light = exposure.lock().unwrap().seconds;
+            assert!((nominal + 0.0002..=nominal + 0.0003).contains(&light), "{nominal} {light}");
+        }
+        // A second curtain without a first, or an unrelated output, exposes nothing.
+        sensor.command(&[0x81, 1, 0, 0, 0, 0, 0, 0]).unwrap();
+        sensor.command(&[0x81, 1, 4, 0, 0, 0, 0, 0]).unwrap();
+        sensor.comparator_edge(2, 10).unwrap();
+        sensor.comparator_edge(1, 20).unwrap();
+        assert_eq!(exposure.lock().unwrap().seconds, 0.);
     }
 }
