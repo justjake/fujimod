@@ -86,7 +86,10 @@ fn paired_nor_read_requires_an_explicit_complete_doubleword_policy() {
                 observed.failure
             );
             assert_eq!(output, [0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27]);
-            assert_eq!(observed.mmio_accesses, vec![(SOURCE, 8, false)]);
+            assert_eq!(
+                observed.mmio_accesses,
+                vec![(SOURCE, 4, false), (SOURCE + 4, 4, false)]
+            );
         } else {
             assert!(!observed.returned && observed.failure.is_some());
             assert_eq!(output, [0xa5; 8]);

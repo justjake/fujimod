@@ -35,6 +35,7 @@ pub struct Guard {
     physical_backing: Vec<Span>,
     mmio: Vec<MmioAccess>,
     mmio_accesses: Vec<(u64, u32, bool)>,
+    paired_read: Option<(u64, u8)>, // current LDRD address and unconsumed word bits
     pub returned: bool,
     pub failure: Option<String>,
     accepted: u64,
@@ -170,6 +171,7 @@ impl Guard {
             physical_backing,
             mmio: Vec::new(),
             mmio_accesses: Vec::new(),
+            paired_read: None,
             returned: false,
             failure: None,
             accepted: 0,
@@ -238,7 +240,21 @@ impl Guard {
         if self.stopped() {
             return Err("Driver guard MMIO access after stop".into());
         }
-        let error = if core != self.core || !self.mmio_permits(address, u64::from(size), write) {
+        // The CPU backend may dispatch LDRD as two word reads. Admit those
+        // only after preflight approved one complete doubleword transaction.
+        let pair_word = self.paired_read.and_then(|(start, remaining)| {
+            let bit = if address == start {
+                1
+            } else if address == start + 4 {
+                2
+            } else {
+                0
+            };
+            (!write && size == 4 && remaining & bit != 0).then_some(bit)
+        });
+        let error = if core != self.core
+            || !(self.mmio_permits(address, u64::from(size), write) || pair_word.is_some())
+        {
             Some(format!(
                 "Driver guard rejected MMIO {} at {address:#x} size={size}",
                 if write { "write" } else { "read" }
@@ -251,6 +267,13 @@ impl Guard {
         if let Some(error) = error {
             self.failure = Some(error.clone());
             return Err(error);
+        }
+        if let Some((start, remaining)) = self.paired_read.as_mut() {
+            if let Some(bit) = pair_word {
+                *remaining &= !bit;
+            } else if !write && size == 8 && address == *start {
+                *remaining = 0;
+            }
         }
         self.mmio_accesses.push((address, size, write));
         Ok(())
@@ -334,6 +357,7 @@ impl Guard {
         cpsr: u32,
         reg: impl Fn(usize) -> Result<u32, String>,
     ) -> Result<(), String> {
+        self.paired_read = None;
         if cpsr & (0x20 | 0x200) != 0 || cpsr & 0xc0 != 0xc0 {
             return Err("Driver guard requires little-endian ARM state with IRQ/FIQ masked".into());
         }
@@ -587,6 +611,9 @@ impl Guard {
                 ));
             }
         }
+        self.paired_read = doubleword_read
+            .filter(|_| paired_mmio)
+            .map(|address| (address, 3));
         self.accepted += 1;
         Ok(())
     }
@@ -869,6 +896,19 @@ mod tests {
             allowed.snapshot().mmio_accesses,
             vec![(0xfffd8000, 8, false)]
         );
+        let mut split = wide();
+        assert!(split.mmio_access(0, 0xfffd8000, 4, false).is_err());
+        let mut split = wide();
+        split
+            .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+            .unwrap();
+        split.mmio_access(0, 0xfffd8000, 4, false).unwrap();
+        split.mmio_access(0, 0xfffd8004, 4, false).unwrap();
+        assert_eq!(
+            split.snapshot().mmio_accesses,
+            vec![(0xfffd8000, 4, false), (0xfffd8004, 4, false)]
+        );
+        assert!(split.mmio_access(0, 0xfffd8000, 4, false).is_err());
         // Refuse a pair outside the range, an unaligned pair, STRD and LDM.
         for (word, address) in [
             (0xe1c020d0, 0xfffd8008),
