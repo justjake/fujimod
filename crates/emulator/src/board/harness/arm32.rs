@@ -252,8 +252,11 @@ impl Guard {
             };
             (!write && size == 4 && remaining & bit != 0).then_some(bit)
         });
+        let pair_whole = !write && size == 8 && self.paired_read == Some((address, 3));
         let error = if core != self.core
-            || !(self.mmio_permits(address, u64::from(size), write) || pair_word.is_some())
+            || !(size != 8 && self.mmio_permits(address, u64::from(size), write)
+                || pair_word.is_some()
+                || pair_whole)
         {
             Some(format!(
                 "Driver guard rejected MMIO {} at {address:#x} size={size}",
@@ -899,6 +902,26 @@ mod tests {
             allowed.snapshot().mmio_accesses,
             vec![(0xfffd8000, 8, false)]
         );
+        assert!(allowed.mmio_access(0, 0xfffd8000, 8, false).is_err());
+        assert!(wide().mmio_access(0, 0xfffd8000, 8, false).is_err());
+        let mut partial = wide();
+        partial
+            .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+            .unwrap();
+        partial.mmio_access(0, 0xfffd8000, 4, false).unwrap();
+        assert!(partial.mmio_access(0, 0xfffd8000, 8, false).is_err());
+        let mut next_instruction = wide();
+        next_instruction
+            .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+            .unwrap();
+        next_instruction
+            .preflight(0x1004, 0xe320f000, 0xd3, |_| Ok(0))
+            .unwrap();
+        assert!(
+            next_instruction
+                .mmio_access(0, 0xfffd8000, 4, false)
+                .is_err()
+        );
         let mut split = wide();
         assert!(split.mmio_access(0, 0xfffd8000, 4, false).is_err());
         let mut split = wide();
@@ -914,6 +937,9 @@ mod tests {
         assert!(split.mmio_access(0, 0xfffd8000, 4, false).is_err());
         let mut exhausted = wide();
         for _ in 0..15 {
+            exhausted
+                .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+                .unwrap();
             exhausted.mmio_access(0, 0xfffd8000, 8, false).unwrap();
         }
         assert!(
