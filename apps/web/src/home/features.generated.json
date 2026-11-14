@@ -3960,146 +3960,6 @@
   },
   "menus": [
     {
-      "title": "SAVE ALL",
-      "path": ["COMPARE WITH CURRENT"],
-      "order": 0,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "ACTION",
-      "path": ["CUSTOM SETTING"],
-      "order": 5,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "COMPARE WITH CURRENT",
-      "path": ["CUSTOM SETTING"],
-      "order": 13,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "COPY",
-      "path": ["CUSTOM SETTING"],
-      "order": 14,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "EDIT CUSTOM NAME",
-      "path": ["CUSTOM SETTING"],
-      "order": 18,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": "mod-recipes-setting-rename"
-    },
-    {
-      "title": "EDIT/CHECK",
-      "path": ["CUSTOM SETTING"],
-      "order": 10,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "ERASE",
-      "path": ["CUSTOM SETTING"],
-      "order": 17,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "MOVE TO HIDDEN",
-      "path": ["CUSTOM SETTING"],
-      "order": 8,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "MOVE TO LIBRARY",
-      "path": ["CUSTOM SETTING"],
-      "order": 7,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "PROTECT",
-      "path": ["CUSTOM SETTING"],
-      "order": 16,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "RESET THE CHANGES",
-      "path": ["CUSTOM SETTING"],
-      "order": 12,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "SAVE THE CHANGES",
-      "path": ["CUSTOM SETTING"],
-      "order": 11,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "SELECT",
-      "path": ["CUSTOM SETTING"],
-      "order": 1,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "SELECT AS CURRENT",
-      "path": ["CUSTOM SETTING"],
-      "order": 6,
-      "kind": "command",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
       "title": "CUSTOM SETTINGS BKT",
       "path": ["DRIVE"],
       "stock": false,
@@ -4988,6 +4848,152 @@
       "card": null,
       "feature": null,
       "icon": "mod-recipes-root-uses-custom"
+    },
+    {
+      "title": "ACTION",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 5,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "COMPARE WITH CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 13,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "COPY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 14,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "EDIT CUSTOM NAME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 18,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-recipes-setting-rename"
+    },
+    {
+      "title": "EDIT/CHECK",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 10,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ERASE",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 17,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MOVE TO HIDDEN",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 8,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MOVE TO LIBRARY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 7,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "PROTECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 16,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RESET THE CHANGES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 12,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SAVE THE CHANGES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 11,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SELECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SELECT AS CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "order": 6,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SAVE ALL",
+      "path": [
+        "SHOOTING MENU",
+        "EDIT/SAVE CUSTOM SETTING",
+        "LIBRARY",
+        "CUSTOM SETTING",
+        "COMPARE WITH CURRENT"
+      ],
+      "order": 0,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
     },
     {
       "title": "DATE STAMP",
