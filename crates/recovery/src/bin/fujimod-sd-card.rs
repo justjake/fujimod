@@ -111,6 +111,25 @@ fn take_destination(
     Ok(Some(value))
 }
 
+/// Remove `--ram-overlay FILE` from the arguments (only the XP5 startup commands take it).
+fn take_ram_overlay(
+    args: &mut Vec<String>,
+    allowed: bool,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let Some(at) = args.iter().position(|arg| arg == "--ram-overlay") else {
+        return Ok(None);
+    };
+    if !allowed {
+        return Err("--ram-overlay requires sd-boot-v1-startup or sd-boot-v1-ram-startup".into());
+    }
+    let value = args.get(at + 1).ok_or("Missing --ram-overlay value")?.clone();
+    args.drain(at..=at + 1);
+    if args.iter().any(|arg| arg == "--ram-overlay") {
+        return Err("--ram-overlay was specified twice".into());
+    }
+    Ok(Some(PathBuf::from(value)))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -142,6 +161,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 take_fallback_wait(&mut inputs, command == "sd-boot-v1-ram-startup")?;
             let read_only_destination =
                 take_destination(&mut inputs, command == "sd-boot-v1-read-only-startup")?;
+            let overlay = take_ram_overlay(
+                &mut inputs,
+                matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-ram-startup"),
+            )?
+            .map(|path| fujimod_recovery::image::Overlay::read(&path))
+            .transpose()?;
             let (firmware, dat, output, hold) =
                 construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup"))?;
             let options = StartupOptions {
@@ -152,7 +177,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
-            let files = if let Some(storage) = storage {
+            let files = if let Some(overlay) = &overlay {
+                recipe.build_startup_with_overlay(&source, options, overlay)?
+            } else if let Some(storage) = storage {
                 recipe.build_startup_with_storage(&source, &storage, options)?
             } else if command == "sd-card-recovery-build" {
                 recipe.build(&source)?
@@ -181,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, required)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, required)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
@@ -191,7 +218,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{construction_args, take_destination, take_fallback_wait};
+    use super::{construction_args, take_destination, take_fallback_wait, take_ram_overlay};
     use fujimod_recovery::StartupOptions;
     fn seconds(n: u32) -> StartupOptions {
         StartupOptions {
@@ -355,5 +382,23 @@ mod tests {
             ..StartupOptions::default()
         };
         assert!(both.hold_units().is_err());
+    }
+
+    #[test]
+    fn ram_overlay_is_taken_out_only_for_the_xp5_startup_commands() {
+        let mut values = args(&["camera", "--ram-overlay", "overlay.json", "update", "output"]);
+        assert_eq!(
+            take_ram_overlay(&mut values, true).unwrap(),
+            Some(std::path::PathBuf::from("overlay.json"))
+        );
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        assert_eq!(take_ram_overlay(&mut values, false).unwrap(), None);
+        for (bad, allowed) in [
+            (args(&["camera", "--ram-overlay", "x"]), false),
+            (args(&["camera", "--ram-overlay"]), true),
+            (args(&["--ram-overlay", "a", "--ram-overlay", "b"]), true),
+        ] {
+            assert!(take_ram_overlay(&mut bad.clone(), allowed).is_err(), "{bad:?}");
+        }
     }
 }

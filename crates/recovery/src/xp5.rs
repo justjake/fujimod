@@ -1669,6 +1669,11 @@ mod tests {
             assert!(recipe.build_boot_files(&update, other).is_err(), "{other:?}");
         }
         assert!(recipe.build_startup_with_storage(&update, &[0; 8], options).is_err());
+        // Its RAM image is read and never run, so a RAM overlay is refused.
+        let refused = recipe
+            .build_startup_with_overlay(&update, options, &image::Overlay::default())
+            .unwrap_err();
+        assert!(refused.to_string().contains("takes no RAM overlay"), "{refused}");
         let mut other_generation = recipe.clone();
         other_generation.generation = crate::Generation::Xp4;
         assert!(other_generation.build_boot_files(&update, options).is_err());

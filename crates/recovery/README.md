@@ -251,6 +251,16 @@ recorded in the loader's progress words and shown as red lamp blinks, and the st
 The command excludes `--fallback-wait-seconds`, takes no storage image and needs no card-resident
 setup in the recipe.
 
+`sd-boot-v1-startup` and `sd-boot-v1-ram-startup` accept `--ram-overlay FILE` (XP5), a JSON
+description of bytes to add to the RAM image before it is packaged, so the loader's length and
+CRC checks cover them (`Recipe::build_startup_with_overlay` and `image::Overlay` are the library
+forms). It lists `regions` (`name`, `address`, `size`, `file`, `sha256`; each file is a basename in
+the description's directory) and `edits` (`address`, `old`, `new`, `what`). A region must lie in
+zero bytes outside every initialized section and every BSS extent of the RAM plan, since the stock
+startup may clear BSS after the image is loaded. An edit must replace the expected word of
+initialized bytes outside the regions. Nothing is written unless every check passes.
+`sd-boot-v1-read-only-startup` refuses an overlay, since its image is never run.
+
 `sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
