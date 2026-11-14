@@ -692,6 +692,18 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn pl011_uart(&mut self, wiring: &crate::definition::Pl011Uart) -> Result<(), String> {
+        use fujimod_emulator_ip_arm::pl011::{Pl011, WINDOW};
+        let model = Pl011::new(wiring.base, wiring.irq)?;
+        let (lo, hi) = (wiring.base, wiring.base + WINDOW);
+        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+            return Err("Overlapping PL011 UART window".into());
+        }
+        let id = self.models.len();
+        self.windows.push((lo, hi, id));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn filter_engine(&mut self, wiring: &crate::definition::FilterEngine) -> Result<(), String> {
         let model = fujimod_emulator_xp4_io::filter_engine::FilterEngine::new(
             wiring.base,

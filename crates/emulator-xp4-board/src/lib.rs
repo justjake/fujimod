@@ -1149,6 +1149,7 @@ impl Session {
             dsp,
             face_detector,
             filter_engine,
+            pl011_uarts,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1753,6 +1754,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .filter_engine(&engine)?;
+        }
+        for uart in &pl011_uarts {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .pl011_uart(uart)?;
         }
         if let Some((base, present)) = usb_condition {
             devices
