@@ -8,6 +8,7 @@ import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { PersonalNote } from '../ui/personal-note';
 import { SiteHeader } from '../ui/site-header';
 import { FeatureCatalog } from './Features';
+import { FeatureOutline } from './Outline';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
 import { sha256 } from '../patch/patcher';
@@ -67,6 +68,7 @@ export default function Home() {
           <PersonalNote />
           <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
           <FeatureCatalog />
+          <FeatureOutline />
           <div class="emulator-heading">
             <h2 class="section-heading" id="software">
               Software

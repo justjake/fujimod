@@ -38,6 +38,10 @@ nusb = { workspace = true, features = ["smol"] }
 name = "fujimod-usb-agent"
 path = "src/agent.rs"
 
+[[bin]]
+name = "fujimod-card"
+path = "src/card.rs"
+
 
 [target.'cfg(target_os = "macos")'.dependencies]
 fskit-rs = "=0.2.0"

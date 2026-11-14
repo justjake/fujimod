@@ -136,7 +136,7 @@ impl SectionLength {
     }
 }
 
-/// The stock user profile: a sixteen-byte header kept by the power controller
+/// The stock user profile: a header kept by the power controller
 /// and journal records in managed flash blocks. Firmware that finds no valid
 /// header and records resets the profile to its defaults at startup.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,14 +148,17 @@ impl SectionLength {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SettingsProfile {
-    /// Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the
-    /// checksum that makes the sixteen bytes sum to zero.
+    /// Stock eight- or sixteen-byte header. The last two bytes hold marker
+    /// `0xaa` and the checksum that makes the header sum to zero.
     pub header: UpdateRange,
     /// X-Processor 4 only: the header's offset in the boot loader's handoff
     /// block. Absent for X-Processor Pro, whose header goes to sub-CPU
     /// registers.
     #[serde(default)]
     pub loader_offset: Option<u64>,
+    /// First 16-bit register of the header on a checksum SPI power controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_register: Option<u8>,
     /// Journal records the stock loader requires, by name.
     pub records: BTreeMap<String, ProfileRecord>,
     /// Fields initialized from the calibration bank or a declared fill.
@@ -449,10 +452,16 @@ impl FirmwareSettings {
             stores.insert("ram", (0x48_0000, BTreeSet::new()));
         }
         if let Some(profile) = profile {
-            if profile.header.size != 16 {
-                return fail("profile header is not sixteen bytes");
+            let size = profile.header.size;
+            if !matches!(size, 8 | 16) {
+                return fail("profile header must contain eight or sixteen bytes");
             }
-            stores.insert("header", (14, BTreeSet::new()));
+            if let Some(register) = profile.power_register
+                && (size != 8 || u64::from(register) + size / 2 > 256)
+            {
+                return fail("profile header does not fit its checksum SPI registers");
+            }
+            stores.insert("header", (size - 2, BTreeSet::new()));
             for (name, record) in &profile.records {
                 let parity_bytes = (record.parity_offset / 4).div_ceil(8);
                 if name.is_empty()

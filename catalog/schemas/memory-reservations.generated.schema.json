@@ -59,10 +59,13 @@
       "type": "string"
     },
     "dram_size": {
-      "description": "DRAM window, in bytes, that every reservation lies within.",
+      "description": "DRAM window in bytes when known. Unknown size does not imply free memory.",
       "format": "uint64",
       "minimum": 0,
-      "type": "integer"
+      "type": [
+        "integer",
+        "null"
+      ]
     },
     "firmware_id": {
       "description": "Firmware whose stock code owns these reservations.",
@@ -98,9 +101,9 @@
     "schema",
     "id",
     "firmware_id",
-    "dram_size",
     "reservations",
-    "locator_failures"
+    "locator_failures",
+    "dram_size"
   ],
   "title": "FirmwareMemoryReservations",
   "type": "object"

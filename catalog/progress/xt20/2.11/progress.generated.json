@@ -80,12 +80,12 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "not-run"
+          "result": "inapplicable"
         },
         {
           "id": "boot-patch-facts",
           "title": "Boot-patch triggers, clears and free spaces located",
-          "result": "not-run"
+          "result": "inapplicable"
         }
       ],
       "steps": [
@@ -186,22 +186,6 @@
           "total": 1
         },
         {
-          "id": "nand-boot-facts",
-          "label": "EXR II NAND bootloader facts located",
-          "stage": "nand-boot-facts",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
-        },
-        {
-          "id": "boot-patch-facts",
-          "label": "Boot-patch triggers, clears and free spaces located",
-          "stage": "boot-patch-facts",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
-        },
-        {
           "id": "boot-rom",
           "label": "Boot ROM",
           "stage": "research",
@@ -226,12 +210,12 @@
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
-          "result": "not-run"
+          "result": "inapplicable"
         },
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "title": "SD boot v2: patch triggers fire in the emulator",
-          "result": "not-run"
+          "result": "inapplicable"
         },
         {
           "id": "menu",
@@ -256,7 +240,7 @@
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
           "title": "SD boot v2: FujiMod boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "inapplicable"
         }
       ],
       "steps": [
@@ -365,22 +349,6 @@
           "total": 1
         },
         {
-          "id": "sd-boot-v2-autostart-starts-in-emulator",
-          "label": "SD boot v2: autostart starts in the emulator",
-          "stage": "sd-boot-v2-autostart-starts-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
-        },
-        {
-          "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
-          "label": "SD boot v2: patch triggers fire in the emulator",
-          "stage": "sd-boot-v2-patch-triggers-fire-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
-        },
-        {
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "label": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "stage": "sd-boot-v1-stock-boots-in-emulator",
@@ -395,14 +363,6 @@
           "result": "pass",
           "passed": 1,
           "total": 1
-        },
-        {
-          "id": "sd-boot-v2-fujimod-boots-in-emulator",
-          "label": "SD boot v2: FujiMod boots from an SD card in the emulator",
-          "stage": "sd-boot-v2-fujimod-boots-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
         }
       ]
     },
@@ -626,7 +586,7 @@
         {
           "id": "sd-boot-v2-fujimod-built",
           "title": "SD boot v2: FujiMod release built",
-          "result": "not-run"
+          "result": "inapplicable"
         }
       ],
       "steps": [
@@ -671,12 +631,12 @@
           "total": 0
         },
         {
-          "id": "sd-boot-v2-fujimod-built",
-          "label": "SD boot v2: FujiMod release built",
-          "stage": "sd-boot-v2-fujimod-built",
+          "id": "walkthroughs/af",
+          "label": "af",
+          "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
-          "total": 0
+          "total": 1
         },
         {
           "id": "walkthroughs/fujimod",
@@ -1071,6 +1031,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/custom-settings-bkt",
+          "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/sd-boot-v2-runtime",
           "label": "sd-boot-v2-runtime",
           "stage": "walkthroughs",
@@ -1103,8 +1071,8 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/startup-shutdown-screen",
-          "label": "startup-shutdown-screen",
+          "id": "walkthroughs/welcome-sheet",
+          "label": "welcome-sheet",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1153,12 +1121,12 @@
         {
           "id": "sd-boot-v2-fujimod-boots-on-camera",
           "title": "SD boot v2: FujiMod boots from an SD card on a camera",
-          "result": "not-run"
+          "result": "inapplicable"
         },
         {
           "id": "sd-boot-v2-autostart-installs-on-camera",
           "title": "SD boot v2: autostart installs on a camera",
-          "result": "not-run"
+          "result": "inapplicable"
         },
         {
           "id": "firmware-update-stock-installs-on-camera",
@@ -1195,22 +1163,6 @@
           "result": "pass",
           "passed": 1,
           "total": 1
-        },
-        {
-          "id": "sd-boot-v2-fujimod-boots-on-camera",
-          "label": "SD boot v2: FujiMod boots from an SD card on a camera",
-          "stage": "sd-boot-v2-fujimod-boots-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
-        },
-        {
-          "id": "sd-boot-v2-autostart-installs-on-camera",
-          "label": "SD boot v2: autostart installs on a camera",
-          "stage": "sd-boot-v2-autostart-installs-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
         },
         {
           "id": "firmware-update-stock-installs-on-camera",
@@ -1273,6 +1225,7 @@
     }
   },
   "mods": {
+    "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
@@ -1322,11 +1275,12 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "custom-settings-bkt": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",
     "internal-data-backup": "not-run",
-    "startup-shutdown-screen": "not-run",
+    "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
     "live-view-speedups": "not-run"
   }

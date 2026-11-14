@@ -11,14 +11,6 @@
   color: var(--dim);
   font-size: 12px;
 }
-.sd-contents > summary {
-  cursor: pointer;
-  font-size: 12px;
-  color: #aeaeb2;
-}
-.sd-contents[open] > summary {
-  margin-bottom: 22px;
-}
 .sd-tree .sd-twist {
   display: grid;
   place-items: center;
@@ -28,15 +20,6 @@
   padding: 0;
   color: inherit;
   cursor: pointer;
-}
-.sd-source {
-  display: grid;
-  place-items: center;
-  flex: none;
-  color: var(--file-dim);
-}
-.sd-source:hover {
-  color: #0a84ff;
 }
 
 /* Round selection marks, as in iOS lists. */
@@ -144,7 +127,21 @@
 .sd-card {
   position: relative;
   isolation: isolate;
-  padding: 84px 48px 92px 64px;
+  display: flex;
+  flex-direction: column;
+  /* A full-size SD card is 24 by 32 mm. */
+  aspect-ratio: 3 / 4;
+  padding: 64px 20px 40px 24px;
+}
+.sd-card > .sd-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 10px 6px 4px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 12px;
+  background: rgb(0 0 0 / 18%);
 }
 .sd-shape {
   position: absolute;
@@ -157,13 +154,20 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 0 22px;
+  /* Clear of the chamfered top-right corner. */
+  margin: 0 min(12%, 96px) 14px 0;
   padding: 0 0 16px;
   border-bottom: 1px solid rgb(255 255 255 / 8%);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
   color: rgb(235 235 245 / 45%);
+}
+.sd-lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgb(235 235 245 / 70%);
 }
 .sd-label img {
   image-rendering: pixelated;
@@ -176,6 +180,26 @@
 }
 .sd-tree .sd-row {
   gap: 7px;
+  height: auto;
+  min-height: 28px;
+  padding-block: 4px;
+  align-items: flex-start;
+  line-height: 20px;
+}
+.sd-tree .sd-row > *,
+.sd-tree .sd-row .fold > * {
+  min-height: 20px;
+}
+.sd-tree .sd-row .fold {
+  align-items: flex-start;
+}
+.sd-tree .sd-row .n,
+.sd-tree .folder .fold .n {
+  flex: none;
+  min-width: 13ch;
+}
+.sd-count {
+  color: var(--file-dim);
 }
 .sd-tree .sd-row.dim > :not(.sd-slot, .sd-twist),
 .sd-tree .sd-row.dim .fold > *,
@@ -189,9 +213,6 @@
   width: 20px;
 }
 .sd-tree .sd-row .n {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 12.5px;
 }
@@ -199,110 +220,51 @@
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
 }
 .sd-detail {
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
   font-size: 12.5px;
+  line-height: 20px;
   color: var(--file-dim);
-}
-.sd-note {
-  max-width: 62ch;
-  /* Aligned with the file icons: the selection slot, the chevron column and their gaps. */
-  margin: 18px 0 6px 48px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: rgb(235 235 245 / 60%);
-}
-.sd-note:first-child {
-  margin-top: 0;
-}
-.sd-note b {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgb(235 235 245 / 85%);
-}
-.sd-note p {
-  margin: 0;
-}
-.sd-note p + p {
-  margin-top: 0.6em;
-}
-.sd-git {
-  display: block;
-  cursor: pointer;
-}
-.sd-tree .sd-git .n {
-  flex: none;
-}
-.sd-git-label {
-  margin-left: 6px;
-  font-size: 13px;
-  color: #c7c7cc;
-  opacity: 1;
-}
-.sd-tree .sd-row.dim .sd-git-label {
-  opacity: 1;
 }
 
 .sd-actions {
-  margin-top: 36px;
-  padding: 24px 22px;
-  border-radius: 16px;
-  background: rgb(255 255 255 / 5%);
-  border: 1px solid rgb(255 255 255 / 9%);
+  /* The button straddles the card's bottom edge. */
+  position: absolute;
+  inset: auto 0 -22px;
+  display: flex;
+  justify-content: center;
 }
-.sd-download-step {
-  display: grid;
-  justify-items: start;
-  gap: 10px;
+.sd-scroll {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
-.sd-download-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 24px;
-  border: 0;
-  border-radius: 22px;
-  background: #0a84ff;
-  color: #fff;
-  font: inherit;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
+.sd-source {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgb(235 235 245 / 30%);
+  text-underline-offset: 3px;
 }
-.sd-download-button span {
-  font-weight: 400;
-  color: rgb(255 255 255 / 75%);
-  font-variant-numeric: tabular-nums;
+.sd-source:hover {
+  color: #64d2ff;
+  text-decoration: underline;
 }
-.sd-download-button:hover:not(:disabled) {
-  background: #409cff;
-}
-.sd-download-button:disabled {
-  background: rgb(118 118 128 / 24%);
-  color: rgb(235 235 245 / 35%);
-  cursor: default;
-}
-.sd-download-button:focus-visible {
-  outline: 2px solid #0a84ff;
-  outline-offset: 3px;
-}
-.sd-problem {
-  margin: 0;
-  font-size: 13px;
-  color: #ff9f0a;
-  text-align: center;
-}
-
-@media (max-width: 620px) {
+@media (max-width: 560px) {
   .sd-card {
-    padding: 76px 16px 80px 22px;
+    padding: 56px 12px 36px 16px;
   }
-  .sd-detail {
-    display: none;
+  .sd-tree .sd-row,
+  .sd-tree .sd-row .fold {
+    flex-wrap: wrap;
+  }
+  .sd-tree .sd-row > .sd-detail {
+    order: 1;
+    flex-basis: 100%;
+    padding-left: 61px;
+  }
+  .sd-tree .sd-row .fold > .sd-detail {
+    flex-basis: 100%;
+    padding-left: 20px;
   }
 }

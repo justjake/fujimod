@@ -15,7 +15,7 @@ pub(super) fn settings_header(
     let layout: fujimod_catalog_settings::FirmwareSettings =
         serde_json::from_str(layout).map_err(|failure| error(failure.to_string()))?;
     let settings = fujimod_settings::build(&layout, flash, &requested, None).map_err(error)?;
-    Ok(settings.profile.map(|profile| profile.header.to_vec()))
+    Ok(settings.profile.map(|profile| profile.header))
 }
 
 /// The user profile for `requested` settings: the header and each sealed
@@ -37,6 +37,6 @@ pub(super) fn settings_profile(
             .into_iter()
             .map(|record| (record.block, record.bytes))
             .collect();
-        (profile.header.to_vec(), records)
+        (profile.header, records)
     }))
 }

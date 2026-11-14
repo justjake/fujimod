@@ -38,6 +38,29 @@ fn construction_args(
     ))
 }
 
+/// Remove `--fallback-wait-seconds N` from the arguments (only `sd-boot-v1-ram-startup` takes it).
+fn take_fallback_wait(
+    args: &mut Vec<String>,
+    allowed: bool,
+) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+    let Some(at) = args.iter().position(|arg| arg == "--fallback-wait-seconds") else {
+        return Ok(None);
+    };
+    if !allowed {
+        return Err("--fallback-wait-seconds requires sd-boot-v1-ram-startup".into());
+    }
+    let value = args
+        .get(at + 1)
+        .ok_or("Missing --fallback-wait-seconds value")?
+        .parse::<u32>()
+        .map_err(|_| "--fallback-wait-seconds requires a non-negative 32-bit integer")?;
+    args.drain(at..=at + 1);
+    if args.iter().any(|arg| arg == "--fallback-wait-seconds") {
+        return Err("--fallback-wait-seconds was specified twice".into());
+    }
+    Ok(Some(value))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -54,7 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
-            | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            | "sd-boot-v1-ram-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -65,10 +88,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 None
             };
+            let fallback_wait_seconds =
+                take_fallback_wait(&mut inputs, command == "sd-boot-v1-ram-startup")?;
             let (firmware, dat, output, success_hold_seconds) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one"))?;
+                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup"))?;
             let options = StartupOptions {
                 success_hold_seconds,
+                internal_flash: command == "sd-boot-v1-ram-startup",
+                fallback_wait_seconds,
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
@@ -84,6 +111,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 recipe.build_ota_startup(&source)?
             } else if command == "sd-boot-v1-stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
+            } else if command == "sd-boot-v1-ram-startup" {
+                // The update stays an independent input and is not written.
+                recipe.build_boot_files(&source, options)?
             } else {
                 recipe.build_startup_with_options(&source, options)?
             };
@@ -98,7 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
@@ -108,9 +138,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::construction_args;
+    use super::{construction_args, take_fallback_wait};
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| s.to_string()).collect()
+    }
+    #[test]
+    fn fallback_wait_is_taken_out_before_the_positional_arguments() {
+        let mut values = args(&["--fallback-wait-seconds", "30", "camera", "update", "output"]);
+        assert_eq!(take_fallback_wait(&mut values, true).unwrap(), Some(30));
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        let mut values = args(&["camera", "update", "output"]);
+        assert_eq!(take_fallback_wait(&mut values, true).unwrap(), None);
+        assert_eq!(take_fallback_wait(&mut values, false).unwrap(), None);
+        for bad in [
+            args(&["camera", "--fallback-wait-seconds"]),
+            args(&["camera", "--fallback-wait-seconds", "-1"]),
+            args(&["camera", "--fallback-wait-seconds", "x"]),
+            args(&["--fallback-wait-seconds", "1", "--fallback-wait-seconds", "2"]),
+        ] {
+            assert!(take_fallback_wait(&mut bad.clone(), true).is_err(), "{bad:?}");
+        }
+        assert!(
+            take_fallback_wait(&mut args(&["--fallback-wait-seconds", "1"]), false).is_err()
+        );
     }
     #[test]
     fn success_hold_defaults_to_zero_and_accepts_either_position() {

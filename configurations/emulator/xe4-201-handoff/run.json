@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xe4-201-handoff",
+  "purpose": "rom_boot",
+  "body_id": "xe4",
+  "firmware_id": "xe4-201",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "overlays": [],
+  "dram_address_space": {
+    "limit_bytes": 536870912,
+    "basis": "Declared virtual address-space limit used for the Discovery run; physical DRAM size is unknown."
+  },
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp4",
+      "body_profile_id": "xe4-201-handoff"
+    },
+    "hardware_inputs_id": "xe4-201-handoff"
+  }
+}

@@ -227,12 +227,12 @@
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "title": "SD boot v2: patch triggers fire in the emulator",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "menu",
@@ -252,12 +252,12 @@
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
           "title": "SD boot v2: FujiMod boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "stale"
         }
       ],
       "steps": [
@@ -369,17 +369,17 @@
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "label": "SD boot v2: autostart starts in the emulator",
           "stage": "sd-boot-v2-autostart-starts-in-emulator",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "label": "SD boot v2: patch triggers fire in the emulator",
           "stage": "sd-boot-v2-patch-triggers-fire-in-emulator",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
@@ -393,15 +393,15 @@
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
           "label": "SD boot v2: FujiMod boots from an SD card in the emulator",
           "stage": "sd-boot-v2-fujimod-boots-in-emulator",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         }
@@ -678,6 +678,14 @@
           "result": "stale",
           "passed": 0,
           "total": 0
+        },
+        {
+          "id": "walkthroughs/af",
+          "label": "af",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
         },
         {
           "id": "walkthroughs/fujimod",
@@ -1048,6 +1056,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/custom-settings-bkt",
+          "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/sd-boot-v2-runtime",
           "label": "sd-boot-v2-runtime",
           "stage": "walkthroughs",
@@ -1080,8 +1096,8 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/startup-shutdown-screen",
-          "label": "startup-shutdown-screen",
+          "id": "walkthroughs/welcome-sheet",
+          "label": "welcome-sheet",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1264,6 +1280,7 @@
     }
   },
   "mods": {
+    "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "inapplicable",
@@ -1313,11 +1330,12 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "custom-settings-bkt": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",
     "internal-data-backup": "not-run",
-    "startup-shutdown-screen": "not-run",
+    "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
     "live-view-speedups": "not-run"
   }

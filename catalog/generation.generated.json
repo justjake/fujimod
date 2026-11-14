@@ -3852,22 +3852,12 @@
           "errors": []
         },
         "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -3932,6 +3922,10 @@
             }
           ]
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -3951,13 +3945,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "SettingsCatalogError: xe4-201: profile header defaults have no marker"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
@@ -4728,20 +4717,15 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "inputs",
-              "reason": "firmware image not available"
+              "locator": "framebuffer",
+              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
             }
           ]
         },
@@ -4777,13 +4761,8 @@
           ]
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match (0x169ffd0: no four settle calls with w0 = -6); 0 structural candidates "
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -4795,13 +4774,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
@@ -7638,6 +7612,10 @@
               "reason": "No catalog firmware and body record is published"
             }
           ]
+        },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
         },
         "progress": {
           "status": "unavailable",

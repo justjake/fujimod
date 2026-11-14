@@ -1,5 +1,6 @@
 //! Physical controls a body has no input model for. Key edges are refused by
 //! the session; ladder samples read as the declared idle fallback.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::controls::Controls;
 use serde_json::Value;
 
@@ -26,6 +27,16 @@ impl Controls for AbsentControls {
             Err("absent controls checkpoint holds key state".into())
         }
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode("physical-controls", &())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode::<()>("physical-controls")?;
+        Ok(())
+    }
+    fn restore_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)
+    }
 }
 
 #[cfg(test)]
@@ -40,5 +51,8 @@ mod tests {
         assert!(controls.advance(u64::MAX).is_empty());
         assert!(controls.restore(&serde_json::json!({"held": []})).is_err());
         assert!(controls.restore(&controls.save()).is_ok());
+        let checkpoint = controls.checkpoint().unwrap();
+        controls.validate_checkpoint(&checkpoint).unwrap();
+        controls.restore_checkpoint(&checkpoint).unwrap();
     }
 }

@@ -247,6 +247,8 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.Monk
             "clock_seconds_2000": None,
             "preferred_languages": [],
             "camera": None,
+            "access_point": None,
+            "capability_reply": None,
         }
     ]
     board.close()

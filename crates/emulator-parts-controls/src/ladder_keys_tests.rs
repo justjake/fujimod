@@ -119,12 +119,17 @@ fn checkpoint_restores_held_and_pending_keys() {
     press(&first, 50, Key::Down, false).unwrap();
     first.advance(10);
     let saved = first.save();
+    let checkpoint = first.checkpoint().unwrap();
     let second = keys();
     second.restore(&saved).unwrap();
     assert_eq!(second.register_sample(0x35), Some(850));
     assert_eq!(second.next_deadline(), Some(50));
     second.advance(50);
     assert_eq!(second.register_sample(0x35), Some(1023));
+    let third = keys();
+    third.validate_checkpoint(&checkpoint).unwrap();
+    third.restore_checkpoint(&checkpoint).unwrap();
+    assert_eq!(third.register_sample(0x35), Some(850));
     let mut foreign = saved.clone();
     foreign["held"] = serde_json::json!(["ShutterHalf"]);
     assert!(keys().restore(&foreign).is_err());

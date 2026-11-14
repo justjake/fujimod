@@ -149,11 +149,7 @@ impl CardBoot {
                 && [0, 0x5555aaac].contains(&self.layout_marker)
                 && self.jedec_id > 0
                 && self.jedec_id <= 0xffffff
-                && self.secondary_sgi.iter().enumerate().all(|(n, &address)| {
-                    (0xf0000000..0xffff0000).contains(&address)
-                        && address.is_multiple_of(0x10000)
-                        && !self.secondary_sgi[..n].contains(&address)
-                }),
+                && super::valid_secondary_sgi(&self.secondary_sgi),
             "Invalid card setup hardware binding",
         )?;
         let at = template::SETUP_SD_CARD_BOOT;
@@ -404,7 +400,7 @@ mod tests {
 
     #[test]
     fn checked_hooks_and_card_bytes_reject_mutated_code_payload_or_binding() {
-        for case in 0..10 {
+        for case in 0..13 {
             let (mut card, mut stock, bytes, mut ram) = fixture();
             let mut raw = stock.clone();
             let mut program = template::IMAGE.to_vec();
@@ -418,6 +414,12 @@ mod tests {
                 7 => card.secondary_sgi[1] = card.secondary_sgi[0],
                 8 => program[template::SETUP_SD_CARD_BOOT] ^= 1,
                 9 => card.payloads[0].destinations[0] = 0x1000,
+                // A frame in the flash aperture (its writes would be flash commands), and
+                // frames that are not one stride apart.
+                10 => card.secondary_sgi[0] = 0xf0010000,
+                11 => card.secondary_sgi = [0xfa0b0000, 0xfa0f0000, 0xfa0d0000],
+                // Correctly strided second-page frames wholly inside the aperture.
+                12 => card.secondary_sgi = [0xf0010000, 0xf0030000, 0xf0050000],
                 _ => (),
             }
             let result = card.install(

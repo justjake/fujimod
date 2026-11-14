@@ -27,7 +27,16 @@ test('the card ZIP holds every checked file and a clean Git repository of FUJIMO
   }) as typeof fetch;
   const processor = 'EXR Processor II';
   const plan = sdBootV2Plan({
-    cameras: [{ id: 'X70-110', model: 'X70', version: '1.10', processor, mods: 1, download_url: 'https://example.org/' }],
+    cameras: [
+      {
+        id: 'X70-110',
+        model: 'X70',
+        version: '1.10',
+        processor,
+        mods: ['recipes'],
+        download_url: 'https://example.org/',
+      },
+    ],
     card: [
       ...['FFBOOT.BIN', 'FFSYS.BIN', 'FM_EXR2.BIN'].map((path) => ({
         path,
@@ -58,8 +67,6 @@ test('the card ZIP holds every checked file and a clean Git repository of FUJIMO
   expect(plan.problems).toEqual([]);
   const zip = await buildCard(plan.files, {
     assetBase: 'https://fujimod.test/releases/1.0/',
-    release: '1.0',
-    git: true,
     fetcher,
   });
   const directory = await mkdtemp(join(tmpdir(), 'sd-card-zip-'));
@@ -76,20 +83,6 @@ test('the card ZIP holds every checked file and a clean Git repository of FUJIMO
       version: '1.0',
       fs: { '/firmware.patch': patchSha },
     });
-    const git = (...args: string[]) =>
-      execFileSync('git', ['-c', 'safe.directory=*', ...args], {
-        cwd: join(card, 'FUJIMOD'),
-        encoding: 'utf8',
-        env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
-      });
-    git('fsck', '--strict', '--no-dangling');
-    expect(git('status', '--porcelain')).toBe('');
-    expect(git('ls-files').trim().split('\n')).toEqual([
-      'RECIPES/A.JSN',
-      `SYSTEM/STORE/${storeName(patchSha)}`,
-      'SYSTEM/X70-110/A.JSN',
-      'SYSTEM/X70-110/STATE.JSN',
-    ]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -102,8 +95,6 @@ test('a file whose bytes differ from the release is refused', async () => {
       [{ path: 'FFBOOT.BIN', from: 'release', asset: 'A.BIN', sha256: 'a'.repeat(64), bytes: 8 }],
       {
         assetBase: 'https://fujimod.test/releases/1/',
-        release: '1',
-        git: false,
         fetcher,
       },
     ),

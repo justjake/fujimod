@@ -207,3 +207,30 @@ fn cold_worker_requires_the_checked_condition_call_and_barrier_join() {
     }
     assert!(xp4::worker(&code, 0x34).is_err());
 }
+
+#[test]
+fn boot_files_are_an_allowlist_and_never_the_update() {
+    let file = |name: &str| File::new(name, vec![1]).unwrap();
+    let names = |files: &[File]| files.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
+    let all = || vec![file("marble_init.bin"), file("ffboot.bin"), file("FPUPDATE.DAT")];
+    assert_eq!(
+        names(&boot_files_only(all(), "FPUPDATE.DAT").unwrap()),
+        ["marble_init.bin", "ffboot.bin"]
+    );
+    // The update is dropped whatever its case.
+    assert_eq!(
+        names(&boot_files_only(all(), "fpupdate.dat").unwrap()),
+        ["marble_init.bin", "ffboot.bin"]
+    );
+    // Anything else, a missing file, a repeat or another order is refused.
+    for bad in [
+        vec![file("marble_init.bin"), file("ffboot.bin"), file("extra.bin")],
+        vec![file("marble_init.bin"), file("FFBOOT.BIN")],
+        vec![file("marble_init.bin")],
+        vec![file("ffboot.bin"), file("marble_init.bin")],
+        vec![file("marble_init.bin"), file("ffboot.bin"), file("ffboot.bin")],
+        vec![file("FPUPDATE.DAT")],
+    ] {
+        assert!(boot_files_only(bad, "FPUPDATE.DAT").is_err());
+    }
+}

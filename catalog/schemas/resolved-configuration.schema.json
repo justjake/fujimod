@@ -26684,7 +26684,7 @@
     },
     "SettingsProfile": {
       "additionalProperties": false,
-      "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
+      "description": "The stock user profile: a header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
       "properties": {
         "derived_fields": {
           "default": [],
@@ -26696,12 +26696,22 @@
         },
         "header": {
           "$ref": "#/$defs/UpdateRange",
-          "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
+          "description": "Stock eight- or sixteen-byte header. The last two bytes hold marker\n`0xaa` and the checksum that makes the header sum to zero."
         },
         "loader_offset": {
           "default": null,
           "description": "X-Processor 4 only: the header's offset in the boot loader's handoff\nblock. Absent for X-Processor Pro, whose header goes to sub-CPU\nregisters.",
           "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "power_register": {
+          "description": "First 16-bit register of the header on a checksum SPI power controller.",
+          "format": "uint8",
+          "maximum": 255,
           "minimum": 0,
           "type": [
             "integer",

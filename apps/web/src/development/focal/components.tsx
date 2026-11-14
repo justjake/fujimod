@@ -453,42 +453,6 @@ function PopupFrame(props: {
   );
 }
 
-/** Focal's choice popup: square, at the right edge, pointing at its row. */
-export function ChoicePopup(props: {
-  anchor: number;
-  options: string[];
-  cursor: number;
-  current: number;
-  description?: string;
-}) {
-  const height = () => props.options.length * 52 + (props.description ? 44 : 0);
-  return (
-    <PopupFrame anchor={props.anchor} width={props.description ? 400 : 300} height={height()}>
-      <For each={props.options}>
-        {(option, index) => (
-          <div
-            class={`flex h-popup-row items-center border-popup-separator pl-[14px] ${
-              index() ? 'border-t' : ''
-            } ${index() === props.cursor ? 'bg-focus' : ''}`}
-          >
-            <span class="w-[34px]">
-              <Show when={index() === props.current}>
-                <Check />
-              </Show>
-            </span>
-            <span class="text-row uppercase">{option}</span>
-          </div>
-        )}
-      </For>
-      <Show when={props.description}>
-        <div class="flex h-[44px] items-center border-t border-popup-separator px-pad text-detail text-secondary uppercase">
-          {props.description}
-        </div>
-      </Show>
-    </PopupFrame>
-  );
-}
-
 /** BACKGROUND COLOR offers this many hues, evenly spaced. */
 export const HUE_STEPS = 24;
 export const HUE_STEP = 360 / HUE_STEPS;

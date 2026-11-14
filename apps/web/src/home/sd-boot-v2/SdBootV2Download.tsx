@@ -15,12 +15,14 @@ import {
   sdBootV2Plan,
   conflicting,
   plannedBytes,
+  offered,
   releaseCameras,
   type CardCamera,
 } from './plan';
 import { buildCard } from './build';
 import { SdBootV2Shape } from './SdBootV2Shape';
 import { InstallSteps } from '../../install/InstallSteps';
+import { InstallDialog } from '../../install/InstallDialog';
 import './sd-card.css';
 
 function Check(props: {
@@ -41,39 +43,21 @@ function Check(props: {
   );
 }
 
-/** Documentation for the rows below it, like a comment in the card's listing. */
-function Note(props: { title?: string; children: JSX.Element }) {
-  return (
-    <div class="sd-note">
-      <Show when={props.title}>
-        <b>{props.title}</b>
-      </Show>
-      {props.children}
-    </div>
-  );
-}
-
 function FileRow(props: {
   name: string;
-  detail?: string;
+  detail?: JSX.Element;
   bytes?: number;
   dim?: boolean;
   folder?: boolean;
   check?: JSX.Element;
-  after?: JSX.Element;
 }) {
   return (
     <div class={{ r: true, 'sd-row': true, dim: props.dim, folder: props.folder }}>
       <span class="tw" />
       <span class="sd-slot">{props.check}</span>
       <Icon name={props.folder ? 'folder' : 'file'} />
-      <span class="n">
-        {props.name}
-        <Show when={props.detail}>
-          <span class="sd-detail">{props.detail}</span>
-        </Show>
-      </span>
-      {props.after}
+      <span class="n">{props.name}</span>
+      <span class="sd-detail">{props.detail}</span>
       <Show when={props.bytes !== undefined}>
         <span class="s">{formatBytes(props.bytes!)}</span>
       </Show>
@@ -83,6 +67,11 @@ function FileRow(props: {
 
 function Folder(props: {
   name: string;
+  detail?: string;
+  /** Shown after the name, such as the count of included files. */
+  count?: number;
+  /** Caps the folder's listing height and scrolls it. */
+  scroll?: boolean;
   dim?: boolean;
   check?: JSX.Element;
   children: JSX.Element;
@@ -111,10 +100,16 @@ function Folder(props: {
           onClick={() => setOpen((value) => !value)}
         >
           <Icon name="folder" />
-          <span class="n">{props.name}</span>
+          <span class="n">
+            {props.name}
+            <Show when={props.count !== undefined}>
+              <span class="sd-count"> ({props.count})</span>
+            </Show>
+          </span>
+          <span class="sd-detail">{props.detail}</span>
         </button>
       </div>
-      <div class="kids" hidden={!open()}>
+      <div class={{ kids: true, 'sd-scroll': props.scroll }} hidden={!open()}>
         {props.children}
       </div>
     </>
@@ -124,6 +119,7 @@ function Folder(props: {
 /** Optional card files in one folder, each with its own include box and one for the folder. */
 function OptionalFolder(props: {
   name: string;
+  detail: string;
   files: readonly SdCardFile[];
   excluded: ReadonlySet<string>;
   setExcluded: (paths: readonly string[], excluded: boolean) => void;
@@ -133,6 +129,9 @@ function OptionalFolder(props: {
   return (
     <Folder
       name={props.name}
+      detail={props.detail}
+      count={included()}
+      scroll
       dim={props.dim}
       check={
         <Show when={props.files.length}>
@@ -163,24 +162,20 @@ function OptionalFolder(props: {
         {(file) => (
           <FileRow
             name={file().path.split('/').at(-1)!}
-            detail={[file().title, file().author].filter(Boolean).join(' · ')}
-            bytes={file().bytes}
-            dim={props.dim || props.excluded.has(file().path)}
-            after={
-              <Show when={file().source}>
+            detail={
+              <Show
+                when={file().source}
+                fallback={[file().title, file().author].filter(Boolean).join(' · ')}
+              >
                 {(source) => (
-                  <a
-                    class="sd-source"
-                    href={source()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`${file().title ?? file().path} source`}
-                  >
-                    <Icon name="external" size={13} />
+                  <a class="sd-source" href={source()} target="_blank" rel="noopener noreferrer">
+                    {[file().title, file().author].filter(Boolean).join(' · ')}
                   </a>
                 )}
               </Show>
             }
+            bytes={file().bytes}
+            dim={props.dim || props.excluded.has(file().path)}
             check={
               <Check
                 label={`Include ${file().path.split('/').at(-1)}`}
@@ -202,7 +197,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   );
   const [chosenIds, setChosenIds] = createSignal<ReadonlySet<string>>(new Set());
   const [excluded, setExcludedPaths] = createSignal<ReadonlySet<string>>(new Set());
-  const [git, setGit] = createSignal(false);
+  const [installing, setInstalling] = createSignal(false);
   const [releases, setReleases] = createSignal<ReadonlyMap<string, SdBootV2Release | Error>>(
     new Map(),
   );
@@ -226,7 +221,9 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   ]);
   const optional = createMemo(() => card().filter((file) => file.processor === undefined));
   const inFolder = (folder: string) =>
-    optional().filter((file) => file.path.startsWith(`FUJIMOD/${folder}/`));
+    optional().filter(
+      (file) => file.path.startsWith(`FUJIMOD/${folder}/`) && offered(file, shown()),
+    );
   const loaded = createMemo(() => {
     const map = new Map<string, SdBootV2Release>();
     for (const [id, value] of releases()) if (!(value instanceof Error)) map.set(id, value);
@@ -282,8 +279,6 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
     try {
       const zip = await buildCard(plan().files, {
         assetBase: release.assetBase,
-        release: release.release,
-        git: git(),
         progress: (done, total) => setProgress(`${done} of ${total} files`),
       });
       downloadBlob(zip, `fujimod-sd-card-${release.release}.zip`);
@@ -338,7 +333,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                 </span>
                 <span class="sd-camera-version">{camera().version}</span>
                 <span class="sd-camera-mods">
-                  {camera().mods} {camera().mods === 1 ? 'mod' : 'mods'}
+                  {camera().mods.length} {camera().mods.length === 1 ? 'mod' : 'mods'}
                 </span>
               </label>
             )}
@@ -350,173 +345,164 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <img src="/brand.png" alt="FujiMod" width="110" height="28" />
             <span>FAT32</span>
           </div>
-          <details class="sd-contents">
-            <summary>SD card contents &amp; optional files</summary>
-            <div class="tree sd-tree" id="sd-card-files">
-              <For each={processors()}>
-                {(processor) => {
-                  const boot = () => sdBootV2For(processor);
-                  const files = () => sdBootV2Files(card(), processor);
-                  const size = (name: string) =>
-                    files().files.find((file) => file.path === name)?.bytes;
-                  return (
-                    <Show when={boot()}>
-                      {(boot) => (
-                        <>
-                          <Note title="SD boot v2">
-                            <p>
-                              The {boot().name} loader starts FujiMod from the SD card. The initial
-                              boot does not change your installed firmware.
-                            </p>
-                          </Note>
-                          <FileRow
-                            name="FFBOOT.BIN"
-                            bytes={size('FFBOOT.BIN')}
-                            dim={previewing()}
-                          />
-                          <Note>
-                            <p>Startup settings for the SD boot loader.</p>
-                          </Note>
-                          <FileRow name="FFSYS.BIN" bytes={size('FFSYS.BIN')} dim={previewing()} />
-                          <Note title="FujiMod loader">
-                            <p>
-                              Loads the selected camera’s files from FUJIMOD/SYSTEM on the SD card.
-                            </p>
-                          </Note>
-                          <FileRow
-                            name={boot().stage2}
-                            bytes={size(boot().stage2)}
-                            dim={previewing()}
-                          />
-                        </>
-                      )}
-                    </Show>
-                  );
-                }}
-              </For>
-              <Note>
-                <p>To start stock firmware, turn the camera off and remove the SD card.</p>
-              </Note>
-              <Folder name="FUJIMOD">
-                <Note>
-                  <p>
-                    Optional Git history lets you compare changes to files on your SD card. The
-                    camera does not create commits.
-                  </p>
-                </Note>
-                <label class="sd-git">
-                  <FileRow
-                    name=".git"
-                    folder
-                    dim={!git()}
-                    check={
-                      <Check label="Track changes with Git" checked={git()} onChange={setGit} />
-                    }
-                    after={<span class="sd-git-label">Track changes with Git</span>}
-                  />
-                </label>
-                <Note>
-                  <p>
-                    FujiMod settings are saved on the SD card. Stock camera settings remain in the
-                    camera’s internal storage.
-                  </p>
-                </Note>
-                <FileRow name="SETTINGS.JSN" />
-                <Note>
-                  <p>
-                    Optional recipe files. On X70, EDIT/SAVE CUSTOM SETTING holds up to 255 custom
-                    settings, with seven favorites in the Q menu.
-                  </p>
-                </Note>
+          <p class="sd-lead">
+            FujiMod lives on your SD card. Running FujiMod does not change the firmware on your
+            camera’s built-in storage.
+          </p>
+          <div class="tree sd-tree" id="sd-card-files">
+            <For each={processors()}>
+              {(processor) => {
+                const files = () => sdBootV2Files(card(), processor);
+                const size = (name: string) =>
+                  files().files.find((file) => file.path === name)?.bytes;
+                return (
+                  <Show when={sdBootV2For(processor)}>
+                    {(boot) => (
+                      <>
+                        <FileRow
+                          name="FFBOOT.BIN"
+                          detail={`FujiMod stage 1 boot loader. The boot ROM runs it when you hold the SD boot buttons; it hands off to ${boot().stage2}.`}
+                          bytes={size('FFBOOT.BIN')}
+                          dim={previewing()}
+                        />
+                        <FileRow
+                          name="FFSYS.BIN"
+                          detail="Used by the boot ROM to initialize RAM."
+                          bytes={size('FFSYS.BIN')}
+                          dim={previewing()}
+                        />
+                        <FileRow
+                          name={boot().stage2}
+                          detail="Loads the selected camera’s files from FUJIMOD/SYSTEM."
+                          bytes={size(boot().stage2)}
+                          dim={previewing()}
+                        />
+                      </>
+                    )}
+                  </Show>
+                );
+              }}
+            </For>
+            <Folder name="FUJIMOD">
+              <FileRow
+                name="SETTINGS.JSN"
+                detail="FujiMod settings. Stock settings stay in the camera."
+              />
+              <Show when={inFolder('RECIPES').length}>
                 <OptionalFolder
                   name="RECIPES"
+                  detail="Recipes for EDIT/SAVE CUSTOM SETTING."
                   files={inFolder('RECIPES')}
                   excluded={excluded()}
                   setExcluded={setExcluded}
                   dim={false}
                 />
-                <Note>
-                  <p>Optional custom film simulations, loaded from the SD card.</p>
-                </Note>
+              </Show>
+              <Show when={inFolder('FILMS').length}>
                 <OptionalFolder
                   name="FILMS"
+                  detail="Custom film simulations."
                   files={inFolder('FILMS')}
                   excluded={excluded()}
                   setExcluded={setExcluded}
                   dim={false}
                 />
-                <Note>
-                  <p>
-                    System files for each selected camera. X70 Wi-Fi updates keep the previous
-                    version available if the new version fails to start.
-                  </p>
-                </Note>
-                <Folder name="SYSTEM" dim={previewing()}>
-                  <For each={shown()} keyed={(camera) => camera.id}>
-                    {(camera) => (
-                      <>
-                        <Note>
-                          <p>A.JSN lists the initial version’s files. STATE.JSN tracks startup.</p>
-                        </Note>
-                        <Folder name={camera().id} dim={previewing()}>
-                          <FileRow name="A.JSN" dim={previewing()} />
-                          <FileRow name="STATE.JSN" dim={previewing()} />
-                        </Folder>
-                      </>
+              </Show>
+              <Folder
+                name="SYSTEM"
+                detail="Each camera’s system files. Wi-Fi updates keep the previous version."
+                dim={previewing()}
+              >
+                <For each={shown()} keyed={(camera) => camera.id}>
+                  {(camera) => (
+                    <Folder name={camera().id} dim={previewing()}>
+                      <FileRow
+                        name="A.JSN"
+                        detail="The installed version’s files."
+                        dim={previewing()}
+                      />
+                      <FileRow name="STATE.JSN" detail="Startup state." dim={previewing()} />
+                    </Folder>
+                  )}
+                </For>
+                <Folder
+                  name="STORE"
+                  detail="Shared system files, named by content."
+                  dim={previewing()}
+                >
+                  <For each={store()} keyed={([name]) => name}>
+                    {(entry) => (
+                      <FileRow
+                        name={entry()[0]}
+                        detail={entry()[1].paths.join(', ')}
+                        bytes={entry()[1].bytes}
+                      />
                     )}
                   </For>
-                  <Note>
-                    <p>Shared system files, named by their content.</p>
-                  </Note>
-                  <Folder name="STORE" dim={previewing()}>
-                    <For each={store()} keyed={([name]) => name}>
-                      {(entry) => (
-                        <FileRow
-                          name={entry()[0]}
-                          detail={entry()[1].paths.join(', ')}
-                          bytes={entry()[1].bytes}
-                        />
-                      )}
-                    </For>
-                  </Folder>
                 </Folder>
               </Folder>
-            </div>
-          </details>
-          <div class="sd-actions">
-            <InstallSteps
-              kind="sd-boot-v2"
-              cameras={shown().map((camera) => ({
-                firmwareId: camera.id,
-                name: `${camera.model} version ${camera.version}`,
-              }))}
-              files={['FUJIMOD', ...rootFiles()]}
-              loader={processors()
-                .map((processor) => sdBootV2For(processor)?.stage2)
-                .find(Boolean)}
-              download={
-                <div class="sd-download-step">
-                  <button
-                    type="button"
-                    class="sd-download-button"
-                    disabled={!chosen().length || pending() || !!problem() || busy()}
-                    onClick={() => void download()}
-                  >
-                    <Icon name="download" />
-                    {busy() ? progress() || 'Preparing…' : 'Download'}
-                    <Show when={!busy() && chosen().length && !pending() && !problem()}>
-                      <span>{formatBytes(plannedBytes(plan().files))}</span>
-                    </Show>
-                  </button>
-                  <Show when={problem() || error()}>
-                    <p class="sd-problem" role="alert">
-                      {error() || problem()}
-                    </p>
-                  </Show>
-                </div>
-              }
-            />
+            </Folder>
           </div>
+          <div class="sd-actions">
+            <button
+              type="button"
+              class="mod-download"
+              disabled={!chosen().length}
+              onClick={() => setInstalling(true)}
+            >
+              <Icon name="download" />
+              {chosen().length
+                ? `Get FujiMod for ${chosen()
+                    .map((camera) => camera.model)
+                    .join(', ')}`
+                : 'Choose a camera'}
+            </button>
+          </div>
+          <Show when={installing()}>
+            <InstallDialog
+              title="FujiMod SD boot v2"
+              identity={`${chosen()
+                .map((camera) => `${camera.model} ${camera.version}`)
+                .join(' • ')} • ${props.release?.tag ?? ''}`}
+              busy={busy()}
+              close={() => setInstalling(false)}
+            >
+              <InstallSteps
+                kind="sd-boot-v2"
+                cameras={chosen().map((camera) => ({
+                  firmwareId: camera.id,
+                  name: `${camera.model} version ${camera.version}`,
+                }))}
+                files={['FUJIMOD', ...rootFiles()]}
+                loader={processors()
+                  .map((processor) => sdBootV2For(processor)?.stage2)
+                  .find(Boolean)}
+                download={
+                  <>
+                    <button
+                      type="button"
+                      class="mod-download"
+                      disabled={pending() || !!problem() || busy()}
+                      onClick={() => void download()}
+                    >
+                      <Icon name="download" />
+                      {busy() ? progress() || 'Preparing…' : 'Download SD card files'}
+                      <Show when={!busy() && !pending() && !problem()}>
+                        <span class="mod-download-size">
+                          {formatBytes(plannedBytes(plan().files))}
+                        </span>
+                      </Show>
+                    </button>
+                    <Show when={problem() || error()}>
+                      <p class="firmware-error" role="alert">
+                        {error() || problem()}
+                      </p>
+                    </Show>
+                  </>
+                }
+              />
+            </InstallDialog>
+          </Show>
         </div>
       </section>
     </Show>

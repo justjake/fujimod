@@ -49,6 +49,17 @@
   },
   "analog_levels": null,
   "boot": {
+    "service": {
+      "hold": [
+        {
+          "id": "selector_up_button"
+        },
+        {
+          "id": "shutter_button",
+          "stage": "full"
+        }
+      ]
+    },
     "sd": {
       "hold": [
         {
@@ -118,7 +129,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
       },
       "positions": []
     },
@@ -160,38 +174,59 @@
           "positions": [
             {
               "id": "P",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "PROGRAM"
+              },
+              "asserted": true
             },
             {
               "id": "S",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "SHUTTER"
+              },
+              "asserted": true
             },
             {
               "id": "A",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "APERTURE"
+              },
+              "asserted": true
             },
             {
               "id": "M",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "MANUAL"
+              },
+              "asserted": true
             },
             {
               "id": "C1",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "C1"
+              },
+              "asserted": true
             },
             {
               "id": "C2",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "C2"
+              },
+              "asserted": true
             },
             {
               "id": "C3",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "C3"
+              },
+              "asserted": true
             },
             {
               "id": "C4",
@@ -215,13 +250,19 @@
             },
             {
               "id": "FILTER",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "FILTER"
+              },
+              "asserted": true
             },
             {
               "id": "F",
-              "key": null,
-              "asserted": null
+              "key": {
+                "kind": "debug_key",
+                "name": "MOVIE"
+              },
+              "asserted": true
             }
           ]
         },
@@ -311,7 +352,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DRIVE"
+        }
       },
       "positions": []
     },
@@ -329,7 +373,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
       },
       "positions": []
     },
@@ -347,7 +394,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "VIEW"
+        }
       },
       "positions": []
     },
@@ -385,12 +435,27 @@
       "behavior": {
         "kind": "pad",
         "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
+          "up": {
+            "kind": "debug_key",
+            "name": "8DIR_U"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "8DIR_D"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "8DIR_L"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "8DIR_R"
+          }
         },
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "8DIR_PUSH"
+        }
       },
       "positions": [],
       "short_name": "FOCUS"
@@ -429,11 +494,17 @@
         "kind": "dial",
         "motion": {
           "kind": "steps",
-          "decrease": null,
-          "increase": null
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD2_L"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD2_R"
+          }
         },
         "press": null,
-        "endless": null
+        "endless": true
       },
       "positions": [],
       "short_name": "FRONT DIAL"
@@ -454,11 +525,17 @@
         "kind": "dial",
         "motion": {
           "kind": "steps",
-          "decrease": null,
-          "increase": null
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD_LEFT"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD_RIGHT"
+          }
         },
         "press": null,
-        "endless": null
+        "endless": true
       },
       "positions": [],
       "short_name": "REAR DIAL"
@@ -480,13 +557,19 @@
         "positions": [
           {
             "id": "ON",
-            "key": null,
-            "asserted": null
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": true
           },
           {
             "id": "OFF",
-            "key": null,
-            "asserted": null
+            "key": {
+              "kind": "debug_key",
+              "name": "POWER"
+            },
+            "asserted": false
           }
         ]
       },
@@ -518,8 +601,22 @@
       "behavior": {
         "kind": "shutter",
         "stages": {
-          "half_press": null,
-          "full_press": null
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
         }
       },
       "positions": [],
@@ -594,7 +691,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
       },
       "positions": []
     },
@@ -631,7 +731,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "UP"
+        }
       },
       "positions": [],
       "short_name": "UP"
@@ -650,7 +753,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "RIGHT"
+        }
       },
       "positions": [],
       "short_name": "RIGHT"
@@ -669,7 +775,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DOWN"
+        }
       },
       "positions": [],
       "short_name": "DOWN"
@@ -688,7 +797,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "LEFT"
+        }
       },
       "positions": [],
       "short_name": "LEFT"
@@ -707,7 +819,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
       },
       "positions": []
     },
@@ -725,7 +840,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
       },
       "positions": []
     },
@@ -743,7 +861,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
       },
       "positions": []
     },

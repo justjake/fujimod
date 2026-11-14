@@ -1,4 +1,4 @@
-.download-modal {
+.install-dialog {
   width: min(560px, calc(100% - 28px));
   max-height: calc(100svh - 32px);
   margin: auto;
@@ -10,24 +10,24 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.download-modal::backdrop {
+.install-dialog::backdrop {
   background: rgb(0 0 0 / 70%);
 }
-.download-modal > h2 {
+.install-dialog > h2 {
   margin: 0 0 2px;
   font-size: 20px;
   font-weight: 650;
 }
-.download-identity {
+.install-dialog-identity {
   margin: 0 0 20px;
   color: var(--dim);
   font-size: 14px;
 }
-.download-modal a {
+.install-dialog a {
   color: #64d2ff;
   text-underline-offset: 2px;
 }
-.download-modal .power-combo-keys {
+.install-dialog .power-combo-keys {
   margin: 4px 0 18px;
 }
 .mod-download {
@@ -52,12 +52,12 @@
   opacity: 0.45;
   cursor: default;
 }
-.download-close {
+.install-dialog-close {
   display: flex;
   justify-content: end;
   margin-top: 20px;
 }
-.download-close .pill {
+.install-dialog-close .pill {
   padding: 9px 18px;
   border-radius: 24px;
   font-size: 15px;
@@ -65,18 +65,23 @@
   cursor: pointer;
 }
 @media (max-width: 520px) {
-  .download-modal {
+  .install-dialog {
     padding: 20px 16px;
   }
-  .download-modal .recovery-steps {
+  .install-dialog .recovery-steps {
     --badge: 24px;
     --indent: 36px;
   }
-  .download-modal .recovery-steps h2 {
+  .install-dialog .recovery-steps h2 {
     font-size: 16px;
   }
   .mod-download {
     padding-inline: 14px;
     font-size: 14px;
   }
+}
+.mod-download-size {
+  font-weight: 400;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
 }
