@@ -27,9 +27,10 @@ the offered directory readable by anyone with the link until Ctrl-C stops it.
 files are replaced, and every path in the managed destination that is not in
 the latest snapshot is deleted. It is a strict mirror, including files added to
 the destination by hand. It retries the connection after a dropped transfer.
-Resuming an interrupted file uses `NAME.part` and a `NAME.part.meta` file
-holding the source SHA-256, so a partial file is resumed only when it belongs to
-the same source bytes.
+Resuming an interrupted file uses a hashed entry under `.fujimod-sync-parts/`
+and a digest sidecar holding the source SHA-256, so a partial file is resumed
+only when it belongs to the same source bytes. Source paths using the reserved
+`.fujimod-sync-parts/` namespace are refused.
 
 The receiver refuses to manage a non-empty directory unless it already contains
 the `.fujimod-sync` marker created by an earlier sync. Use a new directory, or
