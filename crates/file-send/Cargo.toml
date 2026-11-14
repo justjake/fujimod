@@ -23,4 +23,5 @@ crc32fast = "1.5"
 sha2.workspace = true
 futures-lite.workspace = true
 async-channel = "2"
+walkdir = "2"
 fujimod-workspace-hack.workspace = true
