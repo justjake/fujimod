@@ -183,6 +183,7 @@ impl Xp4Session {
         Ok(PyBytes::new(py, &bytes))
     }
     forward!(run(core: usize, budget: usize) -> ());
+    forward!(run_to(core: usize, budget: usize, target: u64) -> ());
     pub fn idle(&self) -> bool {
         self.inner.idle()
     }
@@ -313,6 +314,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn run(&self, core: usize, budget: usize) -> PyResult<()> {
         Xp4Session::run(self, core, budget)
+    }
+    fn run_to(&self, core: usize, budget: usize, target: u64) -> PyResult<()> {
+        Xp4Session::run_to(self, core, budget, target)
     }
     fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()> {
         Xp4Session::set_adc_input(self, channel, sample)

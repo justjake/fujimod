@@ -153,6 +153,11 @@ impl Xp4 {
     fn run(&self, py: Python<'_>, core: usize, budget: usize) -> PyResult<()> {
         self.with(py, |s| s.run(core, budget))
     }
+    /// Run a positive instruction budget, stopping before the even target PC.
+    /// Normal IRQ, wait and device yields can return before the target is reached.
+    fn run_to(&self, py: Python<'_>, core: usize, budget: usize, target: u64) -> PyResult<()> {
+        self.with(py, |s| s.run_to(core, budget, target))
+    }
     fn idle(&self, py: Python<'_>) -> PyResult<bool> {
         self.with(py, |s| Ok(s.idle()))
     }

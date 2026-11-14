@@ -2345,6 +2345,25 @@ impl Session {
         Ok(bytes)
     }
     pub fn run(&self, core: usize, budget: usize) -> Result<(), String> {
+        self.run_inner(core, budget, None)
+    }
+    /// Run at most `budget` instructions, stopping before `target` executes.
+    /// The target is an even 32-bit instruction address, without a Thumb bit;
+    /// the guest may change instruction sets before reaching it. Address zero
+    /// is a valid stop. IRQ entry, WFI and other normal yields may return first:
+    /// callers inspect the PC and board state before scheduling another run.
+    pub fn run_to(&self, core: usize, budget: usize, target: u64) -> Result<(), String> {
+        self.inner.healthy()?;
+        self.inner.cpu(core)?;
+        if budget == 0 {
+            return Err("Run-to requires a positive instruction budget".to_owned());
+        }
+        if target > u64::from(u32::MAX) || target & 1 != 0 {
+            return Err("Run-to target must be an even 32-bit instruction address".to_owned());
+        }
+        self.run_inner(core, budget, Some(target))
+    }
+    fn run_inner(&self, core: usize, budget: usize, until: Option<u64>) -> Result<(), String> {
         let c = &self.inner;
         c.healthy()?;
         let cpu = c.cpu(core)?;
@@ -2352,6 +2371,14 @@ impl Session {
             return Err("Reentrant ARMv7-A execution".to_owned());
         }
         let _running = Running(&c.running);
+        if let Some(target) = until
+            && u64::from(c.reg(core, arm::PC)?) == target
+        {
+            // A debugger boundary already reached is a no-op, including for
+            // device deadlines and pending DMA. Still reject reentrant calls
+            // and preserve an earlier sticky board failure above.
+            return Ok(());
+        }
         c.maintenance.ready(&c.cpus)
             .map_err(|error| c.retain_failure(error))?;
         if budget == 0 && unsafe { (*c.state.get()).driver_guard.is_some() } {
@@ -2374,7 +2401,7 @@ impl Session {
             }
             let mut exit = cpu.run(Run {
                 begin: u64::from(start),
-                until: None,
+                until,
                 watchdog_us: 0,
                 instructions: Some(budget),
             });
