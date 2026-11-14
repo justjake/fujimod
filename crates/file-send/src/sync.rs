@@ -6,13 +6,13 @@
 //! applies removals for paths that an earlier snapshot created.
 use crate::tree::{DirectorySource, relative};
 use crate::{
-    CHUNK_BYTES, Hello, Incoming, ManifestBatch, Pipe, Report, Result, SYNC_CAPABILITY,
-    SYNC_MARKER, Wants, appended, commit, fail, hash_file, manifest_entry, modified, put,
-    receive_end, receive_manifest, resume, safe_path, take, transfer_wanted, welcome,
+    CHUNK_BYTES, Hello, Incoming, Pipe, Report, Result, SYNC_CAPABILITY, SYNC_MARKER, SYNC_PARTS,
+    Wants, commit, fail, hash_file, manifest_entry, modified, put, receive_end, receive_manifest,
+    resume, safe_path, send_manifest, take, transfer_wanted, welcome,
 };
 use fujimod_sync_protocol::committed::Status;
 use fujimod_sync_protocol::{ManifestEntry, decode, frame::Body};
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     fs::OpenOptions,
@@ -78,16 +78,7 @@ async fn serve_connected(
     loop {
         let (generation, snapshot) = source.snapshot();
         if served != Some(generation) {
-            put(
-                pipe,
-                Body::Manifest(ManifestBatch {
-                    entries: snapshot.iter().map(manifest_entry).collect(),
-                    last: true,
-                    complete: true,
-                }),
-                &[],
-            )
-            .await?;
+            send_manifest(pipe, snapshot.iter().map(manifest_entry).collect(), true).await?;
             let (Body::Wants(wants), _) = take(pipe).await? else {
                 return Err("expected Wants".into());
             };
@@ -315,6 +306,9 @@ fn validate(entries: Vec<ManifestEntry>) -> Result<Vec<Entry>> {
         if entry.sha256.len() != 32 && !entry.directory {
             return Err(format!("{}: sender did not send a SHA-256", entry.path));
         }
+        if entry.directory && entry.size_bytes != 0 {
+            return Err(format!("{}: directory has a nonzero size", entry.path));
+        }
         if entry.directory && !entry.sha256.is_empty() {
             return Err(format!("{}: directory carries a digest", entry.path));
         }
@@ -347,6 +341,7 @@ fn validate(entries: Vec<ManifestEntry>) -> Result<Vec<Entry>> {
 fn keep_paths(entries: &[Entry]) -> HashSet<String> {
     let mut keep = HashSet::new();
     keep.insert(SYNC_MARKER.to_owned());
+    keep.insert(SYNC_PARTS.to_owned());
     for entry in entries {
         keep.insert(entry.path.clone());
         let parts: Vec<&str> = entry.path.split('/').collect();
@@ -375,10 +370,9 @@ struct Wanted {
 /// opened only when its transfer starts, so a directory with thousands of
 /// missing files does not fill the process descriptor limit up front.
 fn wanted_file(root: &Path, entry: &Entry) -> Result<Wanted> {
-    let finished = root.join(&entry.path);
     ensure_parents(root, &entry.path)?;
-    let part = appended(&finished, ".part");
-    let meta = appended(&finished, ".part.meta");
+    let part = state_path(root, &entry.path, ".part");
+    let meta = state_path(root, &entry.path, ".part.meta");
     let expected = crate::hex(&entry.sha256);
     let mut resume_offset = 0;
     let meta_matches = match std::fs::symlink_metadata(&meta) {
@@ -417,7 +411,20 @@ fn wanted_file(root: &Path, entry: &Entry) -> Result<Wanted> {
     })
 }
 
+fn state_path(root: &Path, name: &str, suffix: &str) -> PathBuf {
+    let mut sha = Sha256::new();
+    sha.update(name.as_bytes());
+    let digest = sha.finalize();
+    root.join(SYNC_PARTS)
+        .join(format!("{}{suffix}", crate::hex(&digest)))
+}
+
 fn open_incoming(wanted: &Wanted) -> Result<Incoming> {
+    let parent = wanted
+        .part
+        .parent()
+        .ok_or_else(|| format!("{}: no parent", wanted.part.display()))?;
+    std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     if let Ok(metadata) = std::fs::symlink_metadata(&wanted.part)
         && !metadata.is_file()
     {
@@ -614,6 +621,7 @@ mod tests {
             sha256: vec![7; 32],
         };
         let wanted = wanted_file(&root, &entry).unwrap();
+        std::fs::create_dir_all(wanted.part.parent().unwrap()).unwrap();
         std::fs::write(&wanted.part, b"ab").unwrap();
         std::fs::write(&wanted.meta, crate::hex(&entry.sha256)).unwrap();
         let wanted = wanted_file(&root, &entry).unwrap();
@@ -622,5 +630,42 @@ mod tests {
         assert_eq!(incoming.written, 2);
         drop(incoming);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn source_names_cannot_collide_with_resume_state() {
+        let root = scratch("collision");
+        let first = Entry {
+            path: "a".into(),
+            size: 0,
+            directory: false,
+            sha256: vec![1; 32],
+        };
+        let second = Entry {
+            path: "a.part".into(),
+            size: 0,
+            directory: false,
+            sha256: vec![2; 32],
+        };
+        let first = wanted_file(&root, &first).unwrap();
+        let second = wanted_file(&root, &second).unwrap();
+        assert_ne!(first.part, second.part);
+        assert_eq!(first.part.parent().unwrap(), root.join(SYNC_PARTS));
+        assert!(safe_path(".fujimod-sync-parts").is_err());
+        assert!(safe_path(".fujimod-sync-parts/anything").is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn validates_directory_size() {
+        let error = validate(vec![ManifestEntry {
+            path: "empty".into(),
+            size_bytes: 1,
+            fat_timestamp: 0,
+            directory: true,
+            sha256: Vec::new(),
+        }])
+        .unwrap_err();
+        assert!(error.contains("nonzero size"));
     }
 }
