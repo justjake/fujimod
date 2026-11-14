@@ -87,16 +87,11 @@ function ordered(node: Node): Node[] {
 
 const NO_CREDITS: Credits = { premiere: false, inspired: [], thanks: [] };
 
-function Kind(props: { row?: MenuRow; inside: boolean }) {
+function Kind(props: { row?: MenuRow }) {
   return (
-    <>
-      <Show when={props.row?.kind === 'command'}>
-        <span class="outline-badge">cmd</span>
-      </Show>
-      <Show when={props.row && !props.row.stock && !props.inside}>
-        <span class="outline-new">NEW</span>
-      </Show>
-    </>
+    <Show when={props.row?.kind === 'command'}>
+      <span class="outline-badge">cmd</span>
+    </Show>
   );
 }
 
@@ -132,8 +127,8 @@ function Options(props: { choices: Choice[]; card: Card }) {
   );
 }
 
-/** A menu row with everything the catalog knows about it. `inside` marks rows within a row FujiMod adds. */
-function OutlineNode(props: { node: Node; inside: boolean }) {
+/** A menu row with everything the catalog knows about it. */
+function OutlineNode(props: { node: Node }) {
   const cardKey = () => props.node.row?.card ?? undefined;
   const card = () => (cardKey() ? catalog.cards[cardKey()!] : undefined);
   /** The feature whose tile is this row, or that the row stands for (DRIVE > SOFTWARE ND). */
@@ -143,7 +138,6 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
     const stands = props.node.row?.card?.startsWith('row:') || own?.title === props.node.title;
     return own && (!own.card || props.node.row?.card?.startsWith('row:')) && stands ? own : undefined;
   };
-  const added = () => !!props.node.row && !props.node.row.stock;
   const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
   /** One description: what FujiMod changes in a stock row, else the card's, else the tile's. */
   const text = () => card()?.changes ?? card()?.summary ?? feature()?.summary;
@@ -168,7 +162,7 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
         <Show when={card()?.drive_mode}>
           <FeatureIcon name="drive-single" />
         </Show>
-        <Kind row={props.node.row} inside={props.inside} />
+        <Kind row={props.node.row} />
         <Show when={credits().premiere}>
           <Premiere />
         </Show>
@@ -194,7 +188,7 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
       <Show when={props.node.children.size}>
         <ul>
           <For each={ordered(props.node)}>
-            {(child) => <OutlineNode node={child} inside={props.inside || added()} />}
+            {(child) => <OutlineNode node={child} />}
           </For>
         </ul>
       </Show>
@@ -211,7 +205,6 @@ function MenuFree(props: { features: Feature[] }) {
           <div class="outline-row">
             <FeatureIcon name={feature.icon} />
             <span class="outline-title">{feature.title}</span>
-            <span class="outline-new">NEW</span>
           </div>
           <p class="outline-text">
             <Prose text={feature.summary} />
@@ -243,7 +236,7 @@ export function FeatureOutline() {
                   <details class="outline-section" open>
                     <summary>{top.title}</summary>
                     <ul class="outline-tree">
-                      <For each={ordered(top)}>{(node) => <OutlineNode node={node} inside={false} />}</For>
+                      <For each={ordered(top)}>{(node) => <OutlineNode node={node} />}</For>
                     </ul>
                   </details>
                 )}

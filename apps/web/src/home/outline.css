@@ -18,9 +18,11 @@
 }
 .outline-section > summary {
   cursor: pointer;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dim);
   letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .outline-tree,
 .outline-tree ul {
@@ -74,8 +76,7 @@
   font-size: 11.5px;
   opacity: 0.55;
 }
-.outline-badge,
-.outline-new {
+.outline-badge {
   padding: 0 5px;
   border-radius: 4px;
   font-size: 10px;
@@ -88,10 +89,6 @@
   color: rgb(235 235 245 / 75%);
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-weight: 500;
-}
-.outline-new {
-  background: rgb(10 132 255 / 25%);
-  color: #64d2ff;
 }
 .outline-chips .catalog-chip svg {
   width: auto;
