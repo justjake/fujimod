@@ -2688,6 +2688,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "futures-lite",
  "sha2 0.10.9",
+ "walkdir",
 ]
 
 [[package]]
