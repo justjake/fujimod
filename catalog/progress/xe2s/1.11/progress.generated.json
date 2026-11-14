@@ -422,7 +422,7 @@
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
@@ -432,7 +432,7 @@
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
@@ -442,7 +442,7 @@
         {
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-fast-memory",
@@ -493,9 +493,9 @@
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
@@ -509,9 +509,9 @@
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
@@ -525,9 +525,9 @@
           "id": "camera-snapshot",
           "label": "Camera state dumped (RAM at least)",
           "stage": "camera-snapshot",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-fast-memory",
