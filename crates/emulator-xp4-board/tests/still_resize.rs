@@ -42,7 +42,9 @@ fn only_the_resizer_admits_a_computed_output() {
         .unwrap()
         .remove("compute");
     session(absent).unwrap();
-    for engine in ["iifp", "recc", "reszl", "mix", "retch"] {
+    let error = session(input("recc", true)).err().unwrap();
+    assert!(error.contains("develops from a declared RAW"), "{error}");
+    for engine in ["iifp", "reszl", "mix", "retch"] {
         let error = session(input(engine, true)).err().unwrap();
         assert!(error.contains("no computed output"), "{engine}: {error}");
     }

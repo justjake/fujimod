@@ -651,6 +651,9 @@ impl Devices {
         if wiring.compute {
             model = model.computing()?;
         }
+        if let Some(raw) = wiring.raw {
+            model = model.developing(raw)?;
+        }
         let (lo, hi) = model.window();
         if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
             return Err("Overlapping XP4 still engine window".into());
