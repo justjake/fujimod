@@ -515,7 +515,7 @@
     {
       "id": "raw_view",
       "group": "photography",
-      "icon": "raw-view",
+      "icon": "mod-raw-view-action",
       "title": "RAW VIEW",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "{button}"],
       "summary": "Assign RAW VIEW to a function button to see how close the brightest areas are to losing detail in the RAW file.",
@@ -608,7 +608,7 @@
     {
       "id": "desqueeze_jpeg",
       "group": "photography",
-      "icon": "desqueeze-jpeg",
+      "icon": "mod-shape-jpeg-item",
       "title": "Desqueeze JPEG",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
@@ -673,7 +673,7 @@
     {
       "id": "desqueeze",
       "group": "videography",
-      "icon": "anamorphic",
+      "icon": "mod-shape-desqueeze-item",
       "title": "Anamorphic Lenses",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
@@ -5183,7 +5183,7 @@
       "stock": false,
       "card": "shape_desqueeze_item",
       "feature": "desqueeze",
-      "icon": null
+      "icon": "mod-shape-desqueeze-item"
     },
     {
       "title": "DESQUEEZE JPEG",
@@ -5193,7 +5193,7 @@
       "stock": false,
       "card": "shape_jpeg_item",
       "feature": "desqueeze_jpeg",
-      "icon": null
+      "icon": "mod-shape-jpeg-item"
     },
     {
       "title": "EDIT ASPECT RATIOS",

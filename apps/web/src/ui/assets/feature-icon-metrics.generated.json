@@ -132,13 +132,6 @@
     "width": 1.106,
     "height": 0.852
   },
-  "anamorphic": {
-    "sprite": "feature",
-    "box": [0.5, 6.5, 35, 23],
-    "view": [0, 0, 36, 36],
-    "width": 1.214,
-    "height": 0.798
-  },
   "controls": {
     "sprite": "feature",
     "box": [2.698, 2.813, 29.877, 29.402],
@@ -258,13 +251,6 @@
     "width": 1.065,
     "height": 0.925
   },
-  "raw-view": {
-    "sprite": "feature",
-    "box": [1.75, 5.75, 32.5, 24.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.131,
-    "height": 0.852
-  },
   "tone-steps": {
     "sprite": "feature",
     "box": [2.75, 7.75, 30.5, 23.5],
@@ -292,13 +278,6 @@
     "view": [0, 0, 36, 36],
     "width": 1,
     "height": 1
-  },
-  "desqueeze-jpeg": {
-    "sprite": "feature",
-    "box": [1.75, 7.75, 32.5, 26.66],
-    "view": [0, 0, 36, 36],
-    "width": 1.104,
-    "height": 0.906
   },
   "menu-order": {
     "sprite": "feature",
@@ -524,6 +503,13 @@
     "width": 1.161,
     "height": 0.794
   },
+  "mod-raw-view-action": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.146,
+    "height": 0.781
+  },
   "mod-recipe-exif-item": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
@@ -558,6 +544,20 @@
     "view": [0, 0, 45, 30],
     "width": 1.131,
     "height": 0.774
+  },
+  "mod-shape-desqueeze-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.129,
+    "height": 0.77
+  },
+  "mod-shape-jpeg-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.128,
+    "height": 0.769
   },
   "mod-shape-surround-item": {
     "sprite": "mod",
