@@ -245,6 +245,40 @@ test('stale and failing stages do not count', () => {
   expect([research?.fraction, emulator?.fraction]).toEqual([0, 1 / 6]);
 });
 
+/** Mark stages inapplicable the way the generator does: the stage says so and writes no steps. */
+function inapplicable(document: FirmwareProgress, stages: string[]) {
+  for (const track of document.tracks) {
+    track.stages.push(
+      ...stages
+        .filter((stage) => track.steps.some((step) => step.stage === stage))
+        .map((stage) => ({ id: stage, title: stage, result: 'inapplicable' as const })),
+    );
+    track.steps = track.steps.filter((step) => !stages.includes(step.stage));
+  }
+}
+
+test('steps of inapplicable stages are not written, so their track can still be done', () => {
+  const document = progress('X-E4', ['boot-rom-loads-sd-card-on-camera', 'camera-identity']);
+  inapplicable(document, ['sd-boot-v1-fujimod-boots-on-camera', 'camera-menu']);
+  expect(document.tracks[4]!.stages).toEqual([
+    {
+      id: 'sd-boot-v1-fujimod-boots-on-camera',
+      title: 'sd-boot-v1-fujimod-boots-on-camera',
+      result: 'inapplicable',
+    },
+  ]);
+  const [, , camera, , sd] = phases(document);
+  expect([camera?.fraction, camera?.value, camera?.steps.length]).toEqual([1 / 3, '1 of 3', 3]);
+  expect([sd?.fraction, sd?.value, sd?.steps.length]).toEqual([1, 'Done', 1]);
+});
+
+test('a track whose every stage is inapplicable is not applicable', () => {
+  const document = progress('X-E4', []);
+  inapplicable(document, ['research', 'analysis']);
+  const [research] = phases(document);
+  expect([research?.fraction, research?.value, research?.steps]).toEqual([1, 'Not applicable', []]);
+});
+
 test('a model is started once any stage, stock feature or mod passes', () => {
   const partial = progress('X30', []);
   const film = partial.tracks[1]!.steps.find((step) => step.id === 'stock/film-simulations')!;

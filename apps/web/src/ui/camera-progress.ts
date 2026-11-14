@@ -1,6 +1,6 @@
 /** Bring-up progress per camera model, from the catalog's generated progress documents. */
-export type StageProgress = 'pass' | 'partial' | 'fail' | 'stale' | 'not-run';
-export type ModProgress = Exclude<StageProgress, 'partial'> | 'unavailable' | 'inapplicable';
+export type StageProgress = 'pass' | 'partial' | 'fail' | 'inapplicable' | 'stale' | 'not-run';
+export type ModProgress = Exclude<StageProgress, 'partial'> | 'unavailable';
 export type StockResult = 'pass' | 'partial' | 'fail' | 'stale' | 'not-run';
 /** Bring-up tracks, in the bring-up graph's order. */
 export type TrackId = 'static' | 'emulator' | 'camera' | 'fujimod' | 'sd';
@@ -20,7 +20,7 @@ export interface TrackProgress {
   /** Draw each step as its own cell instead of one continuous fill. */
   cells: boolean;
   stages: StageEntry[];
-  /** The ordered steps the website draws. */
+  /** The ordered steps the website draws; an `inapplicable` stage has none. */
   steps: StepProgress[];
 }
 
@@ -28,7 +28,7 @@ export interface StepProgress {
   id: string;
   label: string;
   stage: string;
-  result: StageProgress | 'unavailable';
+  result: Exclude<StageProgress, 'inapplicable'> | 'unavailable';
   passed: number;
   total: number;
   detail?: string;
@@ -74,7 +74,7 @@ export interface Phase {
   weight: number;
   /** Completed share of this phase, 0–1. */
   fraction: number;
-  /** "Done", "2 of 3", "6 of 24", "Not yet". */
+  /** "Done", "2 of 3", "6 of 24", "Not yet", "Not applicable". */
   value: string;
   steps: Step[];
   /** Draw each step as its own cell of the segment. */
@@ -89,6 +89,9 @@ function phase(
   cells = false,
 ): Phase {
   const done = steps.filter((step) => step.fraction === 1).length;
+  // Every stage of the track is inapplicable to this body.
+  if (!steps.length)
+    return { id, label, weight, fraction: 1, value: 'Not applicable', steps, cells };
   return {
     id,
     label,
