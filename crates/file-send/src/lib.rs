@@ -15,7 +15,7 @@ use fujimod_sync_protocol::{
 };
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::{File, Metadata},
     future::Future,
     io::{Read, Seek, SeekFrom, Write},
@@ -34,6 +34,9 @@ pub const CHUNK_BYTES: u32 = 1024 * 1024;
 const CAPABILITIES: [&str; 2] = ["files", "sha256"];
 pub(crate) const SYNC_CAPABILITY: &str = "sync";
 pub(crate) const SYNC_MARKER: &str = ".fujimod-sync";
+pub(crate) const SYNC_PARTS: &str = ".fujimod-sync-parts";
+pub(crate) const SYNC_PARTS_PREFIX: &str = ".fujimod-sync-parts/";
+const MANIFEST_BATCH: usize = 1024;
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -168,20 +171,47 @@ async fn send_files(pipe: &mut impl Pipe, files: &[Source], report: Report<'_>) 
     }
     let chunk = welcome.max_chunk_bytes.clamp(1, CHUNK_BYTES) as usize;
     let entries: Vec<ManifestEntry> = files.iter().map(manifest_entry).collect();
-    put(
-        pipe,
-        Body::Manifest(ManifestBatch {
-            entries,
-            last: true,
-            complete: false,
-        }),
-        &[],
-    )
-    .await?;
+    send_manifest(pipe, entries, false).await?;
     let (Body::Wants(wants), _) = take(pipe).await? else {
         return Err("expected Wants".into());
     };
     transfer_wanted(pipe, files, &wants, chunk, report).await
+}
+
+/// Send a manifest in bounded batches. Only the final batch is `last`, and a
+/// complete snapshot marks only that final batch as `complete`.
+pub(crate) async fn send_manifest(
+    pipe: &mut impl Pipe,
+    entries: Vec<ManifestEntry>,
+    complete: bool,
+) -> Result<()> {
+    if entries.is_empty() {
+        return put(
+            pipe,
+            Body::Manifest(ManifestBatch {
+                entries: Vec::new(),
+                last: true,
+                complete,
+            }),
+            &[],
+        )
+        .await;
+    }
+    let count = entries.len().div_ceil(MANIFEST_BATCH);
+    for (index, chunk) in entries.chunks(MANIFEST_BATCH).enumerate() {
+        let last = index + 1 == count;
+        put(
+            pipe,
+            Body::Manifest(ManifestBatch {
+                entries: chunk.to_vec(),
+                last,
+                complete: complete && last,
+            }),
+            &[],
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 pub(crate) fn manifest_entry(source: &Source) -> ManifestEntry {
@@ -204,10 +234,14 @@ pub(crate) async fn transfer_wanted(
     chunk: usize,
     report: Report<'_>,
 ) -> Result<()> {
+    let sources: HashMap<&str, &Source> = files
+        .iter()
+        .map(|source| (source.path.as_str(), source))
+        .collect();
     for want in &wants.entries {
-        let source = files
-            .iter()
-            .find(|source| source.path == want.path)
+        let source = sources
+            .get(want.path.as_str())
+            .copied()
             .ok_or_else(|| format!("receiver wants unknown file {}", want.path))?;
         if source.directory {
             return Err(format!("{}: receiver wants a directory", want.path));
@@ -290,6 +324,8 @@ pub(crate) fn safe_path(name: &str) -> Result<&str> {
         || name == "."
         || name == ".."
         || name == SYNC_MARKER
+        || name == SYNC_PARTS
+        || name.starts_with(SYNC_PARTS_PREFIX)
         || name.starts_with('/')
         || name.ends_with('/')
         || name.contains(['\\', '\0', ':'])
