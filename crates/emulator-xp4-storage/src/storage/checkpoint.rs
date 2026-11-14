@@ -24,6 +24,8 @@ struct NorState {
     immutable_prefix: Option<usize>,
     #[serde(default)]
     write_protect: bool,
+    #[serde(default)]
+    read_backing: Option<ReadBacking>,
     jedec: u32,
     write_enable: bool,
     pending: Option<Pending>,
@@ -44,6 +46,7 @@ impl Nor {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
             || state.write_protect != self.write_protect
+            || state.read_backing != self.read_backing
             || state.jedec != self.jedec
             || state.erase_bytes != g.erase_bytes
             || state.page_bytes != g.page_bytes
@@ -163,10 +166,14 @@ impl SerialFlashController {
             port.nor
                 .check_command(registers[0x90 / 4], registers[0x94 / 4])?;
         }
-        if let Some(request) = &state.stream
-            && request.write
-        {
-            port.nor.check_mutation(request.address, request.size)?;
+        if let Some(request) = &state.stream {
+            if request.write {
+                port.nor.check_mutation(request.address, request.size)?;
+            } else {
+                // Validate against factory coverage before any restored state
+                // is committed, including streams already accepted by DMA.
+                port.nor.check_read_backing(request.address, request.size)?;
+            }
         }
         port.nor.restore_state(state.nor)?;
         port.request = state.stream;

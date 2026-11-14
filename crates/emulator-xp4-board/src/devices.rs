@@ -979,6 +979,7 @@ impl Devices {
         prefix: Option<storage::ImmutablePrefix>,
         mapped_read: Option<storage::MappedReadGate>,
         write_protect: bool,
+        strict_backing: bool,
     ) -> Result<(Self, Option<storage::ImmutableView>), String> {
         let routes: [u32; 16] = routes
             .try_into()
@@ -1001,6 +1002,7 @@ impl Devices {
         )?;
         if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
         if write_protect { nor = nor.with_write_protect(); }
+        if strict_backing { nor = nor.with_strict_backing(); }
         let view = nor.immutable_view();
         let port = storage::port_from_nor(nor);
         let mut dma = DmaController::new(port.clone(), routes);

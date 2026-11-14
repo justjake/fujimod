@@ -1089,6 +1089,7 @@ impl Session {
             storage_immutable_prefix,
             storage_mapped_read,
             storage_write_protect,
+            storage_strict_backing,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
@@ -1288,6 +1289,9 @@ impl Session {
         if (storage_mapped_read.is_some() || storage_write_protect) && storage_jedec.is_none() {
             return Err("NOR read gate and write protection require an XP4 NOR owner".into());
         }
+        if storage_strict_backing && (storage_jedec.is_none() || storage_image.is_none()) {
+            return Err("Strict NOR backing requires an XP4 NOR owner and explicit contents".into());
+        }
         if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
             // The prefix is mapped as memory, so its reads would bypass the gate.
             return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
@@ -1309,6 +1313,7 @@ impl Session {
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
                 storage_mapped_read,
                 storage_write_protect,
+                storage_strict_backing,
             )?;
             frozen_nor = view;
             Some(devices)
