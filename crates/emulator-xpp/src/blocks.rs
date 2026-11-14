@@ -49,6 +49,17 @@
 //! 0xfff0f000 through 0xc6c64c (+0xb8 = 0x6a020202, then waits for +0xbc bits
 //! 5..0 = 0x27) and back through 0xc6c700 (0x01020202, waits for 0x20); these
 //! are its only +0xb8 commands. What the states mean is not known.
+//! A command may name its own word as the status word: the field takes its
+//! state right after the write, a busy or request bit whose work completes
+//! at once. On the X-T3 5.11, the boot setup writes 1 to 0xff505384 and waits
+//! for it to read 0; the block 0xfff78000 is enabled by writing 1 to +0x1c
+//! and reading it back until 0; the power-off path writes 0 to bit 0 of
+//! 0xfff6c400 and waits for that bit to read set again.
+//!
+//! A block's base only has to be word-aligned, so a block can cover the rest
+//! of a page whose first words another model owns, as long as it stays inside
+//! that page: on the XP4 the sensor command window owns 0xfff6c000..0xfff6c244,
+//! and the block that holds 0xfff6c400 starts at 0xfff6c244.
 //!
 //! A job may declare [`Work`]: when it finishes, before its interrupt rises,
 //! the block develops or scales a still from the registers the firmware
@@ -357,9 +368,9 @@ impl Block {
         frames: Option<Frames>,
     ) -> Result<Self, String> {
         let bit = |(o, mask): (u64, u32)| o & 3 != 0 || o >= size || mask == 0;
-        if base & 0xfff != 0
+        if base & 3 != 0
             || size == 0
-            || size > 0x1000
+            || (base & 0xfff) + size > 0x1000
             || size & 3 != 0
             || idle.iter().any(|&b| bit(b))
             || frames.is_some_and(|f| {
@@ -576,7 +587,8 @@ impl Block {
         self.fixed = fixed;
         Ok(self)
     }
-    /// Commands that set a field of a status word.
+    /// Commands that set a field of a status word, which may be the command's
+    /// own word.
     pub fn with_commands(mut self, commands: Vec<Command>) -> Result<Self, String> {
         let word = |o: u64| o & 3 != 0 || o >= self.size;
         let special = |o: u64| {
@@ -594,7 +606,6 @@ impl Block {
         if commands.iter().any(|c| {
             word(c.word)
                 || word(c.status)
-                || c.word == c.status
                 || c.mask == 0
                 || c.state & !c.mask != 0
                 || special(c.word)
@@ -1988,6 +1999,90 @@ mod tests {
         }
         assert_eq!(h.ram[0x1000..0x1004], 0x1122_3344_u32.to_le_bytes());
         assert_eq!(h.ram[0x1004..0x1010], [0; 12]);
+    }
+
+    #[test]
+    fn a_command_may_name_its_own_word_as_its_status() {
+        // X-T3 5.11: 0xfff78000 is enabled by writing 1 to +0x1c and reading
+        // it back until bit 0 is clear; the power-off path writes 0 to bit 0
+        // of 0xfff6c400 and waits for it to read set.
+        let enable = Command {
+            word: 0x1c,
+            value: 1,
+            status: 0x1c,
+            mask: 1,
+            state: 0,
+        };
+        let mut block = Block::new(0xfff7_8000, 0x1000, vec![], None)
+            .unwrap()
+            .with_commands(vec![enable])
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut block, &mut h, 0xfff7_801c, 1);
+        assert_eq!(read(&mut block, &mut h, 0xfff7_801c), 0);
+        // Only the declared value is a command; the other bits keep the write.
+        write(&mut block, &mut h, 0xfff7_801c, 3);
+        assert_eq!(read(&mut block, &mut h, 0xfff7_801c), 3);
+        let request = Command {
+            word: 0x1bc,
+            value: 0,
+            status: 0x1bc,
+            mask: 1,
+            state: 1,
+        };
+        let mut sensor = Block::new(0xfff6_c244, 0xdbc, vec![], None)
+            .unwrap()
+            .with_commands(vec![request])
+            .unwrap();
+        write(&mut sensor, &mut h, 0xfff6_c400, 0);
+        assert_eq!(read(&mut sensor, &mut h, 0xfff6_c400), 1);
+        let saved = sensor.save();
+        let mut other = Block::new(0xfff6_c244, 0xdbc, vec![], None)
+            .unwrap()
+            .with_commands(vec![request])
+            .unwrap();
+        other.restore(&saved).unwrap();
+        assert_eq!(read(&mut other, &mut h, 0xfff6_c400), 1);
+        // The state must still fit the field, and the word may not be special.
+        assert!(
+            Block::new(0xfff7_8000, 0x1000, vec![(0x1c, 2)], None)
+                .unwrap()
+                .with_commands(vec![enable])
+                .is_err()
+        );
+        assert!(
+            Block::new(0xfff7_8000, 0x1000, vec![], None)
+                .unwrap()
+                .with_commands(vec![Command { state: 2, ..enable }])
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_word_aligned_block_covers_the_rest_of_its_page() {
+        // On the XP4 the sensor command window owns 0xfff6c000..0xfff6c244.
+        let mut rest = Block::new(0xfff6_c244, 0xdbc, vec![(0x100, 1)], None).unwrap();
+        assert_eq!(rest.window(), 0xdbc);
+        let mut h = TestHost::new();
+        write(&mut rest, &mut h, 0xfff6_c248, 0x1234);
+        assert_eq!(read(&mut rest, &mut h, 0xfff6_c248), 0x1234);
+        assert_eq!(read(&mut rest, &mut h, 0xfff6_c344), 1);
+        let mut cx = h.cx();
+        rest.read(&mut cx, 0xfff6_c240, 4);
+        assert!(cx.is_unmodeled());
+        // Word-aligned, inside one page.
+        for (base, size) in [
+            (0xfff6_c242, 0xdbc),
+            (0xfff6_c244, 0xdc0),
+            (0xfff6_cffc, 8),
+            (0xfff6_c244, 0),
+        ] {
+            assert!(
+                Block::new(base, size, vec![], None).is_err(),
+                "{base:#x}+{size:#x}"
+            );
+        }
+        assert!(Block::new(0xfff6_cffc, 4, vec![], None).is_ok());
     }
 
     #[test]
