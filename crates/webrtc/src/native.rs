@@ -9,11 +9,7 @@ use aes_gcm::{
     aead::{Aead, Payload},
 };
 use async_channel::{Receiver, Sender};
-use async_tungstenite::{
-    WebSocketStream,
-    smol::{ConnectStream, connect_async},
-    tungstenite::Message,
-};
+use async_tungstenite::tungstenite::Message;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use bytes::BytesMut;
 use futures_util::StreamExt;
@@ -37,7 +33,7 @@ use webrtc::{
 fn error(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
 }
-type Socket = WebSocketStream<ConnectStream>;
+type Socket = crate::dial::Signal;
 async fn write(socket: &mut Socket, value: Value) -> Result<()> {
     socket
         .send(Message::Text(value.to_string().into()))
@@ -482,7 +478,7 @@ async fn run(
     signal_url
         .query_pairs_mut()
         .append_pair("room", &ticket.room);
-    let (mut signal, _) = connect_async(signal_url.as_str()).await.map_err(error)?;
+    let mut signal = crate::dial::connect_signaling(signal_url.as_str()).await?;
     progress("signaling connected");
     write(
         &mut signal,
