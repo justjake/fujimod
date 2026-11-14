@@ -1201,17 +1201,18 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
         transfer_address,
         initializer_address,
         prepare_address,
+        prepare_word,
         state_address,
         initializer_bytes,
     ) = match firmware {
         "xt3-511" => (
-            0x01074fb8, 0x0107536c, 0x01074df8, 0x01075808, 0x010763cc, 0x0155a69c, 0x128,
+            0x01074fb8, 0x0107536c, 0x01074df8, 0x01075808, 0x010763cc, 68, 0x0155a69c, 0x128,
         ),
         "xt30-201" => (
-            0x0106f1ec, 0x0106f5a0, 0x0106f02c, 0x0106fa3c, 0x010706fc, 0x01503894, 0x138,
+            0x0106f1ec, 0x0106f5a0, 0x0106f02c, 0x0106fa3c, 0x010706fc, 68, 0x01503894, 0x138,
         ),
         "xe4-201" => (
-            0x011c79d0, 0x011c7d84, 0x011c7810, 0x011c8220, 0x011c8bc0, 0x01711a1c, 0x138,
+            0x011c79d0, 0x011c7d84, 0x011c7810, 0x011c8220, 0x011c8bc0, 61, 0x01711a1c, 0x138,
         ),
         _ => return Err("unsupported XP4 packet flash layout".into()),
     };
@@ -1256,7 +1257,7 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
         state_address,
         transfer_address,
         prepare_address,
-        if firmware == "xe4-201" { 61 } else { 68 },
+        prepare_word,
     )?;
     let references = index
         .referrers(firmware, Some("main"), state_address)
