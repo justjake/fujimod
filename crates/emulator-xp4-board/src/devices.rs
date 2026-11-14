@@ -646,8 +646,11 @@ impl Devices {
         Ok(())
     }
     pub fn still_engine(&mut self, wiring: &crate::definition::StillEngine) -> Result<(), String> {
-        let model =
+        let mut model =
             crate::still::Engine::new(wiring.engine, wiring.base, wiring.irq, wiring.run_ticks)?;
+        if wiring.compute {
+            model = model.computing()?;
+        }
         let (lo, hi) = model.window();
         if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
             return Err("Overlapping XP4 still engine window".into());
