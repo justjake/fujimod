@@ -366,6 +366,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -7142,6 +7151,10 @@
             }
           ]
         },
+        "restart": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -7219,6 +7232,10 @@
           ]
         },
         "progress": {
+          "status": "available",
+          "errors": []
+        },
+        "restart": {
           "status": "available",
           "errors": []
         },

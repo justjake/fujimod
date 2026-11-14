@@ -1,0 +1,149 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xt20-211-restart",
+  "firmware_id": "xt20-211",
+  "product": "X-T20",
+  "internal_version": "1.46",
+  "code_alias": 1073741824,
+  "code_checks": [
+    {
+      "name": "query_dispatch",
+      "address": 22202964,
+      "size": 136,
+      "sha256": "1cf12727d03a87800d665bc63ed33c31e9ace779ec0804d5cb425d023e6a4380"
+    },
+    {
+      "name": "query_forwarder",
+      "address": 22211932,
+      "size": 144,
+      "sha256": "52ce46be65ea0718713807b4edf8b037379a43412c63c0dccbfcf10b8cda15b4"
+    },
+    {
+      "name": "query_table_writer",
+      "address": 22211216,
+      "size": 92,
+      "sha256": "a155c2bac047fabd7a3bdce85f7c4176aa72fe0507df4d7dfbe8c9f118246bb2"
+    },
+    {
+      "name": "query_stock_callback",
+      "address": 22546340,
+      "size": 612,
+      "sha256": "cc641753e15286ff60dbe17df89e5b25807c4de158440ff7a0ca7872a2661d03"
+    },
+    {
+      "name": "query_service_dispatcher",
+      "address": 22203916,
+      "size": 628,
+      "sha256": "7a7ff076aed057b8ec566bd4266ff6bcc4f7790ee1b4553c25c2dfcbeb4ff3fc"
+    },
+    {
+      "name": "power_off_sender",
+      "address": 22467236,
+      "size": 232,
+      "sha256": "978ba391e7177d3ea471806a74778436d8edf51083871d3ad17a6a95cdbe5c56"
+    },
+    {
+      "name": "service_command",
+      "address": 22465828,
+      "size": 64,
+      "sha256": "692af90477f12e99ef7f69f5d6ffccc2a09ceb2d1e00efbb71ac35ba3bdf87a9"
+    },
+    {
+      "name": "message_send",
+      "address": 13511908,
+      "size": 408,
+      "sha256": "0cad20364037c876c560c81e1be7c226f88a84d0dc1528d8e42c5e61b18be9ae"
+    },
+    {
+      "name": "request_decoder",
+      "address": 23606536,
+      "size": 344,
+      "sha256": "c3d99e32ea527ed2910dca4a8455f87757b970f82179e1903b0f6435f161ec24"
+    },
+    {
+      "name": "power_off",
+      "address": 23621244,
+      "size": 216,
+      "sha256": "6ef61c0a31b2b0345ee005a50a4c59d82dcdd61028007e49d35191091ba7b95b"
+    },
+    {
+      "name": "alarm_setter",
+      "address": 13041044,
+      "size": 236,
+      "sha256": "4752b7b009158e50d799dbf69d462e4c41009be5c69cbfd408856cca08ec81ff"
+    },
+    {
+      "name": "power_cut",
+      "address": 12899564,
+      "size": 148,
+      "sha256": "5a36aa1232be7b99ba2554a69faff7781c0958439d08373d2534a7919c6bb6a1"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 13449384,
+      "size": 572,
+      "sha256": "3a8a3d14e391ba2a32fb8042777e280c2abe2da1957bcd1309ea670fa3309ddd"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 13449964,
+      "size": 196,
+      "sha256": "2d422b7ce4f9fc2e159535869566cc901d41a777f76f56e0e7f5d89f61a62265"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 29818084,
+      "callback_offset": 12,
+      "stock_callback": 22546340,
+      "output_fields": 30735500,
+      "output_bytes": 8
+    },
+    "sender": 22467236,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 8,
+    "ui": {
+      "mode_address": 18673732,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 18673735,
+      "menu_active_address": 18067664
+    },
+    "power_off": {
+      "entry": 23621244,
+      "halt": 23621456,
+      "power_cut": 12899564,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
+      },
+      "deadline_parameter": 0,
+      "rollover_parameter": 13,
+      "fixed_interval": null
+    },
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 13449384,
+        "size": 572
+      },
+      "cancel": {
+        "address": 13449964,
+        "size": 196
+      }
+    }
+  }
+}
