@@ -197,7 +197,7 @@ impl Guard {
         policy.sort_by_key(|entry| entry.start);
         if policy.len() > 4096
             || policy.iter().any(|entry| {
-                !matches!(entry.width, 1 | 2 | 4)
+                !(matches!(entry.width, 1 | 2 | 4) || entry.width == 8 && !entry.write)
                     || entry.start >= entry.end
                     || entry.start % u64::from(entry.width.max(1)) != 0
                     || entry.end % u64::from(entry.width.max(1)) != 0
@@ -396,6 +396,7 @@ impl Guard {
         let rn = ((word >> 16) & 15) as usize;
         let load = word & (1 << 20) != 0;
         let mut accesses: Vec<(u64, u64, bool)> = Vec::new();
+        let mut doubleword_read = None;
         match (word >> 25) & 7 {
             2 | 3 => {
                 if word & (1 << 25) != 0 && word & (1 << 4) != 0 {
@@ -545,6 +546,9 @@ impl Guard {
                         }
                         accesses.push((address as u64, 4, write));
                         accesses.push((address.wrapping_add(4) as u64, 4, write));
+                        if !write && u64::from(address) + 8 <= 1 << 32 {
+                            doubleword_read = Some(u64::from(address));
+                        }
                     } else {
                         accesses.push((address as u64, width, write));
                     }
@@ -563,6 +567,11 @@ impl Guard {
         }
         let plain_single = accesses.len() == 1
             && (matches!((word >> 25) & 7, 2 | 3) || word & 0x0e0000f0 == 0x000000b0);
+        // A modeled-memory LDRD requires one explicit eight-byte read policy.
+        // Preflight the whole pair before the CPU dispatches its read; two
+        // neighboring word permissions do not admit this wider transaction.
+        let paired_mmio =
+            doubleword_read.is_some_and(|address| self.mmio_permits(address, 8, false));
         for (address, size, write) in accesses {
             let allowed = if write {
                 &self.writable
@@ -570,7 +579,7 @@ impl Guard {
                 &self.readable
             };
             if !contains(allowed, address, size)
-                && !(plain_single && self.mmio_permits(address, size, write))
+                && !(paired_mmio || plain_single && self.mmio_permits(address, size, write))
             {
                 return Err(format!(
                     "Driver guard rejected {} at {address:#x} size={size} pc={pc:#x}",
@@ -833,6 +842,64 @@ mod tests {
             )
             .unwrap();
         assert!(readonly.preflight(0x1000, 0xe5801000, 0xd3, reg).is_err());
+    }
+
+    #[test]
+    fn paired_device_reads_require_one_complete_read_only_doubleword_policy() {
+        let wide = || {
+            guard()
+                .with_mmio(
+                    vec![MmioAccess {
+                        start: 0xfffd8000,
+                        end: 0xfffd8008,
+                        width: 8,
+                        read: true,
+                        write: false,
+                    }],
+                    vec![(0xfffd8000, 0xfffd8100)],
+                )
+                .unwrap()
+        };
+        let mut allowed = wide();
+        allowed
+            .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+            .unwrap();
+        allowed.mmio_access(0, 0xfffd8000, 8, false).unwrap();
+        assert_eq!(
+            allowed.snapshot().mmio_accesses,
+            vec![(0xfffd8000, 8, false)]
+        );
+        // Refuse a pair outside the range, an unaligned pair, STRD and LDM.
+        for (word, address) in [
+            (0xe1c020d0, 0xfffd8008),
+            (0xe1c020d0, 0xfffd8004),
+            (0xe1c020f0, 0xfffd8000),
+            (0xe890000c, 0xfffd8000),
+        ] {
+            let mut denied = wide();
+            assert!(
+                denied
+                    .preflight(0x1000, word, 0xd3, |_| Ok(address))
+                    .is_err()
+            );
+            assert!(denied.snapshot().mmio_accesses.is_empty());
+            assert_eq!(denied.snapshot().accepted_instructions, 0);
+        }
+        let mut words = guard()
+            .with_mmio(
+                vec![MmioAccess {
+                    end: 0xfffd8008,
+                    write: false,
+                    ..mmio_policy()
+                }],
+                vec![(0xfffd8000, 0xfffd8100)],
+            )
+            .unwrap();
+        assert!(
+            words
+                .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+                .is_err()
+        );
     }
 
     #[test]
