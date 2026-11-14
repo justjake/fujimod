@@ -74,8 +74,19 @@
 //! +0x34..+0x3c and +0x40..+0xb8 (a 31-point radial table written by
 //! 0x11131d4), which the firmware leaves at the identity in every job
 //! measured so far.
-//! The format word +0x08 holds 0x100 in all of them; a job whose source
-//! (bits 1..0) or output (bits 5..4) format is not 0 refuses.
+//! The format word +0x08 holds 0x100 in all of them.
+//!
+//! The 4K movie programs +0x08 = 0x133: source (bits 1..0) and output
+//! (bits 5..4) format 3, two picture lines per pitch row. 0x1dad1e0 accepts
+//! only formats 0 and 3, and doubles the line length for 3 (<< 2 instead
+//! of << 1). A format 3 side is read or written as
+//! Y0L2 rows ([`fujimod_emulator_xpp::development::Y0L2`]): RECC's 4K output
+//! (see below) and the Mali-V61 encoder's 10-bit frame, format 0x121, one
+//! plane (driver 0x109a248). 2636 source lines then fill 1318 rows at
+//! pitch 0x9000 and 2160 output lines exactly the 1080 rows of the encoder
+//! ring at pitch 0x5600. An odd output height repeats its last line; a
+//! Y0L2 block takes the chroma of its upper left pixel. Formats 1 and 2
+//! refuse.
 //!
 //! # RECC output (opt-in)
 //!
@@ -94,16 +105,36 @@
 //!   (lines << 16 | pixels, 4176 x 6256), and channel 4 writes it at the
 //!   start of the buffer.
 //!
+//! - mode +0x08 = 0x422000, the 4K movie (service 0x1293, recfReccProcess
+//!   0x1e901d0), two bands a frame: channel 1 reads the RAW at +0x0c
+//!   (+0x10), pitch +0x14 (0x3600), from line +0x1c >> 16 (332, then
+//!   2084), +0x20 samples a line (6272: 6252 rounded up to 32). Channel 4
+//!   writes +0x50 >> 16 lines (1316, then 1320) of +0x58 pixels (4704) at
+//!   +0x70 (+0x74), pitch +0x80, from line +0x54 >> 16 (0, then 1314): the
+//!   firmware scales by 3/4 both ways (0x1e717e0). +0x6c bits 1..0 is the
+//!   output code (0x1dc2f74, from the output format; 0x11563bc gives its
+//!   bytes a pixel): 3 = 0x80802, 10-bit 4:2:0 in line pairs at twice the
+//!   descriptor's pitch (0x1e89358 doubles it for that code alone), written
+//!   as Y0L2 rows; 0 = 0x100402, packed 4:2:2 8-bit lines. Codes 1 and 2
+//!   refuse.
+//!
 //! A band is developed by [`fujimod_emulator_xpp::development::develop`]
 //! (its declared X-Trans nearest-site sRGB law) from the site its source
 //! address has in the declared RAW; the copy pass copies its lines as they
-//! are. What the engine computes beyond that (the firmware's color, noise
-//! reduction, sharpening, and the copy pass's own processing, lens
+//! are. In the movie mode, picture line `j` of a band takes RAW line
+//! `j * 6272 / 4704` from the band's first one and pixel `x` sample
+//! `x * 6272 / 4704` (nearest neighbour), so the lines two bands share come
+//! out the same. The movie's RAW is read as 16-bit samples, as the still's;
+//! the firmware programs it 12-bit packed (source format 0x40101), which is
+//! not modeled. What the engine computes beyond that (the firmware's color,
+//! noise reduction, sharpening, and the copy pass's own processing, lens
 //! distortion correction among it) is not modeled. A pass in another mode,
 //! with a column start (bits 15..0 of +0x1c / +0x54) or whose source is not
 //! in the declared RAW at its pitch refuses.
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_xpp::development::{develop, size, step};
+use fujimod_emulator_xpp::development::{
+    YcLayout, develop, scaled_line, size, step, y0l2_sample, yc_row,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -673,6 +704,71 @@ impl Engine {
         self.contract.output = Output::Develop(raw);
         Ok(self)
     }
+    /// The X-Trans site of a pass's first RAW sample.
+    fn site(name: &str, raw: Raw, source: u64, pitch: u64) -> Result<(usize, usize), String> {
+        let offset = source
+            .checked_sub(raw.address)
+            .filter(|_| pitch == raw.pitch)
+            .ok_or_else(|| format!("{name} source {source:#x} is not in the declared RAW"))?;
+        Ok((
+            (usize::from(raw.site.0) + (offset / pitch) as usize) % 6,
+            (usize::from(raw.site.1) + (offset % pitch / 2) as usize) % 6,
+        ))
+    }
+    /// One band of the 4K movie (mode 0x422000, see the module notes).
+    fn movie_band(&self, cx: &mut Cx<'_>, raw: Raw) -> Result<(), String> {
+        let name = self.contract.name;
+        let word = |o| u64::from(self.word(o));
+        let address = |high, low| (word(high) & 3) << 32 | word(low);
+        let layout = match word(0x6c) & 3 {
+            0 => YcLayout::Lines,
+            3 => YcLayout::Y0l2,
+            code => return Err(format!("{name} output code {code} is not modeled")),
+        };
+        let per_row = layout.lines() as u64;
+        let (spitch, pitch) = (word(0x14), word(0x80));
+        let (window, width) = (word(0x20), word(0x58));
+        let (lines, first) = (word(0x50) >> 16, word(0x54) >> 16);
+        if window < 6
+            || !window.is_multiple_of(2)
+            || width < 2
+            || !width.is_multiple_of(2)
+            || width > window
+            || lines == 0
+            || !lines.is_multiple_of(per_row)
+            || !first.is_multiple_of(per_row)
+            || pitch < 2 * width * per_row
+        {
+            return Err(format!(
+                "{name} band {window} -> {width} x {lines} from line {first}, pitch {pitch}"
+            ));
+        }
+        let source = address(0x10, 0x0c) + (word(0x1c) >> 16) * spitch;
+        let phase = Self::site(name, raw, source, spitch)?;
+        // RAW line of band line j: the same step down as across.
+        let raw_line = |j: u64| (j * window / width) as usize;
+        let count = raw_line(lines - 1) as u64 + 1;
+        let bytes = cx.ram_bytes(source, (spitch * (count - 1) + 2 * window) as usize)?;
+        let developed = develop(
+            &bytes,
+            spitch as usize,
+            count as usize,
+            window as usize,
+            phase,
+            None,
+        )?;
+        let line = |j: u64| scaled_line(&developed[raw_line(j)], window as usize, width as usize);
+        let output = address(0x74, 0x70) + first / per_row * pitch;
+        for row in 0..lines / per_row {
+            let j = row * per_row;
+            let lower = match layout {
+                YcLayout::Y0l2 => line(j + 1),
+                YcLayout::Lines => Vec::new(),
+            };
+            cx.ram_write(output + row * pitch, &yc_row(layout, &line(j), &lower))?;
+        }
+        Ok(())
+    }
     /// One RECC pass: a band developed from the RAW, or the copy into place.
     fn pass(&self, cx: &mut Cx<'_>, raw: Raw) -> Result<(), String> {
         let name = self.contract.name;
@@ -686,16 +782,7 @@ impl Engine {
                 let (pitch, band) = (word(0x14), word(0x18));
                 let (lines, width) = (band >> 16, band & 0xffff);
                 let source = address(0x10, 0x0c) + (word(0x1c) >> 16) * pitch;
-                let offset = source
-                    .checked_sub(raw.address)
-                    .filter(|_| pitch == raw.pitch)
-                    .ok_or_else(|| {
-                        format!("{name} source {source:#x} is not in the declared RAW")
-                    })?;
-                let phase = (
-                    (usize::from(raw.site.0) + (offset / pitch) as usize) % 6,
-                    (usize::from(raw.site.1) + (offset % pitch / 2) as usize) % 6,
-                );
+                let phase = Self::site(name, raw, source, pitch)?;
                 let length = pitch * lines.saturating_sub(1) + 2 * width;
                 let bytes = cx.ram_bytes(source, length as usize)?;
                 let rows = develop(
@@ -724,6 +811,7 @@ impl Engine {
                     .collect();
                 (0, rows)
             }
+            0x0042_2000 => return self.movie_band(cx, raw),
             mode => return Err(format!("{name} mode {mode:#x} is not modeled")),
         };
         let pitch = word(0x80);
@@ -736,13 +824,19 @@ impl Engine {
         }
         Ok(())
     }
-    /// Scales the programmed packed 4:2:2 picture (nearest neighbour).
+    /// Scales the programmed picture (nearest neighbour), packed 4:2:2 lines
+    /// or Y0L2 rows on either side.
     fn resize(&self, cx: &mut Cx<'_>) -> Result<(), String> {
         let name = self.contract.name;
         let format = self.word(0x008);
-        if format & 0x33 != 0 {
-            return Err(format!("{name} format {format:#x} is not packed 4:2:2"));
-        }
+        let layout = |code| match code {
+            0 => Some(YcLayout::Lines),
+            3 => Some(YcLayout::Y0l2),
+            _ => None,
+        };
+        let (Some(input), Some(layout_out)) = (layout(format & 3), layout(format >> 4 & 3)) else {
+            return Err(format!("{name} format {format:#x} is not modeled"));
+        };
         let ((sh, sw), (oh, ow)) = (size(self.word(0x00c)), size(self.word(0x018)));
         let (Some(hx), Some(hy)) = (step(self.word(0x01c)), step(self.word(0x020))) else {
             return Err(format!("{name} has no step"));
@@ -750,23 +844,39 @@ impl Engine {
         let address = |high, low| u64::from(self.word(high) & 3) << 32 | u64::from(self.word(low));
         let (source, spitch) = (address(0x0c0, 0x0c4), self.word(0x0d0) as usize);
         let (output, opitch) = (address(0x0d4, 0x0d8), self.word(0x0e4) as usize);
-        if sw % 2 != 0 || ow % 2 != 0 || sw * 2 > spitch || ow * 2 > opitch {
+        let (sline, oline) = (sw * 2 * input.lines(), ow * 2 * layout_out.lines());
+        if sw % 2 != 0 || ow % 2 != 0 || sline > spitch || oline > opitch {
             return Err(format!(
                 "{name} {sw}x{sh} pitch {spitch} -> {ow}x{oh} pitch {opitch}"
             ));
         }
-        let pixels = cx.ram_bytes(source, spitch * (sh - 1) + sw * 2)?;
+        let rows = sh.div_ceil(input.lines());
+        let pixels = cx.ram_bytes(source, spitch * (rows - 1) + sline)?;
+        // 10-bit Y, Cb and Cr of a source pixel; a packed pixel takes its
+        // pair's chroma.
+        let sample = |x: usize, y: usize| match input {
+            YcLayout::Y0l2 => y0l2_sample(&pixels[y / 2 * spitch..], x, y % 2),
+            YcLayout::Lines => {
+                let row = &pixels[y * spitch + x / 2 * 4..];
+                [row[x % 2], row[2], row[3]].map(|b| u16::from(b) << 2)
+            }
+        };
         // The steps are dyadic, so the products are exact.
         let at = |i: usize, step: f64, limit: usize| ((i as f64 * step) as usize).min(limit - 1);
-        let mut line = vec![0; ow * 2];
-        for y in 0..oh {
-            let row = &pixels[at(y, hy, sh) * spitch..];
-            for (pair, out) in line.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                let (x0, x1) = (at(pair * 2, hx, sw), at(pair * 2 + 1, hx, sw));
-                let (p0, p1) = (x0 / 2 * 4, x1 / 2 * 4);
-                *out = [row[p0 + x0 % 2], row[p1 + x1 % 2], row[p0 + 2], row[p0 + 3]];
-            }
-            cx.ram_write(output + (y * opitch) as u64, &line)?;
+        let line = |y: usize| -> Vec<[u16; 3]> {
+            let sy = at(y.min(oh - 1), hy, sh);
+            (0..ow).map(|x| sample(at(x, hx, sw), sy)).collect()
+        };
+        for row in 0..oh.div_ceil(layout_out.lines()) {
+            let y = row * layout_out.lines();
+            let lower = match layout_out {
+                YcLayout::Y0l2 => line(y + 1),
+                YcLayout::Lines => Vec::new(),
+            };
+            cx.ram_write(
+                output + (row * opitch) as u64,
+                &yc_row(layout_out, &line(y), &lower),
+            )?;
         }
         Ok(())
     }
@@ -1367,7 +1477,7 @@ mod tests {
         }
     }
 
-    /// Paired-row formats (+0x08 bits 1..0 or 5..4), odd widths, a pitch
+    /// Formats 1 and 2 (+0x08 bits 1..0 or 5..4), odd widths, a pitch
     /// shorter than a line and a zero step refuse when the job ends.
     #[test]
     fn a_job_outside_the_modeled_layout_refuses() {
@@ -1384,8 +1494,8 @@ mod tests {
             words
         };
         for (words, expected) in [
-            (with(0x008, 0x133), "not packed"),
-            (with(0x008, 0x103), "not packed"),
+            (with(0x008, 0x101), "format 0x101 is not modeled"),
+            (with(0x008, 0x120), "format 0x120 is not modeled"),
             (with(0x00c, 0x0001_0002), "3x2"),
             (with(0x0d0, 6), "pitch 6"),
             (with(0x01c, 0x1_0000), "no step"),
@@ -1540,9 +1650,8 @@ mod tests {
         }
     }
 
-    /// The 4K movie mode, a column start, a source outside the RAW or at
-    /// another pitch, and a band too small to develop refuse when the pass
-    /// ends.
+    /// Another mode, a column start, a source outside the RAW or at another
+    /// pitch, and a band too small to develop refuse when the pass ends.
     #[test]
     fn a_pass_outside_the_modeled_modes_refuses() {
         let with = |o: u64, v: u32| {
@@ -1552,7 +1661,7 @@ mod tests {
             words
         };
         for (words, expected) in [
-            (with(0x08, 0x0042_2000), "mode 0x422000"),
+            (with(0x08, 0x0040_2000), "mode 0x402000"),
             (with(0x1c, 4), "column"),
             (with(0x14, 66), "not in the declared RAW"),
             (with(0x18, 4 << 16 | 12), "Unsupported"),
@@ -1581,5 +1690,183 @@ mod tests {
             .unwrap();
         let refusal = recc_pass(&mut e, &mut h, &band(0));
         assert!(refusal.is_some_and(|r| r.contains("not in the declared RAW")));
+    }
+
+    /// An 8 x 4 picture as two Y0L2 rows (pitch 64): luma 10y + x + 1, the
+    /// block's chroma 100 + block and 200 + row.
+    fn y0l2_picture() -> Vec<u8> {
+        let mut bytes = vec![0; 2 * 64];
+        for row in 0..2 {
+            for block in 0..4 {
+                let luma = |x: usize, y: usize| (10 * y + x + 1) as u16;
+                let (x, y) = (block * 2, row * 2);
+                let word = fujimod_emulator_xpp::development::y0l2_block(
+                    [
+                        luma(x, y),
+                        luma(x + 1, y),
+                        luma(x, y + 1),
+                        luma(x + 1, y + 1),
+                    ],
+                    100 + block as u16,
+                    200 + row as u16,
+                );
+                bytes[row * 64 + block * 8..][..8].copy_from_slice(&word.to_le_bytes());
+            }
+        }
+        bytes
+    }
+
+    /// Format 3 sides: a Y0L2 copy, Y0L2 to packed lines and back, and an
+    /// odd output height that repeats its last line.
+    #[test]
+    fn format_3_reads_and_writes_y0l2_rows() {
+        let mut h = RecordingHost {
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        h.ram[..128].copy_from_slice(&y0l2_picture());
+        let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20)
+            .unwrap()
+            .computing()
+            .unwrap();
+        let mut run =
+            |h: &mut RecordingHost, format: u32, sizes: (u32, u32), source: u32, output: u32| {
+                let mut words = job(sizes, (0x1000, 0x1000), (source, 64), (output, 64));
+                words[0] = (0x008, format);
+                let refusal = resize_job(&mut e, h, &words);
+                let mut cx = Cx::new(h, 0, 0, 0);
+                e.write(&mut cx, RESZ + 0x10c, 4, 1);
+                refusal
+            };
+        // 0x133: the copy keeps every block.
+        assert_eq!(
+            run(&mut h, 0x133, (0x0003_0007, 0x0003_0007), 0, 0x400),
+            None
+        );
+        assert_eq!(h.ram[0x400..0x400 + 32], h.ram[..32]);
+        assert_eq!(h.ram[0x440..0x440 + 32], h.ram[64..96]);
+        // 0x103: Y0L2 in, packed lines out, samples narrowed by >> 2.
+        assert_eq!(
+            run(&mut h, 0x103, (0x0003_0007, 0x0003_0007), 0, 0x800),
+            None
+        );
+        for y in 0..4 {
+            let line = &h.ram[0x800 + y * 64..][..16];
+            for x in 0..8 {
+                assert_eq!(
+                    u16::from(line[x / 2 * 4 + x % 2]),
+                    (10 * y + x + 1) as u16 >> 2
+                );
+            }
+            assert_eq!(line[2..4], [(100 >> 2) as u8, ((200 + y / 2) >> 2) as u8]);
+        }
+        // 0x130: those lines back to Y0L2, widened by << 2.
+        assert_eq!(
+            run(&mut h, 0x130, (0x0003_0007, 0x0003_0007), 0x800, 0xc00),
+            None
+        );
+        let lower = y0l2_sample(&h.ram[0xc00 + 64..], 3, 1);
+        // Pixel (3, 3): luma 34, block 1, row 1.
+        assert_eq!(lower, [(34 >> 2) << 2, (101 >> 2) << 2, (201 >> 2) << 2]);
+        // An odd height: 3 lines in two rows, the last row's lower line
+        // repeating line 2.
+        assert_eq!(
+            run(&mut h, 0x133, (0x0003_0007, 0x0002_0007), 0, 0x1000),
+            None
+        );
+        for x in 0..8 {
+            let row = &h.ram[0x1000 + 64..];
+            assert_eq!(y0l2_sample(row, x, 1)[0], y0l2_sample(row, x, 0)[0]);
+            assert_eq!(y0l2_sample(row, x, 1)[0], (20 + x + 1) as u16);
+        }
+    }
+
+    /// A 4K movie band: 6 lines of 6 pixels from 8 RAW samples a line (the
+    /// 3/4 scale), developed from the band's site.
+    fn movie_band(code: u32, pitch: u32) -> Vec<(u64, u32)> {
+        vec![
+            (0x08, 0x0042_2000),
+            (0x0c, 64 + 4),
+            (0x14, 64),
+            (0x1c, 0),
+            (0x20, 8),
+            (0x50, 6 << 16),
+            (0x54, 0),
+            (0x58, 6),
+            (0x6c, code),
+            (0x70, 0x1000),
+            (0x80, pitch),
+        ]
+    }
+
+    #[test]
+    fn a_movie_band_writes_y0l2_rows_or_lines_scaled_by_three_quarters() {
+        let raw = raw_samples();
+        // Band line j reads RAW line j * 8 / 6: 7 lines from site (0, 3).
+        let developed = develop(&raw[64 + 4..], 64, 7, 8, (0, 3), None).unwrap();
+        let luma = |j: usize, x: usize| {
+            let s = x * 8 / 6;
+            developed[j * 8 / 6][s / 2 * 4 + s % 2]
+        };
+        for code in [3, 0] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            h.ram[..16 * 64].copy_from_slice(&raw);
+            let mut e = developing_recc();
+            assert_eq!(recc_pass(&mut e, &mut h, &movie_band(code, 32)), None);
+            for j in 0..6 {
+                for x in 0..6 {
+                    let written = if code == 3 {
+                        y0l2_sample(&h.ram[0x1000 + j / 2 * 32..], x, j % 2)[0] >> 2
+                    } else {
+                        u16::from(h.ram[0x1000 + j * 32 + x / 2 * 4 + x % 2])
+                    };
+                    assert_eq!(
+                        written,
+                        u16::from(luma(j, x)),
+                        "code {code} line {j} pixel {x}"
+                    );
+                }
+            }
+            // Y0L2: 3 rows of 3 blocks; lines: 6 rows of 12 bytes.
+            let end = if code == 3 {
+                0x1000 + 2 * 32 + 24
+            } else {
+                0x1000 + 5 * 32 + 12
+            };
+            assert!(h.ram[end..0x1000 + 6 * 32].iter().all(|&b| b == 0));
+        }
+    }
+
+    #[test]
+    fn a_movie_band_refuses_unmodeled_codes_and_rows() {
+        let with = |words: Vec<(u64, u32)>, o: u64, v: u32| {
+            let mut words = words;
+            words.retain(|&(w, _)| w != o);
+            words.push((o, v));
+            words
+        };
+        for (words, expected) in [
+            (movie_band(1, 32), "output code 1"),
+            (movie_band(2, 32), "output code 2"),
+            (movie_band(3, 16), "pitch 16"),
+            (with(movie_band(3, 32), 0x54, 1 << 16), "from line 1"),
+            (with(movie_band(3, 32), 0x50, 5 << 16), "x 5"),
+            (with(movie_band(3, 32), 0x58, 10), "8 -> 10"),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            h.ram[..16 * 64].copy_from_slice(&raw_samples());
+            let mut e = developing_recc();
+            let refusal = recc_pass(&mut e, &mut h, &words);
+            assert!(
+                refusal.as_deref().is_some_and(|r| r.contains(expected)),
+                "{expected}: {refusal:?}"
+            );
+        }
     }
 }
