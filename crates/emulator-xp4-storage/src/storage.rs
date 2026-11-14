@@ -14,6 +14,88 @@ pub const CONTROLLER: u64 = 0xfffd8000;
 pub const DMA: u64 = 0xfffe0000;
 pub const FLASH: u64 = 0xf0000000;
 pub const FLASH_SIZE: u64 = 0x08000000;
+/// Fixed DMA addresses at or above this one are peripheral FIFOs (X-T3 5.11:
+/// serial audio port 0, receive 0xfff4f000 and transmit 0xfff4f004).
+pub const PERIPHERAL_FIFOS: u64 = 0xfff00000;
+
+/// Declared audio channels of the storage DMA (absent by default: every
+/// channel keeps the plain timing and refusals).
+///
+/// On a listed channel:
+/// - a fixed side at or above [`PERIPHERAL_FIFOS`] is an audio FIFO with
+///   nothing attached: a receive block delivers silence and a transmit block
+///   leaves the chip. The far end sets the pace: a block of `n` bytes lasts
+///   `n * ticks_per_second / bytes_per_second` ticks, and while it runs the
+///   incremented address reads where the transfer has got to, in whole
+///   transfer units;
+/// - `+0x24` may link the next descriptor (bits 31..4 its address, bit 0
+///   set; bits 1..3 must be clear): when a block completes, the channel
+///   loads `+0x10..+0x24` from the six words there and keeps running;
+/// - with `irq_at_end`, a linked block completes without raising the channel
+///   IRQ or `+0x30` bit 0; only the end of the list does.
+///
+/// X-T3 5.11 records movie sound through channel 4, from 0xfff4f000 into a
+/// self-linked ring of 5 760-byte blocks (720 frames of 8 bytes at 48 kHz,
+/// 384 000 bytes/s), while channel 8 sends a ring to serial audio port 1
+/// (0xfff78004); playback sends through channel 7 to 0xfff4f004. Its audio task finds each block end by polling the position
+/// (monitors 0x111be60 / 0x111bb74, wait 0x111bf78); a channel IRQ means
+/// "list finished": its callbacks (0x111a3a8, 0x111a370) make the driver
+/// stop the channel (0x111c818, 0x111c320).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AudioPacing {
+    pub channels: Vec<usize>,
+    pub bytes_per_second: u64,
+    pub ticks_per_second: u64,
+    #[serde(default)]
+    pub irq_at_end: bool,
+    /// Known test signal on a receive FIFO instead of silence (absent by
+    /// default): see [`TestMicrophone`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub microphone: Option<TestMicrophone>,
+}
+
+/// Known test signal a receive FIFO delivers instead of silence on a declared
+/// audio channel (absent by default), the sound counterpart of a test sensor
+/// pattern.
+///
+/// X-T3 5.11 programs serial audio port 0 for 24-bit samples in 32-bit slots
+/// (0x1078104: `+0x0c` = 0x400 | 31 << 5 | 23, 0x10783a0), two slots a frame,
+/// and DMA channel 4 reads its receive FIFO 0xfff4f000 in 4-byte units
+/// (0x111a724, 0x111ae44); the audio converter 0xfffa8000 then packs the
+/// 32-bit slots into the 24-bit samples of the movie (0x111a4bc).
+///
+/// Frame `n`, counted from the first frame the FIFO delivers, carries for each
+/// slot in order `((start + step * n) mod 2^(32 - shift)) << shift`,
+/// little-endian. Which slot is the left channel, and where the port puts
+/// 24-bit data in its slot, are declared, not measured: with `shift` 8 the
+/// value is left-justified, the layout the declared converter law expects.
+/// A block that is not made of whole frames of 4-byte units is refused.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TestMicrophone {
+    /// Receive FIFO (X-T3 5.11: 0xfff4f000).
+    pub fifo: u64,
+    /// `[start, step]` of each 4-byte slot of a frame, in FIFO order (1 to 8).
+    pub slots: Vec<[u32; 2]>,
+    /// Left shift of each value in its slot (below 32).
+    pub shift: u32,
+}
+impl TestMicrophone {
+    /// `frames` frames from frame `first` on.
+    pub fn frames(&self, first: u64, frames: u64) -> Vec<u8> {
+        let mask = (1u64 << (32 - self.shift)) - 1;
+        (first..first + frames)
+            .flat_map(|n| {
+                self.slots.iter().flat_map(move |&[start, step]| {
+                    let value =
+                        u64::from(start).wrapping_add(u64::from(step).wrapping_mul(n)) & mask;
+                    ((value as u32) << self.shift).to_le_bytes()
+                })
+            })
+            .collect()
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Geometry {
@@ -754,6 +836,15 @@ struct Channel {
     completed: u64,
     submitted_at: u64,
 }
+impl Channel {
+    /// The fixed side (`+0x1c` or `+0x20` bit 2) is a peripheral FIFO.
+    fn fifo(&self) -> bool {
+        let fixed = |config: usize, address: usize| {
+            self.regs[config / 4] & 4 != 0 && u64::from(self.regs[address / 4]) >= PERIPHERAL_FIFOS
+        };
+        fixed(0x1c, 0x14) || fixed(0x20, 0x18)
+    }
+}
 pub struct DmaController {
     receiver: Option<crate::tx_receiver::SharedReceiver>,
     port: Option<Shared>,
@@ -764,6 +855,9 @@ pub struct DmaController {
     mux_changed: [u64; 16],
     /// Per-channel request words at `0xfff4a800 + n*8` (+0 control, +4 selector).
     request: BTreeMap<u64, u32>,
+    audio: Option<AudioPacing>,
+    /// Frames the test microphone has delivered (see [`TestMicrophone`]).
+    microphone_frames: u64,
 }
 impl DmaController {
     pub fn new(port: Shared, routes: [u32; 16]) -> Self {
@@ -774,7 +868,88 @@ impl DmaController {
             mux: BTreeMap::new(),
             mux_changed: [0; 16],
             request: BTreeMap::new(),
+            audio: None,
+            microphone_frames: 0,
         }
+    }
+    /// Declares the audio channels (see [`AudioPacing`]); `None` keeps every
+    /// channel unchanged.
+    pub fn with_audio(mut self, audio: Option<AudioPacing>) -> Result<Self, String> {
+        if let Some(a) = &audio {
+            let unique: std::collections::BTreeSet<_> = a.channels.iter().collect();
+            if self.port.is_none()
+                || a.channels.is_empty()
+                || unique.len() != a.channels.len()
+                || a.channels.iter().any(|&n| n >= 16)
+                || a.bytes_per_second == 0
+                || a.ticks_per_second == 0
+            {
+                return Err("Invalid XP4 DMA audio channels".into());
+            }
+            if let Some(m) = &a.microphone
+                && (m.fifo < PERIPHERAL_FIFOS
+                    || m.fifo & 3 != 0
+                    || m.slots.is_empty()
+                    || m.slots.len() > 8
+                    || m.shift >= 32)
+            {
+                return Err("Invalid XP4 DMA test microphone".into());
+            }
+        }
+        self.audio = audio;
+        Ok(self)
+    }
+    fn microphone(&self) -> Option<&TestMicrophone> {
+        self.audio.as_ref().and_then(|a| a.microphone.as_ref())
+    }
+    /// Receive block of paced channel `n` from the test microphone FIFO, in
+    /// whole frames of 4-byte units; `None` when channel `n` does not read it.
+    fn microphone_block(&mut self, n: usize) -> Result<Option<Vec<u8>>, String> {
+        let Some(m) = self.microphone().filter(|_| self.paced(n)) else {
+            return Ok(None);
+        };
+        let c = &self.channels[n];
+        if c.regs[0x1c / 4] & 4 == 0 || u64::from(c.regs[0x14 / 4]) != m.fifo {
+            return Ok(None);
+        }
+        let size = u64::from(c.regs[0x10 / 4]) + 1;
+        let frame = 4 * m.slots.len() as u64;
+        if (c.regs[0x1c / 4] >> 16) & 3 != 2 || !size.is_multiple_of(frame) {
+            return Err("XP4 DMA test microphone block is not whole 4-byte frames".into());
+        }
+        let data = m.frames(self.microphone_frames, size / frame);
+        self.microphone_frames += size / frame;
+        Ok(Some(data))
+    }
+    fn audio(&self, n: usize) -> Option<&AudioPacing> {
+        self.audio.as_ref().filter(|a| a.channels.contains(&n))
+    }
+    /// Channel `n` is a declared audio channel with a peripheral FIFO side.
+    fn paced(&self, n: usize) -> bool {
+        self.audio(n).is_some() && self.channels[n].fifo()
+    }
+    /// Ticks a paced block of `bytes` lasts on channel `n`.
+    fn paced_ticks(&self, n: usize, bytes: u64) -> Option<u64> {
+        let a = self.audio(n)?;
+        u64::try_from(
+            u128::from(bytes) * u128::from(a.ticks_per_second) / u128::from(a.bytes_per_second),
+        )
+        .ok()
+    }
+    /// Bytes a running paced block of channel `n` has moved at `now`, in
+    /// whole transfer units of its incremented side (`config` = that side's
+    /// configuration word).
+    fn paced_moved(&self, n: usize, now: u64, config: usize) -> u32 {
+        let (Some(a), c) = (self.audio(n), &self.channels[n]) else {
+            return 0;
+        };
+        let bytes = u64::from(c.regs[0x10 / 4]) + 1;
+        let elapsed = now.saturating_sub(c.submitted_at);
+        let moved =
+            u128::from(elapsed) * u128::from(a.bytes_per_second) / u128::from(a.ticks_per_second);
+        let moved = moved.min(u128::from(bytes)) as u64;
+        let width = 1u64 << ((c.regs[config / 4] >> 16) & 3);
+        (moved - moved % width) as u32
     }
     pub const STANDALONE_RESET: &str = "experimental-zero-registers-v1";
     pub const STANDALONE_TIMING: &str = "functional-16-setup-16-bytes-v1";
@@ -786,7 +961,8 @@ impl DmaController {
             return Err("Invalid explicit standalone XP4 DMA profiles or IRQ routes".into());
         }
         Ok(Self { receiver: None, port: None, standalone_admitted: false, channels: Default::default(), routes,
-            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new() })
+            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new(), audio: None,
+            microphone_frames: 0 })
     }
     pub fn with_receiver(mut self, receiver: crate::tx_receiver::SharedReceiver) -> Self {
         self.receiver = Some(receiver);
@@ -826,6 +1002,7 @@ impl DmaController {
         let write = (FLASH..FLASH + FLASH_SIZE).contains(&dst);
         if !(FLASH..FLASH + FLASH_SIZE).contains(&src) && !write {
             if c.regs[0x20 / 4] & 4 != 0
+                && !self.paced(n)
                 && let Some(receiver) = &self.receiver
             {
                 let mux = *self
@@ -941,6 +1118,18 @@ impl DmaController {
                 .check_mutation(u64::from(c.regs[0x18 / 4]), c.regs[0x10 / 4] as usize + 1)?;
         }
         self.admit(cx);
+        let audio = self.audio(n).is_some();
+        if !write && matches!(o, 0x14 | 0x18) && self.channels[n].submitted && self.paced(n) {
+            // A paced block moves continuously: its incremented address reads
+            // where the transfer has got to (X-T3 5.11 0x107b63c reads +0x30,
+            // +0x14 and +0x18 while core 3 polls the movie audio ring).
+            let config = if o == 0x14 { 0x1c } else { 0x20 };
+            let c = &self.channels[n];
+            if c.regs[config / 4] & 4 == 0 {
+                let moved = self.paced_moved(n, cx.now(), config);
+                return Ok(u64::from(c.regs[o / 4].wrapping_add(moved)));
+            }
+        }
         let c = &mut self.channels[n];
         if !write {
             return Ok(c.regs[o / 4] as u64);
@@ -953,7 +1142,11 @@ impl DmaController {
                         return Err("XP4 DMA channel start while busy".into());
                     }
                     let count = u64::from(c.regs[0x10 / 4]) + 1;
-                    if count > FLASH_SIZE || c.regs[0x24 / 4] != 0 {
+                    // An audio channel may link its next descriptor: +0x24
+                    // bits 31..4 address, bit 0 linked (0x107ba50 writes
+                    // (x << 4) | 1); bits 1..3 are not modeled.
+                    let next = c.regs[0x24 / 4];
+                    if count > FLASH_SIZE || if audio { next & 0xe != 0 } else { next != 0 } {
                         return Err("Unsupported XP4 DMA extent/repeat".into());
                     }
                     c.regs[0x30 / 4] = 0x10000;
@@ -966,7 +1159,9 @@ impl DmaController {
                 }
             }
             0x30 => {
-                c.regs[o / 4] = 0;
+                // A running linked audio channel acknowledges one block and
+                // keeps running.
+                c.regs[o / 4] = if audio && c.submitted { 0x10000 } else { 0 };
                 cx.set_irq(self.routes[n], false);
             }
             _ => {
@@ -979,6 +1174,9 @@ impl DmaController {
         Ok(0)
     }
     fn complete(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
+        let microphone = self.microphone_block(n)?;
+        let audio = self.audio(n).map(|a| a.irq_at_end);
+        let paced = self.paced(n);
         let c = &mut self.channels[n];
         let src = u64::from(c.regs[0x14 / 4]);
         let dst = u64::from(c.regs[0x18 / 4]);
@@ -986,7 +1184,14 @@ impl DmaController {
         if let Some(port) = &self.port { port.lock().unwrap().nor.check_mutation(dst, size)?; }
         let completed_at = c.due.unwrap();
         let program = (FLASH..FLASH + FLASH_SIZE).contains(&dst);
-        if c.regs[0x20 / 4] & 4 != 0 && !program && self.receiver.is_none() {
+        // A declared audio FIFO with nothing attached: a receive block is
+        // silence, a transmit block leaves the chip.
+        let silence = paced && c.regs[0x1c / 4] & 4 != 0 && src >= PERIPHERAL_FIFOS;
+        let sink = paced && c.regs[0x20 / 4] & 4 != 0 && dst >= PERIPHERAL_FIFOS;
+        if sink && !size.is_multiple_of(1usize << ((c.regs[0x20 / 4] >> 16) & 3)) {
+            return Err("XP4 DMA count is not a multiple of transfer width".into());
+        }
+        if c.regs[0x20 / 4] & 4 != 0 && !program && !sink && self.receiver.is_none() {
             return Err("XP4 fixed-destination DMA is not modeled".into());
         }
         let data = if (FLASH..FLASH + FLASH_SIZE).contains(&src) {
@@ -1004,16 +1209,24 @@ impl DmaController {
             if !size.is_multiple_of(width) {
                 return Err("XP4 DMA count is not a multiple of transfer width".into());
             }
-            cx.ram_bytes(src, width)?
-                .iter()
-                .copied()
-                .cycle()
-                .take(size)
-                .collect()
+            if let Some(data) = microphone {
+                data
+            } else if silence {
+                vec![0; size]
+            } else {
+                cx.ram_bytes(src, width)?
+                    .iter()
+                    .copied()
+                    .cycle()
+                    .take(size)
+                    .collect()
+            }
         } else {
             cx.ram_bytes(src, size)?
         };
-        if !program && c.regs[0x20 / 4] & 4 != 0 {
+        if sink {
+            // The samples leave the chip.
+        } else if !program && c.regs[0x20 / 4] & 4 != 0 {
             if c.regs[0x1c / 4] != 0x20000 || c.regs[0x20 / 4] != 0x20004 || !size.is_multiple_of(4)
             {
                 return Err("Unsupported transmit word geometry".into());
@@ -1058,16 +1271,37 @@ impl DmaController {
         if c.regs[0x20 / 4] & 4 == 0 {
             c.regs[0x18 / 4] = c.regs[0x18 / 4].wrapping_add(size as u32);
         }
-        c.regs[0x30 / 4] = 1;
-        c.regs[0x28 / 4] &= !0x10000000;
-        c.submitted = false;
+        let next = c.regs[0x24 / 4];
+        let linked = audio.is_some() && next & 1 != 0;
+        let quiet = linked && audio == Some(true);
+        if linked {
+            // Linked list (0x107c028): the next descriptor holds the new
+            // +0x10..+0x24 (size - 1, source, destination, source and
+            // destination configuration, next); the channel keeps running.
+            let words = cx.ram_bytes(u64::from(next & !0xf), 24)?;
+            let word = |i: usize| u32::from_le_bytes(words[i * 4..i * 4 + 4].try_into().unwrap());
+            if word(5) & 0xe != 0 || u64::from(word(0)) + 1 > FLASH_SIZE {
+                return Err("Unsupported XP4 DMA linked descriptor".into());
+            }
+            for i in 0..6 {
+                c.regs[0x10 / 4 + i] = word(i);
+            }
+            c.regs[0x30 / 4] = if quiet { 0x10000 } else { 0x10001 };
+            c.submitted_at = completed_at;
+        } else {
+            c.regs[0x30 / 4] = 1;
+            c.regs[0x28 / 4] &= !0x10000000;
+            c.submitted = false;
+        }
         c.due = None;
         c.completed += 1;
         // 107bb3c selects 0x01100001 for software request 44 and
         // 0x00201011/0x00200011 for peripheral requests. Bit4 is absent
         // from software fills, whose callbacks use the same physical IRQ.
         // Completion status remains asserted until the guest ACKs +30.
-        cx.set_irq(self.routes[n], true);
+        if !quiet {
+            cx.set_irq(self.routes[n], true);
+        }
         cx.record(Record::new(
             "XP4 DMA complete",
             [
@@ -1118,7 +1352,14 @@ impl Device for DmaController {
                 cx.fail("Standalone XP4 DMA cannot wait for a missing serial-flash peer"); return;
             }
             if let Some(started) = self.ready_time(n) {
-                let Some(at) = started.checked_add(16).and_then(|at| at.checked_add((u64::from(self.channels[n].regs[0x10 / 4]) + 1).div_ceil(16))) else {
+                let bytes = u64::from(self.channels[n].regs[0x10 / 4]) + 1;
+                // A declared audio FIFO fills or drains at its own pace.
+                let duration = if self.paced(n) {
+                    self.paced_ticks(n, bytes)
+                } else {
+                    16u64.checked_add(bytes.div_ceil(16))
+                };
+                let Some(at) = duration.and_then(|d| started.checked_add(d)) else {
                     cx.fail("XP4 DMA deadline overflow");
                     return;
                 };
@@ -1140,6 +1381,10 @@ impl Device for DmaController {
     fn save(&self) -> Value {
         let mut state = json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request});
         if self.receiver.is_some() { state["transmit_receiver_connected"] = json!(true); }
+        if let Some(audio) = &self.audio { state["audio"] = json!(audio); }
+        if self.microphone().is_some() {
+            state["microphone_frames"] = json!(self.microphone_frames);
+        }
         if self.port.is_none() {
             state["serial_flash_peer"] = json!(false);
             state["reset_profile"] = json!(Self::STANDALONE_RESET);
@@ -1206,6 +1451,476 @@ mod tests {
         d.event(&mut cx, token);
         assert_eq!(cx.refusal(), None);
     }
+    fn audio_dma(audio: Option<AudioPacing>) -> Result<DmaController, String> {
+        let p = port(
+            vec![0xff; 32],
+            0,
+            Geometry {
+                erase_bytes: 4096,
+                page_bytes: 256,
+                erase_ticks: 20,
+                page_ticks: 12,
+            },
+        )
+        .unwrap();
+        DmaController::new(p, std::array::from_fn(|n| 207 + n as u32)).with_audio(audio)
+    }
+    /// X-T3 5.11 movie sound: 384 000 bytes/s on the 54 MHz board clock.
+    fn movie_audio(channels: Vec<usize>, irq_at_end: bool) -> AudioPacing {
+        AudioPacing {
+            channels,
+            bytes_per_second: 384_000,
+            ticks_per_second: 54_000_000,
+            irq_at_end,
+            microphone: None,
+        }
+    }
+    /// 16 bytes at 384 000 bytes/s.
+    const AUDIO_BLOCK: u64 = 16 * 54_000_000 / 384_000;
+    fn descriptor(h: &mut TestHost, at: usize, words: [u32; 6]) {
+        for (i, w) in words.iter().enumerate() {
+            h.ram[at + i * 4..at + 4 + i * 4].copy_from_slice(&w.to_le_bytes());
+        }
+    }
+    /// Channel 4 receives 16-byte blocks from the fixed serial audio port 0
+    /// FIFO into RAM at 0x100, then follows `next`.
+    fn start_movie_audio(dma: &mut DmaController, h: &mut TestHost, next: u64) -> Option<String> {
+        let ch = DMA + 0x4000;
+        for (o, v) in [
+            (0x10, 15),
+            (0x14, 0xfff4f000),
+            (0x18, 0x100),
+            (0x1c, 0x20f04),
+            (0x20, 0x20f00),
+            (0x24, next),
+        ] {
+            write(dma, h, 0, ch + o, v, 0);
+        }
+        let mut cx = Cx::new(h, 3, 0, 0);
+        dma.write(&mut cx, ch + 0x28, 4, 0x10201011);
+        cx.refusal().map(str::to_owned)
+    }
+    fn advance(dma: &mut DmaController, h: &mut TestHost) {
+        dma.advance(&mut Cx::new(h, 0, 0, 0));
+    }
+    fn load(dma: &mut DmaController, h: &mut TestHost, address: u64) -> u64 {
+        dma.read(&mut Cx::new(h, 0, 0, 0), address, 4)
+    }
+
+    #[test]
+    fn audio_channels_are_explicit_and_validated() {
+        // Absent: a linked list and a FIFO source keep their refusals.
+        let mut plain = audio_dma(None).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        assert!(
+            start_movie_audio(&mut plain, &mut h, 0x201)
+                .is_some_and(|e| e.contains("extent/repeat"))
+        );
+        write(&mut plain, &mut h, 0, DMA + 0x4028, 0, 0);
+        assert_eq!(start_movie_audio(&mut plain, &mut h, 0), None);
+        advance(&mut plain, &mut h);
+        assert_eq!(plain.next_deadline(h.now), Some(100 + 16 + 1));
+        h.now = 117;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        plain.event(&mut cx, 4);
+        assert!(cx.refusal().is_some());
+        assert!(plain.save().get("audio").is_none());
+        // A listed channel only.
+        let mut other = audio_dma(Some(movie_audio(vec![5], true))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        assert!(start_movie_audio(&mut other, &mut h, 0x201).is_some());
+        for bad in [
+            movie_audio(vec![], true),
+            movie_audio(vec![16], true),
+            movie_audio(vec![4, 4], true),
+            AudioPacing {
+                bytes_per_second: 0,
+                ..movie_audio(vec![4], true)
+            },
+            AudioPacing {
+                ticks_per_second: 0,
+                ..movie_audio(vec![4], true)
+            },
+        ] {
+            assert!(audio_dma(Some(bad)).is_err());
+        }
+        let standalone = DmaController::standalone(
+            std::array::from_fn(|n| 207 + n as u32),
+            DmaController::STANDALONE_RESET,
+            DmaController::STANDALONE_TIMING,
+        )
+        .unwrap();
+        assert!(
+            standalone
+                .with_audio(Some(movie_audio(vec![4], true)))
+                .is_err()
+        );
+        let unknown = json!({"channels": [4], "bytes_per_second": 384000, "ticks_per_second": 54000000, "extra": 1});
+        assert!(serde_json::from_value::<AudioPacing>(unknown).is_err());
+    }
+
+    #[test]
+    fn a_linked_audio_channel_records_paced_silence_block_after_block() {
+        let mut dma = audio_dma(Some(movie_audio(vec![4], false))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        descriptor(&mut h, 0x200, [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        let ch = DMA + 0x4000;
+        advance(&mut dma, &mut h);
+        let first = 100 + AUDIO_BLOCK;
+        assert_eq!(dma.next_deadline(h.now), Some(first));
+        // Mid-block, the incremented destination reads where the transfer has
+        // got to, in whole 4-byte units; the fixed source does not move.
+        h.now = 100 + AUDIO_BLOCK * 10 / 16;
+        assert_eq!(load(&mut dma, &mut h, ch + 0x18), 0x108);
+        assert_eq!(load(&mut dma, &mut h, ch + 0x14), 0xfff4f000);
+        h.now = first;
+        event(&mut dma, &mut h, 0, 4);
+        assert_eq!(&h.ram[0x100..0x110], &[0; 16]);
+        assert_eq!(h.ram[0x110], 0xaa);
+        assert_eq!(h.irqs.last(), Some(&(211, true)));
+        // The next descriptor is loaded and the channel keeps running.
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 0x10001);
+        assert_eq!(dma.channels[4].regs[0x18 / 4], 0x110);
+        assert_eq!(dma.channels[4].regs[0x24 / 4], 0);
+        assert!(dma.channels[4].submitted);
+        write(&mut dma, &mut h, 0, ch + 0x30, 1, 0);
+        assert_eq!(h.irqs.last(), Some(&(211, false)));
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 0x10000);
+        advance(&mut dma, &mut h);
+        h.now = first + AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 4);
+        assert_eq!(&h.ram[0x110..0x120], &[0; 16]);
+        assert!(!dma.channels[4].submitted);
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 1);
+        assert_eq!(dma.channels[4].completed, 2);
+        // A descriptor with bits 1..3 set is refused at start and when loaded.
+        write(&mut dma, &mut h, 0, ch + 0x30, 1, 0);
+        assert!(start_movie_audio(&mut dma, &mut h, 0x203).is_some());
+        write(&mut dma, &mut h, 0, ch + 0x28, 0, 0);
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x245],
+        );
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        advance(&mut dma, &mut h);
+        h.now += AUDIO_BLOCK;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 4);
+        assert!(
+            cx.refusal()
+                .is_some_and(|e| e.contains("linked descriptor"))
+        );
+    }
+
+    #[test]
+    fn irq_at_end_keeps_a_linked_audio_channel_quiet_until_the_list_ends() {
+        let mut dma = audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // A self-linked descriptor (the firmware's ring), then a terminal one.
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x201],
+        );
+        descriptor(&mut h, 0x240, [15, 0xfff4f000, 0x120, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        for k in 1..=3u64 {
+            advance(&mut dma, &mut h);
+            assert_eq!(dma.next_deadline(h.now), Some(100 + k * AUDIO_BLOCK));
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            assert!(h.irqs.is_empty(), "linked block {k} raised the IRQ");
+            assert_eq!(dma.channels[4].regs[0x30 / 4], 0x10000);
+            assert!(dma.channels[4].submitted);
+        }
+        // Mid-block, the position follows the declared pace.
+        h.now += AUDIO_BLOCK / 2;
+        assert_eq!(load(&mut dma, &mut h, DMA + 0x4018), 0x118);
+        // The guest points the ring at its end: block 4 reloads the ring (now
+        // linked to the end), block 5 loads the terminal descriptor, block 6
+        // ends the list and raises the IRQ.
+        h.ram[0x214..0x218].copy_from_slice(&0x241u32.to_le_bytes());
+        for k in 4..=5u64 {
+            advance(&mut dma, &mut h);
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            assert!(h.irqs.is_empty());
+        }
+        advance(&mut dma, &mut h);
+        h.now = 100 + 6 * AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 4);
+        assert_eq!(h.irqs.last(), Some(&(211, true)));
+        assert!(!dma.channels[4].submitted);
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 1);
+        assert_eq!(dma.channels[4].regs[0x18 / 4], 0x130);
+        assert_eq!(dma.channels[4].completed, 6);
+    }
+
+    #[test]
+    fn a_playback_block_drains_into_the_audio_port_at_its_pace() {
+        let mut dma = audio_dma(Some(movie_audio(vec![7], true))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0x55; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // X-T3 5.11 playback: channel 7, source incremented, fixed destination
+        // 0xfff4f004 (serial audio port 0 transmit).
+        let ch = DMA + 0x7000;
+        let program = |dma: &mut DmaController, h: &mut TestHost, destination: u64| {
+            for (o, v) in [
+                (0x10, 31),
+                (0x14, 0x100),
+                (0x18, destination),
+                (0x1c, 0x20f00),
+                (0x20, 0x20f04),
+                (0x24, 0),
+            ] {
+                write(dma, h, 0, ch + o, v, 0);
+            }
+            write(dma, h, 0, ch + 0x28, 0x10201011, 0);
+            advance(dma, h);
+        };
+        program(&mut dma, &mut h, 0xfff4f004);
+        assert_eq!(dma.next_deadline(h.now), Some(100 + 2 * AUDIO_BLOCK));
+        h.now = 100 + AUDIO_BLOCK;
+        assert_eq!(load(&mut dma, &mut h, ch + 0x14), 0x110);
+        h.now = 100 + 2 * AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 7);
+        assert!(h.ram.iter().all(|&b| b == 0x55));
+        assert_eq!(h.irqs.last(), Some(&(214, true)));
+        assert_eq!(dma.channels[7].regs[0x14 / 4], 0x120);
+        assert_eq!(dma.channels[7].regs[0x18 / 4], 0xfff4f004);
+        assert!(!dma.channels[7].submitted);
+        // A fixed RAM destination is still refused.
+        write(&mut dma, &mut h, 0, ch + 0x30, 1, 0);
+        program(&mut dma, &mut h, 0x200);
+        h.now += 100;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 7);
+        assert!(
+            cx.refusal()
+                .is_some_and(|e| e.contains("fixed-destination"))
+        );
+    }
+
+    #[test]
+    fn a_running_audio_list_survives_a_checkpoint_bound_to_its_declaration() {
+        let declared = || audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        let mut dma = declared();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x201],
+        );
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        advance(&mut dma, &mut h);
+        h.now = 100 + AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 4);
+        advance(&mut dma, &mut h);
+        h.now += AUDIO_BLOCK / 2;
+        let saved = dma.save();
+        assert_eq!(saved["audio"]["channels"], json!([4]));
+        let mut restored = declared();
+        restored.restore(&saved).unwrap();
+        assert_eq!(load(&mut restored, &mut h, DMA + 0x4018), 0x118);
+        assert_eq!(restored.next_deadline(h.now), Some(100 + 2 * AUDIO_BLOCK));
+        // A different declaration, or none, refuses the checkpoint.
+        for other in [
+            None,
+            Some(movie_audio(vec![4], false)),
+            Some(movie_audio(vec![4, 7], true)),
+        ] {
+            assert!(audio_dma(other).unwrap().restore(&saved).is_err());
+        }
+        let mut undeclared = saved.clone();
+        undeclared.as_object_mut().unwrap().remove("audio");
+        assert!(audio_dma(None).unwrap().restore(&undeclared).is_err());
+    }
+
+    /// X-T3 5.11 movie sound: two 32-bit slots a frame, 24-bit samples
+    /// left-justified (shift 8); left = n + 1, right = 0xfffffe + 2n, so the
+    /// right ramp wraps 24 bits within the test.
+    fn test_microphone() -> AudioPacing {
+        AudioPacing {
+            microphone: Some(TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[1, 1], [0xfffffe, 2]],
+                shift: 8,
+            }),
+            ..movie_audio(vec![4], true)
+        }
+    }
+
+    #[test]
+    fn a_test_microphone_fills_the_movie_audio_ring_with_its_declared_ramp() {
+        let mut dma = audio_dma(Some(test_microphone())).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // Three linked 16-byte blocks of 2 frames each.
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x241],
+        );
+        descriptor(&mut h, 0x240, [15, 0xfff4f000, 0x120, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        let mut saved = None;
+        for k in 1..=3u64 {
+            advance(&mut dma, &mut h);
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            if k == 1 {
+                saved = Some(dma.save());
+            }
+        }
+        assert!(!dma.channels[4].submitted);
+        let slot = |a: usize| u32::from_le_bytes(h.ram[a..a + 4].try_into().unwrap());
+        // Frames 0..5 in order, each slot = value << 8 (low byte zero).
+        let expect = [(1, 0xfffffe), (2, 0), (3, 2), (4, 4), (5, 6), (6, 8)];
+        for (f, (l, r)) in expect.into_iter().enumerate() {
+            assert_eq!(
+                (slot(0x100 + f * 8), slot(0x104 + f * 8)),
+                (l << 8, r << 8),
+                "frame {f}"
+            );
+        }
+        assert_eq!(&h.ram[0x130..0x140], &[0xaa; 16]);
+        assert_eq!(dma.microphone_frames, 6);
+        assert_eq!(dma.save()["microphone_frames"], 6);
+
+        // The frame count is checkpointed, and only with the option.
+        let saved = saved.unwrap();
+        assert_eq!(saved["microphone_frames"], 2);
+        let mut again = audio_dma(Some(test_microphone())).unwrap();
+        again.restore(&saved).unwrap();
+        assert_eq!(again.microphone_frames, 2);
+        let mut missing = saved.clone();
+        missing.as_object_mut().unwrap().remove("microphone_frames");
+        assert!(
+            audio_dma(Some(test_microphone()))
+                .unwrap()
+                .restore(&missing)
+                .is_err()
+        );
+        let silent = audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        assert!(silent.save().get("microphone_frames").is_none());
+        assert!(silent.save()["audio"].get("microphone").is_none());
+        assert!(
+            audio_dma(Some(movie_audio(vec![4], true)))
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
+
+        // A block of partial frames, or of 2-byte units, is refused.
+        for (size, source) in [(11, 0x20f04), (15, 0x10f04)] {
+            let mut dma = audio_dma(Some(test_microphone())).unwrap();
+            let mut h = TestHost {
+                now: 100,
+                ram: vec![0xaa; 0x400],
+                irqs: vec![],
+                events: vec![],
+                records: vec![],
+            };
+            for (o, v) in [
+                (0x10, size),
+                (0x14, 0xfff4f000),
+                (0x18, 0x100),
+                (0x1c, source),
+                (0x20, 0x20f00),
+                (0x24, 0),
+                (0x28, 0x10201011),
+            ] {
+                write(&mut dma, &mut h, 0, DMA + 0x4000 + o, v, 0);
+            }
+            advance(&mut dma, &mut h);
+            h.now += AUDIO_BLOCK;
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            dma.event(&mut cx, 4);
+            assert!(
+                cx.refusal()
+                    .is_some_and(|e| e.contains("whole 4-byte frames")),
+                "{size} {source:#x}"
+            );
+        }
+
+        // Invalid declarations are refused.
+        for bad in [
+            TestMicrophone {
+                fifo: 0x1000,
+                slots: vec![[0, 1]],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f002,
+                slots: vec![[0, 1]],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[0, 1]; 9],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[0, 1]],
+                shift: 32,
+            },
+        ] {
+            let audio = AudioPacing {
+                microphone: Some(bad),
+                ..movie_audio(vec![4], true)
+            };
+            assert!(audio_dma(Some(audio)).is_err());
+        }
+    }
+
     #[test]
     fn initialization_status_requires_enable_then_configuration_and_survives_restore() {
         let make = || {

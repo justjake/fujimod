@@ -197,6 +197,10 @@ struct DmaState {
     request_mux_changed: [u64; 16],
     #[serde(default)]
     request: BTreeMap<u64, u32>,
+    #[serde(default)]
+    audio: Option<AudioPacing>,
+    #[serde(default)]
+    microphone_frames: Option<u64>,
 }
 impl DmaController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
@@ -215,10 +219,15 @@ impl DmaController {
                 && state.timing_profile.is_none() && state.assumptions_recorded.is_none()
         };
         if !mode_matches || state.irq_routes != self.routes
+            || state.audio != self.audio
+            || state.microphone_frames.is_some() != self.microphone().is_some()
             || state.channels.len() != 16
-            || state.channels.iter().any(|c| {
+            || state.channels.iter().enumerate().any(|(n, c)| {
                 c.due.is_some_and(|at| !c.submitted || at < c.submitted_at)
                     || c.submitted && u64::from(c.regs[4]) + 1 > FLASH_SIZE
+                    // Only a declared audio channel runs a linked list.
+                    || c.submitted && c.regs[0x24 / 4] != 0
+                        && (self.audio(n).is_none() || c.regs[0x24 / 4] & 0xe != 0)
                     || standalone && c.submitted && (Self::needs_flash(c) || c.regs[0x24 / 4] != 0
                         || c.regs[0x28 / 4] & 0x10000001 != 0x10000001
                         || Self::standalone_deadline(c).is_none()
@@ -241,6 +250,7 @@ impl DmaController {
             }
         }
         self.standalone_admitted = state.assumptions_recorded.unwrap_or(false);
+        self.microphone_frames = state.microphone_frames.unwrap_or(0);
         self.channels = state
             .channels
             .try_into()
