@@ -1096,6 +1096,7 @@ impl Session {
             xp4_functional_system_control,
             storage_geometry,
             storage_irq,
+            storage_dma_audio,
             xpp_storage,
             xpp_serial,
             xpp_sub_cpu,
@@ -1279,6 +1280,9 @@ impl Session {
         if standalone_dma.is_some() && (storage_jedec.is_some() || xpp_storage.is_some()) {
             return Err("Standalone XP4 DMA cannot be combined with a storage controller".into());
         }
+        if storage_dma_audio.is_some() && storage_jedec.is_none() {
+            return Err("XP4 DMA audio channels require the XP4 storage controller".into());
+        }
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
@@ -1309,6 +1313,7 @@ impl Session {
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
                 storage_mapped_read,
                 storage_write_protect,
+                storage_dma_audio,
             )?;
             frozen_nor = view;
             Some(devices)

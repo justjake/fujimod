@@ -40,8 +40,12 @@
 //! and waits for bit 0 through 0x1560de8). Idle bits may share the status
 //! word when they do not overlap the status bit (0xfffc4000: +0x3c bit 20
 //! idle, bit 0 done; 0xfffc3000: +0xdc 0x01000100 idle, bit 0 done, which
-//! its handler 0xcce510 clears through 0xc6d580). What a job computes is not
-//! modeled.
+//! its handler 0xcce510 clears through 0xc6d580). A job with neither a status
+//! nor a stop bit is a pulse job: when it finishes, its start bit reads clear
+//! again and its edge line pulses once, with nothing to acknowledge (XP4
+//! X-T3 5.11 0xfffa8000: 0x1091630 sets +0x04 bit 0 and returns, GIC 144's
+//! handler 0x1090e24 reads no register; 0x1091150 instead polls bit 0 back
+//! to 0). What a job computes is not modeled.
 //!
 //! A block may declare [`Command`]s: writing exactly a command's value to its
 //! word sets the declared field of a status word, which otherwise reads back
@@ -202,6 +206,55 @@ pub enum Work {
     Develop { phase: (u8, u8) },
     /// The resizer.
     Resize,
+    /// The XP4 audio format converter: see [`AUDIO_CONTROL`].
+    Audio,
+}
+/// X-T3 5.11 audio format converter 0xfffa8000, as its driver programs it
+/// (0x1091220, 0x1091630):
+///
+/// - +0x08: bit 0 converts (clear, +0x04 loads the firmware table addressed
+///   by +0x0c/+0x10, 0x1091150); source sample format in bits 8..10 and
+///   destination format in bits 24..26 (0x111a4bc: 1 = 16-bit, 2 = 24-bit
+///   packed, 3 = 32-bit);
+/// - source at +0x18 (high bits +0x14), line bytes +0x1c, lines +0x20;
+///   destination at +0x28 (high bits +0x24), +0x2c, +0x30; +0x34 and +0x38
+///   repeat the source and destination line bytes in both halves;
+/// - movie playback, 720 stereo frames a job: 90 lines of 0x30 bytes
+///   (24-bit packed) become 90 lines of 0x40 bytes (32-bit) that DMA
+///   channel 7 sends to serial audio port 0. Recording goes the other way,
+///   from the 32-bit slots DMA channel 4 receives to 24-bit packed samples.
+///
+/// The declared stand-in converts each signed little-endian sample
+/// left-justified ([`convert_audio`]): 24 to 32 bits shifts left by 8, 32 to
+/// 24 keeps the top 24 bits. The firmware table (a microcode of 16-bit
+/// slots) is not decoded: the law is declared, not measured. Other
+/// geometries are left unconverted and counted.
+pub const AUDIO_CONTROL: u64 = 0x08;
+const AUDIO_SOURCE_HIGH: u64 = 0x14;
+const AUDIO_SOURCE: u64 = 0x18;
+const AUDIO_SOURCE_LINE: u64 = 0x1c;
+const AUDIO_SOURCE_LINES: u64 = 0x20;
+const AUDIO_DESTINATION_HIGH: u64 = 0x24;
+const AUDIO_DESTINATION: u64 = 0x28;
+const AUDIO_DESTINATION_LINE: u64 = 0x2c;
+const AUDIO_DESTINATION_LINES: u64 = 0x30;
+const AUDIO_SOURCE_PITCH: u64 = 0x34;
+const AUDIO_DESTINATION_PITCH: u64 = 0x38;
+/// Converts `source`, samples of `from` bytes, to samples of `to` bytes
+/// (2, 3 or 4, signed little-endian), left-justified: the sample's top bits
+/// stay its top bits, the low bits added are zero, the low bits dropped are
+/// truncated.
+pub fn convert_audio(source: &[u8], from: usize, to: usize) -> Vec<u8> {
+    source
+        .chunks_exact(from)
+        .flat_map(|sample| {
+            let mut slot = [0u8; 4];
+            slot[4 - from..].copy_from_slice(sample);
+            let mut out = [0u8; 4];
+            out[..to].copy_from_slice(&slot[4 - to..]);
+            out.into_iter().take(to)
+        })
+        .collect()
 }
 const DEVELOP_SOURCE: u64 = 0x08;
 const DEVELOP_SOURCE_STRIDE: u64 = 0x0c;
@@ -298,6 +351,12 @@ struct State {
     jobs: u64,
     #[serde(default, skip_serializing_if = "is_zero")]
     movie_frames: u64,
+    /// Audio converter jobs converted, and conversion jobs left unconverted
+    /// (unmodeled format or geometry); table loads count in neither.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    audio_converted: u64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    audio_skipped: u64,
 }
 const BUFFER: u64 = 0xc0;
 const WIDTH: u64 = 0xc4;
@@ -398,7 +457,7 @@ impl Block {
         let bit = |(o, mask): (u64, u32)| o & 3 != 0 || o >= self.size || mask == 0;
         if self.frames.is_some()
             || bit(job.start)
-            || job.status.is_some() == job.stop.is_some()
+            || job.status.is_some() && job.stop.is_some()
             || job.stop.is_some_and(bit)
             || job.status.is_some_and(|status| {
                 bit(status)
@@ -429,6 +488,7 @@ impl Block {
         let words = match work {
             Work::Develop { phase } if phase.0 < 6 && phase.1 < 6 => DEVELOP_DESTINATION_STRIDE,
             Work::Resize => RESIZE_FORMAT,
+            Work::Audio => AUDIO_DESTINATION_PITCH,
             Work::Develop { .. } => return Err("Invalid X-Trans phase".into()),
         };
         if self.job.is_none() || words >= self.size {
@@ -467,11 +527,58 @@ impl Block {
             *words.lock().unwrap() = self.state.words.clone();
         }
     }
+    /// One audio converter job: None for a table load, Some(true) once
+    /// converted, Some(false) for an unmodeled format or geometry.
+    fn run_audio(&self, cx: &mut Cx<'_>) -> Result<Option<bool>, String> {
+        let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
+        let control = word(AUDIO_CONTROL);
+        if control & 1 == 0 {
+            return Ok(None);
+        }
+        let width = |code: u32| match code {
+            1 => Some(2usize),
+            2 => Some(3),
+            3 => Some(4),
+            _ => None,
+        };
+        let (Some(from), Some(to)) = (width(control >> 8 & 7), width(control >> 24 & 7)) else {
+            return Ok(Some(false));
+        };
+        let line = |o| word(o) as usize;
+        let (source_line, lines) = (line(AUDIO_SOURCE_LINE), line(AUDIO_SOURCE_LINES));
+        let destination_line = line(AUDIO_DESTINATION_LINE);
+        let both = |o: u64, bytes: usize| {
+            let w = word(o) as usize;
+            w & 0x3ff == bytes && w >> 16 & 0x3ff == bytes
+        };
+        if source_line == 0
+            || lines == 0
+            || line(AUDIO_DESTINATION_LINES) != lines
+            || !source_line.is_multiple_of(from)
+            || !destination_line.is_multiple_of(to)
+            || source_line / from != destination_line / to
+            || !both(AUDIO_SOURCE_PITCH, source_line)
+            || !both(AUDIO_DESTINATION_PITCH, destination_line)
+        {
+            return Ok(Some(false));
+        }
+        let address = |low, high| u64::from(word(high) & 3) << 32 | u64::from(word(low));
+        let source = cx.ram_bytes(
+            address(AUDIO_SOURCE, AUDIO_SOURCE_HIGH),
+            source_line * lines,
+        )?;
+        cx.ram_write(
+            address(AUDIO_DESTINATION, AUDIO_DESTINATION_HIGH),
+            &convert_audio(&source, from, to),
+        )?;
+        Ok(Some(true))
+    }
     fn run_work(&self, cx: &mut Cx<'_>, work: Work) -> Result<(), String> {
         let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
         let address = |o| u64::from(word(o));
         let stride = |o| word(o) as usize * 2;
         let (rows, destination, destination_stride) = match work {
+            Work::Audio => return Err("The audio converter converts through its own path".into()),
             Work::Develop { phase } => {
                 let (lines, width) = crate::development::size(word(DEVELOP_SIZE));
                 let source_stride = stride(DEVELOP_SOURCE_STRIDE);
@@ -1055,7 +1162,14 @@ impl Device for Block {
         if let Some(job) = self.job {
             if self.state.due.is_some_and(|at| at <= cx.now()) {
                 self.state.due = None;
-                if let Some(work) = self.work
+                if let Some(Work::Audio) = self.work {
+                    match self.run_audio(cx) {
+                        Ok(Some(true)) => self.state.audio_converted += 1,
+                        Ok(Some(false)) => self.state.audio_skipped += 1,
+                        Ok(None) => {}
+                        Err(e) => return cx.fail(e),
+                    }
+                } else if let Some(work) = self.work
                     && let Err(e) = self.run_work(cx, work)
                 {
                     return cx.fail(e);
@@ -1066,6 +1180,13 @@ impl Device for Block {
                     return cx.fail(e);
                 }
                 self.state.jobs += 1;
+                if job.status.is_none() && job.stop.is_none() {
+                    // Pulse job: the start bit clears, the edge line pulses.
+                    self.clear_start(job.start);
+                    cx.set_irq(job.irq, true);
+                    cx.set_irq(job.irq, false);
+                    return;
+                }
                 self.state.status |= job.status.map_or(1, |(_, mask)| mask);
                 cx.set_irq(job.irq, true);
             }
@@ -1128,6 +1249,15 @@ impl Device for Block {
     }
 }
 impl Block {
+    fn clear_start(&mut self, (offset, mask): (u64, u32)) {
+        let word = self.state.words.get(&offset).copied().unwrap_or(0) & !mask;
+        if word == 0 {
+            self.state.words.remove(&offset);
+        } else {
+            self.state.words.insert(offset, word);
+        }
+        self.publish();
+    }
     fn check(&self, state: &State) -> Result<(), String> {
         let started = self.frames.is_some_and(|f| {
             let (offset, mask) = f.start;
@@ -1759,7 +1889,14 @@ mod tests {
             ticks: 10,
         };
         let block = || Block::new(0xfff98000, 0x1000, vec![(0, 1)], None).unwrap();
-        assert!(block().with_job(Job { stop: None, ..job }).is_err());
+        assert!(
+            block()
+                .with_job(Job {
+                    status: Some((8, 1)),
+                    ..job
+                })
+                .is_err()
+        );
         let mut engine = block().with_job(job).unwrap();
         write(&mut engine, &mut h, 0xfff98004, 1);
         assert_eq!(engine.next_deadline(10), Some(20));
@@ -2000,5 +2137,162 @@ mod tests {
         assert_eq!(read(&mut engine, &mut h, 0xfffc30dc), 0x0100_0100);
         write(&mut engine, &mut h, 0xfffc30d8, 4);
         assert_eq!(read(&mut engine, &mut h, 0xfffc30d8), 4);
+    }
+
+    #[test]
+    fn a_pulse_job_clears_its_start_bit_and_pulses_its_edge_line() {
+        use fujimod_emulator_devices::test_host::advance;
+        // X-T3 5.11 0xfffa8000: +0x00 bit 0 idle; +0x04 bit 0 starts a job
+        // (0x1091630 returns at once, GIC 144; 0x1091150 polls bit 0 to 0).
+        const ENGINE: u64 = 0xfffa8000;
+        let job = Job {
+            start: (4, 1),
+            status: None,
+            stop: None,
+            irq: 144,
+            ticks: 10,
+        };
+        let mut engine = Block::new(ENGINE, 0x1000, vec![(0, 1)], None)
+            .unwrap()
+            .with_job(job)
+            .unwrap();
+        let mut h = TestHost::new();
+        write(&mut engine, &mut h, ENGINE + 0x10, 0x13eef80);
+        write(&mut engine, &mut h, ENGINE + 4, 1);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 4), 1);
+        advance(&mut engine, &mut h, 10);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 4), 0);
+        assert_eq!(read(&mut engine, &mut h, ENGINE + 0x10), 0x13eef80);
+        assert_eq!(read(&mut engine, &mut h, ENGINE), 1);
+        assert_eq!(engine.state.jobs, 1);
+        assert_eq!(engine.state.status, 0);
+        assert_eq!(engine.next_deadline(10), None);
+    }
+
+    #[test]
+    fn audio_converter_left_justifies_24_bit_playback_samples_into_32_bit_slots() {
+        use fujimod_emulator_devices::test_host::advance;
+        const A: u64 = 0xfffa8000;
+        let job = Job {
+            start: (4, 1),
+            status: None,
+            stop: None,
+            irq: 144,
+            ticks: 10,
+        };
+        let block = || {
+            Block::new(A, 0x1000, vec![(0, 1)], None)
+                .unwrap()
+                .with_job(job)
+                .unwrap()
+        };
+        assert!(
+            Block::new(A, 0x1000, vec![(0, 1)], None)
+                .unwrap()
+                .with_work(Work::Audio)
+                .is_err()
+        );
+        assert!(
+            Block::new(A, 0x38, vec![(0, 1)], None)
+                .unwrap()
+                .with_job(job)
+                .unwrap()
+                .with_work(Work::Audio)
+                .is_err()
+        );
+        let mut converter = block().with_work(Work::Audio).unwrap();
+        let mut plain = block();
+        let mut h = TestHost::new();
+        // Two lines of eight stereo frames, 24-bit packed: frame n has left
+        // n + 1 and right 0xa00000 + n (negative samples).
+        for n in 0..16u32 {
+            let at = 0x2000 + 6 * n as usize;
+            h.ram[at..at + 3].copy_from_slice(&(n + 1).to_le_bytes()[..3]);
+            h.ram[at + 3..at + 6].copy_from_slice(&(0xa0_0000 + n).to_le_bytes()[..3]);
+        }
+        let w = |e: &mut Block, h: &mut TestHost, o: u64, v: u32| write(e, h, A + o, v);
+        // 0x1091150: loading the firmware table converts nothing.
+        for (o, v) in [(0x0c, 0), (0x10, 0x013e_ef80), (0x08, 0), (0x04, 1)] {
+            w(&mut converter, &mut h, o, v);
+        }
+        advance(&mut converter, &mut h, 10);
+        assert!(h.ram[0x4000..0x4080].iter().all(|&b| b == 0));
+        // 0x1091220 then 0x1091630, the first job of a movie playback (two
+        // lines instead of 90).
+        let start = |e: &mut Block, h: &mut TestHost, lines: u32| {
+            for (o, v) in [
+                (0x08, 0x0300_0201),
+                (0x14, 0),
+                (0x18, 0x2000),
+                (0x1c, 0x30),
+                (0x20, lines),
+                (0x24, 0),
+                (0x28, 0x4000),
+                (0x2c, 0x40),
+                (0x30, 2),
+                (0x34, 0x0030_0030),
+                (0x38, 0x0040_0040),
+                (0x3c, 1),
+                (0x40, 5),
+                (0x44, 0x25),
+                (0x04, 1),
+            ] {
+                w(e, h, o, v);
+            }
+        };
+        // Without the work, the job only pulses its interrupt.
+        start(&mut plain, &mut h, 2);
+        advance(&mut plain, &mut h, 30);
+        assert!(h.ram[0x4000..0x4080].iter().all(|&b| b == 0));
+        assert_eq!(plain.state.jobs, 1);
+        start(&mut converter, &mut h, 2);
+        advance(&mut converter, &mut h, 50);
+        let slot =
+            |h: &TestHost, at: usize| u32::from_le_bytes(h.ram[at..at + 4].try_into().unwrap());
+        for n in 0..16u32 {
+            let at = 0x4000 + 8 * n as usize;
+            assert_eq!(slot(&h, at), (n + 1) << 8);
+            assert_eq!(slot(&h, at + 4), (0xa0_0000 + n) << 8);
+        }
+        assert_eq!(slot(&h, 0x4080), 0);
+        assert_eq!(
+            (
+                converter.state.audio_converted,
+                converter.state.audio_skipped
+            ),
+            (1, 0)
+        );
+        // Lines that do not match: left alone and counted.
+        h.ram[0x4000..0x4080].fill(0);
+        start(&mut converter, &mut h, 3);
+        advance(&mut converter, &mut h, 70);
+        assert!(h.ram[0x4000..0x4080].iter().all(|&b| b == 0));
+        assert_eq!(
+            (
+                converter.state.audio_converted,
+                converter.state.audio_skipped
+            ),
+            (1, 1)
+        );
+        let saved = converter.save();
+        assert_eq!(saved["audio_skipped"], 1);
+        let mut restored = block().with_work(Work::Audio).unwrap();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.state.audio_skipped, 1);
+        // The other widths, and recording's 32 to 24 bits.
+        assert_eq!(
+            convert_audio(&[0x22, 0x33, 0x44], 3, 4),
+            [0, 0x22, 0x33, 0x44]
+        );
+        assert_eq!(convert_audio(&[0x33, 0x44], 2, 4), [0, 0, 0x33, 0x44]);
+        assert_eq!(
+            convert_audio(&[0x11, 0x22, 0x33, 0x44], 4, 3),
+            [0x22, 0x33, 0x44]
+        );
+        assert_eq!(convert_audio(&[0x11, 0x22, 0x33, 0x44], 4, 2), [0x33, 0x44]);
+        assert_eq!(
+            convert_audio(&[0x22, 0x33, 0x44, 0x55], 2, 3),
+            [0, 0x22, 0x33, 0, 0x44, 0x55]
+        );
     }
 }
