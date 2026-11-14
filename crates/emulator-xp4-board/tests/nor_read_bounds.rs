@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 const FLASH: u64 = 0xf0000000;
 const SERIAL: u64 = 0xfffd8000;
 const DMA: u64 = 0xfffe0000;
-const OUTPUT: u64 = 0x4000;
+const OUTPUT: usize = 0x4000;
 
 fn definition(strict: bool) -> Value {
     json!({
