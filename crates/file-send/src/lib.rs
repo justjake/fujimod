@@ -40,6 +40,56 @@ const MANIFEST_BATCH: usize = 1024;
 
 pub type Result<T> = std::result::Result<T, String>;
 
+/// The receiver binary identity reported to the sender.
+pub fn build_info() -> String {
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    format!(
+        "fujimod-send {} {profile} {}-{}",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+
+/// The receiver destination path and free space, when available.
+pub fn path_info(path: &Path) -> String {
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    match free_bytes(&absolute) {
+        Some(free) => format!(
+            "destination {} ({} free)",
+            absolute.display(),
+            format_bytes(free)
+        ),
+        None => format!("destination {}", absolute.display()),
+    }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const MIB: f64 = 1024.0 * 1024.0;
+    const GIB: f64 = 1024.0 * MIB;
+    if bytes >= 1024 * 1024 * 1024 {
+        format!("{:.1} GiB", bytes as f64 / GIB)
+    } else {
+        format!("{:.1} MiB", bytes as f64 / MIB)
+    }
+}
+
+#[cfg(unix)]
+fn free_bytes(path: &Path) -> Option<u64> {
+    use nix::sys::statvfs::statvfs;
+    let stats = statvfs(path).ok()?;
+    Some(stats.fragment_size() as u64 * stats.blocks_available() as u64)
+}
+
+#[cfg(not(unix))]
+fn free_bytes(_: &Path) -> Option<u64> {
+    None
+}
+
 /// A reliable, ordered message pipe, such as a WebRTC data channel.
 pub trait Pipe {
     fn send(&mut self, message: Vec<u8>) -> impl Future<Output = Result<()>>;
@@ -168,6 +218,9 @@ async fn send_files(pipe: &mut impl Pipe, files: &[Source], report: Report<'_>) 
             "receiver speaks version {}",
             welcome.protocol_version
         ));
+    }
+    if !welcome.client.is_empty() {
+        eprintln!("receiver: {}", welcome.client);
     }
     let chunk = welcome.max_chunk_bytes.clamp(1, CHUNK_BYTES) as usize;
     let entries: Vec<ManifestEntry> = files.iter().map(manifest_entry).collect();
@@ -318,6 +371,14 @@ pub enum Destination {
     Stdout,
 }
 
+/// A one-line description of where a receiver stores files.
+pub fn destination_info(destination: &Destination) -> String {
+    match destination {
+        Destination::Directory(path) => path_info(path),
+        Destination::Stdout => "destination standard output".into(),
+    }
+}
+
 /// A slash-separated path that stays inside the destination directory.
 pub(crate) fn safe_path(name: &str) -> Result<&str> {
     if name.is_empty()
@@ -434,7 +495,7 @@ async fn receive_files(
     destination: &Destination,
     report: Report<'_>,
 ) -> Result<Vec<String>> {
-    welcome(pipe, false).await?;
+    welcome(pipe, false, &destination_info(destination)).await?;
     let entries = receive_manifest(pipe, false).await?;
     let mut names = HashSet::new();
     for entry in &entries {
@@ -555,7 +616,11 @@ async fn receive_files(
     Ok(stored)
 }
 
-pub(crate) async fn welcome(pipe: &mut impl Pipe, require_sync: bool) -> Result<usize> {
+pub(crate) async fn welcome(
+    pipe: &mut impl Pipe,
+    require_sync: bool,
+    client: &str,
+) -> Result<usize> {
     let (Body::Hello(hello), _) = take(pipe).await? else {
         return Err("expected Hello".into());
     };
@@ -575,6 +640,7 @@ pub(crate) async fn welcome(pipe: &mut impl Pipe, require_sync: bool) -> Result<
             max_chunk_bytes: CHUNK_BYTES,
             window_bytes: 0,
             high_water_path: String::new(),
+            client: client.to_owned(),
         }),
         &[],
     )

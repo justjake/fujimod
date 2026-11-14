@@ -34,6 +34,8 @@ message Welcome {
   uint32 window_bytes = 3;
   // Empty means the complete manifest is required.
   string high_water_path = 4;
+  // Receiver diagnostics: build, platform, destination and free space.
+  string client = 5;
 }
 message ManifestEntry {
   // SD card-relative path including directory and original extension.

@@ -2,7 +2,8 @@
 //! over direct WebRTC connections, using a share-link room for rendezvous
 //! (crates/file-send/README.md).
 use fujimod_file_send::{
-    Destination, DirectorySource, prepare_sync_root, receive, send, serve_peer, sources, sync,
+    Destination, DirectorySource, build_info, destination_info, path_info, prepare_sync_root,
+    receive, send, serve_peer, sources, sync,
 };
 use fujimod_webrtc::{
     CandidatePolicy, HostEvent, HostRoom, Pacing, PeerSocket, share::OwnerTicket,
@@ -118,6 +119,7 @@ async fn run(args: Vec<String>) -> Result<(), String> {
             if positional.is_empty() || output.is_some() || ticket_path.is_some() || force {
                 return Err(USAGE.into());
             }
+            eprintln!("{}", build_info());
             let paths: Vec<PathBuf> = positional.iter().map(PathBuf::from).collect();
             let files = sources(&paths)?;
             let ticket = OwnerTicket::create(signal, SITE).map_err(|e| e.to_string())?;
@@ -131,6 +133,9 @@ async fn run(args: Vec<String>) -> Result<(), String> {
                 match room.next_event().await.map_err(|e| e.to_string())? {
                     HostEvent::Controller(_, mut peer) => {
                         eprintln!("receiver connected");
+                        if let Some(path) = peer.path() {
+                            eprintln!("{path}");
+                        }
                         let mut report = reporter("");
                         let result = send(&mut peer, &files, &mut report).await;
                         peer.goodbye(Vec::new());
@@ -160,9 +165,14 @@ async fn run(args: Vec<String>) -> Result<(), String> {
                     Destination::Directory(directory.into())
                 }
             };
+            eprintln!("{}", build_info());
+            eprintln!("{}", destination_info(&destination));
             let mut peer = PeerSocket::connect(link, &progress, policy, Pacing::Unpaced)
                 .await
                 .map_err(|e| direct_hint(e, policy))?;
+            if let Some(path) = peer.path() {
+                eprintln!("{path}");
+            }
             let mut report = reporter("");
             let stored = receive(&mut peer, &destination, &mut report).await?;
             for name in &stored {
@@ -205,6 +215,9 @@ async fn run(args: Vec<String>) -> Result<(), String> {
                 match room.next_event().await.map_err(|e| e.to_string())? {
                     HostEvent::Controller(id, mut peer) => {
                         eprintln!("{id}: connected");
+                        if let Some(path) = peer.path() {
+                            eprintln!("{id}: {path}");
+                        }
                         let source = source.clone();
                         let label = id.clone();
                         std::thread::Builder::new()
@@ -244,6 +257,8 @@ async fn run(args: Vec<String>) -> Result<(), String> {
             }
             let directory = PathBuf::from(directory);
             prepare_sync_root(&directory, force)?;
+            eprintln!("{}", build_info());
+            eprintln!("{}", path_info(&directory));
             loop {
                 let mut peer =
                     match PeerSocket::connect(link, &progress, policy, Pacing::Unpaced).await {
@@ -255,6 +270,9 @@ async fn run(args: Vec<String>) -> Result<(), String> {
                         }
                     };
                 eprintln!("connected to sender");
+                if let Some(path) = peer.path() {
+                    eprintln!("{path}");
+                }
                 let mut report = reporter("");
                 match sync(&mut peer, &directory, &mut report).await {
                     Ok(()) => {

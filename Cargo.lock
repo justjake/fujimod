@@ -2687,6 +2687,7 @@ dependencies = [
  "fujimod-webrtc",
  "fujimod-workspace-hack",
  "futures-lite",
+ "nix",
  "sha2 0.10.9",
  "walkdir",
 ]

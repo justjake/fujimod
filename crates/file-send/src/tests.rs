@@ -134,7 +134,7 @@ fn sync_once(source: Arc<DirectorySource>, out: &Path) -> Result<SyncSummary> {
         futures_lite::future::block_on(serve_peer(&mut host, &source, &mut |_, _, _| {}))
     });
     let received = futures_lite::future::block_on(async {
-        welcome(&mut controller, true).await?;
+        welcome(&mut controller, true, "").await?;
         receive_snapshot(&mut controller, out, &mut |_, _, _| {}).await
     });
     drop(controller);
@@ -200,7 +200,7 @@ fn a_connected_receiver_gets_later_snapshots() {
         futures_lite::future::block_on(serve_peer(&mut host, &server_source, &mut |_, _, _| {}))
     });
     let received = futures_lite::future::block_on(async {
-        welcome(&mut controller, true).await?;
+        welcome(&mut controller, true, "").await?;
         let mut target = SyncTarget::new(&out);
         let first = target.receive(&mut controller, &mut |_, _, _| {}).await?;
         std::fs::write(input.join("second.txt"), b"second").unwrap();
