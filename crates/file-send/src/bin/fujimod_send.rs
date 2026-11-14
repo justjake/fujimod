@@ -36,20 +36,33 @@ fn reporter(label: &str) -> impl FnMut(&str, u64, u64) + '_ {
     } else {
         format!("[{label}] ")
     };
-    let started = Instant::now();
+    let mut current: Option<(String, Instant, u64)> = None;
     let mut shown = None::<Instant>;
     move |name, done, size| {
         let now = Instant::now();
+        let previous = current
+            .as_ref()
+            .filter(|(current_name, ..)| current_name == name)
+            .map(|(_, started, start_done)| (*started, *start_done));
+        let (started, start_done) = match previous {
+            Some(previous) => previous,
+            None => {
+                current = Some((name.to_owned(), now, done));
+                shown = None;
+                (now, done)
+            }
+        };
         if done < size && shown.is_some_and(|at| now.duration_since(at).as_millis() < 500) {
             return;
         }
         shown = Some(now);
-        let seconds = started.elapsed().as_secs_f64().max(0.001);
+        let seconds = now.duration_since(started).as_secs_f64().max(0.001);
+        let moved = done.saturating_sub(start_done);
         eprint!(
             "\r{prefix}{name}: {:.1} of {:.1} MiB, {:.1} MiB/s   ",
             done as f64 / 1048576.0,
             size as f64 / 1048576.0,
-            done as f64 / 1048576.0 / seconds
+            moved as f64 / 1048576.0 / seconds
         );
         if done == size {
             eprintln!();

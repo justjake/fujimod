@@ -189,7 +189,7 @@ impl SyncTarget {
         let entries = validate(receive_manifest(pipe, true).await?)?;
         prepare_sync_root(&self.root, false)?;
         let mut keep = keep_paths(&entries);
-        let mut incoming = Vec::new();
+        let mut wanted = Vec::new();
         let mut summary = SyncSummary::default();
         for entry in &entries {
             if entry.directory {
@@ -201,14 +201,10 @@ impl SyncTarget {
                 summary.skipped += 1;
                 continue;
             }
-            let file = incoming_file(&self.root, entry)?;
-            if let Some(part) = &file.part {
-                keep.insert(relative(&self.root, part)?);
-            }
-            if let Some(meta) = &file.meta {
-                keep.insert(relative(&self.root, meta)?);
-            }
-            incoming.push(file);
+            let file = wanted_file(&self.root, entry)?;
+            keep.insert(relative(&self.root, &file.part)?);
+            keep.insert(relative(&self.root, &file.meta)?);
+            wanted.push(file);
         }
         summary.removed = clean(&self.root, &keep)?;
         for entry in &entries {
@@ -216,26 +212,22 @@ impl SyncTarget {
                 ensure_directory(&self.root, entry)?;
             }
         }
-        for entry in &entries {
-            if !entry.directory {
-                ensure_parents(&self.root, &entry.path)?;
-            }
-        }
         put(
             pipe,
             Body::Wants(Wants {
-                entries: incoming
+                entries: wanted
                     .iter()
                     .map(|file| fujimod_sync_protocol::wants::Entry {
                         path: file.name.clone(),
-                        resume_offset: file.written,
+                        resume_offset: file.resume_offset,
                     })
                     .collect(),
             }),
             &[],
         )
         .await?;
-        for mut file in incoming {
+        for wanted in wanted {
+            let mut file = open_incoming(&wanted)?;
             report(&file.name, file.written, file.size);
             let end = receive_end(pipe, &mut file, &mut *report).await?;
             let sha = file.sha.finalize();
@@ -370,41 +362,87 @@ fn keep_paths(entries: &[Entry]) -> HashSet<String> {
     keep
 }
 
-fn incoming_file(root: &Path, entry: &Entry) -> Result<Incoming> {
+struct Wanted {
+    name: String,
+    size: u64,
+    part: PathBuf,
+    meta: PathBuf,
+    expected_sha256: Vec<u8>,
+    resume_offset: u64,
+}
+
+/// Inspect a partial file without creating or opening anything. The part is
+/// opened only when its transfer starts, so a directory with thousands of
+/// missing files does not fill the process descriptor limit up front.
+fn wanted_file(root: &Path, entry: &Entry) -> Result<Wanted> {
     let finished = root.join(&entry.path);
     ensure_parents(root, &entry.path)?;
     let part = appended(&finished, ".part");
     let meta = appended(&finished, ".part.meta");
     let expected = crate::hex(&entry.sha256);
-    let resumable = match std::fs::read_to_string(&meta) {
-        Ok(stored) => stored == expected,
-        Err(_) => false,
+    let mut resume_offset = 0;
+    let meta_matches = match std::fs::symlink_metadata(&meta) {
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
+            std::fs::read_to_string(&meta)
+                .map(|stored| stored == expected)
+                .unwrap_or(false)
+        }
+        _ => false,
     };
-    if !resumable {
+    if meta_matches {
+        match std::fs::symlink_metadata(&part) {
+            Ok(metadata) if metadata.is_file() && metadata.len() <= entry.size => {
+                resume_offset = metadata.len();
+            }
+            Ok(_) => {
+                remove_if_present(&part)?;
+                remove_if_present(&meta)?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                remove_if_present(&meta)?;
+            }
+            Err(error) => return Err(format!("{}: {error}", part.display())),
+        }
+    } else if std::fs::symlink_metadata(&meta).is_ok() || std::fs::symlink_metadata(&part).is_ok() {
         remove_if_present(&part)?;
         remove_if_present(&meta)?;
     }
-    if let Ok(metadata) = std::fs::symlink_metadata(&part)
+    Ok(Wanted {
+        name: entry.path.clone(),
+        size: entry.size,
+        part,
+        meta,
+        expected_sha256: entry.sha256.clone(),
+        resume_offset,
+    })
+}
+
+fn open_incoming(wanted: &Wanted) -> Result<Incoming> {
+    if let Ok(metadata) = std::fs::symlink_metadata(&wanted.part)
         && !metadata.is_file()
     {
-        remove_if_present(&part)?;
+        remove_if_present(&wanted.part)?;
     }
-    let (written, file, crc, sha) = resume(&part, entry.size)?;
+    let (written, file, crc, sha) = resume(&wanted.part, wanted.size)?;
+    if written != wanted.resume_offset {
+        return Err(format!("{}: partial file changed after Wants", wanted.name));
+    }
+    let expected = crate::hex(&wanted.expected_sha256);
     let mut options = OpenOptions::new();
     options.write(true).create(true).truncate(true);
     let mut meta_file = options
-        .open(&meta)
-        .map_err(|e| format!("{}: {e}", meta.display()))?;
+        .open(&wanted.meta)
+        .map_err(|e| format!("{}: {e}", wanted.meta.display()))?;
     meta_file
         .write_all(expected.as_bytes())
         .and_then(|()| meta_file.sync_all())
-        .map_err(|e| format!("{}: {e}", meta.display()))?;
+        .map_err(|e| format!("{}: {e}", wanted.meta.display()))?;
     Ok(Incoming {
-        name: entry.path.clone(),
-        size: entry.size,
-        part: Some(part),
-        meta: Some(meta),
-        expected_sha256: entry.sha256.clone(),
+        name: wanted.name.clone(),
+        size: wanted.size,
+        part: Some(wanted.part.clone()),
+        meta: Some(wanted.meta.clone()),
+        expected_sha256: wanted.expected_sha256.clone(),
         output: Box::new(file),
         written,
         crc,
@@ -525,4 +563,64 @@ pub fn prepare_sync_root(root: &Path, force: bool) -> Result<()> {
     file.write_all(MARKER_CONTENT)
         .and_then(|()| file.sync_all())
         .map_err(|e| format!("{}: {e}", marker.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn scratch(label: &str) -> PathBuf {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "fujimod-sync-{label}-{}-{stamp}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn wanted_files_open_parts_only_when_the_transfer_starts() {
+        let root = scratch("lazy");
+        let entry = Entry {
+            path: "a.bin".into(),
+            size: 4,
+            directory: false,
+            sha256: vec![7; 32],
+        };
+        let wanted = wanted_file(&root, &entry).unwrap();
+        assert_eq!(wanted.resume_offset, 0);
+        assert!(!wanted.part.exists());
+        assert!(!wanted.meta.exists());
+
+        let incoming = open_incoming(&wanted).unwrap();
+        assert!(wanted.part.is_file());
+        assert!(wanted.meta.is_file());
+        drop(incoming);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_matching_part_resumes_without_being_opened_early() {
+        let root = scratch("resume");
+        let entry = Entry {
+            path: "a.bin".into(),
+            size: 4,
+            directory: false,
+            sha256: vec![7; 32],
+        };
+        let wanted = wanted_file(&root, &entry).unwrap();
+        std::fs::write(&wanted.part, b"ab").unwrap();
+        std::fs::write(&wanted.meta, crate::hex(&entry.sha256)).unwrap();
+        let wanted = wanted_file(&root, &entry).unwrap();
+        assert_eq!(wanted.resume_offset, 2);
+        let incoming = open_incoming(&wanted).unwrap();
+        assert_eq!(incoming.written, 2);
+        drop(incoming);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
