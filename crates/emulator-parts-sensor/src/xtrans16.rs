@@ -848,11 +848,11 @@ mod tests {
 
     #[test]
     fn focal_plane_curtains_expose_from_comparator_edges() {
-        // X-E2S, lens off. Card 38 read image-input comparators 0 and 1 during
+        // X-E2S camera, lens off: image-input comparators 0 and 1 read during
         // each still (line, clock at 1482 clocks per line): 1/4000 started 0 at
         // (0, 0x5c8) and 1 at (3, 0x39c); 1/250 started 0 at (0, 0x5c8) and 1
-        // at (85, 0x170). Card 34's RAW levels put light at the nominal time
-        // plus 0.2..0.3 ms at the same dial positions.
+        // at (85, 0x170). RAW levels put light at the nominal time plus
+        // 0.2..0.3 ms at the same dial positions.
         let exposure = std::sync::Arc::new(std::sync::Mutex::new(Exposure::default()));
         let aperture = std::sync::Arc::new(std::sync::Mutex::new(1.));
         let mut sensor = Sensor::new(

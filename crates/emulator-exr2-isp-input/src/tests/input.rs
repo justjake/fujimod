@@ -1524,7 +1524,7 @@ fn record_phase_has_an_independent_register_gated_frame_edge() {
 }
 #[test]
 fn started_comparators_fire_once_at_their_frame_point_and_release_the_curtains() {
-    // X-E2S cards 38 and 34: comparators 0 and 1 read 0x80010003 while a still
+    // X-E2S camera: comparators 0 and 1 read 0x80010003 while a still
     // waits for its curtains and 0x3 afterwards; stock refuses to reprogram a
     // started comparator, so a comparator that never fired kept every later
     // still's curtain points out. Light runs from comparator 0's edge to
