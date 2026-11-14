@@ -79,11 +79,22 @@ impl MappedReadGate {
     }
 }
 
+/// Explicit erased initial contents outside the supplied byte asset.
+/// Offsets and lengths are relative to the array, not CPU addresses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ErasedRange {
+    pub offset: u64,
+    pub length: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReadBacking {
     bytes: usize,
     sha256: [u8; 32],
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    erased_ranges: Vec<ErasedRange>,
 }
 
 /// External NOR contents and identity, supplied by the board. Uninitialized
@@ -149,19 +160,51 @@ impl Nor {
         self.read_backing = Some(ReadBacking {
             bytes: self.bytes.len(),
             sha256: Sha256::digest(self.bytes.as_slice()).into(),
+            erased_ranges: vec![],
         });
         self
+    }
+    /// Add explicitly erased initial input ranges to strict read coverage.
+    /// Gaps remain inaccessible. Writes do not expand these fixed ranges.
+    pub fn with_erased_ranges(mut self, mut ranges: Vec<ErasedRange>) -> Result<Self, String> {
+        let backing = self.read_backing.as_mut()
+            .ok_or("Erased NOR ranges require strict read backing")?;
+        ranges.sort_by_key(|range| range.offset);
+        let mut previous_end = backing.bytes as u64;
+        for range in &ranges {
+            let end = range.offset.checked_add(range.length)
+                .ok_or("Erased NOR range overflows")?;
+            if range.length == 0 || range.offset < previous_end || end > FLASH_SIZE {
+                return Err("Invalid, overlapping or out-of-aperture erased NOR range".into());
+            }
+            previous_end = end;
+        }
+        backing.erased_ranges = ranges;
+        Ok(self)
     }
     fn check_read_backing(&self, address: u64, size: usize) -> Result<(), String> {
         let Some(backing) = &self.read_backing else { return Ok(()) };
         let offset = address.checked_sub(FLASH).ok_or("NOR address below aperture")?;
-        if offset.checked_add(size as u64).is_none_or(|end| end > backing.bytes as u64) {
-            return Err(format!(
-                "NOR read outside supplied backing: offset={offset:#x} size={size:#x} backed_bytes={:#x}",
-                backing.bytes
-            ));
+        if let Some(end) = offset.checked_add(size as u64) {
+            let mut covered = if offset <= backing.bytes as u64 {
+                Some(backing.bytes as u64)
+            } else {
+                None
+            };
+            for range in &backing.erased_ranges {
+                if covered.is_some_and(|at| end <= at) { return Ok(()); }
+                let range_end = range.offset + range.length; // Constructor validated.
+                if covered.is_some_and(|at| range.offset <= at)
+                    || covered.is_none() && range.offset <= offset && offset <= range_end {
+                    covered = Some(range_end);
+                }
+            }
+            if covered.is_some_and(|at| end <= at) { return Ok(()); }
         }
-        Ok(())
+        Err(format!(
+            "NOR read outside supplied backing: offset={offset:#x} size={size:#x} backed_bytes={:#x}",
+            backing.bytes
+        ))
     }
     fn read_array(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
         self.check_read_backing(address, size)?;
@@ -2385,6 +2428,99 @@ mod strict_backing_tests {
         assert_eq!(erased.read_array(FLASH + 16, 4).unwrap(), [0x42, 255, 255, 255]);
         assert_eq!(erased.read_array(FLASH + 17, 4).unwrap(), [255; 4]);
         assert!(erased.read_array(FLASH + FLASH_SIZE - 1, 2).is_err());
+    }
+
+    fn declared_ranges() -> Vec<ErasedRange> {
+        vec![ErasedRange { offset: 17, length: 15 },
+             ErasedRange { offset: 64, length: 16 },
+             ErasedRange { offset: 80, length: 16 }]
+    }
+
+    #[test]
+    fn declared_erased_ranges_cover_only_their_union_with_the_asset() {
+        let n = nor(vec![0x42; 17], true).with_erased_ranges(declared_ranges()).unwrap();
+        assert_eq!(n.read_array(FLASH + 16, 16).unwrap(),
+                   [vec![0x42], vec![255; 15]].concat());
+        assert_eq!(n.read_array(FLASH + 64, 32).unwrap(), vec![255; 32]);
+        for offset in [0, 17, 32, 64, 80, 96] {
+            assert_eq!(n.read_array(FLASH + offset, 0).unwrap(), Vec::<u8>::new());
+        }
+        for (offset, size) in [(31, 2), (32, 1), (33, 0), (63, 2), (95, 2), (97, 0)] {
+            assert!(n.read_array(FLASH + offset, size).is_err());
+        }
+        assert!(nor(vec![0x42; 17], false).with_erased_ranges(declared_ranges()).is_err());
+        for ranges in [
+            vec![ErasedRange { offset: 16, length: 1 }],
+            vec![ErasedRange { offset: 17, length: 0 }],
+            vec![ErasedRange { offset: FLASH_SIZE, length: 1 }],
+            vec![ErasedRange { offset: u64::MAX, length: 2 }],
+            vec![ErasedRange { offset: 64, length: 16 }, ErasedRange { offset: 70, length: 16 }],
+        ] {
+            assert!(nor(vec![0x42; 17], true).with_erased_ranges(ranges).is_err());
+        }
+        let mut reversed = declared_ranges();
+        reversed.reverse();
+        assert_eq!(nor(vec![0x42; 17], true).with_erased_ranges(reversed).unwrap().read_backing,
+                   n.read_backing);
+    }
+
+    #[test]
+    fn erased_range_stream_dma_and_checkpoint_preserve_declared_coverage() {
+        let make = || SerialFlashController::new(port_from_nor(
+            nor(vec![0x42; 17], true).with_erased_ranges(declared_ranges()).unwrap()), 37);
+        let mut f = make();
+        let mut host = TestHost::new();
+        f.regs[0x20 / 4] = 0x707;
+        f.regs[0x68 / 4] = (FLASH + 64) as u32;
+        f.regs[0x6c / 4] = 32;
+        f.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1).unwrap();
+        let saved = f.save();
+        let mut restored = make();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        let mut no_ranges = controller(vec![0x42; 17], true);
+        let before = no_ranges.save();
+        assert!(no_ranges.restore(&saved).is_err());
+        assert_eq!(no_ranges.save(), before);
+        let mut changed = SerialFlashController::new(port_from_nor(
+            nor(vec![0x42; 17], true).with_erased_ranges(vec![ErasedRange { offset: 64, length: 32 }]).unwrap()), 37);
+        let before = changed.save();
+        assert!(changed.restore(&saved).is_err());
+        assert_eq!(changed.save(), before);
+        // Admission and completion both reject a request crossing a hole.
+        let mut invalid = make();
+        invalid.regs[0x20 / 4] = 0x707;
+        invalid.regs[0x68 / 4] = (FLASH + 24) as u32;
+        invalid.regs[0x6c / 4] = 48;
+        let before = invalid.save();
+        assert!(invalid.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1).is_err());
+        assert_eq!(invalid.save(), before);
+        for (offset, size, success) in [(64, 32, true), (24, 48, false)] {
+            let port = port_from_nor(nor(vec![0x42; 17], true).with_erased_ranges(declared_ranges()).unwrap());
+            port.lock().unwrap().request = Some(Request {
+                address: FLASH + offset, size, accepted: true, accepted_at: 0, write: false,
+            });
+            let mut dma = DmaController::new(port, std::array::from_fn(|n| 207 + n as u32));
+            let channel = &mut dma.channels[0];
+            channel.regs[0x14 / 4] = (FLASH + offset) as u32;
+            channel.regs[0x18 / 4] = 0x100;
+            channel.regs[0x10 / 4] = (size - 1) as u32;
+            channel.submitted = true;
+            channel.due = Some(0);
+            let mut host = TestHost::new();
+            host.ram[0x100..0x140].fill(0xa5);
+            let before = dma.save();
+            let result = dma.complete(&mut host.cx(), 0);
+            assert_eq!(result.is_ok(), success);
+            if success {
+                assert_eq!(&host.ram[0x100..0x120], &[255; 32]);
+                assert_eq!(&host.ram[0x120..0x140], &[0xa5; 32]);
+            } else {
+                assert_eq!(dma.save(), before);
+                assert_eq!(&host.ram[0x100..0x140], &[0xa5; 64]);
+                assert!(host.effects.is_empty());
+            }
+        }
     }
 
     #[test]

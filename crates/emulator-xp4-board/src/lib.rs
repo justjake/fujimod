@@ -1093,6 +1093,7 @@ impl Session {
             storage_mapped_read,
             storage_write_protect,
             storage_strict_backing,
+            storage_erased_ranges,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
@@ -1309,6 +1310,9 @@ impl Session {
         if storage_strict_backing && (storage_jedec.is_none() || storage_image.is_none()) {
             return Err("Strict NOR backing requires an XP4 NOR owner and explicit contents".into());
         }
+        if !storage_erased_ranges.is_empty() && !storage_strict_backing {
+            return Err("Erased NOR ranges require strict read backing".into());
+        }
         if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
             // The prefix is mapped as memory, so its reads would bypass the gate.
             return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
@@ -1331,6 +1335,7 @@ impl Session {
                 storage_mapped_read,
                 storage_write_protect,
                 storage_strict_backing,
+                storage_erased_ranges,
             )?;
             frozen_nor = view;
             Some(devices)
