@@ -5,6 +5,17 @@
 .outline-section {
   margin-top: 18px;
 }
+@media (min-width: 1100px) {
+  .outline {
+    max-width: min(1400px, calc(100vw - 64px));
+  }
+  .outline-columns {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 40px;
+    align-items: start;
+  }
+}
 .outline-section > summary {
   cursor: pointer;
   font-size: 15px;

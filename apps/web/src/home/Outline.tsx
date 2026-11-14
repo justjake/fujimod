@@ -12,7 +12,13 @@ import { FeatureIcon } from './FeatureIcon';
 import './outline.css';
 
 /** Top menus, and the DRIVE button's popup, in the order the outline lists them. */
-const TOP_ORDER = ['DRIVE', 'SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP', 'SYSTEM CHANGES'];
+const TOP_ORDER = ['DRIVE', 'SHOOTING MENU', 'SET-UP', 'SYSTEM CHANGES', 'PLAYBACK MENU'];
+/** Top menus per desktop column: shooting, set-up, then system and playback. */
+const COLUMNS = [
+  ['DRIVE', 'SHOOTING MENU'],
+  ['SET-UP'],
+  ['SYSTEM CHANGES', 'PLAYBACK MENU'],
+];
 const TOP_MENUS = new Set(TOP_ORDER);
 
 const features = new Map(catalog.features.map((feature) => [feature.id, feature]));
@@ -222,29 +228,38 @@ export function FeatureOutline() {
   const free = catalog.features.filter(
     (feature) => !placed.has(feature.id) && !reached.has(feature.id),
   );
+  const tops = ordered(tree(shownRows));
   return (
     <section class="outline" aria-labelledby="outline">
       <h2 class="section-heading" id="outline">
         Everything in FujiMod
       </h2>
-      <For each={ordered(tree(shownRows))}>
-        {(top) => (
-          <details class="outline-section" open>
-            <summary>{top.title}</summary>
-            <ul class="outline-tree">
-              <For each={ordered(top)}>{(node) => <OutlineNode node={node} inside={false} />}</For>
-            </ul>
-          </details>
-        )}
-      </For>
-      <Show when={free.length}>
-        <details class="outline-section" open>
-          <summary>OUTSIDE THE MENUS</summary>
-          <ul class="outline-tree">
-            <MenuFree features={free} />
-          </ul>
-        </details>
-      </Show>
+      <div class="outline-columns">
+        <For each={COLUMNS}>
+          {(column, index) => (
+            <div class="outline-column">
+              <For each={tops.filter((top) => column.includes(top.title))}>
+                {(top) => (
+                  <details class="outline-section" open>
+                    <summary>{top.title}</summary>
+                    <ul class="outline-tree">
+                      <For each={ordered(top)}>{(node) => <OutlineNode node={node} inside={false} />}</For>
+                    </ul>
+                  </details>
+                )}
+              </For>
+              <Show when={index() === COLUMNS.length - 1 && free.length}>
+                <details class="outline-section" open>
+                  <summary>OUTSIDE THE MENUS</summary>
+                  <ul class="outline-tree">
+                    <MenuFree features={free} />
+                  </ul>
+                </details>
+              </Show>
+            </div>
+          )}
+        </For>
+      </div>
     </section>
   );
 }
