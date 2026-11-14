@@ -45,7 +45,19 @@ pub struct Payload {
     pub checks: Vec<CodeCheck>,
     pub control_sha256: String,
     pub update_size: u64,
+    /// Normal non-cacheable mirror of RAM. When present, the uploaded image
+    /// must read back through it before the callback is published, so the
+    /// instruction fetch cannot see bytes still held in the data cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uncached_alias: Option<u64>,
+    /// Cached, read-only stock code read to evict data-cache lines when the
+    /// alias read-back is stale. Required with `uncached_alias`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_churn: Option<Range>,
 }
+
+/// Rounds of eviction reads before an unpublished image is refused.
+const CACHE_CHURN_ROUNDS: usize = 3;
 
 /// The XPP service callback is a 32-bit slot with an existing stock owner.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -226,8 +238,72 @@ impl Payload {
                 }),
             "XPP control identity or callback code check differs",
         )?;
+        match (self.uncached_alias, &self.cache_churn) {
+            (None, None) => {}
+            (Some(alias), Some(churn)) => {
+                let mirrored = alias
+                    .checked_add(self.address)
+                    .ok_or(BulkError::Check("XPP uncached alias overflow".into()))?;
+                require(
+                    alias != 0
+                        && alias.is_multiple_of(0x100000)
+                        && churn.size != 0
+                        && !overlaps(self.address, self.capacity, churn.address, churn.size)
+                        && !overlaps(mirrored, self.capacity, churn.address, churn.size),
+                    "Invalid XPP uncached alias or cache churn range",
+                )?;
+                bulk::memory_range(BulkRange {
+                    address: mirrored,
+                    size: self.capacity,
+                })?;
+                bulk::memory_range(BulkRange {
+                    address: churn.address,
+                    size: churn.size,
+                })?;
+            }
+            _ => {
+                return Err(BulkError::Check(
+                    "XPP uncached alias and cache churn come together".into(),
+                ));
+            }
+        }
         Ok(())
     }
+}
+
+/// Require the uploaded image in memory, as seen through the uncached alias,
+/// before anything can execute it. Stale bytes trigger eviction reads of
+/// cached stock code; the image is refused if it never appears.
+async fn require_published(
+    access: &mut bulk::Access<'_>,
+    payload: &Payload,
+    image: &[u8],
+) -> bulk::Result<()> {
+    let (Some(alias), Some(churn)) = (payload.uncached_alias, &payload.cache_churn) else {
+        return Ok(());
+    };
+    let piece = u64::from(access.limits.memory.read.get());
+    let read = async |access: &mut bulk::Access<'_>, at: u64, size: u64| {
+        let mut bytes = Vec::new();
+        let mut offset = 0;
+        while offset < size {
+            let count = piece.min(size - offset);
+            bytes.extend(access.raw(at + offset, count).await?);
+            offset += count;
+        }
+        bulk::Result::Ok(bytes)
+    };
+    for round in 0..=CACHE_CHURN_ROUNDS {
+        if read(access, alias + payload.address, image.len() as u64).await? == image {
+            return Ok(());
+        }
+        if round < CACHE_CHURN_ROUNDS {
+            read(access, churn.address, churn.size).await?;
+        }
+    }
+    Err(BulkError::Check(
+        "XPP payload never reached memory through the uncached alias; not published".into(),
+    ))
 }
 
 /// Read a whole flash or bounded aligned range with the stock XPP reader.
@@ -294,6 +370,7 @@ async fn execute(
             "XPP service callback differs from its stock value",
         )?;
         reservation.upload(reader).await?;
+        require_published(&mut reader.access, payload, image).await?;
         let mut lease = CallbackLease::new(
             payload.transport.address,
             u64::from(payload.transport.original),
@@ -577,3 +654,7 @@ async fn write_all(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "xpp_tests.rs"]
+mod tests;
