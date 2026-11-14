@@ -184,6 +184,7 @@ fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
                     bytes: vec![0xff, 0xff],
                     basis: "Record marker.".into(),
                 }],
+                copies: None,
             },
         )]),
     });
@@ -468,4 +469,59 @@ fn source_and_range_extents_remain_bounded() {
     assert!(read(&[0; 32], &layout, &range).is_err());
     layout.source.flash_offset = u64::MAX;
     assert!(build(&layout, &flash, &BTreeMap::new(), None).is_err());
+}
+
+fn main_record(layout: &mut FirmwareSettings) -> &mut ProfileRecord {
+    let profile = layout.profile.as_mut().unwrap();
+    profile.records.get_mut("main").unwrap()
+}
+
+#[test]
+fn sixteen_byte_headers_take_eight_power_registers() {
+    let (_, mut layout) = profile_fixture();
+    for (register, fits) in [(48, true), (248, true), (249, false)] {
+        layout.profile.as_mut().unwrap().power_register = Some(register);
+        assert_eq!(layout.validate().is_ok(), fits, "register {register}");
+    }
+}
+
+#[test]
+fn copied_records_number_and_seal_each_copy() {
+    let (source, mut layout) = profile_fixture();
+    let flash = flash_image(&source, 4).unwrap();
+    let requested = BTreeMap::from([("language".into(), "en".into())]);
+    main_record(&mut layout).copies = Some(2);
+    // The record marker at offset 2 would overwrite the copy number.
+    assert!(layout.validate().unwrap_err().contains("copy number"));
+    main_record(&mut layout).fields[0].offset = 4;
+    main_record(&mut layout).copies = None;
+    let single = build(&layout, &flash, &requested, None)
+        .unwrap()
+        .profile
+        .unwrap()
+        .records
+        .remove(0);
+    main_record(&mut layout).copies = Some(2);
+    let copied = build(&layout, &flash, &requested, None)
+        .unwrap()
+        .profile
+        .unwrap()
+        .records
+        .remove(0);
+    assert_eq!((copied.block, copied.bytes.len()), (976, 0x200));
+    assert_eq!(copied.bytes[..0x100], single.bytes);
+    for (number, copy) in copied.bytes.as_chunks::<0x100>().0.iter().enumerate() {
+        assert_eq!(copy[..4], (number as u32).to_le_bytes());
+        assert_eq!(copy[4..0xe0], single.bytes[4..0xe0]);
+        let mut sealed = *copy;
+        seal_journal(&mut sealed, 0xe0).unwrap();
+        assert_eq!(&sealed, copy);
+    }
+    let mut numbered = layout.clone();
+    numbered.settings.get_mut("language").unwrap().offset = 1;
+    assert!(numbered.validate().is_err());
+    for copies in [1, 9] {
+        main_record(&mut layout).copies = Some(copies);
+        assert!(layout.validate().is_err(), "{copies} copies");
+    }
 }

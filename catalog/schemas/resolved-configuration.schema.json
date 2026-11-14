@@ -21074,6 +21074,16 @@
           "minimum": 0,
           "type": "integer"
         },
+        "copies": {
+          "description": "Sealed copies the stock formatter writes back to back from the start\nof the block, each with its copy number in its first four bytes\n(little-endian). Absent for a single copy.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "defaults": {
           "$ref": "#/$defs/UpdateRange",
           "description": "Stock defaults copied into the record."
@@ -26663,7 +26673,7 @@
           ]
         },
         "power_register": {
-          "description": "First 16-bit register of the header on a checksum SPI power controller.",
+          "description": "First 16-bit register of the header on a checksum SPI power controller.\nThe header fills one register per two bytes: four registers for an\neight-byte header, eight for a sixteen-byte one.",
           "format": "uint8",
           "maximum": 255,
           "minimum": 0,
