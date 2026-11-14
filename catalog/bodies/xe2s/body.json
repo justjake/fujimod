@@ -37,6 +37,7 @@
               "name": "imagescaler",
               "kind": "ImageScaler",
               "boot_entries": [
+                "rom",
                 "loader"
               ],
               "refs": {}
@@ -74,7 +75,17 @@
             {
               "name": "audio",
               "kind": "SerialAudioTransmitSink",
-              "refs": {}
+              "refs": {},
+              "model_choices": {
+                "option": "audio_input_profile",
+                "models": {
+                  "declared-silent-stereo-pcm48000": {
+                    "kind": "SerialAudioReceiveSource",
+                    "refs": {},
+                    "dependencies": []
+                  }
+                }
+              }
             },
             {
               "name": "pulseoutputs",
@@ -198,6 +209,11 @@
               "refs": {}
             },
             {
+              "name": "avccodec",
+              "kind": "AvcCodecControl",
+              "refs": {}
+            },
+            {
               "name": "jpegencoder",
               "kind": "ApproximateJPEGEncodeControl",
               "refs": {
@@ -254,6 +270,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "jpegdecoder"
@@ -293,6 +310,7 @@
             "rawstatistics",
             "stillisp",
             "imagewarp",
+            "avccodec",
             "jpegencoder",
             "rawreadback",
             "jpegdecoder"
