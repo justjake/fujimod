@@ -69,7 +69,7 @@ pub struct TrackProgress {
     pub cells: bool,
     /// The track's stages, in order.
     pub stages: Vec<StageEntry>,
-    /// The ordered steps the website draws, resolved from the graph.
+    /// The ordered steps the website draws, resolved from the graph; an `inapplicable` stage has none.
     pub steps: Vec<StepProgress>,
 }
 
@@ -152,6 +152,8 @@ pub enum StageProgress {
     /// Some of the stage's graded parts pass (stock features, mod walkthroughs).
     Partial,
     Fail,
+    /// The stage cannot pass on this body's processor or hardware.
+    Inapplicable,
     /// Recorded, but its inputs changed since.
     Stale,
     NotRun,

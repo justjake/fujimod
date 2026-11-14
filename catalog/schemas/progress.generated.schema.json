@@ -89,6 +89,11 @@
           "type": "string"
         },
         {
+          "const": "inapplicable",
+          "description": "The stage cannot pass on this body's processor or hardware.",
+          "type": "string"
+        },
+        {
           "const": "stale",
           "description": "Recorded, but its inputs changed since.",
           "type": "string"
@@ -246,7 +251,7 @@
           "type": "array"
         },
         "steps": {
-          "description": "The ordered steps the website draws, resolved from the graph.",
+          "description": "The ordered steps the website draws, resolved from the graph; an `inapplicable` stage has none.",
           "items": {
             "$ref": "#/$defs/StepProgress"
           },
