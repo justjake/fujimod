@@ -596,6 +596,9 @@ impl Guard {
         // neighboring word permissions do not admit this wider transaction.
         let paired_mmio =
             doubleword_read.is_some_and(|address| self.mmio_permits(address, 8, false));
+        if paired_mmio && self.mmio_accesses.len() + 2 > self.store_limit {
+            return Err("Driver guard MMIO record bound reached before paired instruction".into());
+        }
         for (address, size, write) in accesses {
             let allowed = if write {
                 &self.writable
@@ -909,6 +912,17 @@ mod tests {
             vec![(0xfffd8000, 4, false), (0xfffd8004, 4, false)]
         );
         assert!(split.mmio_access(0, 0xfffd8000, 4, false).is_err());
+        let mut exhausted = wide();
+        for _ in 0..15 {
+            exhausted.mmio_access(0, 0xfffd8000, 8, false).unwrap();
+        }
+        assert!(
+            exhausted
+                .preflight(0x1000, 0xe1c020d0, 0xd3, |_| Ok(0xfffd8000))
+                .unwrap_err()
+                .contains("record bound")
+        );
+        assert_eq!(exhausted.snapshot().mmio_accesses.len(), 15);
         // Refuse a pair outside the range, an unaligned pair, STRD and LDM.
         for (word, address) in [
             (0xe1c020d0, 0xfffd8008),
