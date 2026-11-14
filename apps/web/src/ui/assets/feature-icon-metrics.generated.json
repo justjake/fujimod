@@ -286,6 +286,188 @@
     "width": 1.065,
     "height": 0.925
   },
+  "raw-view": {
+    "sprite": "feature",
+    "box": [1.75, 5.75, 32.5, 24.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.131,
+    "height": 0.852
+  },
+  "d-range": {
+    "sprite": "feature",
+    "box": [2.75, 13.75, 30.5, 20.66],
+    "view": [0, 0, 36, 36],
+    "width": 1.215,
+    "height": 0.823
+  },
+  "tone-steps": {
+    "sprite": "feature",
+    "box": [2.75, 7.75, 30.5, 23.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.139,
+    "height": 0.878
+  },
+  "exif": {
+    "sprite": "feature",
+    "box": [6.75, 1.75, 23.5, 32.5],
+    "view": [0, 0, 36, 36],
+    "width": 0.841,
+    "height": 1.164
+  },
+  "zone-focus": {
+    "sprite": "feature",
+    "box": [1.75, 4.75, 32.5, 26.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.107,
+    "height": 0.903
+  },
+  "surround": {
+    "sprite": "feature",
+    "box": [1.25, 4.75, 33.5, 26.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.115,
+    "height": 0.882
+  },
+  "tele-conv": {
+    "sprite": "feature",
+    "box": [1.25, 4.75, 33.5, 26.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.101,
+    "height": 0.871
+  },
+  "raw-tele": {
+    "sprite": "feature",
+    "box": [1.25, 2.75, 33.5, 30.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.031,
+    "height": 0.938
+  },
+  "ultrafine": {
+    "sprite": "feature",
+    "box": [2, 2, 32, 32],
+    "view": [0, 0, 36, 36],
+    "width": 1,
+    "height": 1
+  },
+  "desqueeze-jpeg": {
+    "sprite": "feature",
+    "box": [1.75, 7.75, 32.5, 26.66],
+    "view": [0, 0, 36, 36],
+    "width": 1.104,
+    "height": 0.906
+  },
+  "hide-films": {
+    "sprite": "feature",
+    "box": [1.75, 1.75, 32.5, 32.5],
+    "view": [0, 0, 36, 36],
+    "width": 0.987,
+    "height": 0.987
+  },
+  "date-stamp": {
+    "sprite": "feature",
+    "box": [1.25, 3.75, 33.5, 28.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.084,
+    "height": 0.922
+  },
+  "clarity": {
+    "sprite": "feature",
+    "box": [2.75, 2.75, 30.5, 30.5],
+    "view": [0, 0, 36, 36],
+    "width": 1,
+    "height": 1
+  },
+  "film-borders": {
+    "sprite": "feature",
+    "box": [1.25, 2.75, 33.5, 30.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.026,
+    "height": 0.934
+  },
+  "light-leaks": {
+    "sprite": "feature",
+    "box": [1.25, 3.75, 33.5, 28.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.075,
+    "height": 0.914
+  },
+  "menu-order": {
+    "sprite": "feature",
+    "box": [1.75, 4.75, 32.5, 26.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.107,
+    "height": 0.903
+  },
+  "opacity": {
+    "sprite": "feature",
+    "box": [1.75, 1.75, 32.5, 32.5],
+    "view": [0, 0, 36, 36],
+    "width": 1,
+    "height": 1
+  },
+  "hud": {
+    "sprite": "feature",
+    "box": [1.25, 3.75, 33.5, 28.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.082,
+    "height": 0.921
+  },
+  "usb": {
+    "sprite": "feature",
+    "box": [5.25, 2.75, 25.5, 31.5],
+    "view": [0, 0, 36, 36],
+    "width": 0.9,
+    "height": 1.111
+  },
+  "build-overlay": {
+    "sprite": "feature",
+    "box": [1.25, 3.75, 33.5, 28.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.078,
+    "height": 0.917
+  },
+  "update": {
+    "sprite": "feature",
+    "box": [5.75, 1.75, 24.5, 28.485],
+    "view": [0, 0, 36, 36],
+    "width": 0.927,
+    "height": 1.078
+  },
+  "divide": {
+    "sprite": "feature",
+    "box": [0.75, 3.75, 34.5, 28.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.1,
+    "height": 0.909
+  },
+  "live-view": {
+    "sprite": "feature",
+    "box": [-0.25, 10.75, 34.5, 14.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.528,
+    "height": 0.642
+  },
+  "backup": {
+    "sprite": "feature",
+    "box": [1.75, 2.75, 32.5, 31.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.016,
+    "height": 0.984
+  },
+  "boot-resilience": {
+    "sprite": "feature",
+    "box": [3.75, 1.75, 28.5, 32.5],
+    "view": [0, 0, 36, 36],
+    "width": 0.936,
+    "height": 1.068
+  },
+  "boot-setup": {
+    "sprite": "feature",
+    "box": [5.75, 1.75, 24.5, 32.5],
+    "view": [0, 0, 36, 36],
+    "width": 0.859,
+    "height": 1.14
+  },
   "mod-color-chrome-blue-item": {
     "sprite": "mod",
     "box": [0, 0, 39, 30],

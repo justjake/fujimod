@@ -12,7 +12,7 @@ import { FeatureIcon } from './FeatureIcon';
 import './outline.css';
 
 /** Top menus, and the DRIVE button's popup, in the order the outline lists them. */
-const TOP_ORDER = ['DRIVE', 'SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP'];
+const TOP_ORDER = ['DRIVE', 'SHOOTING MENU', 'PLAYBACK MENU', 'SET-UP', 'SYSTEM CHANGES'];
 const TOP_MENUS = new Set(TOP_ORDER);
 
 const features = new Map(catalog.features.map((feature) => [feature.id, feature]));
