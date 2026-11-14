@@ -313,3 +313,47 @@ fn owner_local_flush_discards_cached_data_translation_without_guest_execution() 
     assert_eq!(reg(&cpu, arm::CORE[2]), 0x22);
     assert_eq!(cpu.translation_maintenance_status().unwrap().pending, 0);
 }
+
+#[test]
+fn owned_core_snapshot_and_restore_round_trip() {
+    let cpu = core(&[ADD_R1, ADD_R1, ADD_R1]);
+    set(&cpu, arm::CORE[1], 10);
+    let owner = attach(&cpu);
+    // The plain snapshot still refuses an attached engine.
+    assert!(cpu.snapshot(None).is_err());
+    let saved = cpu.snapshot_owned(&owner, None).unwrap();
+    run(&cpu, 0x1000, 2).unwrap();
+    assert_eq!(reg(&cpu, arm::CORE[1]), 12);
+    assert_eq!(reg(&cpu, arm::PC), 0x1008);
+    cpu.restore_owned(&owner, &*saved).unwrap();
+    assert_eq!(reg(&cpu, arm::CORE[1]), 10);
+    // The engine runs on after the restore and reaches the same state.
+    run(&cpu, 0x1000, 2).unwrap();
+    assert_eq!(reg(&cpu, arm::CORE[1]), 12);
+    assert_eq!(reg(&cpu, arm::PC), 0x1008);
+    // A snapshot can be restored more than once.
+    cpu.restore_owned(&owner, &*saved).unwrap();
+    assert_eq!(reg(&cpu, arm::CORE[1]), 10);
+    assert_eq!(cpu.translation_maintenance_status().unwrap().pending, 0);
+    // A snapshot of another engine is refused.
+    let other = core(&[ADD_R1]);
+    let foreign = other.snapshot(None).unwrap();
+    assert!(cpu.restore_owned(&owner, &*foreign).is_err());
+}
+
+#[test]
+fn owned_core_snapshot_refuses_pending_events_and_wrong_owner() {
+    let cpu = core(&[ALL_IS]);
+    let owner = attach(&cpu);
+    let clean = cpu.snapshot_owned(&owner, None).unwrap();
+    run(&cpu, 0x1000, 1).unwrap();
+    assert_eq!(cpu.translation_maintenance_status().unwrap().pending, 1);
+    assert!(cpu.snapshot_owned(&owner, None).is_err());
+    assert!(cpu.restore_owned(&owner, &*clean).is_err());
+    let front = cpu.translation_maintenance_status().unwrap().front;
+    cpu.acknowledge_translation_maintenance(&owner, &front).unwrap();
+    cpu.restore_owned(&owner, &*clean).unwrap();
+    let other = core(&[ALL_IS]);
+    let other_owner = attach(&other);
+    assert!(cpu.snapshot_owned(&other_owner, None).is_err());
+}
