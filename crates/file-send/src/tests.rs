@@ -217,3 +217,21 @@ fn a_connected_receiver_gets_later_snapshots() {
     assert_eq!(std::fs::read(out.join("second.txt")).unwrap(), b"second");
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn sends_large_manifests_in_batches() {
+    let (mut sender, mut receiver) = pair();
+    let entries: Vec<ManifestEntry> = (0..MANIFEST_BATCH * 2 + 1)
+        .map(|index| ManifestEntry {
+            path: format!("file-{index}"),
+            size_bytes: index as u64,
+            fat_timestamp: 0,
+            directory: false,
+            sha256: vec![index as u8; 32],
+        })
+        .collect();
+    let sent = futures_lite::future::block_on(send_manifest(&mut sender, entries.clone(), true));
+    let received = futures_lite::future::block_on(receive_manifest(&mut receiver, true));
+    sent.unwrap();
+    assert_eq!(received.unwrap().len(), entries.len());
+}
