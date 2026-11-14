@@ -304,9 +304,10 @@
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
-          "total": 1
+          "result": "partial",
+          "passed": 1,
+          "total": 3,
+          "detail": "1 of 3"
         },
         {
           "id": "stock/film-simulations",
@@ -1205,8 +1206,8 @@
       "total": 4
     },
     "lens": {
-      "result": "stale",
-      "passed": 0,
+      "result": "partial",
+      "passed": 1,
       "total": 3
     },
     "film-simulations": {
