@@ -1549,6 +1549,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "tsify",
  "wasm-bindgen",
 ]

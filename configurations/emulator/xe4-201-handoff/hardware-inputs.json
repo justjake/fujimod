@@ -1,0 +1,338 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "xe4-201-handoff",
+  "body_id": "xe4",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 65644,
+      "basis": "Original X-E4 loader output observed with declared Discovery inputs. The startup also declares 0xff70f03c reset zero via the XP4 control-request model; zero and 0x400 produced equivalent observed REC workflows, and the physical reset value is unknown.",
+      "fill": 0,
+      "size": 1488,
+      "words": [
+        {
+          "name": "Observed word at +0x000",
+          "offset": 0,
+          "value": 8
+        },
+        {
+          "name": "Observed word at +0x028",
+          "offset": 40,
+          "value": 20
+        },
+        {
+          "name": "Observed word at +0x02c",
+          "offset": 44,
+          "value": 6
+        },
+        {
+          "name": "Observed word at +0x03c",
+          "offset": 60,
+          "value": 3
+        },
+        {
+          "name": "Observed word at +0x040",
+          "offset": 64,
+          "value": 16777216
+        },
+        {
+          "name": "Observed word at +0x044",
+          "offset": 68,
+          "value": 76
+        },
+        {
+          "name": "Observed word at +0x048",
+          "offset": 72,
+          "value": 285212672
+        },
+        {
+          "name": "Observed word at +0x04c",
+          "offset": 76,
+          "value": 300599
+        },
+        {
+          "name": "Observed word at +0x050",
+          "offset": 80,
+          "value": 16777728
+        },
+        {
+          "name": "Observed word at +0x054",
+          "offset": 84,
+          "value": 301326
+        },
+        {
+          "name": "Observed word at +0x058",
+          "offset": 88,
+          "value": 285213184
+        },
+        {
+          "name": "Observed word at +0x05c",
+          "offset": 92,
+          "value": 809266
+        },
+        {
+          "name": "Observed word at +0x060",
+          "offset": 96,
+          "value": 1398031684
+        },
+        {
+          "name": "Observed word at +0x0c0",
+          "offset": 192,
+          "value": 16777984
+        },
+        {
+          "name": "Observed word at +0x0c4",
+          "offset": 196,
+          "value": 3910
+        },
+        {
+          "name": "Observed word at +0x0c8",
+          "offset": 200,
+          "value": 16778240
+        },
+        {
+          "name": "Observed word at +0x0cc",
+          "offset": 204,
+          "value": 351226
+        },
+        {
+          "name": "Observed word at +0x0d0",
+          "offset": 208,
+          "value": 285213696
+        },
+        {
+          "name": "Observed word at +0x0d4",
+          "offset": 212,
+          "value": 354498
+        },
+        {
+          "name": "Observed word at +0x0d8",
+          "offset": 216,
+          "value": 285213440
+        },
+        {
+          "name": "Observed word at +0x0dc",
+          "offset": 220,
+          "value": 354886
+        },
+        {
+          "name": "Observed word at +0x0e0",
+          "offset": 224,
+          "value": 1398031684
+        },
+        {
+          "name": "Observed word at +0x140",
+          "offset": 320,
+          "value": 4
+        },
+        {
+          "name": "Observed word at +0x1c4",
+          "offset": 452,
+          "value": 98304
+        },
+        {
+          "name": "Observed word at +0x5bc",
+          "offset": 1468,
+          "value": 1
+        },
+        {
+          "name": "Observed word at +0x5c0",
+          "offset": 1472,
+          "value": 62
+        },
+        {
+          "name": "Observed word at +0x5c8",
+          "offset": 1480,
+          "value": 261
+        },
+        {
+          "name": "Observed word at +0x5cc",
+          "offset": 1484,
+          "value": 32
+        }
+      ]
+    },
+    "adc_input": {
+      "basis": "Declared virtual ADC startup samples used by the Discovery run; physical idle samples are not measured.",
+      "samples": [
+        2048,
+        2048,
+        4095,
+        4095,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2048,
+        2048
+      ]
+    },
+    "gpio_input": {
+      "basis": "Declared virtual GPIO startup levels used by the Discovery run; physical levels are not measured.",
+      "levels": [
+        8,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        20,
+        6,
+        0,
+        0,
+        0,
+        3
+      ]
+    },
+    "temperature_input": {
+      "basis": "Declared virtual ambient temperature of 25 C used by the Discovery run; physical temperature is not measured.",
+      "millicelsius": 25000
+    },
+    "sensor_input": {
+      "basis": "Declared virtual X-E4 sensor and statistics scene, with native statistics defaults made explicit.",
+      "frame_period_ticks": 4000000,
+      "frame_active_ticks": 10000,
+      "read_gate": {
+        "register": 81,
+        "mask": 8
+      },
+      "statistics_scene": {
+        "name": "diagnostic-flat-linear-statistics",
+        "luma": 4096,
+        "samples_per_cell": 1024,
+        "black_level": 1024,
+        "signal_shift": 2
+      }
+    },
+    "processed_frame_input": {
+      "basis": "Declared virtual X-E4 MOVDC frame input.",
+      "frame_period_ticks": 1000000,
+      "luma": 81
+    },
+    "usb_cable": {
+      "basis": "The X-E4 VBUS pin is not known. Bank 15 pin 15 is a declared virtual cable input following the X-T3 Discovery profile. The initial GPIO level is low and the USB controller starts disconnected; a later virtual host may negotiate high speed.",
+      "vbus_bank": 15,
+      "vbus_pin": 15,
+      "speed": "high"
+    },
+    "spi_inputs": {
+      "1": {
+        "level": "low",
+        "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured.",
+        "power_checksum_registers": {
+          "chip_select": {
+            "port": 12,
+            "pin": 5,
+            "active_high": true
+          },
+          "inputs": {
+            "0": 64511,
+            "14": 0,
+            "2": 0,
+            "25": 0,
+            "29": 65535,
+            "3": 520,
+            "30": 65535,
+            "34": 0,
+            "35": 0,
+            "36": 41472,
+            "37": 0,
+            "38": 0,
+            "4": 640,
+            "16": 4,
+            "42": 0,
+            "43": 0,
+            "44": 0,
+            "45": 0
+          },
+          "disable_writes": [
+            {
+              "register": 25,
+              "value": 0
+            }
+          ],
+          "retained_registers": [
+            2,
+            14,
+            18,
+            29,
+            30,
+            36,
+            37,
+            38,
+            42,
+            43,
+            44,
+            45
+          ],
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured. Register 16 is declared 4 as in the X-T3 virtual cold-boot input and a successful X-E4 loader run; the physical X-E4 value is unmeasured. Register 18 is virtual volatile storage for the observed loader write 0x0097, without a physical power effect. Registers 42\u201345 initialize to zero as observed with declared virtual inputs. Register 25 accepts a zero disable write following the X-S10 profile; its physical effect is not measured."
+        }
+      },
+      "4": {
+        "level": "low",
+        "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured."
+      },
+      "5": {
+        "level": "low",
+        "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured."
+      }
+    },
+    "serial_flash": {
+      "contents": "registered-update",
+      "jedec_id": 2145056,
+      "geometry": {
+        "erase_bytes": 65536,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "JEDEC ID 20 bb 20 was observed on an X-E4 and identifies a 64 MiB NOR array; erase and page geometry and timing are declared virtual inputs."
+      },
+      "basis": "JEDEC ID 20 bb 20 was observed on an X-E4 and identifies a 64 MiB NOR array; erase and page geometry and timing are declared virtual inputs."
+    },
+    "usb_phy_input": {
+      "basis": "Virtual zeroed USB PHY parallel input and register bytes following the X-T3 Discovery profile; X-E4 PHY inputs are not measured.",
+      "parallel": 0,
+      "registers": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  }
+}
