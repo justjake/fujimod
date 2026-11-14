@@ -291,6 +291,14 @@ pub struct StillEngine {
     pub base: u64,
     pub irq: u32,
     pub run_ticks: u64,
+    /// A finished job also computes the engine's declared output (opt-in;
+    /// RESZ only, see `crate::still`). Absent, a job writes nothing.
+    #[serde(default)]
+    pub compute: bool,
+    /// RECC only: the sensor RAW its passes develop from (opt-in, see
+    /// `crate::still`). Absent, a pass writes nothing.
+    #[serde(default)]
+    pub raw: Option<crate::still::Raw>,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the
