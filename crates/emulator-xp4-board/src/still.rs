@@ -45,7 +45,65 @@
 //! holds 0x18f0 (the line pitch in pixels) and +0x20..+0x40 hold five small
 //! DRAM tables. What it computes is not decoded, so its output is declared
 //! as not computed.
+//!
+//! # RESZ output (opt-in)
+//!
+//! [`Engine::computing`] makes a finished RESZ job scale its picture
+//! ([`Output::Resize`]); every other engine has no computed output. The
+//! words are the ones the X-T3 5.11 drivers program for a packed 4:2:2
+//! picture (Y0 Y1 Cb Cr per pixel pair, the JPEG decoder's output) in
+//! still capture and playback:
+//!
+//! - +0x0c and +0x18: source and output size, (lines - 1) << 16 |
+//!   (pixels - 1), as [`fujimod_emulator_xpp::development::size`];
+//! - +0x1c and +0x20: horizontal and vertical steps in source pixels per
+//!   output pixel, 2^(bits 31..16) x (bits 15..0) / 0x1000, as
+//!   [`fujimod_emulator_xpp::development::step`] (playback of a 3120 x 2080
+//!   shot to 720 x 480: 0x21155 and 0x21156, 4.333);
+//! - +0xc0 / +0xc4: source address (bits 33..32, bits 31..0), +0xd0 its
+//!   pitch in bytes; +0xd4 / +0xd8 and +0xe4 the same for the output.
+//!
+//! Each output pixel takes the luma of the source pixel at the floor of its
+//! scaled position, and each output pixel pair the chroma of the pair that
+//! holds its first pixel. Nearest neighbour is a declared law: the drivers
+//! program no interpolation kernel, so the engine's filter is fixed and
+//! unknown. Not modeled: +0x10 (written 0), +0x14 (the size after the
+//! pre-decimation the step's upper bits select), the second address pair
+//! of each side (+0xc8 / +0xcc, +0xdc / +0xe0, written 0), +0x2c / +0x30
+//! (not decoded) and the lens distortion correction at +0x24, +0x28,
+//! +0x34..+0x3c and +0x40..+0xb8 (a 31-point radial table written by
+//! 0x11131d4), which the firmware leaves at the identity in every job
+//! measured so far.
+//! The format word +0x08 holds 0x100 in all of them; a job whose source
+//! (bits 1..0) or output (bits 5..4) format is not 0 refuses.
+//!
+//! # RECC output (opt-in)
+//!
+//! [`Engine::developing`] makes a finished RECC pass write its picture
+//! ([`Output::Develop`]) from a RAW the wiring declares ([`Raw`]: where the
+//! sensor writes it, its pitch and the X-Trans site of its first sample).
+//! X-T3 5.11 programs three passes a still (0x1dc3490):
+//!
+//! - mode +0x08 = 0x620000, twice: channel 1 reads 16-bit RAW samples at
+//!   +0x0c (bits 33..32 at +0x10), pitch +0x14, from line +0x1c >> 16;
+//!   +0x18 is the band, lines << 16 | samples (2088 x 6256). Channel 4
+//!   writes the packed 4:2:2 picture at +0x70 (+0x74), pitch +0x80, from
+//!   line +0x54 >> 16. The two passes are the halves of one picture (lines
+//!   0 and 2088), written 64 lines and 128 pixels into the picture buffer.
+//! - mode +0x08 = 2: channel 2 reads +0x3c (+0x40), pitch +0x4c, size +0x50
+//!   (lines << 16 | pixels, 4176 x 6256), and channel 4 writes it at the
+//!   start of the buffer.
+//!
+//! A band is developed by [`fujimod_emulator_xpp::development::develop`]
+//! (its declared X-Trans nearest-site sRGB law) from the site its source
+//! address has in the declared RAW; the copy pass copies its lines as they
+//! are. What the engine computes beyond that (the firmware's color, noise
+//! reduction, sharpening, and the copy pass's own processing, lens
+//! distortion correction among it) is not modeled. A pass in another mode,
+//! with a column start (bits 15..0 of +0x1c / +0x54) or whose source is not
+//! in the declared RAW at its pitch refuses.
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_xpp::development::{develop, size, step};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -76,6 +134,24 @@ pub enum Kind {
 pub enum Output {
     /// The job writes nothing: its destination buffers keep their contents.
     NotComputed,
+    /// RESZ: the job scales a packed 4:2:2 picture (see the module notes).
+    Resize,
+    /// RECC: a pass develops its band from the declared RAW or copies the
+    /// picture into place (see the module notes).
+    Develop(Raw),
+}
+
+/// The sensor RAW a developing RECC reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Raw {
+    /// Address of the RAW's first sample.
+    pub address: u64,
+    /// Line pitch in bytes.
+    pub pitch: u64,
+    /// X-Trans site (line, sample) of the first sample in
+    /// [`fujimod_emulator_xpp::development::XTRANS`].
+    pub site: (u8, u8),
 }
 
 /// The words a driver uses.
@@ -546,6 +622,7 @@ struct State {
 }
 
 pub struct Engine {
+    kind: Kind,
     base: u64,
     irq: u32,
     ticks: u64,
@@ -561,12 +638,137 @@ impl Engine {
             return Err(format!("Invalid {} wiring", contract.name));
         }
         Ok(Self {
+            kind,
             base,
             irq,
             ticks,
             contract,
             state: State::default(),
         })
+    }
+    /// The engine also computes its declared output (opt-in). Only RESZ has
+    /// one, [`Output::Resize`].
+    pub fn computing(mut self) -> Result<Self, String> {
+        self.contract.output = match self.kind {
+            Kind::Resz => Output::Resize,
+            Kind::Recc => {
+                return Err(format!(
+                    "{} develops from a declared RAW",
+                    self.contract.name
+                ));
+            }
+            _ => return Err(format!("{} has no computed output", self.contract.name)),
+        };
+        Ok(self)
+    }
+    /// RECC develops its passes from `raw` (opt-in, see the module notes).
+    pub fn developing(mut self, raw: Raw) -> Result<Self, String> {
+        let name = self.contract.name;
+        if self.kind != Kind::Recc {
+            return Err(format!("{name} does not develop"));
+        }
+        if raw.site.0 > 5 || raw.site.1 > 5 || raw.pitch < 12 || !raw.pitch.is_multiple_of(2) {
+            return Err(format!("Invalid {name} RAW"));
+        }
+        self.contract.output = Output::Develop(raw);
+        Ok(self)
+    }
+    /// One RECC pass: a band developed from the RAW, or the copy into place.
+    fn pass(&self, cx: &mut Cx<'_>, raw: Raw) -> Result<(), String> {
+        let name = self.contract.name;
+        let word = |o| u64::from(self.word(o));
+        let address = |high, low| (word(high) & 3) << 32 | word(low);
+        if word(0x1c) & 0xffff != 0 || word(0x54) & 0xffff != 0 {
+            return Err(format!("{name} pass starts at a column"));
+        }
+        let (first, rows) = match self.word(0x008) {
+            0x0062_0000 => {
+                let (pitch, band) = (word(0x14), word(0x18));
+                let (lines, width) = (band >> 16, band & 0xffff);
+                let source = address(0x10, 0x0c) + (word(0x1c) >> 16) * pitch;
+                let offset = source
+                    .checked_sub(raw.address)
+                    .filter(|_| pitch == raw.pitch)
+                    .ok_or_else(|| {
+                        format!("{name} source {source:#x} is not in the declared RAW")
+                    })?;
+                let phase = (
+                    (usize::from(raw.site.0) + (offset / pitch) as usize) % 6,
+                    (usize::from(raw.site.1) + (offset % pitch / 2) as usize) % 6,
+                );
+                let length = pitch * lines.saturating_sub(1) + 2 * width;
+                let bytes = cx.ram_bytes(source, length as usize)?;
+                let rows = develop(
+                    &bytes,
+                    pitch as usize,
+                    lines as usize,
+                    width as usize,
+                    phase,
+                    None,
+                )?;
+                (word(0x54) >> 16, rows)
+            }
+            2 => {
+                let (pitch, picture) = (word(0x4c), word(0x50));
+                let (lines, width) = (picture >> 16, picture & 0xffff);
+                if lines == 0 || width == 0 || pitch < 2 * width {
+                    return Err(format!("{name} copy {width}x{lines} pitch {pitch}"));
+                }
+                let bytes = cx.ram_bytes(
+                    address(0x40, 0x3c),
+                    (pitch * (lines - 1) + 2 * width) as usize,
+                )?;
+                let rows = bytes
+                    .chunks(pitch as usize)
+                    .map(|row| row[..2 * width as usize].to_vec())
+                    .collect();
+                (0, rows)
+            }
+            mode => return Err(format!("{name} mode {mode:#x} is not modeled")),
+        };
+        let pitch = word(0x80);
+        let output = address(0x74, 0x70) + first * pitch;
+        for (y, row) in rows.iter().enumerate() {
+            if row.len() as u64 > pitch {
+                return Err(format!("{name} picture line wider than pitch {pitch}"));
+            }
+            cx.ram_write(output + y as u64 * pitch, row)?;
+        }
+        Ok(())
+    }
+    /// Scales the programmed packed 4:2:2 picture (nearest neighbour).
+    fn resize(&self, cx: &mut Cx<'_>) -> Result<(), String> {
+        let name = self.contract.name;
+        let format = self.word(0x008);
+        if format & 0x33 != 0 {
+            return Err(format!("{name} format {format:#x} is not packed 4:2:2"));
+        }
+        let ((sh, sw), (oh, ow)) = (size(self.word(0x00c)), size(self.word(0x018)));
+        let (Some(hx), Some(hy)) = (step(self.word(0x01c)), step(self.word(0x020))) else {
+            return Err(format!("{name} has no step"));
+        };
+        let address = |high, low| u64::from(self.word(high) & 3) << 32 | u64::from(self.word(low));
+        let (source, spitch) = (address(0x0c0, 0x0c4), self.word(0x0d0) as usize);
+        let (output, opitch) = (address(0x0d4, 0x0d8), self.word(0x0e4) as usize);
+        if sw % 2 != 0 || ow % 2 != 0 || sw * 2 > spitch || ow * 2 > opitch {
+            return Err(format!(
+                "{name} {sw}x{sh} pitch {spitch} -> {ow}x{oh} pitch {opitch}"
+            ));
+        }
+        let pixels = cx.ram_bytes(source, spitch * (sh - 1) + sw * 2)?;
+        // The steps are dyadic, so the products are exact.
+        let at = |i: usize, step: f64, limit: usize| ((i as f64 * step) as usize).min(limit - 1);
+        let mut line = vec![0; ow * 2];
+        for y in 0..oh {
+            let row = &pixels[at(y, hy, sh) * spitch..];
+            for (pair, out) in line.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                let (x0, x1) = (at(pair * 2, hx, sw), at(pair * 2 + 1, hx, sw));
+                let (p0, p1) = (x0 / 2 * 4, x1 / 2 * 4);
+                *out = [row[p0 + x0 % 2], row[p1 + x1 % 2], row[p0 + 2], row[p0 + 3]];
+            }
+            cx.ram_write(output + (y * opitch) as u64, &line)?;
+        }
+        Ok(())
     }
     pub fn window(&self) -> (u64, u64) {
         (self.base, self.base + WINDOW)
@@ -702,6 +904,16 @@ impl Device for Engine {
         self.state.due = None;
         match self.contract.output {
             Output::NotComputed => {}
+            Output::Resize => {
+                if let Err(error) = self.resize(cx) {
+                    return cx.fail(error);
+                }
+            }
+            Output::Develop(raw) => {
+                if let Err(error) = self.pass(cx, raw) {
+                    return cx.fail(error);
+                }
+            }
         }
         self.state.jobs += 1;
         if let Some(f) = self.contract.flags {
@@ -982,5 +1194,392 @@ mod tests {
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         e.write(&mut cx, BASE, 4, 1);
         assert!(cx.refusal().is_some());
+    }
+
+    const RESZ: u64 = 0xfff7e000;
+    const RESZ_IRQ: u32 = 132;
+
+    /// A packed 4:2:2 picture: luma x + 3y, Cb the pixel pair, Cr the line.
+    fn picture(w: usize, h: usize, pitch: usize) -> Vec<u8> {
+        let mut bytes = vec![0; pitch * h];
+        for y in 0..h {
+            for x in 0..w {
+                bytes[y * pitch + x / 2 * 4 + x % 2] = (x + 3 * y) as u8;
+            }
+            for pair in 0..w / 2 {
+                bytes[y * pitch + pair * 4 + 2] = pair as u8;
+                bytes[y * pitch + pair * 4 + 3] = y as u8;
+            }
+        }
+        bytes
+    }
+    /// Programs one RESZ job, starts it and lets it finish; returns the
+    /// engine's refusal, if any.
+    fn resize_job(e: &mut Engine, h: &mut RecordingHost, words: &[(u64, u32)]) -> Option<String> {
+        for &(o, v) in words.iter().chain(&[(0x004, 1)]) {
+            let mut cx = Cx::new(h, 0, 0, 0);
+            e.write(&mut cx, RESZ + o, 4, v.into());
+            assert!(cx.refusal().is_none(), "+{o:#x} {v:#x}");
+        }
+        h.now += 20;
+        let mut cx = Cx::new(h, 0, 0, 0);
+        e.advance(&mut cx);
+        cx.take_refusal()
+    }
+    /// The words of a job: sizes, steps, source and output address and pitch.
+    fn job(
+        sizes: (u32, u32),
+        steps: (u32, u32),
+        source: (u32, u32),
+        output: (u32, u32),
+    ) -> Vec<(u64, u32)> {
+        vec![
+            (0x008, 0x100),
+            (0x00c, sizes.0),
+            (0x018, sizes.1),
+            (0x01c, steps.0),
+            (0x020, steps.1),
+            (0x0c4, source.0),
+            (0x0d0, source.1),
+            (0x0d8, output.0),
+            (0x0e4, output.1),
+        ]
+    }
+    /// The source pixel an output index reads: floor(i x step), the step
+    /// 2^(bits 31..16) x (bits 15..0) / 0x1000.
+    fn source_index(i: usize, step: u32) -> usize {
+        ((i * (step as usize & 0xffff)) << (step >> 16)) >> 12
+    }
+
+    /// The step words of an emulated X-T3 5.11 playback (3120 x 2080 to
+    /// 720 x 480) on a smaller picture: each output pixel takes the luma of
+    /// its floor source pixel and the chroma of that pixel's pair.
+    #[test]
+    fn a_computing_resizer_scales_by_the_programmed_steps() {
+        let (sw, sh, spitch, ow, oh, opitch) = (64, 40, 136, 14, 9, 32);
+        let (hx, hy) = (0x21155, 0x21156);
+        let mut h = RecordingHost {
+            ram: vec![0xee; 0x4000],
+            ..Default::default()
+        };
+        h.ram[..spitch * sh].copy_from_slice(&picture(sw, sh, spitch));
+        let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20)
+            .unwrap()
+            .computing()
+            .unwrap();
+        let words = job(
+            (
+                (sh as u32 - 1) << 16 | (sw as u32 - 1),
+                (oh as u32 - 1) << 16 | (ow as u32 - 1),
+            ),
+            (hx, hy),
+            (0, spitch as u32),
+            (0x2000, opitch as u32),
+        );
+        assert_eq!(resize_job(&mut e, &mut h, &words), None);
+        assert_eq!(h.irqs.last(), Some(&(RESZ_IRQ, true)));
+        for y in 0..oh {
+            let line = &h.ram[0x2000 + y * opitch..][..opitch];
+            let sy = source_index(y, hy);
+            for x in 0..ow {
+                let sx = source_index(x, hx);
+                assert_eq!(usize::from(line[x / 2 * 4 + x % 2]), sx + 3 * sy, "{x} {y}");
+            }
+            for pair in 0..ow / 2 {
+                let chroma = &line[pair * 4 + 2..pair * 4 + 4];
+                assert_eq!(chroma, [(source_index(pair * 2, hx) / 2) as u8, sy as u8]);
+            }
+            // The pitch's padding is left alone.
+            assert!(line[ow * 2..].iter().all(|&b| b == 0xee));
+        }
+        // Step 4.333 from the last output pixel stays inside the source.
+        assert!(source_index(ow - 1, hx) < sw && source_index(oh - 1, hy) < sh);
+    }
+
+    /// A still capture's halving step (0x11000) and a playback copy (0x1000)
+    /// into a wider output at an offset.
+    #[test]
+    fn halving_and_copy_steps_place_the_lines_at_the_output_pitch() {
+        let (sw, sh, spitch) = (16, 8, 32);
+        let mut h = RecordingHost {
+            ram: vec![0; 0x4000],
+            ..Default::default()
+        };
+        h.ram[..spitch * sh].copy_from_slice(&picture(sw, sh, spitch));
+        let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20)
+            .unwrap()
+            .computing()
+            .unwrap();
+        let half = job(
+            (0x0007_000f, 0x0003_0007),
+            (0x11000, 0x11000),
+            (0, 32),
+            (0x1000, 16),
+        );
+        assert_eq!(resize_job(&mut e, &mut h, &half), None);
+        for y in 0..4 {
+            let line = &h.ram[0x1000 + y * 16..][..16];
+            let luma: Vec<u8> = (0..8).map(|x| line[x / 2 * 4 + x % 2]).collect();
+            let expected: Vec<u8> = (0..8).map(|x| (2 * x + 6 * y) as u8).collect();
+            assert_eq!(luma, expected, "line {y}");
+        }
+        // Acknowledge, then copy 1:1 to +24 bytes in a 96-byte pitch.
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        e.write(&mut cx, RESZ + 0x10c, 4, 1);
+        let copy = job(
+            (0x0007_000f, 0x0007_000f),
+            (0x1000, 0x1000),
+            (0, 32),
+            (0x2018, 96),
+        );
+        assert_eq!(resize_job(&mut e, &mut h, &copy), None);
+        let source = picture(sw, sh, spitch);
+        for y in 0..sh {
+            assert_eq!(h.ram[0x2018 + y * 96..][..32], source[y * spitch..][..32]);
+        }
+        assert!(h.ram[0x2000..0x2018].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn only_a_computing_resizer_writes_its_output() {
+        let words = job(
+            (0x0001_0003, 0x0001_0003),
+            (0x1000, 0x1000),
+            (0, 8),
+            (0x100, 8),
+        );
+        let mut h = RecordingHost {
+            ram: vec![0x55; 0x200],
+            ..Default::default()
+        };
+        let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20).unwrap();
+        assert_eq!(resize_job(&mut e, &mut h, &words), None);
+        assert!(h.ram[0x100..0x110].iter().all(|&b| b == 0x55));
+        for kind in [Kind::Iifp, Kind::Reszl, Kind::Mix, Kind::Retch] {
+            let error = Engine::new(kind, RESZ, RESZ_IRQ, 20)
+                .unwrap()
+                .computing()
+                .err();
+            assert!(
+                error.is_some_and(|e| e.contains("no computed output")),
+                "{kind:?}"
+            );
+        }
+    }
+
+    /// Paired-row formats (+0x08 bits 1..0 or 5..4), odd widths, a pitch
+    /// shorter than a line and a zero step refuse when the job ends.
+    #[test]
+    fn a_job_outside_the_modeled_layout_refuses() {
+        let base = job(
+            (0x0001_0003, 0x0001_0003),
+            (0x1000, 0x1000),
+            (0, 8),
+            (0x100, 8),
+        );
+        let with = |o: u64, v: u32| {
+            let mut words = base.clone();
+            words.retain(|&(w, _)| w != o);
+            words.push((o, v));
+            words
+        };
+        for (words, expected) in [
+            (with(0x008, 0x133), "not packed"),
+            (with(0x008, 0x103), "not packed"),
+            (with(0x00c, 0x0001_0002), "3x2"),
+            (with(0x0d0, 6), "pitch 6"),
+            (with(0x01c, 0x1_0000), "no step"),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x200],
+                ..Default::default()
+            };
+            let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20)
+                .unwrap()
+                .computing()
+                .unwrap();
+            let refusal = resize_job(&mut e, &mut h, &words);
+            assert!(
+                refusal.as_deref().is_some_and(|r| r.contains(expected)),
+                "{expected}: {refusal:?}"
+            );
+        }
+    }
+
+    const RECC: u64 = 0xfff82000;
+    const RECC_IRQ: u32 = 129;
+    /// The declared RAW: 16 lines of 32 samples, first sample at site (5, 1).
+    const RAW: Raw = Raw {
+        address: 0,
+        pitch: 64,
+        site: (5, 1),
+    };
+
+    fn raw_samples() -> Vec<u8> {
+        (0..16 * 32)
+            .flat_map(|i: u32| {
+                (((i.wrapping_mul(2654435761) >> 18) % 12000 + 1024) as u16).to_le_bytes()
+            })
+            .collect()
+    }
+    fn developing_recc() -> Engine {
+        Engine::new(Kind::Recc, RECC, RECC_IRQ, 20)
+            .unwrap()
+            .developing(RAW)
+            .unwrap()
+    }
+    /// Programs one RECC pass, starts it and lets it finish; returns the
+    /// engine's refusal, if any.
+    fn recc_pass(e: &mut Engine, h: &mut RecordingHost, words: &[(u64, u32)]) -> Option<String> {
+        for &(o, v) in words.iter().chain(&[(0x04, 1)]) {
+            let mut cx = Cx::new(h, 0, 0, 0);
+            e.write(&mut cx, RECC + o, 4, v.into());
+            assert!(cx.refusal().is_none(), "+{o:#x} {v:#x}");
+        }
+        h.now += 20;
+        let mut cx = Cx::new(h, 0, 0, 0);
+        e.advance(&mut cx);
+        cx.take_refusal()
+    }
+    /// A band pass: 6 lines of 12 samples from RAW + 1 line + 2 samples,
+    /// starting at band line `line`, into the picture 2 lines and 4 pixels
+    /// into the buffer at 0x1000 (pitch 48).
+    fn band(line: u32) -> Vec<(u64, u32)> {
+        vec![
+            (0x08, 0x0062_0000),
+            (0x0c, 64 + 4),
+            (0x14, 64),
+            (0x18, 6 << 16 | 12),
+            (0x1c, line << 16),
+            (0x54, line << 16),
+            (0x70, 0x1000 + 2 * 48 + 8),
+            (0x80, 48),
+        ]
+    }
+
+    /// The still's three passes: two bands developed from their X-Trans
+    /// sites, then the copy of the picture to the start of the buffer.
+    #[test]
+    fn a_developing_recc_writes_its_bands_then_copies_the_picture_into_place() {
+        let mut h = RecordingHost {
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        h.ram[..16 * 64].copy_from_slice(&raw_samples());
+        let mut e = developing_recc();
+        assert_eq!(recc_pass(&mut e, &mut h, &band(0)), None);
+        assert_eq!(
+            h.irqs[h.irqs.len() - 2..],
+            [(RECC_IRQ, true), (RECC_IRQ, false)]
+        );
+        assert_eq!(recc_pass(&mut e, &mut h, &band(6)), None);
+        // Sites: line (5 + 1) % 6 = 0, sample (1 + 2) % 6 = 3, and the second
+        // band 6 lines on, the same site. Each band develops on its own.
+        let raw = raw_samples();
+        let mut expected = develop(&raw[64 + 4..], 64, 6, 12, (0, 3), None).unwrap();
+        expected.extend(develop(&raw[7 * 64 + 4..], 64, 6, 12, (0, 3), None).unwrap());
+        for (y, row) in expected.iter().enumerate() {
+            let at = 0x1000 + (2 + y) * 48 + 8;
+            assert_eq!(h.ram[at..at + 24], row[..], "band line {y}");
+        }
+        let copy = [
+            (0x08, 2),
+            (0x1c, 0),
+            (0x54, 0),
+            (0x3c, 0x1000 + 2 * 48 + 8),
+            (0x4c, 48),
+            (0x50, 12 << 16 | 12),
+            (0x70, 0x1000),
+        ];
+        assert_eq!(recc_pass(&mut e, &mut h, &copy), None);
+        for (y, row) in expected.iter().enumerate() {
+            assert_eq!(h.ram[0x1000 + y * 48..][..24], row[..], "picture line {y}");
+        }
+    }
+
+    #[test]
+    fn only_a_developing_recc_writes_and_only_from_the_declared_raw() {
+        let mut h = RecordingHost {
+            ram: vec![0x55; 0x2000],
+            ..Default::default()
+        };
+        let mut e = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20).unwrap();
+        assert_eq!(recc_pass(&mut e, &mut h, &band(0)), None);
+        assert!(h.ram[0x1000..].iter().all(|&b| b == 0x55));
+        let error = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20)
+            .unwrap()
+            .computing()
+            .err();
+        assert!(error.is_some_and(|e| e.contains("declared RAW")));
+        for kind in [Kind::Iifp, Kind::Resz, Kind::Reszl, Kind::Mix, Kind::Retch] {
+            let error = Engine::new(kind, RECC, RECC_IRQ, 20)
+                .unwrap()
+                .developing(RAW)
+                .err();
+            assert!(
+                error.is_some_and(|e| e.contains("does not develop")),
+                "{kind:?}"
+            );
+        }
+        for raw in [
+            Raw {
+                site: (6, 0),
+                ..RAW
+            },
+            Raw {
+                site: (0, 6),
+                ..RAW
+            },
+            Raw { pitch: 63, ..RAW },
+        ] {
+            let error = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20)
+                .unwrap()
+                .developing(raw)
+                .err();
+            assert!(error.is_some_and(|e| e.contains("Invalid")), "{raw:?}");
+        }
+    }
+
+    /// The 4K movie mode, a column start, a source outside the RAW or at
+    /// another pitch, and a band too small to develop refuse when the pass
+    /// ends.
+    #[test]
+    fn a_pass_outside_the_modeled_modes_refuses() {
+        let with = |o: u64, v: u32| {
+            let mut words = band(0);
+            words.retain(|&(w, _)| w != o);
+            words.push((o, v));
+            words
+        };
+        for (words, expected) in [
+            (with(0x08, 0x0042_2000), "mode 0x422000"),
+            (with(0x1c, 4), "column"),
+            (with(0x14, 66), "not in the declared RAW"),
+            (with(0x18, 4 << 16 | 12), "Unsupported"),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            let mut e = developing_recc();
+            let refusal = recc_pass(&mut e, &mut h, &words);
+            assert!(
+                refusal.as_deref().is_some_and(|r| r.contains(expected)),
+                "{expected}: {refusal:?}"
+            );
+        }
+        let mut h = RecordingHost {
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        let mut e = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20)
+            .unwrap()
+            .developing(Raw {
+                address: 0x100,
+                ..RAW
+            })
+            .unwrap();
+        let refusal = recc_pass(&mut e, &mut h, &band(0));
+        assert!(refusal.is_some_and(|r| r.contains("not in the declared RAW")));
     }
 }
