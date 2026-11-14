@@ -391,6 +391,13 @@
     "width": 1.307,
     "height": 0.683
   },
+  "mod-custom-settings-bkt-item": {
+    "sprite": "mod",
+    "box": [0, 5, 44, 23],
+    "view": [0, 0, 45, 30],
+    "width": 1.307,
+    "height": 0.683
+  },
   "mod-d-range-priority-item": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
@@ -516,27 +523,6 @@
     "view": [0, 0, 45, 30],
     "width": 1.135,
     "height": 0.776
-  },
-  "mod-recipes-root-hidden": {
-    "sprite": "mod",
-    "box": [0, 0, 44, 30],
-    "view": [0, 0, 45, 30],
-    "width": 1.114,
-    "height": 0.76
-  },
-  "mod-recipes-root-uses-custom": {
-    "sprite": "mod",
-    "box": [0, 0, 44, 30],
-    "view": [0, 0, 45, 30],
-    "width": 1.156,
-    "height": 0.788
-  },
-  "mod-recipes-setting-rename": {
-    "sprite": "mod",
-    "box": [0, 0, 44, 30],
-    "view": [0, 0, 45, 30],
-    "width": 1.116,
-    "height": 0.761
   },
   "mod-shape-aspect-item": {
     "sprite": "mod",

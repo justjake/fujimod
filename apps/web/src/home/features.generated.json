@@ -115,7 +115,7 @@
       "icon": "mod-custom-settings-bkt-drive-item",
       "title": "CUSTOM SETTINGS BKT",
       "path": ["DRIVE"],
-      "summary": "For each shutter release, create up to 5 JPEGs with different CUSTOM SETTINGS recipes.",
+      "summary": "For each shutter release, create up to 3 JPEGs with different CUSTOM SETTINGS recipes.",
       "card": null,
       "attached": false,
       "media_cards": [],
@@ -780,7 +780,7 @@
             "USES CUSTOM FILM",
             "HIDDEN",
             "ERASE HIDDEN",
-            "OWNER NAME"
+            "ENTER AUTHOR INFO"
           ]
         },
         {
@@ -1949,7 +1949,7 @@
       "summary": "Check for and install a FujiMod update from the update server.",
       "card": null,
       "attached": true,
-      "media_cards": [],
+      "media_cards": ["fujimod_setup_item"],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -1966,7 +1966,7 @@
       "summary": "Copy the camera's internal flash to the SD card.",
       "card": null,
       "attached": true,
-      "media_cards": [],
+      "media_cards": ["fujimod_setup_item"],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -2133,7 +2133,7 @@
       "summary": "On X70, choose MANUAL startup with the SD boot buttons or AUTOMATIC startup from the SD card. Automatic startup backs up internal data before it is enabled.",
       "card": null,
       "attached": true,
-      "media_cards": [],
+      "media_cards": ["fujimod_setup_item"],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -2222,6 +2222,21 @@
         "ON": "Draw the build overlay.",
         "OFF": "Hide the build overlay."
       },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "fujimod_setup_item": {
+      "title": "FUJIMOD SET-UP",
+      "path": ["SET-UP"],
+      "summary": "Updates FujiMod over Wi-Fi, backs up the camera’s internal data to the SD card, installs the bootloader for automatic boot and lists the build’s mods.",
+      "choices": {},
       "related": [],
       "changes": null,
       "drive_mode": null,
@@ -2608,7 +2623,12 @@
       "path": ["SHOOTING MENU", "GRAIN EFFECT"],
       "summary": "Choose how strong the grain is. Bursts in continuous drive are recorded without grain.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep GRAIN EFFECT the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -2638,7 +2658,12 @@
       "path": ["SHOOTING MENU", "COLOR CHROME"],
       "summary": "Render saturated reds, yellows and greens deeper, with more tonal gradation. Bursts in continuous drive are recorded without it.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep COLOR CHROME the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -2668,7 +2693,12 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
       "summary": "Choose how strongly light sources glow. Bursts in continuous drive are recorded without halation.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep HALATION the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -2698,7 +2728,12 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
       "summary": "Choose how strongly a soft light leak enters from an edge or corner. Each photograph gets its own leak, and now and then none. Bursts in continuous drive are recorded without it.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep LIGHT LEAKS the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -2743,7 +2778,12 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
       "summary": "Burn the frame into every JPEG. Bursts in continuous drive are recorded without it.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep FILM BORDERS the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -2773,7 +2813,12 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
       "summary": "Records JPEGs as color negatives on an orange film base, ready to invert in Negative Lab Pro or a similar tool.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep NEGATIVE the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": "single",
       "credits": {
@@ -2788,7 +2833,12 @@
       "path": ["SHOOTING MENU"],
       "summary": "Positive values deepen and brighten broad local structure in the midtones; negative values soften it. Highlights and shadows are protected. 0 skips it. Bursts in continuous drive are recorded without it.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep CLARITY the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -2843,7 +2893,12 @@
         "STRONG": "DYNAMIC RANGE DR400, HIGHLIGHT TONE -2, SHADOW TONE -2.",
         "OFF": "Return DYNAMIC RANGE, HIGHLIGHT TONE and SHADOW TONE to their own values."
       },
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep D RANGE PRIORITY the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -3288,6 +3343,24 @@
       },
       "choice_credits": {}
     },
+    "setting_control": {
+      "title": "SETTING CONTROL",
+      "path": ["EDIT/SAVE CUSTOM SETTING"],
+      "summary": "Choose, for each setting FujiMod adds, whether custom settings carry it.",
+      "choices": {
+        "FROM CUSTOM SETTING": "Each custom setting has its own value, saved and recalled with it.",
+        "GLOBAL": "Custom settings never change the setting. It stays as the shooting menu left it, whichever custom setting is selected."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
     "snap_menu_item": {
       "title": "MF SNAP FOCUS",
       "path": ["SHOOTING MENU"],
@@ -3386,7 +3459,12 @@
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
       "summary": "Choose whether new JPEG photographs carry the date, and how it looks.",
       "choices": {},
-      "related": [],
+      "related": [
+        {
+          "card": "setting_control",
+          "reason": "keep DATE STAMP the same for every custom setting, or give each its own"
+        }
+      ],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -3841,6 +3919,26 @@
       "icon": null
     },
     {
+      "title": "NAME",
+      "path": ["ENTER AUTHOR INFO"],
+      "order": 0,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "URL",
+      "path": ["ENTER AUTHOR INFO"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "DEVTOOLS",
       "path": ["SET-UP"],
       "order": 368,
@@ -3856,7 +3954,7 @@
       "order": 352,
       "kind": "page",
       "stock": false,
-      "card": null,
+      "card": "fujimod_setup_item",
       "feature": null,
       "icon": "mod-fujimod-setup-item"
     },
@@ -4248,7 +4346,7 @@
       "stock": false,
       "card": "custom_settings_bkt_item",
       "feature": null,
-      "icon": null
+      "icon": "mod-custom-settings-bkt-item"
     },
     {
       "title": "D RANGE PRIORITY",
