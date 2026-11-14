@@ -961,7 +961,7 @@ fn xpp_initialized_marker(reader: &Routine) -> Result<u64> {
 /// capture. The first checked firmware establishes the instruction grammar;
 /// each address and state input is recovered from its indexed routines.
 fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
-    if matches!(firmware, "xt3-511" | "xt30-201") {
+    if matches!(firmware, "xt3-511" | "xt30-201" | "xe4-201") {
         return xp4_packet_flash(index, firmware, image_origin);
     }
     if firmware != "xs10-311" {
@@ -1210,6 +1210,9 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
         "xt30-201" => (
             0x0106f1ec, 0x0106f5a0, 0x0106f02c, 0x0106fa3c, 0x010706fc, 0x01503894, 0x138,
         ),
+        "xe4-201" => (
+            0x011c79d0, 0x011c7d84, 0x011c7810, 0x011c8220, 0x011c8bc0, 0x01711a1c, 0x138,
+        ),
         _ => return Err("unsupported XP4 packet flash layout".into()),
     };
     const HIGH_LEVEL_BYTES: u64 = 0x3b4;
@@ -1253,6 +1256,7 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
         state_address,
         transfer_address,
         prepare_address,
+        if firmware == "xe4-201" { 61 } else { 68 },
     )?;
     let references = index
         .referrers(firmware, Some("main"), state_address)
@@ -1305,6 +1309,7 @@ fn verify_xp4_packet_reader(
     state_address: u64,
     transfer_address: u64,
     prepare_address: u64,
+    prepare_word: usize,
 ) -> Result<()> {
     if words.len() != 193
         || words[..8]
@@ -1316,7 +1321,7 @@ fn verify_xp4_packet_reader(
         || arm_mov_pair_for(words[26], words[27], 3)? != state_address
         || arm_mov_pair_for(words[28], words[29], 2)? != 0x7766_6555
         || arm_branch_target(reader_address + 0x170, words[92])? != transfer_address
-        || arm_branch_target(reader_address + 0x110, words[68])? != prepare_address
+        || arm_branch_target(reader_address + (prepare_word * 4) as u64, words[prepare_word])? != prepare_address
     {
         return Err("XP4 flash packet, state or transfer path changed".into());
     }
@@ -1538,7 +1543,7 @@ mod tests {
         words[68] = branch(0x1110, 0x3000);
         words[92] = branch(0x1170, 0x4000);
         let verify =
-            |words: &[u32]| verify_xp4_packet_reader(words, 0x1000, 0x20000, 0x4000, 0x3000);
+            |words: &[u32]| verify_xp4_packet_reader(words, 0x1000, 0x20000, 0x4000, 0x3000, 68);
         assert!(verify(&words).is_ok());
         for (offset, value) in [
             (3, 0xe5905004),
@@ -1556,7 +1561,7 @@ mod tests {
             assert!(verify(&changed).is_err(), "accepted changed word {offset}");
         }
         assert!(verify(&words[..192]).is_err());
-        assert!(verify_xp4_packet_reader(&words, 0x1004, 0x20000, 0x4000, 0x3000).is_err());
+        assert!(verify_xp4_packet_reader(&words, 0x1004, 0x20000, 0x4000, 0x3000, 68).is_err());
     }
 
     fn candidates(second: u32) -> Index {

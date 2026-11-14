@@ -24,3 +24,6 @@ fujimod-workspace-hack.workspace = true
 [features]
 # JSON Schema derives, used only to generate and check the committed schemas.
 schema = []
+
+[dev-dependencies]
+serde_json.workspace = true

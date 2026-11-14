@@ -169,6 +169,7 @@ fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
         derived_fields: vec![],
         header: range(0x101c, &header),
         loader_offset: None,
+        power_register: None,
         records: BTreeMap::from([(
             "main".into(),
             ProfileRecord {

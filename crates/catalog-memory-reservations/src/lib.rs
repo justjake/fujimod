@@ -13,6 +13,7 @@ pub const MEMORY_RESERVATIONS_SCHEMA_URI: &str =
 /// Located fixed reservations of one firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(transform = require_dram_size))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
@@ -29,8 +30,9 @@ pub struct FirmwareMemoryReservations {
     pub id: String,
     /// Firmware whose stock code owns these reservations.
     pub firmware_id: String,
-    /// DRAM window, in bytes, that every reservation lies within.
-    pub dram_size: u64,
+    /// DRAM window in bytes when known. Unknown size does not imply free memory.
+    #[serde(deserialize_with = "deserialize_dram_size")]
+    pub dram_size: Option<u64>,
     /// Located reservations, by stock name.
     pub reservations: Vec<Reservation>,
     /// Fixed reservations whose locator failed; each is absent from `reservations`.
@@ -71,6 +73,23 @@ pub struct LocatorFailure {
     pub reason: String,
 }
 
+// The key stays required even though its value can be null.
+fn deserialize_dram_size<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error> {
+    Option::<u64>::deserialize(deserializer)
+}
+
+#[cfg(feature = "schema")]
+fn require_dram_size(schema: &mut schemars::Schema) {
+    schema
+        .as_object_mut()
+        .and_then(|object| object.get_mut("required"))
+        .and_then(|required| required.as_array_mut())
+        .expect("memory reservations schema must have required properties")
+        .push("dram_size".into());
+}
+
 impl FirmwareMemoryReservations {
     pub fn validate(&self) -> Result<(), String> {
         fujimod_catalog_identity::validate_id(&self.id)?;
@@ -79,7 +98,7 @@ impl FirmwareMemoryReservations {
         if self.schema_uri != MEMORY_RESERVATIONS_SCHEMA_URI || self.schema != 1 {
             return fail("unsupported schema");
         }
-        if self.dram_size == 0 {
+        if self.dram_size == Some(0) {
             return fail("empty DRAM window");
         }
         if self.reservations.is_empty() {
@@ -94,7 +113,7 @@ impl FirmwareMemoryReservations {
                 || reservation
                     .address
                     .checked_add(reservation.size)
-                    .is_none_or(|end| end > self.dram_size)
+                    .is_none_or(|end| self.dram_size.is_some_and(|size| end > size))
             {
                 return fail("reservation outside the DRAM window");
             }
