@@ -6293,8 +6293,15 @@
           "type": "integer"
         },
         "projection": {
-          "$ref": "#/$defs/HardwareProjection",
-          "description": "Declared projection."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareProjection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared lens projection; absent when no lens is mounted."
         },
         "rolling_references": {
           "description": "Declared rolling references.",
@@ -6332,7 +6339,6 @@
       },
       "required": [
         "pixel_clock_hz",
-        "projection",
         "rolling_references",
         "mode_change_frames",
         "saturation_lux_seconds",

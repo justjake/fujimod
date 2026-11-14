@@ -546,8 +546,9 @@ pub struct Shutter {
 pub struct Radiometry {
     /// Declared pixel clock hz.
     pub pixel_clock_hz: u64,
-    /// Declared projection.
-    pub projection: Projection,
+    /// Declared lens projection; absent when no lens is mounted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projection: Option<Projection>,
     /// Declared rolling references.
     pub rolling_references: Vec<RollingReference>,
     /// Invalid readouts while a sensor drive-mode change acquires sync.
