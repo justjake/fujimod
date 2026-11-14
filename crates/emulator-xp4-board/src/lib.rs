@@ -89,6 +89,8 @@ struct RunState {
     data_aborts: Vec<u64>,
     calls: Vec<Call>,
     pending_calls: Vec<BTreeMap<u32, Vec<usize>>>,
+    // Addresses that may need a passive observation (see `mark_observed`).
+    observe_filter: Vec<u64>,
     exclusive: Vec<Option<(u64, usize)>>,
     recorder: Option<observe::Recorder>,
     memory_watch: Option<observation::MemoryWatch>,
@@ -323,6 +325,20 @@ impl Cluster {
         self.cpus[core].stop()
     }
     fn word(&self, core: usize, address: u64) -> Result<u32, String> {
+        // The engine is about to execute this word, so its fetch permission
+        // already holds: when it translates into plain DRAM, read the backing
+        // directly instead of the observational read (page-size query, region
+        // copy and physical read on every instruction). Explicit windows lie
+        // above DRAM; only the low boot window overlaps it until the remap.
+        if let Ok(physical) = self.cpus[core].translate(address, Access::Fetch) {
+            let low = unsafe { (*self.state.get()).low_alias }
+                .map_or(0, |index| self.memory[index].data.len() as u64);
+            if physical >= low && physical & 3 == 0 && physical + 4 <= self.ram.len() as u64 {
+                return Ok(u32::from_le(unsafe {
+                    std::ptr::read(self.ram.as_ptr().add(physical as usize).cast::<u32>())
+                }));
+            }
+        }
         let mut bytes = [0; 4];
         self.cpus[core].read_virtual(address, Access::Fetch, &mut bytes)?;
         Ok(u32::from_le_bytes(bytes))
@@ -361,7 +377,13 @@ impl Cluster {
             return;
         }
         let state = unsafe { &mut *self.state.get() };
-        if let Some(timer) = &mut state.timer {
+        // A counter expires only once its next tick is reached (`tick` is a
+        // no-op before), so skip the channel walk until then.
+        if let Some(timer) = &mut state.timer
+            && timer
+                .next_event_tick(state.ticks)
+                .is_some_and(|at| at <= state.ticks)
+        {
             for irq in timer.tick(state.ticks) {
                 state.gic.pulse(irq);
             }
@@ -479,6 +501,13 @@ unsafe fn memory_access(access: Access, address: u64, size: i32, value: i64, dat
     let cluster = unsafe { &*hook.cluster };
     cluster.record_memory(hook.core, access, address, size, value);
 }
+/// Marks an address in the 64 Ki-bit passive-observation filter, keyed by
+/// instruction-address bits 2..18. Bits are never cleared: a set bit only
+/// sends the instruction through the exact label/return/observer lookups.
+fn mark_observed(filter: &mut [u64], address: u64) {
+    let key = (address as u32 >> 2) & 0xffff;
+    filter[(key >> 6) as usize] |= 1 << (key & 63);
+}
 fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), String> {
     c.healthy()?;
     c.record_memory(core, Access::Fetch, address, size as i32, 0);
@@ -573,13 +602,18 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
     }
     trace.push_back((address as u32, word));
     // Passive call/return observations cannot select device or CPU behavior.
-    let labeled = c.labels.contains(&(address as u32));
-    let sp = if labeled || state.pending_calls[core].contains_key(&(address as u32)) {
+    // The filter holds every label, pending return and PC observer address
+    // (never cleared, so a set bit only means "look it up").
+    let key = (address as u32 >> 2) & 0xffff;
+    let candidate = state.observe_filter[(key >> 6) as usize] & (1 << (key & 63)) != 0;
+    let labeled = candidate && c.labels.contains(&(address as u32));
+    let returning = candidate && state.pending_calls[core].contains_key(&(address as u32));
+    let sp = if labeled || returning {
         c.reg(core, arm::CORE[13])?
     } else {
         0
     };
-    if let Some(indices) = state.pending_calls[core].get_mut(&(address as u32)) {
+    if returning && let Some(indices) = state.pending_calls[core].get_mut(&(address as u32)) {
         indices.retain(|&index| {
             let call = &mut state.calls[index];
             if call.sp == sp {
@@ -621,6 +655,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
                 result: None,
             });
             state.pending_calls[core].entry(lr).or_default().push(index);
+            mark_observed(&mut state.observe_filter, u64::from(lr));
         }
     }
     if let Some(recorder) = &mut state.recorder
@@ -639,7 +674,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
             u64::from(registers[14]) & !1,
         );
     }
-    let observed = state.pc_observers[core].contains(&address);
+    let observed = candidate && state.pc_observers[core].contains(&address);
     // The actual return is already recorded. Explicit discovery/debugger
     // callbacks run at the CPU boundary, never inside a peripheral model.
     if observed {
@@ -1831,6 +1866,10 @@ impl Session {
             }
         }
         if let Some(view) = &frozen_nor { devices.as_mut().unwrap().partition_nor_prefix(view.len()); }
+        let mut observe_filter = vec![0u64; 1024];
+        for &label in &labels {
+            mark_observed(&mut observe_filter, u64::from(label));
+        }
         let mut inner = Box::new(Cluster {
             cpus,
             maintenance,
@@ -1870,6 +1909,7 @@ impl Session {
                 data_aborts: vec![0; cores],
                 calls: Vec::new(),
                 pending_calls: vec![BTreeMap::new(); cores],
+                observe_filter,
                 exclusive: vec![None; cores],
                 recorder: None,
                 memory_watch: None,
@@ -2118,7 +2158,11 @@ impl Session {
             return Err("Invalid ARMv7-A PC observer addresses".to_owned());
         }
         unsafe {
-            (&mut (*self.inner.state.get()).pc_observers)[core] = addresses.into_iter().collect();
+            let state = &mut *self.inner.state.get();
+            for &address in &addresses {
+                mark_observed(&mut state.observe_filter, address);
+            }
+            state.pc_observers[core] = addresses.into_iter().collect();
         }
         Ok(())
     }
