@@ -171,5 +171,32 @@
     }
   ],
   "parts": [],
-  "wiring": []
+  "wiring": [],
+  "hardware": {
+    "profiles": {
+      "xe4-201-handoff": {
+        "dram_basis": "Declared virtual 512 MiB address-space bound used for the Discovery run; physical DRAM size is unknown.",
+        "register_maps": {
+          "register_blocks": [
+            {
+              "base": 4294287360,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-E4 2.01 copies three 256-word display parameter banks on this page in 0x021c1e18, via 0x021c1644. This virtual page retains the last written words; physical reset values and display side effects are not modeled."
+            },
+            {
+              "base": 4294291456,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "X-E4 2.01 copies three 256-word display parameter banks on this page in 0x021c1e18, via 0x021c1644. This virtual page retains the last written words; physical reset values and display side effects are not modeled."
+            }
+          ]
+        }
+      }
+    },
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": []
+  }
 }
