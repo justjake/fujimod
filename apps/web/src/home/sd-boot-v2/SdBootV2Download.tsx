@@ -345,6 +345,10 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
             <img src="/brand.png" alt="FujiMod" width="110" height="28" />
             <span>FAT32</span>
           </div>
+          <p class="sd-lead">
+            FujiMod lives on your SD card. Running FujiMod does not change the firmware on your
+            camera’s built-in storage.
+          </p>
           <div class="tree sd-tree" id="sd-card-files">
             <For each={processors()}>
               {(processor) => {
@@ -387,7 +391,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
               <Show when={inFolder('RECIPES').length}>
                 <OptionalFolder
                   name="RECIPES"
-                  detail="Recipes for EDIT/SAVE CUSTOM SETTING, when available."
+                  detail="Recipes for EDIT/SAVE CUSTOM SETTING."
                   files={inFolder('RECIPES')}
                   excluded={excluded()}
                   setExcluded={setExcluded}

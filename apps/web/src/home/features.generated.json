@@ -10,6 +10,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Choose HIGHLIGHT to reduce exposure when bright areas dominate the scene.",
       "card": "photometry",
+      "attached": false,
       "media_cards": ["photometry"],
       "controls": [
         {
@@ -55,11 +56,12 @@
     {
       "id": "software_nd",
       "group": "photography",
-      "icon": "shift",
+      "icon": "mod-software-nd-item",
       "title": "SOFTWARE ND",
-      "path": [],
+      "path": ["DRIVE"],
       "summary": "Average a sequence of frames into one long-exposure JPEG.",
       "card": "software_nd_item",
+      "attached": false,
       "media_cards": ["software_nd_item"],
       "controls": [
         {
@@ -108,13 +110,31 @@
       }
     },
     {
+      "id": "custom_settings_bkt",
+      "group": "photography",
+      "icon": "recipes",
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["DRIVE"],
+      "summary": "Each shutter press records one JPEG for the current settings and one for each chosen custom setting.",
+      "card": null,
+      "attached": false,
+      "media_cards": [],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "snap_focus",
       "group": "photography",
-      "icon": "snap",
+      "icon": "mod-snap-menu-item",
       "title": "MF SNAP FOCUS",
       "path": ["SHOOTING MENU"],
       "summary": "In manual focus mode, press a button assigned to SNAP FOCUS to focus at a preset distance.",
       "card": "snap_menu_item",
+      "attached": false,
       "media_cards": ["snap_menu_item"],
       "controls": [],
       "credits": {
@@ -131,6 +151,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Show the focus distance, the near and far limits of sharp focus and the hyperfocal distance on the shooting display, and set the hyperfocal distance with a button.",
       "card": null,
+      "attached": false,
       "media_cards": ["zone_readout_item", "zone_in_af_item", "zone_coc_item", "zone_units_item"],
       "controls": [
         {
@@ -220,6 +241,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose the aspect ratio of still pictures.",
       "card": "shape_aspect_item",
+      "attached": false,
       "media_cards": ["shape_aspect_item"],
       "controls": [
         {
@@ -285,11 +307,12 @@
     {
       "id": "pixel_map",
       "group": "photography",
-      "icon": "highlight",
+      "icon": "pixel-map",
       "title": "PIXEL MAPPING",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Hide hot and stuck pixels in every photo, RAW and JPEG, from a list made with lens-cap test shots.",
       "card": "pixel_map_item",
+      "attached": false,
       "media_cards": ["pixel_map_item"],
       "controls": [
         {
@@ -325,6 +348,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose how the area outside the frame is shown.",
       "card": "shape_surround_item",
+      "attached": false,
       "media_cards": ["shape_surround_item"],
       "controls": [
         {
@@ -376,13 +400,14 @@
       "title": "DIGITAL TELE-CONV.",
       "path": ["SHOOTING MENU"],
       "summary": "Choose a focal length that stays selected.",
-      "card": "6b",
-      "media_cards": ["6b"],
+      "card": "digital_tele_conv",
+      "attached": false,
+      "media_cards": ["digital_tele_conv"],
       "controls": [
         {
           "title": "DIGITAL TELE-CONV.",
           "primary": true,
-          "card": "6b",
+          "card": "digital_tele_conv",
           "choices": [
             {
               "label": "28mm",
@@ -414,10 +439,11 @@
       "group": "photography",
       "icon": "aspect",
       "title": "RAW Teleconverter",
-      "path": [],
+      "path": ["SHOOTING MENU", "DIGITAL TELE-CONV."],
       "summary": "Use the digital teleconverter with RAW and RAW+JPEG pictures.",
       "card": null,
-      "media_cards": [],
+      "attached": true,
+      "media_cards": ["digital_tele_conv"],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -433,6 +459,7 @@
       "path": ["SHOOTING MENU"],
       "summary": "Choose ULTRAFINE or ULTRAFINE+RAW to save JPEGs with finer compression.",
       "card": "image_quality",
+      "attached": false,
       "media_cards": ["image_quality"],
       "controls": [
         {
@@ -486,96 +513,6 @@
       }
     },
     {
-      "id": "d_range_priority",
-      "group": "photography",
-      "icon": "highlight",
-      "title": "D RANGE PRIORITY",
-      "path": ["SHOOTING MENU"],
-      "summary": "Protect highlights by combining DYNAMIC RANGE, HIGHLIGHT TONE and SHADOW TONE in one choice.",
-      "card": "d_range_priority_item",
-      "media_cards": ["d_range_priority_item"],
-      "controls": [
-        {
-          "title": "D RANGE PRIORITY",
-          "primary": true,
-          "card": "d_range_priority_item",
-          "choices": [
-            {
-              "label": "OFF",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "AUTO",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "WEAK",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "STRONG",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "noise_reduction",
-      "group": "photography",
-      "icon": "film",
-      "title": "NOISE REDUCTION",
-      "path": ["SHOOTING MENU"],
-      "summary": "Choose how much luminance and color noise reduction is applied to still pictures.",
-      "card": "noise_reduction",
-      "media_cards": ["noise_reduction"],
-      "controls": [
-        {
-          "title": "NOISE REDUCTION",
-          "primary": true,
-          "card": "noise_reduction",
-          "choices": [
-            {
-              "label": "LUMA NR OFF",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "COLOR NR LOW",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "SPECKLE NR ONLY",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "NR OFF",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "raw_view",
       "group": "photography",
       "icon": "highlight",
@@ -583,94 +520,9 @@
       "path": [],
       "summary": "Assign RAW VIEW to a function button to see how close the brightest areas are to losing detail in the RAW file.",
       "card": "raw_view",
+      "attached": false,
       "media_cards": ["raw_view"],
       "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "tone_curve",
-      "group": "photography",
-      "icon": "highlight",
-      "title": "TONE CURVE",
-      "path": ["SHOOTING MENU"],
-      "summary": "Set HIGHLIGHTS and SHADOWS together on one page, as on the X100VI.",
-      "card": "tone_curve_item",
-      "media_cards": ["tone_curve_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "tone_steps",
-      "group": "photography",
-      "icon": "highlight",
-      "title": "Tone Steps",
-      "path": ["SHOOTING MENU"],
-      "summary": "Choose half steps for HIGHLIGHT TONE and SHADOW TONE, and COLOR beyond ±2.",
-      "card": null,
-      "media_cards": ["3"],
-      "controls": [
-        {
-          "title": "COLOR",
-          "primary": false,
-          "card": "3",
-          "choices": [
-            {
-              "label": "+4",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "+3",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "+2",
-              "stock": true,
-              "icon": null
-            },
-            {
-              "label": "+1",
-              "stock": true,
-              "icon": null
-            },
-            {
-              "label": "0",
-              "stock": true,
-              "icon": null
-            },
-            {
-              "label": "-1",
-              "stock": true,
-              "icon": null
-            },
-            {
-              "label": "-2",
-              "stock": true,
-              "icon": null
-            },
-            {
-              "label": "-3",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "-4",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -685,6 +537,7 @@
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Choose a guide to display in the shooting view, including Golden Ratio, four Golden Spiral focal points and Dynamic Symmetry.",
       "card": "c",
+      "attached": false,
       "media_cards": ["c"],
       "controls": [
         {
@@ -760,6 +613,7 @@
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
       "card": null,
+      "attached": true,
       "media_cards": ["shape_jpeg_item"],
       "controls": [
         {
@@ -788,13 +642,507 @@
       }
     },
     {
+      "id": "f_log",
+      "group": "videography",
+      "icon": "movie",
+      "title": "F-Log RECORDING",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "summary": "Record movies in F-Log format.",
+      "card": "f_log_recording_item",
+      "attached": false,
+      "media_cards": ["f_log_recording_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
+              "text": ["suggested"]
+            },
+            " by ",
+            {
+              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
+              "text": ["u/Visible-Marzipan5763"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "desqueeze",
+      "group": "videography",
+      "icon": "anamorphic",
+      "title": "Anamorphic Lenses",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
+      "card": null,
+      "attached": true,
+      "media_cards": ["shape_desqueeze_item"],
+      "controls": [
+        {
+          "title": "DESQUEEZE",
+          "primary": false,
+          "card": "shape_desqueeze_item",
+          "choices": [
+            {
+              "label": "1.25X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.33X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.50X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.60X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "1.80X",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "2.00X",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            "suggested by ",
+            {
+              "href": "https://www.reddit.com/user/-ayiv-/",
+              "text": ["u/-ayiv-"]
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "id": "hdmi_output",
+      "group": "videography",
+      "icon": "hdmi",
+      "title": "HDMI OUTPUT",
+      "path": ["SET-UP"],
+      "summary": "Display the shooting view on an HDMI device.",
+      "card": "hdmi_rec_behavior_item",
+      "attached": false,
+      "media_cards": ["hdmi_rec_behavior_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "recipes",
+      "group": "recipes",
+      "icon": "recipes",
+      "title": "Recipes",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "summary": "Keep up to 255 named custom settings on an SD card, with seven favorites for Q and Fn.",
+      "card": null,
+      "attached": false,
+      "media_cards": ["recipes", "recipes_setting_page", "recipes_compare_page"],
+      "controls": [
+        {
+          "title": "EDIT/SAVE CUSTOM SETTING",
+          "primary": true,
+          "card": null,
+          "choices": [],
+          "actions": [
+            "SAVE CURRENT AS NEW",
+            "AUTO-UPDATE CURRENT",
+            "UNSELECT",
+            "MY RECIPES",
+            "BY NAME",
+            "BY FILM SIMULATION",
+            "BY AUTHOR",
+            "ANY COLOR",
+            "ANY MONOCHROME",
+            "USES CUSTOM FILM",
+            "HIDDEN",
+            "ERASE HIDDEN"
+          ]
+        },
+        {
+          "title": "CUSTOM SETTING",
+          "primary": false,
+          "card": "recipes_setting_page",
+          "choices": [],
+          "actions": [
+            "SELECT AS CURRENT",
+            "EDIT/CHECK",
+            "SAVE THE CHANGES",
+            "RESET THE CHANGES",
+            "COMPARE WITH CURRENT",
+            "COPY",
+            "PROTECT",
+            "ERASE",
+            "EDIT CUSTOM NAME"
+          ]
+        },
+        {
+          "title": "COMPARE WITH CURRENT",
+          "primary": false,
+          "card": "recipes_compare_page",
+          "choices": [],
+          "actions": ["SAVE ALL"]
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "film_simulation",
+      "group": "recipes",
+      "icon": "film",
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU"],
+      "summary": "Simulate the effects of additional types of film. Create your own film simulations in FILM EDITOR.",
+      "card": "film_simulation",
+      "attached": false,
+      "media_cards": ["film_simulation"],
+      "controls": [
+        {
+          "title": "FILM SIMULATION",
+          "primary": true,
+          "card": "film_simulation",
+          "choices": [
+            {
+              "label": "ETERNA",
+              "stock": false,
+              "icon": "eterna"
+            },
+            {
+              "label": "ETERNA BLEACH BYPASS",
+              "stock": false,
+              "icon": "bleach-bypass"
+            },
+            {
+              "label": "CLASSIC Neg.",
+              "stock": false,
+              "icon": "classic-neg"
+            },
+            {
+              "label": "NOSTALGIC Neg.",
+              "stock": false,
+              "icon": "nostalgic-neg"
+            },
+            {
+              "label": "REALA ACE",
+              "stock": false,
+              "icon": "reala-ace"
+            },
+            {
+              "label": "Neutral",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "card_films",
+      "group": "recipes",
+      "icon": "film",
+      "title": "Card Films",
+      "path": [],
+      "summary": "Load film simulations from FUJIMOD/FILMS on the SD card, with LEICA X built in.",
+      "card": null,
+      "attached": false,
+      "media_cards": [],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "multipass_curves",
+      "group": "recipes",
+      "icon": "film",
+      "title": "Film Curves",
+      "path": [],
+      "summary": "Develop films with separate color curves faster, and add Classic Neg. as a built-in film.",
+      "card": null,
+      "attached": false,
+      "media_cards": [],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "hide_films",
+      "group": "recipes",
+      "icon": "film",
+      "title": "HIDE FILMS",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "summary": "Choose which film simulations appear in the pickers.",
+      "card": "hide_films_item",
+      "attached": false,
+      "media_cards": ["hide_films_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "film_editor",
+      "group": "recipes",
+      "icon": "mod-film-editor-item",
+      "title": "FILM EDITOR",
+      "path": ["SHOOTING MENU"],
+      "summary": "Create and edit your own film simulations, saved as files on the memory card.",
+      "card": "film_editor_item",
+      "attached": false,
+      "media_cards": ["film_editor_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "recipe_exif",
+      "group": "recipes",
+      "icon": "recipes",
+      "title": "RECIPE IN EXIF",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "summary": "Write the active recipe's name and settings into each photo, so shared pictures carry their recipe.",
+      "card": "recipe_exif_item",
+      "attached": false,
+      "media_cards": ["recipe_exif_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "d_range_priority",
+      "group": "recipes",
+      "icon": "highlight",
+      "title": "D RANGE PRIORITY",
+      "path": ["SHOOTING MENU"],
+      "summary": "Protect highlights by combining DYNAMIC RANGE, HIGHLIGHT TONE and SHADOW TONE in one choice.",
+      "card": "d_range_priority_item",
+      "attached": false,
+      "media_cards": ["d_range_priority_item"],
+      "controls": [
+        {
+          "title": "D RANGE PRIORITY",
+          "primary": true,
+          "card": "d_range_priority_item",
+          "choices": [
+            {
+              "label": "OFF",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "AUTO",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "WEAK",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "STRONG",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "noise_reduction",
+      "group": "recipes",
+      "icon": "noise-reduction",
+      "title": "NOISE REDUCTION",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose how much luminance and color noise reduction is applied to still pictures.",
+      "card": "noise_reduction",
+      "attached": false,
+      "media_cards": ["noise_reduction"],
+      "controls": [
+        {
+          "title": "NOISE REDUCTION",
+          "primary": true,
+          "card": "noise_reduction",
+          "choices": [
+            {
+              "label": "LUMA NR OFF",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "COLOR NR LOW",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "SPECKLE NR ONLY",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "NR OFF",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "tone_curve",
+      "group": "recipes",
+      "icon": "tone-curve",
+      "title": "TONE CURVE",
+      "path": ["SHOOTING MENU"],
+      "summary": "Set HIGHLIGHTS and SHADOWS together on one page, as on the X100VI.",
+      "card": "tone_curve_item",
+      "attached": false,
+      "media_cards": ["tone_curve_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "tone_steps",
+      "group": "recipes",
+      "icon": "highlight",
+      "title": "Tone Steps",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose half steps for HIGHLIGHT TONE and SHADOW TONE, and COLOR beyond ±2.",
+      "card": null,
+      "attached": false,
+      "media_cards": ["3"],
+      "controls": [
+        {
+          "title": "COLOR",
+          "primary": false,
+          "card": "3",
+          "choices": [
+            {
+              "label": "+4",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+3",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+2",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "+1",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "0",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "-1",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "-2",
+              "stock": true,
+              "icon": null
+            },
+            {
+              "label": "-3",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-4",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "color_chrome",
-      "group": "photography",
+      "group": "recipes",
       "icon": "grain",
       "title": "Color Chrome",
       "path": ["SHOOTING MENU", "COLOR CHROME"],
       "summary": "Deepen saturated colors and blues in JPEG photographs, as the X100VI does.",
       "card": null,
+      "attached": false,
       "media_cards": ["color_chrome_effect_item", "color_chrome_blue_item"],
       "controls": [
         {
@@ -852,12 +1200,13 @@
     },
     {
       "id": "film_grain",
-      "group": "photography",
+      "group": "recipes",
       "icon": "grain",
       "title": "Film Grain",
       "path": ["SHOOTING MENU", "GRAIN EFFECT"],
       "summary": "Add film-like grain to JPEG photographs.",
       "card": null,
+      "attached": false,
       "media_cards": ["film_grain_graininess_item", "film_grain_size_item"],
       "controls": [
         {
@@ -918,12 +1267,13 @@
     },
     {
       "id": "halation",
-      "group": "photography",
+      "group": "recipes",
       "icon": "grain",
       "title": "Halation",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
       "summary": "Add a film-like red glow around light sources in JPEG photographs.",
       "card": null,
+      "attached": false,
       "media_cards": ["halation_strength_item", "halation_color_item"],
       "controls": [
         {
@@ -991,12 +1341,13 @@
     },
     {
       "id": "clarity",
-      "group": "photography",
+      "group": "recipes",
       "icon": "grain",
       "title": "Clarity",
       "path": ["SHOOTING MENU", "CLARITY"],
       "summary": "Add or soften local midtone contrast in JPEG photographs, as the X100VI does.",
       "card": null,
+      "attached": false,
       "media_cards": ["clarity_item"],
       "controls": [
         {
@@ -1071,12 +1422,13 @@
     },
     {
       "id": "film_borders",
-      "group": "photography",
+      "group": "recipes",
       "icon": "grain",
       "title": "Film Borders",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
       "summary": "On the FILM EFFECTS page: frame JPEG photographs like a scanned negative, a slide, an instant print, a thin black border or a 35-to-120 conversion with the film simulation along the edge.",
       "card": null,
+      "attached": false,
       "media_cards": ["borders_enabled_item", "borders_style_item", "negative_item"],
       "controls": [
         {
@@ -1157,12 +1509,13 @@
     },
     {
       "id": "light_leaks",
-      "group": "photography",
+      "group": "recipes",
       "icon": "grain",
       "title": "Light Leaks",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
       "summary": "Add film-camera light leaks and an expired-film look to JPEG photographs.",
       "card": null,
+      "attached": false,
       "media_cards": [
         "light_leaks_level_item",
         "light_leaks_color_item",
@@ -1242,12 +1595,13 @@
     },
     {
       "id": "date_stamp",
-      "group": "photography",
+      "group": "recipes",
       "icon": "film",
       "title": "DATE STAMP",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
       "summary": "Print the date or time in a corner of JPEG photographs, like a point-and-shoot film camera.",
       "card": "date_stamp_item",
+      "attached": false,
       "media_cards": ["date_stamp_item"],
       "controls": [],
       "credits": {
@@ -1258,12 +1612,13 @@
     },
     {
       "id": "disposable",
-      "group": "photography",
-      "icon": "ticket",
+      "group": "recipes",
+      "icon": "mod-disposable-item",
       "title": "DISPOSABLE",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Shoot a roll of 24, 27 or 36 exposures before playback unlocks.",
       "card": null,
+      "attached": false,
       "media_cards": ["disposable_roll_item", "disposable_recipe_item"],
       "controls": [
         {
@@ -1357,307 +1712,6 @@
       }
     },
     {
-      "id": "f_log",
-      "group": "videography",
-      "icon": "movie",
-      "title": "F-Log RECORDING",
-      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "summary": "Record movies with the F-Log transfer and F-Gamut color matrix.",
-      "card": "f_log_recording_item",
-      "media_cards": ["f_log_recording_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": [
-          [
-            {
-              "href": "https://www.reddit.com/r/fujifilm/comments/1x611yb/comment/pgsf59j/",
-              "text": ["suggested"]
-            },
-            " by ",
-            {
-              "href": "https://www.reddit.com/user/Visible-Marzipan5763/",
-              "text": ["u/Visible-Marzipan5763"]
-            }
-          ]
-        ]
-      }
-    },
-    {
-      "id": "desqueeze",
-      "group": "videography",
-      "icon": "anamorphic",
-      "title": "Anamorphic Lenses",
-      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
-      "summary": "Display and record pictures taken through an anamorphic adapter at their corrected width.",
-      "card": null,
-      "media_cards": ["shape_desqueeze_item"],
-      "controls": [
-        {
-          "title": "DESQUEEZE",
-          "primary": false,
-          "card": "shape_desqueeze_item",
-          "choices": [
-            {
-              "label": "1.25X",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "1.33X",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "1.50X",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "1.60X",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "1.80X",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "2.00X",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": [
-          [
-            "suggested by ",
-            {
-              "href": "https://www.reddit.com/user/-ayiv-/",
-              "text": ["u/-ayiv-"]
-            }
-          ]
-        ]
-      }
-    },
-    {
-      "id": "hdmi_output",
-      "group": "videography",
-      "icon": "hdmi",
-      "title": "HDMI OUTPUT",
-      "path": ["SET-UP"],
-      "summary": "Display the shooting view on an HDMI device.",
-      "card": "hdmi_rec_behavior_item",
-      "media_cards": ["hdmi_rec_behavior_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "recipes",
-      "group": "recipes",
-      "icon": "recipes",
-      "title": "Recipes",
-      "path": ["EDIT/SAVE CUSTOM SETTING"],
-      "summary": "Keep up to 255 named custom settings on an SD card, with seven favorites for Q and Fn.",
-      "card": null,
-      "media_cards": ["recipes", "recipes_setting_page", "recipes_compare_page"],
-      "controls": [
-        {
-          "title": "EDIT/SAVE CUSTOM SETTING",
-          "primary": true,
-          "card": "recipes",
-          "choices": [],
-          "actions": [
-            "SAVE CURRENT AS NEW",
-            "AUTO-UPDATE CURRENT",
-            "UNSELECT",
-            "BY NAME",
-            "BY FILM SIMULATION",
-            "ANY COLOR",
-            "ANY MONOCHROME",
-            "USES CUSTOM FILM",
-            "HIDDEN",
-            "ERASE HIDDEN"
-          ]
-        },
-        {
-          "title": "CUSTOM SETTING",
-          "primary": false,
-          "card": "recipes_setting_page",
-          "choices": [],
-          "actions": [
-            "SELECT AS CURRENT",
-            "EDIT/CHECK",
-            "SAVE THE CHANGES",
-            "RESET THE CHANGES",
-            "COMPARE WITH CURRENT",
-            "COPY",
-            "PROTECT",
-            "ERASE",
-            "EDIT CUSTOM NAME"
-          ]
-        },
-        {
-          "title": "COMPARE WITH CURRENT",
-          "primary": false,
-          "card": "recipes_compare_page",
-          "choices": [],
-          "actions": ["SAVE ALL"]
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "film_simulation",
-      "group": "recipes",
-      "icon": "film",
-      "title": "FILM SIMULATION",
-      "path": ["SHOOTING MENU"],
-      "summary": "Simulate the effects of additional types of film. Create your own film simulations in FILM EDITOR.",
-      "card": "film_simulation",
-      "media_cards": ["film_simulation"],
-      "controls": [
-        {
-          "title": "FILM SIMULATION",
-          "primary": true,
-          "card": "film_simulation",
-          "choices": [
-            {
-              "label": "ETERNA",
-              "stock": false,
-              "icon": "eterna"
-            },
-            {
-              "label": "ETERNA BLEACH BYPASS",
-              "stock": false,
-              "icon": "bleach-bypass"
-            },
-            {
-              "label": "CLASSIC Neg.",
-              "stock": false,
-              "icon": "classic-neg"
-            },
-            {
-              "label": "NOSTALGIC Neg.",
-              "stock": false,
-              "icon": "nostalgic-neg"
-            },
-            {
-              "label": "REALA ACE",
-              "stock": false,
-              "icon": "reala-ace"
-            },
-            {
-              "label": "Neutral",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "card_films",
-      "group": "recipes",
-      "icon": "film",
-      "title": "Card Films",
-      "path": [],
-      "summary": "Load film simulations from FUJIMOD/FILMS on the SD card, with LEICA X built in.",
-      "card": null,
-      "media_cards": [],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "multipass_curves",
-      "group": "recipes",
-      "icon": "film",
-      "title": "Film Curves",
-      "path": [],
-      "summary": "Develop films with separate color curves faster, and add Classic Neg. as a built-in film.",
-      "card": null,
-      "media_cards": [],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "hide_films",
-      "group": "recipes",
-      "icon": "film",
-      "title": "HIDE FILMS",
-      "path": ["SHOOTING MENU", "FUJIMOD"],
-      "summary": "Choose which film simulations appear in the pickers.",
-      "card": "hide_films_item",
-      "media_cards": ["hide_films_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "film_editor",
-      "group": "recipes",
-      "icon": "film",
-      "title": "FILM EDITOR",
-      "path": ["SHOOTING MENU"],
-      "summary": "Create and edit your own film simulations, saved as files on the memory card.",
-      "card": "film_editor_item",
-      "media_cards": ["film_editor_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
-      "id": "recipe_exif",
-      "group": "recipes",
-      "icon": "recipes",
-      "title": "RECIPE IN EXIF",
-      "path": ["SHOOTING MENU", "FUJIMOD"],
-      "summary": "Write the active recipe's name and settings into each photo, so shared pictures carry their recipe.",
-      "card": "recipe_exif_item",
-      "media_cards": ["recipe_exif_item"],
-      "controls": [],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "unlocked_controls",
       "group": "system",
       "icon": "controls",
@@ -1665,6 +1719,7 @@
       "path": [],
       "summary": "Assign stock and FujiMod settings to the camera's dials, selectors and unlocked buttons.",
       "card": null,
+      "attached": false,
       "media_cards": [
         "bindings_row_exposure_compensation_dial",
         "bindings_row_command_control",
@@ -1705,6 +1760,7 @@
       "path": ["SET-UP"],
       "summary": "Choose the menu renderer and appearance.",
       "card": "menu_style_item",
+      "attached": false,
       "media_cards": ["menu_style_item"],
       "controls": [],
       "credits": {
@@ -1721,6 +1777,7 @@
       "path": [],
       "summary": "A new menu and Q menu renderer with grouped setting pages, touch and drag.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -1733,20 +1790,13 @@
       "id": "menu_order",
       "group": "system",
       "icon": "controls",
-      "title": "AE/AF & SCENE",
-      "path": ["SHOOTING MENU"],
-      "summary": "Put the SHOOTING MENU rows in the X100VI order, with AE/AF & SCENE replacing three rows.",
-      "card": "ae_af_lock_item",
-      "media_cards": ["ae_af_lock_item"],
-      "controls": [
-        {
-          "title": "AE/AF & SCENE",
-          "primary": true,
-          "card": "ae_af_lock_item",
-          "choices": [],
-          "actions": ["AE/AF-LOCK MODE", "AE/AF-LOCK BUTTON", "SCENE POSITION"]
-        }
-      ],
+      "title": "Menu Order",
+      "path": [],
+      "summary": "Put the SHOOTING MENU rows in the X100VI order.",
+      "card": null,
+      "attached": false,
+      "media_cards": [],
+      "controls": [],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -1756,11 +1806,12 @@
     {
       "id": "menu_animations",
       "group": "system",
-      "icon": "theme",
+      "icon": "animation",
       "title": "MENU ANIMATIONS",
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Choose whether menu entry and exit animations play.",
       "card": "menu_animations_item",
+      "attached": false,
       "media_cards": ["menu_animations_item"],
       "controls": [
         {
@@ -1789,59 +1840,6 @@
       }
     },
     {
-      "id": "power_screens",
-      "group": "system",
-      "icon": "movie",
-      "title": "Startup & Shutdown Screens",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "START UP STYLE"],
-      "summary": "Choose what plays when the camera turns on and off.",
-      "card": null,
-      "media_cards": ["startup_power_on_item", "startup_power_off_item"],
-      "controls": [
-        {
-          "title": "START UP STYLE",
-          "primary": false,
-          "card": "startup_power_on_item",
-          "choices": [
-            {
-              "label": "FUJIMOD",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "NONE",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        },
-        {
-          "title": "SHUT DOWN STYLE",
-          "primary": false,
-          "card": "startup_power_off_item",
-          "choices": [
-            {
-              "label": "CATHODE",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "NONE",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "build_overlay",
       "group": "system",
       "icon": "bug",
@@ -1849,6 +1847,7 @@
       "path": ["SET-UP", "DEVTOOLS"],
       "summary": "Show the running FujiMod version on the screen.",
       "card": "build_overlay_item",
+      "attached": false,
       "media_cards": ["build_overlay_item"],
       "controls": [
         {
@@ -1884,6 +1883,7 @@
       "path": ["SET-UP", "DEVTOOLS"],
       "summary": "Turn on the camera's diagnostic USB mode.",
       "card": "usb_debug_item",
+      "attached": false,
       "media_cards": ["usb_debug_item"],
       "controls": [
         {
@@ -1919,6 +1919,7 @@
       "path": ["SET-UP", "SCREEN SET-UP"],
       "summary": "Set menu and shooting indicator opacity independently.",
       "card": null,
+      "attached": false,
       "media_cards": ["opacity_menu_item", "opacity_indicators_item"],
       "controls": [
         {
@@ -1997,6 +1998,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Check for and install a FujiMod update from the update server.",
       "card": null,
+      "attached": true,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2013,6 +2015,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Copy the camera's internal flash to the SD card.",
       "card": null,
+      "attached": true,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2029,6 +2032,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD", "HUD LAYOUT"],
       "summary": "Arrange the shooting display like a phone: the battery in the top-right corner, the film simulation and digital focal length in the bottom-right corner.",
       "card": null,
+      "attached": false,
       "media_cards": ["hud_layout_item"],
       "controls": [
         {
@@ -2064,7 +2068,25 @@
       "path": ["SET-UP", "TOUCH SCREEN SETTING"],
       "summary": "Tap a menu row, tab or option to choose it. Tap outside a pop-up to close it.",
       "card": null,
+      "attached": true,
       "media_cards": ["touch_screen_setting"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "autofocus",
+      "group": "system",
+      "icon": "autofocus",
+      "title": "Autofocus",
+      "path": [],
+      "summary": "In AF-S mode, when phase detection fails, the camera estimates focus and measures again before using contrast detection.",
+      "card": null,
+      "attached": false,
+      "media_cards": [],
       "controls": [],
       "credits": {
         "premiere": false,
@@ -2080,6 +2102,7 @@
       "path": ["SET-UP", "SAVE DATA SET-UP"],
       "summary": "Name memory cards after the date they are formatted.",
       "card": "sd_volume_name_item",
+      "attached": false,
       "media_cards": ["sd_volume_name_item"],
       "controls": [],
       "credits": {
@@ -2096,6 +2119,7 @@
       "path": ["SET-UP", "SAVE DATA SET-UP"],
       "summary": "Keep each day's pictures in their own folder, named after the date.",
       "card": "date_folders_item",
+      "attached": false,
       "media_cards": ["date_folders_item"],
       "controls": [],
       "credits": {
@@ -2124,6 +2148,7 @@
       "path": ["SET-UP", "DEVTOOLS", "BUG REPORT SHORTCUT"],
       "summary": "Hold the delete button for 1.5 seconds to save a diagnostic report to the memory card and display a QR code.",
       "card": null,
+      "attached": false,
       "media_cards": ["bug_report_shortcut"],
       "controls": [],
       "credits": {
@@ -2140,6 +2165,7 @@
       "path": [],
       "summary": "Confirm a release selected at start, so the next start keeps it.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2156,6 +2182,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "On X70, choose MANUAL startup with the SD boot buttons or AUTOMATIC startup from the SD card. Automatic startup backs up internal data before it is enabled.",
       "card": null,
+      "attached": true,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2172,6 +2199,7 @@
       "path": [],
       "summary": "Divide values with the camera's hardware divider to cut live-view CPU time.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2188,6 +2216,7 @@
       "path": [],
       "summary": "Do repeated profile work with fewer instructions to cut live-view CPU time.",
       "card": null,
+      "attached": false,
       "media_cards": [],
       "controls": [],
       "credits": {
@@ -2198,6 +2227,43 @@
     }
   ],
   "cards": {
+    "af_range_item": {
+      "title": "AF RANGE",
+      "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
+      "summary": "Limits how close the camera focuses, so AF finds distant subjects faster.",
+      "choices": {
+        "FULL": "Focus over the full range.",
+        "0.3 M - INF": "Focus from 0.3 m to infinity.",
+        "1 M - INF": "Focus from 1 m to infinity."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "af_miss_item": {
+      "title": "AF MISS",
+      "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
+      "summary": "Choose where the lens rests when AF cannot find focus.",
+      "choices": {
+        "HOLD": "The lens stays where it is.",
+        "HYPERFOCAL": "The lens moves to the hyperfocal distance."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
     "build_overlay_item": {
       "title": "BUILD OVERLAY",
       "path": ["SET-UP", "DEVTOOLS"],
@@ -2208,6 +2274,26 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "quick_start_item": {
+      "title": "QUICK START",
+      "path": ["SET-UP", "POWER MANAGEMENT"],
+      "summary": "Keeps the camera ready after it is turned off, so it starts shooting at once when turned on again. Uses more battery.",
+      "choices": {
+        "OFF": "The camera shuts down fully.",
+        "10 MIN": "Ready to start quickly for 10 minutes after turning off.",
+        "23 MIN": "Ready to start quickly for 23 minutes after turning off."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2221,7 +2307,8 @@
       "summary": null,
       "choices": {},
       "related": [],
-      "changes": "Aspect ratio selection moved to ASPECT RATIO in the shooting menu; IMAGE SIZE now sets L, M or S only.",
+      "changes": "Controls image max size only. Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2251,6 +2338,7 @@
         }
       ],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2300,6 +2388,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2318,6 +2407,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2344,6 +2434,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2358,6 +2449,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2374,7 +2466,8 @@
         "ULTRAFINE+RAW": "Save a RAW file and an ULTRAFINE JPEG."
       },
       "related": [],
-      "changes": "Adds ULTRAFINE and ULTRAFINE+RAW JPEG quality.",
+      "changes": "New ULTRAFINE quality level preserves even more detail. Variable file size, may be as large as RAW files in rare cases.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2393,7 +2486,8 @@
         "NR OFF": "Turn off all noise reduction."
       },
       "related": [],
-      "changes": "Adds four levels below -2.",
+      "changes": "Further control or completely disable noise reduction. We recommend SPECKLE NR ONLY.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2416,6 +2510,7 @@
       },
       "related": [],
       "changes": "Adds NONE to hide the guide, GOLDEN RATIO, four GOLDEN SPIRAL focal-point placements and DYNAMIC SYMMETRY. All guides follow the selected image bounds and aspect ratio.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2516,6 +2611,7 @@
       "choices": {},
       "related": [],
       "changes": "Adds ETERNA, Classic Negative calibrated for the X70, Neutral and approximations of three film simulations from newer cameras, and films saved on the memory card. Monochrome and SEPIA move to the end of the list.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2534,6 +2630,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2548,6 +2645,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2562,6 +2660,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2576,6 +2675,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2590,6 +2690,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2604,6 +2705,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2618,6 +2720,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2632,6 +2735,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2646,6 +2750,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2660,6 +2765,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2674,6 +2780,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2688,6 +2795,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2702,6 +2810,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2712,10 +2821,11 @@
     "negative_item": {
       "title": "NEGATIVE",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "summary": "Record every JPEG as an unconverted C-41 color negative: inverted, on an orange film base, with the low contrast of negative film. Invert it in Negative Lab Pro or a similar tool to get the positive back. With 35MM NEGATIVE borders the rebate is the film base to sample. Bursts in continuous drive are recorded as positives.",
+      "summary": "Records JPEGs as color negatives on an orange film base, ready to invert in Negative Lab Pro or a similar tool.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": "single",
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2730,6 +2840,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2740,10 +2851,11 @@
     "tone_curve_item": {
       "title": "TONE CURVE",
       "path": ["SHOOTING MENU"],
-      "summary": "Replaces HIGHLIGHT TONE and SHADOW TONE with one TONE CURVE row. Its screen sets HIGHLIGHTS on the left and SHADOWS on the right, each from -2 to +2, and live view follows each change. LEFT and RIGHT choose a side, UP and DOWN change it. MENU/OK keeps the values; DISP/BACK restores the values the screen opened with.",
+      "summary": "Adjusts HIGHLIGHTS and SHADOWS from -2 to +2 on one screen, replacing HIGHLIGHT TONE and SHADOW TONE.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2763,6 +2875,7 @@
       },
       "related": [],
       "changes": "Adds +3, +4, -3 and -4.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2782,6 +2895,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2804,6 +2918,7 @@
         }
       ],
       "changes": "Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [["Ricoh GRIII"]],
@@ -2836,6 +2951,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2846,13 +2962,14 @@
     "f_log_recording_item": {
       "title": "F-Log RECORDING",
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "summary": "Choose F-Log processing for movies.",
+      "summary": "Record movies in F-Log format. NOTE: Suffers from 8-bit clipping. We recommend ETERNA instead.",
       "choices": {
         "OFF": "Use the selected picture settings.",
         "ON": "Use F-Log movie processing."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2882,6 +2999,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2896,6 +3014,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2922,6 +3041,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2936,6 +3056,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2950,6 +3071,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2964,6 +3086,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2972,12 +3095,13 @@
       "choice_credits": {}
     },
     "bindings_row_focus_mode_selector": {
-      "title": "FOCUS MODE",
+      "title": "FOCUS MODE SELECTOR",
       "path": ["SET-UP", "BUTTON/DIAL SETTING"],
       "summary": "Choose an action and the value S, C and M each select.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -2992,6 +3116,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3006,6 +3131,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3020,6 +3146,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3034,6 +3161,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3048,6 +3176,7 @@
       "choices": {},
       "related": [],
       "changes": "Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3060,10 +3189,16 @@
       "path": ["SET-UP"],
       "summary": "Choose the menu renderer and appearance.",
       "choices": {
-        "FUJIMOD": "Grouped setting pages and Q tiles with touch and drag controls."
+        "STOCK": "The original camera menus.",
+        "X100VI": "Dark panels with thin row outlines and a white selection, as on the X100VI.",
+        "CUPERTINO": "Black background, gray cards and a rounded blue selection.",
+        "TEENAGE": "Light gray background, dark rules and a square orange selection.",
+        "EVA-01": "Dark violet panels, orange headings and a green selection.",
+        "FUJIMOD": "Familiar layout with all-new high performance rendering, and multi-touch input. Customize it further in SET-UP > FUJIMOD SET-UP > APPEARANCE."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3084,6 +3219,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3098,6 +3234,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3115,6 +3252,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3132,6 +3270,7 @@
       },
       "related": [],
       "changes": "Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3141,11 +3280,12 @@
     },
     "recipes": {
       "title": "EDIT/SAVE CUSTOM SETTING",
-      "path": [],
-      "summary": "SHOOTING MENU > EDIT/SAVE CUSTOM SETTING opens CURRENT, seven C1–C7 FAVORITES and the LIBRARY. Open a name to manage its file; SELECT AS CURRENT applies it. SAVE CURRENT AS NEW captures the camera settings into LIBRARY or a favorite slot. AUTO-UPDATE CURRENT saves live setting changes to the current file when writable. UNSELECT clears CURRENT without changing the live settings. Browse LIBRARY by name, film simulation, color, monochrome or custom film. HIDDEN keeps files out of the library lists; ERASE HIDDEN asks before deleting hidden files and skips protected ones.",
+      "path": ["SHOOTING MENU"],
+      "summary": "Store up to 255 custom settings (aka recipes) in your LIBRARY on the SD card. Move settings to your FAVORITES (C1-C7) for quick access. Download and share recipes in JSON format, browse BY AUTHOR and remix the original to make it your own. Yes, custom settings now include WHITE BALANCE SHIFT.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3160,6 +3300,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3174,6 +3315,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3188,6 +3330,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3202,6 +3345,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [["Ricoh GRIII"]],
@@ -3219,6 +3363,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3233,6 +3378,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3247,6 +3393,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3261,6 +3408,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3275,6 +3423,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3289,6 +3438,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3306,6 +3456,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3324,6 +3475,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3343,6 +3495,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3360,6 +3513,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3374,6 +3528,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3388,6 +3543,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3402,6 +3558,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3416,6 +3573,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3423,13 +3581,14 @@
       },
       "choice_credits": {}
     },
-    "6b": {
+    "digital_tele_conv": {
       "title": "DIGITAL TELE-CONV.",
       "path": ["SHOOTING MENU"],
       "summary": "28mm is the lens without the teleconverter. With WIDE CONVERSION LENS on, the choices are 21mm, 26mm and 38mm. DIGITAL FOCAL LENGTH is also a button action: each press steps to the next focal length.",
       "choices": {},
       "related": [],
-      "changes": "Renamed DIGITAL FOCAL LENGTH. The choice survives turning the camera off, and returns after burst and other modes that turn the teleconverter off.",
+      "changes": "Remembers the chosen focal length after turning the camera off, and after burst and other modes that turn the teleconverter off.",
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3447,20 +3606,7 @@
       },
       "related": [],
       "changes": null,
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      },
-      "choice_credits": {}
-    },
-    "ae_af_lock_item": {
-      "title": "AE/AF & SCENE",
-      "path": ["SHOOTING MENU"],
-      "summary": "AE/AF-LOCK MODE, AE/AF-LOCK BUTTON and SCENE POSITION share one row and open together. Their values, availability and effect are stock: SCENE POSITION is grayed in P, S, A and M and chosen with the AUTO lever. The other rows keep their names, values and behavior; only their positions change.",
-      "choices": {},
-      "related": [],
-      "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3478,6 +3624,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3488,13 +3635,14 @@
     "usb_debug_item": {
       "title": "USB DEBUGGING",
       "path": ["SET-UP", "DEVTOOLS"],
-      "summary": "Enables the stock diagnostic USB path, which can change normal USB behavior. Disconnect USB before changing the setting, then reconnect it. The choice is not saved, so each start uses the camera's own configuration.",
+      "summary": "Enables the stock diagnostic USB path, which can change normal USB behavior. Disconnect USB before changing the setting, then reconnect it. The camera keeps the choice after it is turned off.",
       "choices": {
         "ON": "Enable the diagnostic USB path.",
         "OFF": "Use normal USB behavior."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3509,6 +3657,7 @@
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3526,6 +3675,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3536,13 +3686,14 @@
     "date_folders_item": {
       "title": "DATE FOLDERS",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "summary": "Choose whether the first picture of each day starts a new folder named after the date.",
+      "summary": "Keep each day's pictures in their own folder, named after the date.",
       "choices": {
         "ON": "Each day starts a new folder, such as 101_1022 for October 22.",
         "OFF": "Pictures are stored in folders as on an unmodified camera."
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3576,6 +3727,7 @@
       },
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3583,13 +3735,14 @@
       },
       "choice_credits": {}
     },
-    "startup_power_on_item": {
-      "title": "START UP STYLE",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "summary": "FUJIMOD plays the FujiMod welcome screen while the camera starts; press any button to skip it. NONE starts directly, as on an unmodified camera.",
+    "custom_settings_bkt_item": {
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose up to five custom settings to bracket. Shown in the CUSTOM SETTINGS BKT drive mode.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3597,13 +3750,14 @@
       },
       "choice_credits": {}
     },
-    "startup_power_off_item": {
-      "title": "SHUT DOWN STYLE",
+    "row:SET-UP/FUJIMOD SET-UP/MODS": {
+      "title": "MODS",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "summary": "CATHODE collapses the picture like a switched-off tube television as the camera turns off. NONE turns off at once.",
+      "summary": "Lists the mods in this FujiMod version. Mods this camera cannot run are listed apart.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3611,13 +3765,92 @@
       },
       "choice_credits": {}
     },
-    "startup_power_on_preview_item": {
-      "title": "PREVIEW POWER ON",
+    "row:SET-UP/FUJIMOD SET-UP/SHOW WELCOME MESSAGE": {
+      "title": "SHOW WELCOME MESSAGE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "summary": "Play the power-on screen now.",
+      "summary": "Show the welcome message again.",
       "choices": {},
       "related": [],
       "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/APPEARANCE": {
+      "title": "APPEARANCE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Choose the REC, SET-UP and PLAY colors and the BACKGROUND COLOR of the FUJIMOD menu style.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP": {
+      "title": "BOOT SETUP",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Optionally modify the internal firmware to boot FM_EXR2.BIN if present on the SD card. If there is a problem during start-up, the camera boots its original internal firmware instead.",
+      "choices": {
+        "MANUAL": "Hold Fn + dial while switching power on to start FujiMod.",
+        "AUTOMATIC": "Boot FM_EXR2.BIN if present on the SD card. Backs up internal data first."
+      },
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES": {
+      "title": "CHECK FOR UPDATES",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Connect to fujimod.com over Wi-Fi to update FUJIMOD on your SD card. Keeps your current version installed, and automatically reverts to it if new version crashes during start-up.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI": {
+      "title": "CONNECT WI-FI",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "summary": "Join a Wi-Fi network. Connection details are kept on internal storage shared with PC AUTO SAVE.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "row:SET-UP/FUJIMOD SET-UP/BACK UP INTERNAL DATA": {
+      "title": "BACK UP INTERNAL DATA",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Saves a copy of internal storage to /BACKUP on the SD card. Includes camera settings, custom settings, and unique factory calibration data.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -3625,5 +3858,1443 @@
       },
       "choice_credits": {}
     }
-  }
+  },
+  "menus": [
+    {
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["DRIVE"],
+      "stock": false,
+      "card": null,
+      "feature": "custom_settings_bkt",
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "SOFTWARE ND",
+      "path": ["DRIVE"],
+      "stock": false,
+      "card": "software_nd_item",
+      "feature": "software_nd",
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "DEVTOOLS",
+      "path": ["SET-UP"],
+      "order": 368,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FUJIMOD SET-UP",
+      "path": ["SET-UP"],
+      "order": 352,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HDMI OUTPUT",
+      "path": ["SET-UP"],
+      "order": 288,
+      "kind": "setting",
+      "stock": false,
+      "card": "hdmi_rec_behavior_item",
+      "feature": "hdmi_output",
+      "icon": null
+    },
+    {
+      "title": "MENU STYLE",
+      "path": ["SET-UP"],
+      "order": 272,
+      "kind": "setting",
+      "stock": false,
+      "card": "menu_style_item",
+      "feature": "menu_theme",
+      "icon": null
+    },
+    {
+      "title": "TOUCH SCREEN SETTING",
+      "path": ["SET-UP"],
+      "stock": true,
+      "card": "touch_screen_setting",
+      "feature": null,
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "AE-L/AF-L",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 13,
+      "kind": "setting",
+      "stock": false,
+      "card": "bindings_row_af_ae_lock_button",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "APERTURE RING",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 11,
+      "kind": "page",
+      "stock": false,
+      "card": "bindings_row_aperture_ring",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "AUTO LEVER",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 9,
+      "kind": "page",
+      "stock": false,
+      "card": "bindings_row_auto_mode_selector_lever",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "COMMAND CONTROL",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 7,
+      "kind": "setting",
+      "stock": false,
+      "card": "bindings_row_command_control",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "COMMAND PRESS",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 16,
+      "kind": "setting",
+      "stock": false,
+      "card": "bindings_row_command_control_press",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "CONTROL RING",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 8,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DRIVE BUTTON",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 14,
+      "kind": "setting",
+      "stock": false,
+      "card": "bindings_row_drive_button",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "EV DIAL",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 6,
+      "kind": "page",
+      "stock": false,
+      "card": "bindings_row_exposure_compensation_dial",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "FOCUS MODE SELECTOR",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 12,
+      "kind": "page",
+      "stock": false,
+      "card": "bindings_row_focus_mode_selector",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "Q BUTTON",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 15,
+      "kind": "setting",
+      "stock": false,
+      "card": "bindings_row_quick_menu_button",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "SHUTTER DIAL",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 10,
+      "kind": "page",
+      "stock": false,
+      "card": "bindings_row_shutter_speed_dial",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "BUG REPORT SHORTCUT",
+      "path": ["SET-UP", "DEVTOOLS"],
+      "order": 3,
+      "kind": "setting",
+      "stock": false,
+      "card": "bug_report_shortcut",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BUILD OVERLAY",
+      "path": ["SET-UP", "DEVTOOLS"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "build_overlay_item",
+      "feature": "build_overlay",
+      "icon": null
+    },
+    {
+      "title": "OVERLAY RENDERING",
+      "path": ["SET-UP", "DEVTOOLS"],
+      "order": 4,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "USB DEBUGGING",
+      "path": ["SET-UP", "DEVTOOLS"],
+      "order": 0,
+      "kind": "setting",
+      "stock": false,
+      "card": "usb_debug_item",
+      "feature": "usb_debugging",
+      "icon": null
+    },
+    {
+      "title": "APPEARANCE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/APPEARANCE",
+      "feature": null,
+      "order": -1,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "BACK UP INTERNAL DATA",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/BACK UP INTERNAL DATA",
+      "feature": "internal_data_backup",
+      "order": -3,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "BOOT SETUP",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP",
+      "feature": "bootloader_install",
+      "order": -4,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "CHECK FOR UPDATES",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES",
+      "feature": "updates",
+      "order": -5,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "MODS",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/MODS",
+      "feature": null,
+      "order": -6,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "PREVIEW POWER ON",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 3,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SHOW WELCOME MESSAGE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/SHOW WELCOME MESSAGE",
+      "feature": null,
+      "order": -2,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "SHUT DOWN STYLE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "START UP STYLE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CONNECT WI-FI",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI",
+      "feature": null,
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "QUICK START",
+      "path": ["SET-UP", "POWER MANAGEMENT"],
+      "order": 272,
+      "kind": "setting",
+      "stock": false,
+      "card": "quick_start_item",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DATE FOLDERS",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "order": 5,
+      "kind": "setting",
+      "stock": false,
+      "card": "date_folders_item",
+      "feature": "date_folders",
+      "icon": null
+    },
+    {
+      "title": "FORMAT CARD NAME",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "order": 6,
+      "kind": "setting",
+      "stock": false,
+      "card": "sd_volume_name_item",
+      "feature": "date_card_name",
+      "icon": null
+    },
+    {
+      "title": "FILM ICONS",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "order": 417,
+      "kind": "setting",
+      "stock": false,
+      "card": "film_icons_item",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FRAMING GUIDELINE",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "order": 12,
+      "kind": "setting",
+      "stock": true,
+      "card": "c",
+      "feature": "framing_guideline",
+      "icon": null
+    },
+    {
+      "title": "INDICATOR OPACITY",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "order": 273,
+      "kind": "setting",
+      "stock": false,
+      "card": "opacity_indicators_item",
+      "feature": "overlay_opacity",
+      "icon": null
+    },
+    {
+      "title": "MENU ANIMATIONS",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "order": 274,
+      "kind": "setting",
+      "stock": false,
+      "card": "menu_animations_item",
+      "feature": "menu_animations",
+      "icon": null
+    },
+    {
+      "title": "MENU OPACITY",
+      "path": ["SET-UP", "SCREEN SET-UP"],
+      "order": 272,
+      "kind": "setting",
+      "stock": false,
+      "card": "opacity_menu_item",
+      "feature": "overlay_opacity",
+      "icon": null
+    },
+    {
+      "title": "CLARITY",
+      "path": ["SHOOTING MENU"],
+      "order": 323,
+      "kind": "setting",
+      "stock": false,
+      "card": "clarity_item",
+      "feature": "clarity",
+      "icon": null
+    },
+    {
+      "title": "COLOR",
+      "path": ["SHOOTING MENU"],
+      "order": 3,
+      "kind": "setting",
+      "stock": true,
+      "card": "3",
+      "feature": "tone_steps",
+      "icon": null
+    },
+    {
+      "title": "COLOR CHROME",
+      "path": ["SHOOTING MENU"],
+      "order": 322,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-color-chrome-item"
+    },
+    {
+      "title": "CONTROL RING SETTING",
+      "path": ["SHOOTING MENU"],
+      "order": 95,
+      "kind": "setting",
+      "stock": true,
+      "card": "control_ring_setting",
+      "feature": "unlocked_controls",
+      "icon": null
+    },
+    {
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["SHOOTING MENU"],
+      "order": 432,
+      "kind": "page",
+      "stock": false,
+      "card": "custom_settings_bkt_item",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "D RANGE PRIORITY",
+      "path": ["SHOOTING MENU"],
+      "order": 384,
+      "kind": "setting",
+      "stock": false,
+      "card": "d_range_priority_item",
+      "feature": "d_range_priority",
+      "icon": null
+    },
+    {
+      "title": "DIGITAL TELE-CONV.",
+      "path": ["SHOOTING MENU"],
+      "stock": true,
+      "card": "digital_tele_conv",
+      "feature": "digital_focal_length",
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "EDIT/SAVE CUSTOM SETTING",
+      "path": ["SHOOTING MENU"],
+      "order": 105,
+      "kind": "page",
+      "stock": false,
+      "card": "recipes",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM EDITOR",
+      "path": ["SHOOTING MENU"],
+      "order": 419,
+      "kind": "command",
+      "stock": false,
+      "card": "film_editor_item",
+      "feature": "film_editor",
+      "icon": "mod-film-editor-item"
+    },
+    {
+      "title": "FILM EFFECTS",
+      "path": ["SHOOTING MENU"],
+      "order": 324,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU"],
+      "order": 22,
+      "kind": "setting",
+      "stock": true,
+      "card": "film_simulation",
+      "feature": "film_simulation",
+      "icon": null
+    },
+    {
+      "title": "FUJIMOD",
+      "path": ["SHOOTING MENU"],
+      "order": 416,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "GRAIN EFFECT",
+      "path": ["SHOOTING MENU"],
+      "order": 320,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-film-grain-effect-item"
+    },
+    {
+      "title": "HIGHLIGHT TONE",
+      "path": ["SHOOTING MENU"],
+      "order": 29,
+      "kind": "setting",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "IMAGE QUALITY",
+      "path": ["SHOOTING MENU"],
+      "order": 61,
+      "kind": "setting",
+      "stock": true,
+      "card": "image_quality",
+      "feature": "jpeg_max",
+      "icon": null
+    },
+    {
+      "title": "IMAGE SIZE",
+      "path": ["SHOOTING MENU"],
+      "order": 59,
+      "kind": "setting",
+      "stock": true,
+      "card": "image_size",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MF SNAP FOCUS",
+      "path": ["SHOOTING MENU"],
+      "order": 420,
+      "kind": "setting",
+      "stock": false,
+      "card": "snap_menu_item",
+      "feature": "snap_focus",
+      "icon": "mod-snap-menu-item"
+    },
+    {
+      "title": "NOISE REDUCTION",
+      "path": ["SHOOTING MENU"],
+      "order": 32,
+      "kind": "setting",
+      "stock": true,
+      "card": "noise_reduction",
+      "feature": "noise_reduction",
+      "icon": null
+    },
+    {
+      "title": "PHOTOMETRY",
+      "path": ["SHOOTING MENU"],
+      "order": 20,
+      "kind": "setting",
+      "stock": true,
+      "card": "photometry",
+      "feature": "highlight_metering",
+      "icon": null
+    },
+    {
+      "title": "SHADOW TONE",
+      "path": ["SHOOTING MENU"],
+      "order": 30,
+      "kind": "setting",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SHAPE & ASPECT",
+      "path": ["SHOOTING MENU"],
+      "order": 418,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "TONE CURVE",
+      "path": ["SHOOTING MENU"],
+      "order": 29,
+      "kind": "command",
+      "stock": false,
+      "card": "tone_curve_item",
+      "feature": "tone_curve",
+      "icon": null
+    },
+    {
+      "title": "AF MISS",
+      "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
+      "order": 328,
+      "kind": "setting",
+      "stock": false,
+      "card": "af_miss_item",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "AF RANGE",
+      "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
+      "order": 327,
+      "kind": "setting",
+      "stock": false,
+      "card": "af_range_item",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "COLOR CHROME EFFECT",
+      "path": ["SHOOTING MENU", "COLOR CHROME"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "color_chrome_effect_item",
+      "feature": "color_chrome",
+      "icon": "mod-color-chrome-effect-item"
+    },
+    {
+      "title": "COLOR CHROME FX BLUE",
+      "path": ["SHOOTING MENU", "COLOR CHROME"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "color_chrome_blue_item",
+      "feature": "color_chrome",
+      "icon": "mod-color-chrome-blue-item"
+    },
+    {
+      "title": "1",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 15,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "2",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 17,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "3",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 19,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "4",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 21,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "5",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 23,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ANY COLOR",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 205,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ANY MONOCHROME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 206,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "AUTO-UPDATE CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 3,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BY AUTHOR",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 204,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BY FILM SIMULATION",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 203,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BY NAME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 202,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CREATE NEW",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 12,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 0,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CURRENT SETTINGS",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 13,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ERASE HIDDEN",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 209,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FAVORITES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 5,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HIDDEN",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 208,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-recipes-root-hidden"
+    },
+    {
+      "title": "LIBRARY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 200,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MY RECIPES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 201,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "NONE",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 1,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SAVE CURRENT AS NEW",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 2,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "UNSELECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 4,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "USES CUSTOM FILM",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 207,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-recipes-root-uses-custom"
+    },
+    {
+      "title": "ACTION",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 5,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "COMPARE WITH CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 13,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "COPY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 14,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "EDIT CUSTOM NAME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 18,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-recipes-setting-rename"
+    },
+    {
+      "title": "EDIT/CHECK",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 10,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ERASE",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 17,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MOVE TO HIDDEN",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 8,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MOVE TO LIBRARY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 7,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "PROTECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 16,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RESET THE CHANGES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 12,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SAVE THE CHANGES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 11,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SELECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SELECT AS CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
+      "order": 6,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SAVE ALL",
+      "path": [
+        "SHOOTING MENU",
+        "EDIT/SAVE CUSTOM SETTING",
+        "LIBRARY",
+        "{recipe}",
+        "COMPARE WITH CURRENT"
+      ],
+      "order": 0,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DATE STAMP",
+      "path": ["SHOOTING MENU", "FILM EFFECTS"],
+      "order": 5,
+      "kind": "page",
+      "stock": false,
+      "card": "date_stamp_item",
+      "feature": "date_stamp",
+      "icon": null
+    },
+    {
+      "title": "FILM BORDERS",
+      "path": ["SHOOTING MENU", "FILM EFFECTS"],
+      "order": 3,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HALATION",
+      "path": ["SHOOTING MENU", "FILM EFFECTS"],
+      "order": 1,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-halation-item"
+    },
+    {
+      "title": "LIGHT LEAKS",
+      "path": ["SHOOTING MENU", "FILM EFFECTS"],
+      "order": 2,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "NEGATIVE",
+      "path": ["SHOOTING MENU", "FILM EFFECTS"],
+      "order": 4,
+      "kind": "setting",
+      "stock": false,
+      "card": "negative_item",
+      "feature": "film_borders",
+      "icon": null
+    },
+    {
+      "title": "CORNER",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
+      "order": 4,
+      "kind": "setting",
+      "stock": false,
+      "card": "date_stamp_corner_item",
+      "feature": "date_stamp",
+      "icon": null
+    },
+    {
+      "title": "FORMAT",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
+      "order": 3,
+      "kind": "setting",
+      "stock": false,
+      "card": "date_stamp_format_item",
+      "feature": "date_stamp",
+      "icon": null
+    },
+    {
+      "title": "STAMP",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "date_stamp_on_item",
+      "feature": "date_stamp",
+      "icon": null
+    },
+    {
+      "title": "STYLE",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "date_stamp_style_item",
+      "feature": "date_stamp",
+      "icon": null
+    },
+    {
+      "title": "BORDERS",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "borders_enabled_item",
+      "feature": "film_borders",
+      "icon": null
+    },
+    {
+      "title": "STYLE",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "borders_style_item",
+      "feature": "film_borders",
+      "icon": null
+    },
+    {
+      "title": "COLOR",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "halation_color_item",
+      "feature": "halation",
+      "icon": null
+    },
+    {
+      "title": "STRENGTH",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "halation_strength_item",
+      "feature": "halation",
+      "icon": null
+    },
+    {
+      "title": "COLOR",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "light_leaks_color_item",
+      "feature": "light_leaks",
+      "icon": null
+    },
+    {
+      "title": "EXPIRED",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
+      "order": 3,
+      "kind": "setting",
+      "stock": false,
+      "card": "light_leaks_expired_item",
+      "feature": "light_leaks",
+      "icon": null
+    },
+    {
+      "title": "LEAKS",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "light_leaks_level_item",
+      "feature": "light_leaks",
+      "icon": null
+    },
+    {
+      "title": "FILM 1",
+      "path": ["SHOOTING MENU", "FILM SIMULATION BKT"],
+      "order": 0,
+      "kind": "setting",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM 2",
+      "path": ["SHOOTING MENU", "FILM SIMULATION BKT"],
+      "order": 1,
+      "kind": "setting",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM 3",
+      "path": ["SHOOTING MENU", "FILM SIMULATION BKT"],
+      "order": 2,
+      "kind": "setting",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DISPOSABLE",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 5,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": "disposable",
+      "icon": "mod-disposable-item"
+    },
+    {
+      "title": "HIDE FILMS",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 419,
+      "kind": "page",
+      "stock": false,
+      "card": "hide_films_item",
+      "feature": "hide_films",
+      "icon": null
+    },
+    {
+      "title": "HUD LAYOUT",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 8,
+      "kind": "setting",
+      "stock": false,
+      "card": "hud_layout_item",
+      "feature": "hud_layout",
+      "icon": null
+    },
+    {
+      "title": "PIXEL MAPPING",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 9,
+      "kind": "setting",
+      "stock": false,
+      "card": "pixel_map_item",
+      "feature": "pixel_map",
+      "icon": null
+    },
+    {
+      "title": "RECIPE IN EXIF",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 4,
+      "kind": "setting",
+      "stock": false,
+      "card": "recipe_exif_item",
+      "feature": "recipe_exif",
+      "icon": null
+    },
+    {
+      "title": "ZONE FOCUS",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 6,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": "zone_focus",
+      "icon": null
+    },
+    {
+      "title": "RECIPE",
+      "path": ["SHOOTING MENU", "FUJIMOD", "DISPOSABLE"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "disposable_recipe_item",
+      "feature": "disposable",
+      "icon": null
+    },
+    {
+      "title": "ROLL",
+      "path": ["SHOOTING MENU", "FUJIMOD", "DISPOSABLE"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "disposable_roll_item",
+      "feature": "disposable",
+      "icon": null
+    },
+    {
+      "title": "START NEW ROLL",
+      "path": ["SHOOTING MENU", "FUJIMOD", "DISPOSABLE"],
+      "order": 3,
+      "kind": "command",
+      "stock": false,
+      "card": "disposable_start_item",
+      "feature": "disposable",
+      "icon": null
+    },
+    {
+      "title": "CIRCLE OF CONFUSION",
+      "path": ["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS"],
+      "order": 3,
+      "kind": "setting",
+      "stock": false,
+      "card": "zone_coc_item",
+      "feature": "zone_focus",
+      "icon": null
+    },
+    {
+      "title": "SHOW IN AF",
+      "path": ["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "zone_in_af_item",
+      "feature": "zone_focus",
+      "icon": null
+    },
+    {
+      "title": "UNITS",
+      "path": ["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS"],
+      "order": 4,
+      "kind": "setting",
+      "stock": false,
+      "card": "zone_units_item",
+      "feature": "zone_focus",
+      "icon": null
+    },
+    {
+      "title": "ZONE READOUT",
+      "path": ["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "zone_readout_item",
+      "feature": "zone_focus",
+      "icon": null
+    },
+    {
+      "title": "SIZE",
+      "path": ["SHOOTING MENU", "GRAIN EFFECT"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": "film_grain_size_item",
+      "feature": "film_grain",
+      "icon": null
+    },
+    {
+      "title": "STRENGTH",
+      "path": ["SHOOTING MENU", "GRAIN EFFECT"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "film_grain_graininess_item",
+      "feature": "film_grain",
+      "icon": null
+    },
+    {
+      "title": "F-Log RECORDING",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "order": 256,
+      "kind": "setting",
+      "stock": false,
+      "card": "f_log_recording_item",
+      "feature": "f_log",
+      "icon": null
+    },
+    {
+      "title": "ASPECT RATIO",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": "shape_aspect_item",
+      "feature": "aspect_ratio",
+      "icon": null
+    },
+    {
+      "title": "DESQUEEZE",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "order": 4,
+      "kind": "setting",
+      "stock": false,
+      "card": "shape_desqueeze_item",
+      "feature": "desqueeze",
+      "icon": null
+    },
+    {
+      "title": "DESQUEEZE JPEG",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "order": 5,
+      "kind": "setting",
+      "stock": false,
+      "card": "shape_jpeg_item",
+      "feature": "desqueeze_jpeg",
+      "icon": null
+    },
+    {
+      "title": "EDIT ASPECT RATIOS",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "order": 2,
+      "kind": "page",
+      "stock": false,
+      "card": "shape_aspect_ratios_editor",
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SURROUND VIEW",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "order": 3,
+      "kind": "setting",
+      "stock": false,
+      "card": "shape_surround_item",
+      "feature": "surround_view",
+      "icon": null
+    }
+  ]
 }

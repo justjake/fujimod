@@ -1,0 +1,109 @@
+.outline {
+  max-width: var(--content-width);
+  margin: 0 auto 56px;
+}
+.outline-section {
+  margin-top: 18px;
+}
+.outline-section > summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+.outline-tree,
+.outline-tree ul {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+.outline-tree {
+  margin-top: 10px;
+  padding-left: 4px;
+}
+.outline-tree ul {
+  border-left: 1px solid rgb(255 255 255 / 9%);
+  margin-left: 4px;
+}
+.outline-tree li {
+  padding: 5px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.outline-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.outline-row .catalog-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.outline-row .catalog-premiere {
+  margin: 0;
+}
+.outline-title {
+  font-weight: 600;
+  color: #f2f2f7;
+}
+.outline-tree li.heading > .outline-row .outline-title {
+  color: rgb(235 235 245 / 60%);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.outline-text {
+  max-width: 72ch;
+  margin: 2px 0 0;
+  color: rgb(235 235 245 / 65%);
+}
+.outline-tree .catalog-credits {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  opacity: 0.55;
+}
+.outline-badge,
+.outline-new {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+}
+.outline-badge {
+  background: rgb(118 118 128 / 30%);
+  color: rgb(235 235 245 / 75%);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-weight: 500;
+}
+.outline-new {
+  background: rgb(10 132 255 / 25%);
+  color: #64d2ff;
+}
+.outline-chips .catalog-chip svg {
+  width: auto;
+  height: 14px;
+  max-width: 28px;
+}
+.outline-chips {
+  margin-top: 6px;
+}
+.outline-switch {
+  color: rgb(235 235 245 / 55%);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.outline-entry {
+  font-style: italic;
+  font-weight: 500;
+  color: rgb(235 235 245 / 75%);
+}
+.outline-entry::before {
+  content: '(';
+}
+.outline-entry::after {
+  content: ')';
+}

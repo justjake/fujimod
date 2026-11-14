@@ -45,12 +45,12 @@
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
@@ -60,12 +60,12 @@
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "settings-layout",
@@ -133,17 +133,17 @@
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
@@ -157,7 +157,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -165,9 +165,9 @@
           "id": "controls",
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "settings-layout",
@@ -604,7 +604,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-target",
@@ -642,9 +642,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-target",
@@ -685,6 +685,14 @@
           "result": "not-run",
           "passed": 0,
           "total": 0
+        },
+        {
+          "id": "walkthroughs/af",
+          "label": "af",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
         },
         {
           "id": "walkthroughs/fujimod",
@@ -1079,6 +1087,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/custom-settings-bkt",
+          "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/sd-boot-v2-runtime",
           "label": "sd-boot-v2-runtime",
           "stage": "walkthroughs",
@@ -1111,8 +1127,8 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/startup-shutdown-screen",
-          "label": "startup-shutdown-screen",
+          "id": "walkthroughs/welcome-sheet",
+          "label": "welcome-sheet",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1278,6 +1294,7 @@
     }
   },
   "mods": {
+    "af": "not-run",
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
@@ -1327,11 +1344,12 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "custom-settings-bkt": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",
     "internal-data-backup": "not-run",
-    "startup-shutdown-screen": "not-run",
+    "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
     "live-view-speedups": "not-run"
   }

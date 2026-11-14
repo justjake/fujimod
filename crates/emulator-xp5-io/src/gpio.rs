@@ -1,7 +1,8 @@
 //! X-Processor 5 GPIO register/pin state; external levels are body inputs.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::gpio::{Feedback, InputIrq};
 use fujimod_emulator_devices::{Cx, Device};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use fujimod_emulator_devices::xp5::pins::{Pins, SharedPins};
 
@@ -31,6 +32,19 @@ pub struct Gpio {
     base: u64,
     input_irqs: Vec<InputIrq>,
     feedback: Vec<Feedback>,
+}
+#[derive(Serialize)]
+struct SavedRef<'a> {
+    pins: &'a Pins,
+    previous: &'a [bool],
+    input_irqs: &'a [InputIrq],
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Saved {
+    pins: Pins,
+    previous: Vec<bool>,
+    input_irqs: Vec<InputIrq>,
 }
 impl Gpio {
     pub fn new(
@@ -124,6 +138,27 @@ impl Gpio {
                 *previous = current;
             }
         }
+    }
+    fn validate_saved(&self, saved: &Saved) -> Result<(), String> {
+        let pins = self.pins.lock().unwrap();
+        if saved.pins.ports.len() != 20 {
+            return Err("GPIO checkpoint needs 20 ports".into());
+        }
+        if saved.pins.pad_model != pins.pad_model {
+            return Err("GPIO checkpoint pad model differs".into());
+        }
+        if saved.previous.len() != self.input_irqs.len()
+            || saved.input_irqs.len() != self.input_irqs.len()
+            || saved.input_irqs.iter().zip(&self.input_irqs).any(|(a, b)| {
+                a.port != b.port
+                    || a.pin != b.pin
+                    || a.line != b.line
+                    || a.active_high != b.active_high
+            })
+        {
+            return Err("GPIO interrupt wiring differs".into());
+        }
+        Ok(())
     }
 }
 fn masked(old: u32, value: u32) -> u32 {
@@ -253,6 +288,30 @@ impl Device for Gpio {
         self.previous = previous;
         Ok(())
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let pins = self.pins.lock().unwrap();
+        Checkpoint::encode(
+            self.name(),
+            &SavedRef {
+                pins: &pins,
+                previous: &self.previous,
+                input_irqs: &self.input_irqs,
+            },
+        )
+    }
+    fn validate_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), String> {
+        self.validate_saved(&checkpoint.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, checkpoint: &Checkpoint) -> Result<(), String> {
+        let saved: Saved = checkpoint.decode(self.name())?;
+        self.validate_saved(&saved)?;
+        *self.pins.lock().unwrap() = saved.pins;
+        self.previous = saved.previous;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous}))
+    }
 }
 
 #[cfg(test)]
@@ -291,6 +350,53 @@ mod tests {
         let mut ports = Gpio::new(0xff907000, pins, false, Vec::new()).unwrap();
         ports.write(&mut cx, 0xff907000 + 0x14, 4, 1);
         assert!(cx.refusal().is_some());
+    }
+    #[test]
+    fn exact_checkpoint_restores_pins_edges_and_input_history() {
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(
+            0xff907000,
+            pins.clone(),
+            false,
+            vec![InputIrq {
+                port: 0,
+                pin: 0,
+                line: 116,
+                active_high: false,
+            }],
+        )
+        .unwrap()
+        .with_initial_outputs(vec![InitialOutput {
+            port: 12,
+            levels: 0x100,
+        }])
+        .unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.write(&mut cx, 0xff907000 + 12 * 0x40, 4, (1 << 19) | (1 << 3));
+        pins.lock().unwrap().set_input(0, 0, false);
+        gpio.event(&mut cx, 0);
+        let saved = gpio.save();
+        let checkpoint = gpio.checkpoint().unwrap();
+        gpio.validate_checkpoint(&checkpoint).unwrap();
+        pins.lock().unwrap().ports[12].registers[0] = 0;
+        pins.lock().unwrap().set_input(0, 0, true);
+        gpio.event(&mut cx, 0);
+        gpio.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(gpio.save(), saved);
+        let other = Gpio::new(
+            0xff907000,
+            pins,
+            false,
+            vec![InputIrq {
+                port: 0,
+                pin: 1,
+                line: 117,
+                active_high: false,
+            }],
+        )
+        .unwrap();
+        assert!(other.validate_checkpoint(&checkpoint).is_err());
     }
     #[test]
     fn initial_input_levels_set_only_the_declared_pads() {
