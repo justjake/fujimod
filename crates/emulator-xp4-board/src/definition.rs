@@ -81,6 +81,12 @@ pub struct Definition {
     pub storage_geometry: Option<(usize, usize, u64, u64)>,
     #[serde(default)]
     pub storage_irq: Option<u32>,
+    /// Declared audio channels of the XP4 storage DMA: paced silent audio
+    /// FIFOs and linked descriptor lists (see
+    /// [`fujimod_emulator_xp4_storage::storage::AudioPacing`]). Absent, every
+    /// channel is unchanged.
+    #[serde(default)]
+    pub storage_dma_audio: Option<fujimod_emulator_xp4_storage::storage::AudioPacing>,
     #[serde(default)]
     pub xpp_storage: Option<XppStorage>,
     #[serde(default)]
@@ -476,6 +482,12 @@ pub struct XppRegisterBlock {
     /// Commands that set a field of a status word.
     #[serde(default)]
     pub commands: Vec<XppBlockCommand>,
+    /// The block's job converts audio samples, as the X-T3 5.11 audio format
+    /// converter 0xfffa8000 does (opt-in, needs the job; see
+    /// [`fujimod_emulator_xpp::blocks::AUDIO_CONTROL`]). Off, the job only
+    /// raises its interrupt.
+    #[serde(default)]
+    pub audio_converter: bool,
 }
 
 /// Command law of a register block: writing exactly `value` to `word` sets
