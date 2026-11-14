@@ -96,3 +96,14 @@
   font-weight: 600;
   letter-spacing: 0.04em;
 }
+.outline-entry {
+  font-style: italic;
+  font-weight: 500;
+  color: rgb(235 235 245 / 75%);
+}
+.outline-entry::before {
+  content: '(';
+}
+.outline-entry::after {
+  content: ')';
+}

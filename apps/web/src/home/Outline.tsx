@@ -150,7 +150,12 @@ function OutlineNode(props: { node: Node; inside: boolean }) {
         <Show when={props.node.row?.icon ?? feature()?.icon}>
           {(name) => <FeatureIcon name={name()} />}
         </Show>
-        <span class="outline-title">{props.node.title}</span>
+        <Show
+          when={/^\{(.+)\}$/.exec(props.node.title)?.[1]}
+          fallback={<span class="outline-title">{props.node.title}</span>}
+        >
+          {(entry) => <span class="outline-title outline-entry">chosen {entry()}</span>}
+        </Show>
         <Show when={switched()}>
           <span class="outline-switch">ON/OFF</span>
         </Show>

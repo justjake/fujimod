@@ -1840,60 +1840,6 @@
       }
     },
     {
-      "id": "power_screens",
-      "group": "system",
-      "icon": "movie",
-      "title": "Startup & Shutdown Screens",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "START UP STYLE"],
-      "summary": "Choose what plays when the camera turns on and off.",
-      "card": null,
-      "attached": false,
-      "media_cards": ["startup_power_on_item", "startup_power_off_item"],
-      "controls": [
-        {
-          "title": "START UP STYLE",
-          "primary": false,
-          "card": "startup_power_on_item",
-          "choices": [
-            {
-              "label": "FUJIMOD",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "NONE",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        },
-        {
-          "title": "SHUT DOWN STYLE",
-          "primary": false,
-          "card": "startup_power_off_item",
-          "choices": [
-            {
-              "label": "CATHODE",
-              "stock": false,
-              "icon": null
-            },
-            {
-              "label": "NONE",
-              "stock": false,
-              "icon": null
-            }
-          ],
-          "actions": []
-        }
-      ],
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      }
-    },
-    {
       "id": "build_overlay",
       "group": "system",
       "icon": "bug",
@@ -3804,51 +3750,6 @@
       },
       "choice_credits": {}
     },
-    "startup_power_on_item": {
-      "title": "START UP STYLE",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "summary": "FUJIMOD plays the FujiMod welcome screen while the camera starts; press any button to skip it. NONE starts directly, as on an unmodified camera.",
-      "choices": {},
-      "related": [],
-      "changes": null,
-      "drive_mode": null,
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      },
-      "choice_credits": {}
-    },
-    "startup_power_off_item": {
-      "title": "SHUT DOWN STYLE",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "summary": "CATHODE collapses the picture like a switched-off tube television as the camera turns off. NONE turns off at once.",
-      "choices": {},
-      "related": [],
-      "changes": null,
-      "drive_mode": null,
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      },
-      "choice_credits": {}
-    },
-    "startup_power_on_preview_item": {
-      "title": "PREVIEW POWER ON",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "summary": "Play the power-on screen now.",
-      "choices": {},
-      "related": [],
-      "changes": null,
-      "drive_mode": null,
-      "credits": {
-        "premiere": false,
-        "inspired": [],
-        "thanks": []
-      },
-      "choice_credits": {}
-    },
     "row:SET-UP/FUJIMOD SET-UP/MODS": {
       "title": "MODS",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
@@ -4235,7 +4136,7 @@
       "order": 3,
       "kind": "command",
       "stock": false,
-      "card": "startup_power_on_preview_item",
+      "card": null,
       "feature": null,
       "icon": null
     },
@@ -4255,8 +4156,8 @@
       "order": 2,
       "kind": "setting",
       "stock": false,
-      "card": "startup_power_off_item",
-      "feature": "power_screens",
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
@@ -4265,8 +4166,8 @@
       "order": 1,
       "kind": "setting",
       "stock": false,
-      "card": "startup_power_on_item",
-      "feature": "power_screens",
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
@@ -4851,7 +4752,7 @@
     },
     {
       "title": "ACTION",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 5,
       "kind": "command",
       "stock": false,
@@ -4861,7 +4762,7 @@
     },
     {
       "title": "COMPARE WITH CURRENT",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 13,
       "kind": "page",
       "stock": false,
@@ -4871,7 +4772,7 @@
     },
     {
       "title": "COPY",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 14,
       "kind": "page",
       "stock": false,
@@ -4881,7 +4782,7 @@
     },
     {
       "title": "EDIT CUSTOM NAME",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 18,
       "kind": "command",
       "stock": false,
@@ -4891,7 +4792,7 @@
     },
     {
       "title": "EDIT/CHECK",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 10,
       "kind": "page",
       "stock": false,
@@ -4901,7 +4802,7 @@
     },
     {
       "title": "ERASE",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 17,
       "kind": "command",
       "stock": false,
@@ -4911,7 +4812,7 @@
     },
     {
       "title": "MOVE TO HIDDEN",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 8,
       "kind": "command",
       "stock": false,
@@ -4921,7 +4822,7 @@
     },
     {
       "title": "MOVE TO LIBRARY",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 7,
       "kind": "page",
       "stock": false,
@@ -4931,7 +4832,7 @@
     },
     {
       "title": "PROTECT",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 16,
       "kind": "command",
       "stock": false,
@@ -4941,7 +4842,7 @@
     },
     {
       "title": "RESET THE CHANGES",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 12,
       "kind": "command",
       "stock": false,
@@ -4951,7 +4852,7 @@
     },
     {
       "title": "SAVE THE CHANGES",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 11,
       "kind": "command",
       "stock": false,
@@ -4961,7 +4862,7 @@
     },
     {
       "title": "SELECT",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 1,
       "kind": "command",
       "stock": false,
@@ -4971,7 +4872,7 @@
     },
     {
       "title": "SELECT AS CURRENT",
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "CUSTOM SETTING"],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "{recipe}"],
       "order": 6,
       "kind": "command",
       "stock": false,
@@ -4985,7 +4886,7 @@
         "SHOOTING MENU",
         "EDIT/SAVE CUSTOM SETTING",
         "LIBRARY",
-        "CUSTOM SETTING",
+        "{recipe}",
         "COMPARE WITH CURRENT"
       ],
       "order": 0,
