@@ -245,6 +245,9 @@ pub struct Definition {
     /// The filter engine with the XP4 driver's register contract, when declared.
     #[serde(default)]
     pub filter_engine: Option<FilterEngine>,
+    /// The Mali-V61 style video unit with the XP4 driver's host interface, when declared.
+    #[serde(default)]
+    pub mali_v61: Option<fujimod_emulator_xp4_io::mali_v61::Options>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]

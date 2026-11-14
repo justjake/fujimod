@@ -712,6 +712,24 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn mali_v61(
+        &mut self,
+        options: fujimod_emulator_xp4_io::mali_v61::Options,
+    ) -> Result<(), String> {
+        let model = fujimod_emulator_xp4_io::mali_v61::MaliV61::new(options)?;
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
+            return Err("Overlapping XP4 Mali-V61 window".into());
+        }
+        let id = self.models.len();
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn usb_condition(&mut self, base: u64, present: bool) -> Result<(), String> {
         if self
             .windows
