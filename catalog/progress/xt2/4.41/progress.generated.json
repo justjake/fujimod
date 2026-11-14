@@ -5,8 +5,8 @@
   "model": "X-T2",
   "version": "4.41",
   "facts": {
-    "located": 32,
-    "total": 32
+    "located": 34,
+    "total": 34
   },
   "boot_rom": null,
   "tracks": [
@@ -236,7 +236,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "fail"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -280,7 +280,7 @@
           "id": "stock/record-movie",
           "label": "Record movie",
           "stage": "stock",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -304,24 +304,23 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "fail",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "partial",
-          "passed": 3,
-          "total": 4,
-          "detail": "3 of 4"
+          "result": "stale",
+          "passed": 0,
+          "total": 1
         },
         {
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -329,7 +328,7 @@
           "id": "stock/film-simulations",
           "label": "Film simulations",
           "stage": "stock",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -345,7 +344,7 @@
           "id": "stock/playback-movie",
           "label": "Playback movie",
           "stage": "stock",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -353,7 +352,7 @@
           "id": "stock/develop-raw",
           "label": "Develop RAW",
           "stage": "stock",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -1239,7 +1238,7 @@
       "total": 1
     },
     "record-movie": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 2
     },
@@ -1249,17 +1248,17 @@
       "total": 53
     },
     "focus": {
-      "result": "partial",
+      "result": "stale",
       "passed": 3,
       "total": 4
     },
     "lens": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 3
     },
     "film-simulations": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 9
     },
@@ -1269,12 +1268,12 @@
       "total": 4
     },
     "playback-movie": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 4
     },
     "develop-raw": {
-      "result": "fail",
+      "result": "stale",
       "passed": 0,
       "total": 3
     },

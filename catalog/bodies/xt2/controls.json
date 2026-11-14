@@ -256,7 +256,9 @@
       "manual_page": 256,
       "face": "Fn1",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Face/eye detection settings.",
@@ -958,7 +960,9 @@
       "manual_page": 256,
       "face": "Fn2",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-2-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Drive settings.",
@@ -1059,7 +1063,9 @@
       "manual_page": 7,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to adjust aperture, exposure compensation when the exposure compensation dial is at C, or settings in menus; press at C to switch between aperture and compensation.",
@@ -1133,7 +1139,9 @@
       "manual_page": 52,
       "face": null,
       "icon": "delete",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-13-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete the selected picture during playback.",
@@ -1154,7 +1162,9 @@
       "manual_page": 51,
       "face": null,
       "icon": "playback",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-7-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start picture playback; half-press the shutter button to return to shooting mode.",
@@ -1175,7 +1185,9 @@
       "manual_page": 16,
       "face": "VIEW/MODE",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-15"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Choose the display mode for the viewfinder and LCD monitor.",
@@ -1196,7 +1208,9 @@
       "manual_page": 94,
       "face": "AE-L",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-6-2"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure while pressed.",
@@ -1217,7 +1231,9 @@
       "manual_page": 7,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-2-2"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to highlight menu items, adjust shutter speed or other settings, change focus-frame size, and zoom; press the center for Focus check by default.",
@@ -1251,7 +1267,9 @@
       "manual_page": 94,
       "face": "AF-L",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-6-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus while pressed.",
