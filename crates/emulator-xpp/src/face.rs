@@ -11,8 +11,16 @@
 //! Each start finishes one run after the declared run ticks. It sets status
 //! bit 0, and the interrupt line is high while a status bit is set; writing a
 //! status bit clears it. The run finds nothing: the result words read 0 or
-//! their last write. +0x00 bit 0 and +0x818 bit 0 always read set, as no run
-//! holds the engine busy. The image is not read.
+//! their last write. +0x00 bit 0 always reads set, as no run holds the engine
+//! busy. The image is not read.
+//!
+//! +0x818 holds one ready flag per channel: bit 0 of nibbles 0-2 for the
+//! channels whose control words are +0x800..+0x808, and of nibbles 4-6 for
+//! +0x80c..+0x814. X-T2 4.41 0x18d9f48 clears the enable bit 28 of all six
+//! channel words (0x18dce30) and then waits until +0x818 reads exactly
+//! 0x01110111; the per-channel start and stop paths of both bodies (X-T2
+//! 0x18dcc4c/0x18dce30, X-T20 0x186bcd0/0x186beb4) wait until it reads
+//! non-zero. No channel is ever busy in this model, so all six flags read set.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,6 +33,8 @@ const START: u64 = 0x004;
 const READY: u64 = 0x818;
 const STATUS: u64 = 0x834;
 const DONE: u32 = 1;
+/// Every channel's ready flag (+0x818).
+const CHANNELS_READY: u32 = 0x0111_0111;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -73,7 +83,8 @@ impl Device for Engine {
         }
         let word = self.state.words.get(&o).copied().unwrap_or(0);
         u64::from(match o {
-            CONTROL | READY => word | 1,
+            CONTROL => word | 1,
+            READY => CHANNELS_READY,
             STATUS => self.state.status,
             _ => word,
         })
@@ -153,7 +164,7 @@ mod tests {
         // 0x18610b0: stop and wait for +0x00; 0x186bcd0 waits for +0x818.
         write(&mut engine, &mut h, BASE, 0);
         assert_eq!(read(&mut engine, &mut h, BASE), 1);
-        assert_eq!(read(&mut engine, &mut h, BASE + READY), 1);
+        assert_eq!(read(&mut engine, &mut h, BASE + READY), 0x0111_0111);
         write(&mut engine, &mut h, BASE + 0x48, 0x27f_01df);
         write(&mut engine, &mut h, BASE + START, 1);
         assert_eq!(engine.next_deadline(0), Some(100));
@@ -174,5 +185,19 @@ mod tests {
                 .restore(&serde_json::json!({"words": [], "status": 1, "due": null, "line": false, "runs": 0}))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn stopping_every_channel_reads_all_six_ready_flags() {
+        let mut engine = Engine::new(BASE, 124, 100).unwrap();
+        let mut h = TestHost::new();
+        // X-T2 4.41 0x18dce30 clears bit 28 of each channel word, then
+        // 0x18d9f48 waits for +0x818 == 0x01110111.
+        for channel in [0x800, 0x804, 0x808, 0x80c, 0x810, 0x814] {
+            write(&mut engine, &mut h, BASE + channel, 0x1000_0001);
+            assert_ne!(read(&mut engine, &mut h, BASE + READY), 0);
+            write(&mut engine, &mut h, BASE + channel, 1);
+        }
+        assert_eq!(read(&mut engine, &mut h, BASE + READY), 0x0111_0111);
     }
 }

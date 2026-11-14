@@ -12,6 +12,13 @@
 //! high again before it programs the DWC3. What those bits gate is not
 //! modeled.
 //!
+//! +0x200..+0x228 are PCIe PHY words. The X-T2 4.41 storage driver start-up
+//! 0x97c1e0 (and its copy linked 0x100000 higher) sets +0x218 bits 22 and 0,
+//! writes tuning fields from configuration bytes to +0x21c..+0x224, then
+//! polls +0x208 bit 7 for link up before it programs the PCIe controller. The
+//! words read back their last write, so the link never comes up: no PCIe
+//! endpoint is modeled and the driver takes its timeout path.
+//!
 //! +0x08 holds the polarity of the sixteen external interrupt lines: bit n
 //! set inverts line n (0xc694d4). Line n is interrupt 151 + n (0xc5cfd4 maps
 //! interrupt rows to lines). [`ExternalLines`] drives the interrupt of each
@@ -29,8 +36,9 @@ use std::sync::{Arc, Mutex};
 
 /// Register window size in bytes.
 pub const WINDOW: u64 = 0x1000;
-const WORDS: [u64; 13] = [
-    0x08, 0x14, 0x1c, 0x20, 0x6c, 0x70, 0x88, 0x9c, 0x100, 0x10c, 0x110, 0x118, 0x11c,
+const WORDS: [u64; 21] = [
+    0x08, 0x14, 0x1c, 0x20, 0x6c, 0x70, 0x88, 0x9c, 0x100, 0x10c, 0x110, 0x118, 0x11c, 0x200,
+    0x204, 0x208, 0x218, 0x21c, 0x220, 0x224, 0x228,
 ];
 /// X-T2 4.41 (USB 3.0) start-up 0x157d41c also sets +0x11c bit 10 and drives a
 /// request/acknowledge PHY register port: +0x110 bits 25:10 carry a 16-bit
@@ -385,6 +393,24 @@ mod tests {
         assert_eq!(line.count(), 1);
         assert_eq!(read(&mut gates, &mut h, BASE + 0x14), 0x400000);
         assert!(gates.sd_reset(3).is_err());
+    }
+
+    #[test]
+    fn pcie_phy_words_read_back_and_the_link_never_comes_up() {
+        let mut gates = Gates::new(BASE).unwrap();
+        let mut h = TestHost::new();
+        // 0x97c294..0x97c2a8: set +0x218 bits 22 and 0 by read-modify-write.
+        write(&mut gates, &mut h, BASE + 0x218, 0x400001);
+        assert_eq!(read(&mut gates, &mut h, BASE + 0x218), 0x400001);
+        write(&mut gates, &mut h, BASE + 0x21c, 0x1234_5678);
+        assert_eq!(read(&mut gates, &mut h, BASE + 0x21c), 0x1234_5678);
+        // 0x97c4cc polls +0x208 bit 7; no endpoint trains the link.
+        let mut cx = h.cx();
+        assert_eq!(gates.read(&mut cx, BASE + 0x208, 4) & 0x80, 0);
+        assert!(!cx.is_unmodeled());
+        let mut cx = h.cx();
+        gates.read(&mut cx, BASE + 0x20c, 4);
+        assert!(cx.is_unmodeled());
     }
 
     #[test]
