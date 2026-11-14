@@ -24,8 +24,10 @@ def default_scene_raf() -> Path:
         or state[0] != _DEFAULT_RAF_SIZE
         or state != _materialized.get(asset, state)
     ):
-        subprocess.run(['node', str(root / 'scripts/assets/default-scene.ts')],
-                       cwd=root, check=True, capture_output=True, text=True)
+        made = subprocess.run(['node', str(root / 'scripts/assets/default-scene.ts')],
+                              cwd=root, capture_output=True, text=True)
+        if made.returncode:
+            raise RuntimeError('Default RAF preparation failed:\n' + made.stderr + made.stdout)
         state = _state(asset)
         if state is None or state[0] != _DEFAULT_RAF_SIZE:
             raise ValueError('Default RAF is missing or has an unexpected byte count')
