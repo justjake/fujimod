@@ -3,9 +3,11 @@
 mod abort;
 mod client;
 mod definition;
+mod initial_security;
 pub mod maintenance;
 pub mod memory;
 pub use definition::{Definition, GicCpuInitial, GicInitial, NorImmutablePrefix};
+pub use initial_security::InitialSecurity;
 pub mod observation;
 use observation::Call;
 mod devices;
@@ -1078,6 +1080,7 @@ impl Session {
             discovery,
             memory_regions,
             initial_registers,
+            initial_security,
             labels,
             cbar,
             gic_initial,
@@ -1240,6 +1243,20 @@ impl Session {
         }
         if !initial_registers.is_empty() && initial_registers.len() != cores {
             return Err("Initial ARM32 register sets must name every processor".into());
+        }
+        if !initial_security.is_empty() && initial_security.len() != cores {
+            return Err("Initial ARM32 security states must name every processor".into());
+        }
+        for (core, initial) in initial_security.iter().enumerate() {
+            initial.validate()?;
+            if let Some(registers) = initial_registers.get(core) {
+                for &(register, value) in registers {
+                    if initial_security::is_cpsr(register) {
+                        initial.validate_cpsr(u32::try_from(value)
+                            .map_err(|_| "ARM32 reset register overflows")?)?;
+                    }
+                }
+            }
         }
         let mut gic = Gic::new(cores, 512);
         if let Some(initial) = gic_initial {
@@ -1999,13 +2016,28 @@ impl Session {
                     }?;
                 }
             }
-            inner.write_reg(core, arm::CPSR, 0xd3)?;
+            let security = initial_security.get(core);
+            if let Some(initial) = security {
+                initial.apply(&inner.cpus[core])?;
+            } else {
+                inner.write_reg(core, arm::CPSR, 0xd3)?;
+            }
+            let mut initial_cpsr = 0xd3;
             if let Some(registers) = initial_registers.get(core) {
                 for &(register, value) in registers {
                     let value =
                         u32::try_from(value).map_err(|_| "ARM32 reset register overflows")?;
                     inner.cpus[core].write_register(register, &value.to_le_bytes())?;
+                    if initial_security::is_cpsr(register) {
+                        initial_cpsr = value;
+                        if let Some(initial) = security {
+                            initial.verify(&inner.cpus[core], initial_cpsr)?;
+                        }
+                    }
                 }
+            }
+            if let Some(initial) = security {
+                initial.verify(&inner.cpus[core], initial_cpsr)?;
             }
         }
         if let Some(base) = cbar {

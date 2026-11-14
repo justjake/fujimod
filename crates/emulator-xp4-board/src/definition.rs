@@ -40,6 +40,10 @@ pub struct Definition {
     pub memory_regions: Vec<super::memory::Region>,
     #[serde(default)]
     pub initial_registers: Vec<Vec<(Register, u64)>>,
+    /// Explicit Cortex-A7 SCR/NSACR inputs, one per core. Empty preserves
+    /// backend defaults; this declaration is not a physical reset measurement.
+    #[serde(default)]
+    pub initial_security: Vec<InitialSecurity>,
     #[serde(default)]
     pub labels: Vec<u32>,
     #[serde(default)]
