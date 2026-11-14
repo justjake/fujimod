@@ -7,8 +7,8 @@
 use crate::tree::{DirectorySource, relative};
 use crate::{
     CHUNK_BYTES, Hello, Incoming, Pipe, Report, Result, SYNC_CAPABILITY, SYNC_MARKER, SYNC_PARTS,
-    Wants, commit, fail, hash_file, manifest_entry, modified, put, receive_end, receive_manifest,
-    resume, safe_path, send_manifest, take, transfer_wanted, welcome,
+    Wants, commit, fail, hash_file, manifest_entry, modified, path_info, put, receive_end,
+    receive_manifest, resume, safe_path, send_manifest, take, transfer_wanted, welcome,
 };
 use fujimod_sync_protocol::committed::Status;
 use fujimod_sync_protocol::{ManifestEntry, decode, frame::Body};
@@ -72,6 +72,9 @@ async fn serve_connected(
             welcome.protocol_version
         ));
     }
+    if !welcome.client.is_empty() {
+        eprintln!("receiver: {}", welcome.client);
+    }
     let chunk = welcome.max_chunk_bytes.clamp(1, CHUNK_BYTES) as usize;
     let updates = source.subscribe();
     let mut served = None;
@@ -122,7 +125,7 @@ pub async fn sync(pipe: &mut impl Pipe, root: &Path, report: Report<'_>) -> Resu
 }
 
 async fn sync_connected(pipe: &mut impl Pipe, root: &Path, report: Report<'_>) -> Result<()> {
-    welcome(pipe, true).await?;
+    welcome(pipe, true, &path_info(root)).await?;
     let mut target = SyncTarget::new(root);
     loop {
         let summary = target.receive(pipe, &mut *report).await?;
