@@ -55,7 +55,7 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "card-files",
@@ -149,9 +149,9 @@
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "card-files",
@@ -230,12 +230,12 @@
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
@@ -296,9 +296,10 @@
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
-          "total": 1
+          "result": "partial",
+          "passed": 3,
+          "total": 4,
+          "detail": "3 of 4"
         },
         {
           "id": "stock/lens",
@@ -353,17 +354,17 @@
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "label": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "stage": "sd-boot-v1-stock-boots-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         }
       ]
     },
@@ -1201,7 +1202,7 @@
       "total": 60
     },
     "focus": {
-      "result": "stale",
+      "result": "partial",
       "passed": 3,
       "total": 4
     },

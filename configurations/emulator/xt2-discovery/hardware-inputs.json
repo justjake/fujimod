@@ -40,12 +40,22 @@
           "value": 694
         },
         {
+          "name": "power_source",
+          "register": 28,
+          "value": 1
+        },
+        {
           "name": "usb_detect",
           "register": 84,
           "value": 1
+        },
+        {
+          "name": "state_of_charge",
+          "register": 100,
+          "value": 25600
         }
       ],
-      "basis": "Borrowed discovery input from xt20-discovery, not measured on an X-T2. X-T20 basis: Measured: the battery task of X-T20 2.11 keeps the gauge's replies in its block at 0xfda4fc (status register 0 at +0, register 8 at +4, 0x0c at +6, 0x10 at +8; 0xc711f0..0xc712bc), read over the live service in the s1 REC capture (2026-10-29). The s2 and s3 captures and the 2026-10-22 live-view dumps agree on register 0 and register 8 (0); register 0x0c ranges over 0x1cb..0x202 and 0x10 over 0x2b6..0x2bf. Wiring from section 5: the gauge sits on serial port 4 (resource 0xf of 0xed389c, chip select bank 13 bit 8, 8-bit transfers). 0xc70748 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc4b87c and 0 by 0xc4b8c0); the first byte names the register and bit 0 writes it, and the bytes read back from +0x60 carry the value, high byte first. The start-up 0xc70e7c polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Unlisted registers read zero, including 0x1c and the updater's 0x54; they are not measured. Register 0x54 is the data-line detection: after a cable raises VBUS, the USB manager 0x168ece0 writes 0xb00 to register 0x50 and reads 0x54, and (value & 0xd) == 1 means a PC, anything else a charger. It is declared 1, so a cable always reaches a PC; the camera's value is not measured."
+      "basis": "Registers 28 (0x1c) and 100 (0x64) are X-T2's own and declared, not measured. Register 0x1c names the battery that powers the camera: the start-up 0xc7bd1c and the battery task 0xc7c130 keep its low byte at 0x100442a, and 0xc7b550 selects the body battery for bit 0, the grip batteries for bits 1 and 2, and none otherwise. battery_level 0xc83dcc then reports the selected battery's register 0x10 reading (0xc7b114) as status item 0x162 (0xcf9c84), and with no battery selected it reports 0. The updater's battery check 0x14dab90 compares that item with the configuration threshold at 0x3b7 (0x261 = 609 here) and shows THE BATTERY IS NOT FULLY CHARGED (0x153165c(0x68)) unless it is larger; the borrowed register 0x10 reading, 694, is. 1 selects the body battery. Register 0x64: the X-T2 battery task 0xc7c130 writes 0x405 to register 0x60, reads register 0x64 into 0x10044a6 and converts it at 0xc7ab34 to a percentage, so the register is the body battery's state of charge in 1/256 percent steps; the battery level routine 0xc82d44 rates the body battery exhausted (state 9) while that reading is 0x100 or less. The X-T20 battery task does not read it. 25600 (0x6400) is a full charge; the camera's reading is not captured. Registers 0, 12, 16 and 84 are borrowed discovery input from xt20-discovery, not measured on an X-T2. X-T20 basis: Measured: the battery task of X-T20 2.11 keeps the gauge's replies in its block at 0xfda4fc (status register 0 at +0, register 8 at +4, 0x0c at +6, 0x10 at +8; 0xc711f0..0xc712bc), read over the live service in the s1 REC capture (2026-10-29). The s2 and s3 captures and the 2026-10-22 live-view dumps agree on register 0 and register 8 (0); register 0x0c ranges over 0x1cb..0x202 and 0x10 over 0x2b6..0x2bf. Wiring from section 5: the gauge sits on serial port 4 (resource 0xf of 0xed389c, chip select bank 13 bit 8, 8-bit transfers). 0xc70748 sends register << 16 | value as three bytes inside one enabled transfer (+0x08 written 1 by 0xc4b87c and 0 by 0xc4b8c0); the first byte names the register and bit 0 writes it, and the bytes read back from +0x60 carry the value, high byte first. The start-up 0xc70e7c polls register 0 until bit 15 is set and then writes 0x405 to register 0x60. Unlisted registers read zero, including 0x1c and the updater's 0x54; they are not measured. Register 0x54 is the data-line detection: after a cable raises VBUS, the USB manager 0x168ece0 writes 0xb00 to register 0x50 and reads 0x54, and (value & 0xd) == 1 means a PC, anything else a charger. It is declared 1, so a cable always reaches a PC; the camera's value is not measured."
     },
     "dram_refresh": {
       "basis": "Borrowed discovery input from xt20-discovery, not measured on an X-T2. X-T20 basis: Measured: X-T20 2.11 0xc8f09c caches the refresh-rate level from bits 8..10 of DRAM controller +0xec at 0xfdbea8 + 5; the s1, s2 and s3 REC captures (2026-10-29) hold level 2 there, with refresh word 0xc30 at 0xfdbea8 and no second controller (0xfda438 = 0).",
