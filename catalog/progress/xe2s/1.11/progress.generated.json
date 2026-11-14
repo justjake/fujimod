@@ -242,7 +242,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "not-run"
+          "result": "partial"
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
@@ -289,8 +289,8 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -1234,9 +1234,9 @@
       "result": "not-run"
     },
     "control-input": {
-      "result": "stale",
-      "passed": 4,
-      "total": 40
+      "result": "pass",
+      "passed": 52,
+      "total": 52
     },
     "focus": {
       "result": "not-run"
