@@ -60,6 +60,10 @@ struct State {
     /// for sensors whose capture frames end at readout.
     #[serde(default)]
     readout_edge: Option<FrameEdge>,
+    /// Guest tick at which each started comparator reaches its point in the
+    /// sensor frame. Firing clears its started bit (16) and drives its output.
+    #[serde(default)]
+    comparator_due: [Option<u64>; 6],
 }
 pub struct ImageInput {
     state: State,
@@ -144,6 +148,7 @@ impl ImageInput {
                 raw3_dma: Transfer::default(),
                 raw_origins: Default::default(),
                 readout_edge: None,
+                comparator_due: [None; 6],
             },
             options,
             wiring,
@@ -618,6 +623,11 @@ impl ImageInput {
         } else {
             v
         };
+        if let Some(i) = Self::phase(o)
+            && v & 0x10000 == 0
+        {
+            self.state.comparator_due[i] = None;
+        }
         if matches!(o, 0x28 | 0x2c) {
             self.publish_grid()?;
         }
@@ -629,6 +639,41 @@ impl ImageInput {
                 (self.state.r[0x28 / 4] & 0xfff) as usize + 1,
                 (self.state.r[0x2c / 4] & 0x3fff) as usize + 1,
             ];
+        }
+        Ok(())
+    }
+    /// A started comparator (bit 16) fires once, at its point in the sensor
+    /// frame that begins at `frame_start`: line (bits 0..13) times the
+    /// receiver's horizontal period plus clock (bits 16..29), in sensor pixel
+    /// clocks. Without a sensor frame clock no point has a guest time.
+    fn arm_comparators(&mut self, frame_start: u64) -> Result<(), String> {
+        let Some(sensor) = &self.wiring.sensor else {
+            return Ok(());
+        };
+        let horizontal = u64::from((self.state.r[0x54 / 4] & 0x3fff) + 1);
+        for i in 0..6 {
+            let o = 0xc4 + i * 0x14;
+            if self.state.r[o / 4] & 0x10000 == 0 || self.state.comparator_due[i].is_some() {
+                continue;
+            }
+            let point = self.state.r[(o + 4) / 4];
+            let clocks = u64::from(point & 0x3fff) * horizontal + u64::from(point >> 16 & 0x3fff);
+            if let Some(ticks) = sensor.pixel_clock_ticks(clocks) {
+                self.state.comparator_due[i] = Some(due(frame_start, ticks.max(1))?);
+            }
+        }
+        Ok(())
+    }
+    fn fire_comparators(&mut self, now: u64) -> Result<(), String> {
+        for i in 0..6 {
+            let Some(tick) = self.state.comparator_due[i].filter(|&t| now >= t) else {
+                continue;
+            };
+            self.state.comparator_due[i] = None;
+            self.state.r[(0xc4 + i * 0x14) / 4] &= !0x10000;
+            if let Some(sensor) = &mut self.wiring.sensor {
+                sensor.comparator_edge(i, tick)?;
+            }
         }
         Ok(())
     }
@@ -786,6 +831,7 @@ impl ImageInput {
                 self.state.r[o / 4] |= 3;
             }
         }
+        self.fire_comparators(now)?;
         self.sync_clocks(now)?;
         let mut record_edge = false;
         for i in 0..2 {
@@ -831,7 +877,9 @@ impl ImageInput {
                     .ok_or("sensor clock overflow")?,
             )?);
             let idle = self.state.dma.deadline().is_none();
-            if self.frame(cx)? && self.uses_sensor_clock() {
+            let latched = self.frame(cx)?;
+            self.arm_comparators(old)?;
+            if latched && self.uses_sensor_clock() {
                 let sensor = self.wiring.sensor.as_ref().unwrap();
                 let at_readout_end = sensor.edge_at_raw_readout_end();
                 let edge = sensor
@@ -984,12 +1032,13 @@ impl Device for ImageInput {
             raw3_dma,
             raw_origins,
             readout_edge,
+            comparator_due,
         } = &self.state;
         let state = serde_json::json!({"r":r,"reset":reset,"command_due":command_due,"command_armed":command_armed,
             "raw_exposure":raw_exposure,"command_done":command_done,"command_bytes":fujimod_emulator_devices::state::bytes(command_bytes),"phases":phases,
             "phase_due":phase_due,"phase_pending":phase_pending,"phase_period":phase_period,"sensor_due":sensor_due,"capture_ack":capture_ack,
             "capture_irq_sent":capture_irq_sent,"raw3_ack":raw3_ack,"raw3_irq_sent":raw3_irq_sent,
-            "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint(),"raw3_dma":raw3_dma.fingerprint(),"raw_origins":raw_origins,"readout_edge":readout_edge});
+            "readback_due":readback_due,"stop_due":stop_due,"dma":dma.fingerprint(),"raw3_dma":raw3_dma.fingerprint(),"raw_origins":raw_origins,"readout_edge":readout_edge,"comparator_due":comparator_due});
         let sensor = self.wiring.sensor.as_ref().map(|s| s.fingerprint());
         let outputs = self
             .wiring
@@ -1071,6 +1120,7 @@ impl Device for ImageInput {
             .chain(s.raw3_dma.deadline())
             .chain(s.readback_due)
             .chain(s.stop_due)
+            .chain(s.comparator_due.into_iter().flatten())
             .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
