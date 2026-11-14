@@ -571,6 +571,13 @@ impl Guard {
                         if rd & 1 != 0 || rd >= 14 {
                             return Err("Driver guard invalid doubleword pair".into());
                         }
+                        let writeback = word & (1 << 24) == 0 || word & (1 << 21) != 0;
+                        if !write && writeback && (rn == rd as usize || rn == rd as usize + 1) {
+                            return Err(
+                                "Driver guard doubleword read writeback overlaps destination"
+                                    .into(),
+                            );
+                        }
                         accesses.push((address as u64, 4, write));
                         accesses.push((address.wrapping_add(4) as u64, 4, write));
                         if !write && u64::from(address) + 8 <= 1 << 32 {
@@ -955,6 +962,8 @@ mod tests {
             (0xe1c020d0, 0xfffd8004),
             (0xe1c020f0, 0xfffd8000),
             (0xe890000c, 0xfffd8000),
+            (0xe1e220d0, 0xfffd8000),
+            (0xe1e320d0, 0xfffd8000),
         ] {
             let mut denied = wide();
             assert!(
