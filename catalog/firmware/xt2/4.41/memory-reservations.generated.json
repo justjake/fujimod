@@ -1,0 +1,29 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xt2-441-memory-reservations",
+  "firmware_id": "xt2-441",
+  "dram_size": 16777216,
+  "reservations": [
+    {
+      "name": "font_library",
+      "address": 7274496,
+      "size": 590640
+    },
+    {
+      "name": "language_fonts",
+      "address": 7929856,
+      "size": 1441792
+    }
+  ],
+  "locator_failures": [
+    {
+      "locator": "main_heap",
+      "reason": "No X-Processor Pro locator yet; the range stays unavailable"
+    },
+    {
+      "locator": "graphics_heap",
+      "reason": "No X-Processor Pro locator yet; the range stays unavailable"
+    }
+  ]
+}
