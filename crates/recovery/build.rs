@@ -13,7 +13,7 @@ fn main() {
     // The XP5 SD loaders are prebuilt binary assets; their layouts become constants. The default
     // build is the card-resident loader; the internal-flash build serves a startup that keeps
     // the installed flash attached; the read-only build only reads the RAM image into spare DRAM
-    // and checks it.
+    // and checks it; the checked-redirect build is that plus one proven redirect.
     loader(
         &root,
         &out,
@@ -34,6 +34,13 @@ fn main() {
         "sd-boot-v1-xp5-read-only-loader",
         "xp5_read_only_loader.rs",
         &["setup_sd_read_only"],
+    );
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-checked-redirect-loader",
+        "xp5_checked_redirect_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect"],
     );
 }
 

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
 pub use xp5::{
     Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash, Lamp as Xp5Lamp,
-    Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
+    CheckedRedirect, Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
     SourceProof as Xp5SourceProof,
 };
 
@@ -45,6 +45,12 @@ pub struct StartupOptions {
     /// normal boot (the file is read and never run). It excludes `internal_flash` and the
     /// fallback.
     pub read_only_destination: Option<u64>,
+    /// With `read_only_destination`: a checked redirect. The loader also proves, against the
+    /// installed flash, that the first raw section of the DRAM copy equals the flash's, and with
+    /// `CheckedRedirect::Apply` changes one word of the stock reset image in RAM 0 so that the
+    /// stock stage loads that section from the DRAM copy. `ffboot.bin` is then the unedited image
+    /// cut after that section. See `xp5::CheckedRedirect`.
+    pub checked_redirect: Option<CheckedRedirect>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -448,6 +454,10 @@ impl Recipe {
             "The read-only startup requires XP5 and takes no storage image, internal-flash build or fallback",
         )?;
         require(
+            options.checked_redirect.is_none() || options.read_only_destination.is_some(),
+            "The checked redirect requires the read-only startup",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -459,6 +469,7 @@ impl Recipe {
                 self.missing.join(", ")
             ))
         })?;
+        let mut redirect_checked = false;
         let mut files =
             match self.generation {
                 Generation::Exr | Generation::ExrPro => {
@@ -532,7 +543,24 @@ impl Recipe {
                         )
                     })?;
                     let ram = image::transform(&inverted, plan)?;
-                    if let Some(destination) = options.read_only_destination {
+                    if let (Some(destination), Some(mode)) =
+                        (options.read_only_destination, options.checked_redirect)
+                    {
+                        // The updater's proofs name code high in the RAM image, which the cut
+                        // file does not carry: check them on the whole image first.
+                        if let Some(contract) = &self.updater {
+                            contract.verify(&ram)?;
+                        }
+                        redirect_checked = true;
+                        xp5::package_checked_redirect(
+                            &inverted,
+                            setup,
+                            ram,
+                            options.success_hold_seconds,
+                            destination,
+                            mode,
+                        )?
+                    } else if let Some(destination) = options.read_only_destination {
                         xp5::package_read_only(
                             &inverted,
                             setup,
@@ -565,7 +593,7 @@ impl Recipe {
                 .any(|f| f.name.eq_ignore_ascii_case(&self.update_filename)),
             "DAT filename collides with boot files",
         )?;
-        if let Some(contract) = &self.updater {
+        if let Some(contract) = self.updater.as_ref().filter(|_| !redirect_checked) {
             let ram_filename = if matches!(self.generation, Generation::Exr | Generation::ExrPro) {
                 "ffuser.bin"
             } else {
