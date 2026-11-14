@@ -1149,6 +1149,7 @@ impl Session {
             dsp,
             face_detector,
             filter_engine,
+            mali_v61,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1753,6 +1754,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .filter_engine(&engine)?;
+        }
+        if let Some(options) = mali_v61 {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .mali_v61(options)?;
         }
         if let Some((base, present)) = usb_condition {
             devices
