@@ -4193,6 +4193,35 @@
       ],
       "type": "object"
     },
+    "HardwareCurtains": {
+      "additionalProperties": false,
+      "description": "Declared focal-plane curtain facts.",
+      "properties": {
+        "first_output": {
+          "description": "Image-input comparator output that releases the first curtain.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "light_offset_seconds": {
+          "description": "Light added to the interval between the two comparator edges, seconds.",
+          "format": "double",
+          "type": "number"
+        },
+        "second_output": {
+          "description": "Image-input comparator output that releases the second curtain.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "first_output",
+        "second_output",
+        "light_offset_seconds"
+      ],
+      "type": "object"
+    },
     "HardwareDecompressor": {
       "additionalProperties": false,
       "description": "Declared decompressor facts.",
@@ -6279,6 +6308,17 @@
       "additionalProperties": false,
       "description": "Declared radiometry facts.",
       "properties": {
+        "curtains": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareCurtains"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared focal-plane curtains; absent for a leaf-shutter body."
+        },
         "mode_change_frames": {
           "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
           "format": "uint8",
@@ -6316,8 +6356,15 @@
           "type": "number"
         },
         "shutter": {
-          "$ref": "#/$defs/HardwareShutter",
-          "description": "Declared shutter."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareShutter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared leaf shutter; absent for a focal-plane body."
         },
         "shutter_output": {
           "description": "Declared shutter output.",
@@ -6342,7 +6389,6 @@
         "rolling_references",
         "mode_change_frames",
         "saturation_lux_seconds",
-        "shutter",
         "shutter_output",
         "ticks_per_second",
         "white_luminance"
