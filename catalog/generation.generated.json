@@ -3852,22 +3852,12 @@
           "errors": []
         },
         "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
@@ -3932,6 +3922,10 @@
             }
           ]
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -3951,13 +3945,8 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "SettingsCatalogError: xe4-201: profile header defaults have no marker"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
           "status": "unavailable",
