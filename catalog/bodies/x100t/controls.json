@@ -256,7 +256,7 @@
       ],
       "assignable": false,
       "default_function": "Rotate to navigate menus, zoom, choose the number of playback images, and select quick-menu options; press the center to zoom in on the active focus area.",
-      "role": null,
+      "role": "command_control",
       "mechanical": false,
       "behavior": {
         "kind": "dial",
