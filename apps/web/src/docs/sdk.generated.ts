@@ -245,7 +245,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_Checkmark_style",
-        "signature": "struct Focal_CheckmarkStyle Focal_Checkmark_style(const struct Focal_Theme * theme, unsigned int text_size, unsigned char accent, enum Focal_CheckmarkTone tone)",
+        "signature": "struct Focal_CheckmarkStyle Focal_Checkmark_style(const struct Focal_Theme *theme, unsigned int text_size, unsigned char accent, enum Focal_CheckmarkTone tone)",
         "comment": "",
         "members": []
       },
@@ -908,7 +908,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_Grid_coordinate",
-        "signature": "unsigned int Focal_Grid_coordinate(char * out, const struct Focal_Grid * grid, unsigned int index)",
+        "signature": "unsigned int Focal_Grid_coordinate(char *out, const struct Focal_Grid *grid, unsigned int index)",
         "comment": "",
         "members": []
       }
@@ -1262,7 +1262,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_InlineText",
-        "signature": "void Focal_InlineText(Clay_ElementId id, const struct Focal_InlineRun * runs, unsigned int count, float width, const Clay_TextElementConfig * text, float line_height)",
+        "signature": "void Focal_InlineText(Clay_ElementId id, const struct Focal_InlineRun *runs, unsigned int count, float width, const Clay_TextElementConfig *text, float line_height)",
         "comment": "",
         "members": []
       }
@@ -1433,14 +1433,14 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_LinkChip_width",
-        "signature": "float Focal_LinkChip_width(const char * label, unsigned int icon, const struct Focal_LinkChipStyle * style)",
+        "signature": "float Focal_LinkChip_width(const char *label, unsigned int icon, const struct Focal_LinkChipStyle *style)",
         "comment": "",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_LinkChip",
-        "signature": "void Focal_LinkChip(Clay_ElementId id, const char * label, unsigned int icon, const struct Focal_LinkChipStyle * style)",
+        "signature": "void Focal_LinkChip(Clay_ElementId id, const char *label, unsigned int icon, const struct Focal_LinkChipStyle *style)",
         "comment": "",
         "members": []
       }
@@ -1509,56 +1509,56 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_ListEditor_open",
-        "signature": "int Focal_ListEditor_open(struct Focal_ListEditor * view, const struct Focal_Editor * editor)",
+        "signature": "int Focal_ListEditor_open(struct Focal_ListEditor *view, const struct Focal_Editor *editor)",
         "comment": "",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_move",
-        "signature": "int Focal_ListEditor_move(struct Focal_ListEditor * view, int delta)",
+        "signature": "int Focal_ListEditor_move(struct Focal_ListEditor *view, int delta)",
         "comment": "Input; each returns 1 when it changed the editor. LEFT (-1) and RIGHT (+1) move between fields, wrapping.",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_step",
-        "signature": "int Focal_ListEditor_step(struct Focal_ListEditor * view, int steps, int dial)",
+        "signature": "int Focal_ListEditor_step(struct Focal_ListEditor *view, int steps, int dial)",
         "comment": "Step the focused field `steps` times (UP +1, DOWN -1), keeping every field in range; a dial's steps (`dial`) publish the staged values.",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_accept",
-        "signature": "int Focal_ListEditor_accept(struct Focal_ListEditor * view)",
+        "signature": "int Focal_ListEditor_accept(struct Focal_ListEditor *view)",
         "comment": "Apply this field page: the next page opens, or the editor closes accepted. A last page whose stock action refuses stays open (0).",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_cancel",
-        "signature": "int Focal_ListEditor_cancel(struct Focal_ListEditor * view)",
+        "signature": "int Focal_ListEditor_cancel(struct Focal_ListEditor *view)",
         "comment": "BACK: the previous chained page, read afresh, or close canceled.",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_playback",
-        "signature": "int Focal_ListEditor_playback(struct Focal_ListEditor * view)",
+        "signature": "int Focal_ListEditor_playback(struct Focal_ListEditor *view)",
         "comment": "Leaving for playback: apply when the body accepts on playback.",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_selectField",
-        "signature": "int Focal_ListEditor_selectField(struct Focal_ListEditor * view, unsigned int field)",
+        "signature": "int Focal_ListEditor_selectField(struct Focal_ListEditor *view, unsigned int field)",
         "comment": "Select a field without stepping it.",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_ListEditor_layout",
-        "signature": "void Focal_ListEditor_layout(const struct Focal_ListEditor * view, Focal_PageFrameFn page)",
+        "signature": "void Focal_ListEditor_layout(const struct Focal_ListEditor *view, Focal_PageFrameFn page)",
         "comment": "",
         "members": []
       },
@@ -1982,14 +1982,14 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_LivePicker_rows",
-        "signature": "int Focal_LivePicker_rows(uint32_t picker, struct Focal_LazyRows * out)",
+        "signature": "int Focal_LivePicker_rows(uint32_t picker, struct Focal_LazyRows *out)",
         "comment": "",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_LivePicker_scrollMetrics",
-        "signature": "void Focal_LivePicker_scrollMetrics(uint32_t picker, struct Focal_ScrollMetrics * out)",
+        "signature": "void Focal_LivePicker_scrollMetrics(uint32_t picker, struct Focal_ScrollMetrics *out)",
         "comment": "",
         "members": []
       },
@@ -2304,14 +2304,14 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_OptionList_rows",
-        "signature": "int Focal_OptionList_rows(uint32_t list, struct Focal_LazyRows * out)",
+        "signature": "int Focal_OptionList_rows(uint32_t list, struct Focal_LazyRows *out)",
         "comment": "",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_OptionList_scrollMetrics",
-        "signature": "void Focal_OptionList_scrollMetrics(uint32_t list, struct Focal_ScrollMetrics * out)",
+        "signature": "void Focal_OptionList_scrollMetrics(uint32_t list, struct Focal_ScrollMetrics *out)",
         "comment": "",
         "members": []
       },
@@ -2368,7 +2368,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_Pointer_plan",
-        "signature": "void Focal_Pointer_plan(const struct Focal_Theme * theme, void (*)(unsigned int, unsigned int) plan)",
+        "signature": "void Focal_Pointer_plan(const struct Focal_Theme *theme, void (*)(unsigned int, unsigned int)plan)",
         "comment": "",
         "members": []
       }
@@ -2618,7 +2618,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_ShiftGrid_move",
-        "signature": "int Focal_ShiftGrid_move(const struct Focal_ShiftGrid * grid, int values[2], unsigned int direction)",
+        "signature": "int Focal_ShiftGrid_move(const struct Focal_ShiftGrid *grid, int values[2], unsigned int direction)",
         "comment": "Move `values` one step in `direction` (enum Focal_Direction), within the grid; 1 when they changed.",
         "members": []
       },
@@ -3178,7 +3178,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_TextKeyboard_keyBox",
-        "signature": "int Focal_TextKeyboard_keyBox(const struct Focal_Keyboard * keyboard, unsigned int index, float width, float height, struct Focal_KeyboardBox * out)",
+        "signature": "int Focal_TextKeyboard_keyBox(const struct Focal_Keyboard *keyboard, unsigned int index, float width, float height, struct Focal_KeyboardBox *out)",
         "comment": "",
         "members": []
       }
@@ -3368,7 +3368,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_ValueEditor_screen",
-        "signature": "void Focal_ValueEditor_screen(const char * title, const struct Focal_Editor * editor, const int values[8], unsigned int field_cursor, const struct Focal_Row * auxiliary_rows, unsigned int auxiliary_row_count, Focal_PageFrameFn page, const struct Focal_ValueEditorDelegate * delegate, const struct Focal_KeyActionRowDelegate * footer, void * context)",
+        "signature": "void Focal_ValueEditor_screen(const char *title, const struct Focal_Editor *editor, const int values[8], unsigned int field_cursor, const struct Focal_Row *auxiliary_rows, unsigned int auxiliary_row_count, Focal_PageFrameFn page, const struct Focal_ValueEditorDelegate *delegate, const struct Focal_KeyActionRowDelegate *footer, void *context)",
         "comment": "",
         "members": []
       },
@@ -5306,7 +5306,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_shadowHalo",
-        "signature": "static float Focal_shadowHalo(const struct Focal_LayerShadow * shadow)",
+        "signature": "static float Focal_shadowHalo(const struct Focal_LayerShadow *shadow)",
         "comment": "How far a shadow paints beyond its element's box: its falloff plus the drop.",
         "members": []
       },
@@ -5320,7 +5320,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_Theme_scale",
-        "signature": "int Focal_Theme_scale(const struct Focal_Theme * source, unsigned int percent, struct Focal_Theme * scaled)",
+        "signature": "int Focal_Theme_scale(const struct Focal_Theme *source, unsigned int percent, struct Focal_Theme *scaled)",
         "comment": "",
         "members": []
       },
@@ -5334,28 +5334,28 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_Row_height",
-        "signature": "float Focal_Row_height(const struct Focal_Theme * theme, float screen_height)",
+        "signature": "float Focal_Row_height(const struct Focal_Theme *theme, float screen_height)",
         "comment": "One row height for lists, option popups and windows. The screen's title band is excluded; font size never changes the row density.",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_modelString",
-        "signature": "static Clay_String Focal_modelString(const struct Focal_Text * text)",
+        "signature": "static Clay_String Focal_modelString(const struct Focal_Text *text)",
         "comment": "",
         "members": []
       },
       {
         "kind": "function",
         "name": "Focal_Theme_accent",
-        "signature": "static Clay_Color Focal_Theme_accent(const struct Focal_Theme * theme, unsigned char accent_kind)",
+        "signature": "static Clay_Color Focal_Theme_accent(const struct Focal_Theme *theme, unsigned char accent_kind)",
         "comment": "",
         "members": []
       },
       {
         "kind": "function",
         "name": "popup_row_count",
-        "signature": "static unsigned int popup_row_count(const struct Focal_Popup * popup)",
+        "signature": "static unsigned int popup_row_count(const struct Focal_Popup *popup)",
         "comment": "",
         "members": []
       },
@@ -6563,7 +6563,7 @@ export const focalComponents: readonly FocalComponent[] = [
       {
         "kind": "function",
         "name": "Focal_textSet",
-        "signature": "void Focal_textSet(struct Focal_Text * out, const char * text)",
+        "signature": "void Focal_textSet(struct Focal_Text *out, const char *text)",
         "comment": "Truncate text to the cell; null text clears it.",
         "members": []
       },
