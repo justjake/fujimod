@@ -245,6 +245,9 @@ pub struct Definition {
     /// The filter engine with the XP4 driver's register contract, when declared.
     #[serde(default)]
     pub filter_engine: Option<FilterEngine>,
+    /// Arm PL011 UARTs with nothing attached, when declared.
+    #[serde(default)]
+    pub pl011_uarts: Vec<Pl011Uart>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -269,6 +272,16 @@ pub struct CountdownDial {
     pub channel: usize,
     pub phase_ticks: u64,
     pub rest_phase: u8,
+}
+
+/// One Arm PL011 UART: register page base and, when routed, its interrupt
+/// line (see `fujimod_emulator_ip_arm::pl011`).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Pl011Uart {
+    pub base: u64,
+    #[serde(default)]
+    pub irq: Option<u32>,
 }
 
 /// The XP4 JPEG encoder: register page base, completion interrupt line,

@@ -1,6 +1,6 @@
 [package]
 name = "fujimod-emulator-ip-arm"
-description = "ARM interrupt controllers, generic timer, PL022 SPI and PL330 DMA"
+description = "ARM interrupt controllers, generic timer, PL011 UART, PL022 SPI and PL330 DMA"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
