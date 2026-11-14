@@ -264,9 +264,14 @@ section. The loader proves all of it against the installed flash before it write
 and the range by CRC-32, the DRAM copy against the flash word for word, RAM 0 against the stock
 reset image) and with `--apply` then stores the one word, reads RAM 0 back and takes the word back
 if the read-back differs; an unproven redirect is never made and the stock boot goes on from the
-flash. `--verify-only` binds the same proof and never writes RAM 0. A failure is shown as red lamp
-blinks (7 not proven, 8 changed and taken back), success as green blinks (2 verified, 3 armed); a
-change that cannot be verified or taken back halts (`-901`).
+flash. `--verify-only` binds the same proof and never writes RAM 0 (and halts, `-902`, if RAM 0 is not the
+stock image at the end). The lamp is steady orange (red and green) while the loader reads the flash
+aperture, so a hang there is told from a plain read. A failure is shown as red lamp blinks (7 not
+proven, 8 changed and taken back, 9 the DRAM copy or RAM 0 changed after the check), success as green
+blinks (2 verified, 3 armed); after the green blinks, right before the hand-off, an armed redirect is
+checked once more (the DRAM copy's CRC-32 and RAM 0) and taken back if either changed (`-841`). A
+change that cannot be verified or taken back halts (`-901`). The binding must carry
+`orr x0, x20, #destination` as its word, which the loader decodes.
 
 `sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
