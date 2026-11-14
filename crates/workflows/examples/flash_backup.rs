@@ -245,10 +245,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     let mut timings = Timings::default();
     let mut session = connection.begin_session(Some(trace.clone())).await?;
+    // FUJIMOD_FF80_MEMORY_WRITE caps bytes per memory write (a body's
+    // published ff80 limit, e.g. 1); the default is 256.
+    let write = match std::env::var("FUJIMOD_FF80_MEMORY_WRITE") {
+        Ok(value) => value
+            .parse::<u32>()
+            .ok()
+            .and_then(NonZeroU32::new)
+            .filter(|n| n.get() <= 256)
+            .ok_or("FUJIMOD_FF80_MEMORY_WRITE must be 1..=256")?,
+        Err(_) => NonZeroU32::new(256).unwrap(),
+    };
     let limits = Limits {
         memory: DebugMemoryLimits {
             read: NonZeroU32::new(256).unwrap(),
-            write: NonZeroU32::new(256).unwrap(),
+            write,
         },
         configuration: NonZeroU32::new(256).unwrap(),
     };
