@@ -146,7 +146,7 @@
     {
       "id": "zone_focus",
       "group": "photography",
-      "icon": "zone-focus",
+      "icon": "mod-zone-focus-item",
       "title": "ZONE FOCUS",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Show the focus distance, the near and far limits of sharp focus and the hyperfocal distance on the shooting display, and set the hyperfocal distance with a button.",
@@ -236,7 +236,7 @@
     {
       "id": "aspect_ratio",
       "group": "photography",
-      "icon": "aspect",
+      "icon": "mod-shape-aspect-item",
       "title": "ASPECT RATIO",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose the aspect ratio of still pictures.",
@@ -307,7 +307,7 @@
     {
       "id": "pixel_map",
       "group": "photography",
-      "icon": "pixel-map",
+      "icon": "mod-pixel-map-item",
       "title": "PIXEL MAPPING",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Hide hot and stuck pixels in every photo, RAW and JPEG, from a list made with lens-cap test shots.",
@@ -343,7 +343,7 @@
     {
       "id": "surround_view",
       "group": "photography",
-      "icon": "surround",
+      "icon": "mod-shape-surround-item",
       "title": "SURROUND VIEW",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose how the area outside the frame is shown.",
@@ -872,7 +872,7 @@
     {
       "id": "hide_films",
       "group": "recipes",
-      "icon": "hide-films",
+      "icon": "mod-hide-films-item",
       "title": "HIDE FILMS",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Choose which film simulations appear in the pickers.",
@@ -906,7 +906,7 @@
     {
       "id": "recipe_exif",
       "group": "recipes",
-      "icon": "exif",
+      "icon": "mod-recipe-exif-item",
       "title": "RECIPE IN EXIF",
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Write the active recipe's name and settings into each photo, so shared pictures carry their recipe.",
@@ -923,7 +923,7 @@
     {
       "id": "d_range_priority",
       "group": "recipes",
-      "icon": "d-range",
+      "icon": "mod-d-range-priority-item",
       "title": "D RANGE PRIORITY",
       "path": ["SHOOTING MENU"],
       "summary": "Protect highlights by combining DYNAMIC RANGE, HIGHLIGHT TONE and SHADOW TONE in one choice.",
@@ -1308,7 +1308,7 @@
     {
       "id": "clarity",
       "group": "recipes",
-      "icon": "clarity",
+      "icon": "mod-clarity-item",
       "title": "Clarity",
       "path": ["SHOOTING MENU", "CLARITY"],
       "summary": "Add or soften local midtone contrast in JPEG photographs, as the X100VI does.",
@@ -1389,7 +1389,7 @@
     {
       "id": "film_borders",
       "group": "recipes",
-      "icon": "film-borders",
+      "icon": "mod-borders-item",
       "title": "Film Borders",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
       "summary": "On the FILM EFFECTS page: frame JPEG photographs like a scanned negative, a slide, an instant print, a thin black border or a 35-to-120 conversion with the film simulation along the edge.",
@@ -1476,7 +1476,7 @@
     {
       "id": "light_leaks",
       "group": "recipes",
-      "icon": "light-leaks",
+      "icon": "mod-light-leaks-item",
       "title": "Light Leaks",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
       "summary": "Add film-camera light leaks and an expired-film look to JPEG photographs.",
@@ -1562,7 +1562,7 @@
     {
       "id": "date_stamp",
       "group": "recipes",
-      "icon": "date-stamp",
+      "icon": "mod-date-stamp-item",
       "title": "DATE STAMP",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
       "summary": "Print the date or time in a corner of JPEG photographs, like a point-and-shoot film camera.",
@@ -1721,7 +1721,7 @@
     {
       "id": "menu_theme",
       "group": "system",
-      "icon": "theme",
+      "icon": "mod-menu-style-item",
       "title": "MENU STYLE",
       "path": ["SET-UP"],
       "summary": "Choose the menu renderer and appearance.",
@@ -1976,7 +1976,7 @@
     {
       "id": "hud_layout",
       "group": "system",
-      "icon": "hud",
+      "icon": "mod-hud-layout-item",
       "title": "HUD Layout",
       "path": ["SHOOTING MENU", "FUJIMOD", "HUD LAYOUT"],
       "summary": "Arrange the shooting display like a phone: the battery in the top-right corner, the film simulation and digital focal length in the bottom-right corner.",
@@ -3837,7 +3837,7 @@
       "stock": false,
       "card": null,
       "feature": null,
-      "icon": null
+      "icon": "mod-dev-tools-item"
     },
     {
       "title": "FUJIMOD SET-UP",
@@ -3847,7 +3847,7 @@
       "stock": false,
       "card": null,
       "feature": null,
-      "icon": null
+      "icon": "mod-fujimod-setup-item"
     },
     {
       "title": "HDMI OUTPUT",
@@ -3867,7 +3867,7 @@
       "stock": false,
       "card": "menu_style_item",
       "feature": "menu_theme",
-      "icon": null
+      "icon": "mod-menu-style-item"
     },
     {
       "title": "TOUCH SCREEN SETTING",
@@ -4197,7 +4197,7 @@
       "stock": false,
       "card": "clarity_item",
       "feature": "clarity",
-      "icon": null
+      "icon": "mod-clarity-item"
     },
     {
       "title": "COLOR",
@@ -4247,7 +4247,7 @@
       "stock": false,
       "card": "d_range_priority_item",
       "feature": "d_range_priority",
-      "icon": null
+      "icon": "mod-d-range-priority-item"
     },
     {
       "title": "DIGITAL TELE-CONV.",
@@ -4287,7 +4287,7 @@
       "stock": false,
       "card": null,
       "feature": null,
-      "icon": null
+      "icon": "mod-film-effects-item"
     },
     {
       "title": "FILM SIMULATION",
@@ -4307,7 +4307,7 @@
       "stock": false,
       "card": null,
       "feature": null,
-      "icon": null
+      "icon": "mod-fujimod-page-item"
     },
     {
       "title": "GRAIN EFFECT",
@@ -4823,7 +4823,7 @@
       "stock": false,
       "card": "date_stamp_item",
       "feature": "date_stamp",
-      "icon": null
+      "icon": "mod-date-stamp-item"
     },
     {
       "title": "FILM BORDERS",
@@ -4833,7 +4833,7 @@
       "stock": false,
       "card": null,
       "feature": null,
-      "icon": null
+      "icon": "mod-borders-item"
     },
     {
       "title": "HALATION",
@@ -4853,7 +4853,7 @@
       "stock": false,
       "card": null,
       "feature": null,
-      "icon": null
+      "icon": "mod-light-leaks-item"
     },
     {
       "title": "NEGATIVE",
@@ -4863,7 +4863,7 @@
       "stock": false,
       "card": "negative_item",
       "feature": "film_borders",
-      "icon": null
+      "icon": "mod-negative-item"
     },
     {
       "title": "CORNER",
@@ -5023,7 +5023,7 @@
       "stock": false,
       "card": "hide_films_item",
       "feature": "hide_films",
-      "icon": null
+      "icon": "mod-hide-films-item"
     },
     {
       "title": "HUD LAYOUT",
@@ -5033,7 +5033,7 @@
       "stock": false,
       "card": "hud_layout_item",
       "feature": "hud_layout",
-      "icon": null
+      "icon": "mod-hud-layout-item"
     },
     {
       "title": "PIXEL MAPPING",
@@ -5043,7 +5043,7 @@
       "stock": false,
       "card": "pixel_map_item",
       "feature": "pixel_map",
-      "icon": null
+      "icon": "mod-pixel-map-item"
     },
     {
       "title": "RECIPE IN EXIF",
@@ -5053,7 +5053,7 @@
       "stock": false,
       "card": "recipe_exif_item",
       "feature": "recipe_exif",
-      "icon": null
+      "icon": "mod-recipe-exif-item"
     },
     {
       "title": "ZONE FOCUS",
@@ -5063,7 +5063,7 @@
       "stock": false,
       "card": null,
       "feature": "zone_focus",
-      "icon": null
+      "icon": "mod-zone-focus-item"
     },
     {
       "title": "RECIPE",
@@ -5173,7 +5173,7 @@
       "stock": false,
       "card": "shape_aspect_item",
       "feature": "aspect_ratio",
-      "icon": null
+      "icon": "mod-shape-aspect-item"
     },
     {
       "title": "DESQUEEZE",
@@ -5213,7 +5213,7 @@
       "stock": false,
       "card": "shape_surround_item",
       "feature": "surround_view",
-      "icon": null
+      "icon": "mod-shape-surround-item"
     },
     {
       "title": "BOOT RESILIENCE",

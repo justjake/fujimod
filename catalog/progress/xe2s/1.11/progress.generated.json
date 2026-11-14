@@ -80,7 +80,7 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "boot-patch-facts",
@@ -189,9 +189,9 @@
           "id": "nand-boot-facts",
           "label": "EXR II NAND bootloader facts located",
           "stage": "nand-boot-facts",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "boot-patch-facts",
@@ -417,7 +417,7 @@
         {
           "id": "camera-identity",
           "title": "Identified over FF80 in service mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-read-gate",
@@ -485,9 +485,9 @@
           "id": "camera-identity",
           "label": "Identified over FF80 in service mode",
           "stage": "camera-identity",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-read-gate",
@@ -602,12 +602,12 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "walkthroughs",
@@ -643,7 +643,7 @@
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -651,7 +651,7 @@
           "id": "mod-build",
           "label": "Every shipped mod built",
           "stage": "mod-build",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },

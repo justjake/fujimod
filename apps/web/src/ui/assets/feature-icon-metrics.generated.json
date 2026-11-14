@@ -132,20 +132,6 @@
     "width": 1.106,
     "height": 0.852
   },
-  "snap": {
-    "sprite": "feature",
-    "box": [0.5, 0, 17.5, 18],
-    "view": [0, 0, 18, 18],
-    "width": 0.986,
-    "height": 1.014
-  },
-  "shift": {
-    "sprite": "feature",
-    "box": [0.5, 0.5, 17, 17],
-    "view": [0, 0, 18, 18],
-    "width": 0.987,
-    "height": 0.987
-  },
   "anamorphic": {
     "sprite": "feature",
     "box": [0.5, 6.5, 35, 23],
@@ -244,13 +230,6 @@
     "width": 1.156,
     "height": 0.746
   },
-  "grain": {
-    "sprite": "feature",
-    "box": [2.75, 4.75, 30.5, 26.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.07,
-    "height": 0.93
-  },
   "drive-single": {
     "sprite": "feature",
     "box": [3.75, 7.75, 28.5, 20.5],
@@ -264,13 +243,6 @@
     "view": [0, 0, 36, 36],
     "width": 0.995,
     "height": 0.995
-  },
-  "pixel-map": {
-    "sprite": "feature",
-    "box": [3, 3, 30, 30],
-    "view": [0, 0, 36, 36],
-    "width": 0.981,
-    "height": 0.981
   },
   "animation": {
     "sprite": "feature",
@@ -293,40 +265,12 @@
     "width": 1.131,
     "height": 0.852
   },
-  "d-range": {
-    "sprite": "feature",
-    "box": [2.75, 13.75, 30.5, 20.66],
-    "view": [0, 0, 36, 36],
-    "width": 1.215,
-    "height": 0.823
-  },
   "tone-steps": {
     "sprite": "feature",
     "box": [2.75, 7.75, 30.5, 23.5],
     "view": [0, 0, 36, 36],
     "width": 1.139,
     "height": 0.878
-  },
-  "exif": {
-    "sprite": "feature",
-    "box": [6.75, 1.75, 23.5, 32.5],
-    "view": [0, 0, 36, 36],
-    "width": 0.841,
-    "height": 1.164
-  },
-  "zone-focus": {
-    "sprite": "feature",
-    "box": [1.75, 4.75, 32.5, 26.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.107,
-    "height": 0.903
-  },
-  "surround": {
-    "sprite": "feature",
-    "box": [1.25, 4.75, 33.5, 26.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.115,
-    "height": 0.882
   },
   "tele-conv": {
     "sprite": "feature",
@@ -356,41 +300,6 @@
     "width": 1.104,
     "height": 0.906
   },
-  "hide-films": {
-    "sprite": "feature",
-    "box": [1.75, 1.75, 32.5, 32.5],
-    "view": [0, 0, 36, 36],
-    "width": 0.987,
-    "height": 0.987
-  },
-  "date-stamp": {
-    "sprite": "feature",
-    "box": [1.25, 3.75, 33.5, 28.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.084,
-    "height": 0.922
-  },
-  "clarity": {
-    "sprite": "feature",
-    "box": [2.75, 2.75, 30.5, 30.5],
-    "view": [0, 0, 36, 36],
-    "width": 1,
-    "height": 1
-  },
-  "film-borders": {
-    "sprite": "feature",
-    "box": [1.25, 2.75, 33.5, 30.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.026,
-    "height": 0.934
-  },
-  "light-leaks": {
-    "sprite": "feature",
-    "box": [1.25, 3.75, 33.5, 28.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.075,
-    "height": 0.914
-  },
   "menu-order": {
     "sprite": "feature",
     "box": [1.75, 4.75, 32.5, 26.5],
@@ -404,13 +313,6 @@
     "view": [0, 0, 36, 36],
     "width": 1,
     "height": 1
-  },
-  "hud": {
-    "sprite": "feature",
-    "box": [1.25, 3.75, 33.5, 28.5],
-    "view": [0, 0, 36, 36],
-    "width": 1.082,
-    "height": 0.921
   },
   "usb": {
     "sprite": "feature",
@@ -468,6 +370,20 @@
     "width": 0.859,
     "height": 1.14
   },
+  "mod-borders-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.152,
+    "height": 0.785
+  },
+  "mod-clarity-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.113,
+    "height": 0.761
+  },
   "mod-color-chrome-blue-item": {
     "sprite": "mod",
     "box": [0, 0, 39, 30],
@@ -496,6 +412,27 @@
     "width": 1.307,
     "height": 0.683
   },
+  "mod-d-range-priority-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.139,
+    "height": 0.779
+  },
+  "mod-date-stamp-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.121,
+    "height": 0.766
+  },
+  "mod-dev-tools-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.12,
+    "height": 0.764
+  },
   "mod-disposable-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
@@ -510,6 +447,13 @@
     "width": 1.136,
     "height": 0.774
   },
+  "mod-film-effects-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.152,
+    "height": 0.785
+  },
   "mod-film-grain-effect-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
@@ -517,12 +461,75 @@
     "width": 1.137,
     "height": 0.775
   },
+  "mod-fujimod-page-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.128,
+    "height": 0.771
+  },
+  "mod-fujimod-setup-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.145,
+    "height": 0.78
+  },
   "mod-halation-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
     "view": [0, 0, 45, 30],
     "width": 1.124,
     "height": 0.766
+  },
+  "mod-hide-films-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.124,
+    "height": 0.769
+  },
+  "mod-hud-layout-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.13,
+    "height": 0.772
+  },
+  "mod-light-leaks-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.13,
+    "height": 0.773
+  },
+  "mod-menu-style-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.134,
+    "height": 0.773
+  },
+  "mod-negative-item": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.147,
+    "height": 0.782
+  },
+  "mod-pixel-map-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.161,
+    "height": 0.794
+  },
+  "mod-recipe-exif-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.135,
+    "height": 0.776
   },
   "mod-recipes-root-hidden": {
     "sprite": "mod",
@@ -545,6 +552,20 @@
     "width": 1.116,
     "height": 0.761
   },
+  "mod-shape-aspect-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.131,
+    "height": 0.774
+  },
+  "mod-shape-surround-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.152,
+    "height": 0.788
+  },
   "mod-snap-menu-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
@@ -558,5 +579,12 @@
     "view": [0, 0, 45, 30],
     "width": 1.138,
     "height": 0.776
+  },
+  "mod-zone-focus-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.113,
+    "height": 0.761
   }
 }
