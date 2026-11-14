@@ -49,6 +49,52 @@ pub struct AudioPacing {
     pub ticks_per_second: u64,
     #[serde(default)]
     pub irq_at_end: bool,
+    /// Known test signal on a receive FIFO instead of silence (absent by
+    /// default): see [`TestMicrophone`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub microphone: Option<TestMicrophone>,
+}
+
+/// Known test signal a receive FIFO delivers instead of silence on a declared
+/// audio channel (absent by default), the sound counterpart of a test sensor
+/// pattern.
+///
+/// X-T3 5.11 programs serial audio port 0 for 24-bit samples in 32-bit slots
+/// (0x1078104: `+0x0c` = 0x400 | 31 << 5 | 23, 0x10783a0), two slots a frame,
+/// and DMA channel 4 reads its receive FIFO 0xfff4f000 in 4-byte units
+/// (0x111a724, 0x111ae44); the audio converter 0xfffa8000 then packs the
+/// 32-bit slots into the 24-bit samples of the movie (0x111a4bc).
+///
+/// Frame `n`, counted from the first frame the FIFO delivers, carries for each
+/// slot in order `((start + step * n) mod 2^(32 - shift)) << shift`,
+/// little-endian. Which slot is the left channel, and where the port puts
+/// 24-bit data in its slot, are declared, not measured: with `shift` 8 the
+/// value is left-justified, the layout the declared converter law expects.
+/// A block that is not made of whole frames of 4-byte units is refused.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TestMicrophone {
+    /// Receive FIFO (X-T3 5.11: 0xfff4f000).
+    pub fifo: u64,
+    /// `[start, step]` of each 4-byte slot of a frame, in FIFO order (1 to 8).
+    pub slots: Vec<[u32; 2]>,
+    /// Left shift of each value in its slot (below 32).
+    pub shift: u32,
+}
+impl TestMicrophone {
+    /// `frames` frames from frame `first` on.
+    pub fn frames(&self, first: u64, frames: u64) -> Vec<u8> {
+        let mask = (1u64 << (32 - self.shift)) - 1;
+        (first..first + frames)
+            .flat_map(|n| {
+                self.slots.iter().flat_map(move |&[start, step]| {
+                    let value =
+                        u64::from(start).wrapping_add(u64::from(step).wrapping_mul(n)) & mask;
+                    ((value as u32) << self.shift).to_le_bytes()
+                })
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -810,6 +856,8 @@ pub struct DmaController {
     /// Per-channel request words at `0xfff4a800 + n*8` (+0 control, +4 selector).
     request: BTreeMap<u64, u32>,
     audio: Option<AudioPacing>,
+    /// Frames the test microphone has delivered (see [`TestMicrophone`]).
+    microphone_frames: u64,
 }
 impl DmaController {
     pub fn new(port: Shared, routes: [u32; 16]) -> Self {
@@ -821,6 +869,7 @@ impl DmaController {
             mux_changed: [0; 16],
             request: BTreeMap::new(),
             audio: None,
+            microphone_frames: 0,
         }
     }
     /// Declares the audio channels (see [`AudioPacing`]); `None` keeps every
@@ -837,9 +886,40 @@ impl DmaController {
             {
                 return Err("Invalid XP4 DMA audio channels".into());
             }
+            if let Some(m) = &a.microphone
+                && (m.fifo < PERIPHERAL_FIFOS
+                    || m.fifo & 3 != 0
+                    || m.slots.is_empty()
+                    || m.slots.len() > 8
+                    || m.shift >= 32)
+            {
+                return Err("Invalid XP4 DMA test microphone".into());
+            }
         }
         self.audio = audio;
         Ok(self)
+    }
+    fn microphone(&self) -> Option<&TestMicrophone> {
+        self.audio.as_ref().and_then(|a| a.microphone.as_ref())
+    }
+    /// Receive block of paced channel `n` from the test microphone FIFO, in
+    /// whole frames of 4-byte units; `None` when channel `n` does not read it.
+    fn microphone_block(&mut self, n: usize) -> Result<Option<Vec<u8>>, String> {
+        let Some(m) = self.microphone().filter(|_| self.paced(n)) else {
+            return Ok(None);
+        };
+        let c = &self.channels[n];
+        if c.regs[0x1c / 4] & 4 == 0 || u64::from(c.regs[0x14 / 4]) != m.fifo {
+            return Ok(None);
+        }
+        let size = u64::from(c.regs[0x10 / 4]) + 1;
+        let frame = 4 * m.slots.len() as u64;
+        if (c.regs[0x1c / 4] >> 16) & 3 != 2 || !size.is_multiple_of(frame) {
+            return Err("XP4 DMA test microphone block is not whole 4-byte frames".into());
+        }
+        let data = m.frames(self.microphone_frames, size / frame);
+        self.microphone_frames += size / frame;
+        Ok(Some(data))
     }
     fn audio(&self, n: usize) -> Option<&AudioPacing> {
         self.audio.as_ref().filter(|a| a.channels.contains(&n))
@@ -881,7 +961,8 @@ impl DmaController {
             return Err("Invalid explicit standalone XP4 DMA profiles or IRQ routes".into());
         }
         Ok(Self { receiver: None, port: None, standalone_admitted: false, channels: Default::default(), routes,
-            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new(), audio: None })
+            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new(), audio: None,
+            microphone_frames: 0 })
     }
     pub fn with_receiver(mut self, receiver: crate::tx_receiver::SharedReceiver) -> Self {
         self.receiver = Some(receiver);
@@ -1093,6 +1174,7 @@ impl DmaController {
         Ok(0)
     }
     fn complete(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
+        let microphone = self.microphone_block(n)?;
         let audio = self.audio(n).map(|a| a.irq_at_end);
         let paced = self.paced(n);
         let c = &mut self.channels[n];
@@ -1127,7 +1209,9 @@ impl DmaController {
             if !size.is_multiple_of(width) {
                 return Err("XP4 DMA count is not a multiple of transfer width".into());
             }
-            if silence {
+            if let Some(data) = microphone {
+                data
+            } else if silence {
                 vec![0; size]
             } else {
                 cx.ram_bytes(src, width)?
@@ -1298,6 +1382,9 @@ impl Device for DmaController {
         let mut state = json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request});
         if self.receiver.is_some() { state["transmit_receiver_connected"] = json!(true); }
         if let Some(audio) = &self.audio { state["audio"] = json!(audio); }
+        if self.microphone().is_some() {
+            state["microphone_frames"] = json!(self.microphone_frames);
+        }
         if self.port.is_none() {
             state["serial_flash_peer"] = json!(false);
             state["reset_profile"] = json!(Self::STANDALONE_RESET);
@@ -1385,6 +1472,7 @@ mod tests {
             bytes_per_second: 384_000,
             ticks_per_second: 54_000_000,
             irq_at_end,
+            microphone: None,
         }
     }
     /// 16 bytes at 384 000 bytes/s.
@@ -1683,6 +1771,154 @@ mod tests {
         let mut undeclared = saved.clone();
         undeclared.as_object_mut().unwrap().remove("audio");
         assert!(audio_dma(None).unwrap().restore(&undeclared).is_err());
+    }
+
+    /// X-T3 5.11 movie sound: two 32-bit slots a frame, 24-bit samples
+    /// left-justified (shift 8); left = n + 1, right = 0xfffffe + 2n, so the
+    /// right ramp wraps 24 bits within the test.
+    fn test_microphone() -> AudioPacing {
+        AudioPacing {
+            microphone: Some(TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[1, 1], [0xfffffe, 2]],
+                shift: 8,
+            }),
+            ..movie_audio(vec![4], true)
+        }
+    }
+
+    #[test]
+    fn a_test_microphone_fills_the_movie_audio_ring_with_its_declared_ramp() {
+        let mut dma = audio_dma(Some(test_microphone())).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // Three linked 16-byte blocks of 2 frames each.
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x241],
+        );
+        descriptor(&mut h, 0x240, [15, 0xfff4f000, 0x120, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        let mut saved = None;
+        for k in 1..=3u64 {
+            advance(&mut dma, &mut h);
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            if k == 1 {
+                saved = Some(dma.save());
+            }
+        }
+        assert!(!dma.channels[4].submitted);
+        let slot = |a: usize| u32::from_le_bytes(h.ram[a..a + 4].try_into().unwrap());
+        // Frames 0..5 in order, each slot = value << 8 (low byte zero).
+        let expect = [(1, 0xfffffe), (2, 0), (3, 2), (4, 4), (5, 6), (6, 8)];
+        for (f, (l, r)) in expect.into_iter().enumerate() {
+            assert_eq!(
+                (slot(0x100 + f * 8), slot(0x104 + f * 8)),
+                (l << 8, r << 8),
+                "frame {f}"
+            );
+        }
+        assert_eq!(&h.ram[0x130..0x140], &[0xaa; 16]);
+        assert_eq!(dma.microphone_frames, 6);
+        assert_eq!(dma.save()["microphone_frames"], 6);
+
+        // The frame count is checkpointed, and only with the option.
+        let saved = saved.unwrap();
+        assert_eq!(saved["microphone_frames"], 2);
+        let mut again = audio_dma(Some(test_microphone())).unwrap();
+        again.restore(&saved).unwrap();
+        assert_eq!(again.microphone_frames, 2);
+        let mut missing = saved.clone();
+        missing.as_object_mut().unwrap().remove("microphone_frames");
+        assert!(
+            audio_dma(Some(test_microphone()))
+                .unwrap()
+                .restore(&missing)
+                .is_err()
+        );
+        let silent = audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        assert!(silent.save().get("microphone_frames").is_none());
+        assert!(silent.save()["audio"].get("microphone").is_none());
+        assert!(
+            audio_dma(Some(movie_audio(vec![4], true)))
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
+
+        // A block of partial frames, or of 2-byte units, is refused.
+        for (size, source) in [(11, 0x20f04), (15, 0x10f04)] {
+            let mut dma = audio_dma(Some(test_microphone())).unwrap();
+            let mut h = TestHost {
+                now: 100,
+                ram: vec![0xaa; 0x400],
+                irqs: vec![],
+                events: vec![],
+                records: vec![],
+            };
+            for (o, v) in [
+                (0x10, size),
+                (0x14, 0xfff4f000),
+                (0x18, 0x100),
+                (0x1c, source),
+                (0x20, 0x20f00),
+                (0x24, 0),
+                (0x28, 0x10201011),
+            ] {
+                write(&mut dma, &mut h, 0, DMA + 0x4000 + o, v, 0);
+            }
+            advance(&mut dma, &mut h);
+            h.now += AUDIO_BLOCK;
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            dma.event(&mut cx, 4);
+            assert!(
+                cx.refusal()
+                    .is_some_and(|e| e.contains("whole 4-byte frames")),
+                "{size} {source:#x}"
+            );
+        }
+
+        // Invalid declarations are refused.
+        for bad in [
+            TestMicrophone {
+                fifo: 0x1000,
+                slots: vec![[0, 1]],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f002,
+                slots: vec![[0, 1]],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[0, 1]; 9],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[0, 1]],
+                shift: 32,
+            },
+        ] {
+            let audio = AudioPacing {
+                microphone: Some(bad),
+                ..movie_audio(vec![4], true)
+            };
+            assert!(audio_dma(Some(audio)).is_err());
+        }
     }
 
     #[test]

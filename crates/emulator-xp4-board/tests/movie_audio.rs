@@ -1,6 +1,7 @@
 //! Declared XP4 movie audio (X-T3 5.11): the storage DMA's audio channels and
 //! the audio format converter block are explicit, and a guest recording
-//! through a linked ring from the serial audio port receives paced silence.
+//! through a linked ring from the serial audio port receives paced silence,
+//! or the declared test microphone's ramp.
 use fujimod_emulator_cpu::arm;
 use fujimod_emulator_xp4_board::{Definition, Session};
 use serde_json::{Value, json};
@@ -79,10 +80,12 @@ fn the_audio_converter_is_an_explicit_block_job() {
     assert!(block(true, false).is_err());
 }
 
-#[test]
-fn a_guest_records_paced_silence_through_a_linked_ring() {
+/// Records two linked 16-byte blocks from 0xfff4f000 into RING with guest
+/// stores and loads, and checks that only the end of the list raised the
+/// channel interrupt.
+fn record(audio: Value) -> Session {
     let mut selected = storage();
-    selected["storage_dma_audio"] = audio(json!([4]));
+    selected["storage_dma_audio"] = audio;
     let board = session(selected).unwrap();
     // A terminal descriptor after the first block; the ring holds a marker.
     let next: [u32; 6] = [15, 0xfff4_f000, RING as u32 + 16, 0x20f04, 0x20f00, 0];
@@ -135,13 +138,51 @@ fn a_guest_records_paced_silence_through_a_linked_ring() {
         RING as u32 + 32,
         "both blocks ended the list"
     );
-    let mut ring = [0; 48];
-    board.read(RING, &mut ring).unwrap();
-    assert_eq!(&ring[..32], &[0; 32]);
-    assert_eq!(&ring[32..], &[0xaa; 16]);
     // Only the end of the list raised the channel interrupt.
     let pending = &board.interrupt_state().unwrap()[0].pending;
     assert_ne!(pending[(IRQ / 32) as usize] & 1 << (IRQ % 32), 0);
     let dma = &board.device_state_json()["xp4-dma"];
     assert!(dma.contains("\"completed\":2"), "{dma}");
+    board
+}
+
+#[test]
+fn a_guest_records_paced_silence_through_a_linked_ring() {
+    let board = record(audio(json!([4])));
+    let mut ring = [0; 48];
+    board.read(RING, &mut ring).unwrap();
+    assert_eq!(&ring[..32], &[0; 32]);
+    assert_eq!(&ring[32..], &[0xaa; 16]);
+    let dma = &board.device_state_json()["xp4-dma"];
+    assert!(!dma.contains("microphone_frames"), "{dma}");
+}
+
+#[test]
+fn a_guest_records_the_declared_test_microphone_ramp() {
+    // Two 24-bit ramps, left-justified in 32-bit slots: the first slot
+    // counts from 1, the second from 0xa00000.
+    let mut declared = audio(json!([4]));
+    declared["microphone"] =
+        json!({"fifo": 0xfff4_f000u32, "slots": [[1, 1], [0xa0_0000, 1]], "shift": 8});
+    let board = record(declared);
+    for frame in 0..4 {
+        let at = RING + frame * 8;
+        let n = frame as u32;
+        assert_eq!(
+            (word(&board, at), word(&board, at + 4)),
+            ((1 + n) << 8, (0xa0_0000 + n) << 8),
+            "frame {frame}"
+        );
+    }
+    assert_eq!(word(&board, RING + 32), 0xaaaa_aaaa);
+    let dma = &board.device_state_json()["xp4-dma"];
+    assert!(dma.contains("\"microphone_frames\":4"), "{dma}");
+
+    // An invalid test microphone is refused when the board is built.
+    let mut invalid = storage();
+    invalid["storage_dma_audio"] = audio(json!([4]));
+    invalid["storage_dma_audio"]["microphone"] =
+        json!({"fifo": 0x1000, "slots": [[0, 1]], "shift": 8});
+    let error = session(invalid).err().unwrap();
+    assert!(error.contains("Invalid XP4 DMA test microphone"), "{error}");
 }

@@ -199,6 +199,8 @@ struct DmaState {
     request: BTreeMap<u64, u32>,
     #[serde(default)]
     audio: Option<AudioPacing>,
+    #[serde(default)]
+    microphone_frames: Option<u64>,
 }
 impl DmaController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
@@ -218,6 +220,7 @@ impl DmaController {
         };
         if !mode_matches || state.irq_routes != self.routes
             || state.audio != self.audio
+            || state.microphone_frames.is_some() != self.microphone().is_some()
             || state.channels.len() != 16
             || state.channels.iter().enumerate().any(|(n, c)| {
                 c.due.is_some_and(|at| !c.submitted || at < c.submitted_at)
@@ -247,6 +250,7 @@ impl DmaController {
             }
         }
         self.standalone_admitted = state.assumptions_recorded.unwrap_or(false);
+        self.microphone_frames = state.microphone_frames.unwrap_or(0);
         self.channels = state
             .channels
             .try_into()
