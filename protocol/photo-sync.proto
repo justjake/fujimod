@@ -53,8 +53,8 @@ message ManifestBatch {
   repeated ManifestEntry entries = 1;
   bool last = 2;
   // True when this batch completes a snapshot of the sender's whole tree.
-  // A live sync receiver removes paths stored by an earlier snapshot that
-  // this one does not list. One-shot file senders leave it false.
+  // A live sync receiver removes paths in its managed destination that this
+  // snapshot does not list. One-shot file senders leave it false.
   bool complete = 3;
 }
 message Wants {

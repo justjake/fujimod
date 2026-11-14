@@ -24,10 +24,12 @@ restarts; without it the link belongs to this process. A running server keeps
 the offered directory readable by anyone with the link until Ctrl-C stops it.
 
 `sync` mirrors the sender's tree: new files and directories appear, changed
-files are replaced, and paths removed by a later snapshot are deleted. It
-retries the connection after a dropped transfer. Resuming an interrupted file
-uses `NAME.part` and a `NAME.part.meta` file holding the source SHA-256, so a
-partial file is resumed only when it belongs to the same source bytes.
+files are replaced, and every path in the managed destination that is not in
+the latest snapshot is deleted. It is a strict mirror, including files added to
+the destination by hand. It retries the connection after a dropped transfer.
+Resuming an interrupted file uses `NAME.part` and a `NAME.part.meta` file
+holding the source SHA-256, so a partial file is resumed only when it belongs to
+the same source bytes.
 
 The receiver refuses to manage a non-empty directory unless it already contains
 the `.fujimod-sync` marker created by an earlier sync. Use a new directory, or
@@ -57,7 +59,7 @@ bump:
 - `ManifestEntry.sha256` carries the whole-file digest, letting a receiver skip
   files it already has and detect replacements.
 - `ManifestBatch.complete` marks a full snapshot. A sync receiver removes paths
-  stored by the previous snapshot that this one does not list. One-shot senders
+  in its managed destination that this one does not list. One-shot senders
   leave it false, so older receivers ignore the field.
 
 The `sync` capability in `Hello` tells the client it can wait for later
