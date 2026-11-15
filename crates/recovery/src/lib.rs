@@ -42,6 +42,12 @@ pub struct StartupOptions {
     /// mismatch, a read error), wait this many seconds and continue the stock boot from the
     /// installed flash. `None` keeps the loader's halt on any failure.
     pub fallback_wait_seconds: Option<u32>,
+    /// XP5 only: a read-only startup. The loader streams `ffboot.bin` into DRAM at this address
+    /// and checks its length and CRC-32, writes nothing else outside SRAM, the SD host and the
+    /// lamp, and returns to the stock bootstrap, which starts from the installed flash as on a
+    /// normal boot (the file is read and never run). It excludes `internal_flash` and the
+    /// fallback.
+    pub read_only_destination: Option<u64>,
 }
 
 impl StartupOptions {
@@ -450,6 +456,14 @@ impl Recipe {
             "The load-failure fallback requires an internal-flash startup",
         )?;
         require(
+            options.read_only_destination.is_none()
+                || (matches!(self.generation, Generation::Xp5)
+                    && storage.is_none()
+                    && !options.internal_flash
+                    && options.fallback_wait_seconds.is_none()),
+            "The read-only startup requires XP5 and takes no storage image, internal-flash build or fallback",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -534,7 +548,15 @@ impl Recipe {
                         )
                     })?;
                     let ram = image::transform(&inverted, plan)?;
-                    if options.internal_flash {
+                    if let Some(destination) = options.read_only_destination {
+                        xp5::package_read_only(
+                            &inverted,
+                            setup,
+                            ram,
+                            options.hold_units()?,
+                            destination,
+                        )?
+                    } else if options.internal_flash {
                         xp5::package_internal_flash(
                             &inverted,
                             setup,

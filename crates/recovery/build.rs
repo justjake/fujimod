@@ -12,7 +12,8 @@ fn main() {
 
     // The XP5 SD loaders are prebuilt binary assets; their layouts become constants. The default
     // build is the card-resident loader; the internal-flash build serves a startup that keeps
-    // the installed flash attached.
+    // the installed flash attached; the read-only build only reads the RAM image into spare DRAM
+    // and checks it.
     loader(
         &root,
         &out,
@@ -26,6 +27,13 @@ fn main() {
         "sd-boot-v1-xp5-internal-flash-loader",
         "xp5_internal_flash_loader.rs",
         &["setup_sd_internal_flash"],
+    );
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-read-only-loader",
+        "xp5_read_only_loader.rs",
+        &["setup_sd_read_only"],
     );
 }
 

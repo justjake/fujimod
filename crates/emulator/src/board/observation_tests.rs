@@ -589,6 +589,31 @@ fn watch_refuses_processors_it_cannot_observe() {
     assert!(error.contains("R5F or A7"), "{error}");
 }
 
+#[test]
+fn range_digest_reports_the_hash_and_the_nonzero_page_runs_of_bus_memory() {
+    use sha2::{Digest, Sha256};
+    let board = a7_board();
+    board.write_physical(0x2000, &[1, 2, 3]).unwrap();
+    board.write_physical(0x5000, &[0xff]).unwrap();
+    board.write_physical(0x6fff, &[7]).unwrap();
+    let digest = board.range_digest(0x1000, 0x8000);
+    let mut expected = vec![0u8; 0x8000];
+    expected[0x1000..0x1003].copy_from_slice(&[1, 2, 3]);
+    expected[0x4000] = 0xff;
+    expected[0x5fff] = 7;
+    let hex: String = Sha256::digest(&expected).iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(digest["sha256"], hex);
+    assert_eq!(digest["nonzero_pages_4k"], 3);
+    assert_eq!(digest["nonzero_runs"], serde_json::json!([[0x2000, 0x3000], [0x5000, 0x7000]]));
+    assert_eq!(digest["nonzero_runs_not_listed"], 0);
+    // All zero reads as no pages; the digest is of the whole range.
+    let zero = board.range_digest(0x100000, 0x4000);
+    assert_eq!((&zero["nonzero_pages_4k"], &zero["nonzero_runs"]), (&0.into(), &serde_json::json!([])));
+    // A range without complete backing reports the error and no hash.
+    let missing = board.range_digest(0x3ff000, 0x2000);
+    assert!(missing.get("error").is_some() && missing.get("sha256").is_none(), "{missing}");
+}
+
 /// Measurement, not a test: `cargo test -p fujimod-emulator --lib
 /// a7_watch_cost -- --ignored --nocapture`.
 ///
