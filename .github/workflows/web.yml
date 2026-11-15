@@ -30,6 +30,8 @@ jobs:
           rustup default 1.99.1
           pnpm install --frozen-lockfile
           pnpm --filter fujimod run setup:tooling
+      - name: Install browser test runtimes
+        run: pnpm --filter fujimod-web exec playwright install --with-deps chromium webkit
       - run: pnpm --filter fujimod-web run check
       - name: Check USB protocol core
         working-directory: .
@@ -39,7 +41,5 @@ jobs:
         run: cargo test --locked --manifest-path crates/simulation/Cargo.toml --lib
       - run: pnpm --filter fujimod-web test
       - run: pnpm --filter fujimod-web run build
-      - name: Install browser test runtimes
-        run: pnpm --filter fujimod-web exec playwright install --with-deps chromium webkit
       - run: pnpm --filter fujimod-web run test:prerender
       - run: pnpm --filter fujimod-web run test:dev-tools:browser

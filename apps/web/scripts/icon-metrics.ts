@@ -115,9 +115,36 @@ const text =
     )
     .join(',\n') +
   '\n}\n';
+/**
+ * Chromium measures and anti-aliases slightly differently on each platform, so a file generated on
+ * macOS can differ from a Linux run by a rounding step. Accept differences up to this much.
+ */
+const TOLERANCE = 0.005;
+const close = (a: number[], b: number[]) =>
+  a.length === b.length && a.every((value, i) => Math.abs(value - b[i]!) <= TOLERANCE);
+function matches(current: string): boolean {
+  let stored: Record<string, IconMetric>;
+  try {
+    stored = JSON.parse(current) as Record<string, IconMetric>;
+  } catch {
+    return false;
+  }
+  const ids = Object.keys(metrics);
+  return (
+    Object.keys(stored).join() === ids.join() &&
+    ids.every((id) => {
+      const [a, b] = [stored[id]!, metrics[id]!];
+      return (
+        a.sprite === b.sprite &&
+        a.view.join() === b.view.join() &&
+        close([...a.box, a.width, a.height], [...b.box, b.width, b.height])
+      );
+    })
+  );
+}
 if (process.argv.includes('--check')) {
   const current = await readFile(output, 'utf8').catch(() => '');
-  if (current !== text) {
+  if (current !== text && !matches(current)) {
     console.error(`${output.pathname} is stale; run node scripts/icon-metrics.ts`);
     process.exit(1);
   }
