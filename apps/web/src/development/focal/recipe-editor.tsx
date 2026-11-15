@@ -990,8 +990,8 @@ const INITIAL: EditorState = {
   fly: 'none',
   comparing: false,
   side: 'b',
-  finish: 'flat',
-  drawer: 'line',
+  finish: 'emboss',
+  drawer: 'shelf',
 };
 
 const PADS = [
@@ -1101,8 +1101,12 @@ const EDITED: Recipe = {
 };
 
 const STATES: { id: string; title: string; state: EditorState }[] = [
-  { id: 'flat', title: 'Flat, as the menus', state: INITIAL },
-  { id: 'emboss', title: 'Embossed, as FUJIMOD SET-UP', state: { ...INITIAL, finish: 'emboss' } },
+  { id: 'emboss', title: 'Embossed with the light drawer', state: INITIAL },
+  {
+    id: 'flat',
+    title: 'Flat with the stroke',
+    state: { ...INITIAL, finish: 'flat', drawer: 'line' },
+  },
   { id: 'slider', title: 'Slider row', state: { ...INITIAL, focus: 4 } },
   {
     id: 'nr',
