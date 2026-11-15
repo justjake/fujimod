@@ -430,6 +430,7 @@ async fn execute(
                 uncorrectable_page_offsets: Vec::new(),
                 uncorrectable_granularity_bytes: 0,
                 nand_read_stats: None,
+                stock_read_seconds: None,
             })
         }
         .await;

@@ -590,6 +590,7 @@ async fn execute(
                     sha256: bulk::hex(&sha256_bytes(&all)),
                     uncorrectable_page_offsets,
                     nand_read_stats: Some(nand_read_stats),
+                    stock_read_seconds: None,
                     uncorrectable_granularity_bytes: 0,
                 });
             }
@@ -631,6 +632,7 @@ async fn execute(
                 sha256: digest.finish(target.size)?,
                 uncorrectable_page_offsets,
                 nand_read_stats: Some(nand_read_stats),
+                stock_read_seconds: None,
                 uncorrectable_granularity_bytes: flash
                     .reader
                     .as_ref()
