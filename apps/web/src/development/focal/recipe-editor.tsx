@@ -406,17 +406,13 @@ function ShiftGrid(props: { r: number; b: number }) {
         <span class="absolute -bottom-[2px] left-1/2 -translate-x-1/2 translate-y-full text-[16px] font-bold">Y</span>
         <span class="absolute top-1/2 -left-[4px] -translate-x-full -translate-y-1/2 text-[16px] font-bold">G</span>
       </div>
-      <div class="flex gap-[28px] text-[24px] leading-none font-semibold tabular-nums">
-        <span>R {fmt(props.r)}</span>
-        <span>B {fmt(props.b)}</span>
-      </div>
     </div>
   );
 }
 
 /** Extends the focused row across the right column, then drops a panel below it. */
-function Flyout(props: { top: number; title: string; children: JSX.Element; height: number }) {
-  const top = () => Math.max(56, Math.min(480 - props.height - 16, props.top));
+function Flyout(props: { top: number; title: string; value?: string; children: JSX.Element; height: number }) {
+  const top = () => Math.max(56, Math.min(480 - props.height - 44, props.top));
   return (
     <>
       <div
@@ -427,7 +423,10 @@ function Flyout(props: { top: number; title: string; children: JSX.Element; heig
         class="absolute flex flex-col rounded-[14px] bg-[rgb(30_30_32/0.88)] p-[18px] backdrop-blur-[18px] shadow-[0_8px_30px_rgb(0_0_0/0.5)]"
         style={{ left: `${COLUMN + 12}px`, right: '12px', top: `${top()}px`, height: `${props.height}px` }}
       >
-        <span class="mb-[14px] text-[20px] font-bold tracking-[0.04em] text-secondary uppercase">{props.title}</span>
+        <div class="mb-[14px] flex items-baseline justify-between text-[20px] font-bold tracking-[0.04em] uppercase">
+          <span class="text-secondary">{props.title}</span>
+          <span class="tabular-nums">{props.value}</span>
+        </div>
         {props.children}
       </div>
     </>
@@ -581,7 +580,12 @@ function Editor(props: { state: EditorState }) {
       </div>
 
       <Show when={s().fly === 'shift'}>
-        <Flyout top={rowTop()} title="WB SHIFT" height={360}>
+        <Flyout
+          top={rowTop()}
+          title="WB SHIFT"
+          value={`R ${fmt(s().recipe.shiftR)}  B ${fmt(s().recipe.shiftB)}`}
+          height={330}
+        >
           <div class="flex flex-1 items-center justify-center">
             <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} />
           </div>
