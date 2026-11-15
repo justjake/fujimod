@@ -107,11 +107,11 @@ fn dma_reads_the_same_retained_prefix_as_cpu_fetch_and_data() {
 }
 
 #[test]
-fn mutable_executable_prefix_erasure_invalidates_translated_code() {
+fn mutable_executable_range_erasure_invalidates_translated_code() {
     let target = FLASH + 0x1000;
     let mut d = definition(1, 0);
     d.as_object_mut().unwrap().remove("storage_immutable_prefix");
-    d["storage_executable_prefix"] = json!({"bytes":65536});
+    d["storage_executable_range"] = json!({"offset":4096,"bytes":61440});
     d["storage_strict_backing"] = json!(true);
     d["initial_registers"] = json!([[
         [{"Arm32":{"R":15}},0], [{"Arm32":{"R":0}},0x8000],
@@ -136,18 +136,49 @@ fn mutable_executable_prefix_erasure_invalidates_translated_code() {
 }
 
 #[test]
-fn executable_prefix_with_gate_keeps_the_remaining_aperture_gated() {
+fn executable_range_with_gate_refuses_undeclared_controller_state() {
     let entry = FLASH + 0x7000;
     let mut d = definition(1, entry);
     d.as_object_mut().unwrap().remove("storage_immutable_prefix");
-    d["storage_executable_prefix"] = json!({"bytes":65536});
+    d["storage_executable_range"] = json!({"offset":28672,"bytes":4096});
     d["storage_mapped_read"] = json!({
         "states":[{"control":[0x780071,0x80041],"clock":0x13,"mode":0x101003,"samples":[9,11],"pad":true}],
         "miss_byte":0xa5,"pad":[0xfff4108cu32,0xffff,0x5545]});
     d["initial_registers"][0][2][1] = json!(FLASH + 65536);
     let s = session(d, image(entry, &[0xe5921000,0xe5801000,0xe320f003])).unwrap();
     assert_eq!(s.nor_medium().unwrap().len(), 131072);
-    assert!(s.write(FLASH, &[0;4]).is_err());
+    assert!(s.write(FLASH + 28672, &[0;4]).is_err());
     assert!(s.run(0, 8).is_err());
     assert!(s.state(false).failure.unwrap().contains("Mapped NOR read in no declared controller state"));
+}
+
+#[test]
+fn gate_applies_on_both_sides_of_executable_range() {
+    let entry = FLASH + 0x7000;
+    for sample in [0u32, 9] {
+        let mut d = definition(1, entry);
+        d.as_object_mut().unwrap().remove("storage_immutable_prefix");
+        d["storage_executable_range"] = json!({"offset":0x7000,"bytes":4096});
+        d["storage_strict_backing"] = json!(true);
+        d["storage_mapped_read"] = json!({
+            "states":[{"control":[0,0],"clock":0,"mode":0,"samples":[9,11],"pad":false}],
+            "miss_byte":0xa5,"pad":[0xfff4108cu32,0xffff,0x5545]});
+        d["initial_registers"][0] = json!([
+            [{"Arm32":{"R":15}},entry], [{"Arm32":{"R":0}},0x8000],
+            [{"Arm32":{"R":2}},FLASH + 0x100], [{"Arm32":{"R":3}},FLASH + 0x8100],
+            [{"Arm32":{"R":4}},0xfffd8000u32], [{"Arm32":{"R":5}},sample]
+        ]);
+        let mut contents = image(entry, &[0xe5845010, 0xe5921000, 0xe5801000, 0xe5931000, 0xe5801004, 0xe320f003]);
+        contents[0x8100..0x8104].copy_from_slice(&0x87654321u32.to_le_bytes());
+        let s = session(d, contents).unwrap();
+        assert!(s.write(FLASH + 0x7000, &[0;4]).is_err());
+        assert!(s.write(FLASH + 0x6ffe, &[0;4]).is_err());
+        assert!(s.write(FLASH + 0x7ffe, &[0;4]).is_err());
+        s.run(0, 8).unwrap();
+        let mut out = [0;8]; s.read(0x8000, &mut out).unwrap();
+        let expected = if sample == 0 { [0xa5;8] } else {
+            [0x78,0x56,0x34,0x12,0x21,0x43,0x65,0x87]
+        };
+        assert_eq!(out, expected);
+    }
 }

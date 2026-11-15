@@ -46,18 +46,34 @@ impl ImmutableView {
     pub fn as_slice(&self) -> &[u8] { &self.source.as_slice()[..self.len] }
 }
 
+/// Page-aligned, nonzero-offset execution window within the NOR aperture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutableRange { pub offset: usize, pub bytes: usize }
+impl ExecutableRange {
+    pub fn new(offset: usize, bytes: usize) -> Result<Self, String> {
+        if offset == 0 || !offset.is_multiple_of(4096) || bytes == 0 || !bytes.is_multiple_of(4096)
+            || offset.checked_add(bytes).is_none_or(|end| end as u64 > super::FLASH_SIZE) {
+            return Err("Invalid executable NOR range".into());
+        }
+        Ok(Self { offset, bytes })
+    }
+}
+
 /// Serialized, read/execute mapping of mutable NOR bytes. All updates happen
 /// while guest execution is stopped at a device boundary.
 #[derive(Clone)]
 pub struct ExecutableView {
     allocation: Arc<Allocation>,
+    offset: usize,
     dirty: Arc<std::sync::atomic::AtomicBool>,
 }
 impl ExecutableView {
-    pub(super) fn new(bytes: Vec<u8>) -> Result<Self, String> {
+    pub(super) fn new(offset: usize, bytes: Vec<u8>) -> Result<Self, String> {
         let Source(allocation) = Source::new(bytes)?;
-        Ok(Self { allocation, dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)) })
+        Ok(Self { allocation, offset, dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)) })
     }
+    pub fn offset(&self) -> usize { self.offset }
     pub fn len(&self) -> usize { self.allocation.len }
     pub fn is_empty(&self) -> bool { self.len() == 0 }
     pub fn as_ptr(&self) -> *const u8 { self.allocation.pointer.as_ptr().cast() }
