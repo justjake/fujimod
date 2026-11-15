@@ -1,15 +1,16 @@
 import { render } from '@solidjs/web';
 import { For, Show, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import { Key } from './components';
+
 import { palette } from './palette';
 import './focal.css';
 
 /* A recipe editor over live view: settings in a translucent left column,
-   the picture in the right. Choice rows scroll their choices as stock icons;
-   fly-outs (WB SHIFT, film notes) extend the focused row across the picture.
-   Compare shows the column twice, A and B, scrolled together. The same screen
-   serves RAW CONVERSION in playback.
+   the picture in the right. Choice rows scroll their choices as stock icons,
+   slider rows step through segments as FUJIMOD SET-UP's color bars do, and
+   fly-outs (WB SHIFT, film notes) continue the focused row across the
+   picture. Compare shows the column twice, A and B, scrolled together. The
+   same screen serves RAW CONVERSION in playback.
 
    Stock icons come from `mise run stock-icons-svg -- --firmware x70-110`,
    served from the local review directory; they are never published. */
@@ -99,6 +100,7 @@ interface SliderSetting {
   kind: 'slider';
   id: string;
   name: string;
+  short: string;
   icon: RowIcon;
   min: number;
   max: number;
@@ -107,31 +109,87 @@ interface ChoiceSetting {
   kind: 'choice';
   id: string;
   name: string;
+  short: string;
   icon: RowIcon;
   choices: Choice[];
 }
 type Setting = SliderSetting | ChoiceSetting;
 
 const SETTINGS: Setting[] = [
-  { kind: 'choice', id: 'film', name: 'FILM SIMULATION', icon: { stock: 0x5f3 }, choices: FILMS },
-  { kind: 'choice', id: 'wb', name: 'WHITE BALANCE', icon: { stock: 0x609 }, choices: WB },
-  { kind: 'choice', id: 'dr', name: 'DYNAMIC RANGE', icon: { stock: 0x5f1 }, choices: DR },
+  {
+    kind: 'choice',
+    id: 'film',
+    name: 'FILM SIMULATION',
+    short: 'FILM',
+    icon: { stock: 0x5f3 },
+    choices: FILMS,
+  },
+  {
+    kind: 'choice',
+    id: 'wb',
+    name: 'WHITE BALANCE',
+    short: 'WB',
+    icon: { stock: 0x609 },
+    choices: WB,
+  },
+  {
+    kind: 'choice',
+    id: 'dr',
+    name: 'DYNAMIC RANGE',
+    short: 'DR',
+    icon: { stock: 0x5f1 },
+    choices: DR,
+  },
   {
     kind: 'slider',
     id: 'highlight',
     name: 'HIGHLIGHT TONE',
+    short: 'H TONE',
     icon: { stock: 0x5f6 },
     min: -2,
     max: 2,
   },
-  { kind: 'slider', id: 'shadow', name: 'SHADOW TONE', icon: { stock: 0x607 }, min: -2, max: 2 },
-  { kind: 'slider', id: 'color', name: 'COLOR', icon: { stock: 0x5f0 }, min: -2, max: 2 },
-  { kind: 'slider', id: 'sharp', name: 'SHARPNESS', icon: { stock: 0x605 }, min: -2, max: 2 },
-  { kind: 'slider', id: 'nr', name: 'NOISE REDUCTION', icon: { stock: 0x603 }, min: -2, max: 2 },
+  {
+    kind: 'slider',
+    id: 'shadow',
+    name: 'SHADOW TONE',
+    short: 'S TONE',
+    icon: { stock: 0x607 },
+    min: -2,
+    max: 2,
+  },
+  {
+    kind: 'slider',
+    id: 'color',
+    name: 'COLOR',
+    short: 'COLOR',
+    icon: { stock: 0x5f0 },
+    min: -2,
+    max: 2,
+  },
+  {
+    kind: 'slider',
+    id: 'sharp',
+    name: 'SHARPNESS',
+    short: 'SHARP',
+    icon: { stock: 0x605 },
+    min: -2,
+    max: 2,
+  },
+  {
+    kind: 'slider',
+    id: 'nr',
+    name: 'NOISE REDUCTION',
+    short: 'NR',
+    icon: { stock: 0x603 },
+    min: -2,
+    max: 2,
+  },
   {
     kind: 'choice',
     id: 'chrome',
     name: 'COLOR CHROME EFFECT',
+    short: 'CHROME',
     icon: { mod: 'color_chrome' },
     choices: EFFECT,
   },
@@ -139,6 +197,7 @@ const SETTINGS: Setting[] = [
     kind: 'choice',
     id: 'fxblue',
     name: 'COLOR CHROME FX BLUE',
+    short: 'FX BLUE',
     icon: { mod: 'color_chrome_blue' },
     choices: EFFECT,
   },
@@ -146,6 +205,7 @@ const SETTINGS: Setting[] = [
     kind: 'choice',
     id: 'grain',
     name: 'GRAIN EFFECT',
+    short: 'GRAIN',
     icon: { mod: 'film_grain' },
     choices: GRAIN,
   },
@@ -189,185 +249,32 @@ function look(r: Recipe): string {
   ].join(' ');
 }
 
-/** A synthetic street scene drawn in SVG; it stands in for the sensor image. */
-function Scene(props: { recipe: Recipe; class?: string }) {
+/** The emulator's default scene, as walkthroughs show it. */
+const PHOTO = new URL('../../engine/assets/default-scene.png', import.meta.url).href;
+
+function Photo(props: { recipe: Recipe }) {
   return (
-    <div
-      class={`absolute inset-0 overflow-hidden ${props.class ?? ''}`}
+    <img
+      alt=""
+      src={PHOTO}
+      class="absolute inset-0 h-full w-full object-cover"
       style={{ filter: look(props.recipe) }}
-    >
-      <svg viewBox="0 0 720 480" preserveAspectRatio="xMidYMid slice" class="h-full w-full">
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#5d8fd0" />
-            <stop offset="0.6" stop-color="#f3c391" />
-            <stop offset="1" stop-color="#f7a166" />
-          </linearGradient>
-          <linearGradient id="street" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#5a4c48" />
-            <stop offset="1" stop-color="#1b1716" />
-          </linearGradient>
-          <radialGradient id="sun" cx="0.72" cy="0.48" r="0.18">
-            <stop offset="0" stop-color="#fff6d8" />
-            <stop offset="1" stop-color="#fff6d8" stop-opacity="0" />
-          </radialGradient>
-        </defs>
-        <rect width="720" height="480" fill="url(#sky)" />
-        <rect width="720" height="480" fill="url(#sun)" />
-        <path d="M0 140h70v-30h40v30h30v240H0z" fill="#2f3a4a" />
-        <path d="M150 90h90v290h-90z" fill="#7a4a3a" />
-        <path d="M250 170h70v210h-70z" fill="#c8a27a" />
-        <path d="M600 120h120v260H600z" fill="#3c2e2c" />
-        <path d="M560 200h50v180h-50z" fill="#8c5c3e" />
-        <For each={[0, 1, 2, 3, 4, 5]}>
-          {(i) => (
-            <>
-              <rect
-                x={162}
-                y={110 + i * 42}
-                width="22"
-                height="26"
-                fill="#f2d48a"
-                opacity={i % 2 ? 0.9 : 0.35}
-              />
-              <rect
-                x={204}
-                y={110 + i * 42}
-                width="22"
-                height="26"
-                fill="#f2d48a"
-                opacity={i % 3 ? 0.4 : 0.95}
-              />
-              <rect
-                x={616}
-                y={140 + i * 38}
-                width="18"
-                height="22"
-                fill="#e9b765"
-                opacity={i % 2 ? 0.3 : 0.85}
-              />
-              <rect
-                x={660}
-                y={140 + i * 38}
-                width="18"
-                height="22"
-                fill="#e9b765"
-                opacity={i % 2 ? 0.85 : 0.3}
-              />
-            </>
-          )}
-        </For>
-        <path d="M0 380h720v100H0z" fill="url(#street)" />
-        <path d="M330 380l40 100h-20z" fill="#e8e2d2" opacity="0.5" />
-        <rect x="430" y="330" width="120" height="50" rx="14" fill="#c62f2a" />
-        <rect x="446" y="314" width="78" height="30" rx="10" fill="#8a1f1c" />
-        <circle cx="458" cy="384" r="12" fill="#111" />
-        <circle cx="526" cy="384" r="12" fill="#111" />
-        <rect x="372" y="300" width="12" height="80" rx="6" fill="#1f2b37" />
-        <circle cx="378" cy="290" r="12" fill="#e2b393" />
-        <path d="M80 210l6 170h-12z" fill="#222" />
-        <circle cx="80" cy="206" r="9" fill="#ffd27a" />
-      </svg>
-    </div>
-  );
-}
-
-/** WB SHIFT: R on the horizontal axis, B on the vertical, -9 to +9 as stock. */
-function ShiftGrid(props: { r: number; b: number }) {
-  const cell = 11;
-  const size = cell * 19;
-  const pos = (v: number) => (v + 9) * cell;
-  return (
-    <div class="flex flex-col items-center gap-[24px]">
-      <div class="relative" style={{ width: `${size}px`, height: `${size}px` }}>
-        <div
-          class="absolute inset-0 rounded-[6px]"
-          style={{
-            background:
-              'linear-gradient(to right, rgb(60 200 120 / 0.55), transparent 50%, rgb(240 70 80 / 0.55)), linear-gradient(to top, rgb(240 200 60 / 0.55), transparent 50%, rgb(60 110 255 / 0.55))',
-          }}
-        />
-        <svg class="absolute inset-0" width={size} height={size}>
-          <For each={Array.from({ length: 20 }, (_, i) => i)}>
-            {(i) => (
-              <>
-                <line
-                  x1={i * cell}
-                  y1="0"
-                  x2={i * cell}
-                  y2={size}
-                  stroke="rgb(255 255 255 / 0.12)"
-                />
-                <line
-                  x1="0"
-                  y1={i * cell}
-                  x2={size}
-                  y2={i * cell}
-                  stroke="rgb(255 255 255 / 0.12)"
-                />
-              </>
-            )}
-          </For>
-          <line x1={size / 2} y1="0" x2={size / 2} y2={size} stroke="rgb(255 255 255 / 0.5)" />
-          <line x1="0" y1={size / 2} x2={size} y2={size / 2} stroke="rgb(255 255 255 / 0.5)" />
-        </svg>
-        <div
-          class="absolute rounded-[3px] border-[3px] border-white bg-(--accent) shadow-[0_1px_6px_rgb(0_0_0/0.7)]"
-          style={{
-            left: `${pos(props.r) - 3}px`,
-            top: `${pos(-props.b) - 3}px`,
-            width: `${cell + 6}px`,
-            height: `${cell + 6}px`,
-          }}
-        />
-        <span class="absolute -top-[2px] left-1/2 -translate-x-1/2 -translate-y-full text-[16px] font-bold">
-          B
-        </span>
-        <span class="absolute top-1/2 -right-[4px] translate-x-full -translate-y-1/2 text-[16px] font-bold">
-          R
-        </span>
-        <span class="absolute -bottom-[2px] left-1/2 -translate-x-1/2 translate-y-full text-[16px] font-bold">
-          Y
-        </span>
-        <span class="absolute top-1/2 -left-[4px] -translate-x-full -translate-y-1/2 text-[16px] font-bold">
-          G
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Fit(props: { children: JSX.Element }) {
-  let host: HTMLDivElement | undefined;
-  const [scale, setScale] = createSignal(1);
-  onSettled(() => {
-    const element = host;
-    if (!element) return;
-    const observer = new ResizeObserver(() => setScale(Math.min(1, element.clientWidth / 720)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  });
-  return (
-    <div
-      ref={(element) => (host = element)}
-      class="w-full max-w-[720px]"
-      style={{ height: `${480 * scale()}px` }}
-    >
-      <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: '720px' }}>
-        {props.children}
-      </div>
-    </div>
+    />
   );
 }
 
 /* ---- Layout ------------------------------------------------------------------ */
 
-const ROW = 62;
-const WIDTH = 340;
-const COMPARE_WIDTH = 300;
-const COMPARE_HEADER = 32;
-const ICON_CELL = 52;
-const TEXT_CELL = 92;
+/** Three ways to name the settings, to compare. */
+type Names = 'title' | 'short' | 'tab';
+
+const ROW = 46;
+const COMPARE_HEADER = 30;
+const ICON_CELL = 46;
+const TEXT_CELL = 76;
+const SHORT_LABEL = 84;
+
+const widthFor = (names: Names) => (names === 'short' ? 300 : 280);
 
 /** The same scroll for every column, so A and B stay in lockstep. */
 function scrollFor(focus: number, height: number): number {
@@ -376,22 +283,34 @@ function scrollFor(focus: number, height: number): number {
 }
 
 /** Flat translucent panels, as the stock live pickers draw them. */
-const PANEL = 'rgb(25 25 25 / 0.82)';
-const CARD = 'rgb(60 60 60 / 0.85)';
+const PANEL = 'rgb(20 20 20 / 0.8)';
+const BODY = 'rgb(40 40 42 / 0.92)';
 const LIGHT = 'font-light tracking-[0.08em] uppercase';
+/** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
+const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
+
+/* ---- Input ------------------------------------------------------------------- */
+
+type Side = 'a' | 'b';
+type Action =
+  | { key: string }
+  | { focus: number; side?: Side }
+  | { set: string; value: number; focus: number; side?: Side }
+  | { shift: [number, number] };
+type Send = (action: Action) => void;
+
+/* ---- Rows -------------------------------------------------------------------- */
 
 function RowIconView(props: { icon: RowIcon }) {
   return (
     <img
       alt=""
-      class="h-[28px] w-[46px] shrink-0 object-contain"
+      class="h-[26px] w-[42px] shrink-0 object-contain"
       style={{ filter: 'invert(1)' }}
       src={'stock' in props.icon ? stock(props.icon.stock) : `${MOD}/${props.icon.mod}.svg`}
     />
   );
 }
-
-/* ---- Rows -------------------------------------------------------------------- */
 
 /** Every choice in a row, scrolled to keep the chosen one in view. */
 function ChoiceStrip(props: {
@@ -399,6 +318,7 @@ function ChoiceStrip(props: {
   value: number;
   width: number;
   focused: boolean;
+  pick: (value: number) => void;
 }) {
   const cell = () => (props.setting.choices[0].icon ? ICON_CELL : TEXT_CELL);
   const offset = () => {
@@ -406,47 +326,39 @@ function ChoiceStrip(props: {
     return Math.max(0, Math.min(max, props.value * cell() - (props.width - cell()) / 2));
   };
   return (
-    <div class="relative h-[34px] overflow-hidden" style={{ width: `${props.width}px` }}>
+    <div class="relative h-[36px] overflow-hidden" style={{ width: `${props.width}px` }}>
       <div
-        class="absolute inset-y-0 left-0 flex"
+        class="absolute inset-y-0 left-0 flex items-center"
         style={{ transform: `translateX(${-offset()}px)` }}
       >
         <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
           {(item) => {
             const chosen = () => item.i === props.value;
-            const inverted = () => chosen() && props.focused;
             return (
               <div
-                class="flex h-[34px] shrink-0 items-center justify-center"
-                style={{
-                  width: `${cell()}px`,
-                  background: inverted()
-                    ? '#ffffff'
-                    : chosen()
-                      ? 'rgb(255 255 255 / 0.2)'
-                      : undefined,
-                  opacity: chosen() ? 1 : 0.5,
+                class="flex shrink-0 items-center justify-center px-[3px]"
+                style={{ width: `${cell()}px` }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.pick(item.i);
                 }}
               >
-                <Show
-                  when={item.choice.icon}
-                  fallback={
-                    <span
-                      class={`text-[18px] ${LIGHT}`}
-                      
-                    >
-                      {item.choice.name}
-                    </span>
-                  }
+                <div
+                  class={`flex h-[28px] w-full items-center justify-center ${chosen() && props.focused ? SELECTED : ''}`}
+                  style={{
+                    background: chosen() ? 'rgb(255 255 255 / 0.16)' : undefined,
+                    opacity: chosen() ? 1 : 0.6,
+                  }}
                 >
-                  {(icon) => (
-                    <img
-                      alt=""
-                      class="h-[26px] w-[46px] object-contain"
-                                            src={stock(icon())}
-                    />
-                  )}
-                </Show>
+                  <Show
+                    when={item.choice.icon}
+                    fallback={<span class={`text-[15px] ${LIGHT}`}>{item.choice.name}</span>}
+                  >
+                    {(icon) => (
+                      <img alt="" class="h-[24px] w-[38px] object-contain" src={stock(icon())} />
+                    )}
+                  </Show>
+                </div>
               </div>
             );
           }}
@@ -456,90 +368,110 @@ function ChoiceStrip(props: {
   );
 }
 
-function Ticks(props: { setting: SliderSetting; value: number }) {
-  const at = (v: number) =>
-    ((v - props.setting.min) / (props.setting.max - props.setting.min)) * 100;
+/** One segment per step, as FUJIMOD SET-UP's color bars: zero to the value
+ * filled, the value outlined while the row has focus. */
+function Segments(props: {
+  setting: SliderSetting;
+  value: number;
+  focused: boolean;
+  pick: (value: number) => void;
+}) {
+  const steps = () =>
+    Array.from(
+      { length: props.setting.max - props.setting.min + 1 },
+      (_, i) => props.setting.min + i,
+    );
+  const filled = (v: number) =>
+    (props.value > 0 && v > 0 && v <= props.value) ||
+    (props.value < 0 && v < 0 && v >= props.value);
   return (
-    <div class="relative mx-[8px] h-[30px] flex-1">
-      <For
-        each={Array.from(
-          { length: props.setting.max - props.setting.min + 1 },
-          (_, i) => props.setting.min + i,
-        )}
-      >
+    <div class="flex h-[22px] flex-1 gap-[3px]">
+      <For each={steps()}>
         {(v) => (
-          <div
-            class="absolute bottom-[4px] w-[2px] -translate-x-1/2"
+          <span
+            class={`relative flex-1 border border-black ${v === props.value && props.focused ? SELECTED : ''}`}
             style={{
-              left: `${at(v)}%`,
-              height: v === 0 ? '18px' : '10px',
-              background: v === 0 ? '#ffffff' : 'rgb(255 255 255 / 0.45)',
+              background: filled(v)
+                ? 'var(--accent)'
+                : v === props.value
+                  ? '#d8d8dc'
+                  : 'rgb(120 120 126 / 0.7)',
             }}
-          />
+            onClick={(e) => {
+              e.stopPropagation();
+              props.pick(v);
+            }}
+          >
+            <Show when={v === 0}>
+              <span class="absolute inset-y-[5px] left-1/2 w-[2px] -translate-x-1/2 bg-black/60" />
+            </Show>
+          </span>
         )}
       </For>
-      <div class="absolute inset-x-0 bottom-[3px] h-[1px] bg-white/45" />
-      <div
-        class="absolute bottom-0 h-[26px] w-[6px] -translate-x-1/2 bg-(--accent)"
-        style={{ left: `${at(props.value)}%` }}
-      />
     </div>
   );
 }
 
 function SettingRow(props: {
   setting: Setting;
+  index: number;
   recipe: Recipe;
   focused: boolean;
   changed: boolean;
   width: number;
+  names: Names;
+  side?: Side;
+  send: Send;
 }) {
-  const controlWidth = () => props.width - 16 - 46 - 12 - 12;
-  const choiceName = () =>
-    props.setting.kind === 'choice'
-      ? props.setting.choices[props.recipe[props.setting.id]].name
-      : '';
+  const lead = () => (props.names === 'short' ? SHORT_LABEL : 42);
+  const controlWidth = () => props.width - 12 - lead() - 10 - 10;
+  const pick = (value: number) =>
+    props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   return (
     <div
-      class={`relative flex items-center gap-[12px] pr-[12px] pl-[16px] ${props.focused ? 'focal-focused' : 'focal-bevel'}`}
+      class={`relative flex items-center gap-[10px] pr-[10px] pl-[12px] ${props.focused ? 'focal-focused' : 'focal-bevel'}`}
       style={{ height: `${ROW}px` }}
+      onClick={() => props.send({ focus: props.index, side: props.side })}
     >
-      <RowIconView icon={props.setting.icon} />
-      <div class="flex min-w-0 flex-1 flex-col">
-        <div
-          class={`flex h-[18px] items-center justify-between text-[14px] text-secondary ${LIGHT}`}
+      <Show when={props.names === 'short'} fallback={<RowIconView icon={props.setting.icon} />}>
+        <span
+          class={`shrink-0 truncate text-[17px] ${LIGHT}`}
+          style={{ width: `${SHORT_LABEL}px` }}
         >
-          <span class="truncate">{props.setting.name}</span>
-          <Show when={props.setting.kind === 'choice' && props.setting.choices[0].icon}>
-            <span class="ml-[8px] truncate text-label">{choiceName()}</span>
-          </Show>
-        </div>
-        <Show
-          when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
-          fallback={
-            <ChoiceStrip
-              setting={props.setting as ChoiceSetting}
-              value={props.recipe[props.setting.id]}
-              width={controlWidth()}
+          {props.setting.short}
+        </span>
+      </Show>
+      <Show
+        when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
+        fallback={
+          <ChoiceStrip
+            setting={props.setting as ChoiceSetting}
+            value={props.recipe[props.setting.id]}
+            width={controlWidth()}
+            focused={props.focused}
+            pick={pick}
+          />
+        }
+      >
+        {(slider) => (
+          <>
+            <Segments
+              setting={slider()}
+              value={props.recipe[slider().id]}
               focused={props.focused}
+              pick={pick}
             />
-          }
-        >
-          {(slider) => (
-            <div class="flex h-[34px] items-center">
-              <Ticks setting={slider()} value={props.recipe[slider().id]} />
-              <span
-                class="w-[44px] text-right text-[24px] leading-none tabular-nums"
-                style={{ color: props.changed ? 'var(--accent-text)' : undefined }}
-              >
-                {fmt(props.recipe[slider().id])}
-              </span>
-            </div>
-          )}
-        </Show>
-      </div>
+            <span
+              class="w-[34px] text-right text-[22px] leading-none tabular-nums"
+              style={{ color: props.changed ? 'var(--accent-text)' : undefined }}
+            >
+              {fmt(props.recipe[slider().id])}
+            </span>
+          </>
+        )}
+      </Show>
       <Show when={props.changed && props.setting.kind === 'choice'}>
-        <span class="absolute top-[6px] right-[6px] h-[8px] w-[8px] bg-(--accent)" />
+        <span class="absolute top-[4px] right-[4px] h-[6px] w-[6px] bg-(--accent)" />
       </Show>
     </div>
   );
@@ -552,25 +484,28 @@ function Column(props: {
   focus: number;
   left: number;
   width: number;
-  badge?: string;
+  names: Names;
+  side?: Side;
   active?: boolean;
+  send: Send;
 }) {
-  const height = () => 480 - (props.badge ? COMPARE_HEADER : 0);
+  const height = () => 480 - (props.side ? COMPARE_HEADER : 0);
   return (
     <div
       class="absolute top-0 bottom-0 flex flex-col"
       style={{ left: `${props.left}px`, width: `${props.width}px`, background: PANEL }}
     >
-      <Show when={props.badge}>
+      <Show when={props.side}>
         <div
           class={`flex shrink-0 items-center justify-center text-[20px] ${LIGHT}`}
           style={{
             height: `${COMPARE_HEADER}px`,
-            'box-shadow': props.active ? 'inset 0 -4px 0 var(--accent)' : undefined,
+            'box-shadow': props.active ? 'inset 0 -3px 0 var(--accent)' : undefined,
             color: props.active ? '#fff' : 'var(--color-secondary)',
           }}
+          onClick={() => props.send({ focus: props.focus, side: props.side })}
         >
-          {props.badge}
+          {props.side === 'a' ? 'A' : 'B'}
         </div>
       </Show>
       <div class="relative flex-1 overflow-hidden">
@@ -579,12 +514,16 @@ function Column(props: {
             {(setting, i) => (
               <SettingRow
                 setting={setting}
+                index={i()}
                 recipe={props.recipe}
                 focused={i() === props.focus && props.active !== false}
                 changed={
                   props.other !== undefined && props.other[setting.id] !== props.recipe[setting.id]
                 }
                 width={props.width}
+                names={props.names}
+                side={props.side}
+                send={props.send}
               />
             )}
           </For>
@@ -596,29 +535,132 @@ function Column(props: {
 
 /* ---- Fly-outs ---------------------------------------------------------------- */
 
-/** A stock-style title card level with the row, and a body card beneath it. */
-function Flyout(props: {
-  row: number;
+/** The focused row continued across the picture: its focus bar runs on as the
+ * fly-out's title band, and the body hangs from it (or rises above it when it
+ * would leave the screen). */
+function RowExtension(props: {
+  top: number;
   left: number;
   title: string;
   value?: string;
-  children: JSX.Element;
+  bodyHeight?: number;
+  children?: JSX.Element;
+  onClick?: () => void;
 }) {
+  const below = () => props.top + ROW + (props.bodyHeight ?? 0) <= 480 - 8;
   return (
-    <div
-      class="absolute flex flex-col gap-[4px]"
-      style={{ left: `${props.left}px`, right: '12px', top: `${props.row}px` }}
-    >
+    <>
       <div
-        class={`flex items-center justify-between px-[14px] text-[24px] ${LIGHT}`}
-        style={{ height: `${ROW}px`, background: CARD }}
+        class={`absolute flex items-center justify-between pr-[14px] pl-[10px] text-[20px] ${LIGHT}`}
+        style={{
+          left: `${props.left}px`,
+          right: '0',
+          top: `${props.top}px`,
+          height: `${ROW}px`,
+          background: 'var(--focus)',
+          'box-shadow': 'inset 0 1px 0 var(--hairline), inset 0 -2px 0 #000',
+        }}
+        onClick={() => props.onClick?.()}
       >
         <span class="truncate">{props.title}</span>
         <span class="tabular-nums">{props.value}</span>
       </div>
-      <div class="px-[14px] py-[12px]" style={{ background: CARD }}>
-        {props.children}
-      </div>
+      <Show when={props.children}>
+        <div
+          class="absolute px-[14px] py-[12px]"
+          style={{
+            left: `${props.left}px`,
+            right: '0',
+            height: `${props.bodyHeight}px`,
+            top: below() ? `${props.top + ROW}px` : `${props.top - (props.bodyHeight ?? 0)}px`,
+            background: BODY,
+          }}
+        >
+          {props.children}
+        </div>
+      </Show>
+    </>
+  );
+}
+
+/** WB SHIFT: R on the horizontal axis, B on the vertical, -9 to +9 as stock. */
+function ShiftGrid(props: { r: number; b: number; send: Send }) {
+  const cell = 11;
+  const size = cell * 19;
+  const pos = (v: number) => (v + 9) * cell;
+  return (
+    <div
+      class="relative"
+      style={{ width: `${size}px`, height: `${size}px` }}
+      onClick={(e) => {
+        const box = e.currentTarget.getBoundingClientRect();
+        const scale = box.width / size;
+        const r = Math.floor((e.clientX - box.left) / scale / cell) - 9;
+        const b = 9 - Math.floor((e.clientY - box.top) / scale / cell);
+        props.send({ shift: [Math.max(-9, Math.min(9, r)), Math.max(-9, Math.min(9, b))] });
+      }}
+    >
+      <div
+        class="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(to right, rgb(60 200 120 / 0.6), transparent 50%, rgb(240 70 80 / 0.6)), linear-gradient(to top, rgb(240 200 60 / 0.6), transparent 50%, rgb(60 110 255 / 0.6))',
+        }}
+      />
+      <div class="absolute inset-y-0 left-1/2 w-[1px] bg-white/60" />
+      <div class="absolute inset-x-0 top-1/2 h-[1px] bg-white/60" />
+      <div
+        class={`absolute ${SELECTED}`}
+        style={{
+          left: `${pos(props.r)}px`,
+          top: `${pos(-props.b)}px`,
+          width: `${cell}px`,
+          height: `${cell}px`,
+          background: '#fff',
+        }}
+      />
+      <span class="absolute -top-[4px] left-1/2 -translate-x-1/2 -translate-y-full text-[15px]">
+        B
+      </span>
+      <span class="absolute top-1/2 -right-[6px] translate-x-full -translate-y-1/2 text-[15px]">
+        R
+      </span>
+      <span class="absolute -bottom-[4px] left-1/2 -translate-x-1/2 translate-y-full text-[15px]">
+        Y
+      </span>
+      <span class="absolute top-1/2 -left-[6px] -translate-x-full -translate-y-1/2 text-[15px]">
+        G
+      </span>
+    </div>
+  );
+}
+
+/* ---- Legend ------------------------------------------------------------------ */
+
+/** The stock floating legend: one dark box per key, the key glyph inverted. */
+function Legend(props: {
+  hints: { glyph: string; label: string; key: string }[];
+  send: Send;
+  left: number;
+}) {
+  return (
+    <div class="absolute bottom-[12px] flex gap-[4px]" style={{ left: `${props.left}px` }}>
+      <For each={props.hints}>
+        {(hint) => (
+          <div
+            class="flex h-[32px] items-center gap-[8px] px-[6px] whitespace-nowrap"
+            style={{ background: 'rgb(0 0 0 / 0.6)' }}
+            onClick={() => props.send({ key: hint.key })}
+          >
+            <span class="flex h-[22px] min-w-[22px] items-center justify-center bg-white px-[3px] text-[14px] leading-none font-semibold text-black">
+              {hint.glyph}
+            </span>
+            <span class="pr-[4px] text-[17px] font-light tracking-[0.16em] uppercase">
+              {hint.label}
+            </span>
+          </div>
+        )}
+      </For>
     </div>
   );
 }
@@ -627,7 +669,6 @@ function Flyout(props: {
 
 type Fly = 'none' | 'shift' | 'film';
 type Mode = 'live' | 'raw';
-type Side = 'a' | 'b';
 
 interface EditorState {
   mode: Mode;
@@ -641,24 +682,35 @@ interface EditorState {
   /** The compare column that takes edits. */
   side: Side;
   name: string;
+  names: Names;
 }
 
-function Hint(props: { keys: string; label: string }) {
-  return (
-    <span class="flex items-center gap-[6px] [text-shadow:0_1px_3px_rgb(0_0_0/0.9)]">
-      <Key>{props.keys}</Key>
-      <span class={`text-[17px] ${LIGHT}`}>{props.label}</span>
-    </span>
-  );
+function choiceName(setting: Setting, recipe: Recipe): string | undefined {
+  return setting.kind === 'choice' ? setting.choices[recipe[setting.id]].name : undefined;
 }
 
-function Editor(props: { state: EditorState }) {
+function Editor(props: { state: EditorState; send?: Send }) {
   const s = () => props.state;
+  const send: Send = (action) => props.send?.(action);
   const focused = () => SETTINGS[s().focus];
+  const width = () => widthFor(s().names);
   const rowTop = () => s().focus * ROW - scrollFor(s().focus, 480);
   const colors = palette(null);
-  const split = 360;
   const compare = () => (s().comparing ? s().snapshot : undefined);
+  const compareWidth = 300;
+
+  const hints = () => {
+    const list: { glyph: string; label: string; key: string }[] = [];
+    if (compare()) list.push({ glyph: 'AEL', label: 'A/B', key: 'Tab' });
+    else if (focused().id === 'wb' && s().fly === 'none')
+      list.push({ glyph: '▲', label: 'SHIFT', key: 's' });
+    else if (focused().id === 'film' && s().fly === 'none')
+      list.push({ glyph: 'DISP', label: 'INFO', key: 'i' });
+    if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
+    else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
+    list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
+    return list;
+  };
 
   return (
     <div
@@ -670,91 +722,116 @@ function Editor(props: { state: EditorState }) {
         '--accent-text': s().mode === 'raw' ? '#3ad06a' : '#4aa3ff',
       }}
     >
-      <Scene recipe={s().recipe} />
+      <Photo recipe={s().recipe} />
       <Show when={compare()}>
         {(a) => (
           <>
-            <div class="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${split}px` }}>
+            <div class="absolute inset-y-0 left-0 w-[360px] overflow-hidden">
               <div class="absolute inset-y-0 left-0 w-screen-w">
-                <Scene recipe={a()} />
+                <Photo recipe={a()} />
               </div>
             </div>
-            <div class="absolute inset-y-0 w-[2px] bg-white" style={{ left: `${split - 1}px` }} />
-            <Column
-              recipe={a()}
-              other={s().recipe}
-              focus={s().focus}
-              left={0}
-              width={COMPARE_WIDTH}
-              badge="A"
-              active={s().side === 'a'}
-            />
-            <Column
-              recipe={s().recipe}
-              other={a()}
-              focus={s().focus}
-              left={720 - COMPARE_WIDTH}
-              width={COMPARE_WIDTH}
-              badge="B"
-              active={s().side === 'b'}
-            />
+            <div class="absolute inset-y-0 left-[359px] w-[2px] bg-white" />
+            <For each={['a', 'b'] as Side[]}>
+              {(side) => (
+                <Column
+                  recipe={side === 'a' ? a() : s().recipe}
+                  other={side === 'a' ? s().recipe : a()}
+                  focus={s().focus}
+                  left={side === 'a' ? 0 : 720 - compareWidth}
+                  width={compareWidth}
+                  names={s().names}
+                  side={side}
+                  active={s().side === side}
+                  send={send}
+                />
+              )}
+            </For>
           </>
         )}
       </Show>
 
       <Show when={!compare()}>
-        <Column recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} />
-        <Show when={s().mode === 'raw' && s().fly === 'none'}>
+        <Column
+          recipe={s().recipe}
+          other={s().snapshot}
+          focus={s().focus}
+          left={0}
+          width={width()}
+          names={s().names}
+          send={send}
+        />
+        <Show when={s().names === 'title' && s().fly === 'none'}>
           <div
-            class="absolute top-[10px] right-[12px] flex items-center gap-[8px] px-[12px] py-[5px]"
-            style={{ background: CARD }}
+            class="absolute top-[10px] flex flex-col items-start gap-[4px]"
+            style={{ left: `${width() + 12}px` }}
           >
-            <span class="bg-(--accent) px-[6px] text-[15px] font-bold">RAW</span>
-            <span class={`text-[20px] ${LIGHT}`}>{s().name}</span>
+            <span
+              class={`px-[12px] py-[5px] text-[24px] ${LIGHT}`}
+              style={{ background: 'rgb(60 60 60 / 0.85)' }}
+            >
+              {focused().name}
+            </span>
+            <Show when={choiceName(focused(), s().recipe)}>
+              {(name) => (
+                <span
+                  class={`px-[12px] py-[4px] text-[18px] ${LIGHT}`}
+                  style={{ background: 'rgb(60 60 60 / 0.85)' }}
+                >
+                  {name()}
+                </span>
+              )}
+            </Show>
           </div>
         </Show>
+        <Show when={s().names === 'tab' && s().fly === 'none'}>
+          <RowExtension
+            top={rowTop()}
+            left={width()}
+            title={focused().name}
+            value={choiceName(focused(), s().recipe)}
+            onClick={() =>
+              send({ key: focused().id === 'film' ? 'i' : focused().id === 'wb' ? 's' : '' })
+            }
+          />
+        </Show>
+        <Show when={s().mode === 'raw'}>
+          <span class="absolute top-[10px] right-[12px] bg-(--accent) px-[8px] py-[2px] text-[17px] font-bold">
+            RAW
+          </span>
+        </Show>
         <Show when={s().fly === 'film'}>
-          <Flyout row={rowTop()} left={WIDTH} title={FILMS[s().recipe.film].name}>
-            <p class="text-[22px] leading-[30px] font-light tracking-[0.04em]">
+          <RowExtension
+            top={rowTop()}
+            left={width()}
+            title={FILMS[s().recipe.film].name}
+            bodyHeight={112}
+            onClick={() => send({ key: 'i' })}
+          >
+            <p class="text-[21px] leading-[29px] font-light tracking-[0.04em]">
               {FILMS[s().recipe.film].note}
             </p>
-          </Flyout>
+          </RowExtension>
         </Show>
         <Show when={s().fly === 'shift'}>
-          <Flyout
-            row={Math.min(rowTop(), 480 - 12 - ROW - 4 - 298)}
-            left={WIDTH}
+          <RowExtension
+            top={rowTop()}
+            left={width()}
             title="WB SHIFT"
             value={`R${fmt(s().recipe.shiftR)} B${fmt(s().recipe.shiftB)}`}
+            bodyHeight={270}
+            onClick={() => send({ key: 'Escape' })}
           >
-            <div class="flex justify-center py-[22px]">
-              <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} />
+            <div class="flex h-full items-center justify-center">
+              <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} send={send} />
             </div>
-          </Flyout>
+          </RowExtension>
         </Show>
       </Show>
 
-      <div
-        class={`absolute bottom-[10px] flex gap-[14px] ${compare() ? 'flex-col items-start' : 'right-[14px] items-center'}`}
-        style={compare() ? { left: `${COMPARE_WIDTH + 10}px` } : undefined}
-      >
-        <Show when={!compare() && focused().id === 'wb' && s().fly === 'none'}>
-          <Hint keys="▲" label="SHIFT" />
-        </Show>
-        <Show when={!compare() && focused().id === 'film' && s().fly === 'none'}>
-          <Hint keys="DISP" label="INFO" />
-        </Show>
-        <Show when={compare()}>
-          <Hint keys="AEL" label="A/B" />
-        </Show>
-        <Show
-          when={s().snapshot}
-          fallback={<Hint keys="AF-ON" label={s().mode === 'raw' ? 'KEEP A' : 'SHOOT A'} />}
-        >
-          <Hint keys="Q" label={s().comparing ? 'HIDE A' : 'COMPARE'} />
-        </Show>
-        <Hint keys="OK" label={s().mode === 'raw' ? 'CREATE' : 'SAVE'} />
-      </div>
+      <Show when={s().fly !== 'shift'}>
+        <Legend hints={hints()} send={send} left={compare() ? 312 : width() + 12} />
+      </Show>
     </div>
   );
 }
@@ -811,6 +888,20 @@ function onKey(state: EditorState, key: string): EditorState {
   return state;
 }
 
+function apply(state: EditorState, action: Action): EditorState {
+  if ('key' in action) return onKey(state, action.key);
+  if ('shift' in action)
+    return edit(state, (r) => ({ ...r, shiftR: action.shift[0], shiftB: action.shift[1] }));
+  const moved = {
+    ...state,
+    focus: action.focus,
+    side: action.side ?? state.side,
+    fly: action.focus === state.focus ? state.fly : ('none' as Fly),
+  };
+  if ('set' in action) return edit(moved, (r) => ({ ...r, [action.set]: action.value }));
+  return moved;
+}
+
 const INITIAL: EditorState = {
   mode: 'live',
   recipe: BASE,
@@ -819,6 +910,7 @@ const INITIAL: EditorState = {
   comparing: false,
   side: 'b',
   name: 'DSCF4182',
+  names: 'tab',
 };
 
 const PADS = [
@@ -828,19 +920,21 @@ const PADS = [
   { label: '▶', key: 'ArrowRight' },
   { label: 'OK', key: 'Enter' },
   { label: 'BACK', key: 'Escape' },
-  { label: 'WB SHIFT', key: 's' },
-  { label: 'INFO', key: 'i' },
-  { label: 'KEEP A', key: 'a' },
-  { label: 'COMPARE', key: 'q' },
-  { label: 'A/B', key: 'Tab' },
+];
+
+const NAMES: { names: Names; label: string }[] = [
+  { names: 'tab', label: 'Name tab' },
+  { names: 'title', label: 'Title box' },
+  { names: 'short', label: 'Short names' },
 ];
 
 function Live() {
   const [state, setState] = createSignal<EditorState>(INITIAL);
+  const send: Send = (action) => setState(apply(state(), action));
   return (
     <div
       tabindex="0"
-      class="outline-none focus-visible:ring-2 focus-visible:ring-[#0068d8]"
+      class="outline-none"
       onKeyDown={(e) => {
         const next = onKey(state(), e.key);
         if (next !== state()) {
@@ -849,8 +943,22 @@ function Live() {
         }
       }}
     >
+      <div class="mb-[10px] flex flex-wrap gap-[8px]">
+        <For each={NAMES}>
+          {(choice) => (
+            <button
+              type="button"
+              class="min-h-[40px] rounded-[10px] px-[12px] text-[15px] font-semibold"
+              style={{ background: state().names === choice.names ? '#0068d8' : '#2a2a2c' }}
+              onClick={() => setState({ ...state(), names: choice.names })}
+            >
+              {choice.label}
+            </button>
+          )}
+        </For>
+      </div>
       <Fit>
-        <Editor state={state()} />
+        <Editor state={state()} send={send} />
       </Fit>
       <div class="mt-[10px] flex max-w-[720px] flex-wrap gap-[8px]">
         <For each={PADS}>
@@ -858,7 +966,7 @@ function Live() {
             <button
               type="button"
               class="min-h-[44px] min-w-[52px] rounded-[10px] bg-[#2a2a2c] px-[12px] text-[16px] font-semibold active:bg-[#444]"
-              onClick={() => setState(onKey(state(), pad.key))}
+              onClick={() => send({ key: pad.key })}
             >
               {pad.label}
             </button>
@@ -880,59 +988,50 @@ const EDITED: Recipe = {
   shiftB: -5,
 };
 
-const STATES: { id: string; title: string; view: () => JSX.Element }[] = [
-  { id: 'slider', title: 'Slider row', view: () => <Editor state={INITIAL} /> },
-  { id: 'film', title: 'Film simulation', view: () => <Editor state={{ ...INITIAL, focus: 0 }} /> },
+const STATES: { id: string; title: string; state: EditorState }[] = [
+  { id: 'tab', title: 'Name tab on the focused row', state: { ...INITIAL, focus: 1 } },
   {
-    id: 'film-info',
-    title: 'Film simulation notes',
-    view: () => <Editor state={{ ...INITIAL, focus: 0, fly: 'film' }} />,
+    id: 'title',
+    title: 'Title box, as the stock pickers',
+    state: { ...INITIAL, focus: 1, names: 'title' },
   },
   {
-    id: 'wb',
-    title: 'White balance',
-    view: () => <Editor state={{ ...INITIAL, focus: 1, recipe: { ...BASE, wb: 4 } }} />,
+    id: 'short',
+    title: 'Short names instead of icons',
+    state: { ...INITIAL, focus: 1, names: 'short' },
   },
-  {
-    id: 'wb-shift',
-    title: 'WB SHIFT',
-    view: () => <Editor state={{ ...INITIAL, focus: 1, fly: 'shift' }} />,
-  },
+  { id: 'slider', title: 'Slider row', state: { ...INITIAL, focus: 4 } },
+  { id: 'film-info', title: 'Film simulation notes', state: { ...INITIAL, focus: 0, fly: 'film' } },
+  { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
   {
     id: 'compare',
     title: 'Compare, editing B',
-    view: () => (
-      <Editor state={{ ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 4, comparing: true }} />
-    ),
+    state: { ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 4, comparing: true },
   },
   {
     id: 'compare-a',
     title: 'Compare, editing A',
-    view: () => (
-      <Editor
-        state={{ ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 0, comparing: true, side: 'a' }}
-      />
-    ),
+    state: { ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 0, comparing: true, side: 'a' },
   },
   {
     id: 'raw',
     title: 'RAW CONVERSION in playback',
-    view: () => <Editor state={{ ...INITIAL, mode: 'raw', recipe: EDITED, focus: 5 }} />,
+    state: { ...INITIAL, mode: 'raw', recipe: EDITED, focus: 5 },
   },
 ];
 
 function Review() {
   return (
     <div class="min-h-dvh bg-[#111] p-[16px] font-sans text-[15px] text-[#ddd]">
-      <h1 class="text-[22px] font-semibold">Recipe editor</h1>
-      <section class="mt-[16px]">
-        <Live />
-      </section>
+      <h1 class="mb-[12px] text-[22px] font-semibold">Recipe editor</h1>
+      <Live />
       <For each={STATES}>
-        {(state) => (
-          <section id={state.id} class="mt-[32px]">
-            <h2 class="mb-[10px] text-[17px] font-semibold">{state.title}</h2>
-            <Fit>{state.view()}</Fit>
+        {(entry) => (
+          <section id={entry.id} class="mt-[32px]">
+            <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
+            <Fit>
+              <Editor state={entry.state} />
+            </Fit>
           </section>
         )}
       </For>
@@ -945,4 +1044,26 @@ if (!host) throw new Error('Missing #recipe-editor');
 if (import.meta.env.DEV) {
   host.replaceChildren();
   render(() => <Review />, host);
+}
+function Fit(props: { children: JSX.Element }) {
+  let host: HTMLDivElement | undefined;
+  const [scale, setScale] = createSignal(1);
+  onSettled(() => {
+    const element = host;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setScale(Math.min(1, element.clientWidth / 720)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  });
+  return (
+    <div
+      ref={(element) => (host = element)}
+      class="w-full max-w-[720px]"
+      style={{ height: `${480 * scale()}px` }}
+    >
+      <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: '720px' }}>
+        {props.children}
+      </div>
+    </div>
+  );
 }
