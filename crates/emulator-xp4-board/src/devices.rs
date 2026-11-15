@@ -1143,12 +1143,17 @@ impl Devices {
     pub fn nor_epoch(&self) -> Option<Arc<std::sync::atomic::AtomicU64>> {
         self.nor_epoch.clone()
     }
-    pub fn partition_nor_prefix(&mut self, bytes: usize) {
-        for (lo, hi, _) in &mut self.windows {
+    pub fn partition_nor_range(&mut self, offset: usize, bytes: usize) {
+        let start = storage::FLASH + offset as u64;
+        let end = start + bytes as u64;
+        let mut tail = None;
+        for (lo, hi, id) in &mut self.windows {
             if *lo == storage::FLASH && *hi == storage::FLASH + storage::FLASH_SIZE {
-                *lo += bytes as u64;
+                tail = Some((end, *hi, *id));
+                *hi = start;
             }
         }
+        if let Some(window) = tail { self.windows.push(window); }
         self.windows.retain(|(lo, hi, _)| lo < hi);
     }
     pub fn storage(
@@ -1159,7 +1164,7 @@ impl Devices {
         irq: u32,
         receiver_input: Option<super::definition::DiscoveryTxReceiver>,
         prefix: Option<storage::ImmutablePrefix>,
-        executable: Option<storage::ImmutablePrefix>,
+        executable: Option<storage::ExecutableRange>,
         mapped_read: Option<storage::MappedReadGate>,
         write_protect: bool,
         write_ranges: Vec<storage::WriteRange>,
@@ -1187,7 +1192,7 @@ impl Devices {
             },
         )?;
         if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
-        if let Some(prefix) = executable { nor = nor.with_executable_prefix(prefix)?; }
+        if let Some(range) = executable { nor = nor.with_executable_range(range)?; }
         if write_protect { nor = nor.with_write_protect(); }
         if strict_backing { nor = nor.with_strict_backing(); }
         if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }

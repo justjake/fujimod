@@ -64,7 +64,7 @@ pub struct Definition {
     pub storage_immutable_prefix: Option<NorImmutablePrefix>,
     /// Mutable NOR execution window, declared independently of normal mapped reads.
     #[serde(default)]
-    pub storage_executable_prefix: Option<NorImmutablePrefix>,
+    pub storage_executable_range: Option<fujimod_emulator_xp4_storage::storage::ExecutableRange>,
     /// Declared controller and pad states under which CPU reads of the mapped
     /// NOR return array data; absent serves every mapped read.
     #[serde(default)]

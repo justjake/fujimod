@@ -9,7 +9,7 @@ use std::{
 };
 mod checkpoint;
 mod frozen;
-pub use frozen::{ExecutableView, ImmutablePrefix, ImmutableView};
+pub use frozen::{ExecutableRange, ExecutableView, ImmutablePrefix, ImmutableView};
 
 pub const CONTROLLER: u64 = 0xfffd8000;
 pub const DMA: u64 = 0xfffe0000;
@@ -312,20 +312,23 @@ impl Nor {
         Ok(self)
     }
     /// Opt in to a read/execute window bounded by supplied initial bytes.
-    pub fn with_executable_prefix(mut self, prefix: ImmutablePrefix) -> Result<Self, String> {
-        if self.prefix.is_some() || prefix.bytes() > self.bytes.len()
-            || !prefix.bytes().is_multiple_of(self.geometry.page_bytes) {
-            return Err("Executable NOR prefix exceeds source or page boundary".into());
+    pub fn with_executable_range(mut self, range: ExecutableRange) -> Result<Self, String> {
+        let range = ExecutableRange::new(range.offset, range.bytes)?;
+        let end = range.offset + range.bytes;
+        if self.prefix.is_some() || end > self.bytes.len()
+            || !range.offset.is_multiple_of(self.geometry.page_bytes)
+            || !range.bytes.is_multiple_of(self.geometry.page_bytes) {
+            return Err("Executable NOR range exceeds source or page boundary".into());
         }
-        self.executable = Some(ExecutableView::new(self.bytes.as_slice()[..prefix.bytes()].to_vec())?);
+        self.executable = Some(ExecutableView::new(range.offset, self.bytes.as_slice()[range.offset..end].to_vec())?);
         Ok(self)
     }
     pub fn executable_view(&self) -> Option<ExecutableView> { self.executable.clone() }
     fn sync_executable(&self, address: u64, size: usize) {
         if let Some(view) = &self.executable {
-            let start = (address - FLASH) as usize;
-            let end = start.saturating_add(size).min(view.len());
-            if start < end { view.replace(start, &self.read(FLASH + start as u64, end - start).unwrap()); }
+            let start = ((address - FLASH) as usize).max(view.offset());
+            let end = ((address - FLASH) as usize).saturating_add(size).min(view.offset() + view.len());
+            if start < end { view.replace(start - view.offset(), &self.read(FLASH + start as u64, end - start).unwrap()); }
         }
     }
     pub fn immutable_view(&self) -> Option<ImmutableView> {
@@ -642,7 +645,7 @@ impl Nor {
             "immutable_prefix":self.prefix.map(|p| p.bytes()),
             "write_protect":self.write_protect,"write_ranges":self.write_ranges,
             "read_backing":self.read_backing});
-        if let Some(view) = &self.executable { state["executable_prefix"] = json!(view.len()); }
+        if let Some(view) = &self.executable { state["executable_range"] = json!({"offset":view.offset(), "bytes":view.len()}); }
         state
     }
 }
@@ -2799,7 +2802,7 @@ mod tests {
     fn executable_nor_tracks_completed_program_and_erase() {
         let geometry = Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 7 };
         let nor = Nor::new(vec![0xff; 8192], 0x123456, geometry).unwrap()
-            .with_executable_prefix(ImmutablePrefix::new(4096).unwrap()).unwrap().with_strict_backing();
+            .with_executable_range(ExecutableRange::new(4096, 4096).unwrap()).unwrap().with_strict_backing();
         let view = nor.executable_view().unwrap();
         let source = port_from_nor(nor);
         let flash = SerialFlashController::new(source.clone(), 37);
@@ -2807,24 +2810,24 @@ mod tests {
         {
             let mut p = source.lock().unwrap();
             p.nor.write_enable = true;
-            p.nor.begin(100, Mutation::Program { address: FLASH + 4, bytes: vec![0x12, 0x34] }).unwrap();
+            p.nor.begin(100, Mutation::Program { address: FLASH + 4096 + 4, bytes: vec![0x12, 0x34] }).unwrap();
         }
         assert!(flash.nor_medium().is_err());
         assert_eq!(unsafe { *view.as_ptr().add(4) }, 0xff);
         host.now = 107;
         source.lock().unwrap().nor.complete(&mut Cx::new(&mut host, 0, 0, 0));
-        assert_eq!(&flash.nor_medium().unwrap()[4..6], &[0x12, 0x34]);
+        assert_eq!(&flash.nor_medium().unwrap()[4100..4102], &[0x12, 0x34]);
         assert_eq!(unsafe { *view.as_ptr().add(4) }, 0x12);
-        assert_eq!(source.lock().unwrap().nor.read_array(FLASH + 4, 2).unwrap(), vec![0x12, 0x34]);
+        assert_eq!(source.lock().unwrap().nor.read_array(FLASH + 4096 + 4, 2).unwrap(), vec![0x12, 0x34]);
         {
             let mut p = source.lock().unwrap();
             p.nor.write_enable = true;
-            p.nor.begin(107, Mutation::Erase { address: FLASH, size: 4096 }).unwrap();
+            p.nor.begin(107, Mutation::Erase { address: FLASH + 4096, size: 4096 }).unwrap();
         }
         host.now = 127;
         source.lock().unwrap().nor.complete(&mut Cx::new(&mut host, 0, 0, 0));
         assert_eq!(unsafe { *view.as_ptr().add(4) }, 0xff);
-        assert_eq!(flash.nor_medium().unwrap()[4], 0xff);
+        assert_eq!(flash.nor_medium().unwrap()[4100], 0xff);
     }
     #[test]
     fn nor_mutations_and_dirty_pages_survive_a_fresh_physical_port() {
@@ -2975,18 +2978,13 @@ mod tests {
     fn real_buffers_deadlines_irq_and_observations_are_program_independent() {
         assert_eq!(transfer(0x1000), transfer(0xabcde0));
     }
-    fn mutations(pc: u64) -> (Value, Vec<Record>) {
-        let p = port(
-            vec![0; 8192],
-            0,
-            Geometry {
-                erase_bytes: 4096,
-                page_bytes: 256,
-                erase_ticks: 20,
-                page_ticks: 12,
-            },
-        )
-        .unwrap();
+    fn mutations(pc: u64, executable: bool) -> (Value, Vec<Record>) {
+        let nor = Nor::new(vec![0; 8192], 0, Geometry {
+            erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12,
+        }).unwrap();
+        let nor = if executable { nor.with_executable_range(ExecutableRange::new(4096, 4096).unwrap()).unwrap() } else { nor };
+        let view = nor.executable_view();
+        let p = port_from_nor(nor);
         let mut flash = SerialFlashController::new(p.clone(), 37);
         let mut dma = DmaController::new(p.clone(), std::array::from_fn(|n| 207 + n as u32));
         let mut h = TestHost {
@@ -3067,6 +3065,10 @@ mod tests {
                 p.lock().unwrap().nor.read(FLASH + 0x1004, 32).unwrap(),
                 vec![0xf0; 32]
             );
+            if let Some(view) = &view {
+                let mapped = unsafe { std::slice::from_raw_parts(view.as_ptr().add(4), 32) };
+                assert_eq!(mapped, &[0xf0; 32]);
+            }
         }
         assert_eq!(p.lock().unwrap().nor.bytes.as_slice(), vec![0; 8192]); // Immutable supplied image.
         assert_eq!(p.lock().unwrap().nor.status(), 0);
@@ -3074,7 +3076,9 @@ mod tests {
     }
     #[test]
     fn erase_and_dma_program_use_wel_wip_real_bytes_and_one_to_zero_bits() {
-        assert_eq!(mutations(0x1234), mutations(0xabcdef));
+        for executable in [false, true] {
+            assert_eq!(mutations(0x1234, executable), mutations(0xabcdef, executable));
+        }
     }
     fn program_timing(late: bool) -> (Value, Value, Vec<Record>) {
         let p = port(
@@ -4444,23 +4448,27 @@ mod executable_nor_tests {
     fn nor() -> Nor {
         Nor::new(vec![0x7f; 8192], 0x123456, Geometry {
             erase_bytes: 4096, page_bytes: 256, erase_ticks: 2, page_ticks: 2,
-        }).unwrap().with_executable_prefix(ImmutablePrefix::new(4096).unwrap()).unwrap().with_strict_backing()
+        }).unwrap().with_executable_range(ExecutableRange::new(4096, 4096).unwrap()).unwrap().with_strict_backing()
     }
     #[test]
     fn executable_view_and_export_follow_completed_overlay_and_restore() {
         let mut nor = nor();
         let view = nor.executable_view().unwrap();
         assert_eq!(unsafe { *view.as_ptr().add(3) }, 0x7f);
-        nor.overlay.insert(0, vec![0x23; 256]);
-        nor.sync_executable(FLASH, 256);
+        nor.overlay.insert(16, vec![0x23; 256]);
+        nor.sync_executable(FLASH + 4096, 256);
         assert!(view.dirty());
         assert_eq!(unsafe { *view.as_ptr().add(3) }, 0x23);
         let port = port_from_nor(nor);
         let mut flash = SerialFlashController::new(port.clone(), 37);
         let media = flash.nor_medium().unwrap();
         assert_eq!(media.len(), 8192);
-        assert_eq!(media[3], 0x23);
+        assert_eq!(media[4099], 0x23);
         let state = flash.save();
+        let mut wrong_range = state.clone();
+        wrong_range["nor"]["executable_range"]["offset"] = json!(8192);
+        assert!(flash.restore(&wrong_range).is_err());
+        assert_eq!(flash.save(), state);
         let fresh = port_from_nor(super::executable_nor_tests::nor());
         let fresh_view = fresh.lock().unwrap().nor.executable_view().unwrap();
         let mut restored = SerialFlashController::new(fresh, 37);
@@ -4472,8 +4480,11 @@ mod executable_nor_tests {
         assert!(flash.nor_medium().is_err());
     }
     #[test]
-    fn executable_prefix_refuses_unbacked_and_misaligned_inputs() {
-        assert!(Nor::new(vec![0; 4095], 1, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 2, page_ticks: 2 }).unwrap().with_executable_prefix(ImmutablePrefix::new(4096).unwrap()).is_err());
-        assert!(ImmutablePrefix::new(4095).is_err());
+    fn executable_range_refuses_unbacked_and_misaligned_inputs() {
+        assert!(Nor::new(vec![0; 8191], 1, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 2, page_ticks: 2 }).unwrap().with_executable_range(ExecutableRange::new(4096, 4096).unwrap()).is_err());
+        assert!(ExecutableRange::new(0, 4096).is_err());
+        assert!(ExecutableRange::new(4095, 4096).is_err());
+        assert!(ExecutableRange::new(4096, 4095).is_err());
+        assert!(ExecutableRange::new(usize::MAX - 4095, 4096).is_err());
     }
 }
