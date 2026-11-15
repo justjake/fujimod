@@ -456,11 +456,11 @@ function Segments(props: {
         )}
       </For>
       <span
-        class={`absolute top-1/2 flex h-[26px] min-w-[40px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[3px] px-[4px] ${props.focused ? SELECTED : ''}`}
+        class={`absolute top-1/2 flex h-[26px] min-w-[40px] -translate-x-1/2 -translate-y-1/2 items-center justify-center px-[4px] ${props.focused ? SELECTED : ''}`}
         style={{
           left: x(props.value),
-          background: 'linear-gradient(#ffffff, #d4d4d8)',
-          'box-shadow': '0 2px 4px rgb(0 0 0 / 0.7), inset 0 -1px 0 rgb(0 0 0 / 0.25)',
+          background: '#fff',
+          'box-shadow': '2px 2px 0 rgb(0 0 0 / 0.6)',
         }}
       >
         <span
