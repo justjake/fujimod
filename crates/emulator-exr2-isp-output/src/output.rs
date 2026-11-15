@@ -30,6 +30,9 @@ pub struct OutputChannel {
     registers: [u32; 64],
     stop_due: Option<u64>,
     seen_frame: u64,
+    /// START (+0xd8 = 1) on a bank that is not armed for continuous output
+    /// (+0 = 0x10001) takes the next frame once and completes with its IRQ.
+    single_frame: bool,
 }
 impl OutputChannel {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -55,6 +58,7 @@ impl OutputChannel {
             registers: [0; 64],
             stop_due: None,
             seen_frame: 0,
+            single_frame: false,
         })
     }
     fn offset(&self, address: u64, size: u8) -> Result<usize, String> {
@@ -232,7 +236,7 @@ impl OutputChannel {
         // RAW sensor capture and preview output are concurrent. Only an
         // active memory-readback transfer owns these banks exclusively; run()
         // handles that ownership before consuming a sensor frame here.
-        if self.registers[0] != 0x10001 {
+        if self.registers[0] != 0x10001 && !self.single_frame {
             return Ok(());
         }
         let layout = match self.layout() {
@@ -322,6 +326,7 @@ impl OutputChannel {
             completed: false,
             route,
         });
+        self.single_frame = false;
         drop(channels);
         drop(frames);
         self.publish_readback()?;
@@ -387,7 +392,7 @@ impl OutputChannel {
     }
 }
 impl Device for OutputChannel {
-    fujimod_emulator_devices::checkpoint_fields!(#[serde(with="fujimod_emulator_devices::checkpoint::array")] registers: [u32;64], stop_due: Option<u64>, seen_frame: u64);
+    fujimod_emulator_devices::checkpoint_fields!(#[serde(with="fujimod_emulator_devices::checkpoint::array")] registers: [u32;64], stop_due: Option<u64>, seen_frame: u64, single_frame: bool);
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(
             serde_json::json!({"registers":self.registers.as_slice(),"stop_due":self.stop_due,"seen_frame":self.seen_frame,
@@ -398,7 +403,7 @@ impl Device for OutputChannel {
         let channels = self.wiring.channels.0.lock().unwrap();
         let transfer = channels.transfers[self.wiring.channel];
         serde_json::json!({"registers":self.registers.as_slice(),"seen_frame":self.seen_frame,
-        "stop_due":self.stop_due,"dma_due":channels.dma[self.wiring.channel].deadline(),
+        "stop_due":self.stop_due,"single_frame":self.single_frame,"dma_due":channels.dma[self.wiring.channel].deadline(),
         "completed":transfer.map(|t|t.completed),"span":transfer.map(|t|t.span),
         "source_frame":transfer.and_then(|t| match t.source {
             Source::Frame(index) => Some(index), Source::Memory => None,
@@ -467,6 +472,7 @@ impl Device for OutputChannel {
                             .unwrap_or(cx.now())
                             .max(cx.now());
                         self.stop_due = Some(due(drain, self.options.stop_ticks)?);
+                        self.single_frame = false;
                         let mut channels = self.wiring.channels.0.lock().unwrap();
                         for i in 0..2 {
                             if channels.transfers[i].is_some_and(|p| !p.completed) {
@@ -492,7 +498,7 @@ impl Device for OutputChannel {
                     0x33ff1 => {}
                     _ => return Err("unknown output acknowledgment".into()),
                 },
-                0xd8 if v == 1 => {}
+                0xd8 if v == 1 => self.single_frame = self.registers[0] != 0x10001,
                 _ if Self::valid(o, v) => {}
                 _ => return Err("unknown output register or unsupported bits".into()),
             }

@@ -95,6 +95,39 @@ fn output_latches_pixels_and_address_before_irq_and_waits_for_ack() {
     }
 }
 #[test]
+fn start_without_continuous_arm_outputs_one_frame_and_completes() {
+    // The X-E2S DYNAMIC TONE filter stops both banks, then STARTs each with
+    // +0xd8 = 1 and no 0x10001 arm, and waits for both completion IRQs before
+    // it reprograms them. On the camera the filter's live view settles with no
+    // white flash, so a START delivers the next frame and its IRQ.
+    for (base, irq) in [(0xfff12000, 0x2c), (0xfff13000, 0x2d)] {
+        let (mut d, frames, _) = output(base, irq);
+        let mut m = Memory::default();
+        for (o, v) in [(4, 0x10007), (0xb0, 0x10007), (0xb4, 7), (0xc0, 0x4000), (0xc4, 8), (0xd8, 1)] {
+            write(&mut d, &mut m, base + o, v);
+        }
+        assert_eq!(d.save()["single_frame"], true);
+        frames
+            .publish(FrameEdge { index: 1, tick: 10 }, &[7; 32])
+            .unwrap();
+        advance(&mut d, &mut m, 10);
+        advance(&mut d, &mut m, 15);
+        assert_eq!(&m.bytes[0x4000..0x4020], &[7; 32]);
+        assert_eq!(m.effects, [Effect::Dma(0x4000, 32), Effect::Irq(0, irq)]);
+        assert_eq!(d.save()["single_frame"], false);
+        // One START, one frame: the next frame waits for another START.
+        write(&mut d, &mut m, base + 0xd4, 1);
+        m.effects.clear();
+        frames
+            .publish(FrameEdge { index: 2, tick: 20 }, &[9; 32])
+            .unwrap();
+        advance(&mut d, &mut m, 20);
+        advance(&mut d, &mut m, 25);
+        assert!(m.effects.is_empty());
+        assert_eq!(&m.bytes[0x4000..0x4020], &[7; 32]);
+    }
+}
+#[test]
 fn output_stop_masked_irq_completion_and_refusals() {
     let base = 0xfff12000;
     let (mut d, frames, routes) = output(base, 0x2c);
