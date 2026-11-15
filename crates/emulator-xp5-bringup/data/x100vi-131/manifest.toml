@@ -27,7 +27,7 @@ base = 0x68000000
 size = 0x18000000
 
 # DDR PHY register and firmware space, two PHYs of 0x1a0000 bytes (the X-T5 runner gives its DDR
-# PHY RAM the same extents: crates/xt5-bringup/src/main.rs, "DDR PHY register/firmware space").
+# PHY RAM the same extents: "DDR PHY register/firmware space").
 # The first half-press (S1) writes the second PHY's mailbox at 0xfb5a0000 and makes a DMA access at
 # 0xfb4a0000 (one run each); a device window cannot receive the DMA. The first PHY (0xfb000000 RAM,
 # 0xfb1a0000 stub) is X-T5 parity, not observed on the X100VI: in the runs checked its stub saw no

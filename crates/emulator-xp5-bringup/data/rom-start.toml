@@ -14,7 +14,7 @@ kind = "write-only-registers"
 # DDR controller status the stock setup polls before training: 0xfaf07780 reads non-zero once
 # 0xfaf07680 is written (the poll helper 0xff80dc24 checks offset 0x7800 & 1 == 1 on each of the
 # four controllers 0xfaf00000..0xfaf30000), and 0xfaf07784's low byte is a result code (0 = ok).
-# The values follow FujiMod's X-T5 bring-up runner (crates/xt5-bringup/src/main.rs, "stage0's
+# The values follow FujiMod's X-T5 bring-up runner ("stage0's
 # memory-controller setup"). They are scripted answers, not a model: the register behavior is
 # unknown, and the poll offsets here come from run 1794558509019-19175 and its pc-entry records.
 [[device]]
