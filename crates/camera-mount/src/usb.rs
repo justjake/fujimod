@@ -317,6 +317,7 @@ impl<F: Sessions> Client<F> {
         // Seconds per step, for FUJIMOD_MOUNT_TRACE.
         let mut phases = serde_json::Map::new();
         let mut mark = std::time::Instant::now();
+        let mut helper_wait = None;
         let mut phase = |name: &str| {
             phases.insert(name.into(), mark.elapsed().as_secs_f64().into());
             mark = std::time::Instant::now();
@@ -355,6 +356,8 @@ impl<F: Sessions> Client<F> {
                             )
                             .await?,
                         );
+                        // Install verified the stock code and the published image.
+                        service_checked = true;
                         phase("install");
                     }
                     let owned =
@@ -402,6 +405,7 @@ impl<F: Sessions> Client<F> {
                     }
                     let result = result.map(|()| Answer::Card(responses));
                     phase("requests");
+                    helper_wait = Some(volume.helper_wait().as_secs_f64());
                     if let Err(error) = volume.close().await {
                         cleanup_known = false;
                         return Err(error);
@@ -541,7 +545,7 @@ impl<F: Sessions> Client<F> {
             eprintln!(
                 "{}",
                 serde_json::json!({"mount_io":kind,"bytes":size,"requests":requests,
-                    "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok(),"phases":phases})
+                    "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok(),"phases":phases,"helper_wait_seconds":helper_wait})
             );
         }
         result
