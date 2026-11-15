@@ -258,7 +258,9 @@ const SKINS: Record<Finish, Skin> = {
 
 const ROW = 46;
 const COMPARE_HEADER = 30;
-const ICON_CELL = 46;
+const ICON_CELL = 52;
+/** Compare keeps the bottom free for the legend under both columns. */
+const LEGEND_SPACE = 52;
 const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
@@ -289,7 +291,7 @@ type Send = (action: Action) => void;
 
 /** Stock icons drawn as the Q tiles draw them: the ink in white, its
  * counters cut through to the surface beneath. */
-function Ink(props: { src: string; class: string; mode: 'alpha' | 'luminance' }) {
+function Ink(props: { src: string; class: string; mode: 'alpha' | 'luminance'; color?: string }) {
   return (
     <span
       class={`shrink-0 bg-white ${props.class}`}
@@ -297,6 +299,7 @@ function Ink(props: { src: string; class: string; mode: 'alpha' | 'luminance' })
         '-webkit-mask': `url(${props.src}) center / contain no-repeat`,
         mask: `url(${props.src}) center / contain no-repeat`,
         'mask-mode': props.mode,
+        'background-color': props.color,
       }}
     />
   );
@@ -307,11 +310,10 @@ function RowIconView(props: { icon: RowIcon }) {
     <Show
       when={'stock' in props.icon ? props.icon.stock : undefined}
       fallback={
-        <img
-          alt=""
-          class="h-[30px] w-[39px] shrink-0 object-contain"
-          style={{ filter: 'invert(1)' }}
+        <Ink
           src={`${MOD}/${(props.icon as { mod: string }).mod}.svg`}
+          class="-mx-[2px] h-[30px] w-[44px]"
+          mode="alpha"
         />
       }
     >
@@ -331,17 +333,26 @@ function ChoiceStrip(props: {
   value: number;
   width: number;
   focused: boolean;
+  changed: boolean;
   pick: (value: number) => void;
 }) {
   let track: HTMLDivElement | undefined;
   const [offset, setOffset] = createSignal(0);
+  const [more, setMore] = createSignal(false);
   const follow = () => {
     const chosen = track?.children[props.value] as HTMLElement | undefined;
     if (!track || !chosen) return;
-    const max = Math.max(0, track.scrollWidth - props.width);
-    setOffset(
-      Math.max(0, Math.min(max, chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2)),
-    );
+    // Start on a whole choice, the one that best centers the chosen one.
+    const centered = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
+    const end = chosen.offsetLeft + chosen.offsetWidth;
+    let best = 0;
+    for (const cell of Array.from(track.children) as HTMLElement[]) {
+      const start = Math.max(0, cell.offsetLeft - 3);
+      if (start > chosen.offsetLeft - 3 || end - start > props.width) continue;
+      if (Math.abs(start - centered) < Math.abs(best - centered)) best = start;
+    }
+    setOffset(best);
+    setMore(track.scrollWidth - best > props.width + 1);
   };
   createEffect(
     () => [props.value, props.width],
@@ -350,10 +361,18 @@ function ChoiceStrip(props: {
     },
   );
   return (
-    <div class="relative h-[36px] overflow-hidden" style={{ width: `${props.width}px` }}>
+    <div
+      class="relative h-[36px] overflow-hidden"
+      style={{
+        width: `${props.width}px`,
+        'mask-image': more()
+          ? 'linear-gradient(to right, #000 calc(100% - 18px), transparent)'
+          : undefined,
+      }}
+    >
       <div
         ref={(element) => (track = element)}
-        class="absolute inset-y-0 left-0 flex items-center gap-[4px] px-[3px]"
+        class="absolute inset-y-0 left-0 flex items-center gap-[2px] px-[3px]"
         style={{ transform: `translateX(${-offset()}px)` }}
       >
         <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
@@ -366,6 +385,8 @@ function ChoiceStrip(props: {
                   width: item.choice.icon ? `${ICON_CELL - 4}px` : undefined,
                   padding: item.choice.icon ? undefined : '0 7px',
                   background: chosen() ? 'rgb(255 255 255 / 0.18)' : undefined,
+                  'box-shadow':
+                    chosen() && props.changed ? 'inset 0 -3px 0 var(--accent)' : undefined,
                   
                 }}
                 onClick={(e) => {
@@ -378,7 +399,7 @@ function ChoiceStrip(props: {
                   fallback={<span class={`text-[16px] ${LIGHT}`}>{item.choice.name}</span>}
                 >
                   {(icon) => (
-                    <Ink src={stock(icon())} class="h-[24px] w-[38px]" mode="alpha" />
+                    <Ink src={stock(icon())} class="h-[24px] w-[48px]" mode="alpha" />
                   )}
                 </Show>
               </div>
@@ -488,6 +509,7 @@ function SettingRow(props: {
             value={props.recipe[props.setting.id]}
             width={controlWidth()}
             focused={props.focused}
+            changed={props.changed}
             pick={pick}
           />
         }
@@ -501,9 +523,6 @@ function SettingRow(props: {
             pick={pick}
           />
         )}
-      </Show>
-      <Show when={props.changed && props.setting.kind === 'choice'}>
-        <span class="absolute top-[4px] right-[6px] h-[6px] w-[6px] bg-(--accent)" />
       </Show>
     </div>
   );
@@ -521,13 +540,14 @@ function Column(props: {
   active?: boolean;
   send: Send;
 }) {
-  const height = () => 480 - (props.side ? COMPARE_HEADER : 0);
+  const height = () => 480 - (props.side ? COMPARE_HEADER + LEGEND_SPACE : 0);
   const edge = () =>
     props.side === 'b' ? props.skin.edge.replaceAll('inset -', 'inset ') : props.skin.edge;
   return (
     <div
-      class="absolute top-0 bottom-0 flex flex-col"
+      class="absolute top-0 flex flex-col"
       style={{
+        bottom: props.side ? `${LEGEND_SPACE}px` : '0',
         left: `${props.left}px`,
         width: `${props.width}px`,
         background: props.skin.panel,
@@ -855,7 +875,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
       </Show>
 
       <Show when={s().fly !== 'shift'}>
-        <Legend hints={hints()} send={send} left={compare() ? 312 : WIDTH + 12} />
+        <Legend hints={hints()} send={send} left={compare() ? 12 : WIDTH + 12} />
       </Show>
     </div>
   );
