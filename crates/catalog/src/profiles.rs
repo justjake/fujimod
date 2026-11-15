@@ -538,6 +538,20 @@ pub struct Shutter {
     pub closing_delay_seconds: Vec<Vec<f64>>,
 }
 
+/// Declared focal-plane curtain facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCurtains"))]
+pub struct Curtains {
+    /// Image-input comparator output that releases the first curtain.
+    pub first_output: u64,
+    /// Image-input comparator output that releases the second curtain.
+    pub second_output: u64,
+    /// Light added to the interval between the two comparator edges, seconds.
+    pub light_offset_seconds: f64,
+}
+
 /// Declared radiometry facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -555,8 +569,12 @@ pub struct Radiometry {
     pub mode_change_frames: u8,
     /// Declared saturation lux seconds.
     pub saturation_lux_seconds: f64,
-    /// Declared shutter.
-    pub shutter: Shutter,
+    /// Declared leaf shutter; absent for a focal-plane body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shutter: Option<Shutter>,
+    /// Declared focal-plane curtains; absent for a leaf-shutter body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curtains: Option<Curtains>,
     /// Declared shutter output.
     pub shutter_output: u64,
     /// Declared ticks per second.
