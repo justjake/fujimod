@@ -464,7 +464,7 @@ impl Cluster {
     /// Instruction fetch from the serial-flash aperture: execute in place. The page is read through the same gated read the
     /// CPU's data reads take, so a controller state that returns the declared miss pattern or refuses reads does so for
     /// the fetch as well, and is then mapped as read-execute memory. NOR writes are refused by the aperture, not here.
-    fn map_nor_exec_page(&self, core: usize, address: u64) -> Result<(), String> {
+    fn map_nor_exec_page(&self, core: usize, address: u64, mapped: bool) -> Result<(), String> {
         use fujimod_emulator_xp4_storage::storage::{FLASH, FLASH_SIZE};
         if !(FLASH..FLASH + FLASH_SIZE).contains(&address) {
             return Err("Not a serial-flash aperture address".into());
@@ -482,7 +482,9 @@ impl Cluster {
             }
         }
         for cpu in &self.cpus {
-            cpu.unmap(page, 4096)?;
+            if mapped {
+                cpu.unmap(page, 4096).map_err(|e| format!("Unmap execute-in-place page {page:#x}: {e}"))?;
+            }
             unsafe { cpu.map_backing(page, 4096, 5, std::ptr::NonNull::new(data.as_mut_ptr()).unwrap()) }
                 .map_err(|e| format!("Map execute-in-place page {page:#x}: {e}"))?;
         }
@@ -505,7 +507,7 @@ impl Cluster {
         let pages: Vec<u64> = state.xip.keys().copied().collect();
         for page in pages {
             for core in 0..self.cpus.len() {
-                self.cpus[core].unmap(page, 4096)?;
+                self.cpus[core].unmap(page, 4096).map_err(|e| format!("Unmap execute-in-place page {page:#x}: {e}"))?;
                 let hook = Box::new(MmioHook { cluster: self, core, base: page });
                 let ptr = (&*hook as *const MmioHook).cast_mut().cast();
                 unsafe {
@@ -998,7 +1000,8 @@ unsafe fn invalid(kind: Fault, address: u64, size: i32, _value: i64, data: *mut 
     if matches!(kind, Fault::FetchProtected | Fault::FetchUnmapped) && owned {
         use fujimod_emulator_xp4_storage::storage::{FLASH, FLASH_SIZE};
         if (FLASH..FLASH + FLASH_SIZE).contains(&address) {
-            return match c.map_nor_exec_page(hook.core, address) {
+            // A fetch-protected page is already mapped (as aperture MMIO); an unmapped one never was.
+            return match c.map_nor_exec_page(hook.core, address, kind == Fault::FetchProtected) {
                 Ok(()) => true,
                 Err(error) => {
                     c.fail(hook.core, error);
