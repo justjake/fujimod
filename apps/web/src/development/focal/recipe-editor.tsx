@@ -254,11 +254,23 @@ const SKINS: Record<Finish, Skin> = {
   },
 };
 
+/** How a row's control area sits beside its icon: behind a stroke alone, in a
+ * darker well, or on a lighter shelf. */
+type Drawer = 'line' | 'well' | 'shelf';
+
+const DRAWERS: Record<Drawer, string | undefined> = {
+  line: undefined,
+  well: 'rgb(0 0 0 / 0.5)',
+  shelf: 'rgb(255 255 255 / 0.11)',
+};
+
 /* ---- Layout ------------------------------------------------------------------ */
 
 const ROW = 46;
 const COMPARE_HEADER = 30;
 const ICON_CELL = 52;
+/** The icon column, before the stroke that starts each row's drawer. */
+const ICON_COLUMN = 58;
 /** Compare keeps the bottom free for the legend under both columns. */
 const LEGEND_SPACE = 52;
 const WIDTH = 280;
@@ -347,8 +359,8 @@ function ChoiceStrip(props: {
     const end = chosen.offsetLeft + chosen.offsetWidth;
     let best = 0;
     for (const cell of Array.from(track.children) as HTMLElement[]) {
-      const start = Math.max(0, cell.offsetLeft - 3);
-      if (start > chosen.offsetLeft - 3 || end - start > props.width) continue;
+      const start = Math.max(0, cell.offsetLeft - 5);
+      if (start > chosen.offsetLeft - 5 || end - start > props.width) continue;
       if (Math.abs(start - centered) < Math.abs(best - centered)) best = start;
     }
     setOffset(best);
@@ -372,7 +384,7 @@ function ChoiceStrip(props: {
     >
       <div
         ref={(element) => (track = element)}
-        class="absolute inset-y-0 left-0 flex items-center gap-[2px] px-[3px]"
+        class="absolute inset-y-0 left-0 flex items-center gap-[2px] px-[5px]"
         style={{ transform: `translateX(${-offset()}px)` }}
       >
         <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
@@ -383,7 +395,7 @@ function ChoiceStrip(props: {
                 class={`flex h-[28px] shrink-0 items-center justify-center ${chosen() && props.focused ? SELECTED : ''}`}
                 style={{
                   width: item.choice.icon ? `${ICON_CELL - 4}px` : undefined,
-                  padding: item.choice.icon ? undefined : '0 7px',
+                  padding: item.choice.icon ? undefined : '0 6px',
                   background: chosen() ? 'rgb(255 255 255 / 0.18)' : undefined,
                   'box-shadow':
                     chosen() && props.changed ? 'inset 0 -3px 0 var(--accent)' : undefined,
@@ -422,10 +434,10 @@ function Segments(props: {
 }) {
   const count = () => props.setting.steps.length;
   const zero = () => props.setting.steps.indexOf(0);
-  const x = (i: number) => `calc(22px + (100% - 44px) * ${i / (count() - 1)})`;
+  const x = (i: number) => `calc(20px + (100% - 40px) * ${i / (count() - 1)})`;
   return (
     <div
-      class="relative h-[34px] flex-1"
+      class="relative mx-[6px] h-[34px] flex-1"
       onClick={(e) => {
         e.stopPropagation();
         const box = e.currentTarget.getBoundingClientRect();
@@ -440,7 +452,7 @@ function Segments(props: {
         class="absolute top-1/2 h-[4px] -translate-y-1/2 bg-(--accent)"
         style={{
           left: x(Math.min(zero(), props.value)),
-          width: `calc((100% - 44px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
+          width: `calc((100% - 40px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
         }}
       />
       <For each={props.setting.steps.map((step, i) => i)}>
@@ -482,15 +494,16 @@ function SettingRow(props: {
   changed: boolean;
   width: number;
   skin: Skin;
+  drawer: Drawer;
   side?: Side;
   send: Send;
 }) {
-  const controlWidth = () => props.width - 8 - 39 - 8 - 8;
+  const controlWidth = () => props.width - ICON_COLUMN - 1;
   const pick = (value: number) =>
     props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   return (
     <div
-      class="relative flex items-center gap-[8px] pr-[8px] pl-[8px]"
+      class="relative flex items-stretch"
       style={{ height: `${ROW}px`, ...props.skin.row(props.focused) }}
       onClick={() => props.send({ focus: props.index, side: props.side })}
     >
@@ -500,30 +513,40 @@ function SettingRow(props: {
           style={{ width: `${STRIPE}px` }}
         />
       </Show>
-      <RowIconView icon={props.setting.icon} />
-      <Show
-        when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
-        fallback={
-          <ChoiceStrip
-            setting={props.setting as ChoiceSetting}
-            value={props.recipe[props.setting.id]}
-            width={controlWidth()}
-            focused={props.focused}
-            changed={props.changed}
-            pick={pick}
-          />
-        }
+      <div
+        class="flex shrink-0 items-center justify-center"
+        style={{ width: `${ICON_COLUMN}px`, 'border-right': '1px solid rgb(255 255 255 / 0.22)' }}
       >
-        {(slider) => (
-          <Segments
-            setting={slider()}
-            value={props.recipe[slider().id]}
-            focused={props.focused}
-            changed={props.changed}
-            pick={pick}
-          />
-        )}
-      </Show>
+        <RowIconView icon={props.setting.icon} />
+      </div>
+      <div
+        class="flex min-w-0 flex-1 items-center"
+        style={{ background: DRAWERS[props.drawer] }}
+      >
+        <Show
+          when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
+          fallback={
+            <ChoiceStrip
+              setting={props.setting as ChoiceSetting}
+              value={props.recipe[props.setting.id]}
+              width={controlWidth()}
+              focused={props.focused}
+              changed={props.changed}
+              pick={pick}
+            />
+          }
+        >
+          {(slider) => (
+            <Segments
+              setting={slider()}
+              value={props.recipe[slider().id]}
+              focused={props.focused}
+              changed={props.changed}
+              pick={pick}
+            />
+          )}
+        </Show>
+      </div>
     </div>
   );
 }
@@ -536,6 +559,7 @@ function Column(props: {
   left: number;
   width: number;
   skin: Skin;
+  drawer: Drawer;
   side?: Side;
   active?: boolean;
   send: Send;
@@ -581,6 +605,7 @@ function Column(props: {
                 }
                 width={props.width}
                 skin={props.skin}
+                drawer={props.drawer}
                 side={props.side}
                 send={props.send}
               />
@@ -742,6 +767,7 @@ interface EditorState {
   side: Side;
   name: string;
   finish: Finish;
+  drawer: Drawer;
 }
 
 function valueName(setting: Setting, recipe: Recipe): string {
@@ -800,6 +826,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
                   left={side === 'a' ? 0 : 720 - COMPARE_WIDTH}
                   width={COMPARE_WIDTH}
                   skin={skin()}
+                  drawer={s().drawer}
                   side={side}
                   active={s().side === side}
                   send={send}
@@ -818,6 +845,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
           left={0}
           width={WIDTH}
           skin={skin()}
+          drawer={s().drawer}
           send={send}
         />
         <Show when={s().fly === 'none'}>
@@ -953,6 +981,7 @@ const INITIAL: EditorState = {
   side: 'b',
   name: 'DSCF4182',
   finish: 'flat',
+  drawer: 'line',
 };
 
 const PADS = [
@@ -962,6 +991,12 @@ const PADS = [
   { label: '▶', key: 'ArrowRight' },
   { label: 'OK', key: 'Enter' },
   { label: 'BACK', key: 'Escape' },
+];
+
+const DRAWER_CHOICES: { drawer: Drawer; label: string }[] = [
+  { drawer: 'line', label: 'Stroke' },
+  { drawer: 'well', label: 'Dark drawer' },
+  { drawer: 'shelf', label: 'Light drawer' },
 ];
 
 const FINISHES: { finish: Finish; label: string }[] = [
@@ -992,6 +1027,18 @@ function Live() {
               class="min-h-[40px] rounded-[10px] px-[12px] text-[15px] font-semibold"
               style={{ background: state().finish === choice.finish ? '#0068d8' : '#2a2a2c' }}
               onClick={() => setState({ ...state(), finish: choice.finish })}
+            >
+              {choice.label}
+            </button>
+          )}
+        </For>
+        <For each={DRAWER_CHOICES}>
+          {(choice) => (
+            <button
+              type="button"
+              class="min-h-[40px] rounded-[10px] px-[12px] text-[15px] font-semibold"
+              style={{ background: state().drawer === choice.drawer ? '#0068d8' : '#2a2a2c' }}
+              onClick={() => setState({ ...state(), drawer: choice.drawer })}
             >
               {choice.label}
             </button>
