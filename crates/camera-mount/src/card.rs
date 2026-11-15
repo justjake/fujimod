@@ -145,7 +145,7 @@ fn main() {
     let rest: Vec<String> = args.collect();
     for signal in [libc::SIGINT, libc::SIGTERM] {
         // SAFETY: the handler only stores to an atomic.
-        unsafe { libc::signal(signal, stop as libc::sighandler_t) };
+        unsafe { libc::signal(signal, stop as *const () as libc::sighandler_t) };
     }
     let page = NonZeroU32::new(256).expect("constant");
     let (usb, regions) = UsbDevice::connect(
