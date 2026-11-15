@@ -65,6 +65,10 @@ pub struct Definition {
     /// Refuse every write-enable, erase and program request to the NOR.
     #[serde(default)]
     pub storage_write_protect: bool,
+    /// Bound external NOR reads to the supplied asset. Omitted preserves
+    /// erased bytes beyond the asset; this does not declare chip capacity.
+    #[serde(default)]
+    pub storage_strict_backing: bool,
     /// DMA-only connection with explicitly declared reset and timing hypotheses.
     #[serde(default)]
     pub standalone_dma: Option<StandaloneDma>,

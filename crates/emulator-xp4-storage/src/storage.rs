@@ -2,6 +2,7 @@
 //! flash bytes, DMA and IRQ routing are separate inputs.
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -78,12 +79,21 @@ impl MappedReadGate {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReadBacking {
+    bytes: usize,
+    sha256: [u8; 32],
+}
+
 /// External NOR contents and identity, supplied by the board. Uninitialized
-/// bytes are erased. No firmware structures or executable signatures enter it.
+/// bytes are erased unless strict external read backing is selected.
+/// No firmware structures or executable signatures enter it.
 pub struct Nor {
     bytes: frozen::Source,
     prefix: Option<ImmutablePrefix>,
     write_protect: bool,
+    read_backing: Option<ReadBacking>,
     pub jedec: u32,
     pub write_enable: bool,
     geometry: Geometry,
@@ -108,6 +118,7 @@ impl Nor {
             bytes: frozen::Source::new(bytes)?,
             prefix: None,
             write_protect: false,
+            read_backing: None,
             jedec,
             write_enable: false,
             geometry,
@@ -130,6 +141,31 @@ impl Nor {
     pub fn with_write_protect(mut self) -> Self {
         self.write_protect = true;
         self
+    }
+    /// Refuse external array reads outside the supplied bytes. The range and
+    /// source identity remain fixed for this instance, including after writes.
+    /// This is independent of write protection and the aperture's capacity.
+    pub fn with_strict_backing(mut self) -> Self {
+        self.read_backing = Some(ReadBacking {
+            bytes: self.bytes.len(),
+            sha256: Sha256::digest(self.bytes.as_slice()).into(),
+        });
+        self
+    }
+    fn check_read_backing(&self, address: u64, size: usize) -> Result<(), String> {
+        let Some(backing) = &self.read_backing else { return Ok(()) };
+        let offset = address.checked_sub(FLASH).ok_or("NOR address below aperture")?;
+        if offset.checked_add(size as u64).is_none_or(|end| end > backing.bytes as u64) {
+            return Err(format!(
+                "NOR read outside supplied backing: offset={offset:#x} size={size:#x} backed_bytes={:#x}",
+                backing.bytes
+            ));
+        }
+        Ok(())
+    }
+    fn read_array(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
+        self.check_read_backing(address, size)?;
+        self.read(address, size)
     }
     /// Commands that only read the array, identity or status. Every other
     /// supported opcode can enable or perform a mutation.
@@ -161,6 +197,9 @@ impl Nor {
         let address = FLASH + offset / size as u64 * size as u64;
         self.check_mutation(address, size)
     }
+    // Internal mutation assembly still needs complete pages, including erased
+    // bytes outside a partially supplied final page. External CPU/DMA reads
+    // use read_array; writes never enlarge that fixed input coverage.
     fn read(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
         let offset = address
             .checked_sub(FLASH)
@@ -283,7 +322,7 @@ impl Nor {
             "erase_bytes":self.geometry.erase_bytes,"page_bytes":self.geometry.page_bytes,
             "erase_ticks":self.geometry.erase_ticks,"page_ticks":self.geometry.page_ticks,
             "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes()),
-            "write_protect":self.write_protect})
+            "write_protect":self.write_protect,"read_backing":self.read_backing})
     }
 }
 
@@ -423,12 +462,15 @@ impl SerialFlashController {
             if write {
                 return Err("CPU store to NOR aperture without a program command".into());
             }
+            // A declared sampling miss is not permission to read outside the
+            // attached input. Check coverage before counting or returning it.
+            self.port.lock().unwrap().nor.check_read_backing(address, size as usize)?;
             if !self.mapped_read_state()? {
                 self.mapped_misses += 1;
                 let miss = self.gate.as_ref().unwrap().miss_byte;
                 return Ok((0..size).fold(0, |v, n| v | u64::from(miss) << (8 * n)));
             }
-            let bytes = self.port.lock().unwrap().nor.read(address, size as usize)?;
+            let bytes = self.port.lock().unwrap().nor.read_array(address, size as usize)?;
             return Ok(bytes
                 .iter()
                 .enumerate()
@@ -542,7 +584,7 @@ impl SerialFlashController {
                 if self.port.lock().unwrap().nor.pending.is_some() {
                     return Err("Mapped NOR read while busy".into());
                 }
-                self.port.lock().unwrap().nor.read(address, size)?;
+                self.port.lock().unwrap().nor.read_array(address, size)?;
                 self.port.lock().unwrap().request = Some(Request {
                     address,
                     size,
@@ -998,7 +1040,7 @@ impl DmaController {
             if !r.accepted || r.write || r.address != src || r.size != size {
                 return Err("DMA differs from serial-flash request".into());
             }
-            port.nor.read(src, size)?
+            port.nor.read_array(src, size)?
         } else if c.regs[0x1c / 4] & 4 != 0 {
             let width = 1usize << ((c.regs[0x1c / 4] >> 16) & 3);
             if !size.is_multiple_of(width) {
@@ -2305,6 +2347,172 @@ mod mapped_read_tests {
         let mut bad = gate(GOOD);
         bad.states[1].control = (1, 3);
         assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+    }
+}
+
+#[cfg(test)]
+mod strict_backing_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::TestHost;
+
+    fn nor(bytes: Vec<u8>, strict: bool) -> Nor {
+        let nor = Nor::new(bytes, 0x20, Geometry {
+            erase_bytes: 4096, page_bytes: 256, erase_ticks: 8, page_ticks: 2,
+        }).unwrap();
+        if strict { nor.with_strict_backing() } else { nor }
+    }
+    fn controller(bytes: Vec<u8>, strict: bool) -> SerialFlashController {
+        SerialFlashController::new(port_from_nor(nor(bytes, strict)), 37)
+    }
+
+    #[test]
+    fn exact_backing_bounds_empty_reads_and_default_erased_bytes() {
+        let bytes = vec![0x42; 17];
+        let strict = nor(bytes.clone(), true);
+        assert_eq!(strict.read_array(FLASH, 17).unwrap(), bytes);
+        assert_eq!(strict.read_array(FLASH + 16, 1).unwrap(), [0x42]);
+        assert_eq!(strict.read_array(FLASH + 17, 0).unwrap(), Vec::<u8>::new());
+        for (address, size) in [
+            (FLASH + 16, 2), (FLASH + 17, 1), (FLASH + 18, 0),
+            (FLASH - 1, 0), (u64::MAX, 8), (FLASH + 1, usize::MAX),
+        ] {
+            assert!(strict.read_array(address, size).is_err(), "{address:#x}+{size:#x}");
+        }
+        let empty = nor(vec![], true);
+        assert_eq!(empty.read_array(FLASH, 0).unwrap(), Vec::<u8>::new());
+        assert!(empty.read_array(FLASH, 1).is_err());
+        let erased = nor(vec![0x42; 17], false);
+        assert_eq!(erased.read_array(FLASH + 16, 4).unwrap(), [0x42, 255, 255, 255]);
+        assert_eq!(erased.read_array(FLASH + 17, 4).unwrap(), [255; 4]);
+        assert!(erased.read_array(FLASH + FLASH_SIZE - 1, 2).is_err());
+    }
+
+    #[test]
+    fn coverage_precedes_sampling_miss_without_counting_an_unbacked_read() {
+        let gate = MappedReadGate {
+            states: vec![MappedReadState {
+                control: (0, 0), clock: 0, mode: 0, samples: vec![1], pad: false,
+            }],
+            miss_byte: 0xa5,
+            pad: (0xfff4108c, 0, 0),
+        };
+        let mut f = controller(vec![0x42; 17], true).with_mapped_read_gate(gate.clone()).unwrap();
+        let mut host = TestHost::new();
+        assert_eq!(f.access(&mut host.cx(), FLASH + 16, 1, false, 0).unwrap(), 0xa5);
+        assert_eq!(f.mapped_misses, 1);
+        let before = f.save();
+        let error = f.access(&mut host.cx(), FLASH + 17, 1, false, 0).unwrap_err();
+        assert!(error.contains("outside supplied backing"));
+        assert_eq!(f.save(), before);
+        let mut legacy = controller(vec![0x42; 17], false).with_mapped_read_gate(gate).unwrap();
+        assert_eq!(legacy.access(&mut host.cx(), FLASH + 17, 1, false, 0).unwrap(), 0xa5);
+    }
+
+    #[test]
+    fn stream_refuses_crossing_backing_before_acceptance_or_dma() {
+        let mut f = controller(vec![0x42; 17], true);
+        let mut host = TestHost::new();
+        f.regs[0x20 / 4] = 0x707;
+        f.regs[0x68 / 4] = (FLASH + 16) as u32;
+        f.regs[0x6c / 4] = 2;
+        let before = f.save();
+        assert!(f.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1)
+            .unwrap_err().contains("outside supplied backing"));
+        assert_eq!(f.save(), before);
+        assert!(host.effects.is_empty());
+        assert!(f.port.lock().unwrap().request.is_none());
+        assert!(f.due.is_none());
+        // A request ending exactly at the bound retains normal acceptance.
+        f.regs[0x68 / 4] = (FLASH + 1) as u32;
+        f.regs[0x6c / 4] = 16;
+        f.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1).unwrap();
+        assert_eq!(f.due, Some((8, 2)));
+    }
+
+    #[test]
+    fn dma_completion_rechecks_read_backing_before_destination_or_completion_changes() {
+        let port = port_from_nor(nor(vec![0x42; 17], true));
+        // A deliberately inconsistent accepted request tests the independent
+        // completion boundary, not only the normal submission validation.
+        port.lock().unwrap().request = Some(Request {
+            address: FLASH + 16, size: 2, accepted: true, accepted_at: 0, write: false,
+        });
+        let mut dma = DmaController::new(port, std::array::from_fn(|n| 207 + n as u32));
+        let channel = &mut dma.channels[0];
+        channel.regs[0x14 / 4] = (FLASH + 16) as u32;
+        channel.regs[0x18 / 4] = 0x100;
+        channel.regs[0x10 / 4] = 1;
+        channel.submitted = true;
+        channel.due = Some(0);
+        let mut host = TestHost::new();
+        host.ram[0x100..0x104].fill(0xa5);
+        let before = dma.save();
+        assert!(dma.complete(&mut host.cx(), 0).unwrap_err().contains("outside supplied backing"));
+        assert_eq!(dma.save(), before);
+        assert_eq!(&host.ram[0x100..0x104], &[0xa5; 4]);
+        assert!(host.effects.is_empty());
+    }
+
+    #[test]
+    fn partial_final_page_program_uses_internal_assembly_without_extending_read_coverage() {
+        let mut n = nor(vec![255; 17], true);
+        let initial_backing = n.read_backing.clone();
+        n.write_enable = true;
+        n.begin(0, Mutation::Program { address: FLASH + 16, bytes: vec![0x5a] }).unwrap();
+        let mut host = TestHost::new();
+        host.now = 2;
+        let mut cx = host.cx();
+        n.complete(&mut cx);
+        assert_eq!(cx.refusal(), None);
+        assert!(n.pending.is_none());
+        assert_eq!(n.read_array(FLASH + 16, 1).unwrap(), [0x5a]);
+        assert_eq!(n.read(FLASH + 17, 1).unwrap(), [255]);
+        assert!(n.read_array(FLASH + 17, 1).is_err());
+        assert_eq!(n.read_backing, initial_backing);
+        // Explicitly programmed bytes outside the input do not silently turn
+        // a fixed read-coverage declaration into a larger one either.
+        n.write_enable = true;
+        n.begin(2, Mutation::Program { address: FLASH + 17, bytes: vec![0x12] }).unwrap();
+        host.now = 4;
+        n.complete(&mut host.cx());
+        assert_eq!(n.read(FLASH + 17, 1).unwrap(), [0x12]);
+        assert!(n.read_array(FLASH + 17, 1).is_err());
+    }
+
+    #[test]
+    fn checkpoint_requires_identical_backing_and_refuses_unbacked_read_stream_atomically() {
+        let mut original = controller(vec![0x42; 17], true);
+        original.regs[0] = 0x123;
+        let saved = original.save();
+        let mut same = controller(vec![0x42; 17], true);
+        same.restore(&saved).unwrap();
+        assert_eq!(same.save(), saved);
+        for mut other in [controller(vec![0x42; 17], false),
+                          controller(vec![0x42; 18], true),
+                          controller(vec![0x43; 17], true)] {
+            let before = other.save();
+            assert!(other.restore(&saved).is_err());
+            assert_eq!(other.save(), before);
+        }
+        for (address, size) in [(FLASH + 16, 2), (FLASH + 18, 0), (u64::MAX, 8)] {
+            let mut bad = saved.clone();
+            bad["registers"][0] = json!(0x456);
+            bad["stream"] = json!({"address":address,"size":size,"accepted":true,
+                                  "accepted_at":0,"write":false});
+            assert!(same.restore(&bad).is_err());
+            assert_eq!(same.save(), saved);
+        }
+        let mut accepted = saved.clone();
+        accepted["stream"] = json!({"address":FLASH + 1,"size":16,"accepted":true,
+                                   "accepted_at":0,"write":false});
+        same.restore(&accepted).unwrap();
+        assert_eq!(same.save(), accepted);
+        let mut legacy = controller(vec![0x42; 17], false);
+        let mut old = legacy.save();
+        old["nor"].as_object_mut().unwrap().remove("read_backing");
+        legacy.restore(&old).unwrap();
+        assert!(original.restore(&old).is_err());
+        assert_eq!(original.save(), saved);
     }
 }
 
