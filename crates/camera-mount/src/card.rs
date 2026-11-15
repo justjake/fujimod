@@ -202,6 +202,7 @@ fn main() {
             write: page,
         },
         None,
+        true,
     )
     .unwrap_or_else(|e| fail(e));
     // Only put and rm may change the card.

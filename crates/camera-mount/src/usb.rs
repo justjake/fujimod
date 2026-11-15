@@ -152,6 +152,9 @@ struct Client<F> {
     fenced: bool,
     fatal: Arc<AtomicBool>,
     lease: Option<ReadLease>,
+    /// Keep one qualified session for every operation until Close, for a
+    /// one-shot command; a mount releases ff80 between bursts instead.
+    hold: bool,
 }
 const READ_IDLE: Duration = Duration::from_millis(20);
 
@@ -223,12 +226,31 @@ impl<F: Sessions> Client<F> {
             }
             _ => 0,
         };
-        if read_bytes == 0
-            || self.lease.as_ref().is_some_and(|lease| {
-                lease.started.elapsed() >= Duration::from_secs(2)
-                    || lease.bytes + read_bytes > 64 << 20
-            })
-        {
+        let ends = matches!(op, Operation::Close | Operation::Unload);
+        let release = if self.hold {
+            ends && self.service.is_none()
+        } else {
+            read_bytes == 0
+                || self.lease.as_ref().is_some_and(|lease| {
+                    lease.started.elapsed() >= Duration::from_secs(2)
+                        || lease.bytes + read_bytes > 64 << 20
+                })
+        };
+        // Only reads run under a kept bulk mapping.
+        let reads_only = match &op {
+            Operation::Memory(..) => true,
+            Operation::Card(requests) => requests.iter().all(|r| {
+                matches!(
+                    r,
+                    Request::ReadAt { .. }
+                        | Request::ReadDirectory { .. }
+                        | Request::List { .. }
+                        | Request::Read { .. }
+                )
+            }),
+            _ => false,
+        };
+        if release {
             self.release_lease().await?;
         }
         // Every write is committed and every handle closed before replying.
@@ -286,6 +308,10 @@ impl<F: Sessions> Client<F> {
             self.bulk.as_ref().and_then(|facts| facts.upload.as_ref()),
         );
         transport.resume(mapping);
+        if !reads_only && let Err(error) = transport.restore(&mut session).await {
+            self.fence();
+            return Err(error);
+        }
         let mut cleanup_known = true;
         let result = async {
             match op {
@@ -466,9 +492,13 @@ impl<F: Sessions> Client<F> {
             return result.and(Err(Error::CompletionUnknown));
         }
         let retain = result.is_ok()
-            && read_bytes != 0
-            && burst_bytes + read_bytes < 64 << 20
-            && burst_started.elapsed() < Duration::from_secs(2);
+            && if self.hold {
+                !ends
+            } else {
+                read_bytes != 0
+                    && burst_bytes + read_bytes < 64 << 20
+                    && burst_started.elapsed() < Duration::from_secs(2)
+            };
         if retain {
             self.lease = Some(ReadLease {
                 session,
@@ -514,12 +544,14 @@ pub struct UsbDevice {
 impl UsbDevice {
     /// Select descriptors and preflight one bounded transaction. Idle mounts
     /// hold no connection, ff80 session or file handle. An owned helper keeps
-    /// its allocation until idle cleanup.
+    /// its allocation until idle cleanup. With `hold`, the preflight's session
+    /// and helper qualification serve every request until close.
     pub fn connect(
         firmware: String,
         device_id: Option<String>,
         limits: DebugMemoryLimits,
         flash_reader: Option<std::path::PathBuf>,
+        hold: bool,
     ) -> std::result::Result<(Self, Vec<Region>), Box<dyn std::error::Error + Send + Sync>> {
         let catalog = ReferenceCatalog::bundled()?;
         let firmware = if firmware == "auto" {
@@ -590,6 +622,7 @@ impl UsbDevice {
                         fenced: false,
                         fatal: worker_fatal,
                         lease: None,
+                        hold,
                     };
                     let preflight = if has_card {
                         Operation::Card(vec![Request::ReadDirectory {
@@ -609,7 +642,9 @@ impl UsbDevice {
                         return;
                     }
                     loop {
-                        let pending = if client.lease.is_some() {
+                        let pending = if client.hold {
+                            rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+                        } else if client.lease.is_some() {
                             rx.recv_timeout(READ_IDLE)
                         } else if client.service.is_some() && !client.fenced {
                             rx.recv_timeout(Duration::from_secs(2))

@@ -137,6 +137,9 @@ An uncertain completion is terminal for the mount: the worker sets a fatal
 flag, the host unmounts and exits, and it never reuses or reclaims that session.
 Flash reads yield the file helper allocation first, then recreate it on the next
 SD operation. Other tools can acquire ff80 between bursts and while idle.
+`fujimod-card` instead keeps its first session, helper qualification and bulk
+mapping for the whole command and closes it at the end; a request that changes
+the SD card first restores the mapping.
 
 The installed-service descriptor address is cached as a discovery hint. Each
 transaction revalidates its descriptor, pointers and ownership; a missing hint
