@@ -199,14 +199,15 @@ fn wfi_and_guest_sgi_irq_yield_before_target_and_resume_through_vector() {
 #[test]
 fn strict_mmio_failure_is_sticky_even_when_its_pc_is_the_next_target() {
     let mut value = input(1);
-    // The declared word maps its MMIO page; the neighboring word has no owner.
-    value["control_requests"] = json!([[0x10000000u32, 8]]);
+    // ADC owns [BASE, BASE+0x48), but its aligned word at +0x44 is
+    // explicitly unmodeled. Ownership maps the page before this refusal.
+    value["adc"] = json!([vec![0u16; 12], 16]);
     value["initial_registers"][0].as_array_mut().unwrap()
-        .push(json!([{"Arm32":{"R":2}},0x10000004u32]));
+        .push(json!([{"Arm32":{"R":2}},0xfff40044u32]));
     let s = session(value);
     program(&s, CODE, &[0xe592_3000, 0xe580_1000]); // Refused LDR; unreachable store.
     let error = s.run_to(0, 8, (CODE + 8) as u64).unwrap_err();
-    assert!(error.contains("Unsupported MMIO 0x10000004"), "{error}");
+    assert!(error.contains("Unsupported MMIO 0xfff40044"), "{error}");
     assert_eq!(s.read_register(0, arm::PC).unwrap(), CODE as u64);
     assert_eq!(word(&s, DATA), 0);
     let before = state(&s);
