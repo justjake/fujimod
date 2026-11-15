@@ -817,7 +817,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
       style={{
         '--hairline': colors.hairline,
         '--focus': colors.focus,
-        '--accent': s().mode === 'raw' ? 'var(--color-play)' : 'var(--color-setup)',
+        '--accent': s().mode === 'raw' ? 'var(--color-play)' : 'var(--color-rec)',
       }}
     >
       <Photo recipe={s().recipe} />
