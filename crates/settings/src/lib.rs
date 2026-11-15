@@ -24,7 +24,8 @@ pub struct Profile {
     pub records: Vec<Record>,
 }
 
-/// A sealed journal record and its flash block.
+/// A sealed journal record and its flash block. A record the layout copies
+/// holds every sealed copy back to back, each numbered in its first bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
     pub bytes: Vec<u8>,
@@ -273,9 +274,17 @@ fn profile<'a>(
             let mut records = Vec::new();
             for (name, record) in &located.records {
                 let mut bytes = stores.remove(name.as_str()).expect("record store");
-                seal_journal(&mut bytes, record.parity_offset as usize)?;
+                let copies = record.copies.map_or(1, u32::from);
+                let mut sealed = Vec::with_capacity(bytes.len() * copies as usize);
+                for copy in 0..copies {
+                    if record.copies.is_some() {
+                        put(&mut bytes, 0, &copy.to_le_bytes());
+                    }
+                    seal_journal(&mut bytes, record.parity_offset as usize)?;
+                    sealed.extend_from_slice(&bytes);
+                }
                 records.push(Record {
-                    bytes,
+                    bytes: sealed,
                     block: record.block,
                     managed_index: record.managed_index,
                 });
