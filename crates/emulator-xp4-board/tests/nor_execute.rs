@@ -105,3 +105,49 @@ fn dma_reads_the_same_retained_prefix_as_cpu_fetch_and_data() {
     s.read(FLASH+0x100,&mut direct).unwrap();s.read(0x9000,&mut dma).unwrap();
     assert_eq!(direct,0x12345678u32.to_le_bytes());assert_eq!(direct,dma);
 }
+
+#[test]
+fn mutable_executable_prefix_erasure_invalidates_translated_code() {
+    let target = FLASH + 0x1000;
+    let mut d = definition(1, 0);
+    d.as_object_mut().unwrap().remove("storage_immutable_prefix");
+    d["storage_executable_prefix"] = json!({"bytes":65536});
+    d["storage_strict_backing"] = json!(true);
+    d["initial_registers"] = json!([[
+        [{"Arm32":{"R":15}},0], [{"Arm32":{"R":0}},0x8000],
+        [{"Arm32":{"R":2}},target], [{"Arm32":{"R":3}},0xfffd8000u32],
+        [{"Arm32":{"R":4}},0x06000001u32], [{"Arm32":{"R":5}},0x210b0001u32],
+        [{"Arm32":{"R":6}},target],
+    ]]);
+    let s = session(d, image(target, &[0xe3a07001, 0xe12fff1e])).unwrap();
+    let mut program = vec![0xe12fff32u32, 0xe5807000, 0xe5834090];
+    program.extend([0xe1a00000; 20]);
+    program.extend([0xe5836094, 0xe5835090]);
+    program.extend([0xe1a00000; 50]);
+    program.extend([0xe12fff32, 0xe3a07002, 0xe5807004, 0xe320f003]);
+    let bytes: Vec<u8> = program.iter().flat_map(|word| word.to_le_bytes()).collect();
+    s.write(0, &bytes).unwrap();
+    for _ in 0..4 { if s.run(0, 256).is_err() { break; } }
+    let mut out = [0;8]; s.read(0x8000, &mut out).unwrap();
+    assert_eq!(&out[..4], &1u32.to_le_bytes());
+    assert_eq!(&out[4..], &[0;4], "stale translated code returned after erase");
+    assert!(s.state(false).failure.is_some(), "erased target was not fetched");
+    s.read(target, &mut out[..4]).unwrap(); assert_eq!(&out[..4], &[0xff;4]);
+}
+
+#[test]
+fn executable_prefix_with_gate_keeps_the_remaining_aperture_gated() {
+    let entry = FLASH + 0x7000;
+    let mut d = definition(1, entry);
+    d.as_object_mut().unwrap().remove("storage_immutable_prefix");
+    d["storage_executable_prefix"] = json!({"bytes":65536});
+    d["storage_mapped_read"] = json!({
+        "states":[{"control":[0x780071,0x80041],"clock":0x13,"mode":0x101003,"samples":[9,11],"pad":true}],
+        "miss_byte":0xa5,"pad":[0xfff4108cu32,0xffff,0x5545]});
+    d["initial_registers"][0][2][1] = json!(FLASH + 65536);
+    let s = session(d, image(entry, &[0xe5921000,0xe5801000,0xe320f003])).unwrap();
+    assert_eq!(s.nor_medium().unwrap().len(), 131072);
+    assert!(s.write(FLASH, &[0;4]).is_err());
+    assert!(s.run(0, 8).is_err());
+    assert!(s.state(false).failure.unwrap().contains("Mapped NOR read in no declared controller state"));
+}

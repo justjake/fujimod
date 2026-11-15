@@ -24,6 +24,8 @@ struct NorState {
     #[serde(default)]
     immutable_prefix: Option<usize>,
     #[serde(default)]
+    executable_prefix: Option<usize>,
+    #[serde(default)]
     write_protect: bool,
     #[serde(default)]
     write_ranges: Vec<WriteRange>,
@@ -77,6 +79,7 @@ impl Nor {
     fn capture_state(&self) -> NorState {
         NorState {
             immutable_prefix: self.prefix.map(|prefix| prefix.bytes()),
+            executable_prefix: self.executable.as_ref().map(|view| view.len()),
             write_protect: self.write_protect, write_ranges: self.write_ranges.clone(),
             read_backing: self.read_backing.clone(),
             jedec: self.jedec, write_enable: self.write_enable,
@@ -102,6 +105,7 @@ impl Nor {
     ) -> Result<(Option<(u64, Mutation)>, ProgramCoverage), String> {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
+            || state.executable_prefix != self.executable.as_ref().map(|v| v.len())
             || state.write_protect != self.write_protect
             || state.write_ranges != self.write_ranges
             || state.read_backing != self.read_backing
@@ -178,6 +182,7 @@ impl Nor {
         self.overlay = state.overlay;
         self.program_coverage = coverage;
         self.pending = pending;
+        if let Some(view) = &self.executable { self.sync_executable(FLASH, view.len()); }
         Ok(())
     }
 }

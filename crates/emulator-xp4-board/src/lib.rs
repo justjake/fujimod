@@ -141,6 +141,7 @@ struct Cluster {
     dram_alias: Option<u64>,
     memory: Vec<memory::Window>,
     frozen_nor: Option<fujimod_emulator_xp4_storage::storage::ImmutableView>,
+    executable_nor: Option<fujimod_emulator_xp4_storage::storage::ExecutableView>,
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     hooks: Vec<Box<Hook>>,
@@ -1315,6 +1316,7 @@ impl Session {
             discovery_tx_receiver,
             storage_jedec,
             storage_immutable_prefix,
+            storage_executable_prefix,
             storage_mapped_read,
             storage_write_protect,
             storage_write_ranges,
@@ -1556,7 +1558,7 @@ impl Session {
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
-        if storage_immutable_prefix.is_some() && storage_jedec.is_none() {
+        if (storage_immutable_prefix.is_some() || storage_executable_prefix.is_some()) && storage_jedec.is_none() {
             return Err("Immutable NOR prefix requires an XP4 NOR owner".into());
         }
         if (storage_mapped_read.is_some() || storage_write_protect) && storage_jedec.is_none() {
@@ -1576,6 +1578,9 @@ impl Session {
         {
             return Err("NOR write ranges require an XP4 NOR owner and strict read backing".into());
         }
+        if storage_immutable_prefix.is_some() && storage_executable_prefix.is_some() {
+            return Err("Only one NOR execution prefix can be declared".into());
+        }
         if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
             // The prefix is mapped as memory, so its reads would bypass the gate.
             return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
@@ -1584,8 +1589,9 @@ impl Session {
             return Err("Transmit receiver input requires discovery and XP4 storage DMA".into());
         }
         let mut frozen_nor = None;
+        let mut executable_nor = None;
         let mut devices = if let Some(jedec) = storage_jedec {
-            let (devices, view) = devices::Devices::storage(
+            let (devices, view, executable_view) = devices::Devices::storage(
                 jedec,
                 storage_dma_routes,
                 storage_image.unwrap_or_default(),
@@ -1595,6 +1601,7 @@ impl Session {
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
                 discovery_tx_receiver,
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
+                storage_executable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
                 storage_mapped_read,
                 storage_write_protect,
                 storage_write_ranges,
@@ -1603,6 +1610,7 @@ impl Session {
                 storage_dma_audio,
             )?;
             frozen_nor = view;
+            executable_nor = executable_view;
             Some(devices)
         } else if let Some(storage) = xpp_storage {
             if !storage_dma_routes.is_empty() || storage_geometry.is_some() || storage_irq.is_some()
@@ -2143,6 +2151,7 @@ impl Session {
             }
         }
         if let Some(view) = &frozen_nor { devices.as_mut().unwrap().partition_nor_prefix(view.len()); }
+        if let Some(view) = &executable_nor { devices.as_mut().unwrap().partition_nor_prefix(view.len()); }
         let mut observe_filter = vec![0u64; 1024];
         for &label in &labels {
             mark_observed(&mut observe_filter, u64::from(label));
@@ -2157,6 +2166,7 @@ impl Session {
             dram_alias,
             memory,
             frozen_nor,
+            executable_nor,
             hooks: Vec::new(),
             labels,
             cbar,
@@ -2263,6 +2273,14 @@ impl Session {
                 // The view retains the canonical allocation until after all CPUs drop.
                 // NOR mutation admission and physical host writes protect these bytes.
                 unsafe { inner.cpus[core].map_frozen_backing(
+                    fujimod_emulator_xp4_storage::storage::FLASH, view.len(), 5,
+                    NonNull::new(view.as_ptr().cast_mut()).unwrap(),
+                ) }?;
+            }
+            if let Some(view) = &inner.executable_nor {
+                // Device callbacks are serialized with execution; dirty translations
+                // are invalidated before any core resumes.
+                unsafe { inner.cpus[core].map_backing(
                     fujimod_emulator_xp4_storage::storage::FLASH, view.len(), 5,
                     NonNull::new(view.as_ptr().cast_mut()).unwrap(),
                 ) }?;

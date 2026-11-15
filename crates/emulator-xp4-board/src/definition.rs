@@ -62,6 +62,9 @@ pub struct Definition {
     /// Immutable executable prefix of the connected XP4 NOR array.
     #[serde(default)]
     pub storage_immutable_prefix: Option<NorImmutablePrefix>,
+    /// Mutable NOR execution window, declared independently of normal mapped reads.
+    #[serde(default)]
+    pub storage_executable_prefix: Option<NorImmutablePrefix>,
     /// Declared controller and pad states under which CPU reads of the mapped
     /// NOR return array data; absent serves every mapped read.
     #[serde(default)]

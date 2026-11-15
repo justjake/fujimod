@@ -45,3 +45,30 @@ impl ImmutableView {
     pub fn as_ptr(&self) -> *const u8 { self.source.0.pointer.as_ptr().cast() }
     pub fn as_slice(&self) -> &[u8] { &self.source.as_slice()[..self.len] }
 }
+
+/// Serialized, read/execute mapping of mutable NOR bytes. All updates happen
+/// while guest execution is stopped at a device boundary.
+#[derive(Clone)]
+pub struct ExecutableView {
+    allocation: Arc<Allocation>,
+    dirty: Arc<std::sync::atomic::AtomicBool>,
+}
+impl ExecutableView {
+    pub(super) fn new(bytes: Vec<u8>) -> Result<Self, String> {
+        let Source(allocation) = Source::new(bytes)?;
+        Ok(Self { allocation, dirty: Arc::new(std::sync::atomic::AtomicBool::new(false)) })
+    }
+    pub fn len(&self) -> usize { self.allocation.len }
+    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn as_ptr(&self) -> *const u8 { self.allocation.pointer.as_ptr().cast() }
+    pub fn dirty(&self) -> bool { self.dirty.load(std::sync::atomic::Ordering::Acquire) }
+    /// # Safety
+    /// All processors must have invalidated translations for this mapping.
+    pub unsafe fn clear_dirty(&self) { self.dirty.store(false, std::sync::atomic::Ordering::Release); }
+    pub(super) fn replace(&self, offset: usize, bytes: &[u8]) {
+        assert!(offset.checked_add(bytes.len()).is_some_and(|end| end <= self.len()));
+        // The owner serializes device callbacks with CPU execution and inspection.
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), self.allocation.pointer.as_ptr().cast::<u8>().add(offset), bytes.len()); }
+        self.dirty.store(true, std::sync::atomic::Ordering::Release);
+    }
+}

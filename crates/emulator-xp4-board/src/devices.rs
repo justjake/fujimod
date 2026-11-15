@@ -1159,13 +1159,14 @@ impl Devices {
         irq: u32,
         receiver_input: Option<super::definition::DiscoveryTxReceiver>,
         prefix: Option<storage::ImmutablePrefix>,
+        executable: Option<storage::ImmutablePrefix>,
         mapped_read: Option<storage::MappedReadGate>,
         write_protect: bool,
         write_ranges: Vec<storage::WriteRange>,
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
         audio: Option<storage::AudioPacing>,
-    ) -> Result<(Self, Option<storage::ImmutableView>), String> {
+    ) -> Result<(Self, Option<storage::ImmutableView>, Option<storage::ExecutableView>), String> {
         let routes: [u32; 16] = routes
             .try_into()
             .map_err(|_| "XP4 DMA requires 16 physical IRQ routes")?;
@@ -1186,11 +1187,13 @@ impl Devices {
             },
         )?;
         if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
+        if let Some(prefix) = executable { nor = nor.with_executable_prefix(prefix)?; }
         if write_protect { nor = nor.with_write_protect(); }
         if strict_backing { nor = nor.with_strict_backing(); }
         if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
         if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
         let view = nor.immutable_view();
+        let executable_view = nor.executable_view();
         let port = storage::port_from_nor(nor);
         let mut dma = DmaController::new(port.clone(), routes).with_audio(audio)?;
         if let Some(input) = receiver_input {
@@ -1244,7 +1247,7 @@ impl Devices {
             devices.windows.push((pad, pad + 4, 0));
             devices.carved.push((pad, pad + 4));
         }
-        Ok((devices, view))
+        Ok((devices, view, executable_view))
     }
     /// X-Processor Pro flash controller, its read aperture and the PL330 that
     /// copies from it. The flash contents are an explicit board input.
@@ -2042,6 +2045,10 @@ impl Cluster {
             let state = unsafe { &mut *self.state.get() };
             state.device_scan_at = devices.next_deadline(state.ticks).unwrap_or(u64::MAX);
             state.devices = Some(devices);
+            if self.executable_nor.as_ref().is_some_and(|view| view.dirty()) {
+                state.cache_dirty = true;
+                state.exclusive.fill(None);
+            }
             result?;
         }
         Ok(())
@@ -2089,6 +2096,7 @@ impl Cluster {
             for cpu in &self.cpus {
                 cpu.invalidate_code(None)?;
             }
+            if let Some(view) = &self.executable_nor { unsafe { view.clear_dirty(); } }
             unsafe {
                 (*self.state.get()).cache_dirty = false;
             }

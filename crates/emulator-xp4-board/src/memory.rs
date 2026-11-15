@@ -60,6 +60,15 @@ impl Cluster {
                 return Ok(unsafe { view.as_ptr().add((address - base) as usize).cast_mut() });
             }
         }
+        if let Some(view) = &self.executable_nor {
+            let base = fujimod_emulator_xp4_storage::storage::FLASH;
+            if address < base + view.len() as u64 && base < end {
+                if address < base || end > base + view.len() as u64 || permissions == 0 || permissions & 2 != 0 {
+                    return Err("Protected executable NOR physical memory".into());
+                }
+                return Ok(unsafe { view.as_ptr().add((address - base) as usize).cast_mut() });
+            }
+        }
         let low = unsafe { (*self.state.get()).low_alias }.map(|index| &self.memory[index]);
         if let Some(window) = low
             && end <= window.data.len() as u64
