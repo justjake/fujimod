@@ -264,16 +264,16 @@ pub fn package(
     inverted: &[u8],
     setup: &Setup,
     ram: Option<Vec<u8>>,
-    success_hold_seconds: u32,
+    success_hold_units: u64,
 ) -> Result<Vec<File>> {
-    package_with_storage(inverted, setup, ram, success_hold_seconds, None)
+    package_with_storage(inverted, setup, ram, success_hold_units, None)
 }
 
 pub(crate) fn package_with_storage(
-    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
+    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
     storage: Option<&[u8]>,
 ) -> Result<Vec<File>> {
-    package_inner(inverted, setup, ram, success_hold_seconds, storage, None)
+    package_inner(inverted, setup, ram, success_hold_units, storage, None)
 }
 
 /// Startup with the installed flash left attached: the card supplies the RAM
@@ -290,7 +290,7 @@ pub(crate) fn package_with_storage(
 /// The recipe's card-resident setup supplies the cores' interrupt frames and is otherwise not
 /// used.
 pub(crate) fn package_internal_flash(
-    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32,
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64,
     fallback_wait_seconds: Option<u32>,
 ) -> Result<Vec<File>> {
     let mut setup = setup.clone();
@@ -314,7 +314,7 @@ pub(crate) fn package_internal_flash(
         inverted,
         &setup,
         Some(ram),
-        success_hold_seconds,
+        success_hold_units,
         None,
         Some(InternalFlash {
             fallback_wait_seconds,
@@ -421,7 +421,7 @@ fn bind_internal_flash(
 }
 
 fn package_inner(
-    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_seconds: u32,
+    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
     storage: Option<&[u8]>, internal_flash: Option<InternalFlash>,
 ) -> Result<Vec<File>> {
     let prefix = setup.verify(inverted)?;
@@ -547,9 +547,10 @@ fn package_inner(
     put64(
         &mut program,
         cfg + 192,
-        // Each unit executes 1,000,000 four-NOP iterations. Even allowing
-        // two billion iterations per second, 2,048 units take >= 1.024 s.
-        u64::from(success_hold_seconds) * 2_048,
+        // Each unit executes 1,000,000 four-NOP iterations. Callers that ask
+        // for seconds pass 2,048 units per second (>= 1.024 s even at two
+        // billion iterations per second).
+        success_hold_units,
     )?;
     put64(
         &mut program,
@@ -1214,10 +1215,10 @@ mod tests {
             let normal = package(&data, &s, payload.clone(), 0).unwrap();
             let at = 0xc000 + template::XP5_SETUP_CONFIGURATION + 192;
             assert_eq!(&normal[0].bytes[at..at + 8], &[0; 8]);
-            for seconds in [1, 3, u32::MAX] {
-                let held = package(&data, &s, payload.clone(), seconds).unwrap();
+            for units in [1, 32, 6_144, u64::from(u32::MAX) * 2_048] {
+                let held = package(&data, &s, payload.clone(), units).unwrap();
                 let mut expected = normal[0].bytes.clone();
-                put64(&mut expected, at, u64::from(seconds) * 2_048).unwrap();
+                put64(&mut expected, at, units).unwrap();
                 assert_eq!(expected, held[0].bytes);
                 if normal.len() == 2 {
                     assert_eq!(normal[1].bytes, held[1].bytes);

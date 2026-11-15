@@ -238,6 +238,12 @@ second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
 
+`--success-hold-units N` sets the hold directly in those loop units instead of
+seconds (so `--success-hold-seconds S` equals `--success-hold-units` `S * 2048`) and
+is mutually exclusive with `--success-hold-seconds`. The units are only a count of
+loop passes, not a duration: the processor's speed at this point decides how long
+one unit takes. Only the 64-bit hold word of the guest configuration changes.
+
 The XP4 compiled SD loader is `assets/sd-boot-v1-xp4-loader.generated.bin`; its companion
 `assets/sd-boot-v1-xp4-loader.generated.json` describes segment offsets, symbols and ARM
 relocations. The crate loads these inputs with `include_bytes!` and
