@@ -173,6 +173,82 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
 }
 /// The sample with reader ABI 2: 40-byte request, 56-byte result and one
 /// flash chunk of staging RAM outside the executable reservation.
+/// Exchanges of a staged backup up to the callback-slot read: identity, the
+/// reset guard and debug gate, the qualified source and the code checks.
+fn staged_prologue(original: [u8; 12]) -> Vec<fujimod_usb::testing::Exchange> {
+    let mut s = info(4, "X-M5");
+    s.extend(info(8, "2.06"));
+    s.extend(cfg(163, 1, false));
+    s.extend(cfg(247, 0, false));
+    s.extend(cfg(247, 1, true));
+    s.extend(cfg(247, 1, false));
+    s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
+    s.extend(memory_read(0x1900, &0x2000u64.to_le_bytes()));
+    s.extend(crate::bulk::tests::qualified());
+    s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
+    s.extend(memory_read(0x1400, &original));
+    s.extend(write(0x1400, &words(&[0, 0, 32])));
+    s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
+    s.extend(memory_read(0x1000, b"stoc"));
+    s.extend(data(0x1000, b"stoc"));
+    s.extend(memory_read(0x1800, &[0; 16]));
+    s.extend(memory_read(0x1000, b"stock code"));
+    s.extend(memory_read(0x1600, &1u32.to_le_bytes()));
+    s
+}
+/// Exchanges that restore the source state and the debug gate after a run.
+fn staged_epilogue(original: [u8; 12]) -> Vec<fujimod_usb::testing::Exchange> {
+    let mut s = memory_read(0x1400, &words(&[0, 0, 32]));
+    s.extend(write(0x1400, &original));
+    s.extend(memory_read(0x1400, &original));
+    s.extend(cfg(163, 1, false));
+    s.extend(cfg(247, 1, false));
+    s.extend(cfg(247, 0, true));
+    s.extend(cfg(247, 0, false));
+    s
+}
+#[test]
+fn interrupted_run_recovery_refuses_a_foreign_callback_or_executable() {
+    for foreign_slot in [true, false] {
+        let (bulk, flash, payload, image) = staged_fixture();
+        let original = [7; 12];
+        let mut s = staged_prologue(original);
+        if foreign_slot {
+            s.extend(memory_read(0x1700, &0x4100u64.to_le_bytes()));
+        } else {
+            let mut other = image.clone();
+            other.resize(0x2000, 0);
+            other[image.len()] = 1; // past the image: not this executable
+            s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+            s.extend(bulk_chunks(0x4000, &other));
+        }
+        s.extend(staged_epilogue(original));
+        let (mut session, script) = opened(s);
+        let error = block_on(read(
+            &mut session,
+            &bulk,
+            &flash,
+            &payload,
+            &image,
+            limits(),
+            crate::flash::Selection::Whole,
+            &mut crate::flash::Callbacks {
+                chunk: &mut |_, _| panic!("nothing is read"),
+                progress: &mut |_, _| Ok(()),
+            },
+        ))
+        .unwrap_err()
+        .to_string();
+        let expected = if foreign_slot {
+            "Service callback is occupied"
+        } else {
+            "occupied by a different executable"
+        };
+        assert!(error.contains(expected), "{error}");
+        assert_eq!(script.remaining(), 0, "the slot and arena stay untouched");
+        assert_eq!(session.state(), SessionState::Ready);
+    }
+}
 fn staged_fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
     let (bulk, flash, mut payload, image) = fixture();
     payload.result = 0x4040;
@@ -218,29 +294,37 @@ fn staging_must_be_aligned_inside_the_window_and_clear_of_owned_state() {
 }
 #[test]
 fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
-    for occupied in [false, true] {
+    // leftover: an earlier session died after publishing this reader, leaving
+    // its entry in the callback slot and its image in the arena. landed:
+    // memory reads of the staged control chunk show the stock DMA's bytes.
+    for (occupied, leftover, landed) in [
+        (false, false, true),
+        (true, false, true),
+        (false, true, true),
+        (false, false, false),
+    ] {
         let (bulk, flash, payload, image) = staged_fixture();
         payload.validate(&flash, &bulk, &image).unwrap();
         let original = [7; 12];
-        let mut s = info(4, "X-M5");
-        s.extend(info(8, "2.06"));
-        s.extend(cfg(163, 1, false));
-        s.extend(cfg(247, 0, false));
-        s.extend(cfg(247, 1, true));
-        s.extend(cfg(247, 1, false));
-        s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
-        s.extend(memory_read(0x1900, &0x2000u64.to_le_bytes()));
-        s.extend(crate::bulk::tests::qualified());
-        s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
-        s.extend(memory_read(0x1400, &original));
-        s.extend(write(0x1400, &words(&[0, 0, 32])));
-        s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
-        s.extend(memory_read(0x1000, b"stoc"));
-        s.extend(data(0x1000, b"stoc"));
-        s.extend(memory_read(0x1800, &[0; 16]));
-        s.extend(memory_read(0x1000, b"stock code"));
-        s.extend(memory_read(0x1600, &1u32.to_le_bytes()));
-        s.extend(memory_read(0x1700, &[0; 8]));
+        let mut s = staged_prologue(original);
+        if leftover {
+            // Proven ours: unpublish, then clear the arena as a restore would.
+            let mut left = image.clone();
+            left[0x40..0x78].fill(3); // the result object is mutable
+            left.resize(0x2000, 0);
+            s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+            s.extend(bulk_chunks(0x4000, &left));
+            s.extend(write_verified(0x1700, &[0; 8]));
+            s.extend(memory_read(0x1700, &[0; 8]));
+            s.extend(bulk_chunks(0x4000, &left));
+            for (i, piece) in vec![0; image.len()].chunks(64).enumerate() {
+                s.extend(write(0x4000 + (i * 64) as u32, piece));
+            }
+            s.extend(raw_chunks(0x4000, &vec![0; image.len()]));
+            s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        } else {
+            s.extend(memory_read(0x1700, &[0; 8]));
+        }
         s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
         for (i, piece) in image.chunks(64).enumerate() {
             s.extend(write_verified(0x4000 + (i * 64) as u32, piece));
@@ -275,6 +359,14 @@ fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
                     reader_words(&[2, 0xf0000000 + offset, n, 0x10000, 0]),
                     reader_words(&[2, 0, calls, 0xf0000000 + offset, n, 100, 1000]),
                 );
+                if calls == 2 {
+                    // The control chunk is read back over memory reads first.
+                    let byte = if landed { 5 } else { 0 };
+                    s.extend(raw_chunks(0x10000, &vec![byte; n as usize]));
+                    if !landed {
+                        break; // refused before any bulk read
+                    }
+                }
                 s.extend(bulk_chunks(0x10000, &vec![5; n as usize]));
             }
             calls += 1;
@@ -320,7 +412,11 @@ fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
                 progress: &mut |_, _| Ok(()),
             },
         ));
-        if occupied {
+        if !landed {
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains("did not land"), "{error}");
+            assert!(chunks.is_empty());
+        } else if occupied {
             let error = result.unwrap_err().to_string();
             assert!(error.contains("staging range is not empty"), "{error}");
             assert!(error.contains("0x18"), "{error}");
@@ -333,6 +429,8 @@ fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
             );
             assert_eq!(backup.sha256, bulk::hex(&sha256_bytes(&vec![5; 8192])));
             assert_eq!(backup.stock_read_seconds, Some(0.3));
+            assert_eq!(backup.recovered_interrupted_run, leftover);
+            assert_eq!(backup.mapped_probe, None, "no mapped window in this flash");
         }
         assert_eq!(script.remaining(), 0);
         assert_eq!(session.state(), SessionState::Ready);

@@ -75,6 +75,12 @@ pub struct Backup {
     /// Seconds the stock reader spent filling staging RAM, from the camera's
     /// generic timer, when the reader reports it.
     pub stock_read_seconds: Option<f64>,
+    /// How the direct E1 read of the control chunk ended, when the flash has
+    /// a mapped window: "matched", "differs" or the completed error.
+    pub mapped_probe: Option<String>,
+    /// This session unpublished and cleared the reader an interrupted
+    /// session had left installed (see `recover_interrupted`).
+    pub recovered_interrupted_run: bool,
 }
 
 impl Payload {
@@ -445,7 +451,8 @@ pub(crate) async fn read(
         }
         let mut reader = Qualified::prepare_preserving(access.session, bulk, limits).await?;
         let outcome = if flash.e1_window.is_some() {
-            if mapped_control_matches(&mut reader, flash, payload).await? {
+            let probe = mapped_control(&mut reader, flash, payload).await?;
+            if probe == "matched" {
                 read_mapped(&mut reader, flash, target, callbacks).await
             } else {
                 execute(
@@ -459,6 +466,10 @@ pub(crate) async fn read(
                 )
                 .await
             }
+            .map(|backup| Backup {
+                mapped_probe: Some(probe),
+                ..backup
+            })
         } else {
             execute(
                 &mut reader,
@@ -549,15 +560,23 @@ fn mapped_range(flash: &FirmwareFlash, offset: u64, size: u64) -> bulk::Result<B
 
 /// Try the update-backed control extent first. A completed E1 mismatch or
 /// refusal selects the stock-reader path; unknown USB completion stops here.
-async fn mapped_control_matches(
+/// Read the control chunk through the mapped window: "matched", "differs" or
+/// the completed error. An error that leaves completion unknown stops here,
+/// before any executable is installed.
+async fn mapped_control(
     reader: &mut Qualified<'_>,
     flash: &FirmwareFlash,
     payload: &Payload,
-) -> bulk::Result<bool> {
+) -> bulk::Result<String> {
     let range = mapped_range(flash, flash.control.offset, flash.control.size)?;
     match reader.read(range).await {
-        Ok(bytes) => Ok(bulk::hex(&sha256_bytes(&bytes)) == payload.control_sha256),
-        Err(_error) if reader.access.session.state() == SessionState::Ready => Ok(false),
+        Ok(bytes) if bulk::hex(&sha256_bytes(&bytes)) == payload.control_sha256 => {
+            Ok("matched".into())
+        }
+        Ok(_) => Ok("differs".into()),
+        Err(error) if reader.access.session.state() == SessionState::Ready => {
+            Ok(format!("error: {error}"))
+        }
         Err(error) => Err(error),
     }
 }
@@ -610,6 +629,8 @@ async fn read_mapped(
         uncorrectable_granularity_bytes: 0,
         nand_read_stats: None,
         stock_read_seconds: None,
+        mapped_probe: None,
+        recovered_interrupted_run: false,
     })
 }
 
@@ -636,6 +657,7 @@ async fn execute(
             format!("Flash driver state differs: {}", c.name),
         )?;
     }
+    let recovered = recover_interrupted(reader, payload, image).await?;
     let mut arena = Arena {
         address: payload.address,
         capacity: payload.capacity,
@@ -644,11 +666,8 @@ async fn execute(
         uploaded: false,
         touched: false,
     };
+    // recover_interrupted returns only with the callback slot empty.
     let outcome = async {
-        require(
-            reader.access.raw(payload.transport.callback, 8).await? == [0; 8],
-            "Service callback is occupied",
-        )?;
         arena.upload(reader, limits).await?;
         callback::invoke(
             reader,
@@ -664,6 +683,7 @@ async fn execute(
                 calls: word(&reader.access.raw(payload.result + 16, 8).await?),
                 read_ticks: 0,
                 frequency: 0,
+                staging_proven: false,
             };
             if let Some(staging) = &payload.staging {
                 staging_operation(
@@ -724,6 +744,8 @@ async fn execute(
                     nand_read_stats: None,
                     stock_read_seconds: (state.frequency != 0)
                         .then(|| state.read_ticks as f64 / state.frequency as f64),
+                    mapped_probe: None,
+                    recovered_interrupted_run: recovered,
                 })
             }
             .await;
@@ -752,11 +774,65 @@ async fn execute(
     }
     bulk::finish(outcome, restored)
 }
-/// The reader's call count, and the timer ticks its staging reads reported.
+
+/// A session that dies after publishing the reader leaves its entry in the
+/// service callback and its image in the arena: cleanup is withheld while
+/// completion is unknown. A later session proves both are this payload's,
+/// unpublishes the entry and clears the arena before starting over. Any other
+/// callback value, or an arena that is not this image, still refuses.
+async fn recover_interrupted(
+    reader: &mut Qualified<'_>,
+    payload: &Payload,
+    image: &[u8],
+) -> bulk::Result<bool> {
+    let slot = payload.transport.callback;
+    let current = reader.access.raw(slot, 8).await?;
+    if current == [0; 8] {
+        return Ok(false);
+    }
+    require(
+        word(&current) == payload.entry,
+        "Service callback is occupied",
+    )?;
+    let bytes = reader
+        .read(BulkRange {
+            address: payload.address,
+            size: payload.capacity,
+        })
+        .await?;
+    require(
+        callback::owns_image(
+            &bytes,
+            image,
+            payload.capacity as usize,
+            &payload.mutable,
+            payload.address,
+            true,
+        ),
+        "Service callback is occupied by a different executable",
+    )?;
+    callback::write(reader, slot, &[0; 8]).await?;
+    let leftover = Arena {
+        address: payload.address,
+        capacity: payload.capacity,
+        image,
+        mutable: &payload.mutable,
+        uploaded: true,
+        touched: true,
+    };
+    let restored = leftover.restore(reader, slot).await;
+    if restored.is_err() {
+        reader.access.session.invalidate_completion();
+    }
+    restored.map(|()| true)
+}
+/// The reader's call count, the timer ticks its staging reads reported, and
+/// whether memory reads have shown a staged read's bytes.
 struct ReaderState {
     calls: u64,
     read_ticks: u64,
     frequency: u64,
+    staging_proven: bool,
 }
 
 /// Run one reader request and return its result words after checking that
@@ -842,6 +918,24 @@ async fn read_chunk(
     if payload.staging.is_some() {
         state.read_ticks += word(&result[40..48]);
         state.frequency = word(&result[48..56]);
+    }
+    if payload.staging.is_some() && !state.staging_proven {
+        // The first staged read is the control chunk. Read it back over
+        // memory reads before any bulk read of the staging range, so a stock
+        // DMA that did not land stops with the session intact and the reader
+        // restored.
+        require(
+            offset == flash.control.offset && size == flash.control.size,
+            "The first staged read must be the control chunk",
+        )?;
+        require(
+            bulk::hex(&sha256_bytes(&reader.access.raw(destination, size).await?))
+                == payload.control_sha256,
+            format!(
+                "Stock flash DMA to {destination:#x} did not land: memory reads differ; no bulk read issued"
+            ),
+        )?;
+        state.staging_proven = true;
     }
     reader
         .read(BulkRange {

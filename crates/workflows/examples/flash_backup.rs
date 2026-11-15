@@ -336,6 +336,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(backup) = &result {
         report["nand_read_stats"] = serde_json::json!(backup.nand_read_stats);
         report["performance"]["stock_read_seconds"] = serde_json::json!(backup.stock_read_seconds);
+        report["mapped_probe"] = serde_json::json!(backup.mapped_probe);
+        report["recovered_interrupted_run"] = backup.recovered_interrupted_run.into();
         report["uncorrectable_page_offsets"] = serde_json::json!(backup.uncorrectable_page_offsets);
         report["uncorrectable_granularity_bytes"] =
             serde_json::json!(backup.uncorrectable_granularity_bytes);
