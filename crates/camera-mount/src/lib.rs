@@ -49,6 +49,13 @@ pub trait Device: Send {
     fn has_card(&self) -> bool;
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>>;
     fn read(&mut self, path: &str, offset: u32, size: u32) -> Result<Vec<u8>>;
+    /// Several `read`s; a device may run them in one camera transaction.
+    fn read_many(&mut self, reads: &[(&str, u32, u32)]) -> Result<Vec<Vec<u8>>> {
+        reads
+            .iter()
+            .map(|(path, offset, size)| self.read(path, *offset, *size))
+            .collect()
+    }
     fn write(&mut self, path: &str, offset: u32, data: &[u8]) -> Result<()>;
     fn create(&mut self, path: &str) -> Result<()>;
     fn delete(&mut self, path: &str) -> Result<()>;

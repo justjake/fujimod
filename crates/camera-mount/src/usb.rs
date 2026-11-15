@@ -21,16 +21,17 @@ use futures_lite::future::block_on;
 use std::{
     num::NonZeroU32,
     sync::{
+        Arc,
         atomic::{AtomicBool, Ordering},
         mpsc::{self, SyncSender},
-        Arc,
     },
     thread::{self, JoinHandle},
     time::Duration,
 };
 
 enum Operation {
-    Card(Request),
+    /// Requests that share one attached file service.
+    Card(Vec<Request>),
     Probe,
     Memory(u32, u32),
     Flash(u64, u32),
@@ -39,7 +40,7 @@ enum Operation {
     Close,
 }
 enum Answer {
-    Card(Response),
+    Card(Vec<Response>),
     Bytes(Vec<u8>),
     Done,
 }
@@ -199,11 +200,26 @@ impl<F: Sessions> Client<F> {
         if self.fenced {
             return Err(Error::CompletionUnknown);
         }
+        let card_read_bytes: u64 = match &op {
+            Operation::Card(requests) => requests
+                .iter()
+                .map(|r| match r {
+                    Request::ReadAt { size, .. } => u64::from(*size),
+                    _ => 0,
+                })
+                .sum(),
+            _ => 0,
+        };
         let read_bytes = match &op {
-            Operation::Memory(_, size) | Operation::Card(Request::ReadAt { size, .. })
-                if *size >= 65536 =>
+            Operation::Memory(_, size) if *size >= 65536 => u64::from(*size),
+            Operation::Card(requests)
+                if requests.iter().all(|r| matches!(r, Request::ReadAt { .. })) =>
             {
-                u64::from(*size)
+                if card_read_bytes >= 65536 {
+                    card_read_bytes
+                } else {
+                    0
+                }
             }
             _ => 0,
         };
@@ -248,11 +264,19 @@ impl<F: Sessions> Client<F> {
             };
         let acquisition_seconds = acquisition.elapsed().as_secs_f64();
         let started = std::time::Instant::now();
+        let requests = match &op {
+            Operation::Card(requests) => requests.len(),
+            _ => 1,
+        };
         let metric = match &op {
-            Operation::Memory(_, size) => Some(("memory", *size)),
-            Operation::Card(Request::ReadAt { size, .. }) => Some(("sd", *size)),
-            Operation::Card(Request::ReadDirectory { .. }) => Some(("sd-list", 0)),
-            Operation::Flash(_, size) => Some(("flash", *size)),
+            Operation::Memory(_, size) => Some(("memory", u64::from(*size))),
+            Operation::Card(r) if matches!(r[..], [Request::ReadDirectory { .. }]) => {
+                Some(("sd-list", 0))
+            }
+            Operation::Card(r) if matches!(r.first(), Some(Request::ReadAt { .. })) => {
+                Some(("sd", card_read_bytes))
+            }
+            Operation::Flash(_, size) => Some(("flash", u64::from(*size))),
             _ => None,
         };
         let mut transport = Transport::new(
@@ -265,7 +289,7 @@ impl<F: Sessions> Client<F> {
         let mut cleanup_known = true;
         let result = async {
             match op {
-                Operation::Card(request) => {
+                Operation::Card(requests) => {
                     if self.service.is_none()
                         && let Some(facts) =
                             self.capability.as_ref().and_then(|c| c.service.as_ref())
@@ -327,7 +351,18 @@ impl<F: Sessions> Client<F> {
                         volume.set_query_trigger(service.trigger())?;
                     }
                     self.mailbox_hint = volume.mailbox_address();
-                    let result = volume.execute(request).await.map(Answer::Card);
+                    let mut responses = Vec::with_capacity(requests.len());
+                    let mut result = Ok(());
+                    for request in requests {
+                        match volume.execute(request).await {
+                            Ok(response) => responses.push(response),
+                            Err(error) => {
+                                result = Err(error);
+                                break;
+                            }
+                        }
+                    }
+                    let result = result.map(|()| Answer::Card(responses));
                     if let Err(error) = volume.close().await {
                         cleanup_known = false;
                         return Err(error);
@@ -459,7 +494,7 @@ impl<F: Sessions> Client<F> {
         {
             eprintln!(
                 "{}",
-                serde_json::json!({"mount_io":kind,"bytes":size,
+                serde_json::json!({"mount_io":kind,"bytes":size,"requests":requests,
                     "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok()})
             );
         }
@@ -557,9 +592,9 @@ impl UsbDevice {
                         lease: None,
                     };
                     let preflight = if has_card {
-                        Operation::Card(Request::ReadDirectory {
+                        Operation::Card(vec![Request::ReadDirectory {
                             path: "A:\\".into(),
-                        })
+                        }])
                     } else {
                         Operation::Probe
                     };
@@ -638,8 +673,8 @@ impl UsbDevice {
         self.fatal.clone()
     }
     fn card(&self, request: Request) -> Result<Response> {
-        match self.request(Operation::Card(request))? {
-            Answer::Card(r) => Ok(r),
+        match self.request(Operation::Card(vec![request]))? {
+            Answer::Card(mut r) if r.len() == 1 => Ok(r.remove(0)),
             _ => Err(libc::EIO),
         }
     }
@@ -756,6 +791,26 @@ impl Device for UsbDevice {
             size,
         })? {
             Response::Bytes(v) => Ok(v),
+            _ => Err(libc::EIO),
+        }
+    }
+    fn read_many(&mut self, reads: &[(&str, u32, u32)]) -> Result<Vec<Vec<u8>>> {
+        let requests = reads
+            .iter()
+            .map(|(path, offset, size)| Request::ReadAt {
+                path: (*path).into(),
+                offset: *offset,
+                size: *size,
+            })
+            .collect();
+        match self.request(Operation::Card(requests))? {
+            Answer::Card(responses) if responses.len() == reads.len() => responses
+                .into_iter()
+                .map(|r| match r {
+                    Response::Bytes(v) => Ok(v),
+                    _ => Err(libc::EIO),
+                })
+                .collect(),
             _ => Err(libc::EIO),
         }
     }

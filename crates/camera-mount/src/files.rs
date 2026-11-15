@@ -69,6 +69,32 @@ pub fn get<D: Device>(fs: &mut CameraFs<D>, node: &Node, limit: Option<u64>) -> 
     Ok(data)
 }
 
+/// `get` for several files whose prefixes fit one read request each, in one
+/// camera transaction.
+pub fn get_many<D: Device>(
+    fs: &mut CameraFs<D>,
+    nodes: &[Node],
+    limit: Option<u64>,
+) -> Result<Vec<Vec<u8>>> {
+    let mut reads = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let size = limit.map_or(node.size, |l| l.min(node.size));
+        if node.directory || size > IO_BYTES as u64 {
+            return Err(libc::EINVAL);
+        }
+        reads.push((node.path.as_deref().ok_or(libc::EINVAL)?, 0, size as u32));
+    }
+    let data = fs.device.read_many(&reads)?;
+    if data
+        .iter()
+        .zip(&reads)
+        .any(|(d, r)| d.len() != r.2 as usize)
+    {
+        return Err(libc::EIO);
+    }
+    Ok(data)
+}
+
 /// Writes `data` as the whole file at `path`, creating it when missing and
 /// shrinking it when it was longer, then reads it back from the card and
 /// returns its SHA-256. An existing file is rewritten in place.

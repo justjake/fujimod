@@ -431,12 +431,12 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
         for _ in 0..2 {
             assert!(matches!(
                 client
-                    .transaction(Operation::Card(Request::ReadDirectory {
+                    .transaction(Operation::Card(vec![Request::ReadDirectory {
                         path: "A:\\".into()
-                    }))
+                    }]))
                     .await
                     .unwrap(),
-                Answer::Card(Response::Directory(_))
+                Answer::Card(r) if matches!(r[..], [Response::Directory(_)])
             ));
             assert!(
                 !state.lock().unwrap().live,
@@ -448,8 +448,21 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
                     .unwrap();
             outside.close().await.unwrap();
         }
+        let batch = (0..3)
+            .map(|_| Request::ReadDirectory {
+                path: "A:\\".into(),
+            })
+            .collect();
+        assert!(matches!(
+            client.transaction(Operation::Card(batch)).await.unwrap(),
+            Answer::Card(r) if r.len() == 3
+        ));
         let state = state.lock().unwrap();
-        assert_eq!((state.opens, state.closes), (4, 4));
+        assert_eq!(
+            (state.opens, state.closes),
+            (5, 5),
+            "a batch shares one session and one attached service"
+        );
         assert_eq!(
             state.searches, 1,
             "the next transaction verifies the hint instead of rescanning"

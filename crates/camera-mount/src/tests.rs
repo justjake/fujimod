@@ -558,3 +558,17 @@ fn kept_listings_list_each_folder_once_per_command() {
     files::put(&mut fs, "DCIM/NEW.JPG", b"new").unwrap();
     assert_eq!(files::list(&mut fs, "DCIM/NEW.JPG").unwrap()[0].size, 3);
 }
+
+#[test]
+fn get_many_reads_each_prefix_in_one_device_call() {
+    let (mut fs, _device) = filesystem();
+    let image = files::list(&mut fs, "DCIM/IMAGE.JPG").unwrap().remove(0);
+    let data = files::get_many(&mut fs, &[image.clone(), image.clone()], Some(3)).unwrap();
+    assert_eq!(data, [vec![0, 1, 2], vec![0, 1, 2]]);
+    let mut big = image;
+    big.size = IO_BYTES as u64 + 1;
+    assert_eq!(
+        files::get_many(&mut fs, &[big], None).err(),
+        Some(libc::EINVAL)
+    );
+}

@@ -1,5 +1,7 @@
 //! `fujimod-card`: SD card files over the debug-USB file service, without a mount.
-use fujimod_camera_mount::{CameraFs, Device, Node, files, read_only::ReadOnly, usb::UsbDevice};
+use fujimod_camera_mount::{
+    CameraFs, Device, IO_BYTES, Node, files, read_only::ReadOnly, usb::UsbDevice,
+};
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
 use sha2::{Digest, Sha256};
 use std::{
@@ -34,6 +36,9 @@ const USAGE: &str = "Usage: fujimod-card --firmware ID [--device BUS-OR-SERIAL] 
   rm PATH...                         delete each card file
 Paths are card paths such as DCIM/100_FUJI/DSCF*.JPG; only the last component
 may hold * or ?. Each file prints one JSON line with its SHA-256.";
+
+/// Files per camera transaction.
+const BATCH_FILES: usize = 32;
 
 fn fail(message: impl std::fmt::Display) -> ! {
     eprintln!("fujimod-card: {message}");
@@ -79,23 +84,64 @@ fn run<D: Device>(
             if patterns.is_empty() || command == "get" && out.is_none() {
                 return Err(USAGE.to_owned());
             }
+            let mut nodes = Vec::new();
             for pattern in &patterns {
-                let nodes: Vec<Node> =
-                    files::list(&mut fs, pattern).map_err(|e| errno(pattern, e))?;
+                nodes.extend(files::list(&mut fs, pattern).map_err(|e| errno(pattern, e))?);
+            }
+            let Some(out) = out else {
                 for node in nodes {
-                    stopped()?;
-                    let mut line = serde_json::json!({"path": node.path, "bytes": node.size, "directory": node.directory});
-                    if let Some(out) = out.as_ref().filter(|_| !node.directory) {
-                        let data =
-                            files::get(&mut fs, &node, limit).map_err(|e| errno(&node.name, e))?;
-                        let file = out.join(&node.name);
-                        std::fs::write(&file, &data)
-                            .map_err(|e| format!("{}: {e}", file.display()))?;
-                        line = serde_json::json!({"path": node.path, "bytes": node.size,
-                            "saved": data.len(), "file": file, "sha256": hash(&data)});
-                    }
-                    println!("{line}");
+                    println!(
+                        "{}",
+                        serde_json::json!({"path": node.path, "bytes": node.size, "directory": node.directory})
+                    );
                 }
+                return Ok(());
+            };
+            let save = |node: &Node, data: &[u8]| {
+                let file = out.join(&node.name);
+                std::fs::write(&file, data).map_err(|e| format!("{}: {e}", file.display()))?;
+                println!(
+                    "{}",
+                    serde_json::json!({"path": node.path, "bytes": node.size,
+                        "saved": data.len(), "file": file, "sha256": hash(data)})
+                );
+                Ok::<_, String>(())
+            };
+            let prefix = |node: &Node| limit.map_or(node.size, |l: u64| l.min(node.size));
+            let mut rest = &nodes[..];
+            while let Some(first) = rest.first() {
+                stopped()?;
+                // Files in a batch share one camera transaction; its bounds
+                // also bound how long an interrupt waits.
+                let (mut count, mut bytes) = (0, 0);
+                while count < rest.len().min(BATCH_FILES)
+                    && !rest[count].directory
+                    && bytes + prefix(&rest[count]) <= IO_BYTES as u64
+                {
+                    bytes += prefix(&rest[count]);
+                    count += 1;
+                }
+                if count == 0 {
+                    if first.directory {
+                        println!(
+                            "{}",
+                            serde_json::json!({"path": first.path, "bytes": first.size, "directory": true})
+                        );
+                    } else {
+                        let data =
+                            files::get(&mut fs, first, limit).map_err(|e| errno(&first.name, e))?;
+                        save(first, &data)?;
+                    }
+                    count = 1;
+                } else {
+                    let batch = &rest[..count];
+                    let data = files::get_many(&mut fs, batch, limit)
+                        .map_err(|e| errno(&first.name, e))?;
+                    for (node, data) in batch.iter().zip(data) {
+                        save(node, &data)?;
+                    }
+                }
+                rest = &rest[count..];
             }
             Ok(())
         }
