@@ -4461,7 +4461,7 @@
     {
       "id": "row-37",
       "event": 830,
-      "debug_key": "E-D-3.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4493,9 +4493,10 @@
     {
       "id": "row-38",
       "event": 829,
-      "debug_key": "E-D-2.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 38,
@@ -4524,9 +4525,10 @@
     {
       "id": "row-39",
       "event": 828,
-      "debug_key": "E-D-2.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 39,
@@ -4555,7 +4557,7 @@
     {
       "id": "row-40",
       "event": 827,
-      "debug_key": "E-D-2.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4589,7 +4591,8 @@
       "event": 826,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 41,
@@ -4620,7 +4623,8 @@
       "event": 825,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 42,
@@ -4649,7 +4653,7 @@
     {
       "id": "row-43",
       "event": 824,
-      "debug_key": "E-D-1.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4681,9 +4685,10 @@
     {
       "id": "row-44",
       "event": 823,
-      "debug_key": "E-D-0.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 44,
@@ -4712,9 +4717,10 @@
     {
       "id": "row-45",
       "event": 822,
-      "debug_key": "E-D-0.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 45,
@@ -4743,7 +4749,7 @@
     {
       "id": "row-46",
       "event": 821,
-      "debug_key": "E-D=0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4775,9 +4781,10 @@
     {
       "id": "row-47",
       "event": 820,
-      "debug_key": "E-D+0.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 47,
@@ -4806,9 +4813,10 @@
     {
       "id": "row-48",
       "event": 819,
-      "debug_key": "E-D+0.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 48,
@@ -4837,7 +4845,7 @@
     {
       "id": "row-49",
       "event": 818,
-      "debug_key": "E-D+1.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4871,7 +4879,8 @@
       "event": 817,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 50,
@@ -4902,7 +4911,8 @@
       "event": 816,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 51,
@@ -4931,7 +4941,7 @@
     {
       "id": "row-52",
       "event": 815,
-      "debug_key": "E-D+2.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4963,9 +4973,10 @@
     {
       "id": "row-53",
       "event": 814,
-      "debug_key": "E-D+2.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 53,
@@ -4994,9 +5005,10 @@
     {
       "id": "row-54",
       "event": 813,
-      "debug_key": "E-D+2.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 54,
@@ -5025,7 +5037,7 @@
     {
       "id": "row-55",
       "event": 812,
-      "debug_key": "E-D+3.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -5358,7 +5370,8 @@
       "event": 1281,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 67,
@@ -5389,7 +5402,8 @@
       "event": 1282,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 68,
@@ -5452,7 +5466,8 @@
       "event": 1284,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 70,
@@ -5483,7 +5498,8 @@
       "event": 1285,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 71,
@@ -5546,7 +5562,8 @@
       "event": 1287,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 73,
@@ -5577,7 +5594,8 @@
       "event": 1288,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 74,
@@ -5640,7 +5658,8 @@
       "event": 1290,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 76,
@@ -5671,7 +5690,8 @@
       "event": 1291,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 77,
@@ -5734,7 +5754,8 @@
       "event": 1293,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 79,
@@ -5765,7 +5786,8 @@
       "event": 1294,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 80,
@@ -5828,7 +5850,8 @@
       "event": 1296,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 82,
@@ -5859,7 +5882,8 @@
       "event": 1297,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 83,
