@@ -405,6 +405,11 @@ export const focalComponents: readonly FocalComponent[] = [
             "name": "accent",
             "type": "unsigned char",
             "comment": ""
+          },
+          {
+            "name": "plain",
+            "type": "unsigned char",
+            "comment": "A plain alert: no title bar and no danger border; the message sits on the panel's gray."
           }
         ]
       },
@@ -2974,6 +2979,11 @@ export const focalComponents: readonly FocalComponent[] = [
             "name": "alternatives",
             "type": "char[4]",
             "comment": ""
+          },
+          {
+            "name": "characters",
+            "type": "const char *",
+            "comment": "Every character the keyboard can show, on any layer or as a long press's choice, prepared when it opens; NULL for none."
           }
         ]
       },
@@ -3256,6 +3266,11 @@ export const focalComponents: readonly FocalComponent[] = [
             "comment": ""
           },
           {
+            "name": "custom_slot",
+            "type": "unsigned char",
+            "comment": "The selected custom setting's favorite slot, 1 to 7, drawn as a badge (C1) before the page counter; 0 draws none."
+          },
+          {
             "name": "appearance",
             "type": "enum Focal_TitleAppearance",
             "comment": ""
@@ -3283,7 +3298,7 @@ export const focalComponents: readonly FocalComponent[] = [
         "slug": "page-title",
         "description": "A page title with its position in a set of pages.",
         "source": "FOCAL_PREVIEW(\"Page title\",\n               .description = \"A page title with its position in a set of pages.\") {\n    (void)props;\n    const struct Focal_Theme *theme = &Focal_Theme_x100vi;\n    FOCAL_THEME(theme) {\n        CLAY(CLAY_ID(\"page\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},\n                       .layoutDirection = CLAY_TOP_TO_BOTTOM},\n            .backgroundColor = theme->background,\n        }) {\n            FOCAL_TITLE_BAR(.title = {.utf8 = \"IMAGE QUALITY\"}, .page = 2, .pages = 5,\n                            .appearance = FOCAL_TITLE_APPEARANCE_DEFAULT);\n        }\n    }\n}",
-        "line": 200,
+        "line": 228,
         "width": 720,
         "height": 480,
         "page": "/docs/sdk/focal/title-bar/page-title/preview.html"
@@ -4685,6 +4700,16 @@ export const focalComponents: readonly FocalComponent[] = [
             "name": "error_text",
             "type": "Clay_Color",
             "comment": "Text that says what went wrong."
+          },
+          {
+            "name": "custom_setting",
+            "type": "Clay_Color",
+            "comment": "Custom settings: the title bar's badge, and the values and chevrons of the rows a custom setting carries."
+          },
+          {
+            "name": "custom_setting_text",
+            "type": "Clay_Color",
+            "comment": "Custom settings: the title bar's badge, and the values and chevrons of the rows a custom setting carries."
           },
           {
             "name": "window_shadow",
@@ -6614,6 +6639,11 @@ export const focalComponents: readonly FocalComponent[] = [
             "comment": "value glyph role"
           },
           {
+            "name": "value_vector",
+            "type": "unsigned int",
+            "comment": "unmapped value artwork id (0xff...)"
+          },
+          {
             "name": "disabled",
             "type": "unsigned char",
             "comment": ""
@@ -6637,6 +6667,16 @@ export const focalComponents: readonly FocalComponent[] = [
             "name": "label_width",
             "type": "unsigned char",
             "comment": "stock's label scale, percent; 0 is 100"
+          },
+          {
+            "name": "custom",
+            "type": "unsigned char",
+            "comment": "Custom settings carry this row's setting: its value draws in the custom-setting color, or its chevron when it shows no value."
+          },
+          {
+            "name": "value_max_width",
+            "type": "unsigned short",
+            "comment": "Widest a text value draws, in pixels, clipped beyond; 0 is unlimited."
           }
         ]
       },
