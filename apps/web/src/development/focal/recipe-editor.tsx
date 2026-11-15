@@ -238,11 +238,11 @@ const SKINS: Record<Finish, Skin> = {
     }),
   },
   flat: {
-    panel: 'rgb(6 6 6 / 0.8)',
-    edge: 'inset -1px 0 0 rgb(255 255 255 / 0.35)',
+    panel: 'rgb(24 24 24 / 0.88)',
+    edge: 'inset -1px 0 0 #3e3e42',
     row: (focused) => ({
-      background: focused ? 'rgb(64 64 68 / 0.96)' : undefined,
-      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.1)',
+      background: focused ? 'rgb(58 58 60 / 0.97)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.08)',
     }),
   },
 };
@@ -262,8 +262,8 @@ function scrollFor(focus: number, height: number): number {
   return Math.max(0, Math.min(max, focus * ROW - (height - ROW) / 2));
 }
 
-const CARD = 'rgb(60 60 60 / 0.85)';
-const BODY = 'rgb(40 40 42 / 0.94)';
+const CARD = 'rgb(24 24 24 / 0.82)';
+const BODY = 'rgb(30 30 32 / 0.96)';
 const LIGHT = 'font-light tracking-[0.08em] uppercase';
 /** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
 const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
@@ -558,7 +558,7 @@ function RowExtension(props: {
     >
       <div
         class={`flex h-full items-center justify-between pr-[12px] pl-[10px] text-[19px] ${LIGHT}`}
-        style={{ ...props.skin.row(true), 'border-right': '1px solid rgb(255 255 255 / 0.22)' }}
+        style={{ ...props.skin.row(true), 'border-right': '1px solid #3e3e42' }}
         onClick={() => props.onClick?.()}
       >
         <span class="truncate">{props.title}</span>
@@ -570,7 +570,7 @@ function RowExtension(props: {
           height: `${props.bodyHeight}px`,
           top: below() ? `${ROW}px` : `${-props.bodyHeight}px`,
           background: BODY,
-          'box-shadow': 'inset 0 0 0 1px rgb(255 255 255 / 0.22)',
+          'box-shadow': 'inset 0 0 0 1px #3e3e42',
         }}
       >
         {props.children}
@@ -762,10 +762,13 @@ function Editor(props: { state: EditorState; send?: Send }) {
             class="absolute top-[10px] flex flex-col items-start gap-[4px]"
             style={{ left: `${WIDTH + 12}px` }}
           >
-            <span class={`px-[12px] py-[5px] text-[24px] ${LIGHT}`} style={{ background: CARD }}>
+            <span
+              class="px-[12px] py-[6px] text-[22px] font-light tracking-[0.14em] text-secondary uppercase"
+              style={{ background: CARD }}
+            >
               {focused().name}
             </span>
-            <span class={`px-[12px] py-[4px] text-[18px] ${LIGHT}`} style={{ background: CARD }}>
+            <span class={`px-[12px] py-[4px] text-[22px] ${LIGHT}`} style={{ background: CARD }}>
               {valueName(focused(), s().recipe)}
             </span>
           </div>
@@ -886,7 +889,7 @@ const INITIAL: EditorState = {
   comparing: false,
   side: 'b',
   name: 'DSCF4182',
-  finish: 'emboss',
+  finish: 'flat',
 };
 
 const PADS = [
@@ -899,8 +902,8 @@ const PADS = [
 ];
 
 const FINISHES: { finish: Finish; label: string }[] = [
-  { finish: 'emboss', label: 'Embossed' },
   { finish: 'flat', label: 'Flat' },
+  { finish: 'emboss', label: 'Embossed' },
 ];
 
 function Live() {
@@ -965,8 +968,8 @@ const EDITED: Recipe = {
 };
 
 const STATES: { id: string; title: string; state: EditorState }[] = [
-  { id: 'emboss', title: 'Embossed, as FUJIMOD SET-UP', state: INITIAL },
-  { id: 'flat', title: 'Flat, as the root menu', state: { ...INITIAL, finish: 'flat' } },
+  { id: 'flat', title: 'Flat, as the menus', state: INITIAL },
+  { id: 'emboss', title: 'Embossed, as FUJIMOD SET-UP', state: { ...INITIAL, finish: 'emboss' } },
   { id: 'slider', title: 'Slider row', state: { ...INITIAL, focus: 4 } },
   {
     id: 'nr',
