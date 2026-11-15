@@ -288,6 +288,9 @@ inherits = "release"
 opt-level = 3
 lto = "thin"
 codegen-units = 16
+# Inherited incremental caches added 8.9 GB (one session per source change) to the web
+# emulator's target and make ThinLTO output no faster to rebuild.
+incremental = false
 strip = "debuginfo"
 
 # Build executables stay unstripped; distribution profiles apply to libraries.
