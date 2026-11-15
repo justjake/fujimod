@@ -298,12 +298,220 @@ const BODY = 'rgb(30 30 32 / 0.96)';
 const LIGHT = 'font-light tracking-[0.08em] uppercase';
 /** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
 const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
-/** The chosen choice's cell, a step lighter than the drawer. */
-const CHOSEN = 'rgb(255 255 255 / 0.2)';
-/** Selection inside a drawer: the white frame drawn on the cell's own edge. */
-const FRAMED = `inset 0 0 0 ${FRAME}px #fff`;
-/** A value that differs from the compare look: the cell's bottom edge in the accent. */
-const CHANGED = `inset 0 -${FRAME}px 0 var(--accent)`;
+
+/* ---- Selection --------------------------------------------------------------- */
+
+/** Treatments to compare for a row's chosen choice and its value thumb. Each
+ * fills the drawer's height and shows focus and a change from the compare
+ * look its own way. */
+type Selection = 'tile' | 'invert' | 'accent' | 'brackets' | 'rules' | 'spotlight';
+
+interface Mark {
+  focused: boolean;
+  changed: boolean;
+}
+
+/** Corner brackets, as an AF frame draws them. */
+interface CornerMarks {
+  arm: number;
+  weight: number;
+  color: string;
+  /** The lower brackets' color, when it differs. */
+  lower?: string;
+}
+
+/** A chosen cell or a thumb's box: its own surface and edges, its ink, and marks. */
+interface Look {
+  style: JSX.CSSProperties;
+  ink: string;
+  corners?: CornerMarks;
+  /** A small square in the top right corner. */
+  pip?: string;
+}
+
+interface ThumbLook {
+  /** The full-height box the thumb sits in. */
+  box: Look;
+  /** The thumb fills its box rather than sitting inside the frame's gap. */
+  fill: boolean;
+  thumb: string;
+}
+
+interface SelectionStyle {
+  label: string;
+  chosen: (mark: Mark) => Look;
+  /** Ink of the choices not chosen, in a focused row or not. */
+  other: (focused: boolean) => string;
+  thumb: (mark: Mark) => ThumbLook;
+}
+
+const ACCENT = 'var(--accent)';
+/** The inverted tile and thumb away from focus: opaque, so the track stays behind it. */
+const INVERT_REST = '#b4b4b8';
+const ring = (width: number, color: string) => `inset 0 0 0 ${width}px ${color}`;
+const top = (width: number, color: string) => `inset 0 ${width}px 0 ${color}`;
+const bottom = (width: number, color: string) => `inset 0 -${width}px 0 ${color}`;
+/** Box shadows listed first paint on top; false entries drop out. */
+const edges = (...list: (string | false)[]) =>
+  list.filter((edge): edge is string => edge !== false).join(', ') || undefined;
+
+/** The thumb's look when only its number shows a change. */
+const plainThumb = (mark: Mark, box: JSX.CSSProperties = {}): ThumbLook => ({
+  box: { style: box, ink: mark.changed ? ACCENT : '#000' },
+  fill: false,
+  thumb: '#fff',
+});
+
+const SELECTIONS: Record<Selection, SelectionStyle> = {
+  tile: {
+    label: 'Tile',
+    chosen: (m) => ({
+      style: {
+        background: 'rgb(255 255 255 / 0.2)',
+        'box-shadow': edges(m.changed && bottom(FRAME, ACCENT), m.focused && ring(FRAME, '#fff')),
+      },
+      ink: '#fff',
+    }),
+    other: () => '#fff',
+    thumb: (m) => plainThumb(m, { 'box-shadow': m.focused ? ring(FRAME, '#fff') : undefined }),
+  },
+  invert: {
+    label: 'Inverted',
+    chosen: (m) => ({
+      style: { background: m.focused ? '#fff' : INVERT_REST },
+      ink: m.changed ? ACCENT : '#000',
+    }),
+    other: () => '#fff',
+    thumb: (m) => ({
+      box: { style: {}, ink: m.changed ? ACCENT : '#000' },
+      fill: m.focused,
+      thumb: m.focused ? '#fff' : INVERT_REST,
+    }),
+  },
+  accent: {
+    label: 'Accent',
+    chosen: (m) => ({
+      style: m.focused
+        ? { background: ACCENT }
+        : { 'box-shadow': bottom(FRAME, 'rgb(255 255 255 / 0.85)') },
+      ink: '#fff',
+      pip: m.changed ? (m.focused ? '#fff' : ACCENT) : undefined,
+    }),
+    other: () => '#fff',
+    thumb: (m) =>
+      m.focused
+        ? {
+            box: {
+              style: { background: ACCENT },
+              ink: '#fff',
+              pip: m.changed ? '#fff' : undefined,
+            },
+            fill: true,
+            thumb: ACCENT,
+          }
+        : plainThumb(m),
+  },
+  brackets: {
+    label: 'Brackets',
+    chosen: (m) => ({
+      style: {},
+      ink: '#fff',
+      corners: m.focused
+        ? { arm: 12, weight: FRAME, color: '#fff', lower: m.changed ? ACCENT : undefined }
+        : {
+            arm: 8,
+            weight: 2,
+            color: 'rgb(255 255 255 / 0.7)',
+            lower: m.changed ? ACCENT : undefined,
+          },
+    }),
+    other: () => '#fff',
+    thumb: (m) => ({
+      ...plainThumb(m),
+      box: {
+        style: {},
+        ink: m.changed ? ACCENT : '#000',
+        corners: m.focused ? { arm: 10, weight: FRAME, color: '#fff' } : undefined,
+      },
+    }),
+  },
+  rules: {
+    label: 'Rules',
+    chosen: (m) => {
+      const weight = m.focused ? FRAME : 2;
+      const rule = m.focused ? '#fff' : 'rgb(255 255 255 / 0.6)';
+      return {
+        style: {
+          'box-shadow': edges(
+            top(weight, rule),
+            m.changed ? bottom(FRAME, ACCENT) : bottom(weight, rule),
+          ),
+        },
+        ink: '#fff',
+      };
+    },
+    other: () => '#fff',
+    thumb: (m) =>
+      plainThumb(m, {
+        'box-shadow': m.focused ? edges(top(FRAME, '#fff'), bottom(FRAME, '#fff')) : undefined,
+      }),
+  },
+  spotlight: {
+    label: 'Spotlight',
+    chosen: (m) => ({
+      style: {
+        background: m.focused ? 'rgb(0 0 0 / 0.72)' : undefined,
+        'box-shadow': m.changed ? bottom(FRAME, ACCENT) : undefined,
+      },
+      ink: '#fff',
+    }),
+    other: (focused) => (focused ? 'rgb(255 255 255 / 0.6)' : 'rgb(255 255 255 / 0.3)'),
+    thumb: (m) => plainThumb(m, { background: m.focused ? 'rgb(0 0 0 / 0.72)' : undefined }),
+  },
+};
+
+function Corners(props: CornerMarks) {
+  const corners = [
+    ['top', 'left'],
+    ['top', 'right'],
+    ['bottom', 'left'],
+    ['bottom', 'right'],
+  ] as const;
+  const arm = (v: string, h: string, width: number, height: number): JSX.CSSProperties => ({
+    [v]: '0',
+    [h]: '0',
+    width: `${width}px`,
+    height: `${height}px`,
+    background: v === 'bottom' ? (props.lower ?? props.color) : props.color,
+  });
+  return (
+    <For each={corners}>
+      {([v, h]) => (
+        <>
+          <span class="pointer-events-none absolute" style={arm(v, h, props.arm, props.weight)} />
+          <span class="pointer-events-none absolute" style={arm(v, h, props.weight, props.arm)} />
+        </>
+      )}
+    </For>
+  );
+}
+
+/** A look's marks over its cell. */
+function Marks(props: { look: Look }) {
+  return (
+    <>
+      <Show when={props.look.corners}>{(corners) => <Corners {...corners()} />}</Show>
+      <Show when={props.look.pip}>
+        {(color) => (
+          <span
+            class="pointer-events-none absolute top-0 right-0 h-[6px] w-[6px]"
+            style={{ background: color() }}
+          />
+        )}
+      </Show>
+    </>
+  );
+}
 
 /* ---- Input ------------------------------------------------------------------- */
 
@@ -362,8 +570,10 @@ function ChoiceStrip(props: {
   width: number;
   focused: boolean;
   changed: boolean;
+  selection: SelectionStyle;
   pick: (value: number) => void;
 }) {
+  const look = () => props.selection.chosen({ focused: props.focused, changed: props.changed });
   let track: HTMLDivElement | undefined;
   const [offset, setOffset] = createSignal(0);
   const [more, setMore] = createSignal(false);
@@ -405,18 +615,14 @@ function ChoiceStrip(props: {
         <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
           {(item) => {
             const chosen = () => item.i === props.value;
+            const ink = () => (chosen() ? look().ink : props.selection.other(props.focused));
             return (
               <div
-                class="flex shrink-0 items-center justify-center"
+                class="relative flex shrink-0 items-center justify-center"
                 style={{
                   width: item.choice.icon ? `${ICON_CELL}px` : undefined,
                   padding: item.choice.icon ? undefined : '0 10px',
-                  background: chosen() ? CHOSEN : undefined,
-                  'box-shadow': chosen()
-                    ? [props.changed && CHANGED, props.focused && FRAMED]
-                        .filter(Boolean)
-                        .join(', ') || undefined
-                    : undefined,
+                  ...(chosen() ? look().style : {}),
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -425,9 +631,18 @@ function ChoiceStrip(props: {
               >
                 <Show
                   when={item.choice.icon}
-                  fallback={<span class={`text-[16px] ${LIGHT}`}>{item.choice.name}</span>}
+                  fallback={
+                    <span class={`text-[16px] ${LIGHT}`} style={{ color: ink() }}>
+                      {item.choice.name}
+                    </span>
+                  }
                 >
-                  {(icon) => <Ink src={stock(icon())} class="h-[24px] w-[48px]" mode="alpha" />}
+                  {(icon) => (
+                    <Ink src={stock(icon())} class="h-[24px] w-[48px]" mode="alpha" color={ink()} />
+                  )}
+                </Show>
+                <Show when={chosen()}>
+                  <Marks look={look()} />
                 </Show>
               </div>
             );
@@ -445,8 +660,10 @@ function Segments(props: {
   value: number;
   focused: boolean;
   changed: boolean;
+  selection: SelectionStyle;
   pick: (value: number) => void;
 }) {
+  const look = () => props.selection.thumb({ focused: props.focused, changed: props.changed });
   const count = () => props.setting.steps.length;
   const zero = () => props.setting.steps.indexOf(0);
   const x = (i: number) => `calc(${INSET}px + (100% - ${2 * INSET}px) * ${i / (count() - 1)})`;
@@ -494,18 +711,25 @@ function Segments(props: {
         class="absolute inset-y-0 flex -translate-x-1/2"
         style={{
           left: x(props.value),
-          padding: `${FRAME + FRAME_GAP}px`,
-          'box-shadow': props.focused ? FRAMED : undefined,
+          padding: look().fill ? undefined : `${FRAME + FRAME_GAP}px`,
+          ...look().box.style,
         }}
       >
-        <span class="flex min-w-[40px] items-center justify-center bg-white px-[4px]">
+        <span
+          class="flex items-center justify-center px-[4px]"
+          style={{
+            'min-width': `${look().fill ? 40 + 2 * (FRAME + FRAME_GAP) : 40}px`,
+            background: look().thumb,
+          }}
+        >
           <span
             class="text-[17px] leading-none font-semibold tabular-nums"
-            style={{ color: props.changed ? 'var(--accent)' : '#000' }}
+            style={{ color: look().box.ink }}
           >
             {fmt(props.setting.steps[props.value])}
           </span>
         </span>
+        <Marks look={look().box} />
       </span>
     </div>
   );
@@ -520,6 +744,7 @@ function SettingRow(props: {
   width: number;
   skin: Skin;
   drawer: Drawer;
+  selection: SelectionStyle;
   side?: Side;
   send: Send;
 }) {
@@ -561,6 +786,7 @@ function SettingRow(props: {
               width={controlWidth()}
               focused={props.focused}
               changed={props.changed}
+              selection={props.selection}
               pick={pick}
             />
           }
@@ -571,6 +797,7 @@ function SettingRow(props: {
               value={props.recipe[slider().id]}
               focused={props.focused}
               changed={props.changed}
+              selection={props.selection}
               pick={pick}
             />
           )}
@@ -589,6 +816,7 @@ function Column(props: {
   width: number;
   skin: Skin;
   drawer: Drawer;
+  selection: SelectionStyle;
   side?: Side;
   active?: boolean;
   send: Send;
@@ -627,6 +855,7 @@ function Column(props: {
                 width={props.width}
                 skin={props.skin}
                 drawer={props.drawer}
+                selection={props.selection}
                 side={props.side}
                 send={props.send}
               />
@@ -793,6 +1022,7 @@ interface EditorState {
   side: Side;
   finish: Finish;
   drawer: Drawer;
+  selection: Selection;
 }
 
 function valueName(setting: Setting, recipe: Recipe): string {
@@ -867,6 +1097,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
                   width={COMPARE_WIDTH}
                   skin={skin()}
                   drawer={s().drawer}
+                  selection={SELECTIONS[s().selection]}
                   side={side}
                   active={s().side === side}
                   send={send}
@@ -886,6 +1117,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
           width={WIDTH}
           skin={skin()}
           drawer={s().drawer}
+          selection={SELECTIONS[s().selection]}
           send={send}
         />
         <Show when={s().fly === 'none'}>
@@ -1026,6 +1258,7 @@ const INITIAL: EditorState = {
   side: 'b',
   finish: 'emboss',
   drawer: 'shelf',
+  selection: 'tile',
 };
 
 const PADS = [
@@ -1101,6 +1334,14 @@ function Live() {
           value={state().drawer}
           pick={(drawer) => setState({ ...state(), drawer })}
         />
+        <Segmented
+          choices={(Object.keys(SELECTIONS) as Selection[]).map((selection) => ({
+            value: selection,
+            label: SELECTIONS[selection].label,
+          }))}
+          value={state().selection}
+          pick={(selection) => setState({ ...state(), selection })}
+        />
       </div>
       <Fit>
         <Editor state={state()} send={send} />
@@ -1134,7 +1375,22 @@ const EDITED: Recipe = {
   shiftB: -5,
 };
 
+/** Each selection with the WB row focused and changed from A, beside other
+ * changed and unchanged rows. */
+const SELECTION_STATES = (Object.keys(SELECTIONS) as Selection[]).map((selection) => ({
+  id: `selection-${selection}`,
+  title: `Selection: ${SELECTIONS[selection].label}`,
+  state: {
+    ...INITIAL,
+    selection,
+    snapshot: BASE,
+    recipe: { ...EDITED, wb: 1 },
+    focus: 1,
+  } satisfies EditorState,
+}));
+
 const STATES: { id: string; title: string; state: EditorState }[] = [
+  ...SELECTION_STATES,
   { id: 'emboss', title: 'Embossed with the light drawer', state: INITIAL },
   {
     id: 'flat',
