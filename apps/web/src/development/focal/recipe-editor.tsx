@@ -705,6 +705,19 @@ function Fit(props: { children: JSX.Element }) {
   );
 }
 
+const PADS = [
+  { label: '◀', key: 'ArrowLeft' },
+  { label: '▲', key: 'ArrowUp' },
+  { label: '▼', key: 'ArrowDown' },
+  { label: '▶', key: 'ArrowRight' },
+  { label: 'OK', key: 'Enter' },
+  { label: 'BACK', key: 'Escape' },
+  { label: 'WB SHIFT', key: 's' },
+  { label: 'INFO', key: 'i' },
+  { label: 'KEEP A', key: 'a' },
+  { label: 'COMPARE', key: 'q' },
+];
+
 function Live() {
   const [state, setState] = createSignal<EditorState>(INITIAL);
   return (
@@ -722,6 +735,19 @@ function Live() {
       <Fit>
         <Editor state={state()} />
       </Fit>
+      <div class="mt-[10px] flex max-w-[720px] flex-wrap gap-[8px]">
+        <For each={PADS}>
+          {(pad) => (
+            <button
+              type="button"
+              class="min-h-[44px] min-w-[52px] rounded-[10px] bg-[#2a2a2c] px-[12px] text-[16px] font-semibold active:bg-[#444]"
+              onClick={() => setState(onKey(state(), pad.key))}
+            >
+              {pad.label}
+            </button>
+          )}
+        </For>
+      </div>
     </div>
   );
 }
@@ -778,8 +804,8 @@ function Review() {
       <section class="mt-[16px]">
         <h2 class="text-[17px] font-semibold">Live</h2>
         <p class="mt-[4px] mb-[10px] text-[#999]">
-          Click the screen, then: arrows are the selector, S opens WB SHIFT on WHITE BALANCE, I shows
-          film notes, A keeps the current look as A, Q cycles compare, Esc closes.
+          The buttons below the screen, or with a keyboard: arrows, Enter, Esc, S (WB SHIFT), I (INFO),
+          A (KEEP A), Q (COMPARE).
         </p>
         <Live />
       </section>
@@ -798,4 +824,7 @@ function Review() {
 
 const host = document.getElementById('recipe-editor');
 if (!host) throw new Error('Missing #recipe-editor');
-if (import.meta.env.DEV) render(() => <Review />, host);
+if (import.meta.env.DEV) {
+  host.replaceChildren();
+  render(() => <Review />, host);
+}
