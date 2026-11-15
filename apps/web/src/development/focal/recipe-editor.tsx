@@ -267,13 +267,9 @@ const DRAWERS: Record<Drawer, string | undefined> = {
 
 /** Eleven rows fill the 480-pixel screen without scrolling. */
 const ROW = 43;
-const COMPARE_HEADER = 30;
 const ICON_CELL = 52;
 /** The icon column, before the stroke that starts each row's drawer. */
 const ICON_COLUMN = 58;
-/** Compare ends each column on a whole row and keeps the space below free
- * for the legend under both columns. */
-const LEGEND_SPACE = 480 - COMPARE_HEADER - 9 * ROW;
 const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
@@ -571,34 +567,20 @@ function Column(props: {
   active?: boolean;
   send: Send;
 }) {
-  const height = () => 480 - (props.side ? COMPARE_HEADER + LEGEND_SPACE : 0);
+  const height = () => 480;
   const scroll = () => scrollFor(props.focus, height());
   const edge = () =>
     props.side === 'b' ? props.skin.edge.replaceAll('inset -', 'inset ') : props.skin.edge;
   return (
     <div
-      class="absolute top-0 flex flex-col"
+      class="absolute inset-y-0 flex flex-col"
       style={{
-        bottom: props.side ? `${LEGEND_SPACE}px` : '0',
         left: `${props.left}px`,
         width: `${props.width}px`,
         background: props.skin.panel,
         'box-shadow': edge(),
       }}
     >
-      <Show when={props.side}>
-        <div
-          class={`flex shrink-0 items-center justify-center text-[20px] ${LIGHT}`}
-          style={{
-            height: `${COMPARE_HEADER}px`,
-            'box-shadow': props.active ? 'inset 0 -3px 0 var(--accent)' : undefined,
-            color: props.active ? '#fff' : 'var(--color-secondary)',
-          }}
-          onClick={() => props.send({ focus: props.focus, side: props.side })}
-        >
-          {props.side === 'a' ? 'A' : 'B'}
-        </div>
-      </Show>
       <div
         class="relative flex-1 overflow-hidden"
         style={{
@@ -739,9 +721,14 @@ function Legend(props: {
   hints: { glyph: string; label: string; key: string }[];
   send: Send;
   left: number;
+  /** Stacked and centered on `left`, for the narrow gap between compare columns. */
+  stacked?: boolean;
 }) {
   return (
-    <div class="absolute bottom-[12px] flex gap-[4px]" style={{ left: `${props.left}px` }}>
+    <div
+      class={`absolute bottom-[12px] flex gap-[4px] ${props.stacked ? '-translate-x-1/2 flex-col items-stretch' : ''}`}
+      style={{ left: `${props.left}px` }}
+    >
       <For each={props.hints}>
         {(hint) => (
           <div
@@ -832,6 +819,20 @@ function Editor(props: { state: EditorState; send?: Send }) {
             <div class="absolute inset-y-0 left-[359px] w-[2px] bg-white" />
             <For each={['a', 'b'] as Side[]}>
               {(side) => (
+                <div
+                  class={`absolute top-[10px] flex h-[30px] w-[30px] items-center justify-center text-[19px] ${LIGHT}`}
+                  style={{
+                    left: side === 'a' ? `${COMPARE_WIDTH + 8}px` : `${720 - COMPARE_WIDTH - 38}px`,
+                    background: s().side === side ? 'var(--accent)' : 'rgb(0 0 0 / 0.6)',
+                  }}
+                  onClick={() => send({ focus: s().focus, side })}
+                >
+                  {side === 'a' ? 'A' : 'B'}
+                </div>
+              )}
+            </For>
+            <For each={['a', 'b'] as Side[]}>
+              {(side) => (
                 <Column
                   recipe={side === 'a' ? a() : s().recipe}
                   other={side === 'a' ? s().recipe : a()}
@@ -916,7 +917,12 @@ function Editor(props: { state: EditorState; send?: Send }) {
       </Show>
 
       <Show when={s().fly !== 'shift'}>
-        <Legend hints={hints()} send={send} left={compare() ? 12 : WIDTH + 12} />
+        <Legend
+          hints={hints()}
+          send={send}
+          left={compare() ? 360 : WIDTH + 12}
+          stacked={compare() !== undefined}
+        />
       </Show>
     </div>
   );
