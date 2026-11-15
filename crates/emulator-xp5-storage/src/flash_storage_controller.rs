@@ -14,13 +14,88 @@ struct State {
     rx_fifo: std::collections::VecDeque<u8>,
     configuration_complete: bool,
 }
+/// One installed serial NOR part: its identity and the opcodes, address bytes
+/// and dummy cycles the controller is allowed to issue to it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+    /// JEDEC 0x20bb20, a quad-I/O NOR part. Its aperture read setup is not
+    /// yet checked by this model.
+    Quad20bb20,
+    /// JEDEC 0x2c5b1b, Micron MT35XU01GBBA: 128 MiB octal NOR, addressed with
+    /// four address bytes.
+    MicronMt35xu01g,
+}
+/// One read opcode served through the memory-mapped aperture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ApertureRead {
+    pub opcode: u8,
+    pub address_bytes: u8,
+    pub dummy_cycles: u8,
+}
+impl Part {
+    pub fn from_jedec(jedec: u32) -> Result<Self, String> {
+        match jedec {
+            0x20bb20 => Ok(Self::Quad20bb20),
+            0x2c5b1b => Ok(Self::MicronMt35xu01g),
+            other => Err(format!("unsupported serial NOR part {other:#08x}")),
+        }
+    }
+    pub fn jedec(self) -> u32 {
+        match self {
+            Self::Quad20bb20 => 0x20bb20,
+            Self::MicronMt35xu01g => 0x2c5b1b,
+        }
+    }
+    /// Commands the PIO path issues: status/identity, reads, programs and erases.
+    fn pio(self, cmd: u8) -> Option<Command> {
+        use Command::*;
+        match (self, cmd) {
+            (_, 0x06) => Some(WriteEnable),
+            (_, 0x04) => Some(WriteDisable),
+            (_, 0x05) => Some(Status),
+            (_, 0x9f) => Some(Identity),
+            (Self::Quad20bb20, 0x03 | 0x13 | 0x0b | 0x0c | 0xeb | 0xec) => Some(Read),
+            (Self::Quad20bb20, 0x02 | 0x12 | 0x32 | 0x34) => Some(Program),
+            (Self::Quad20bb20, 0x20 | 0x21) => Some(Erase(0x1000)),
+            (Self::Quad20bb20, 0xd8 | 0xdc) => Some(Erase(0x10000)),
+            // MT35XU: 4-byte read, octal-output and octal-I/O 4-byte fast reads,
+            // 4-byte page program, 4 KiB and 128 KiB 4-byte erases.
+            (Self::MicronMt35xu01g, 0x13 | 0xcc | 0xfd) => Some(Read),
+            (Self::MicronMt35xu01g, 0x12) => Some(Program),
+            (Self::MicronMt35xu01g, 0x21) => Some(Erase(0x1000)),
+            (Self::MicronMt35xu01g, 0xdc) => Some(Erase(0x20000)),
+            _ => None,
+        }
+    }
+    /// Aperture read setups the part answers, or None while unchecked.
+    pub fn aperture_reads(self) -> Option<&'static [ApertureRead]> {
+        match self {
+            Self::Quad20bb20 => None,
+            // Octal-I/O and octal-output 4-byte fast reads with 20 dummy cycles.
+            Self::MicronMt35xu01g => Some(&[
+                ApertureRead { opcode: 0xfd, address_bytes: 4, dummy_cycles: 20 },
+                ApertureRead { opcode: 0xcc, address_bytes: 4, dummy_cycles: 20 },
+            ]),
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Command {
+    WriteEnable,
+    WriteDisable,
+    Status,
+    Identity,
+    Read,
+    Program,
+    Erase(usize),
+}
 pub struct Controller {
     state: State,
     flash_storage: Shared,
-    jedec: u32,
+    part: Part,
 }
 impl Controller {
-    pub fn new(flash_storage: Shared, jedec: u32) -> Self {
+    pub fn new(flash_storage: Shared, part: Part) -> Self {
         let mut regs = vec![0; 64];
         regs[0x10 / 4] = 0x10001; // Explicit inherited enabled/idle controller assumption.
         Self {
@@ -34,7 +109,27 @@ impl Controller {
                 configuration_complete: false,
             },
             flash_storage,
-            jedec,
+            part,
+        }
+    }
+    /// The aperture's configured read opcode and dummy cycles must be a read
+    /// the installed part answers.
+    fn check_aperture_read(&self) -> Result<(), String> {
+        let Some(reads) = self.part.aperture_reads() else {
+            return Ok(());
+        };
+        let opcode = self.state.regs[0x44 / 4] as u8;
+        let dummy = self.state.regs[0x74 / 4];
+        if reads
+            .iter()
+            .any(|r| r.opcode == opcode && u32::from(r.dummy_cycles) == dummy)
+        {
+            Ok(())
+        } else {
+            Err(format!(
+                "serial NOR part {:#08x} has no aperture read {opcode:#x} with {dummy} dummy cycles",
+                self.part.jedec()
+            ))
         }
     }
     fn known(o: u64) -> bool {
@@ -89,29 +184,32 @@ impl Controller {
         self.state.tx.clear();
         self.state.active = true;
         self.state.complete = false;
+        let command = self.part.pio(cmd).ok_or_else(|| {
+            format!(
+                "unsupported serial-flash storage command {cmd:#x} for part {:#08x}",
+                self.part.jedec()
+            )
+        })?;
+        let jedec = self.part.jedec();
         let mut flash_storage = self.flash_storage.lock().unwrap();
         flash_storage.session.controller_complete = false;
-        match cmd {
-            0x06 => {
+        match command {
+            Command::WriteEnable => {
                 flash_storage.session.write_enable = true;
                 self.state.complete = true;
             }
-            0x04 => {
+            Command::WriteDisable => {
                 flash_storage.session.write_enable = false;
                 self.state.complete = true;
             }
-            0x05 | 0x9f | 0x03 | 0x13 | 0x0b | 0x0c | 0xeb | 0xec => {
+            Command::Status | Command::Identity | Command::Read => {
                 let count = (self.state.regs[0xa0 / 4] & 0x7ff) as usize + 1;
-                self.state.rx_fifo = match cmd {
-                    0x05 => vec![(flash_storage.session.write_enable as u8) << 1; count].into(),
-                    0x9f => (0..count)
-                        .map(|i| {
-                            if i < 3 {
-                                (self.jedec >> (16 - i * 8)) as u8
-                            } else {
-                                0xff
-                            }
-                        })
+                self.state.rx_fifo = match command {
+                    Command::Status => {
+                        vec![(flash_storage.session.write_enable as u8) << 1; count].into()
+                    }
+                    Command::Identity => (0..count)
+                        .map(|i| if i < 3 { (jedec >> (16 - i * 8)) as u8 } else { 0xff })
                         .collect(),
                     _ => flash_storage
                         .read_device(self.state.regs[0x50 / 4] as u64, count)?
@@ -119,22 +217,16 @@ impl Controller {
                 };
                 self.state.complete = true;
             }
-            0x02 | 0x12 | 0x32 | 0x34 => {}
-            0x20 | 0x21 | 0xd8 | 0xdc => {
-                let size = if cmd == 0x20 || cmd == 0x21 {
-                    0x1000
-                } else {
-                    0x10000
-                };
+            Command::Program => {}
+            Command::Erase(size) => {
                 flash_storage.erase(self.state.regs[0x50 / 4] as u64, size)?;
                 self.state.complete = true;
             }
-            _ => return Err(format!("unsupported serial-flash storage command {cmd:#x}")),
         }
         Ok(())
     }
     fn stop(&mut self) -> Result<(), String> {
-        if matches!(self.cmd(), 0x02 | 0x12 | 0x32 | 0x34) && !self.state.tx.is_empty() {
+        if self.part.pio(self.cmd()) == Some(Command::Program) && !self.state.tx.is_empty() {
             self.flash_storage
                 .lock()
                 .unwrap()
@@ -155,20 +247,21 @@ impl Controller {
             return Err("flash storage FIFO read outside transaction".into());
         }
         let mut s = self.flash_storage.lock().unwrap();
-        let b = match self.cmd() {
-            0x05 => (s.session.write_enable as u8) << 1,
-            0x9f => {
+        let cmd = self.cmd();
+        let b = match self.part.pio(cmd) {
+            Some(Command::Status) => (s.session.write_enable as u8) << 1,
+            Some(Command::Identity) => {
                 if self.state.cursor < 3 {
-                    (self.jedec >> (16 - self.state.cursor * 8)) as u8
+                    (self.part.jedec() >> (16 - self.state.cursor * 8)) as u8
                 } else {
                     0xff
                 }
             }
-            0x03 | 0x13 | 0x0b | 0x0c | 0xeb | 0xec => s.read_device(
+            Some(Command::Read) => s.read_device(
                 self.state.regs[0x50 / 4] as u64 + self.state.cursor as u64,
                 1,
             )?[0],
-            cmd => return Err(format!("flash storage FIFO read for command {cmd:#x}")),
+            _ => return Err(format!("flash storage FIFO read for command {cmd:#x}")),
         };
         self.state.cursor += 1;
         self.state.complete = true;
@@ -214,8 +307,8 @@ impl Device for Controller {
                 let receive = !self.state.rx_fifo.is_empty()
                     || (self.state.active
                         && matches!(
-                            self.cmd(),
-                            0x05 | 0x9f | 0x03 | 0x13 | 0x0b | 0x0c | 0xeb | 0xec
+                            self.part.pio(self.cmd()),
+                            Some(Command::Status | Command::Identity | Command::Read)
                         ));
                 let complete = self.state.complete
                     || self
@@ -239,7 +332,7 @@ impl Device for Controller {
         let v = v as u32;
         let result = match o {
             0x80 => {
-                if !self.state.active || !matches!(self.cmd(), 0x02 | 0x12 | 0x32 | 0x34) {
+                if !self.state.active || self.part.pio(self.cmd()) != Some(Command::Program) {
                     Err("unsupported flash storage FIFO write".into())
                 } else {
                     self.state.tx.push(v as u8);
@@ -284,9 +377,13 @@ impl Device for Controller {
                 }
                 if o == 0x48 {
                     self.flash_storage.lock().unwrap().session.program_mode =
-                        matches!(v as u8, 0x02 | 0x12 | 0x32 | 0x34);
+                        self.part.pio(v as u8) == Some(Command::Program);
                 }
-                Ok(())
+                if o == 0x74 {
+                    self.check_aperture_read()
+                } else {
+                    Ok(())
+                }
             }
         };
         if let Err(e) = result {
@@ -341,7 +438,7 @@ mod tests {
     #[test]
     fn pio_reads_count_transferred_bytes_once_and_exclude_identity_commands() {
         let storage = Arc::new(Mutex::new(Storage::new((0..32).collect()).unwrap()));
-        let mut controller = Controller::new(storage.clone(), 0xef4018);
+        let mut controller = Controller::new(storage.clone(), Part::Quad20bb20);
         controller.state.regs[0] = 1;
         controller.state.regs[0x40 / 4] = 0x03;
         controller.state.regs[0x50 / 4] = 8;
@@ -356,7 +453,67 @@ mod tests {
         assert_eq!(storage.lock().unwrap().session.reads.ranges, [(8, 13)]);
         controller.state.regs[0x40 / 4] = 0x9f;
         controller.begin().unwrap();
-        assert_eq!(controller.rx().unwrap(), 0xef);
+        assert_eq!(controller.rx().unwrap(), 0x20);
         assert_eq!(storage.lock().unwrap().session.reads.bytes, 5);
+    }
+
+    fn mt35xu() -> (Shared, Controller) {
+        let storage = Arc::new(Mutex::new(Storage::new((0..64).collect()).unwrap()));
+        let controller = Controller::new(storage.clone(), Part::from_jedec(0x2c5b1b).unwrap());
+        (storage, controller)
+    }
+
+    #[test]
+    fn octal_part_answers_its_identity_and_four_byte_reads() {
+        let (_, mut controller) = mt35xu();
+        controller.state.regs[0] = 1;
+        controller.state.regs[0xa0 / 4] = 2;
+        controller.state.regs[0x40 / 4] = 0x9f;
+        controller.begin().unwrap();
+        let id: Vec<u8> = (0..3).map(|_| controller.rx().unwrap()).collect();
+        assert_eq!(id, [0x2c, 0x5b, 0x1b]);
+        for opcode in [0x13, 0xcc, 0xfd] {
+            controller.state.regs[0x40 / 4] = opcode;
+            controller.state.regs[0x50 / 4] = 16;
+            controller.begin().unwrap();
+            assert_eq!(controller.rx().unwrap(), 16);
+        }
+    }
+
+    #[test]
+    fn octal_part_refuses_commands_outside_its_set() {
+        let (_, mut controller) = mt35xu();
+        controller.state.regs[0] = 1;
+        // Three-byte read and quad-I/O read belong to the quad part only.
+        for opcode in [0x03, 0xec] {
+            controller.state.regs[0x40 / 4] = opcode;
+            assert!(controller.begin().unwrap_err().contains("for part 0x2c5b1b"));
+        }
+    }
+
+    #[test]
+    fn octal_part_erases_its_sector_size() {
+        let (storage, mut controller) = mt35xu();
+        controller.state.regs[0] = 1;
+        controller.state.regs[0x40 / 4] = 0x06;
+        controller.begin().unwrap();
+        controller.state.regs[0x40 / 4] = 0xdc;
+        controller.state.regs[0x50 / 4] = 0;
+        controller.begin().unwrap();
+        assert_eq!(storage.lock().unwrap().read_device(0, 1).unwrap(), [0xff]);
+    }
+
+    #[test]
+    fn aperture_read_setup_must_match_the_part() {
+        let (_, mut controller) = mt35xu();
+        controller.state.regs[0x44 / 4] = 0xfd;
+        controller.state.regs[0x74 / 4] = 20;
+        assert!(controller.check_aperture_read().is_ok());
+        controller.state.regs[0x74 / 4] = 10;
+        assert!(controller.check_aperture_read().unwrap_err().contains("0xfd with 10"));
+        controller.state.regs[0x44 / 4] = 0xec;
+        controller.state.regs[0x74 / 4] = 10;
+        assert!(controller.check_aperture_read().is_err());
+        assert_eq!(Part::from_jedec(0xef4018).unwrap_err(), "unsupported serial NOR part 0xef4018");
     }
 }

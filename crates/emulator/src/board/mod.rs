@@ -216,7 +216,8 @@ pub struct Board {
     #[allow(clippy::vec_box)]
     bindings: Vec<Box<Binding>>,
     hooks: Vec<(usize, HookId)>,
-    mmio: Vec<(usize, u64, usize)>,
+    /// Native MMIO maps as (core, address, bytes, physical base).
+    mmio: Vec<(usize, u64, usize, u64)>,
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     interactive_windows: Cell<u64>,
     interactive_host_duration_ns: Cell<u128>,
@@ -578,6 +579,11 @@ impl Board {
     pub fn mappings(&self) -> &[factory::MemoryMap] {
         &self.mappings
     }
+    /// Processor address views dispatched through the device bus, as
+    /// (core, address, bytes, physical base).
+    pub fn mmio_mappings(&self) -> &[(usize, u64, usize, u64)] {
+        &self.mmio
+    }
     pub fn now(&self) -> u64 {
         self.state.borrow().timeline.now()
     }
@@ -855,7 +861,7 @@ impl Board {
             cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
         }
         self.bindings.push(binding);
-        self.mmio.push((core, address, bytes));
+        self.mmio.push((core, address, bytes, physical));
         Ok(())
     }
     /// Observe guest ticks every 100,000 executed instructions, at existing scheduler
@@ -1310,7 +1316,7 @@ impl Drop for Board {
         for (core, hook) in self.hooks.drain(..) {
             let _ = self.cpus[core].remove_hook(hook);
         }
-        for (core, base, bytes) in self.mmio.drain(..) {
+        for (core, base, bytes, _) in self.mmio.drain(..) {
             let _ = self.cpus[core].unmap(base, bytes);
         }
     }

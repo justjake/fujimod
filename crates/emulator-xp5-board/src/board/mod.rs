@@ -599,14 +599,11 @@ pub fn register_all(
                     .ok_or("controller requires flash storage aperture")?
                 {
                     flash_storage::Medium::Nor(storage) => {
-                        // Current opcode geometry comes from the 20bb20 descriptor.
-                        if jedec != 0x20bb20 {
-                            return Err("only 0x20bb20 flash geometry is supported".into());
-                        }
+                        let part = flash_storage_controller::Part::from_jedec(jedec)?;
                         bus.register(
                             w.base,
                             w.size,
-                            Box::new(flash_storage_controller::Controller::new(storage, jedec)),
+                            Box::new(flash_storage_controller::Controller::new(storage, part)),
                         )?;
                     }
                     flash_storage::Medium::Nand(storage) => {
