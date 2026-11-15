@@ -44,6 +44,7 @@ members = [
   "crates/emulator-session",
   "crates/emulator-cli",
   "crates/xt5-bringup",
+  "crates/emulator-xp5-bringup",
   "crates/emulator-cpu",
   "crates/emulator-cpu-hvf",
   "crates/emulator-cpu-unicorn",
@@ -173,6 +174,7 @@ fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-perf = { path = "crates/perf", version = "0.1.0" }
 fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
 fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
+fujimod-emulator-xp5-bringup = { path = "crates/emulator-xp5-bringup", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
 fujimod-emulator-models = { path = "crates/emulator-models", version = "0.1.0" }
 fujimod-emulator-exr2-boot-serial = { path = "crates/emulator-exr2-boot-serial", version = "0.1.0" }

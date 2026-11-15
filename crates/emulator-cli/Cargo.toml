@@ -30,6 +30,7 @@ fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
 fujimod-emulator-graphics = { path = "../../crates/emulator-graphics" }
 fujimod-emulator = { path = "../emulator" }
 fujimod-emulator-boot.workspace = true
+fujimod-emulator-xp5-bringup.workspace = true
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
 fujimod-emulator-devices = { path = "../emulator-devices" }

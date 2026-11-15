@@ -3,7 +3,8 @@ use fujimod_emulator_boot::{self as boot, Options};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode};
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN [--camera DIR] \\\n  [--overlay ID] [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+const HELP: &str = "Usage: fujimod-emulator xp5 boot --configuration ID --state MANIFEST.toml --firmware-id ID \\\n  --mapped DIR --update UPDATE.DAT --run-root DIR [--files-root DIR] [--files DIR] \\\n  [--ledger SYMBOLS.tsv] [--functions FUNCTIONS.tsv] [--start loader|rom --rom ROM.BIN] \\\n  [--sd-file NAME=PATH | --sd-image IMAGE] [--sd-absent] [--dials held|released] \\\n  [--emulator-patch FILE] [--mod MANIFEST.json] [--keys t=SECONDS:KEY;...] [--stub NAME@ADDR=VALUE] \\\n  [--discovery] [--seconds N] [--status-every N] [--policy exact|interactive] [--quantum N] \\\n  [--overlay ID] [--scene PATH]\n\n\
+Usage: fujimod-emulator boot --configuration ID \\\n  --update UPDATE.DAT --boot-rom ROM.BIN [--camera DIR] \\\n  [--overlay ID] [--nand IMAGE] [--settings MCU.BIN] [--screenshot LCD.PNG] \\\n  [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
 x70-110-rec starts from the reference camera's settings bank with setup done;\n\
 --camera names its directory of nand-<section>.bin.zst sections\n\
@@ -138,6 +139,18 @@ fn parse(
     Ok(Some((options, screenshot, limit, execution_policy)))
 }
 fn run() -> Result<bool, String> {
+    let mut arguments = std::env::args().skip(1);
+    if arguments.next().as_deref() == Some("xp5") {
+        if arguments.next().as_deref() != Some("boot") {
+            return Err(HELP.into());
+        }
+        let report = fujimod_emulator_xp5_bringup::run_boot(arguments.collect())?;
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
+        );
+        return Ok(true);
+    }
     let Some((options, path, limit, execution_policy)) = parse(std::env::args_os().skip(1))? else {
         print!("{HELP}");
         return Ok(true);
