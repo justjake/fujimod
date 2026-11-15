@@ -299,6 +299,7 @@ impl<F: Sessions> Client<F> {
                 Some(("sd", card_read_bytes))
             }
             Operation::Flash(_, size) => Some(("flash", u64::from(*size))),
+            Operation::Close | Operation::Unload => Some(("release", 0)),
             _ => None,
         };
         let mut transport = Transport::new(
@@ -313,6 +314,13 @@ impl<F: Sessions> Client<F> {
             return Err(error);
         }
         let mut cleanup_known = true;
+        // Seconds per step, for FUJIMOD_MOUNT_TRACE.
+        let mut phases = serde_json::Map::new();
+        let mut mark = std::time::Instant::now();
+        let mut phase = |name: &str| {
+            phases.insert(name.into(), mark.elapsed().as_secs_f64().into());
+            mark = std::time::Instant::now();
+        };
         let result = async {
             match op {
                 Operation::Card(requests) => {
@@ -337,6 +345,7 @@ impl<F: Sessions> Client<F> {
                                 "Connected camera differs from the mounted firmware".into(),
                             ));
                         }
+                        phase("identity");
                         self.service = Some(
                             crate::service::Service::install(
                                 &mut session,
@@ -346,6 +355,7 @@ impl<F: Sessions> Client<F> {
                             )
                             .await?,
                         );
+                        phase("install");
                     }
                     let owned =
                         if let Some(service) = &self.service {
@@ -354,6 +364,7 @@ impl<F: Sessions> Client<F> {
                                     .check(&mut session, self.limits, Some(&mut transport))
                                     .await?;
                                 service_checked = true;
+                                phase("check");
                             }
                             self.mailbox_hint = Some(service.base + 0x2000);
                             Some(service.capability(
@@ -373,6 +384,7 @@ impl<F: Sessions> Client<F> {
                         self.mailbox_hint,
                     )
                     .await?;
+                    phase("attach");
                     if let Some(service) = &self.service {
                         volume.set_query_trigger(service.trigger())?;
                     }
@@ -389,10 +401,12 @@ impl<F: Sessions> Client<F> {
                         }
                     }
                     let result = result.map(|()| Answer::Card(responses));
+                    phase("requests");
                     if let Err(error) = volume.close().await {
                         cleanup_known = false;
                         return Err(error);
                     }
+                    phase("volume_close");
                     result
                 }
                 Operation::Flash(offset, size) => {
@@ -478,6 +492,7 @@ impl<F: Sessions> Client<F> {
                 Operation::Close | Operation::Unload => {
                     if let Some(service) = &self.service {
                         service.release(&mut session, self.limits).await?;
+                        phase("release");
                     }
                     self.service = None;
                     self.mailbox_hint = None;
@@ -518,6 +533,7 @@ impl<F: Sessions> Client<F> {
                 self.fence();
                 return Err(error);
             }
+            phase("session_close");
         }
         if std::env::var_os("FUJIMOD_MOUNT_TRACE").is_some()
             && let Some((kind, size)) = metric
@@ -525,7 +541,7 @@ impl<F: Sessions> Client<F> {
             eprintln!(
                 "{}",
                 serde_json::json!({"mount_io":kind,"bytes":size,"requests":requests,
-                    "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok()})
+                    "seconds":started.elapsed().as_secs_f64(),"acquisition_seconds":acquisition_seconds,"success":result.is_ok(),"phases":phases})
             );
         }
         result
