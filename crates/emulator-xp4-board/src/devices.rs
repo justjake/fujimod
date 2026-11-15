@@ -1036,6 +1036,7 @@ impl Devices {
         write_protect: bool,
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
+        audio: Option<storage::AudioPacing>,
     ) -> Result<(Self, Option<storage::ImmutableView>), String> {
         let routes: [u32; 16] = routes
             .try_into()
@@ -1062,7 +1063,7 @@ impl Devices {
         if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
         let view = nor.immutable_view();
         let port = storage::port_from_nor(nor);
-        let mut dma = DmaController::new(port.clone(), routes);
+        let mut dma = DmaController::new(port.clone(), routes).with_audio(audio)?;
         if let Some(input) = receiver_input {
             if input.address < 0xff000000 {
                 return Err("Discovery transmit receiver requires a peripheral destination".into());
@@ -1509,6 +1510,9 @@ impl Devices {
                 irq: j.irq,
                 ticks: j.ticks,
             })?;
+        }
+        if block.audio_converter {
+            model = model.with_work(fujimod_emulator_xpp::blocks::Work::Audio)?;
         }
         if !block.fixed.is_empty() {
             model = model.with_fixed(block.fixed)?;
