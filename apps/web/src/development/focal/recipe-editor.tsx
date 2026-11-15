@@ -102,6 +102,13 @@ type Step = number | string;
 const LEVELS: Step[] = [-2, -1, 0, 1, 2];
 /** The noise-reduction mod's levels below -2, then stock's. */
 const NR_LEVELS: Step[] = ['OFF', 'SNR', 'CNR', 'LNR', -2, -1, 0, 1, 2];
+/** The noise-reduction mod's full names, for the title box. */
+const STEP_NAMES: Record<string, string> = {
+  OFF: 'NR OFF',
+  SNR: 'SPECKLE NR ONLY',
+  CNR: 'COLOR NR LOW',
+  LNR: 'LUMA NR OFF',
+};
 
 interface SliderSetting {
   kind: 'slider';
@@ -280,14 +287,40 @@ type Send = (action: Action) => void;
 
 /* ---- Rows -------------------------------------------------------------------- */
 
+/** Stock icons drawn as the Q tiles draw them: the ink in white, its
+ * counters cut through to the surface beneath. */
+function Ink(props: { src: string; class: string; mode: 'alpha' | 'luminance' }) {
+  return (
+    <span
+      class={`shrink-0 bg-white ${props.class}`}
+      style={{
+        '-webkit-mask': `url(${props.src}) center / contain no-repeat`,
+        mask: `url(${props.src}) center / contain no-repeat`,
+        'mask-mode': props.mode,
+      }}
+    />
+  );
+}
+
 function RowIconView(props: { icon: RowIcon }) {
   return (
-    <img
-      alt=""
-      class="h-[26px] w-[42px] shrink-0 object-contain"
-      style={{ filter: 'invert(1)' }}
-      src={'stock' in props.icon ? stock(props.icon.stock) : `${MOD}/${props.icon.mod}.svg`}
-    />
+    <Show
+      when={'stock' in props.icon ? props.icon.stock : undefined}
+      fallback={
+        <img
+          alt=""
+          class="h-[30px] w-[39px] shrink-0 object-contain"
+          style={{ filter: 'invert(1)' }}
+          src={`${MOD}/${(props.icon as { mod: string }).mod}.svg`}
+        />
+      }
+    >
+      {(id) => (
+        // Q icons are 80 by 48 with their ink in the middle 52 by 40; at 0.75
+        // the ink is the root menu's 39 by 30.
+        <Ink src={stock(id())} class="-mx-[10px] h-[36px] w-[60px]" mode="alpha" />
+      )}
+    </Show>
   );
 }
 
@@ -366,46 +399,56 @@ function Segments(props: {
   changed: boolean;
   pick: (value: number) => void;
 }) {
+  const count = () => props.setting.steps.length;
   const zero = () => props.setting.steps.indexOf(0);
-  const filled = (i: number) =>
-    (props.value > zero() && i > zero() && i < props.value) ||
-    (props.value < zero() && i < zero() && i > props.value);
+  const x = (i: number) => `calc(22px + (100% - 44px) * ${i / (count() - 1)})`;
   return (
-    <div class="flex h-[26px] flex-1 items-center gap-[3px]">
-      <For each={props.setting.steps.map((step, i) => ({ step, i }))}>
-        {(item) => {
-          const thumb = () => item.i === props.value;
-          return (
-            <span
-              class={`relative flex h-full items-center justify-center border border-black ${thumb() && props.focused ? SELECTED : ''}`}
-              style={{
-                flex: thumb() ? '0 0 44px' : '1 1 0',
-                background: thumb()
-                  ? '#ffffff'
-                  : filled(item.i)
-                    ? 'var(--accent)'
-                    : 'rgb(120 120 126 / 0.6)',
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                props.pick(item.i);
-              }}
-            >
-              <Show when={thumb()}>
-                <span
-                  class="text-[17px] leading-none font-semibold tabular-nums"
-                  style={{ color: props.changed ? 'var(--accent)' : '#000' }}
-                >
-                  {fmt(item.step)}
-                </span>
-              </Show>
-              <Show when={!thumb() && item.i === zero()}>
-                <span class="absolute inset-y-[6px] left-1/2 w-[2px] -translate-x-1/2 bg-black/60" />
-              </Show>
-            </span>
-          );
+    <div
+      class="relative h-[34px] flex-1"
+      onClick={(e) => {
+        e.stopPropagation();
+        const box = e.currentTarget.getBoundingClientRect();
+        const scale = box.width / e.currentTarget.offsetWidth;
+        const inner = (e.clientX - box.left) / scale - 22;
+        const i = Math.round((inner / (e.currentTarget.offsetWidth - 44)) * (count() - 1));
+        props.pick(Math.max(0, Math.min(count() - 1, i)));
+      }}
+    >
+      <div class="absolute top-1/2 h-[2px] -translate-y-1/2 bg-white/35" style={{ left: '22px', right: '22px' }} />
+      <div
+        class="absolute top-1/2 h-[4px] -translate-y-1/2 bg-(--accent)"
+        style={{
+          left: x(Math.min(zero(), props.value)),
+          width: `calc((100% - 44px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
         }}
+      />
+      <For each={props.setting.steps.map((step, i) => i)}>
+        {(i) => (
+          <span
+            class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={
+              i === zero()
+                ? { left: x(i), width: '4px', height: '26px', background: '#fff' }
+                : { left: x(i), width: '2px', height: '10px', background: 'rgb(255 255 255 / 0.55)' }
+            }
+          />
+        )}
       </For>
+      <span
+        class={`absolute top-1/2 flex h-[26px] min-w-[40px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[3px] px-[4px] ${props.focused ? SELECTED : ''}`}
+        style={{
+          left: x(props.value),
+          background: 'linear-gradient(#ffffff, #d4d4d8)',
+          'box-shadow': '0 2px 4px rgb(0 0 0 / 0.7), inset 0 -1px 0 rgb(0 0 0 / 0.25)',
+        }}
+      >
+        <span
+          class="text-[17px] leading-none font-semibold tabular-nums"
+          style={{ color: props.changed ? 'var(--accent)' : '#000' }}
+        >
+          {fmt(props.setting.steps[props.value])}
+        </span>
+      </span>
     </div>
   );
 }
@@ -421,12 +464,12 @@ function SettingRow(props: {
   side?: Side;
   send: Send;
 }) {
-  const controlWidth = () => props.width - 12 - 42 - 10 - 10;
+  const controlWidth = () => props.width - 8 - 39 - 8 - 8;
   const pick = (value: number) =>
     props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   return (
     <div
-      class="relative flex items-center gap-[10px] pr-[10px] pl-[12px]"
+      class="relative flex items-center gap-[8px] pr-[8px] pl-[8px]"
       style={{ height: `${ROW}px`, ...props.skin.row(props.focused) }}
       onClick={() => props.send({ focus: props.index, side: props.side })}
     >
@@ -684,7 +727,7 @@ interface EditorState {
 function valueName(setting: Setting, recipe: Recipe): string {
   return setting.kind === 'choice'
     ? setting.choices[recipe[setting.id]].name
-    : fmt(setting.steps[recipe[setting.id]]);
+    : (STEP_NAMES[String(setting.steps[recipe[setting.id]])] ?? fmt(setting.steps[recipe[setting.id]]));
 }
 
 function Editor(props: { state: EditorState; send?: Send }) {
@@ -763,7 +806,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
             style={{ left: `${WIDTH + 12}px` }}
           >
             <span
-              class="px-[12px] py-[6px] text-[22px] font-light tracking-[0.14em] text-secondary uppercase"
+              class="px-[12px] py-[6px] text-[22px] font-light tracking-[0.14em] uppercase"
               style={{ background: CARD }}
             >
               {focused().name}
@@ -997,7 +1040,7 @@ const STATES: { id: string; title: string; state: EditorState }[] = [
 
 function Review() {
   return (
-    <div class="min-h-dvh bg-[#111] p-[16px] font-sans text-[15px] text-[#ddd]">
+    <div class="min-h-dvh touch-manipulation bg-[#111] p-[16px] font-sans text-[15px] text-[#ddd]">
       <h1 class="mb-[12px] text-[22px] font-semibold">Recipe editor</h1>
       <Live />
       <For each={STATES}>
