@@ -64,6 +64,10 @@ struct MmioHook {
     core: usize,
     base: u64,
 }
+struct XipPage {
+    data: Box<[u8; 4096]>,
+    epoch: u64,
+}
 struct RunState {
     instructions: u64,
     ticks: u64,
@@ -82,12 +86,12 @@ struct RunState {
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     pages: BTreeMap<u64, Vec<Box<MmioHook>>>,
-    // Serial-flash aperture pages the CPU executed from: each is read once through the aperture's gated read path and
-    // mapped as read-execute memory on every core until a NOR erase or program completes (`xip_generation`).
-    xip: BTreeMap<u64, Box<[u8; 4096]>>,
-    #[allow(clippy::vec_box)]
-    xip_hooks: Vec<Box<MmioHook>>,
-    xip_generation: u64,
+    // Serial-flash aperture pages the CPU executed from: each is read once through the aperture's gated read path, in the
+    // controller state of the core that faulted, and mapped as read-execute memory on every core until the array or the
+    // controller's read state changes (the storage epoch), when it returns to the gated aperture and the next fetch reads again.
+    xip: BTreeMap<u64, XipPage>,
+    xip_source: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
+    xip_seen: u64,
     cbar_reads: u64,
     gic: Gic,
     timer: Option<timer::Timer>,
@@ -462,8 +466,11 @@ impl Cluster {
         Ok(true)
     }
     /// Instruction fetch from the serial-flash aperture: execute in place. The page is read through the same gated read the
-    /// CPU's data reads take, so a controller state that returns the declared miss pattern or refuses reads does so for
-    /// the fetch as well, and is then mapped as read-execute memory. NOR writes are refused by the aperture, not here.
+    /// CPU's loads take, so a controller state that returns the declared miss pattern or refuses reads does so for the
+    /// fetch as well (a refusal fails the run, a page that is not wholly backed by the NOR image is refused), and is then
+    /// mapped as read-execute memory on every core. The copy is a snapshot taken in the faulting core's controller state:
+    /// the epoch of the array and of the controller's read state ends it (`refresh_xip`). NOR writes are refused by the
+    /// aperture, not here.
     fn map_nor_exec_page(&self, core: usize, address: u64, mapped: bool) -> Result<(), String> {
         use fujimod_emulator_xp4_storage::storage::{FLASH, FLASH_SIZE};
         if !(FLASH..FLASH + FLASH_SIZE).contains(&address) {
@@ -474,6 +481,7 @@ impl Cluster {
         if state.xip.contains_key(&page) {
             return Err(format!("Execute-in-place page {page:#x} faulted while mapped"));
         }
+        let epoch = state.xip_source.as_ref().map_or(0, |e| e.load(std::sync::atomic::Ordering::SeqCst));
         let mut data = Box::new([0u8; 4096]);
         for index in 0..1024usize {
             match self.device_access(core, page + 4 * index as u64, 4, false, 0)? {
@@ -489,29 +497,32 @@ impl Cluster {
                 .map_err(|e| format!("Map execute-in-place page {page:#x}: {e}"))?;
         }
         let state = unsafe { &mut *self.state.get() };
-        state.xip.insert(page, data);
-        state.xip_generation = state.devices.as_ref().and_then(|d| d.nor_generation()).unwrap_or(0);
+        state.xip.insert(page, XipPage { data, epoch });
         Ok(())
     }
-    /// After a NOR erase or program completed, return every execute-in-place page to the gated aperture: the next fetch
-    /// reads the new array.
+    /// Once the storage epoch moved, return every execute-in-place page read before it to the gated aperture: the next
+    /// fetch reads the new array in the new controller state. Each page's aperture hooks are the ones `pages` holds.
     fn refresh_xip(&self) -> Result<(), String> {
         let state = unsafe { &mut *self.state.get() };
-        let Some(generation) = state.devices.as_ref().and_then(|d| d.nor_generation()) else {
+        let Some(source) = &state.xip_source else {
             return Ok(());
         };
-        if generation == state.xip_generation {
+        let now = source.load(std::sync::atomic::Ordering::SeqCst);
+        if now == state.xip_seen {
             return Ok(());
         }
-        state.xip_generation = generation;
-        let pages: Vec<u64> = state.xip.keys().copied().collect();
-        for page in pages {
-            for core in 0..self.cpus.len() {
-                self.cpus[core].unmap(page, 4096).map_err(|e| format!("Unmap execute-in-place page {page:#x}: {e}"))?;
-                let hook = Box::new(MmioHook { cluster: self, core, base: page });
-                let ptr = (&*hook as *const MmioHook).cast_mut().cast();
+        state.xip_seen = now;
+        let stale: Vec<u64> = state.xip.iter().filter(|(_, p)| p.epoch != now).map(|(&page, _)| page).collect();
+        for page in stale {
+            for cpu in &self.cpus {
+                cpu.unmap(page, 4096).map_err(|e| format!("Unmap execute-in-place page {page:#x}: {e}"))?;
+            }
+            let hooks = state.pages.entry(page).or_insert_with(|| {
+                (0..self.cpus.len()).map(|core| Box::new(MmioHook { cluster: self, core, base: page })).collect()
+            });
+            for (core, hook) in hooks.iter().enumerate() {
+                let ptr = (&**hook as *const MmioHook).cast_mut().cast();
                 unsafe {
-                    state.xip_hooks.push(hook);
                     self.cpus[core].map_mmio(page, 4096, cpu::Mmio { read: mmio_read, write: mmio_write, data: ptr })
                 }
                 .map_err(|e| format!("Return execute-in-place page {page:#x} to the aperture: {e}"))?;
@@ -577,6 +588,7 @@ fn mark_observed(filter: &mut [u64], address: u64) {
 }
 fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), String> {
     c.healthy()?;
+    c.refresh_xip()?;
     c.record_memory(core, Access::Fetch, address, size as i32, 0);
     if let Some(guard) = unsafe { &mut (*c.state.get()).driver_guard } {
         // Check architecture before a return sentinel or IRQ can bypass the
@@ -1998,6 +2010,7 @@ impl Session {
         for &label in &labels {
             mark_observed(&mut observe_filter, u64::from(label));
         }
+        let xip_source = devices.as_ref().and_then(|d| d.nor_epoch());
         let mut inner = Box::new(Cluster {
             cpus,
             maintenance,
@@ -2029,8 +2042,8 @@ impl Session {
                 redirected: None,
                 pages: BTreeMap::new(),
                 xip: BTreeMap::new(),
-                xip_hooks: Vec::new(),
-                xip_generation: 0,
+                xip_source,
+                xip_seen: 0,
                 cbar_reads: 0,
                 gic,
                 timer,
