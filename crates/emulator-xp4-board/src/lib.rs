@@ -3,12 +3,17 @@
 mod abort;
 mod client;
 mod definition;
+mod initial_security;
 pub mod maintenance;
 pub mod memory;
 pub use definition::{Definition, GicCpuInitial, GicInitial, NorImmutablePrefix};
+pub use initial_security::InitialSecurity;
 pub mod observation;
 use observation::Call;
 mod devices;
+mod jpeg;
+mod dsp;
+mod still;
 mod timer;
 use fujimod_emulator::board::discovery::Discovery;
 use fujimod_emulator::board::harness::arm32 as driver_guard;
@@ -86,6 +91,8 @@ struct RunState {
     data_aborts: Vec<u64>,
     calls: Vec<Call>,
     pending_calls: Vec<BTreeMap<u32, Vec<usize>>>,
+    // Addresses that may need a passive observation (see `mark_observed`).
+    observe_filter: Vec<u64>,
     exclusive: Vec<Option<(u64, usize)>>,
     recorder: Option<observe::Recorder>,
     memory_watch: Option<observation::MemoryWatch>,
@@ -157,7 +164,7 @@ impl Cluster {
     }
 
     fn record_memory(&self, core: usize, access: Access, address: u64, size: i32, value: i64) {
-        if unsafe { (*self.state.get()).memory_watch.is_none() } {
+        if unsafe { (*self.state.get()).memory_watch.as_ref().is_none_or(|w| w.writes_only && access != Access::Write) } {
             return;
         }
         let result = (|| -> Result<Option<observation::MemoryRecord>, String> {
@@ -320,6 +327,20 @@ impl Cluster {
         self.cpus[core].stop()
     }
     fn word(&self, core: usize, address: u64) -> Result<u32, String> {
+        // The engine is about to execute this word, so its fetch permission
+        // already holds: when it translates into plain DRAM, read the backing
+        // directly instead of the observational read (page-size query, region
+        // copy and physical read on every instruction). Explicit windows lie
+        // above DRAM; only the low boot window overlaps it until the remap.
+        if let Ok(physical) = self.cpus[core].translate(address, Access::Fetch) {
+            let low = unsafe { (*self.state.get()).low_alias }
+                .map_or(0, |index| self.memory[index].data.len() as u64);
+            if physical >= low && physical & 3 == 0 && physical + 4 <= self.ram.len() as u64 {
+                return Ok(u32::from_le(unsafe {
+                    std::ptr::read(self.ram.as_ptr().add(physical as usize).cast::<u32>())
+                }));
+            }
+        }
         let mut bytes = [0; 4];
         self.cpus[core].read_virtual(address, Access::Fetch, &mut bytes)?;
         Ok(u32::from_le_bytes(bytes))
@@ -358,7 +379,13 @@ impl Cluster {
             return;
         }
         let state = unsafe { &mut *self.state.get() };
-        if let Some(timer) = &mut state.timer {
+        // A counter expires only once its next tick is reached (`tick` is a
+        // no-op before), so skip the channel walk until then.
+        if let Some(timer) = &mut state.timer
+            && timer
+                .next_event_tick(state.ticks)
+                .is_some_and(|at| at <= state.ticks)
+        {
             for irq in timer.tick(state.ticks) {
                 state.gic.pulse(irq);
             }
@@ -476,6 +503,13 @@ unsafe fn memory_access(access: Access, address: u64, size: i32, value: i64, dat
     let cluster = unsafe { &*hook.cluster };
     cluster.record_memory(hook.core, access, address, size, value);
 }
+/// Marks an address in the 64 Ki-bit passive-observation filter, keyed by
+/// instruction-address bits 2..18. Bits are never cleared: a set bit only
+/// sends the instruction through the exact label/return/observer lookups.
+fn mark_observed(filter: &mut [u64], address: u64) {
+    let key = (address as u32 >> 2) & 0xffff;
+    filter[(key >> 6) as usize] |= 1 << (key & 63);
+}
 fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), String> {
     c.healthy()?;
     c.record_memory(core, Access::Fetch, address, size as i32, 0);
@@ -498,10 +532,21 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
             return Ok(());
         }
     }
-    if size != 4 {
-        return Err(format!(
-            "Unimplemented ARMv7-A Thumb instrumentation at {address:#x}"
-        ));
+    // The XP4 boot ROM runs Thumb code. Count it and advance guest time, but skip the ARM-encoded decode below.
+    // Only the ROM window is checked for 32-bit Thumb-2 encodings; firmware outside the ROM is ARM.
+    let thumb = size != 4
+        || ((0xfff0_0000..0xfff0_8000).contains(&address) && c.reg(core, arm::CPSR)? & 0x20 != 0);
+    if thumb {
+        c.due();
+        c.healthy()?;
+        let state = unsafe { &mut *c.state.get() };
+        state.instructions += 1;
+        let (ticks, phase) = c.instruction_rate.advance_phase(state.tick_phase, 1)?;
+        state.ticks = state.ticks.checked_add(ticks as u64).ok_or("A7 guest time overflow")?;
+        state.tick_phase = phase;
+        state.per_core[core] += 1;
+        state.waiting[core] = 0;
+        return Ok(());
     }
     c.due();
     c.healthy()?;
@@ -559,13 +604,18 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
     }
     trace.push_back((address as u32, word));
     // Passive call/return observations cannot select device or CPU behavior.
-    let labeled = c.labels.contains(&(address as u32));
-    let sp = if labeled || state.pending_calls[core].contains_key(&(address as u32)) {
+    // The filter holds every label, pending return and PC observer address
+    // (never cleared, so a set bit only means "look it up").
+    let key = (address as u32 >> 2) & 0xffff;
+    let candidate = state.observe_filter[(key >> 6) as usize] & (1 << (key & 63)) != 0;
+    let labeled = candidate && c.labels.contains(&(address as u32));
+    let returning = candidate && state.pending_calls[core].contains_key(&(address as u32));
+    let sp = if labeled || returning {
         c.reg(core, arm::CORE[13])?
     } else {
         0
     };
-    if let Some(indices) = state.pending_calls[core].get_mut(&(address as u32)) {
+    if returning && let Some(indices) = state.pending_calls[core].get_mut(&(address as u32)) {
         indices.retain(|&index| {
             let call = &mut state.calls[index];
             if call.sp == sp {
@@ -607,6 +657,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
                 result: None,
             });
             state.pending_calls[core].entry(lr).or_default().push(index);
+            mark_observed(&mut state.observe_filter, u64::from(lr));
         }
     }
     if let Some(recorder) = &mut state.recorder
@@ -625,7 +676,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
             u64::from(registers[14]) & !1,
         );
     }
-    let observed = state.pc_observers[core].contains(&address);
+    let observed = candidate && state.pc_observers[core].contains(&address);
     // The actual return is already recorded. Explicit discovery/debugger
     // callbacks run at the CPU boundary, never inside a peripheral model.
     if observed {
@@ -1034,6 +1085,29 @@ impl Session {
         storage_image: Option<Vec<u8>>,
         card_files: Vec<(String, Vec<u8>)>,
     ) -> Result<Self, String> {
+        Self::new_with_media(definition, storage_image, card_files, Vec::new())
+    }
+    /// The medium (by SD host declaration order) in the `host`th SD card slot.
+    pub fn card_medium(
+        &self,
+        host: usize,
+    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+        unsafe {
+            (*self.inner.state.get())
+                .devices
+                .as_ref()
+                .ok_or("Board has no devices")?
+                .card_medium(host)
+        }
+    }
+    /// Like `new`, with an existing medium in place of the formatted SD card of the
+    /// listed SD hosts (index in declaration order).
+    pub fn new_with_media(
+        definition: Definition,
+        storage_image: Option<Vec<u8>>,
+        card_files: Vec<(String, Vec<u8>)>,
+        card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
+    ) -> Result<Self, String> {
         let Definition {
             byte_i2c,
             ram_size,
@@ -1041,6 +1115,7 @@ impl Session {
             discovery,
             memory_regions,
             initial_registers,
+            initial_security,
             labels,
             cbar,
             gic_initial,
@@ -1050,6 +1125,10 @@ impl Session {
             discovery_tx_receiver,
             storage_jedec,
             storage_immutable_prefix,
+            storage_mapped_read,
+            storage_write_protect,
+            storage_strict_backing,
+            storage_erased_ranges,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
@@ -1057,6 +1136,7 @@ impl Session {
             xp4_functional_system_control,
             storage_geometry,
             storage_irq,
+            storage_dma_audio,
             xpp_storage,
             xpp_serial,
             xpp_sub_cpu,
@@ -1093,6 +1173,7 @@ impl Session {
             adc,
             gpio,
             gpio_base,
+            gpio_interrupts,
             temperature,
             power_spi,
             power_spi_command_output,
@@ -1100,7 +1181,18 @@ impl Session {
             imaging,
             movdc,
             sd_clocks,
+            sd_hosts,
             register_banks,
+            countdown_timers,
+            countdown_dials,
+            jpeg_encoder,
+            jpeg_decoder,
+            still_engines,
+            dsp,
+            face_detector,
+            filter_engine,
+            pl011_uarts,
+            mali_v61,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1120,7 +1212,7 @@ impl Session {
             || pmu_cycles_per_tick == Some(0)
             || ram_size < 0x10000
             || ram_size & 4095 != 0
-            || ram_size > 0x80000000
+            || ram_size > 0xf000_0000
         {
             return Err("ARMv7-A needs 1..4 cores and page aligned physical RAM".to_owned());
         }
@@ -1192,6 +1284,20 @@ impl Session {
         if !initial_registers.is_empty() && initial_registers.len() != cores {
             return Err("Initial ARM32 register sets must name every processor".into());
         }
+        if !initial_security.is_empty() && initial_security.len() != cores {
+            return Err("Initial ARM32 security states must name every processor".into());
+        }
+        for (core, initial) in initial_security.iter().enumerate() {
+            initial.validate()?;
+            if let Some(registers) = initial_registers.get(core) {
+                for &(register, value) in registers {
+                    if initial_security::is_cpsr(register) {
+                        initial.validate_cpsr(u32::try_from(value)
+                            .map_err(|_| "ARM32 reset register overflows")?)?;
+                    }
+                }
+            }
+        }
         let mut gic = Gic::new(cores, 512);
         if let Some(initial) = gic_initial {
             if cbar.is_none() { return Err("Initial GIC registers require an explicit CBAR".into()); }
@@ -1231,11 +1337,27 @@ impl Session {
         if standalone_dma.is_some() && (storage_jedec.is_some() || xpp_storage.is_some()) {
             return Err("Standalone XP4 DMA cannot be combined with a storage controller".into());
         }
+        if storage_dma_audio.is_some() && storage_jedec.is_none() {
+            return Err("XP4 DMA audio channels require the XP4 storage controller".into());
+        }
         if storage_jedec.is_some() && xpp_storage.is_some() {
             return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
         }
         if storage_immutable_prefix.is_some() && storage_jedec.is_none() {
             return Err("Immutable NOR prefix requires an XP4 NOR owner".into());
+        }
+        if (storage_mapped_read.is_some() || storage_write_protect) && storage_jedec.is_none() {
+            return Err("NOR read gate and write protection require an XP4 NOR owner".into());
+        }
+        if storage_strict_backing && (storage_jedec.is_none() || storage_image.is_none()) {
+            return Err("Strict NOR backing requires an XP4 NOR owner and explicit contents".into());
+        }
+        if !storage_erased_ranges.is_empty() && !storage_strict_backing {
+            return Err("Erased NOR ranges require strict read backing".into());
+        }
+        if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
+            // The prefix is mapped as memory, so its reads would bypass the gate.
+            return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
         }
         if discovery_tx_receiver.is_some() && (!discovery || storage_jedec.is_none()) {
             return Err("Transmit receiver input requires discovery and XP4 storage DMA".into());
@@ -1252,6 +1374,11 @@ impl Session {
                     .ok_or_else(|| "Serial flash requires an explicit IRQ route".to_owned())?,
                 discovery_tx_receiver,
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
+                storage_mapped_read,
+                storage_write_protect,
+                storage_strict_backing,
+                storage_erased_ranges,
+                storage_dma_audio,
             )?;
             frozen_nor = view;
             Some(devices)
@@ -1388,7 +1515,10 @@ impl Session {
                 None => None,
             }
         };
+        // Card files go on the first host's card.
+        let mut card_files = Some(card_files);
         if let Some(sd) = xpp_sd {
+            let card_files = card_files.take().unwrap_or_default();
             let reset = match (sd.reset_channel, &reset_gates) {
                 (Some(channel), Some(lines)) => Some(
                     lines
@@ -1404,8 +1534,26 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .xpp_sd(sd, reset, &card_files)?;
-        } else if !card_files.is_empty() {
-            return Err("SD card files require the X-Processor Pro SD wrapper".to_owned());
+        }
+        let mut card_media = card_media;
+        if card_media.iter().any(|(index, _)| *index >= sd_hosts.len()) {
+            return Err("SD card medium names an undeclared SD host".into());
+        }
+        for (index, host) in sd_hosts.into_iter().enumerate() {
+            let files = card_files.take().unwrap_or_default();
+            let medium = card_media
+                .iter()
+                .position(|(slot, _)| *slot == index)
+                .map(|position| card_media.swap_remove(position).1);
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .sd_host(host, &files, medium)?;
+        }
+        if !card_media.is_empty() {
+            return Err("Two SD card media name the same SD host".into());
+        }
+        if card_files.is_some_and(|files| !files.is_empty()) {
+            return Err("SD card files require an SD host".to_owned());
         }
         if let Some((unit, ..)) = xpp_live_view_image
             && !xpp_register_blocks
@@ -1519,9 +1667,17 @@ impl Session {
                 .adc(inputs, sample_ticks)?;
         }
         if let Some((map, timing, read_gate, ibuf)) = imaging {
+            // The statistics banks are guest memory when a declared memory
+            // region holds them (the boot ROM start keeps its SRAM there).
+            let statistics_in_memory = ibuf.as_ref().is_some_and(|(_, _, _, sram, bank, _)| {
+                memory.iter().any(|window| {
+                    window.base <= *sram
+                        && sram + bank * 2 <= window.base + window.data.len() as u64
+                })
+            });
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .imaging(map, timing, read_gate, ibuf)?;
+                .imaging(map, timing, read_gate, ibuf, statistics_in_memory)?;
         }
         if !movdc.is_empty() {
             devices
@@ -1543,9 +1699,13 @@ impl Session {
             )?;
         }
         if let Some(inputs) = gpio {
-            devices
-                .get_or_insert_with(devices::Devices::empty)
-                .gpio(gpio_base.unwrap_or(0xfff41000), inputs)?;
+            devices.get_or_insert_with(devices::Devices::empty).gpio(
+                gpio_base.unwrap_or(0xfff41000),
+                inputs,
+                gpio_interrupts,
+            )?;
+        } else if !gpio_interrupts.is_empty() {
+            return Err("GPIO interrupts require GPIO wiring".into());
         }
         if let Some(keys) = xpp_key_lines {
             let lines = external_lines
@@ -1632,6 +1792,53 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .register_banks(register_banks)?;
         }
+        if let Some((base, routes)) = countdown_timers {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .countdown_timers(base, &routes, &countdown_dials)?;
+        } else if !countdown_dials.is_empty() {
+            return Err("XP4 countdown dials require the countdown timer bank".into());
+        }
+        if let Some(encoder) = jpeg_encoder {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .jpeg_encoder(&encoder)?;
+        }
+        if let Some(decoder) = jpeg_decoder {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .jpeg_decoder(&decoder)?;
+        }
+        for engine in &still_engines {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .still_engine(engine)?;
+        }
+        if let Some(wiring) = dsp {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .dsp(&wiring)?;
+        }
+        if let Some(detector) = face_detector {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .face_detector(&detector)?;
+        }
+        if let Some(engine) = filter_engine {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .filter_engine(&engine)?;
+        }
+        for uart in &pl011_uarts {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .pl011_uart(uart)?;
+        }
+        if let Some(options) = mali_v61 {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .mali_v61(options)?;
+        }
         if let Some((base, present)) = usb_condition {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -1709,6 +1916,10 @@ impl Session {
             }
         }
         if let Some(view) = &frozen_nor { devices.as_mut().unwrap().partition_nor_prefix(view.len()); }
+        let mut observe_filter = vec![0u64; 1024];
+        for &label in &labels {
+            mark_observed(&mut observe_filter, u64::from(label));
+        }
         let mut inner = Box::new(Cluster {
             cpus,
             maintenance,
@@ -1748,6 +1959,7 @@ impl Session {
                 data_aborts: vec![0; cores],
                 calls: Vec::new(),
                 pending_calls: vec![BTreeMap::new(); cores],
+                observe_filter,
                 exclusive: vec![None; cores],
                 recorder: None,
                 memory_watch: None,
@@ -1872,13 +2084,28 @@ impl Session {
                     }?;
                 }
             }
-            inner.write_reg(core, arm::CPSR, 0xd3)?;
+            let security = initial_security.get(core);
+            if let Some(initial) = security {
+                initial.apply(&inner.cpus[core])?;
+            } else {
+                inner.write_reg(core, arm::CPSR, 0xd3)?;
+            }
+            let mut initial_cpsr = 0xd3;
             if let Some(registers) = initial_registers.get(core) {
                 for &(register, value) in registers {
                     let value =
                         u32::try_from(value).map_err(|_| "ARM32 reset register overflows")?;
                     inner.cpus[core].write_register(register, &value.to_le_bytes())?;
+                    if initial_security::is_cpsr(register) {
+                        initial_cpsr = value;
+                        if let Some(initial) = security {
+                            initial.verify(&inner.cpus[core], initial_cpsr)?;
+                        }
+                    }
                 }
+            }
+            if let Some(initial) = security {
+                initial.verify(&inner.cpus[core], initial_cpsr)?;
             }
         }
         if let Some(base) = cbar {
@@ -1996,11 +2223,16 @@ impl Session {
             return Err("Invalid ARMv7-A PC observer addresses".to_owned());
         }
         unsafe {
-            (&mut (*self.inner.state.get()).pc_observers)[core] = addresses.into_iter().collect();
+            let state = &mut *self.inner.state.get();
+            for &address in &addresses {
+                mark_observed(&mut state.observe_filter, address);
+            }
+            state.pc_observers[core] = addresses.into_iter().collect();
         }
         Ok(())
     }
-    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> Result<(), String> {
+    /// `writes_only` records stores alone, so reads and fetches of hot ranges do not consume the record bound.
+    pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> Result<(), String> {
         self.inner.host_mutation()?;
         if ranges.is_empty()
             || ranges.len() > 256
@@ -2037,13 +2269,14 @@ impl Session {
             records: Vec::new(),
             violation: None,
             hooks: Vec::new(),
+            writes_only,
         };
         for (core, cpu) in self.inner.cpus.iter().enumerate() {
             let data = (&*self.inner.hooks[core] as *const Hook).cast_mut().cast();
             let hook = CpuHook::Memory {
                 callback: memory_access,
                 data,
-                read: true,
+                read: !writes_only,
                 write: true,
                 range: HookRange::Inclusive {
                     begin: 0,
@@ -2179,6 +2412,25 @@ impl Session {
         Ok(bytes)
     }
     pub fn run(&self, core: usize, budget: usize) -> Result<(), String> {
+        self.run_inner(core, budget, None)
+    }
+    /// Run at most `budget` instructions, stopping before `target` executes.
+    /// The target is an even 32-bit instruction address, without a Thumb bit;
+    /// the guest may change instruction sets before reaching it. Address zero
+    /// is a valid stop. IRQ entry, WFI and other normal yields may return first:
+    /// callers inspect the PC and board state before scheduling another run.
+    pub fn run_to(&self, core: usize, budget: usize, target: u64) -> Result<(), String> {
+        self.inner.healthy()?;
+        self.inner.cpu(core)?;
+        if budget == 0 {
+            return Err("Run-to requires a positive instruction budget".to_owned());
+        }
+        if target > u64::from(u32::MAX) || target & 1 != 0 {
+            return Err("Run-to target must be an even 32-bit instruction address".to_owned());
+        }
+        self.run_inner(core, budget, Some(target))
+    }
+    fn run_inner(&self, core: usize, budget: usize, until: Option<u64>) -> Result<(), String> {
         let c = &self.inner;
         c.healthy()?;
         let cpu = c.cpu(core)?;
@@ -2186,6 +2438,14 @@ impl Session {
             return Err("Reentrant ARMv7-A execution".to_owned());
         }
         let _running = Running(&c.running);
+        if let Some(target) = until
+            && u64::from(c.reg(core, arm::PC)?) == target
+        {
+            // A debugger boundary already reached is a no-op, including for
+            // device deadlines and pending DMA. Still reject reentrant calls
+            // and preserve an earlier sticky board failure above.
+            return Ok(());
+        }
         c.maintenance.ready(&c.cpus)
             .map_err(|error| c.retain_failure(error))?;
         if budget == 0 && unsafe { (*c.state.get()).driver_guard.is_some() } {
@@ -2201,13 +2461,14 @@ impl Session {
         }
         let result = (|| {
             c.flush_dma()?;
-            let start = c.reg(core, arm::PC)?;
+            // The PC register reads without the Thumb bit; a run resumes in Thumb state only when it is set.
+            let start = c.reg(core, arm::PC)? | (c.reg(core, arm::CPSR)? >> 5 & 1);
             unsafe {
                 (*c.state.get()).redirected = None;
             }
             let mut exit = cpu.run(Run {
                 begin: u64::from(start),
-                until: None,
+                until,
                 watchdog_us: 0,
                 instructions: Some(budget),
             });
@@ -2306,6 +2567,23 @@ impl Session {
             .as_mut()
             .ok_or_else(|| "XP4 GPIO is not wired".to_owned())?
             .set_gpio_input(port, pin, high)
+    }
+    /// Turn a declared command dial by `edges` quadrature edges (negative turns
+    /// the other way); the edges follow each other at the dial's edge period.
+    pub fn turn_dial(&self, name: &str, edges: i32) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        if state.driver_guard.is_some() {
+            return Err("Guarded routine cannot turn command dials".to_owned());
+        }
+        let now = state.ticks;
+        state.device_scan_at = 0;
+        state
+            .devices
+            .as_ref()
+            .ok_or_else(|| "XP4 command dials are not wired".to_owned())?
+            .dial(name)?
+            .queue_edges(now, edges)
     }
     pub fn set_usb_connected(&self, connected: bool) -> Result<(), String> {
         self.inner

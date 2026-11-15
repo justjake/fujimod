@@ -72,7 +72,10 @@
       "manual_page": 2,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus and exposure when SHUTTER AF and SHUTTER AE are on; press fully to take a picture.",
@@ -81,8 +84,18 @@
       "behavior": {
         "kind": "shutter",
         "stages": {
-          "half_press": null,
-          "full_press": null
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ],
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ]
         }
       },
       "positions": [
@@ -513,11 +526,8 @@
       "pushable": true,
       "default_function": "Release the attached lens so it can be rotated and removed.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "LENS"
     },
@@ -532,17 +542,8 @@
       "pushable": false,
       "default_function": "Adjust the viewfinder display focus until its indicators appear sharp.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
-        },
-        "press": null,
-        "endless": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "DIOPTER"
     },
@@ -570,7 +571,9 @@
       "manual_page": 3,
       "face": null,
       "icon": "playback",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-7-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback; half-press the shutter button to return to shooting.",
@@ -578,7 +581,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
       },
       "positions": []
     },
@@ -606,7 +612,9 @@
       "manual_page": 3,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Tilt or press to select the focus area and navigate menus; the center and tilt roles can be configured.",
@@ -615,10 +623,22 @@
       "behavior": {
         "kind": "pad",
         "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
+          "up": {
+            "kind": "debug_key",
+            "name": "8DIR_U"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "8DIR_D"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "8DIR_L"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "8DIR_R"
+          }
         },
         "press": null
       },
@@ -631,7 +651,9 @@
       "manual_page": 3,
       "face": "MENU/OK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display the menus and confirm selections.",
@@ -639,7 +661,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
       },
       "positions": []
     },
@@ -649,7 +674,9 @@
       "manual_page": 3,
       "face": "DISP/BACK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Control the display of indicators in the viewfinder, LCD monitor, and playback display; back out of a menu or dialog.",
@@ -657,7 +684,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
       },
       "positions": []
     },
@@ -689,12 +719,8 @@
       "pushable": false,
       "default_function": "Slide to open or close the battery-chamber cover.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "COVER"
     },
@@ -709,12 +735,8 @@
       "pushable": true,
       "default_function": "Press to release the battery for removal.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "BATTERY"
     }

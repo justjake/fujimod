@@ -20,6 +20,7 @@ ninja = "1.13.2"
 "conda:ffmpeg" = "9.0.2"
 "conda:protobuf" = "7.36.2"
 "cargo:cargo-hakari" = "0.9.39"
+"cargo:cargo-sweep" = "0.8.0"
 "cargo:cargo-llvm-cov" = "0.9.1"
 
 [tasks.commit]

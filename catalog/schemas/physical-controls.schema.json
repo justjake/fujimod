@@ -557,7 +557,7 @@
       ]
     },
     "InputBinding": {
-      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "description": "A debug key, native input name, or exact located scanner-row identity.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -594,6 +594,25 @@
           "required": [
             "kind",
             "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Stable identity of a located scanner row, even when it has no command name.",
+          "properties": {
+            "kind": {
+              "const": "scanner_row",
+              "type": "string"
+            },
+            "row": {
+              "description": "Generated scanner row identity, such as `row-69`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "row"
           ],
           "type": "object"
         }

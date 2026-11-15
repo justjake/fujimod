@@ -396,9 +396,144 @@ pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
         .collect())
 }
 
+/// Bit positions of Y0, Y1, Y2, Y3, Cb and Cr in a Y0L2 block, 10 bits
+/// each (Linux drm_fourcc.h, DRM_FORMAT_Y0L2: one little-endian 64-bit word
+/// per 2 x 2 pixels, Y0 9..0, Cb 19..10, Y1 29..20, A0 30, A1 31, Y2 41..32,
+/// Cr 51..42, Y3 61..52, A2 62, A3 63). Which pixel each luma sample is
+/// (here Y0 Y1 the upper line, Y2 Y3 the lower one) is declared.
+pub const Y0L2: [u32; 6] = [0, 20, 32, 52, 10, 42];
+
+/// Y, Cb and Cr of pixel `x` of the upper (`line` 0) or lower line of a row
+/// of Y0L2 blocks.
+pub fn y0l2_sample(row: &[u8], x: usize, line: usize) -> [u16; 3] {
+    let at = x / 2 * 8;
+    let block = u64::from_le_bytes(row[at..at + 8].try_into().expect("8 bytes"));
+    let field = |bit: u32| ((block >> bit) & 0x3ff) as u16;
+    [
+        field(Y0L2[line * 2 + x % 2]),
+        field(Y0L2[4]),
+        field(Y0L2[5]),
+    ]
+}
+
+/// A Y0L2 block from its four luma samples (upper line, then lower) and its
+/// chroma; the alpha bits are 0.
+pub fn y0l2_block(luma: [u16; 4], cb: u16, cr: u16) -> u64 {
+    luma.into_iter()
+        .chain([cb, cr])
+        .zip(Y0L2)
+        .fold(0, |block, (value, bit)| {
+            block | u64::from(value & 0x3ff) << bit
+        })
+}
+
+/// How a picture's lines sit in its pitch rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum YcLayout {
+    /// One packed 4:2:2 8-bit line (Y0 Y1 Cb Cr per pixel pair) per row.
+    Lines,
+    /// Two lines per row as Y0L2 blocks of 10-bit samples.
+    Y0l2,
+}
+
+impl YcLayout {
+    /// Picture lines per pitch row.
+    pub fn lines(self) -> usize {
+        match self {
+            Self::Lines => 1,
+            Self::Y0l2 => 2,
+        }
+    }
+}
+
+/// 10-bit Y, Cb and Cr of the `width` pixels of a line taken by nearest
+/// neighbour from a packed 4:2:2 8-bit line of `window` pixels (as
+/// [`develop`] writes them): pixel x reads pixel x * window / width and the
+/// chroma of its pair; samples are widened by << 2.
+pub fn scaled_line(line: &[u8], window: usize, width: usize) -> Vec<[u16; 3]> {
+    (0..width)
+        .map(|x| {
+            let s = x * window / width;
+            let p = s / 2 * 4;
+            [line[p + s % 2], line[p + 2], line[p + 3]].map(|b| u16::from(b) << 2)
+        })
+        .collect()
+}
+
+/// One pitch row of `layout` from its upper line and, for Y0L2, its lower
+/// one (10-bit samples; packed lines narrow them by >> 2). A pixel pair, or
+/// a Y0L2 block, takes the chroma of its upper left pixel.
+pub fn yc_row(layout: YcLayout, upper: &[[u16; 3]], lower: &[[u16; 3]]) -> Vec<u8> {
+    match layout {
+        YcLayout::Lines => upper
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0][0], p[1][0], p[0][1], p[0][2]].map(|v| (v >> 2) as u8))
+            .collect(),
+        YcLayout::Y0l2 => upper
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(lower.as_chunks::<2>().0)
+            .flat_map(|(u, d)| {
+                y0l2_block([u[0][0], u[1][0], d[0][0], d[1][0]], u[0][1], u[0][2]).to_le_bytes()
+            })
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// drm_fourcc.h's layout: Y0 1, Cb 5, Y1 2, Y2 3, Cr 6, Y3 4.
+    #[test]
+    fn y0l2_blocks_hold_the_drm_fourcc_bit_positions() {
+        let block = y0l2_block([1, 2, 3, 4], 5, 6);
+        assert_eq!(block, 1 | 5 << 10 | 2 << 20 | 3 << 32 | 6 << 42 | 4 << 52);
+        assert_eq!(y0l2_block([0x7ff; 4], 0x7ff, 0x7ff) >> 30 & 3, 0, "alpha 0");
+        let row = [
+            block.to_le_bytes(),
+            y0l2_block([7, 8, 9, 10], 11, 12).to_le_bytes(),
+        ]
+        .concat();
+        let samples: Vec<[u16; 3]> = (0..4)
+            .flat_map(|x| [y0l2_sample(&row, x, 0), y0l2_sample(&row, x, 1)])
+            .collect();
+        assert_eq!(
+            samples,
+            [
+                [1, 5, 6],
+                [3, 5, 6],
+                [2, 5, 6],
+                [4, 5, 6],
+                [7, 11, 12],
+                [9, 11, 12],
+                [8, 11, 12],
+                [10, 11, 12]
+            ]
+        );
+    }
+
+    #[test]
+    fn yc_rows_pack_lines_or_y0l2_blocks_from_scaled_lines() {
+        // 8 pixels: luma 10 x pixel, Cb the pair, Cr 200 - the pair.
+        let line: Vec<u8> = (0..4u8)
+            .flat_map(|p| [20 * p, 20 * p + 10, p, 200 - p])
+            .collect();
+        let scaled = scaled_line(&line, 8, 6);
+        let lumas: Vec<u16> = scaled.iter().map(|s| s[0] >> 2).collect();
+        assert_eq!(lumas, [0, 10, 20, 40, 50, 60]);
+        assert_eq!(scaled[3][1..], [2 << 2, 198 << 2]);
+        let packed = yc_row(YcLayout::Lines, &scaled, &[]);
+        assert_eq!(packed[..8], [0, 10, 0, 200, 20, 40, 1, 199]);
+        let lower = scaled_line(&line, 8, 6);
+        let tiled = yc_row(YcLayout::Y0l2, &scaled, &lower);
+        assert_eq!(tiled.len(), 3 * 8);
+        assert_eq!(y0l2_sample(&tiled[8..], 1, 1), [40 << 2, 1 << 2, 199 << 2]);
+        assert_eq!(YcLayout::Y0l2.lines(), 2);
+    }
 
     #[test]
     fn size_and_step_words_decode_as_the_shot_programs_them() {

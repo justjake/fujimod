@@ -195,6 +195,7 @@ class emulator:
             definition: str,
             storage_image: SupportsGetItem[int, SupportsIndex] | None = None,
             card_files: Sequence[tuple[str, SupportsGetItem[int, SupportsIndex]]] = ...,
+            card_media: Sequence[tuple[int, emulator.CardMedium]] = ...,
         ) -> emulator.Board: ...
         def function_watch_begin(
             self,
@@ -595,6 +596,7 @@ class emulator:
 
     @final
     class Xp4:
+        def card_medium(self, /, host: SupportsIndex) -> emulator.CardMedium: ...
         def cpr_read(
             self,
             /,
@@ -665,6 +667,7 @@ class emulator:
         def set_gpio_input(
             self, /, port: SupportsIndex, pin: SupportsIndex, high: bool
         ) -> None: ...
+        def turn_dial(self, /, name: str, edges: SupportsIndex) -> None: ...
         def set_pc_handler(
             self, /, callback: Callable[[int, int], object] | None
         ) -> None: ...

@@ -30,6 +30,8 @@ mod hook_tlb_flush_tests;
 mod actlr_tests;
 #[cfg(test)]
 mod alignment_tests;
+#[cfg(test)]
+mod code_store_tests;
 pub mod jit;
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::BTreeMap;

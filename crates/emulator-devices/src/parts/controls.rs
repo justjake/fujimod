@@ -21,6 +21,20 @@ pub trait Controls: Send + Sync {
     }
     fn save(&self) -> Value;
     fn restore(&self, state: &Value) -> Result<(), String>;
+    /// Exact future-affecting state, including held keys and queued edges.
+    /// Diagnostic `save()` is not a restore source.
+    fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+        Err("physical controls have no exact checkpoint implementation".into())
+    }
+    fn validate_checkpoint(
+        &self,
+        _: &crate::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        Err("physical controls have no exact checkpoint implementation".into())
+    }
+    fn restore_checkpoint(&self, _: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+        Err("physical controls have no exact checkpoint implementation".into())
+    }
 }
 
 /// A physical input queue is a non-MMIO source on the same device timeline.
@@ -55,5 +69,14 @@ impl crate::Device for Source {
     }
     fn restore(&mut self, state: &Value) -> Result<(), String> {
         self.0.restore(state)
+    }
+    fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
+        self.0.checkpoint()
+    }
+    fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+        self.0.validate_checkpoint(saved)
+    }
+    fn restore_checkpoint(&mut self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
+        self.0.restore_checkpoint(saved)
     }
 }

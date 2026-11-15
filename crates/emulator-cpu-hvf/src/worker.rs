@@ -58,6 +58,9 @@ pub struct Shared {
     pub deadline: AtomicBool,
     pub progress: AtomicU64,
     pub limit: AtomicU64,
+    /// Wall time the timer thread waits before it interrupts the vCPU again. The
+    /// worker shrinks it to the execution budget still left after a preemption.
+    pub wake_limit_ns: AtomicU64,
     pub measured: AtomicBool,
     pub budget_active: AtomicBool,
     pub budget_start_ticks: AtomicU64,
@@ -75,6 +78,7 @@ impl Default for Shared {
             deadline: AtomicBool::new(false),
             progress: AtomicU64::new(0),
             limit: AtomicU64::new(u64::MAX),
+            wake_limit_ns: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
             budget_active: AtomicBool::new(false),
             budget_start_ticks: AtomicU64::new(0),
@@ -184,6 +188,9 @@ impl BudgetRun {
             shared
                 .budget_start_ticks
                 .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
+            shared
+                .wake_limit_ns
+                .store(shared.limit.load(Ordering::Acquire), Ordering::Release);
             shared.budget_active.store(true, Ordering::Release);
             shared.budget_generation.fetch_add(1, Ordering::AcqRel);
         }
@@ -271,7 +278,7 @@ fn budget_timer(cpu: u64, shared: Arc<Shared>, ready: mpsc::Sender<Result<(), St
             (
                 shared.budget_active.load(Ordering::Acquire),
                 shared.budget_generation.load(Ordering::Acquire),
-                shared.limit.load(Ordering::Acquire),
+                shared.wake_limit_ns.load(Ordering::Acquire),
                 shared.budget_start_ticks.load(Ordering::Acquire),
                 shared.deadline.load(Ordering::Acquire),
                 shared.budget_shutdown.load(Ordering::Acquire),
@@ -1017,9 +1024,55 @@ impl Processor {
         }
         Ok(Exit::Stopped)
     }
-    fn update_interactive_progress(&self, started: Instant) {
-        let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-        self.shared.progress.fetch_max(elapsed, Ordering::Relaxed);
+    /// Guest time this run has executed, from the hypervisor's per-vCPU
+    /// execution clock. Wall time the thread spends preempted or paused for an
+    /// owner callback is not guest work: charging it lets a core the host did
+    /// not schedule advance a whole barrier round past its peers.
+    fn exec_time(&self) -> Result<u64, ExecutionError> {
+        let mut time = 0;
+        unsafe {
+            ffi::check(
+                ffi::hv_vcpu_get_exec_time(self.cpu, &mut time),
+                "read execution time",
+            )?;
+        }
+        Ok(time)
+    }
+    fn update_interactive_progress(&self, started: u64) -> Result<u64, ExecutionError> {
+        let progress = self.exec_time()?.saturating_sub(started);
+        self.shared.progress.fetch_max(progress, Ordering::Relaxed);
+        Ok(progress)
+    }
+    /// Stop at the execution budget. A wall timer that fired while the thread
+    /// was not running only interrupts the vCPU; the worker re-arms it for the
+    /// budget that execution has not consumed yet.
+    fn interactive_budget_spent(&self, started: u64) -> Result<bool, ExecutionError> {
+        let progress = self.update_interactive_progress(started)?;
+        let limit = self.shared.limit.load(Ordering::Acquire);
+        if progress >= limit {
+            return Ok(true);
+        }
+        if self.shared.deadline.load(Ordering::Acquire) {
+            {
+                let _guard = self
+                    .shared
+                    .budget_lock
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                self.shared.deadline.store(false, Ordering::Release);
+                self.shared
+                    .budget_start_ticks
+                    .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
+                self.shared
+                    .wake_limit_ns
+                    .store(limit.saturating_sub(progress).max(1), Ordering::Release);
+                self.shared.budget_generation.fetch_add(1, Ordering::AcqRel);
+            }
+            self.shared
+                .notify_budget_change()
+                .map_err(ExecutionError::Backend)?;
+        }
+        Ok(false)
     }
     fn run_interactive(
         &mut self,
@@ -1045,21 +1098,17 @@ impl Processor {
         let limit = request.instructions.map(|n| n as u64).unwrap_or(u64::MAX);
         self.shared.limit.store(limit, Ordering::Release);
 
-        let started = Instant::now();
+        let started = self.exec_time()?;
         let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
         let mdscr = self.sys(ffi::MDSCR)?;
         self.set_sys(ffi::MDSCR, mdscr & !1)?;
         let pstate = self.reg(ffi::PSTATE)?;
         self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
         loop {
-            self.update_interactive_progress(started);
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
             }
-            if self.shared.deadline.load(Ordering::Acquire)
-                || self.shared.progress.load(Ordering::Relaxed)
-                    >= self.shared.limit.load(Ordering::Acquire)
-            {
+            if self.interactive_budget_spent(started)? {
                 return Ok(Exit::Stopped);
             }
 
@@ -1071,24 +1120,20 @@ impl Processor {
             self.shared.native_active.store(true, Ordering::Release);
             if self.shared.stop.load(Ordering::Acquire) {
                 self.shared.native_active.store(false, Ordering::Release);
-                self.update_interactive_progress(started);
+                self.update_interactive_progress(started)?;
                 return Ok(Exit::Stopped);
             }
             let run_result = unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run") };
             self.shared.native_active.store(false, Ordering::Release);
             run_result?;
             let exit = unsafe { *self.exit };
-            self.update_interactive_progress(started);
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
             }
+            if self.interactive_budget_spent(started)? {
+                return Ok(Exit::Stopped);
+            }
             match exit.reason {
-                0 if self.shared.deadline.load(Ordering::Acquire)
-                    || self.shared.progress.load(Ordering::Relaxed)
-                        >= self.shared.limit.load(Ordering::Acquire) =>
-                {
-                    return Ok(Exit::Stopped);
-                }
                 0 => continue,
                 1 => {
                     let ec = exit.exception.syndrome >> 26;

@@ -2,7 +2,7 @@ const pages = {
   '/': {
     title: 'FujiMod',
     description:
-      'Firmware modified to unlock your camera’s full potential. 23 new features like 65:24 XPan crop, highlight metering, snap focus, unlimited recipes with white balance shift, F-Log video, and touch input in menus. Assign any setting to any control: use the EV dial for ISO, or the auto/manual switch to change film simulation. Try in your browser or dual-boot from an SD card without flashing.',
+      'New films, film effects and more control for Fujifilm X70, X-E2S and X-E2. Explore the FujiMod 0.1.0 preview, including 255 custom settings on X70 and SD boot v2. Features vary by camera.',
   },
   '/dev-tools/': {
     title: 'Dev Tools: Camera console',
@@ -36,6 +36,10 @@ const pages = {
     title: 'Recover your camera · FujiMod',
     description:
       'Tried making your own mod but bricked your camera? Build a recovery SD card from official Fujifilm firmware to restore your device. This usually works and it’s cheaper than buying a new one.',
+  },
+  '/device/': {
+    title: 'Camera sign-in · FujiMod',
+    description: 'Approve a FujiMod camera connection with the code shown on the camera.',
   },
 };
 

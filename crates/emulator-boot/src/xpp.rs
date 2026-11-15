@@ -716,10 +716,18 @@ fn nodes(
             return Err(format!("I2C part {:#x} names an absent bus", part.address));
         }
         for (bus, &irq) in buses.irq_routes.iter().enumerate() {
+            let touch_parts: Vec<_> = reset
+                .i2c_parts
+                .iter()
+                .filter(|part| part.bus as usize == bus && part.touch_panel.is_some())
+                .collect();
+            if touch_parts.len() > 1 {
+                return Err(format!("I2C bus {bus} has multiple touch-panel models"));
+            }
             let parts: Vec<Value> = reset
                 .i2c_parts
                 .iter()
-                .filter(|part| part.bus as usize == bus)
+                .filter(|part| part.bus as usize == bus && part.touch_panel.is_none())
                 .map(|part| {
                     json!({
                         "address": part.address, "select_mask": part.select_mask,
@@ -730,13 +738,29 @@ fn nodes(
                     })
                 })
                 .collect();
-            node(
-                format!("i2c{bus}"),
-                json!({ "kind": "i2c", "options": {
+            let options = json!({
                 "base": buses.base + bus as u64 * buses.stride, "irq": irq,
                 "fifo_depth": buses.fifo_depth, "clock_hz": buses.clock_hz, "tick_hz": buses.tick_hz,
-            }, "parts": parts }),
-            );
+            });
+            if let Some(part) = touch_parts.first() {
+                let touch = part.touch_panel.as_ref().ok_or("touch model options are absent")?;
+                node(
+                    format!("i2c{bus}"),
+                    json!({ "kind": "xt20-touch-i2c", "options": options, "parts": parts,
+                        "touch": {
+                            "address": part.address,
+                            "report_register": touch.report_register,
+                            "input_ready_irq": touch.input_ready_irq,
+                            "ticks_per_second": buses.tick_hz,
+                        }
+                    }),
+                );
+            } else {
+                node(
+                    format!("i2c{bus}"),
+                    json!({ "kind": "i2c", "options": options, "parts": parts }),
+                );
+            }
         }
     } else if !reset.i2c_parts.is_empty() {
         return Err("I2C parts require the I2C buses".into());

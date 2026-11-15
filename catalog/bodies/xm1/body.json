@@ -1313,7 +1313,12 @@
           "device-4",
           "device-5",
           "device-6"
-        ]
+        ],
+        "card_contacts": {
+          "detect": [12, 7, 0],
+          "write_protect": [12, 6, 1],
+          "basis": "Declared catalog input."
+        }
       }
     }
   },

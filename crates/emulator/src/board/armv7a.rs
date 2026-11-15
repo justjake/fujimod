@@ -420,8 +420,17 @@ mod tests {
         b.run_for_instructions(100, 10).unwrap();
         assert_eq!(points.event(), Some(0));
         assert_eq!(b.instruction_counts(), [15]);
+        // A stop whose core the host moved elsewhere before resuming leaves no
+        // skip behind to swallow that address's next hit.
+        b.write_register(0, Register::Pc, 4).unwrap();
+        b.instruction_points_update(0, &mut points, vec![0])
+            .unwrap();
+        b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(points.event(), Some(0));
+        assert_eq!(b.instruction_counts(), [17]);
+        assert_eq!(b.read_register(0, Register::Pc).unwrap(), 0);
         b.instruction_points_end(0, &mut points).unwrap();
         b.run_for_instructions(3, 10).unwrap();
-        assert_eq!(b.instruction_counts(), [18]);
+        assert_eq!(b.instruction_counts(), [20]);
     }
 }

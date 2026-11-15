@@ -3792,7 +3792,8 @@
       "event": 61,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "movie_record_button"
       },
       "scanner": {
         "index": 14,
@@ -5341,17 +5342,6 @@
       "target": {
         "kind": "control",
         "control_id": "zoom_power_ring"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-51",
-      "event": 51,
-      "debug_key": "MOVIE_REC",
-      "target": {
-        "kind": "control",
-        "control_id": "movie_record_button"
       },
       "scanner": null,
       "electrical": null

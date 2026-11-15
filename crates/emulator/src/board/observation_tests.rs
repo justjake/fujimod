@@ -284,6 +284,36 @@ fn memory_watch_captures_bounded_pointer_chain_at_read() {
 }
 
 #[test]
+fn a7_watch_skips_accesses_from_excluded_program_counters() {
+    let mut board = a7_board();
+    let mut code = store_at(PAGE as u32, 0x33, 0).to_vec(); // CODE..CODE + 0x10, excluded
+    code.extend(store_at(PAGE as u32, 0x11, 0)); // recorded
+    code.push(0xeaff_fffe);
+    words(&board, CODE, &code);
+    let mut watch = board
+        .memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec())
+        .unwrap();
+    watch
+        .records
+        .borrow_mut()
+        .exclude_pcs(vec![(CODE, CODE + 0x10)])
+        .unwrap();
+    run(&mut board, code.len() as u64 - 1);
+    let records = records(&watch);
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0]["pc"], CODE + 0x1c);
+    assert_eq!(records[0]["value"], 0x11);
+    assert!(
+        watch
+            .records
+            .borrow_mut()
+            .exclude_pcs(vec![(CODE, CODE)])
+            .is_err()
+    );
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
 fn memory_watch_detects_the_loss_of_its_board() {
     let board = a7_board();
     let watch = board.memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec()).unwrap();
@@ -557,6 +587,31 @@ fn watch_refuses_processors_it_cannot_observe() {
         .err()
         .expect("an unobservable processor must be refused");
     assert!(error.contains("R5F or A7"), "{error}");
+}
+
+#[test]
+fn range_digest_reports_the_hash_and_the_nonzero_page_runs_of_bus_memory() {
+    use sha2::{Digest, Sha256};
+    let board = a7_board();
+    board.write_physical(0x2000, &[1, 2, 3]).unwrap();
+    board.write_physical(0x5000, &[0xff]).unwrap();
+    board.write_physical(0x6fff, &[7]).unwrap();
+    let digest = board.range_digest(0x1000, 0x8000);
+    let mut expected = vec![0u8; 0x8000];
+    expected[0x1000..0x1003].copy_from_slice(&[1, 2, 3]);
+    expected[0x4000] = 0xff;
+    expected[0x5fff] = 7;
+    let hex: String = Sha256::digest(&expected).iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(digest["sha256"], hex);
+    assert_eq!(digest["nonzero_pages_4k"], 3);
+    assert_eq!(digest["nonzero_runs"], serde_json::json!([[0x2000, 0x3000], [0x5000, 0x7000]]));
+    assert_eq!(digest["nonzero_runs_not_listed"], 0);
+    // All zero reads as no pages; the digest is of the whole range.
+    let zero = board.range_digest(0x100000, 0x4000);
+    assert_eq!((&zero["nonzero_pages_4k"], &zero["nonzero_runs"]), (&0.into(), &serde_json::json!([])));
+    // A range without complete backing reports the error and no hash.
+    let missing = board.range_digest(0x3ff000, 0x2000);
+    assert!(missing.get("error").is_some() && missing.get("sha256").is_none(), "{missing}");
 }
 
 /// Measurement, not a test: `cargo test -p fujimod-emulator --lib

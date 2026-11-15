@@ -2687,7 +2687,7 @@
       "type": "object"
     },
     "InputBinding": {
-      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "description": "A debug key, native input name, or exact located scanner-row identity.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -2724,6 +2724,25 @@
           "required": [
             "kind",
             "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Stable identity of a located scanner row, even when it has no command name.",
+          "properties": {
+            "kind": {
+              "const": "scanner_row",
+              "type": "string"
+            },
+            "row": {
+              "description": "Generated scanner row identity, such as `row-69`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "row"
           ],
           "type": "object"
         }
@@ -3027,6 +3046,25 @@
         }
       ]
     },
+    "LinkedChoice": {
+      "additionalProperties": false,
+      "description": "One declared choice slot of a linked-choice row.",
+      "properties": {
+        "label": {
+          "description": "The choice's caption.",
+          "type": "string"
+        },
+        "linked": {
+          "description": "Whether the build links the object that offers this choice.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "linked"
+      ],
+      "type": "object"
+    },
     "LinkedSymbol": {
       "additionalProperties": false,
       "description": "Linked symbol identity.",
@@ -3305,6 +3343,13 @@
         "label_text": {
           "description": "Declared label.",
           "type": "string"
+        },
+        "linked_choices": {
+          "description": "Every declared slot of a row whose choices exist only when another\nlinked object does, in slot order, and whether this build links it.",
+          "items": {
+            "$ref": "#/$defs/LinkedChoice"
+          },
+          "type": "array"
         },
         "mod": {
           "description": "Owning_mod.",

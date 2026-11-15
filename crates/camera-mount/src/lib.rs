@@ -4,6 +4,7 @@
 pub mod bridge;
 pub mod display;
 mod display_tree;
+pub mod files;
 mod flash;
 pub mod harness;
 use display_tree::DISPLAY;

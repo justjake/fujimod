@@ -484,6 +484,25 @@
       ],
       "type": "object"
     },
+    "LinkedChoice": {
+      "additionalProperties": false,
+      "description": "One declared choice slot of a linked-choice row.",
+      "properties": {
+        "label": {
+          "description": "The choice's caption.",
+          "type": "string"
+        },
+        "linked": {
+          "description": "Whether the build links the object that offers this choice.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "linked"
+      ],
+      "type": "object"
+    },
     "LinkedSymbol": {
       "additionalProperties": false,
       "description": "Linked symbol identity.",
@@ -589,6 +608,13 @@
         "label_text": {
           "description": "Declared label.",
           "type": "string"
+        },
+        "linked_choices": {
+          "description": "Every declared slot of a row whose choices exist only when another\nlinked object does, in slot order, and whether this build links it.",
+          "items": {
+            "$ref": "#/$defs/LinkedChoice"
+          },
+          "type": "array"
         },
         "mod": {
           "description": "Owning_mod.",

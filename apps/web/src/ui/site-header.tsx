@@ -1,4 +1,6 @@
 /** The site header: the brand links home, then the page links and the source repository. */
+declare const __FUJIMOD_BUILD_DATE__: string;
+
 export function SiteHeader(props: {
   /** Path from the current page to the site root, such as `''` or `'../'`. */
   root: string;
@@ -21,6 +23,9 @@ export function SiteHeader(props: {
       </nav>
       <div class="meta build-info">
         <a href="https://github.com/justjake/fujimod">github.com/justjake/fujimod</a>
+        <time class="build-date" datetime={__FUJIMOD_BUILD_DATE__}>
+          website updated {__FUJIMOD_BUILD_DATE__}
+        </time>
       </div>
     </header>
   );

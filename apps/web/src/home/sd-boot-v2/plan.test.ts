@@ -2,7 +2,14 @@ import { expect, test } from 'vite-plus/test';
 import type { SdCardFile, PatchFirmware } from '../../patch/catalog';
 import type { Firmware } from '../../catalog';
 import { storeName, validateOtaRelease, type SdBootV2Release } from '../../ota/release';
-import { sdBootV2Files, sdBootV2Plan, conflicting, releaseCameras, type CardCamera } from './plan';
+import {
+  sdBootV2Files,
+  sdBootV2Plan,
+  conflicting,
+  offered,
+  releaseCameras,
+  type CardCamera,
+} from './plan';
 
 const digest = (c: string) => c.repeat(64);
 const release = (id: string, mods: number, sha: string) =>
@@ -18,7 +25,8 @@ const camera = (id: string, processor = 'EXR Processor II'): CardCamera => ({
   model: id,
   version: '1.00',
   processor,
-  mods: 1,
+  mods: ['recipes'],
+  download_url: 'https://example.org/',
 });
 const file = (path: string, sha: string, processor?: string): SdCardFile => ({
   path,
@@ -28,11 +36,16 @@ const file = (path: string, sha: string, processor?: string): SdCardFile => ({
   ...(processor ? { processor } : {}),
 });
 
-test('the checklist lists cameras with a known processor, most mods first', () => {
+test('the checklist lists cameras whose processor has complete SD boot files, most mods first', () => {
   const catalog = [
     { sha256: digest('a'), processor: 'EXR Processor II' },
     { sha256: digest('b'), processor: 'EXR Processor II' },
   ] as Firmware[];
+  const card = [
+    file('FFBOOT.BIN', digest('1'), 'EXR Processor II'),
+    file('FFSYS.BIN', digest('2'), 'EXR Processor II'),
+    file('FM_EXR2.BIN', digest('3'), 'EXR Processor II'),
+  ];
   const cameras = releaseCameras(
     [
       release('x70-110', 3, digest('a')),
@@ -40,11 +53,15 @@ test('the checklist lists cameras with a known processor, most mods first', () =
       release('x-c', 20, digest('c')),
     ],
     catalog,
+    card,
   );
-  expect(cameras.map((entry) => [entry.id, entry.mods])).toEqual([
+  expect(cameras.map((entry) => [entry.id, entry.mods.length])).toEqual([
     ['XE2-411', 9],
     ['X70-110', 3],
   ]);
+  const partial = card.slice(0, 2);
+  expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, partial)).toEqual([]);
+  expect(releaseCameras([release('x70-110', 3, digest('a'))], catalog, [])).toEqual([]);
 });
 
 test('store names and release manifests follow the camera update layer', () => {
@@ -143,4 +160,18 @@ test('cameras whose root files differ from the chosen cameras’ cannot join the
   const all = [camera('X70-110'), camera('XE2-411'), camera('XT20-211', 'X-Processor Pro')];
   expect([...conflicting(all, [all[0]], card)]).toEqual(['XT20-211']);
   expect([...conflicting(all, [], card)]).toEqual([]);
+});
+
+test('recipe and film files are offered only to cameras whose release has the mod that reads them', () => {
+  const recipe = file('FUJIMOD/RECIPES/A.JSN', digest('a'));
+  const film = file('FUJIMOD/FILMS/A.FLM', digest('b'));
+  const other = file('FUJIMOD/NOTES.TXT', digest('c'));
+  const plain = { ...camera('X70-110'), mods: ['fujimod'] };
+  expect([recipe, film, other].map((entry) => offered(entry, [plain]))).toEqual([
+    false,
+    false,
+    true,
+  ]);
+  expect(offered(recipe, [plain, camera('XE2-411')])).toBe(true);
+  expect(offered(film, [{ ...plain, mods: ['card-films'] }])).toBe(true);
 });

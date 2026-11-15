@@ -1,8 +1,8 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
 use crate::{
-    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, jpeg, keys,
-    lens, power, resets, sd, serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, keys,
+    lens, power, resets, sd, serial, shutter, statistics, sync, timer, touch_xt20,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -14,6 +14,7 @@ use fujimod_emulator_devices::{
     graph::{DeviceGraph, Mapping},
     signals::Level,
 };
+use fujimod_emulator_ip::jpeg;
 use fujimod_emulator_ip_arm::{gicv2, pl330};
 use serde::Deserialize;
 use serde_json::Value;
@@ -310,6 +311,11 @@ pub enum Model {
     I2c {
         options: fujimod_emulator_ip::dw_i2c::Options,
         parts: Value,
+    },
+    Xt20TouchI2c {
+        options: fujimod_emulator_ip::dw_i2c::Options,
+        parts: Value,
+        touch: touch_xt20::Options,
     },
     DisplayOutput {
         #[serde(default)]
@@ -1060,7 +1066,13 @@ pub fn build(
             } => devices.register(
                 base,
                 jpeg::WINDOW,
-                Box::new(jpeg::Encoder::new(base, irq, run_ticks)?),
+                Box::new(jpeg::Encoder::new(
+                    "xpp-jpeg-encoder",
+                    base,
+                    irq,
+                    run_ticks,
+                    jpeg::Registers::LastWrite,
+                )?),
             )?,
             Model::JpegDecoder {
                 base,
@@ -1069,7 +1081,12 @@ pub fn build(
             } => devices.register(
                 base,
                 jpeg::WINDOW,
-                Box::new(jpeg::Decoder::new(base, irq, run_ticks)?),
+                Box::new(jpeg::Decoder::new(
+                    "xpp-jpeg-decoder",
+                    base,
+                    irq,
+                    run_ticks,
+                )?),
             )?,
             Model::H264 {
                 base,
@@ -1123,6 +1140,18 @@ pub fn build(
                     Box::new(fujimod_emulator_ip::dw_i2c::Controller::new(
                         options,
                         i2c::Parts::new(serde_json::from_value(parts).map_err(|e| e.to_string())?)?,
+                    )?),
+                )?
+            }
+            Model::Xt20TouchI2c { options, parts, touch } => {
+                let base = options.base;
+                devices.register(
+                    base,
+                    fujimod_emulator_ip::dw_i2c::WINDOW,
+                    Box::new(touch_xt20::Xt20TouchI2c::new(
+                        options,
+                        serde_json::from_value(parts).map_err(|e| e.to_string())?,
+                        touch,
                     )?),
                 )?
             }
@@ -1287,7 +1316,11 @@ pub fn build(
             Model::Renderer { base, irq } => devices.register(
                 base,
                 0x3000,
-                Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq)?),
+                Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(
+                    base,
+                    irq,
+                    fujimod_emulator_ip_dmp::smaph::PixmapReadback::RotatesChannels,
+                )?),
             )?,
             Model::Shutter {
                 mode,

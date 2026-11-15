@@ -86,6 +86,7 @@ const MOVIE_FORMAT: u32 = 0x0400_0400;
 const FRAMES_PER_SECOND: u32 = 60;
 const BITRATE: u32 = 40_000_000;
 const MAX_QP: u8 = 26;
+const LEVEL_IDC: u8 = 42;
 /// Stock clips key every 60 samples; the sequence starts with an IDR.
 const GOP: usize = 60;
 /// Upper bound on one access unit in the model's output span.
@@ -274,6 +275,7 @@ impl Encoder {
             bitrate: BITRATE,
             max_qp: MAX_QP,
             gop: GOP,
+            level_idc: LEVEL_IDC,
         };
         config.validate()?;
         if self.config.is_some_and(|old| old != config) {
@@ -742,6 +744,7 @@ mod tests {
             bitrate: 40_000_000,
             max_qp: 26,
             gop: 60,
+            level_idc: LEVEL_IDC,
         };
         let frames: Vec<Vec<u8>> = (0..61u64)
             .map(|index| {

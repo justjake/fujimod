@@ -397,11 +397,20 @@ fn register_with_resources(
                 .any(|k| {
                     !matches!(
                         k.as_str(),
-                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs"
+                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs" | "pad_model"
                     )
                 })
             {
                 return Err("unknown GPIO option".into());
+            }
+            if let Some(model) = window.options.get("pad_model") {
+                if window.kind != "gpio" {
+                    return Err("pad_model belongs on the gpio window".into());
+                }
+                let model: fujimod_emulator_devices::xp5::pins::PadModel =
+                    serde_json::from_value(serde_json::to_value(model).map_err(|e| e.to_string())?)
+                        .map_err(|e| format!("GPIO pad_model: {e}"))?;
+                resources.pins.lock().unwrap().pad_model = model;
             }
             let feedback = window
                 .options
@@ -590,14 +599,11 @@ pub fn register_all(
                     .ok_or("controller requires flash storage aperture")?
                 {
                     flash_storage::Medium::Nor(storage) => {
-                        // Current opcode geometry comes from the 20bb20 descriptor.
-                        if jedec != 0x20bb20 {
-                            return Err("only 0x20bb20 flash geometry is supported".into());
-                        }
+                        let part = flash_storage_controller::Part::from_jedec(jedec)?;
                         bus.register(
                             w.base,
                             w.size,
-                            Box::new(flash_storage_controller::Controller::new(storage, jedec)),
+                            Box::new(flash_storage_controller::Controller::new(storage, part)),
                         )?;
                     }
                     flash_storage::Medium::Nand(storage) => {

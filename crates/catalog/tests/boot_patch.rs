@@ -55,8 +55,9 @@ fn located_boot_patch_facts_resolve() {
 
     assert_eq!(facts.trampoline_space.address, 0x90000);
     assert_eq!(facts.trampoline_space.size, 0x1000);
-    assert_eq!(facts.resident_space.address, 0x102e2000);
-    assert_eq!(facts.resident_space.size, 0x400000);
+    // The X70 publishes its resident space in the stock network heap.
+    assert_eq!(facts.resident_space.address, 0x1d04_0000);
+    assert_eq!(facts.resident_space.size, 0x2e_0000);
     assert!(catalog.boot_patch("missing-100").is_none());
 }
 

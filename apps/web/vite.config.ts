@@ -220,6 +220,7 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_BUILD_SHA__: JSON.stringify(
       execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().slice(0, 8),
     ),
+    __FUJIMOD_BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
     __FUJIMOD_SIMULATED_USB__: simulatedUsbAvailable(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     __FUJIMOD_INITIAL_CATALOG__: readFileSync(
       catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')),

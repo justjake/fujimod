@@ -4,9 +4,10 @@ use std::{env, fs, path::PathBuf};
 fn construction_args(
     args: &[String],
     allow_hold: bool,
-) -> Result<(&str, &str, &str, u32), Box<dyn std::error::Error>> {
+) -> Result<(&str, &str, &str, StartupOptions), Box<dyn std::error::Error>> {
     let mut positional = Vec::new();
     let mut hold = None;
+    let mut units = None;
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         if arg == "--success-hold-seconds" {
@@ -21,6 +22,19 @@ fn construction_args(
                 Some(value.parse::<u32>().map_err(
                     |_| "--success-hold-seconds requires a non-negative 32-bit integer",
                 )?);
+        } else if arg == "--success-hold-units" {
+            if !allow_hold {
+                return Err("--success-hold-units requires sd-boot-v1-startup or sd-boot-v1-stage-one".into());
+            }
+            if units.is_some() {
+                return Err("--success-hold-units was specified twice".into());
+            }
+            let value = args.next().ok_or("Missing --success-hold-units value")?;
+            units = Some(
+                value
+                    .parse::<u64>()
+                    .map_err(|_| "--success-hold-units requires a non-negative 64-bit integer")?,
+            );
         } else if arg.starts_with("--") {
             return Err(format!("Unknown construction option: {arg}").into());
         } else {
@@ -30,12 +44,71 @@ fn construction_args(
     if positional.len() != 3 {
         return Err("Expected FIRMWARE DAT NEW_DIRECTORY".into());
     }
+    if hold.is_some() && units.is_some() {
+        return Err("--success-hold-seconds and --success-hold-units are mutually exclusive".into());
+    }
     Ok((
         positional[0],
         positional[1],
         positional[2],
-        hold.unwrap_or(0),
+        StartupOptions {
+            success_hold_seconds: hold.unwrap_or(0),
+            success_hold_units: units,
+            ..StartupOptions::default()
+        },
     ))
+}
+
+/// Remove `--fallback-wait-seconds N` from the arguments (only `sd-boot-v1-ram-startup` takes it).
+fn take_fallback_wait(
+    args: &mut Vec<String>,
+    allowed: bool,
+) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+    let Some(at) = args.iter().position(|arg| arg == "--fallback-wait-seconds") else {
+        return Ok(None);
+    };
+    if !allowed {
+        return Err("--fallback-wait-seconds requires sd-boot-v1-ram-startup".into());
+    }
+    let value = args
+        .get(at + 1)
+        .ok_or("Missing --fallback-wait-seconds value")?
+        .parse::<u32>()
+        .map_err(|_| "--fallback-wait-seconds requires a non-negative 32-bit integer")?;
+    args.drain(at..=at + 1);
+    if args.iter().any(|arg| arg == "--fallback-wait-seconds") {
+        return Err("--fallback-wait-seconds was specified twice".into());
+    }
+    Ok(Some(value))
+}
+
+/// Remove `--destination ADDRESS` from the arguments (`sd-boot-v1-read-only-startup` requires it, no
+/// other command takes it). ADDRESS is decimal or `0x` hexadecimal.
+fn take_destination(
+    args: &mut Vec<String>,
+    allowed: bool,
+) -> Result<Option<u64>, Box<dyn std::error::Error>> {
+    let Some(at) = args.iter().position(|arg| arg == "--destination") else {
+        return if allowed {
+            Err("sd-boot-v1-read-only-startup requires --destination ADDRESS".into())
+        } else {
+            Ok(None)
+        };
+    };
+    if !allowed {
+        return Err("--destination requires sd-boot-v1-read-only-startup".into());
+    }
+    let text = args.get(at + 1).ok_or("Missing --destination value")?;
+    let value = match text.strip_prefix("0x") {
+        Some(hex) => u64::from_str_radix(hex, 16),
+        None => text.parse::<u64>(),
+    }
+    .map_err(|_| "--destination requires an address, decimal or 0x hexadecimal")?;
+    args.drain(at..=at + 1);
+    if args.iter().any(|arg| arg == "--destination") {
+        return Err("--destination was specified twice".into());
+    }
+    Ok(Some(value))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
-            | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -65,10 +138,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 None
             };
-            let (firmware, dat, output, success_hold_seconds) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one"))?;
+            let fallback_wait_seconds =
+                take_fallback_wait(&mut inputs, command == "sd-boot-v1-ram-startup")?;
+            let read_only_destination =
+                take_destination(&mut inputs, command == "sd-boot-v1-read-only-startup")?;
+            let (firmware, dat, output, hold) =
+                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup"))?;
             let options = StartupOptions {
-                success_hold_seconds,
+                internal_flash: command == "sd-boot-v1-ram-startup",
+                fallback_wait_seconds,
+                read_only_destination,
+                ..hold
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
@@ -84,6 +164,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 recipe.build_ota_startup(&source)?
             } else if command == "sd-boot-v1-stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
+            } else if matches!(command, "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup") {
+                // The update stays an independent input and is not written.
+                recipe.build_boot_files(&source, options)?
             } else {
                 recipe.build_startup_with_options(&source, options)?
             };
@@ -98,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, required)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
@@ -108,15 +191,63 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::construction_args;
+    use super::{construction_args, take_destination, take_fallback_wait};
+    use fujimod_recovery::StartupOptions;
+    fn seconds(n: u32) -> StartupOptions {
+        StartupOptions {
+            success_hold_seconds: n,
+            ..StartupOptions::default()
+        }
+    }
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| s.to_string()).collect()
+    }
+    #[test]
+    fn fallback_wait_is_taken_out_before_the_positional_arguments() {
+        let mut values = args(&["--fallback-wait-seconds", "30", "camera", "update", "output"]);
+        assert_eq!(take_fallback_wait(&mut values, true).unwrap(), Some(30));
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        let mut values = args(&["camera", "update", "output"]);
+        assert_eq!(take_fallback_wait(&mut values, true).unwrap(), None);
+        assert_eq!(take_fallback_wait(&mut values, false).unwrap(), None);
+        for bad in [
+            args(&["camera", "--fallback-wait-seconds"]),
+            args(&["camera", "--fallback-wait-seconds", "-1"]),
+            args(&["camera", "--fallback-wait-seconds", "x"]),
+            args(&["--fallback-wait-seconds", "1", "--fallback-wait-seconds", "2"]),
+        ] {
+            assert!(take_fallback_wait(&mut bad.clone(), true).is_err(), "{bad:?}");
+        }
+        assert!(
+            take_fallback_wait(&mut args(&["--fallback-wait-seconds", "1"]), false).is_err()
+        );
+    }
+    #[test]
+    fn destination_is_required_by_the_read_only_command_and_by_no_other() {
+        let mut values = args(&["--destination", "0x30000000", "camera", "update", "output"]);
+        assert_eq!(take_destination(&mut values, true).unwrap(), Some(0x3000_0000));
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        let mut values = args(&["camera", "update", "output", "--destination", "805306368"]);
+        assert_eq!(take_destination(&mut values, true).unwrap(), Some(0x3000_0000));
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        assert_eq!(take_destination(&mut args(&["camera", "update", "output"]), false).unwrap(), None);
+        assert!(take_destination(&mut args(&["camera", "update", "output"]), true).is_err());
+        assert!(take_destination(&mut args(&["--destination", "0x2000"]), false).is_err());
+        for bad in [
+            args(&["camera", "--destination"]),
+            args(&["camera", "--destination", "-1"]),
+            args(&["camera", "--destination", "0xzz"]),
+            args(&["camera", "--destination", "x"]),
+            args(&["--destination", "0x1000", "--destination", "0x2000"]),
+        ] {
+            assert!(take_destination(&mut bad.clone(), true).is_err(), "{bad:?}");
+        }
     }
     #[test]
     fn success_hold_defaults_to_zero_and_accepts_either_position() {
         assert_eq!(
             construction_args(&args(&["camera", "update", "output"]), true).unwrap(),
-            ("camera", "update", "output", 0)
+            ("camera", "update", "output", seconds(0))
         );
         for values in [
             args(&["camera", "update", "output", "--success-hold-seconds", "3"]),
@@ -124,7 +255,7 @@ mod tests {
         ] {
             assert_eq!(
                 construction_args(&values, true).unwrap(),
-                ("camera", "update", "output", 3)
+                ("camera", "update", "output", seconds(3))
             );
         }
     }
@@ -174,5 +305,55 @@ mod tests {
             )
             .is_err()
         );
+    }
+    #[test]
+    fn success_hold_units_are_explicit_and_exclusive_with_seconds() {
+        let units = |n: u64| StartupOptions {
+            success_hold_units: Some(n),
+            ..StartupOptions::default()
+        };
+        for values in [
+            args(&["camera", "update", "output", "--success-hold-units", "32"]),
+            args(&["--success-hold-units", "32", "camera", "update", "output"]),
+        ] {
+            assert_eq!(
+                construction_args(&values, true).unwrap(),
+                ("camera", "update", "output", units(32))
+            );
+        }
+        assert_eq!(units(32).hold_units().unwrap(), 32);
+        assert_eq!(seconds(3).hold_units().unwrap(), 6_144);
+        assert_eq!(StartupOptions::default().hold_units().unwrap(), 0);
+        let refused = [
+            // both options, either order
+            vec!["--success-hold-seconds", "3", "--success-hold-units", "32"],
+            vec!["--success-hold-units", "32", "--success-hold-seconds", "3"],
+            // repeated, malformed, missing
+            vec!["--success-hold-units", "1", "--success-hold-units", "2"],
+            vec!["--success-hold-units", "-1"],
+            vec!["--success-hold-units", "1.5"],
+            vec!["--success-hold-units", "18446744073709551616"],
+            vec!["--success-hold-units"],
+        ];
+        for extra in refused {
+            let mut values = args(&["camera", "update", "output"]);
+            values.extend(extra.iter().map(|s| s.to_string()));
+            assert!(construction_args(&values, true).is_err(), "{extra:?}");
+        }
+        // Refused for the commands that take no hold (the recovery build).
+        assert!(
+            construction_args(
+                &args(&["camera", "update", "output", "--success-hold-units", "32"]),
+                false
+            )
+            .is_err()
+        );
+        // The library refuses both settings at once.
+        let both = StartupOptions {
+            success_hold_seconds: 3,
+            success_hold_units: Some(32),
+            ..StartupOptions::default()
+        };
+        assert!(both.hold_units().is_err());
     }
 }

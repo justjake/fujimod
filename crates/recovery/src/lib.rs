@@ -30,6 +30,37 @@ pub use xp5::{
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct StartupOptions {
     pub success_hold_seconds: u32,
+    /// Hold length in loop units instead of seconds (2,048 units per second).
+    /// Mutually exclusive with a nonzero `success_hold_seconds`.
+    pub success_hold_units: Option<u64>,
+    /// XP5 only: keep the installed flash attached. The card supplies the RAM
+    /// image alone; the prelude initializes and scans the installed flash as
+    /// stage one does, and no card-resident tables, namespace or unit storage
+    /// image are used (so none is needed).
+    pub internal_flash: bool,
+    /// With `internal_flash`: when the FFBOOT load fails (no file, a length or CRC
+    /// mismatch, a read error), wait this many seconds and continue the stock boot from the
+    /// installed flash. `None` keeps the loader's halt on any failure.
+    pub fallback_wait_seconds: Option<u32>,
+    /// XP5 only: a read-only startup. The loader streams `ffboot.bin` into DRAM at this address
+    /// and checks its length and CRC-32, writes nothing else outside SRAM, the SD host and the
+    /// lamp, and returns to the stock bootstrap, which starts from the installed flash as on a
+    /// normal boot (the file is read and never run). It excludes `internal_flash` and the
+    /// fallback.
+    pub read_only_destination: Option<u64>,
+}
+
+impl StartupOptions {
+    /// The success hold in loop units of 1,000,000 four-NOP iterations.
+    pub fn hold_units(&self) -> Result<u64> {
+        require(
+            self.success_hold_units.is_none() || self.success_hold_seconds == 0,
+            "Success hold takes seconds or units, not both",
+        )?;
+        Ok(self
+            .success_hold_units
+            .unwrap_or(u64::from(self.success_hold_seconds) * 2_048))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -265,7 +296,7 @@ impl Recipe {
             &fujimod_firmware::invert(source),
             setup,
             None,
-            options.success_hold_seconds,
+            options.hold_units()?,
         )
     }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
@@ -356,6 +387,14 @@ impl Recipe {
     ) -> Result<Vec<File>> {
         self.startup_inputs(source, options, None)
     }
+    /// `build_startup_with_options` without the update: exactly the two files the
+    /// boot ROM and the loader read, `marble_init.bin` and `ffboot.bin` (an XP5
+    /// startup). The update is an independent updater input; this never returns it,
+    /// and any other output name is an error rather than silently passed on.
+    pub fn build_boot_files(&self, source: &[u8], options: StartupOptions) -> Result<Vec<File>> {
+        let files = self.build_startup_with_options(source, options)?;
+        boot_files_only(files, &self.update_filename)
+    }
     /// Include the unit's retained storage data in a checked card startup.
     pub fn build_startup_with_storage(
         &self, source: &[u8], storage: &[u8], options: StartupOptions,
@@ -373,8 +412,8 @@ impl Recipe {
         })
     }
     /// Build an EXR II card entry that loads stage 1 from NAND, then stage 2.
-    /// The board's memory setup header and the early LED rows are verified
-    /// against the supplied update before the universal loaders are packaged.
+    /// The board's memory setup header is verified against the supplied update;
+    /// the packaged loaders are the same for every EXR II body.
     pub fn build_ota_startup(&self, source: &[u8]) -> Result<Vec<File>> {
         require(
             matches!(self.generation, Generation::Exr2),
@@ -390,8 +429,9 @@ impl Recipe {
             .as_ref()
             .ok_or_else(|| image::Error::Invalid("Missing SD header packaging".into()))?;
         let inverted = fujimod_firmware::invert(source);
-        let mut stage1 = include_bytes!("../assets/sd-boot-v2-stage1-sd-card.generated.bin").to_vec();
-        early_led::stage(self, source, &mut stage1, 0, 0, 0xffff)?;
+        // One universal stage-1 loader for every EXR II body: no early LED
+        // table is staged in, so the same FFBOOT.BIN boots any of them.
+        let stage1 = include_bytes!("../assets/sd-boot-v2-stage1-sd-card.generated.bin").to_vec();
         let mut files = packaging.package_bytes(&inverted, packaging.entry, stage1)?;
         files.push(File::new(
             "FM_EXR2.BIN",
@@ -403,8 +443,25 @@ impl Recipe {
     fn startup_inputs(&self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>)
         -> Result<Vec<File>> {
         require(
-            options.success_hold_seconds == 0 || matches!(self.generation, Generation::Xp5),
+            options.hold_units()? == 0 || matches!(self.generation, Generation::Xp5),
             "Success hold requires XP5",
+        )?;
+        require(
+            !options.internal_flash
+                || (matches!(self.generation, Generation::Xp5) && storage.is_none()),
+            "Internal-flash startup requires XP5 and takes no storage image",
+        )?;
+        require(
+            options.fallback_wait_seconds.is_none() || options.internal_flash,
+            "The load-failure fallback requires an internal-flash startup",
+        )?;
+        require(
+            options.read_only_destination.is_none()
+                || (matches!(self.generation, Generation::Xp5)
+                    && storage.is_none()
+                    && !options.internal_flash
+                    && options.fallback_wait_seconds.is_none()),
+            "The read-only startup requires XP5 and takes no storage image, internal-flash build or fallback",
         )?;
         require(
             source.len() == self.source_size,
@@ -490,13 +547,32 @@ impl Recipe {
                             "Missing XP5 post-setup SD loader and handoff facts".into(),
                         )
                     })?;
-                    xp5::package_with_storage(
-                        &inverted,
-                        setup,
-                        Some(image::transform(&inverted, plan)?),
-                        options.success_hold_seconds,
-                        storage,
-                    )?
+                    let ram = image::transform(&inverted, plan)?;
+                    if let Some(destination) = options.read_only_destination {
+                        xp5::package_read_only(
+                            &inverted,
+                            setup,
+                            ram,
+                            options.hold_units()?,
+                            destination,
+                        )?
+                    } else if options.internal_flash {
+                        xp5::package_internal_flash(
+                            &inverted,
+                            setup,
+                            ram,
+                            options.hold_units()?,
+                            options.fallback_wait_seconds,
+                        )?
+                    } else {
+                        xp5::package_with_storage(
+                            &inverted,
+                            setup,
+                            Some(ram),
+                            options.hold_units()?,
+                            storage,
+                        )?
+                    }
                 }
             };
         require(
@@ -523,6 +599,29 @@ impl Recipe {
         Ok(files)
     }
 }
+/// The only files `build_boot_files` returns.
+const BOOT_FILES: [&str; 2] = ["marble_init.bin", "ffboot.bin"];
+
+/// Drop the update from `files` and require exactly the boot files, once each, in that order.
+fn boot_files_only(files: Vec<File>, update_filename: &str) -> Result<Vec<File>> {
+    let mut boot = Vec::new();
+    for file in files {
+        if file.name.eq_ignore_ascii_case(update_filename) {
+            continue;
+        }
+        require(
+            BOOT_FILES.contains(&file.name.as_str()),
+            "A startup output is neither a boot file nor the update",
+        )?;
+        boot.push(file);
+    }
+    require(
+        boot.iter().map(|f| f.name.as_str()).eq(BOOT_FILES),
+        "A startup lacks one of its boot files",
+    )?;
+    Ok(boot)
+}
+
 #[derive(Debug, Serialize)]
 pub struct Availability {
     pub firmware_id: String,

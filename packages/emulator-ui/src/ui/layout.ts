@@ -143,7 +143,8 @@ function boundInputIds(panel: DevicePanel): string[] {
   const ids = new Set<string>();
   const visit = (nodes: ControlNode[]) => {
     for (const node of nodes) {
-      if (node.id) ids.add(node.id);
+      // Group ids (such as a dpad's visual id) are not runtime input ids.
+      if (node.kind === 'control' && node.id) ids.add(node.id);
       for (const id of Object.values(node.bindings ?? {})) ids.add(id);
       visit(node.children ?? []);
     }

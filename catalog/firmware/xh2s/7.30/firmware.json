@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xh2s-730",
+  "body_id": "xh2s",
+  "version": "7.30",
+  "update": {
+    "size": 110302568,
+    "sha256": "87c566c1ff6343e4c7463a4ef968183f41d1f24cc63d610433d3a387b13f731b"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

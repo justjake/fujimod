@@ -174,13 +174,96 @@ optional runtime binding initializes the card and serves checked descriptor
 reads from that namespace; it uses the card’s retained training data and
 does not initialize the serial NOR controller.
 
-`sd-boot-v1-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-ram-startup FIRMWARE DAT NEW_DIRECTORY [--fallback-wait-seconds N]` (XP5) writes only
+the two files the boot ROM and the loader read, `marble_init.bin` and `ffboot.bin`, and never the
+update. The installed flash stays attached: the prelude initializes and scans it as
+`sd-boot-v1-stage-one` does, the card carries only the RAM image, and the card-resident setup
+tables, namespace and unit cache are not used, so no unit storage image is involved and none of
+the unit's data reaches the output (`StartupOptions::internal_flash` and `Recipe::build_boot_files`
+are the library forms). Without that option, a recipe that carries a card-resident setup (X100VI
+1.31) refuses to build a startup without a unit storage image. A recipe's
+`internal_flash_ram_edits` are applied to the image (and covered by the CRC the loader checks).
+
+This startup uses its own build of the post-DDR loader,
+`assets/sd-boot-v1-xp5-internal-flash-loader.generated.{bin,json}`: the same C sources as the
+card-resident loader, compiled with `-DXP5_INTERNAL_FLASH` by the pinned Arm GCC 9.2.1. The
+default `sd-boot-v1-xp5-loader.generated.*` is unchanged. The internal-flash build keeps what
+the card-resident one does while it loads: the cores the boot ROM parks in WFI are held (their
+SGI enables masked), RAM 0 holds a gate stub that sends any stray arrival to the bootstrap's
+wait, and the first 16 bytes of the image (the reset entry) are kept back until the CRC has
+passed. RAM 0's first 16 bytes are written as single-copy-atomic 32-bit stores (`b .` first, the
+entry's final word last), which relies on the other cores being held. Only after the CRC does it write the entry, publish the image and wake
+the cores with SGI0 (after a `dsb sy`), which the image's preloaded reset stage expects to be awake.
+
+The loader reads its binding from `setup_sd_internal_flash`, which the packager fills after
+checking the empty template (`bind_internal_flash` in `src/xp5.rs`): the parked cores' interrupt
+frames, taken from the recipe's card-resident setup, and the fallback. The frames must lie in the
+redistributor window `0xfa000000..0xfb000000`, be the second page of a `0x20000`-aligned
+redistributor, follow each other at that stride and avoid the flash aperture and the flash
+controller's page (a write to either is a flash command). The card-resident setup's frames
+(`card_boot.rs`) are held to the window, alignment and stride clauses, which also keep them out of
+the aperture. The loader repeats the window, alignment and stride check (`-104`) before it touches
+a frame and then compares one byte of each redistributor's `GICR_TYPER` (Aff0 of the affinity)
+with its core number (`-105`), which is a check of one byte. A recipe with no card-resident setup
+has no frames to name, so the internal-flash startup refuses it.
+
+With `--fallback-wait-seconds N` (at most 86,400) the loader also continues from the installed
+flash after a failed load (no file, a length or CRC mismatch, a read error, a card
+initialization failure) instead of halting. The packager binds the CRC-32 of the stock reset
+image (`reset_copy_size` bytes at the update's reset offset, flash `0x40000` in the X100VI 1.31
+update). Before the loader gates RAM 0 it reads that image through the flash aperture with 32-bit
+loads, as the prelude's flash scan does, and compares the CRC: a different installed firmware
+turns the fallback off for the boot and a failed load halts. Otherwise a failed load waits N
+seconds and puts the stock reset image back at RAM 0 (only the 16 bytes saved before the gate when
+nothing beyond the held entry was written; else the image from offset 16 on, from the aperture).
+The gate stays in RAM 0 while the result is checked: the CRC of the entry about to be written and
+RAM `[16, restore_bytes)` must equal the bound one, and only then is the entry written and read
+back; a mismatch halts. It then gives the parked cores their interrupt enables back without waking
+them (the stock reset stage wakes them itself), publishes `a64_boot_ready = 2` and returns to the
+stock bootstrap, whose gate releases to RAM 0. After an aperture-path restore, what FFBOOT wrote
+above `restore_bytes` stays in DDR unverified; the stock reset stage reloads it.
+
+What halts: a bad request or binding (`-100`, `-104`) or frames that are not the cores'
+redistributors (`-105`) halt before anything is held or gated, with the DDR untrained; an
+unexpected exception level or MMU state (`-101`, `-102`) halts with the cores held and no gate;
+every other failure without an armed fallback halts with the cores held and the gate in place; a
+restore that does not verify (`-106`) halts with the gate still in place. The loader records the status of the fallback and
+the CRCs it measured in the last words of its binding.
+
+`sd-boot-v1-read-only-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS` (XP5) writes the same two
+files, `marble_init.bin` and `ffboot.bin`, and never the update, for a card that only *reads*
+`ffboot.bin`. `ffboot.bin` is the RAM image as the update installs it: the recipe's plan with its
+preloaded-selector edit undone and no RAM edits, so its reset-image prefix is byte for byte the
+stock reset image in the flash (the image is never run). The loader
+(`assets/sd-boot-v1-xp5-read-only-loader.generated.{bin,json}`, the same sources compiled with
+`-DXP5_READ_ONLY_STARTUP`) runs in place of the stock initializer's call: the stock initializer
+runs first and unchanged, then the loader streams the whole file into DRAM at `ADDRESS` (decimal or
+`0x`; `StartupOptions::read_only_destination` in the library), checks its length and CRC-32, reads
+the DRAM back and checks that, quiesces the SD host and returns, and the stock bootstrap goes on from
+the installed flash exactly as on a normal boot. The bootstrap's continuation (`ldr x30,
+=0xf0027110; ret`, into the flash) is not touched, RAM 0 is never written, no core is held or woken
+and nothing read is run. The destination must be 4 KiB aligned with the whole file inside
+`0x24459000..0x3e408000` (the loader refuses a bound outside that and so does the packager). The
+loader takes the CRC-32 of RAM `[0, reset_copy_size)` and the selector word before and after the
+read and **halts** (error `-900`, the lamp alternating red and green for ever) if either changed.
+Any other failure (no file, a length or CRC mismatch, a read error, a read-back mismatch) is
+recorded in the loader's progress words and shown as red lamp blinks, and the stock boot continues.
+The command excludes `--fallback-wait-seconds`, takes no storage image and needs no card-resident
+setup in the recipe.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
 second; the startup clock can make the hold longer. This early hold calls no
 stock code and requires no initialized timer. Zero skips the hold. The library
 exposes the same setting through `StartupOptions` and the corresponding `_with_options` methods.
+
+`--success-hold-units N` sets the hold directly in those loop units instead of
+seconds (so `--success-hold-seconds S` equals `--success-hold-units` `S * 2048`) and
+is mutually exclusive with `--success-hold-seconds`. The units are only a count of
+loop passes, not a duration: the processor's speed at this point decides how long
+one unit takes. Only the 64-bit hold word of the guest configuration changes.
 
 The XP4 compiled SD loader is `assets/sd-boot-v1-xp4-loader.generated.bin`; its companion
 `assets/sd-boot-v1-xp4-loader.generated.json` describes segment offsets, symbols and ARM

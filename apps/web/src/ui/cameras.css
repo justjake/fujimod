@@ -160,16 +160,13 @@
 
 .progress-row .tip {
   position: absolute;
-  z-index: 2;
+  z-index: 50;
   bottom: calc(100% + 22px); /* clears this row's name and status */
   left: 50%;
-  width: 240px;
-  translate: -50% 0;
-  padding: 10px 12px 11px;
+  width: min(240px, calc(100vw - 16px));
+  translate: calc(-50% + var(--tip-shift-x, 0px)) var(--tip-shift-y, 0px);
   border-radius: 12px;
-  background: rgb(44 44 46 / 97%);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  backdrop-filter: blur(20px) saturate(1.6);
+  background: var(--key2);
   box-shadow:
     0 0 0 0.5px rgb(255 255 255 / 12%) inset,
     0 10px 30px rgb(0 0 0 / 55%);
@@ -183,6 +180,16 @@
     transform 140ms,
     visibility 0s 140ms;
 }
+.progress-row .tip-scroll {
+  max-height: min(420px, calc(100dvh - 40px));
+  padding: 10px 12px 11px;
+  border-radius: inherit;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 28%) transparent;
+}
 .progress-row .tip::after {
   /* keeps the hover alive while the pointer crosses to the tip's links */
   content: '';
@@ -192,12 +199,12 @@
 }
 .progress-row .phase:first-child .tip {
   left: 0;
-  translate: 0 0;
+  translate: var(--tip-shift-x, 0px) var(--tip-shift-y, 0px);
 }
 .progress-row .phase:last-child .tip {
   left: auto;
   right: 0;
-  translate: 0 0;
+  translate: var(--tip-shift-x, 0px) var(--tip-shift-y, 0px);
 }
 .progress-row .phase.open .tip {
   opacity: 1;

@@ -512,7 +512,7 @@ async fn convert<P: Pipe>(
         .call(
             ptp::SET_DEVICE_PROP_VALUE,
             &[START_RAW_CONVERSION],
-            Some(&0u16.to_le_bytes()),
+            Some(&1u16.to_le_bytes()),
         )
         .await;
     match start {

@@ -488,10 +488,10 @@ fn prepare_xpp(
     let callback = &profile["callback"];
     let callback_address = num(callback, "address")?;
     let callback_original = u32::try_from(num(callback, "original")?)?;
+    // An original of zero is an empty slot: its `body` is then the stock
+    // dispatcher that skips a zero slot, and restoration writes zero back.
     check(
-        callback_address.is_multiple_of(4)
-            && callback_original != 0
-            && callback_original.is_multiple_of(4),
+        callback_address.is_multiple_of(4) && callback_original.is_multiple_of(4),
         "XPP callback slot or original pointer is invalid",
     )?;
     let map = document(&input.load_map)?;
@@ -661,6 +661,16 @@ fn prepare_xpp(
         .min(flash.window.size);
     let update_bytes = extent(&inverted, flash.update_image.dat_offset, update_size)?;
     let control = extent(update_bytes, flash.control.offset, flash.control.size)?;
+    // The profile's uncached RAM mirror gates execution on the image being in
+    // memory; eviction reads cover 4x a 32 KiB L1 data cache of stock code.
+    let uncached_alias = profile
+        .get("uncached_alias")
+        .map(|_| num(&profile, "uncached_alias"))
+        .transpose()?;
+    let cache_churn = uncached_alias.map(|_| Range {
+        address: stock_reader & !0xffff,
+        size: 0x20000,
+    });
     let payload = super::xpp::Payload {
         schema: 1,
         firmware_id: selected.firmware.id.clone(),
@@ -683,6 +693,8 @@ fn prepare_xpp(
         checks,
         control_sha256: sha256(control),
         update_size,
+        uncached_alias,
+        cache_churn,
     };
     payload.validate(flash, bulk, &image)?;
     Ok((

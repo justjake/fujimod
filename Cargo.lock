@@ -1549,6 +1549,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1987,6 +1988,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-exr2-image-transfer"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator-exr2-images"
 version = "0.1.0"
 dependencies = [
@@ -2050,6 +2063,7 @@ dependencies = [
  "fujimod-catalog-construction",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-codecs",
+ "fujimod-emulator-exr2-image-transfer",
  "fujimod-emulator-exr2-images",
  "fujimod-emulator-exr2-isp-input",
  "fujimod-emulator-exr2-isp-statistics",
@@ -2135,7 +2149,7 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
  "fujimod-emulator-ip",
- "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-wifi",
  "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
@@ -2232,6 +2246,7 @@ name = "fujimod-emulator-ip"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
@@ -2364,18 +2379,12 @@ dependencies = [
 name = "fujimod-emulator-parts-io"
 version = "0.1.0"
 dependencies = [
- "aes 0.9.2",
- "aes-kw",
  "ciborium",
  "fujimod-emulator-devices",
  "fujimod-workspace-hack",
- "hmac 0.13.0",
- "pbkdf2",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha1 0.11.0",
- "smoltcp",
  "tsify",
  "wasm-bindgen",
 ]
@@ -2404,6 +2413,22 @@ dependencies = [
  "libm",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-wifi"
+version = "0.1.0"
+dependencies = [
+ "aes-kw",
+ "ciborium",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "hmac 0.13.0",
+ "pbkdf2",
+ "serde",
+ "serde_json",
+ "sha1 0.11.0",
+ "smoltcp",
 ]
 
 [[package]]
@@ -2481,6 +2506,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
@@ -2489,6 +2515,7 @@ dependencies = [
  "fujimod-emulator-xp4-display",
  "fujimod-emulator-xp4-io",
  "fujimod-emulator-xp4-storage",
+ "fujimod-emulator-xp4-system",
  "fujimod-emulator-xpp",
  "fujimod-framebuffer-xp4",
  "fujimod-workspace-hack",
@@ -2519,12 +2546,24 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
  "fujimod-workspace-hack",
+ "parking_lot",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "fujimod-emulator-xp4-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-system"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
@@ -2649,7 +2688,9 @@ dependencies = [
  "fujimod-webrtc",
  "fujimod-workspace-hack",
  "futures-lite",
+ "nix",
  "sha2 0.10.9",
+ "walkdir",
 ]
 
 [[package]]
@@ -3264,6 +3305,7 @@ dependencies = [
  "memchr",
  "naga",
  "naga-types",
+ "nix",
  "num-traits",
  "once_cell",
  "percent-encoding",

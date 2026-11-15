@@ -718,6 +718,21 @@ pub struct MenuItem {
     /// Inline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inline: Option<InlineChoices>,
+    /// Every declared slot of a row whose choices exist only when another
+    /// linked object does, in slot order, and whether this build links it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub linked_choices: Vec<LinkedChoice>,
+}
+
+/// One declared choice slot of a linked-choice row.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct LinkedChoice {
+    /// The choice's caption.
+    pub label: String,
+    /// Whether the build links the object that offers this choice.
+    pub linked: bool,
 }
 
 /// Compiler-declared stock choice observation.

@@ -200,6 +200,18 @@ Applying migrations uses the Cloudflare CLI (`cf`), which shares this
 repository's sign-in with Wrangler. `pnpm run db:migrate:local` targets the local
 D1 copy instead.
 
+## Download counts
+
+The homepage reports each completed FujiMod archive to `POST /api/downloads`.
+The Worker records it in `download_event` in `fujimod-auth`; the tab-scoped
+random session ID separates downloads from distinct sessions. Failed builds and
+recovery images are not counted. Query the table with the Cloudflare CLI:
+
+```sh
+cf d1 query 29375cc8-35ff-4559-ad3a-05d977dfde89 --sql \
+  "select count(*) as downloads, count(distinct session) as sessions from download_event"
+```
+
 ## DNS and sharing
 
 Gandi is the registrar. Cloudflare hosts DNS, delegated to `ali.ns.cloudflare.com`
