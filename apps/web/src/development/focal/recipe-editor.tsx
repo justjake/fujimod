@@ -183,7 +183,7 @@ const BASE: Recipe = {
   shiftB: -3,
 };
 
-const fmt = (n: Step) => (typeof n === 'string' ? n : n > 0 ? `+${n}` : `${n}`);
+const fmt = (n: Step) => (typeof n === 'string' ? n : n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
 const level = (r: Recipe, id: string) => {
   const step = LEVELS[r[id]];
   return typeof step === 'number' ? step : 0;
@@ -265,13 +265,15 @@ const DRAWERS: Record<Drawer, string | undefined> = {
 
 /* ---- Layout ------------------------------------------------------------------ */
 
-const ROW = 46;
+/** Eleven rows fill the 480-pixel screen without scrolling. */
+const ROW = 43;
 const COMPARE_HEADER = 30;
 const ICON_CELL = 52;
 /** The icon column, before the stroke that starts each row's drawer. */
 const ICON_COLUMN = 58;
-/** Compare keeps the bottom free for the legend under both columns. */
-const LEGEND_SPACE = 52;
+/** Compare ends each column on a whole row and keeps the space below free
+ * for the legend under both columns. */
+const LEGEND_SPACE = 480 - COMPARE_HEADER - 9 * ROW;
 const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
