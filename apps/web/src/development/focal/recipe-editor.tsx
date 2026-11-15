@@ -366,7 +366,7 @@ function ChoiceStrip(props: {
                   width: item.choice.icon ? `${ICON_CELL - 4}px` : undefined,
                   padding: item.choice.icon ? undefined : '0 7px',
                   background: chosen() ? 'rgb(255 255 255 / 0.18)' : undefined,
-                  opacity: chosen() ? 1 : 0.6,
+                  
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -378,7 +378,7 @@ function ChoiceStrip(props: {
                   fallback={<span class={`text-[16px] ${LIGHT}`}>{item.choice.name}</span>}
                 >
                   {(icon) => (
-                    <img alt="" class="h-[24px] w-[38px] object-contain" src={stock(icon())} />
+                    <Ink src={stock(icon())} class="h-[24px] w-[38px]" mode="alpha" />
                   )}
                 </Show>
               </div>
