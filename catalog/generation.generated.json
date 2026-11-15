@@ -152,7 +152,7 @@
       "firmware_id": "gfx100s-213",
       "product": "GFX100S",
       "version": "2.13",
-      "internal_version": null,
+      "internal_version": "1.94",
       "tables": {
         "bulk": {
           "status": "unavailable",
@@ -178,6 +178,35 @@
             {
               "locator": "controls",
               "reason": "firmware image not available"
+            }
+          ]
+        },
+        "facts": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "ui_mode",
+              "reason": "ui_hdmi_allowed_in_current_mode: 0 candidates, 0 verified results"
+            },
+            {
+              "locator": "ui_modes",
+              "reason": "ui_hdmi_allowed_in_current_mode: 0 candidates, 0 verified results"
+            },
+            {
+              "locator": "remote_menu",
+              "reason": "ui_hdmi_allowed_in_current_mode: 0 candidates, 0 verified results"
+            },
+            {
+              "locator": "usb_normal_ids",
+              "reason": "Factory configuration default image is truncated or lacks its signature"
+            },
+            {
+              "locator": "service_exit.jig_deinit_link",
+              "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
+            },
+            {
+              "locator": "framebuffer",
+              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
             }
           ]
         },
