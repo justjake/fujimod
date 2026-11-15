@@ -3,9 +3,11 @@
 mod abort;
 mod client;
 mod definition;
+mod initial_security;
 pub mod maintenance;
 pub mod memory;
 pub use definition::{Definition, GicCpuInitial, GicInitial, NorImmutablePrefix};
+pub use initial_security::InitialSecurity;
 pub mod observation;
 use observation::Call;
 mod devices;
@@ -1078,6 +1080,7 @@ impl Session {
             discovery,
             memory_regions,
             initial_registers,
+            initial_security,
             labels,
             cbar,
             gic_initial,
@@ -1090,6 +1093,7 @@ impl Session {
             storage_mapped_read,
             storage_write_protect,
             storage_strict_backing,
+            storage_erased_ranges,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
@@ -1241,6 +1245,20 @@ impl Session {
         if !initial_registers.is_empty() && initial_registers.len() != cores {
             return Err("Initial ARM32 register sets must name every processor".into());
         }
+        if !initial_security.is_empty() && initial_security.len() != cores {
+            return Err("Initial ARM32 security states must name every processor".into());
+        }
+        for (core, initial) in initial_security.iter().enumerate() {
+            initial.validate()?;
+            if let Some(registers) = initial_registers.get(core) {
+                for &(register, value) in registers {
+                    if initial_security::is_cpsr(register) {
+                        initial.validate_cpsr(u32::try_from(value)
+                            .map_err(|_| "ARM32 reset register overflows")?)?;
+                    }
+                }
+            }
+        }
         let mut gic = Gic::new(cores, 512);
         if let Some(initial) = gic_initial {
             if cbar.is_none() { return Err("Initial GIC registers require an explicit CBAR".into()); }
@@ -1292,6 +1310,9 @@ impl Session {
         if storage_strict_backing && (storage_jedec.is_none() || storage_image.is_none()) {
             return Err("Strict NOR backing requires an XP4 NOR owner and explicit contents".into());
         }
+        if !storage_erased_ranges.is_empty() && !storage_strict_backing {
+            return Err("Erased NOR ranges require strict read backing".into());
+        }
         if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
             // The prefix is mapped as memory, so its reads would bypass the gate.
             return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
@@ -1314,6 +1335,7 @@ impl Session {
                 storage_mapped_read,
                 storage_write_protect,
                 storage_strict_backing,
+                storage_erased_ranges,
             )?;
             frozen_nor = view;
             Some(devices)
@@ -1999,13 +2021,28 @@ impl Session {
                     }?;
                 }
             }
-            inner.write_reg(core, arm::CPSR, 0xd3)?;
+            let security = initial_security.get(core);
+            if let Some(initial) = security {
+                initial.apply(&inner.cpus[core])?;
+            } else {
+                inner.write_reg(core, arm::CPSR, 0xd3)?;
+            }
+            let mut initial_cpsr = 0xd3;
             if let Some(registers) = initial_registers.get(core) {
                 for &(register, value) in registers {
                     let value =
                         u32::try_from(value).map_err(|_| "ARM32 reset register overflows")?;
                     inner.cpus[core].write_register(register, &value.to_le_bytes())?;
+                    if initial_security::is_cpsr(register) {
+                        initial_cpsr = value;
+                        if let Some(initial) = security {
+                            initial.verify(&inner.cpus[core], initial_cpsr)?;
+                        }
+                    }
                 }
+            }
+            if let Some(initial) = security {
+                initial.verify(&inner.cpus[core], initial_cpsr)?;
             }
         }
         if let Some(base) = cbar {
@@ -2308,6 +2345,25 @@ impl Session {
         Ok(bytes)
     }
     pub fn run(&self, core: usize, budget: usize) -> Result<(), String> {
+        self.run_inner(core, budget, None)
+    }
+    /// Run at most `budget` instructions, stopping before `target` executes.
+    /// The target is an even 32-bit instruction address, without a Thumb bit;
+    /// the guest may change instruction sets before reaching it. Address zero
+    /// is a valid stop. IRQ entry, WFI and other normal yields may return first:
+    /// callers inspect the PC and board state before scheduling another run.
+    pub fn run_to(&self, core: usize, budget: usize, target: u64) -> Result<(), String> {
+        self.inner.healthy()?;
+        self.inner.cpu(core)?;
+        if budget == 0 {
+            return Err("Run-to requires a positive instruction budget".to_owned());
+        }
+        if target > u64::from(u32::MAX) || target & 1 != 0 {
+            return Err("Run-to target must be an even 32-bit instruction address".to_owned());
+        }
+        self.run_inner(core, budget, Some(target))
+    }
+    fn run_inner(&self, core: usize, budget: usize, until: Option<u64>) -> Result<(), String> {
         let c = &self.inner;
         c.healthy()?;
         let cpu = c.cpu(core)?;
@@ -2315,6 +2371,14 @@ impl Session {
             return Err("Reentrant ARMv7-A execution".to_owned());
         }
         let _running = Running(&c.running);
+        if let Some(target) = until
+            && u64::from(c.reg(core, arm::PC)?) == target
+        {
+            // A debugger boundary already reached is a no-op, including for
+            // device deadlines and pending DMA. Still reject reentrant calls
+            // and preserve an earlier sticky board failure above.
+            return Ok(());
+        }
         c.maintenance.ready(&c.cpus)
             .map_err(|error| c.retain_failure(error))?;
         if budget == 0 && unsafe { (*c.state.get()).driver_guard.is_some() } {
@@ -2337,7 +2401,7 @@ impl Session {
             }
             let mut exit = cpu.run(Run {
                 begin: u64::from(start),
-                until: None,
+                until,
                 watchdog_us: 0,
                 instructions: Some(budget),
             });

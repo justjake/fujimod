@@ -40,6 +40,10 @@ pub struct Definition {
     pub memory_regions: Vec<super::memory::Region>,
     #[serde(default)]
     pub initial_registers: Vec<Vec<(Register, u64)>>,
+    /// Explicit Cortex-A7 SCR/NSACR inputs, one per core. Empty preserves
+    /// backend defaults; this declaration is not a physical reset measurement.
+    #[serde(default)]
+    pub initial_security: Vec<InitialSecurity>,
     #[serde(default)]
     pub labels: Vec<u32>,
     #[serde(default)]
@@ -69,6 +73,10 @@ pub struct Definition {
     /// erased bytes beyond the asset; this does not declare chip capacity.
     #[serde(default)]
     pub storage_strict_backing: bool,
+    /// Explicit erased initial ranges outside the byte asset. Requires strict
+    /// backing; undeclared gaps remain inaccessible.
+    #[serde(default)]
+    pub storage_erased_ranges: Vec<fujimod_emulator_xp4_storage::storage::ErasedRange>,
     /// DMA-only connection with explicitly declared reset and timing hypotheses.
     #[serde(default)]
     pub standalone_dma: Option<StandaloneDma>,
