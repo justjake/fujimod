@@ -185,18 +185,6 @@
           "status": "unavailable",
           "errors": [
             {
-              "locator": "ui_mode",
-              "reason": "ui_hdmi_allowed_in_current_mode: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ui_modes",
-              "reason": "ui_hdmi_allowed_in_current_mode: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "remote_menu",
-              "reason": "ui_hdmi_allowed_in_current_mode: 0 candidates, 0 verified results"
-            },
-            {
               "locator": "usb_normal_ids",
               "reason": "Factory configuration default image is truncated or lacks its signature"
             },
