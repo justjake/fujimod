@@ -1921,6 +1921,19 @@ mod tests {
         assert_eq!(read(&mut engine, &mut h, 0xfff98000), 1);
         engine.restore(&saved).unwrap();
         assert_eq!(engine.state.status, 1);
+        // The X-T20 catalog's start mask 5: the command in +0x04 bits 0..2 is 1
+        // or 7 for a still and 6 for develop-RAW's second job; 2 starts nothing.
+        let mut engine = block()
+            .with_job(Job {
+                start: (4, 5),
+                ..job
+            })
+            .unwrap();
+        write(&mut engine, &mut h, 0xfff98004, 0x2);
+        write(&mut engine, &mut h, 0xfff98004, 0x22_0000);
+        assert_eq!(engine.next_deadline(20), None);
+        write(&mut engine, &mut h, 0xfff98004, 0x22_0006);
+        assert_eq!(engine.next_deadline(20), Some(30));
     }
 
     #[test]
