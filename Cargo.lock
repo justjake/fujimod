@@ -3305,6 +3305,7 @@ dependencies = [
  "memchr",
  "naga",
  "naga-types",
+ "nix",
  "num-traits",
  "once_cell",
  "percent-encoding",
