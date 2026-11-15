@@ -222,89 +222,14 @@ function Photo(props: { recipe: Recipe }) {
   );
 }
 
-/* ---- Look -------------------------------------------------------------------- */
+/* ---- Designs ----------------------------------------------------------------- */
 
-/** Two column treatments to compare: FUJIMOD SET-UP's beveled rows, or the
- * root menu's flat rows. */
-type Finish = 'emboss' | 'flat';
+/* Five whole designs of the same layout, beside the embossed one built first.
+   Each sets every surface: the column, its rows and focus, the icon column,
+   the chosen choice, the slider's form, the title box, the legend and the
+   fly-outs. */
 
-interface Skin {
-  panel: string;
-  /** The column's outer edge. */
-  edge: string;
-  row: (focused: boolean) => JSX.CSSProperties;
-  /** The row's own top and bottom lines, which a drawer's contents stay between. */
-  lines: { top: number; bottom: number };
-}
-
-const SKINS: Record<Finish, Skin> = {
-  emboss: {
-    panel: 'rgb(34 34 36 / 0.88)',
-    edge: 'inset -1px 0 0 rgb(255 255 255 / 0.3), inset -3px 0 0 #000',
-    row: (focused) => ({
-      background: focused ? 'rgb(88 88 92 / 0.96)' : undefined,
-      'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -2px 0 #000',
-    }),
-    lines: { top: 1, bottom: 2 },
-  },
-  flat: {
-    panel: 'rgb(24 24 24 / 0.88)',
-    edge: 'inset -1px 0 0 #3e3e42',
-    row: (focused) => ({
-      background: focused ? 'rgb(58 58 60 / 0.97)' : undefined,
-      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.08)',
-    }),
-    lines: { top: 0, bottom: 1 },
-  },
-};
-
-/** How a row's control area sits beside its icon: behind a stroke alone, in a
- * darker well, or on a lighter shelf. */
-type Drawer = 'line' | 'well' | 'shelf';
-
-const DRAWERS: Record<Drawer, string | undefined> = {
-  line: undefined,
-  well: 'rgb(0 0 0 / 0.5)',
-  shelf: 'rgb(255 255 255 / 0.11)',
-};
-
-/* ---- Layout ------------------------------------------------------------------ */
-
-/** Eleven rows fill the 480-pixel screen without scrolling. */
-const ROW = 43;
-const ICON_CELL = 52;
-/** The icon column, before the stroke that starts each row's drawer. */
-const ICON_COLUMN = 58;
-const WIDTH = 280;
-const COMPARE_WIDTH = 300;
-const STRIPE = 4;
-/** Where clipped rows or choices fade out, to show that more follow. */
-const FADE = 18;
-/** The focus frame around a row's chosen cell or value thumb, and the gap
- * between the frame and the thumb. */
-const FRAME = 3;
-const FRAME_GAP = 2;
-/** From a slider's ends to its first and last steps: half a framed value thumb. */
-const INSET = 26;
-
-/** The same scroll for every column, so A and B stay in lockstep. */
-function scrollFor(focus: number, height: number): number {
-  const max = Math.max(0, SETTINGS.length * ROW - height);
-  return Math.max(0, Math.min(max, focus * ROW - (height - ROW) / 2));
-}
-
-const CARD = 'rgb(24 24 24 / 0.82)';
-const BODY = 'rgb(30 30 32 / 0.96)';
-const LIGHT = 'font-light tracking-[0.08em] uppercase';
-/** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
-const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
-
-/* ---- Selection --------------------------------------------------------------- */
-
-/** Treatments to compare for a row's chosen choice and its value thumb. Each
- * fills the drawer's height and shows focus and a change from the compare
- * look its own way. */
-type Selection = 'tile' | 'invert' | 'accent' | 'brackets' | 'rules' | 'spotlight';
+type DesignId = 'embossed' | 'paper' | 'viewfinder' | 'dial' | 'meter' | 'outline';
 
 interface Mark {
   focused: boolean;
@@ -329,146 +254,376 @@ interface Look {
   pip?: string;
 }
 
-interface ThumbLook {
-  /** The full-height box the thumb sits in. */
-  box: Look;
-  /** The thumb fills its box rather than sitting inside the frame's gap. */
-  fill: boolean;
-  thumb: string;
+/** How a slider row draws its steps. */
+type SliderForm =
+  /** A track with ticks, zero to the value filled, a square thumb carrying the number. */
+  | 'thumb'
+  /** A scale of ticks with a full-height needle on the value, the number at the end. */
+  | 'ruler'
+  /** Every step printed; the value large, the others small. */
+  | 'digits'
+  /** One block per step, zero to the value lit, the number at the end. */
+  | 'blocks';
+
+interface SliderColors {
+  track: string;
+  tick: string;
+  zero: string;
+  fill: string;
+  /** The value's box (thumb, needle label or lit digit) and its ink. */
+  value: (mark: Mark) => Look;
+  /** Steps printed but not chosen ('digits'). */
+  other: string;
 }
 
-interface SelectionStyle {
+interface Card {
+  style: JSX.CSSProperties;
+  class: string;
+}
+
+interface Design {
   label: string;
+  panel: JSX.CSSProperties;
+  /** The column's edge on the side that meets the picture. */
+  edge: (side: 'left' | 'right') => string | undefined;
+  row: (focused: boolean) => JSX.CSSProperties;
+  /** The row's own top and bottom lines, which a drawer's contents stay between. */
+  lines: { top: number; bottom: number };
+  /** How the focused row is marked, beyond its own surface. */
+  focus: 'stripe' | 'corners' | 'frame' | 'none';
+  focusColor: string;
+  iconInk: (focused: boolean) => string;
+  /** The stroke after the icon column. */
+  divider?: (focused: boolean) => string | undefined;
+  drawer?: (focused: boolean) => string | undefined;
+  choiceFont: string;
   chosen: (mark: Mark) => Look;
-  /** Ink of the choices not chosen, in a focused row or not. */
+  /** Ink of the choices not chosen. */
   other: (focused: boolean) => string;
-  thumb: (mark: Mark) => ThumbLook;
+  slider: SliderForm;
+  sliderColors: (focused: boolean) => SliderColors;
+  card: Card;
+  legend: { box: JSX.CSSProperties; key: JSX.CSSProperties };
+  /** The fly-out's body below its band; the band is the focused row. */
+  body: JSX.CSSProperties;
+  /** Drawn under everything in the column, for legibility over the picture. */
+  filter?: string;
 }
 
 const ACCENT = 'var(--accent)';
-/** The inverted tile and thumb away from focus: opaque, so the track stays behind it. */
-const INVERT_REST = '#b4b4b8';
 const ring = (width: number, color: string) => `inset 0 0 0 ${width}px ${color}`;
 const top = (width: number, color: string) => `inset 0 ${width}px 0 ${color}`;
 const bottom = (width: number, color: string) => `inset 0 -${width}px 0 ${color}`;
 /** Box shadows listed first paint on top; false entries drop out. */
-const edges = (...list: (string | false)[]) =>
-  list.filter((edge): edge is string => edge !== false).join(', ') || undefined;
+const edges = (...list: (string | false | undefined)[]) =>
+  list.filter((edge): edge is string => typeof edge === 'string').join(', ') || undefined;
 
-/** The thumb's look when only its number shows a change. */
-const plainThumb = (mark: Mark, box: JSX.CSSProperties = {}): ThumbLook => ({
-  box: { style: box, ink: mark.changed ? ACCENT : '#000' },
-  fill: false,
-  thumb: '#fff',
-});
+const PAPER = 'rgb(236 234 228 / 0.95)';
+const PAPER_INK = '#16161a';
+const DIAL_PLATE = 'rgb(46 46 48 / 0.97)';
+const DIAL_LIT = '#f1f1ef';
 
-const SELECTIONS: Record<Selection, SelectionStyle> = {
-  tile: {
-    label: 'Tile',
+const DESIGNS: Record<DesignId, Design> = {
+  embossed: {
+    label: 'Embossed',
+    panel: { background: 'rgb(34 34 36 / 0.88)' },
+    edge: (side) =>
+      side === 'right'
+        ? 'inset -1px 0 0 rgb(255 255 255 / 0.3), inset -3px 0 0 #000'
+        : 'inset 1px 0 0 rgb(255 255 255 / 0.3), inset 3px 0 0 #000',
+    row: (focused) => ({
+      background: focused ? 'rgb(88 88 92 / 0.96)' : undefined,
+      'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -2px 0 #000',
+    }),
+    lines: { top: 1, bottom: 2 },
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => '#fff',
+    divider: () => 'rgb(255 255 255 / 0.22)',
+    drawer: () => 'rgb(255 255 255 / 0.11)',
+    choiceFont: 'text-[16px] font-light tracking-[0.08em] uppercase',
     chosen: (m) => ({
       style: {
         background: 'rgb(255 255 255 / 0.2)',
-        'box-shadow': edges(m.changed && bottom(FRAME, ACCENT), m.focused && ring(FRAME, '#fff')),
+        'box-shadow': edges(m.changed && bottom(3, ACCENT), m.focused && ring(3, '#fff')),
       },
       ink: '#fff',
     }),
     other: () => '#fff',
-    thumb: (m) => plainThumb(m, { 'box-shadow': m.focused ? ring(FRAME, '#fff') : undefined }),
-  },
-  invert: {
-    label: 'Inverted',
-    chosen: (m) => ({
-      style: { background: m.focused ? '#fff' : INVERT_REST },
-      ink: m.changed ? ACCENT : '#000',
-    }),
-    other: () => '#fff',
-    thumb: (m) => ({
-      box: { style: {}, ink: m.changed ? ACCENT : '#000' },
-      fill: m.focused,
-      thumb: m.focused ? '#fff' : INVERT_REST,
-    }),
-  },
-  accent: {
-    label: 'Accent',
-    chosen: (m) => ({
-      style: m.focused
-        ? { background: ACCENT }
-        : { 'box-shadow': bottom(FRAME, 'rgb(255 255 255 / 0.85)') },
-      ink: '#fff',
-      pip: m.changed ? (m.focused ? '#fff' : ACCENT) : undefined,
-    }),
-    other: () => '#fff',
-    thumb: (m) =>
-      m.focused
-        ? {
-            box: {
-              style: { background: ACCENT },
-              ink: '#fff',
-              pip: m.changed ? '#fff' : undefined,
-            },
-            fill: true,
-            thumb: ACCENT,
-          }
-        : plainThumb(m),
-  },
-  brackets: {
-    label: 'Brackets',
-    chosen: (m) => ({
-      style: {},
-      ink: '#fff',
-      corners: m.focused
-        ? { arm: 12, weight: FRAME, color: '#fff', lower: m.changed ? ACCENT : undefined }
-        : {
-            arm: 8,
-            weight: 2,
-            color: 'rgb(255 255 255 / 0.7)',
-            lower: m.changed ? ACCENT : undefined,
-          },
-    }),
-    other: () => '#fff',
-    thumb: (m) => ({
-      ...plainThumb(m),
-      box: {
-        style: {},
+    slider: 'thumb',
+    sliderColors: () => ({
+      track: 'rgb(255 255 255 / 0.35)',
+      tick: 'rgb(255 255 255 / 0.55)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => ({
+        style: { background: '#fff', 'box-shadow': m.focused ? ring(3, '#fff') : undefined },
         ink: m.changed ? ACCENT : '#000',
-        corners: m.focused ? { arm: 10, weight: FRAME, color: '#fff' } : undefined,
-      },
-    }),
-  },
-  rules: {
-    label: 'Rules',
-    chosen: (m) => {
-      const weight = m.focused ? FRAME : 2;
-      const rule = m.focused ? '#fff' : 'rgb(255 255 255 / 0.6)';
-      return {
-        style: {
-          'box-shadow': edges(
-            top(weight, rule),
-            m.changed ? bottom(FRAME, ACCENT) : bottom(weight, rule),
-          ),
-        },
-        ink: '#fff',
-      };
-    },
-    other: () => '#fff',
-    thumb: (m) =>
-      plainThumb(m, {
-        'box-shadow': m.focused ? edges(top(FRAME, '#fff'), bottom(FRAME, '#fff')) : undefined,
       }),
+      other: '#fff',
+    }),
+    card: {
+      style: { background: 'rgb(24 24 24 / 0.82)', color: '#fff' },
+      class: 'font-light tracking-[0.14em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(0 0 0 / 0.6)', color: '#fff' },
+      key: { background: '#fff', color: '#000' },
+    },
+    body: { background: 'rgb(30 30 32 / 0.96)', 'box-shadow': ring(1, '#3e3e42'), color: '#fff' },
   },
-  spotlight: {
-    label: 'Spotlight',
+
+  /* Printed, like the engraving on a top dial: black ink on warm paper, the
+     chosen choice a solid black block, a change in red. */
+  paper: {
+    label: 'Paper',
+    panel: { background: PAPER },
+    edge: (side) => (side === 'right' ? 'inset -2px 0 0 #000' : 'inset 2px 0 0 #000'),
+    row: (focused) => ({
+      background: focused ? 'rgb(0 0 0 / 0.08)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(0 0 0 / 0.16)',
+    }),
+    lines: { top: 0, bottom: 1 },
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => PAPER_INK,
+    divider: () => 'rgb(0 0 0 / 0.2)',
+    choiceFont: 'text-[16px] font-medium tracking-[0.06em] uppercase',
     chosen: (m) => ({
       style: {
-        background: m.focused ? 'rgb(0 0 0 / 0.72)' : undefined,
-        'box-shadow': m.changed ? bottom(FRAME, ACCENT) : undefined,
+        background: m.focused ? PAPER_INK : 'rgb(0 0 0 / 0.14)',
+        'box-shadow': m.changed ? bottom(4, ACCENT) : undefined,
+      },
+      ink: m.focused ? '#fff' : PAPER_INK,
+    }),
+    other: () => 'rgb(22 22 26 / 0.75)',
+    slider: 'thumb',
+    sliderColors: () => ({
+      track: 'rgb(0 0 0 / 0.3)',
+      tick: 'rgb(0 0 0 / 0.45)',
+      zero: PAPER_INK,
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: m.focused ? PAPER_INK : PAPER,
+          'box-shadow': edges(m.changed && bottom(4, ACCENT), ring(2, PAPER_INK)),
+        },
+        ink: m.focused ? '#fff' : PAPER_INK,
+      }),
+      other: PAPER_INK,
+    }),
+    card: {
+      style: { background: PAPER, color: PAPER_INK, 'box-shadow': ring(2, PAPER_INK) },
+      class: 'font-medium tracking-[0.12em] uppercase',
+    },
+    legend: {
+      box: { background: PAPER, color: PAPER_INK },
+      key: { background: PAPER_INK, color: '#fff' },
+    },
+    body: { background: PAPER, color: PAPER_INK, 'box-shadow': ring(2, PAPER_INK) },
+  },
+
+  /* The EVF's own language: no boxes, white type with a hard shadow straight
+     on a dimmed picture, the focused row held in AF-frame corners, sliders as
+     an exposure scale with a needle. */
+  viewfinder: {
+    label: 'Viewfinder',
+    panel: { background: 'rgb(0 0 0 / 0.42)' },
+    edge: () => undefined,
+    row: (focused) => ({ background: focused ? 'rgb(0 0 0 / 0.38)' : undefined }),
+    lines: { top: 0, bottom: 0 },
+    focus: 'corners',
+    focusColor: '#fff',
+    iconInk: () => '#fff',
+    choiceFont: 'text-[16px] font-normal tracking-[0.1em] uppercase',
+    chosen: (m) => ({
+      style: { 'box-shadow': bottom(3, m.changed ? ACCENT : '#fff') },
+      ink: '#fff',
+    }),
+    other: (focused) => (focused ? 'rgb(255 255 255 / 0.62)' : 'rgb(255 255 255 / 0.45)'),
+    slider: 'ruler',
+    sliderColors: (focused) => ({
+      track: 'rgb(255 255 255 / 0.6)',
+      tick: 'rgb(255 255 255 / 0.7)',
+      zero: '#fff',
+      fill: focused ? '#fff' : 'rgb(255 255 255 / 0.85)',
+      value: (m) => ({ style: {}, ink: m.changed ? '#ff5a4a' : '#fff' }),
+      other: '#fff',
+    }),
+    card: {
+      style: { color: '#fff', 'text-shadow': '0 2px 0 #000, 0 0 3px #000' },
+      class: 'font-normal tracking-[0.14em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(0 0 0 / 0.45)', color: '#fff' },
+      key: { background: '#fff', color: '#000' },
+    },
+    body: { background: 'rgb(0 0 0 / 0.62)', color: '#fff' },
+    filter: 'drop-shadow(0 1px 0 #000)',
+  },
+
+  /* Machined plates with gaps between them. The focused plate lights up white
+     with black ink; only the chosen choice is bright, and sliders print every
+     step like a dial's scale with the value large. */
+  dial: {
+    label: 'Dial',
+    panel: { background: 'rgb(12 12 12 / 0.9)' },
+    edge: () => undefined,
+    row: (focused) => ({
+      background: focused ? DIAL_LIT : DIAL_PLATE,
+      'box-shadow': edges(bottom(3, 'rgb(12 12 12)'), focused && bottom(5, ACCENT)),
+    }),
+    lines: { top: 0, bottom: 3 },
+    focus: 'none',
+    focusColor: ACCENT,
+    iconInk: (focused) => (focused ? '#000' : '#fff'),
+    divider: (focused) => (focused ? 'rgb(0 0 0 / 0.25)' : 'rgb(0 0 0 / 0.6)'),
+    choiceFont: 'text-[17px] font-semibold tracking-[0.04em] uppercase',
+    chosen: (m) => ({
+      style: {},
+      ink: m.changed ? ACCENT : m.focused ? '#000' : '#fff',
+    }),
+    other: (focused) => (focused ? 'rgb(0 0 0 / 0.28)' : 'rgb(255 255 255 / 0.26)'),
+    slider: 'digits',
+    sliderColors: (focused) => ({
+      track: 'transparent',
+      tick: 'transparent',
+      zero: 'transparent',
+      fill: ACCENT,
+      value: (m) => ({ style: {}, ink: m.changed ? ACCENT : focused ? '#000' : '#fff' }),
+      other: focused ? 'rgb(0 0 0 / 0.32)' : 'rgb(255 255 255 / 0.3)',
+    }),
+    card: {
+      style: { background: DIAL_LIT, color: '#000' },
+      class: 'font-semibold tracking-[0.06em] uppercase',
+    },
+    legend: {
+      box: { background: DIAL_LIT, color: '#000' },
+      key: { background: '#000', color: '#fff' },
+    },
+    body: { background: 'rgb(12 12 12 / 0.94)', color: '#fff', 'box-shadow': ring(2, DIAL_LIT) },
+  },
+
+  /* An instrument panel: near-black, the focused row held in a red frame,
+     choices as indicator lamps (a lit bar over the chosen one), sliders as
+     segment meters lit from zero. */
+  meter: {
+    label: 'Meter',
+    panel: { background: 'rgb(6 6 6 / 0.84)' },
+    edge: (side) => (side === 'right' ? 'inset -1px 0 0 #333' : 'inset 1px 0 0 #333'),
+    row: () => ({ 'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.1)' }),
+    lines: { top: 0, bottom: 1 },
+    focus: 'frame',
+    focusColor: ACCENT,
+    iconInk: (focused) => (focused ? '#fff' : 'rgb(255 255 255 / 0.8)'),
+    choiceFont: 'text-[15px] font-medium tracking-[0.12em] uppercase',
+    chosen: (m) => ({
+      style: {
+        'box-shadow': top(4, m.focused ? ACCENT : 'rgb(255 255 255 / 0.85)'),
+        background: 'rgb(255 255 255 / 0.06)',
+      },
+      ink: '#fff',
+      pip: m.changed ? ACCENT : undefined,
+    }),
+    other: () => 'rgb(255 255 255 / 0.38)',
+    slider: 'blocks',
+    sliderColors: (focused) => ({
+      track: 'rgb(255 255 255 / 0.12)',
+      tick: 'rgb(255 255 255 / 0.12)',
+      zero: 'rgb(255 255 255 / 0.5)',
+      fill: focused ? ACCENT : 'rgb(255 255 255 / 0.82)',
+      value: (m) => ({ style: {}, ink: m.changed ? '#ff5a4a' : '#fff' }),
+      other: '#fff',
+    }),
+    card: {
+      style: { background: 'rgb(6 6 6 / 0.84)', color: '#fff', 'box-shadow': top(3, ACCENT) },
+      class: 'font-medium tracking-[0.14em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(6 6 6 / 0.84)', color: '#fff' },
+      key: { background: '#fff', color: '#000' },
+    },
+    body: { background: 'rgb(6 6 6 / 0.94)', color: '#fff', 'box-shadow': ring(2, ACCENT) },
+  },
+
+  /* Wireframe: hairlines only over a light veil, everything drawn in 1px
+     white strokes; focus thickens and fills. */
+  outline: {
+    label: 'Outline',
+    panel: { background: 'rgb(0 0 0 / 0.5)' },
+    edge: (side) => (side === 'right' ? 'inset -1px 0 0 #fff' : 'inset 1px 0 0 #fff'),
+    row: (focused) => ({
+      background: focused ? 'rgb(255 255 255 / 0.1)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.4)',
+    }),
+    lines: { top: 0, bottom: 1 },
+    focus: 'frame',
+    focusColor: '#fff',
+    iconInk: () => '#fff',
+    divider: () => 'rgb(255 255 255 / 0.4)',
+    choiceFont: 'text-[16px] font-light tracking-[0.1em] uppercase',
+    chosen: (m) => ({
+      style: {
+        'box-shadow': ring(m.focused ? 2 : 1, m.changed ? ACCENT : '#fff'),
+        background: m.focused ? 'rgb(255 255 255 / 0.14)' : undefined,
       },
       ink: '#fff',
     }),
-    other: (focused) => (focused ? 'rgb(255 255 255 / 0.6)' : 'rgb(255 255 255 / 0.3)'),
-    thumb: (m) => plainThumb(m, { background: m.focused ? 'rgb(0 0 0 / 0.72)' : undefined }),
+    other: () => 'rgb(255 255 255 / 0.7)',
+    slider: 'thumb',
+    sliderColors: () => ({
+      track: 'rgb(255 255 255 / 0.7)',
+      tick: 'rgb(255 255 255 / 0.7)',
+      zero: '#fff',
+      fill: '#fff',
+      value: (m) => ({
+        style: {
+          background: m.focused ? '#fff' : 'rgb(0 0 0 / 0.75)',
+          'box-shadow': ring(m.focused ? 2 : 1, m.changed ? ACCENT : '#fff'),
+        },
+        ink: m.focused ? '#000' : '#fff',
+      }),
+      other: '#fff',
+    }),
+    card: {
+      style: { background: 'rgb(0 0 0 / 0.5)', color: '#fff', 'box-shadow': ring(1, '#fff') },
+      class: 'font-light tracking-[0.14em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(0 0 0 / 0.5)', color: '#fff', 'box-shadow': ring(1, '#fff') },
+      key: { background: '#fff', color: '#000' },
+    },
+    body: { background: 'rgb(0 0 0 / 0.72)', color: '#fff', 'box-shadow': ring(1, '#fff') },
   },
 };
+
+/* ---- Layout ------------------------------------------------------------------ */
+
+/** Eleven rows fill the 480-pixel screen without scrolling. */
+const ROW = 43;
+const ICON_CELL = 52;
+/** The icon column, before the stroke that starts each row's drawer. */
+const ICON_COLUMN = 58;
+const WIDTH = 280;
+const COMPARE_WIDTH = 300;
+const STRIPE = 4;
+/** Where clipped rows or choices fade out, to show that more follow. */
+const FADE = 18;
+/** The focus frame around a value thumb, and the gap between the frame and the thumb. */
+const FRAME = 3;
+const FRAME_GAP = 2;
+/** From a slider's ends to its first and last steps: half a framed value thumb. */
+const INSET = 26;
+
+/** The same scroll for every column, so A and B stay in lockstep. */
+function scrollFor(focus: number, height: number): number {
+  const max = Math.max(0, SETTINGS.length * ROW - height);
+  return Math.max(0, Math.min(max, focus * ROW - (height - ROW) / 2));
+}
+
+const LIGHT = 'font-light tracking-[0.08em] uppercase';
+/** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
+const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
 
 function Corners(props: CornerMarks) {
   const corners = [
@@ -525,23 +680,23 @@ type Send = (action: Action) => void;
 
 /* ---- Rows -------------------------------------------------------------------- */
 
-/** Stock icons drawn as the Q tiles draw them: the ink in white, its
+/** Stock icons drawn as the Q tiles draw them: the ink in one color, its
  * counters cut through to the surface beneath. */
-function Ink(props: { src: string; class: string; mode: 'alpha' | 'luminance'; color?: string }) {
+function Ink(props: { src: string; class: string; color: string }) {
   return (
     <span
-      class={`shrink-0 bg-white ${props.class}`}
+      class={`shrink-0 ${props.class}`}
       style={{
         '-webkit-mask': `url(${props.src}) center / contain no-repeat`,
         mask: `url(${props.src}) center / contain no-repeat`,
-        'mask-mode': props.mode,
+        'mask-mode': 'alpha',
         'background-color': props.color,
       }}
     />
   );
 }
 
-function RowIconView(props: { icon: RowIcon }) {
+function RowIconView(props: { icon: RowIcon; color: string }) {
   return (
     <Show
       when={'stock' in props.icon ? props.icon.stock : undefined}
@@ -549,31 +704,29 @@ function RowIconView(props: { icon: RowIcon }) {
         <Ink
           src={`${MOD}/${(props.icon as { mod: string }).mod}.svg`}
           class="-mx-[2px] h-[30px] w-[44px]"
-          mode="alpha"
+          color={props.color}
         />
       }
     >
       {(id) => (
         // Q icons are 80 by 48 with their ink in the middle 52 by 40; at 0.75
         // the ink is the root menu's 39 by 30.
-        <Ink src={stock(id())} class="-mx-[10px] h-[36px] w-[60px]" mode="alpha" />
+        <Ink src={stock(id())} class="-mx-[10px] h-[36px] w-[60px]" color={props.color} />
       )}
     </Show>
   );
 }
 
-/** Every choice in a row, scrolled to keep the chosen one in view. Text
- * choices sit as close as their words allow. */
-function ChoiceStrip(props: {
-  setting: ChoiceSetting;
-  value: number;
-  width: number;
+interface ControlProps {
+  design: Design;
   focused: boolean;
   changed: boolean;
-  selection: SelectionStyle;
   pick: (value: number) => void;
-}) {
-  const look = () => props.selection.chosen({ focused: props.focused, changed: props.changed });
+}
+
+/** Every choice in a row, scrolled to keep the chosen one in view. */
+function ChoiceStrip(props: ControlProps & { setting: ChoiceSetting; value: number; width: number }) {
+  const look = () => props.design.chosen({ focused: props.focused, changed: props.changed });
   let track: HTMLDivElement | undefined;
   const [offset, setOffset] = createSignal(0);
   const [more, setMore] = createSignal(false);
@@ -615,7 +768,7 @@ function ChoiceStrip(props: {
         <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
           {(item) => {
             const chosen = () => item.i === props.value;
-            const ink = () => (chosen() ? look().ink : props.selection.other(props.focused));
+            const ink = () => (chosen() ? look().ink : props.design.other(props.focused));
             return (
               <div
                 class="relative flex shrink-0 items-center justify-center"
@@ -632,14 +785,12 @@ function ChoiceStrip(props: {
                 <Show
                   when={item.choice.icon}
                   fallback={
-                    <span class={`text-[16px] ${LIGHT}`} style={{ color: ink() }}>
+                    <span class={props.design.choiceFont} style={{ color: ink() }}>
                       {item.choice.name}
                     </span>
                   }
                 >
-                  {(icon) => (
-                    <Ink src={stock(icon())} class="h-[24px] w-[48px]" mode="alpha" color={ink()} />
-                  )}
+                  {(icon) => <Ink src={stock(icon())} class="h-[24px] w-[48px]" color={ink()} />}
                 </Show>
                 <Show when={chosen()}>
                   <Marks look={look()} />
@@ -653,84 +804,214 @@ function ChoiceStrip(props: {
   );
 }
 
+type SliderProps = ControlProps & { setting: SliderSetting; value: number };
+
+/** Picks the step nearest a click across `inset` to `width - inset`. */
+function pickStep(e: MouseEvent, count: number, inset: number, pick: (value: number) => void) {
+  const element = e.currentTarget as HTMLElement;
+  e.stopPropagation();
+  const box = element.getBoundingClientRect();
+  const scale = box.width / element.offsetWidth;
+  const inner = (e.clientX - box.left) / scale - inset;
+  const i = Math.round((inner / (element.offsetWidth - 2 * inset)) * (count - 1));
+  pick(Math.max(0, Math.min(count - 1, i)));
+}
+
+function SliderView(props: SliderProps) {
+  return (
+    <>
+      <Show when={props.design.slider === 'thumb'}>
+        <ThumbSlider {...props} />
+      </Show>
+      <Show when={props.design.slider === 'ruler'}>
+        <RulerSlider {...props} />
+      </Show>
+      <Show when={props.design.slider === 'digits'}>
+        <DigitSlider {...props} />
+      </Show>
+      <Show when={props.design.slider === 'blocks'}>
+        <BlockSlider {...props} />
+      </Show>
+    </>
+  );
+}
+
 /** FUJIMOD SET-UP's segment bar: zero to the value filled, the value itself a
- * wider white thumb that carries the number. */
-function Segments(props: {
-  setting: SliderSetting;
-  value: number;
-  focused: boolean;
-  changed: boolean;
-  selection: SelectionStyle;
-  pick: (value: number) => void;
-}) {
-  const look = () => props.selection.thumb({ focused: props.focused, changed: props.changed });
+ * square thumb that carries the number. */
+function ThumbSlider(props: SliderProps) {
+  const colors = () => props.design.sliderColors(props.focused);
+  const look = () => colors().value({ focused: props.focused, changed: props.changed });
   const count = () => props.setting.steps.length;
   const zero = () => props.setting.steps.indexOf(0);
   const x = (i: number) => `calc(${INSET}px + (100% - ${2 * INSET}px) * ${i / (count() - 1)})`;
   return (
-    <div
-      class="relative mx-[6px] flex-1"
-      onClick={(e) => {
-        e.stopPropagation();
-        const box = e.currentTarget.getBoundingClientRect();
-        const scale = box.width / e.currentTarget.offsetWidth;
-        const inner = (e.clientX - box.left) / scale - INSET;
-        const i = Math.round((inner / (e.currentTarget.offsetWidth - 2 * INSET)) * (count() - 1));
-        props.pick(Math.max(0, Math.min(count() - 1, i)));
-      }}
-    >
+    <div class="relative mx-[6px] flex-1" onClick={(e) => pickStep(e, count(), INSET, props.pick)}>
       <div
-        class="absolute top-1/2 h-[2px] -translate-y-1/2 bg-white/35"
-        style={{ left: `${INSET}px`, right: `${INSET}px` }}
+        class="absolute top-1/2 h-[2px] -translate-y-1/2"
+        style={{ left: `${INSET}px`, right: `${INSET}px`, background: colors().track }}
       />
       <div
-        class="absolute top-1/2 h-[4px] -translate-y-1/2 bg-(--accent)"
+        class="absolute top-1/2 h-[4px] -translate-y-1/2"
         style={{
           left: x(Math.min(zero(), props.value)),
           width: `calc((100% - ${2 * INSET}px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
+          background: colors().fill,
         }}
       />
       <For each={props.setting.steps.map((step, i) => i)}>
         {(i) => (
           <span
             class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-            style={
-              i === zero()
-                ? { left: x(i), width: '4px', height: '26px', background: '#fff' }
-                : {
-                    left: x(i),
-                    width: '2px',
-                    height: '10px',
-                    background: 'rgb(255 255 255 / 0.55)',
-                  }
-            }
+            style={{
+              left: x(i),
+              width: i === zero() ? '4px' : '2px',
+              height: i === zero() ? '26px' : '10px',
+              background: i === zero() ? colors().zero : colors().tick,
+            }}
           />
         )}
       </For>
       <span
         class="absolute inset-y-0 flex -translate-x-1/2"
-        style={{
-          left: x(props.value),
-          padding: look().fill ? undefined : `${FRAME + FRAME_GAP}px`,
-          ...look().box.style,
-        }}
+        style={{ left: x(props.value), padding: `${FRAME + FRAME_GAP}px` }}
       >
         <span
-          class="flex items-center justify-center px-[4px]"
-          style={{
-            'min-width': `${look().fill ? 40 + 2 * (FRAME + FRAME_GAP) : 40}px`,
-            background: look().thumb,
-          }}
+          class="relative flex min-w-[40px] items-center justify-center px-[4px]"
+          style={look().style}
         >
           <span
             class="text-[17px] leading-none font-semibold tabular-nums"
-            style={{ color: look().box.ink }}
+            style={{ color: look().ink }}
           >
             {fmt(props.setting.steps[props.value])}
           </span>
+          <Marks look={look()} />
         </span>
-        <Marks look={look().box} />
       </span>
+    </div>
+  );
+}
+
+/** The value printed at the row's end, for forms whose scale carries no number. */
+function ValueLabel(props: SliderProps & { class: string }) {
+  const look = () =>
+    props.design.sliderColors(props.focused).value({ focused: props.focused, changed: props.changed });
+  return (
+    <span
+      class={`flex w-[46px] shrink-0 items-center justify-end pr-[8px] tabular-nums ${props.class}`}
+      style={{ color: look().ink, ...look().style }}
+    >
+      {fmt(props.setting.steps[props.value])}
+    </span>
+  );
+}
+
+/** An exposure scale: ticks, a longer tick at zero, and a full-height needle
+ * on the value; the number stands at the row's end. */
+function RulerSlider(props: SliderProps) {
+  const colors = () => props.design.sliderColors(props.focused);
+  const count = () => props.setting.steps.length;
+  const zero = () => props.setting.steps.indexOf(0);
+  const inset = 10;
+  const x = (i: number) => `calc(${inset}px + (100% - ${2 * inset}px) * ${i / (count() - 1)})`;
+  return (
+    <div class="flex flex-1 items-stretch">
+      <div class="relative flex-1" onClick={(e) => pickStep(e, count(), inset, props.pick)}>
+        <div
+          class="absolute bottom-[12px] h-[1px]"
+          style={{ left: `${inset}px`, right: `${inset}px`, background: colors().track }}
+        />
+        <For each={props.setting.steps.map((step, i) => i)}>
+          {(i) => (
+            <span
+              class="absolute bottom-[12px] -translate-x-1/2"
+              style={{
+                left: x(i),
+                width: i === zero() ? '2px' : '1px',
+                height: i === zero() ? '16px' : '8px',
+                background: i === zero() ? colors().zero : colors().tick,
+              }}
+            />
+          )}
+        </For>
+        <span
+          class="absolute bottom-[3px] -translate-x-1/2 border-x-[6px] border-b-[8px] border-x-transparent"
+          style={{ left: x(props.value), 'border-bottom-color': colors().fill }}
+        />
+        <span
+          class="absolute top-[5px] bottom-[12px] w-[3px] -translate-x-1/2"
+          style={{ left: x(props.value), background: colors().fill }}
+        />
+      </div>
+      <ValueLabel {...props} class="text-[19px] font-normal" />
+    </div>
+  );
+}
+
+/** Every step printed, as on a dial; the value large and bright. */
+function DigitSlider(props: SliderProps) {
+  const colors = () => props.design.sliderColors(props.focused);
+  const look = () => colors().value({ focused: props.focused, changed: props.changed });
+  const short = (step: Step) => (typeof step === 'string' ? step : fmt(step).replace('+', ''));
+  /** Five steps around the value, as much of the scale as a dial window shows. */
+  const shown = () => {
+    const steps = props.setting.steps.map((step, i) => ({ step, i }));
+    const first = Math.max(0, Math.min(steps.length - 5, props.value - 2));
+    return steps.slice(first, first + 5);
+  };
+  return (
+    <div class="flex flex-1 items-center justify-between px-[8px]">
+      <For each={shown()}>
+        {(item) => (
+          <span
+            class="relative flex h-full items-center justify-center tabular-nums"
+            style={{
+              color: item.i === props.value ? look().ink : colors().other,
+              'font-size': item.i === props.value ? '21px' : '13px',
+              'font-weight': item.i === props.value ? 700 : 500,
+              'min-width': item.i === props.value ? '26px' : undefined,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.pick(item.i);
+            }}
+          >
+            {item.i === props.value ? fmt(item.step) : short(item.step)}
+          </span>
+        )}
+      </For>
+    </div>
+  );
+}
+
+/** A segment meter: one block per step, lit from zero to the value. */
+function BlockSlider(props: SliderProps) {
+  const colors = () => props.design.sliderColors(props.focused);
+  const zero = () => props.setting.steps.indexOf(0);
+  const lit = (i: number) =>
+    (i >= Math.min(zero(), props.value) && i <= Math.max(zero(), props.value) && i !== zero()) ||
+    i === props.value;
+  return (
+    <div class="flex flex-1 items-stretch">
+      <div class="flex flex-1 items-center gap-[3px] pl-[8px]">
+        <For each={props.setting.steps.map((step, i) => i)}>
+          {(i) => (
+            <span
+              class="h-[18px] flex-1"
+              style={{
+                background: lit(i) ? colors().fill : colors().track,
+                'box-shadow': i === zero() ? ring(1, colors().zero) : undefined,
+                height: i === props.value ? '24px' : '18px',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.pick(i);
+              }}
+            />
+          )}
+        </For>
+      </div>
+      <ValueLabel {...props} class="text-[18px] font-medium" />
     </div>
   );
 }
@@ -742,39 +1023,36 @@ function SettingRow(props: {
   focused: boolean;
   changed: boolean;
   width: number;
-  skin: Skin;
-  drawer: Drawer;
-  selection: SelectionStyle;
+  design: Design;
   side?: Side;
   send: Send;
 }) {
+  const d = () => props.design;
   const controlWidth = () => props.width - ICON_COLUMN - 1;
   const pick = (value: number) =>
     props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   return (
     <div
       class="relative flex items-stretch"
-      style={{ height: `${ROW}px`, ...props.skin.row(props.focused) }}
+      style={{ height: `${ROW}px`, ...d().row(props.focused) }}
       onClick={() => props.send({ focus: props.index, side: props.side })}
     >
-      <Show when={props.focused}>
-        <span
-          class="absolute top-[1px] bottom-[2px] left-0 bg-(--accent)"
-          style={{ width: `${STRIPE}px` }}
-        />
-      </Show>
       <div
         class="flex shrink-0 items-center justify-center"
-        style={{ width: `${ICON_COLUMN}px`, 'border-right': '1px solid rgb(255 255 255 / 0.22)' }}
+        style={{
+          width: `${ICON_COLUMN}px`,
+          'border-right': `1px solid ${d().divider?.(props.focused) ?? 'transparent'}`,
+          'padding-bottom': `${d().lines.bottom - d().lines.top}px`,
+        }}
       >
-        <RowIconView icon={props.setting.icon} />
+        <RowIconView icon={props.setting.icon} color={d().iconInk(props.focused)} />
       </div>
       <div
         class="flex min-w-0 flex-1 items-stretch"
         style={{
-          background: DRAWERS[props.drawer],
-          'padding-top': `${props.skin.lines.top}px`,
-          'padding-bottom': `${props.skin.lines.bottom}px`,
+          background: d().drawer?.(props.focused),
+          'padding-top': `${d().lines.top}px`,
+          'padding-bottom': `${d().lines.bottom}px`,
         }}
       >
         <Show
@@ -784,25 +1062,42 @@ function SettingRow(props: {
               setting={props.setting as ChoiceSetting}
               value={props.recipe[props.setting.id]}
               width={controlWidth()}
+              design={d()}
               focused={props.focused}
               changed={props.changed}
-              selection={props.selection}
               pick={pick}
             />
           }
         >
           {(slider) => (
-            <Segments
+            <SliderView
               setting={slider()}
               value={props.recipe[slider().id]}
+              design={d()}
               focused={props.focused}
               changed={props.changed}
-              selection={props.selection}
               pick={pick}
             />
           )}
         </Show>
       </div>
+      <Show when={props.focused}>
+        <Show when={d().focus === 'stripe'}>
+          <span
+            class="pointer-events-none absolute top-[1px] bottom-[2px] left-0"
+            style={{ width: `${STRIPE}px`, background: d().focusColor }}
+          />
+        </Show>
+        <Show when={d().focus === 'frame'}>
+          <span
+            class="pointer-events-none absolute inset-0"
+            style={{ 'box-shadow': ring(2, d().focusColor) }}
+          />
+        </Show>
+        <Show when={d().focus === 'corners'}>
+          <Corners arm={12} weight={3} color={d().focusColor} />
+        </Show>
+      </Show>
     </div>
   );
 }
@@ -814,30 +1109,27 @@ function Column(props: {
   focus: number;
   left: number;
   width: number;
-  skin: Skin;
-  drawer: Drawer;
-  selection: SelectionStyle;
+  design: Design;
   side?: Side;
   active?: boolean;
   send: Send;
 }) {
   const height = () => 480;
   const scroll = () => scrollFor(props.focus, height());
-  const edge = () =>
-    props.side === 'b' ? props.skin.edge.replaceAll('inset -', 'inset ') : props.skin.edge;
   return (
     <div
       class="absolute inset-y-0 flex flex-col"
       style={{
         left: `${props.left}px`,
         width: `${props.width}px`,
-        background: props.skin.panel,
-        'box-shadow': edge(),
+        ...props.design.panel,
+        'box-shadow': props.design.edge(props.side === 'b' ? 'left' : 'right'),
       }}
     >
       <div
         class="relative flex-1 overflow-hidden"
         style={{
+          filter: props.design.filter,
           'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
         }}
       >
@@ -853,9 +1145,7 @@ function Column(props: {
                   props.other !== undefined && props.other[setting.id] !== props.recipe[setting.id]
                 }
                 width={props.width}
-                skin={props.skin}
-                drawer={props.drawer}
-                selection={props.selection}
+                design={props.design}
                 side={props.side}
                 send={props.send}
               />
@@ -876,7 +1166,7 @@ function RowExtension(props: {
   top: number;
   left: number;
   width: number;
-  skin: Skin;
+  design: Design;
   title: string;
   value?: string;
   bodyHeight: number;
@@ -895,8 +1185,8 @@ function RowExtension(props: {
       }}
     >
       <div
-        class={`flex h-full items-center justify-between pr-[12px] pl-[10px] text-[19px] ${LIGHT}`}
-        style={{ ...props.skin.row(true), 'border-right': '1px solid #3e3e42' }}
+        class={`flex h-full items-center justify-between pr-[12px] pl-[10px] text-[19px] ${props.design.card.class}`}
+        style={{ ...props.design.panel, ...props.design.row(true), color: props.design.iconInk(true) }}
         onClick={() => props.onClick?.()}
       >
         <span class="truncate">{props.title}</span>
@@ -907,8 +1197,7 @@ function RowExtension(props: {
         style={{
           height: `${props.bodyHeight}px`,
           top: below() ? `${ROW}px` : `${-props.bodyHeight}px`,
-          background: BODY,
-          'box-shadow': 'inset 0 0 0 1px #3e3e42',
+          ...props.design.body,
         }}
       >
         {props.children}
@@ -975,6 +1264,7 @@ function ShiftGrid(props: { r: number; b: number; send: Send }) {
 function Legend(props: {
   hints: { glyph: string; label: string; key: string }[];
   send: Send;
+  design: Design;
   left: number;
   /** Stacked and centered on `left`, for the narrow gap between compare columns. */
   stacked?: boolean;
@@ -988,10 +1278,13 @@ function Legend(props: {
         {(hint) => (
           <div
             class="flex h-[32px] items-center gap-[8px] px-[6px] whitespace-nowrap"
-            style={{ background: 'rgb(0 0 0 / 0.6)' }}
+            style={props.design.legend.box}
             onClick={() => props.send({ key: hint.key })}
           >
-            <span class="flex h-[22px] min-w-[22px] items-center justify-center bg-white px-[3px] text-[14px] leading-none font-semibold text-black">
+            <span
+              class="flex h-[22px] min-w-[22px] items-center justify-center px-[3px] text-[14px] leading-none font-semibold"
+              style={props.design.legend.key}
+            >
               {hint.glyph}
             </span>
             <span class="pr-[4px] text-[17px] font-light tracking-[0.16em] uppercase">
@@ -1020,9 +1313,7 @@ interface EditorState {
   comparing: boolean;
   /** The compare column that takes edits. */
   side: Side;
-  finish: Finish;
-  drawer: Drawer;
-  selection: Selection;
+  design: DesignId;
 }
 
 function valueName(setting: Setting, recipe: Recipe): string {
@@ -1035,7 +1326,7 @@ function valueName(setting: Setting, recipe: Recipe): string {
 function Editor(props: { state: EditorState; send?: Send }) {
   const s = () => props.state;
   const send: Send = (action) => props.send?.(action);
-  const skin = () => SKINS[s().finish];
+  const design = () => DESIGNS[s().design];
   const focused = () => SETTINGS[s().focus];
   const rowTop = () => s().focus * ROW - scrollFor(s().focus, 480);
   const colors = palette(null);
@@ -1095,9 +1386,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
                   focus={s().focus}
                   left={side === 'a' ? 0 : 720 - COMPARE_WIDTH}
                   width={COMPARE_WIDTH}
-                  skin={skin()}
-                  drawer={s().drawer}
-                  selection={SELECTIONS[s().selection]}
+                  design={design()}
                   side={side}
                   active={s().side === side}
                   send={send}
@@ -1115,9 +1404,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
           focus={s().focus}
           left={0}
           width={WIDTH}
-          skin={skin()}
-          drawer={s().drawer}
-          selection={SELECTIONS[s().selection]}
+          design={design()}
           send={send}
         />
         <Show when={s().fly === 'none'}>
@@ -1126,12 +1413,15 @@ function Editor(props: { state: EditorState; send?: Send }) {
             style={{ left: `${WIDTH + 12}px` }}
           >
             <span
-              class="px-[12px] py-[6px] text-[22px] font-light tracking-[0.14em] uppercase"
-              style={{ background: CARD }}
+              class={`px-[12px] py-[6px] text-[22px] ${design().card.class}`}
+              style={design().card.style}
             >
               {focused().name}
             </span>
-            <span class={`px-[12px] py-[4px] text-[22px] ${LIGHT}`} style={{ background: CARD }}>
+            <span
+              class={`px-[12px] py-[4px] text-[22px] ${design().card.class}`}
+              style={design().card.style}
+            >
               {valueName(focused(), s().recipe)}
             </span>
           </div>
@@ -1146,7 +1436,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
             top={rowTop()}
             left={WIDTH}
             width={300}
-            skin={skin()}
+            design={design()}
             title={FILMS[s().recipe.film].name}
             bodyHeight={104}
             onClick={() => send({ key: 'i' })}
@@ -1161,7 +1451,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
             top={rowTop()}
             left={WIDTH}
             width={270}
-            skin={skin()}
+            design={design()}
             title="WB SHIFT"
             value={`R${fmt(s().recipe.shiftR)} B${fmt(s().recipe.shiftB)}`}
             bodyHeight={274}
@@ -1178,6 +1468,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
         <Legend
           hints={hints()}
           send={send}
+          design={design()}
           left={compare() ? 360 : WIDTH + 12}
           stacked={compare() !== undefined}
         />
@@ -1256,9 +1547,7 @@ const INITIAL: EditorState = {
   fly: 'none',
   comparing: false,
   side: 'b',
-  finish: 'emboss',
-  drawer: 'shelf',
-  selection: 'tile',
+  design: 'embossed',
 };
 
 const PADS = [
@@ -1268,17 +1557,6 @@ const PADS = [
   { label: '▶', key: 'ArrowRight' },
   { label: 'OK', key: 'Enter' },
   { label: 'BACK', key: 'Escape' },
-];
-
-const DRAWER_CHOICES: { drawer: Drawer; label: string }[] = [
-  { drawer: 'line', label: 'Stroke' },
-  { drawer: 'well', label: 'Dark drawer' },
-  { drawer: 'shelf', label: 'Light drawer' },
-];
-
-const FINISHES: { finish: Finish; label: string }[] = [
-  { finish: 'flat', label: 'Flat' },
-  { finish: 'emboss', label: 'Embossed' },
 ];
 
 /** One of several page options, as a single segmented control. */
@@ -1325,22 +1603,12 @@ function Live() {
     >
       <div class="mb-[10px] flex flex-wrap gap-[10px]">
         <Segmented
-          choices={FINISHES.map((choice) => ({ value: choice.finish, label: choice.label }))}
-          value={state().finish}
-          pick={(finish) => setState({ ...state(), finish })}
-        />
-        <Segmented
-          choices={DRAWER_CHOICES.map((choice) => ({ value: choice.drawer, label: choice.label }))}
-          value={state().drawer}
-          pick={(drawer) => setState({ ...state(), drawer })}
-        />
-        <Segmented
-          choices={(Object.keys(SELECTIONS) as Selection[]).map((selection) => ({
-            value: selection,
-            label: SELECTIONS[selection].label,
+          choices={(Object.keys(DESIGNS) as DesignId[]).map((id) => ({
+            value: id,
+            label: DESIGNS[id].label,
           }))}
-          value={state().selection}
-          pick={(selection) => setState({ ...state(), selection })}
+          value={state().design}
+          pick={(design) => setState({ ...state(), design })}
         />
       </div>
       <Fit>
@@ -1375,28 +1643,36 @@ const EDITED: Recipe = {
   shiftB: -5,
 };
 
-/** Each selection with the WB row focused and changed from A, beside other
+/** Each design with the WB row focused and changed from A, beside other
  * changed and unchanged rows. */
-const SELECTION_STATES = (Object.keys(SELECTIONS) as Selection[]).map((selection) => ({
-  id: `selection-${selection}`,
-  title: `Selection: ${SELECTIONS[selection].label}`,
-  state: {
-    ...INITIAL,
-    selection,
-    snapshot: BASE,
-    recipe: { ...EDITED, wb: 1 },
-    focus: 1,
-  } satisfies EditorState,
-}));
+const DESIGN_STATES = (Object.keys(DESIGNS) as DesignId[]).flatMap((design) => [
+  {
+    id: design,
+    title: DESIGNS[design].label,
+    state: {
+      ...INITIAL,
+      design,
+      snapshot: BASE,
+      recipe: { ...EDITED, wb: 1 },
+      focus: 1,
+    } satisfies EditorState,
+  },
+  {
+    id: `${design}-compare`,
+    title: `${DESIGNS[design].label}, compare`,
+    state: {
+      ...INITIAL,
+      design,
+      snapshot: BASE,
+      recipe: EDITED,
+      focus: 4,
+      comparing: true,
+    } satisfies EditorState,
+  },
+]);
 
 const STATES: { id: string; title: string; state: EditorState }[] = [
-  ...SELECTION_STATES,
-  { id: 'emboss', title: 'Embossed with the light drawer', state: INITIAL },
-  {
-    id: 'flat',
-    title: 'Flat with the stroke',
-    state: { ...INITIAL, finish: 'flat', drawer: 'line' },
-  },
+  ...DESIGN_STATES,
   { id: 'slider', title: 'Slider row', state: { ...INITIAL, focus: 4 } },
   {
     id: 'nr',
