@@ -271,7 +271,7 @@ pub struct Definition {
     pub pl011_uarts: Vec<Pl011Uart>,
     /// The Mali-V61 style video unit with the XP4 driver's host interface, when declared.
     #[serde(default)]
-    pub mali_v61: Option<fujimod_emulator_xp4_io::mali_v61::Options>,
+    pub mali_v61: Option<fujimod_emulator_xp4_video::mali_v61::Options>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]

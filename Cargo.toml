@@ -64,6 +64,7 @@ members = [
   "crates/emulator-exr2-isp-face",
   "crates/emulator-exr2-isp-input",
   "crates/emulator-xp4-io",
+  "crates/emulator-xp4-video",
   "crates/emulator-xp4-system",
   "crates/emulator-xp4-display",
   "crates/emulator-xp4-storage",
@@ -191,6 +192,7 @@ fujimod-emulator-exr2-isp-testing = { path = "crates/emulator-exr2-isp-testing",
 fujimod-emulator-exr2-isp-face = { path = "crates/emulator-exr2-isp-face", version = "0.1.0" }
 fujimod-emulator-exr2-isp-input = { path = "crates/emulator-exr2-isp-input", version = "0.1.0" }
 fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
+fujimod-emulator-xp4-video = { path = "crates/emulator-xp4-video", version = "0.1.0" }
 fujimod-emulator-xp4-system = { path = "crates/emulator-xp4-system", version = "0.1.0" }
 fujimod-emulator-xp4-display = { path = "crates/emulator-xp4-display", version = "0.1.0" }
 fujimod-emulator-xp4-storage = { path = "crates/emulator-xp4-storage", version = "0.1.0" }

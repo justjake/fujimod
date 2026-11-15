@@ -41,6 +41,7 @@
       "fujimod-emulator-sensor-input",
       "fujimod-emulator-xp4-display",
       "fujimod-emulator-xp4-io",
+      "fujimod-emulator-xp4-video",
       "fujimod-emulator-xp4-system",
       "fujimod-emulator-xp4-storage",
       "fujimod-emulator-xp5-display",
@@ -168,7 +169,8 @@
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
         "fujimod-emulator-xp4-storage",
-        "fujimod-emulator-xp4-system"
+        "fujimod-emulator-xp4-system",
+        "fujimod-emulator-xp4-video"
       ],
       "fujimod-emulator-xpp": [
         "fujimod-emulator-graphics",

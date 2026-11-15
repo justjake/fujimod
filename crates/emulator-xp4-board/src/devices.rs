@@ -751,9 +751,9 @@ impl Devices {
     }
     pub fn mali_v61(
         &mut self,
-        options: fujimod_emulator_xp4_io::mali_v61::Options,
+        options: fujimod_emulator_xp4_video::mali_v61::Options,
     ) -> Result<(), String> {
-        let model = fujimod_emulator_xp4_io::mali_v61::MaliV61::new(options)?;
+        let model = fujimod_emulator_xp4_video::mali_v61::MaliV61::new(options)?;
         let windows = model.windows();
         if windows
             .iter()

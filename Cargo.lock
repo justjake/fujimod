@@ -2532,6 +2532,7 @@ dependencies = [
  "fujimod-emulator-xp4-io",
  "fujimod-emulator-xp4-storage",
  "fujimod-emulator-xp4-system",
+ "fujimod-emulator-xp4-video",
  "fujimod-emulator-xpp",
  "fujimod-framebuffer-xp4",
  "fujimod-workspace-hack",
@@ -2580,6 +2581,16 @@ dependencies = [
 
 [[package]]
 name = "fujimod-emulator-xp4-system"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-video"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
