@@ -144,7 +144,8 @@ fn run() -> Result<bool, String> {
         if arguments.next().as_deref() != Some("boot") {
             return Err(HELP.into());
         }
-        let report = fujimod_emulator_xp5_bringup::run_boot(arguments.collect())?;
+        let report = fujimod_emulator_xp5_bringup::run_boot(arguments.collect())
+            .map_err(|error| format!("fujimod-emulator xp5: {error}"))?;
         println!(
             "{}",
             serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
