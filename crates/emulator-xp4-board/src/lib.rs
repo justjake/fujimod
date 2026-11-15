@@ -1156,6 +1156,7 @@ impl Session {
             face_detector,
             filter_engine,
             pl011_uarts,
+            mali_v61,
             usb_condition,
             instructions_per_tick,
             usb,
@@ -1792,6 +1793,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .pl011_uart(uart)?;
+        }
+        if let Some(options) = mali_v61 {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .mali_v61(options)?;
         }
         if let Some((base, present)) = usb_condition {
             devices
