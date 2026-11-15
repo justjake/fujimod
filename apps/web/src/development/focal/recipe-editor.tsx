@@ -183,7 +183,8 @@ const BASE: Recipe = {
   shiftB: -3,
 };
 
-const fmt = (n: Step) => (typeof n === 'string' ? n : n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0');
+const fmt = (n: Step) =>
+  typeof n === 'string' ? n : n > 0 ? `+${n}` : n < 0 ? `\u2212${-n}` : '0';
 const level = (r: Recipe, id: string) => {
   const step = LEVELS[r[id]];
   return typeof step === 'number' ? step : 0;
@@ -232,6 +233,8 @@ interface Skin {
   /** The column's outer edge. */
   edge: string;
   row: (focused: boolean) => JSX.CSSProperties;
+  /** The row's own top and bottom lines, which a drawer's contents stay between. */
+  lines: { top: number; bottom: number };
 }
 
 const SKINS: Record<Finish, Skin> = {
@@ -242,6 +245,7 @@ const SKINS: Record<Finish, Skin> = {
       background: focused ? 'rgb(88 88 92 / 0.96)' : undefined,
       'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -2px 0 #000',
     }),
+    lines: { top: 1, bottom: 2 },
   },
   flat: {
     panel: 'rgb(24 24 24 / 0.88)',
@@ -250,6 +254,7 @@ const SKINS: Record<Finish, Skin> = {
       background: focused ? 'rgb(58 58 60 / 0.97)' : undefined,
       'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.08)',
     }),
+    lines: { top: 0, bottom: 1 },
   },
 };
 
@@ -275,8 +280,11 @@ const COMPARE_WIDTH = 300;
 const STRIPE = 4;
 /** Where clipped rows or choices fade out, to show that more follow. */
 const FADE = 18;
-/** From a slider's ends to its first and last steps: half a value thumb and
- * its selection outline. */
+/** The focus frame around a row's chosen cell or value thumb, and the gap
+ * between the frame and the thumb. */
+const FRAME = 3;
+const FRAME_GAP = 2;
+/** From a slider's ends to its first and last steps: half a framed value thumb. */
 const INSET = 26;
 
 /** The same scroll for every column, so A and B stay in lockstep. */
@@ -290,6 +298,12 @@ const BODY = 'rgb(30 30 32 / 0.96)';
 const LIGHT = 'font-light tracking-[0.08em] uppercase';
 /** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
 const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
+/** The chosen choice's cell, a step lighter than the drawer. */
+const CHOSEN = 'rgb(255 255 255 / 0.2)';
+/** Selection inside a drawer: the white frame drawn on the cell's own edge. */
+const FRAMED = `inset 0 0 0 ${FRAME}px #fff`;
+/** A value that differs from the compare look: the cell's bottom edge in the accent. */
+const CHANGED = `inset 0 -${FRAME}px 0 var(--accent)`;
 
 /* ---- Input ------------------------------------------------------------------- */
 
@@ -362,8 +376,8 @@ function ChoiceStrip(props: {
     let best = 0;
     const fits = track.scrollWidth <= props.width;
     for (const cell of Array.from(track.children) as HTMLElement[]) {
-      const start = Math.max(0, cell.offsetLeft - 5);
-      if (fits || start > chosen.offsetLeft - 5 || end - start > props.width) continue;
+      const start = cell.offsetLeft;
+      if (fits || start > chosen.offsetLeft || end - start > props.width) continue;
       if (Math.abs(start - centered) < Math.abs(best - centered)) best = start;
     }
     setOffset(best);
@@ -377,7 +391,7 @@ function ChoiceStrip(props: {
   );
   return (
     <div
-      class="relative h-[36px] overflow-hidden"
+      class="relative h-full overflow-hidden"
       style={{
         width: `${props.width}px`,
         'mask-image': `linear-gradient(to right, ${offset() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${more() ? 'transparent' : '#000'})`,
@@ -385,7 +399,7 @@ function ChoiceStrip(props: {
     >
       <div
         ref={(element) => (track = element)}
-        class="absolute inset-y-0 left-0 flex items-center gap-[2px] px-[5px]"
+        class="absolute inset-y-0 left-0 flex items-stretch"
         style={{ transform: `translateX(${-offset()}px)` }}
       >
         <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
@@ -393,13 +407,16 @@ function ChoiceStrip(props: {
             const chosen = () => item.i === props.value;
             return (
               <div
-                class={`flex h-[28px] shrink-0 items-center justify-center ${chosen() && props.focused ? SELECTED : ''}`}
+                class="flex shrink-0 items-center justify-center"
                 style={{
-                  width: item.choice.icon ? `${ICON_CELL - 4}px` : undefined,
-                  padding: item.choice.icon ? undefined : '0 6px',
-                  background: chosen() ? 'rgb(255 255 255 / 0.18)' : undefined,
-                  'box-shadow':
-                    chosen() && props.changed ? 'inset 0 -3px 0 var(--accent)' : undefined,
+                  width: item.choice.icon ? `${ICON_CELL}px` : undefined,
+                  padding: item.choice.icon ? undefined : '0 10px',
+                  background: chosen() ? CHOSEN : undefined,
+                  'box-shadow': chosen()
+                    ? [props.changed && CHANGED, props.focused && FRAMED]
+                        .filter(Boolean)
+                        .join(', ') || undefined
+                    : undefined,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -435,7 +452,7 @@ function Segments(props: {
   const x = (i: number) => `calc(${INSET}px + (100% - ${2 * INSET}px) * ${i / (count() - 1)})`;
   return (
     <div
-      class="relative mx-[6px] h-[34px] flex-1"
+      class="relative mx-[6px] flex-1"
       onClick={(e) => {
         e.stopPropagation();
         const box = e.currentTarget.getBoundingClientRect();
@@ -474,18 +491,20 @@ function Segments(props: {
         )}
       </For>
       <span
-        class={`absolute top-1/2 flex h-[26px] min-w-[40px] -translate-x-1/2 -translate-y-1/2 items-center justify-center px-[4px] ${props.focused ? SELECTED : ''}`}
+        class="absolute inset-y-0 flex -translate-x-1/2"
         style={{
           left: x(props.value),
-          background: '#fff',
-          'box-shadow': '2px 2px 0 rgb(0 0 0 / 0.6)',
+          padding: `${FRAME + FRAME_GAP}px`,
+          'box-shadow': props.focused ? FRAMED : undefined,
         }}
       >
-        <span
-          class="text-[17px] leading-none font-semibold tabular-nums"
-          style={{ color: props.changed ? 'var(--accent)' : '#000' }}
-        >
-          {fmt(props.setting.steps[props.value])}
+        <span class="flex min-w-[40px] items-center justify-center bg-white px-[4px]">
+          <span
+            class="text-[17px] leading-none font-semibold tabular-nums"
+            style={{ color: props.changed ? 'var(--accent)' : '#000' }}
+          >
+            {fmt(props.setting.steps[props.value])}
+          </span>
         </span>
       </span>
     </div>
@@ -525,7 +544,14 @@ function SettingRow(props: {
       >
         <RowIconView icon={props.setting.icon} />
       </div>
-      <div class="flex min-w-0 flex-1 items-center" style={{ background: DRAWERS[props.drawer] }}>
+      <div
+        class="flex min-w-0 flex-1 items-stretch"
+        style={{
+          background: DRAWERS[props.drawer],
+          'padding-top': `${props.skin.lines.top}px`,
+          'padding-bottom': `${props.skin.lines.bottom}px`,
+        }}
+      >
         <Show
           when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
           fallback={
