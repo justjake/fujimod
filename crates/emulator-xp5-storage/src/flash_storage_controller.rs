@@ -410,7 +410,7 @@ mod tests {
     fn configuration_latches_written_by_serial_flash_setup_read_back() {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let storage = Arc::new(Mutex::new(Storage::new(vec![0; 16]).unwrap()));
-        let mut controller = Controller::new(storage, 0x20bb20);
+        let mut controller = Controller::new(storage, Part::Quad20bb20);
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         // Aperture window words and the per-opcode format fields a setup program writes.
