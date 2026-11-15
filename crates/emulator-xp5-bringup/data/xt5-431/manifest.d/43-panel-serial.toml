@@ -1,0 +1,29 @@
+# SSP instance 5 (0xff910000 + 5*0x1000, 0x137c324) carries the two panels. Clients of
+# serial"):
+#   4 (0x18e7ca0): select GPIO 12.8 active-low, mode 0, 8-bit words. The LCD driver
+#     opens it in 0x1438c04 and writes in 0x1438cbc: one select period carries the
+#     register number times 2, then the data bytes. It has no read path.
+#   9 (0x18e7d90): select GPIO 12.10 active-low, mode 2, 8-bit words. The EVF driver
+#     writes through 0x143a78c/0x143a668 (string "EvfSd_NG" at 0x1985770): the
+#     register byte, then the data bytes.
+#   8 (0x18e7d60): the same select, mode 2, 16-bit words: the EVF read 0x143c09c,
+#     which first writes registers 0x80 and 0x81 and keeps the reply's high byte.
+# Neither panel part is identified, so both are FujiMod's write-only command/data
+# register endpoint: writes are retained, and a read is refused because the reply is
+# unknown (the LCD read flag, bit 0 of the command byte, is inferred from the times-2
+# encoding; the EVF read arrives as a 16-bit frame, which the 8-bit endpoint refuses).
+# MISO during writes is discarded by both drivers; miso_high = false is UNVERIFIED.
+# source_hz is the X100VI value, UNVERIFIED (hvf-board.md, "Values that are inherited
+# or unverified").
+[[device]]
+base = 0xff915000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 12, pin = 8, active_high = false }
+part = { kind = "serial-command-registers", bits = 8, mode = 0, read_flag = 0x01, miso_high = false }
+[[device.options.endpoints]]
+select = { port = 12, pin = 10, active_high = false }
+part = { kind = "serial-command-registers", bits = 8, mode = 2, miso_high = false }

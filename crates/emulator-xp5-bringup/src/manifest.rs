@@ -1,5 +1,5 @@
 //! Declarative EL1 handoff. Addresses and register values are TOML integers
-//! (0x hexadecimal is accepted); preload file paths are relative to the firmware's `files` directory.
+//! (0x hexadecimal is accepted).
 use serde::{Deserialize, Serialize};
 use fujimod_emulator_devices::graph::DeviceWindow;
 use std::collections::BTreeMap;
@@ -94,9 +94,8 @@ pub struct Preload {
     /// XOR offset in the update file; length and sha256 are mandatory.
     pub dat_offset: Option<u64>,
     pub length: Option<u64>,
-    pub file: Option<String>,
     pub sha256: Option<String>,
-    /// Hex byte string, spaces accepted. Exactly one of file/bytes/value/dat_offset.
+    /// Hex byte string, spaces accepted. Exactly one of bytes/value/dat_offset.
     pub bytes: Option<String>,
     pub value: Option<u64>,
     /// Little-endian value width (1,2,4,8), required with value.
@@ -143,40 +142,68 @@ pub struct Gic {
     #[serde(default)]
     pub registers: BTreeMap<String, u64>,
 }
+/// A firmware's boot manifest and stream layout, compiled into the crate.
+pub(crate) struct Bundled {
+    pub firmware: &'static str,
+    pub manifest: &'static str,
+    pub fragments: &'static [&'static str],
+    pub streams: &'static str,
+}
+
+include!(concat!(env!("OUT_DIR"), "/bundled.rs"));
+
+pub(crate) fn bundled(firmware: &str) -> Result<&'static Bundled, String> {
+    BUNDLED
+        .iter()
+        .find(|bundled| bundled.firmware == firmware)
+        .ok_or_else(|| format!("no XP5 boot manifest is bundled for {firmware}"))
+}
+
 impl BootState {
-    pub fn load(path: &Path) -> Result<Self, String> {
+    /// The bundled manifest of `firmware`. `FUJIMOD_XP5_MANIFEST=FILE` replaces it with a manifest
+    /// file (and its sibling `.d` directory of device fragments) for experiments and tests.
+    pub fn for_firmware(firmware: &str) -> Result<Self, String> {
+        let state = match std::env::var_os("FUJIMOD_XP5_MANIFEST") {
+            Some(path) => Self::load(Path::new(&path))?,
+            None => {
+                let bundled = bundled(firmware)?;
+                Self::parse(bundled.manifest, bundled.fragments)?
+            }
+        };
+        if state.firmware != firmware {
+            return Err(format!("boot manifest is for {}, not {firmware}", state.firmware));
+        }
+        Ok(state)
+    }
+
+    fn load(path: &Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let mut s: Self = toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
         let directory = path.with_extension("d");
-        let entries = match std::fs::read_dir(&directory) {
-            Ok(entries) => Some(entries),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        let mut names = match std::fs::read_dir(&directory) {
+            Ok(entries) => entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|fragment| fragment.extension().is_some_and(|extension| extension == "toml"))
+                .collect::<Vec<_>>(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(format!("{}: {e}", directory.display())),
         };
-        if let Some(entries) = entries {
-            let mut fragments = Vec::new();
-            for entry in entries {
-                let entry = entry.map_err(|e| format!("{}: {e}", directory.display()))?;
-                let fragment = entry.path();
-                if fragment
-                    .extension()
-                    .is_some_and(|extension| extension == "toml")
-                    && entry
-                        .file_type()
-                        .map_err(|e| format!("{}: {e}", fragment.display()))?
-                        .is_file()
-                {
-                    fragments.push(fragment);
-                }
-            }
-            fragments.sort();
-            for fragment in fragments {
-                let text = std::fs::read_to_string(&fragment)
-                    .map_err(|e| format!("{}: {e}", fragment.display()))?;
-                let parsed: DeviceFragment =
-                    toml::from_str(&text).map_err(|e| format!("{}: {e}", fragment.display()))?;
-                s.device.extend(parsed.device);
-            }
+        names.sort();
+        let fragments = names
+            .iter()
+            .map(|fragment| {
+                std::fs::read_to_string(fragment).map_err(|e| format!("{}: {e}", fragment.display()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::parse(&text, &fragments.iter().map(String::as_str).collect::<Vec<_>>())
+            .map_err(|error| format!("{}: {error}", path.display()))
+    }
+
+    fn parse(text: &str, fragments: &[&str]) -> Result<Self, String> {
+        let mut s: Self = toml::from_str(text).map_err(|e| e.to_string())?;
+        for fragment in fragments {
+            let parsed: DeviceFragment = toml::from_str(fragment).map_err(|e| e.to_string())?;
+            s.device.extend(parsed.device);
         }
         if s.version != 1 {
             return Err(format!("unsupported boot state version {}", s.version));
@@ -193,12 +220,11 @@ impl BootState {
 
 impl Preload {
     pub fn load_bytes(&self, firmware: &crate::firmware::Firmware) -> Result<Vec<u8>, String> {
-        let count = usize::from(self.file.is_some())
-            + usize::from(self.bytes.is_some())
+        let count = usize::from(self.bytes.is_some())
             + usize::from(self.value.is_some())
             + usize::from(self.dat_offset.is_some());
         if count != 1 {
-            return Err("preload requires exactly one of file/bytes/value/dat_offset".into());
+            return Err("preload requires exactly one of bytes/value/dat_offset".into());
         }
         let bytes = if let Some(offset) = self.dat_offset {
             return firmware.xor_dat_range(
@@ -208,11 +234,6 @@ impl Preload {
                     .as_deref()
                     .ok_or("DAT preload requires sha256")?,
             );
-        } else if let Some(file) = &self.file {
-            if self.sha256.is_none() {
-                return Err(format!("preload file {file} needs sha256"));
-            }
-            std::fs::read(firmware.files.join(file)).map_err(|e| format!("{file}: {e}"))?
         } else if let Some(hex) = &self.bytes {
             let hex: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
             if !hex.is_ascii() || hex.len() % 2 != 0 {

@@ -16,4 +16,4 @@ mod png_writer;
 mod rom_start;
 mod run;
 
-pub use run::run_boot;
+pub use run::{Run, parse_quantum, parse_seconds, run_boot};

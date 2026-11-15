@@ -2,7 +2,7 @@
 //! the outcome in the run directory.
 use crate::{
     emulator_patch,
-    firmware::{Firmware, FirmwareInputs, Symbols},
+    firmware::Firmware,
     manifest::BootState,
     mod_loader, open as session_open, rom_start,
 };
@@ -97,115 +97,106 @@ fn shared_boot_summary(
 }
 
 
-/// Run the boot command with `arguments` (everything after `boot`).
-pub fn run_boot(arguments: Vec<String>) -> Result<Value, String> {
+/// One XP5 boot: the run configuration plus the caller's input files.
+pub struct Run {
+    pub configuration: String,
+    pub overlays: Vec<String>,
+    /// The original update file.
+    pub update: PathBuf,
+    /// The boot ROM, for a configuration that starts from it.
+    pub boot_rom: Option<PathBuf>,
+    /// A raw SD card image in place of the in-memory volume (ROM start only).
+    pub card_image: Option<PathBuf>,
+    /// Files on the in-memory SD card, as `(name, path)` (ROM start only).
+    pub card_files: Vec<(String, PathBuf)>,
+    /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
+    pub keys: Option<String>,
+    /// Route unmodeled register accesses to the bus instead of stopping.
+    pub discovery: bool,
+    /// Discovery callee stubs: `NAME@ADDRESS=VALUE`.
+    pub stubs: Vec<String>,
+    /// Guest-memory patch file.
+    pub patch_file: Option<PathBuf>,
+    /// Built mod manifests.
+    pub mods: Vec<String>,
+    /// Scene file replacing the configuration's scene.
+    pub scene: Option<PathBuf>,
+    /// Instructions per scheduler turn, replacing the configuration's.
+    pub quantum: Option<usize>,
+    /// Stop after this much guest time.
+    pub seconds: Option<Duration>,
+    pub status_every: Duration,
+    pub execution_policy: ExecutionPolicy,
+    /// Directory for the run's records (display frames, board state, dumps).
+    pub output: PathBuf,
+}
+
+pub fn parse_stub(specification: &str) -> Result<fujimod_emulator::board::discovery::CalleeStub, String> {
+    let (name, rest) = specification
+        .split_once('@')
+        .ok_or("--stub needs NAME@ADDR=VALUE")?;
+    let (address, value) = rest.split_once('=').ok_or("--stub needs NAME@ADDR=VALUE")?;
+    if name.is_empty() {
+        return Err("discovery callee stub name is empty".into());
+    }
+    Ok(fujimod_emulator::board::discovery::CalleeStub {
+        name: name.to_owned(),
+        core: 0,
+        address: parse_number(address)?,
+        value: parse_number(value)?,
+    })
+}
+
+pub fn parse_quantum(text: &str) -> Result<usize, String> {
+    quantum(text)
+}
+
+pub fn parse_seconds(text: &str) -> Result<Duration, String> {
+    seconds(text)
+}
+
+/// Run the boot described by `run`.
+pub fn run_boot(run: Run) -> Result<Value, String> {
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     };
-    let mut state_file: Option<PathBuf> = None;
-    let mut run_root: Option<PathBuf> = None;
-    let mut inputs = FirmwareArguments::default();
-    let mut configuration: Option<String> = None;
-    let mut overlays = Vec::new();
-    let mut scene = None;
-    let mut limit = None;
-    let mut status_every = Duration::from_secs(5);
-    let mut key_script = None;
-    let mut callee_stubs = Vec::new();
-    let mut policy = ExecutionPolicy::Interactive;
-    let mut quantum_override = None;
-    let mut mode = fujimod_emulator::board::bus::Mode::Strict;
-    let mut patch_file: Option<PathBuf> = None;
-    let mut mod_specs: Vec<String> = Vec::new();
-    let mut start_rom = false;
-    let mut rom_path: Option<PathBuf> = None;
-    let mut card_files: Vec<(String, PathBuf)> = Vec::new();
-    let mut card_present = true;
-    let mut sd_image: Option<PathBuf> = None;
-    let mut dials_held = true;
-    let mut args = arguments.into_iter();
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--start" => match args.next().ok_or("--start needs loader or rom")?.as_str() {
-                "loader" => start_rom = false,
-                "rom" => start_rom = true,
-                other => return Err(format!("--start takes loader or rom, not {other:?}")),
-            },
-            "--rom" => rom_path = Some(PathBuf::from(args.next().ok_or("--rom needs FILE")?)),
-            "--sd-file" => {
-                let specification = args.next().ok_or("--sd-file needs NAME=PATH")?;
-                let (name, path) = specification
-                    .split_once('=')
-                    .filter(|(name, path)| !name.is_empty() && !path.is_empty())
-                    .ok_or("--sd-file needs NAME=PATH")?;
-                card_files.push((name.to_owned(), PathBuf::from(path)));
-            }
-            "--sd-image" => {
-                sd_image = Some(PathBuf::from(args.next().ok_or("--sd-image needs PATH")?));
-            }
-            "--sd-absent" => card_present = false,
-            "--dials" => {
-                dials_held = match args.next().ok_or("--dials needs held or released")?.as_str() {
-                    "held" => true,
-                    "released" => false,
-                    other => return Err(format!("--dials takes held or released, not {other:?}")),
-                }
-            }
-            "--state" => state_file = Some(PathBuf::from(args.next().ok_or("--state needs FILE")?)),
-            "--run-root" => run_root = Some(PathBuf::from(args.next().ok_or("--run-root needs DIR")?)),
-            "--firmware-id" => inputs.id = Some(args.next().ok_or("--firmware-id needs ID")?),
-            "--mapped" => inputs.mapped = Some(PathBuf::from(args.next().ok_or("--mapped needs DIR")?)),
-            "--files-root" => inputs.files_root = Some(PathBuf::from(args.next().ok_or("--files-root needs DIR")?)),
-            "--files" => inputs.files = Some(PathBuf::from(args.next().ok_or("--files needs DIR")?)),
-            "--update" => inputs.update = Some(PathBuf::from(args.next().ok_or("--update needs FILE")?)),
-            "--ledger" => inputs.ledger = Some(PathBuf::from(args.next().ok_or("--ledger needs FILE")?)),
-            "--functions" => inputs.functions = Some(PathBuf::from(args.next().ok_or("--functions needs FILE")?)),
-            "--configuration" => {
-                configuration = Some(args.next().ok_or("--configuration needs ID")?);
-            }
-            "--overlay" => overlays.push(args.next().ok_or("--overlay needs ID")?),
-            "--scene" => scene = Some(PathBuf::from(args.next().ok_or("--scene needs PATH")?)),
-            "--seconds" => limit = Some(seconds(&args.next().ok_or("--seconds needs N")?)?),
-            "--status-every" => {
-                status_every = seconds(&args.next().ok_or("--status-every needs N")?)?;
-            }
-            "--policy" => {
-                policy = ExecutionPolicy::parse(
-                    &args
-                        .next()
-                        .ok_or("--policy needs exact or interactive")?,
-                )?;
-            }
-            "--quantum" => {
-                quantum_override = Some(quantum(&args.next().ok_or("--quantum needs N")?)?);
-            }
-            "--keys" => key_script = Some(args.next().ok_or("--keys needs t=SECONDS:KEY;...")?),
-            "--stub" => {
-                let specification = args.next().ok_or("--stub needs NAME@ADDR=VALUE")?;
-                let (name, rest) = specification
-                    .split_once('@')
-                    .ok_or("--stub needs NAME@ADDR=VALUE")?;
-                let (address, value) =
-                    rest.split_once('=').ok_or("--stub needs NAME@ADDR=VALUE")?;
-                if name.is_empty() {
-                    return Err("discovery callee stub name is empty".into());
-                }
-                callee_stubs.push(fujimod_emulator::board::discovery::CalleeStub {
-                    name: name.to_owned(),
-                    core: 0,
-                    address: parse_number(address)?,
-                    value: parse_number(value)?,
-                });
-            }
-            "--discovery" => mode = fujimod_emulator::board::bus::Mode::Discovery,
-            "--emulator-patch" => {
-                patch_file = Some(PathBuf::from(args.next().ok_or("--emulator-patch needs FILE")?));
-            }
-            "--mod" => mod_specs.push(args.next().ok_or("--mod needs NAME, DIR or manifest.json")?),
-            _ => return Err(format!("unknown shared boot option {arg:?}")),
-        }
-    }
+    let Run {
+        configuration,
+        overlays,
+        update,
+        boot_rom: rom_path,
+        card_image: sd_image,
+        card_files,
+        keys: key_script,
+        discovery,
+        stubs,
+        patch_file,
+        mods: mod_specs,
+        scene,
+        quantum: quantum_override,
+        seconds: limit,
+        status_every,
+        execution_policy: policy,
+        output: run_directory,
+    } = run;
+    let mode = if discovery {
+        fujimod_emulator::board::bus::Mode::Discovery
+    } else {
+        fujimod_emulator::board::bus::Mode::Strict
+    };
+    let callee_stubs = stubs
+        .iter()
+        .map(|stub| parse_stub(stub))
+        .collect::<Result<Vec<_>, _>>()?;
+    let resolved_start = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(&configuration, &overlays)?;
+    let start_rom = matches!(
+        resolved_start.configuration.start,
+        fujimod_catalog_configuration::RunStart::Rom
+    );
+    let dials_held = true;
+    let card_present = true;
+    let scene = scene;
     // Input-only parsing comes first, so a malformed spec fails before the run directory exists
     // and before the board is opened. Patch times stay in milliseconds and the key delays stay
     // durations until the run starts and its tick rate is known.
@@ -249,17 +240,10 @@ pub fn run_boot(arguments: Vec<String>) -> Result<Value, String> {
             keys.push((delay, key, pressed));
         }
     }
-    let state_file = state_file.ok_or("--state FILE is required")?;
-    let configuration = configuration.ok_or("--configuration ID is required")?;
-    let run_root = run_root.ok_or("--run-root DIR is required")?;
-    let state = BootState::load(&state_file)?;
-    let firmware_inputs = inputs.resolve(&state.firmware, &state_file)?;
-    let firmware = Firmware::load(&firmware_inputs)?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| error.to_string())?
-        .as_millis();
-    let run_directory = run_root.join(format!("{stamp}-{}", std::process::id()));
+    let firmware_id = resolved_start.configuration.firmware_id.clone();
+    let state = BootState::for_firmware(&firmware_id)?;
+    let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
+    let firmware = Firmware::from_update(&firmware_id, update_bytes, true)?;
     std::fs::create_dir_all(&run_directory).map_err(|error| error.to_string())?;
     let rom = if start_rom {
         let start = rom_start::RomStart::load(
@@ -410,13 +394,7 @@ pub fn run_boot(arguments: Vec<String>) -> Result<Value, String> {
                         .board
                         .read_register(core, lr_register)
                     {
-                        let symbols = Symbols::load(&firmware);
-                        let symbol = symbols.at(lr);
-                        error = if symbol == format!("{lr:#x}") {
-                            format!("{error}; CPU{core} LR={lr:#x}")
-                        } else {
-                            format!("{error}; CPU{core} LR={lr:#x} ({symbol})")
-                        };
+                        error = format!("{error}; CPU{core} LR={lr:#x}");
                     }
                 }
                 return Err(error);
@@ -559,37 +537,5 @@ fn post_mortem(
     }
     for entry in board.pc_entries() {
         eprintln!("FUJIMOD XP5 pc-entry: {entry}");
-    }
-}
-
-/// Where the firmware lives; every location is explicit.
-#[derive(Default)]
-struct FirmwareArguments {
-    id: Option<String>,
-    mapped: Option<PathBuf>,
-    files_root: Option<PathBuf>,
-    files: Option<PathBuf>,
-    update: Option<PathBuf>,
-    ledger: Option<PathBuf>,
-    functions: Option<PathBuf>,
-}
-
-impl FirmwareArguments {
-    fn resolve(self, manifest_firmware: &str, state_file: &Path) -> Result<FirmwareInputs, String> {
-        let id = self.id.unwrap_or_else(|| manifest_firmware.to_owned());
-        if id != manifest_firmware {
-            return Err(format!("--firmware-id {id} differs from the boot manifest's {manifest_firmware}"));
-        }
-        let mapped = self.mapped.ok_or("--mapped DIR is required")?;
-        let state_directory = state_file.parent().unwrap_or(Path::new("."));
-        Ok(FirmwareInputs {
-            id,
-            files_root: self.files_root.unwrap_or_else(|| mapped.clone()),
-            files: self.files.unwrap_or_else(|| state_directory.to_path_buf()),
-            mapped,
-            update: self.update.ok_or("--update FILE is required")?,
-            ledger: self.ledger,
-            functions: self.functions,
-        })
     }
 }

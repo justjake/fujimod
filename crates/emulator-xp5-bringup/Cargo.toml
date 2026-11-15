@@ -24,6 +24,7 @@ fujimod-framebuffer.workspace = true
 fujimod-emulator-xp5-io.workspace = true
 fujimod-emulator-xp5-storage.workspace = true
 fujimod-workspace-hack.workspace = true
+fujimod-firmware.workspace = true
 ctrlc = "3"
 regex = "1"
 serde.workspace = true

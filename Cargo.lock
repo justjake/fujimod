@@ -1782,6 +1782,8 @@ name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-assets",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
  "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
@@ -2636,6 +2638,7 @@ dependencies = [
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-io",
  "fujimod-emulator-xp5-storage",
+ "fujimod-firmware",
  "fujimod-framebuffer",
  "fujimod-workspace-hack",
  "regex",
