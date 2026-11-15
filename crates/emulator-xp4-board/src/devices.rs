@@ -63,6 +63,8 @@ pub struct Devices {
     pub outputs: BTreeMap<usize, serde_json::Value>,
     /// Single words owned by a declared model inside another block's range.
     carved: Vec<(u64, u64)>,
+    /// The serial-flash array, when this board has one: instruction pages derived from it follow its generation.
+    nor: Option<storage::Shared>,
 }
 struct PhysicalHost<'a> {
     cluster: &'a Cluster,
@@ -951,6 +953,7 @@ impl Devices {
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
             carved: Vec::new(),
+            nor: None,
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
@@ -1015,6 +1018,10 @@ impl Devices {
         self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
+    }
+    /// Completed NOR mutations, or None without a serial flash.
+    pub fn nor_generation(&self) -> Option<u64> {
+        self.nor.as_ref().map(|nor| nor.lock().unwrap().generation())
     }
     pub fn partition_nor_prefix(&mut self, bytes: usize) {
         for (lo, hi, _) in &mut self.windows {
@@ -1102,6 +1109,7 @@ impl Devices {
                 (0xfff4a800, 0xfff4a880, 1),
             ],
             carved: Vec::new(),
+            nor: Some(port.clone()),
         };
         if let Some(pad) = pad {
             if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {

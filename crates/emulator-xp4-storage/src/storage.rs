@@ -192,8 +192,13 @@ pub struct Nor {
     geometry: Geometry,
     overlay: BTreeMap<usize, Vec<u8>>,
     pending: Option<(u64, Mutation)>,
+    /// Completed erases and programs; a consumer of derived copies of the array compares it to refresh them.
+    generation: u64,
 }
 impl Nor {
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
     pub fn new(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Self, String> {
         if bytes.len() as u64 > FLASH_SIZE
             || jedec > 0xffffff
@@ -217,6 +222,7 @@ impl Nor {
             geometry,
             overlay: BTreeMap::new(),
             pending: None,
+            generation: 0,
         })
     }
     pub fn with_immutable_prefix(mut self, prefix: ImmutablePrefix) -> Result<Self, String> {
@@ -425,6 +431,7 @@ impl Nor {
                 (address, bytes.len(), "XP4 NOR program complete")
             }
         };
+        self.generation += 1;
         cx.record(Record::new(
             name,
             [
@@ -469,7 +476,11 @@ pub type Shared = Arc<Mutex<Port>>;
 pub fn port_from_nor(nor: Nor) -> Shared {
     Arc::new(Mutex::new(Port { nor, request: None, program_data: None }))
 }
-impl Port { pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() } }
+impl Port {
+    pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() }
+    /// Completed NOR erases and programs so far.
+    pub fn generation(&self) -> u64 { self.nor.generation() }
+}
 pub fn port(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Shared, String> {
     Ok(Arc::new(Mutex::new(Port {
         nor: Nor::new(bytes, jedec, geometry)?,

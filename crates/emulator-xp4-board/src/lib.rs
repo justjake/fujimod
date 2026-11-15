@@ -82,6 +82,12 @@ struct RunState {
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     pages: BTreeMap<u64, Vec<Box<MmioHook>>>,
+    // Serial-flash aperture pages the CPU executed from: each is read once through the aperture's gated read path and
+    // mapped as read-execute memory on every core until a NOR erase or program completes (`xip_generation`).
+    xip: BTreeMap<u64, Box<[u8; 4096]>>,
+    #[allow(clippy::vec_box)]
+    xip_hooks: Vec<Box<MmioHook>>,
+    xip_generation: u64,
     cbar_reads: u64,
     gic: Gic,
     timer: Option<timer::Timer>,
@@ -454,6 +460,63 @@ impl Cluster {
             (&mut (*self.state.get()).undefined_entries)[core] += 1;
         }
         Ok(true)
+    }
+    /// Instruction fetch from the serial-flash aperture: execute in place. The page is read through the same gated read the
+    /// CPU's data reads take, so a controller state that returns the declared miss pattern or refuses reads does so for
+    /// the fetch as well, and is then mapped as read-execute memory. NOR writes are refused by the aperture, not here.
+    fn map_nor_exec_page(&self, core: usize, address: u64) -> Result<(), String> {
+        use fujimod_emulator_xp4_storage::storage::{FLASH, FLASH_SIZE};
+        if !(FLASH..FLASH + FLASH_SIZE).contains(&address) {
+            return Err("Not a serial-flash aperture address".into());
+        }
+        let page = address & !0xfff;
+        let state = unsafe { &mut *self.state.get() };
+        if state.xip.contains_key(&page) {
+            return Err(format!("Execute-in-place page {page:#x} faulted while mapped"));
+        }
+        let mut data = Box::new([0u8; 4096]);
+        for index in 0..1024usize {
+            match self.device_access(core, page + 4 * index as u64, 4, false, 0)? {
+                Some((word, false)) => data[4 * index..4 * index + 4].copy_from_slice(&(word as u32).to_le_bytes()),
+                _ => return Err(format!("Serial-flash aperture {page:#x} did not answer an instruction page read")),
+            }
+        }
+        for cpu in &self.cpus {
+            cpu.unmap(page, 4096)?;
+            unsafe { cpu.map_backing(page, 4096, 5, std::ptr::NonNull::new(data.as_mut_ptr()).unwrap()) }
+                .map_err(|e| format!("Map execute-in-place page {page:#x}: {e}"))?;
+        }
+        let state = unsafe { &mut *self.state.get() };
+        state.xip.insert(page, data);
+        state.xip_generation = state.devices.as_ref().and_then(|d| d.nor_generation()).unwrap_or(0);
+        Ok(())
+    }
+    /// After a NOR erase or program completed, return every execute-in-place page to the gated aperture: the next fetch
+    /// reads the new array.
+    fn refresh_xip(&self) -> Result<(), String> {
+        let state = unsafe { &mut *self.state.get() };
+        let Some(generation) = state.devices.as_ref().and_then(|d| d.nor_generation()) else {
+            return Ok(());
+        };
+        if generation == state.xip_generation {
+            return Ok(());
+        }
+        state.xip_generation = generation;
+        let pages: Vec<u64> = state.xip.keys().copied().collect();
+        for page in pages {
+            for core in 0..self.cpus.len() {
+                self.cpus[core].unmap(page, 4096)?;
+                let hook = Box::new(MmioHook { cluster: self, core, base: page });
+                let ptr = (&*hook as *const MmioHook).cast_mut().cast();
+                unsafe {
+                    state.xip_hooks.push(hook);
+                    self.cpus[core].map_mmio(page, 4096, cpu::Mmio { read: mmio_read, write: mmio_write, data: ptr })
+                }
+                .map_err(|e| format!("Return execute-in-place page {page:#x} to the aperture: {e}"))?;
+            }
+            state.xip.remove(&page);
+        }
+        Ok(())
     }
     fn map_page(&self, address: u64) -> Result<(), String> {
         let page = address & !0xfff;
@@ -931,6 +994,18 @@ unsafe fn invalid(kind: Fault, address: u64, size: i32, _value: i64, data: *mut 
             return false;
         }
         return true;
+    }
+    if matches!(kind, Fault::FetchProtected | Fault::FetchUnmapped) && owned {
+        use fujimod_emulator_xp4_storage::storage::{FLASH, FLASH_SIZE};
+        if (FLASH..FLASH + FLASH_SIZE).contains(&address) {
+            return match c.map_nor_exec_page(hook.core, address) {
+                Ok(()) => true,
+                Err(error) => {
+                    c.fail(hook.core, error);
+                    false
+                }
+            };
+        }
     }
     c.fail(
         hook.core,
@@ -1950,6 +2025,9 @@ impl Session {
                 failure: None,
                 redirected: None,
                 pages: BTreeMap::new(),
+                xip: BTreeMap::new(),
+                xip_hooks: Vec::new(),
+                xip_generation: 0,
                 cbar_reads: 0,
                 gic,
                 timer,
@@ -2461,6 +2539,7 @@ impl Session {
         }
         let result = (|| {
             c.flush_dma()?;
+            c.refresh_xip()?;
             // The PC register reads without the Thumb bit; a run resumes in Thumb state only when it is set.
             let start = c.reg(core, arm::PC)? | (c.reg(core, arm::CPSR)? >> 5 & 1);
             unsafe {
