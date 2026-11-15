@@ -5,6 +5,7 @@ use fujimod_emulator_xpp::timer::{self as xpp, TickTimers};
 
 // One value per board, so the variant size difference costs nothing.
 #[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
 pub enum Timer {
     Xp4(IntervalTimers),
     Xpp(TickTimers),

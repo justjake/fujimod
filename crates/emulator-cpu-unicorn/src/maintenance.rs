@@ -89,6 +89,37 @@ impl Core {
         self.check(unsafe { (self.api.uc_ctl)(self.raw, ffi::ctl(11, 0, 1)) })
     }
 
+    /// Capture this stopped engine's context while it is an attached
+    /// translation owner. The owner proves that the caller holds the whole-owner
+    /// coordination; the engine must have no pending or poisoned events.
+    pub fn snapshot_owned(
+        &self,
+        owner: &Owner,
+        previous: Option<&dyn fujimod_emulator_cpu::Snapshot>,
+    ) -> Result<Box<dyn fujimod_emulator_cpu::Snapshot>, String> {
+        let _ = previous;
+        self.check_translation_owner(owner)?;
+        self.check_tlbi_ready()?;
+        // The native engine refuses to save a context while a translation
+        // owner is attached, so the architectural state is read from the core.
+        crate::durable::capture_owned(self)
+    }
+
+    /// Restore a context taken from this engine while it is an attached
+    /// translation owner, then flush the engine's modeled translations. The
+    /// accepted-event sequence counter of the native queue is not touched.
+    pub fn restore_owned(
+        &self,
+        owner: &Owner,
+        snapshot: &dyn fujimod_emulator_cpu::Snapshot,
+    ) -> Result<(), String> {
+        self.check_translation_owner(owner)?;
+        self.check_tlbi_ready()?;
+        self.restore_context(snapshot)?;
+        self.check_tlbi_ready()?;
+        self.check(unsafe { (self.api.uc_ctl)(self.raw, ffi::ctl(11, 0, 1)) })
+    }
+
     pub(crate) fn check_tlbi_ready(&self) -> Result<(), String> {
         if self.tlbi_owner.get().is_some() {
             let status = self.translation_maintenance_status()?;

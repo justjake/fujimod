@@ -55,6 +55,17 @@ pub(super) fn capture(cpu: &Core, context: &Context) -> Result<Architecture, Str
         )),
     }
 }
+/// Architectural snapshot of a live, stopped Cortex-A7 that is an attached
+/// translation owner; the native context API refuses such an engine.
+pub(super) fn capture_owned(cpu: &Core) -> Result<Box<dyn Snapshot>, String> {
+    if cpu.model != Model::CortexA7 {
+        return Err("owned CPU snapshots exist only for the Cortex-A7 model".into());
+    }
+    Ok(Box::new(Imported {
+        owner: cpu.identity,
+        state: Architecture::CortexA7(a7::State::capture_live(cpu)?),
+    }))
+}
 pub(super) fn export(state: &Architecture) -> Result<Vec<u8>, String> {
     encode(&Document {
         schema: 1,

@@ -11,7 +11,20 @@ use pyo3::{
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+/// An in-memory checkpoint of an XP4 session. The state is opaque to the emulator bindings and is
+/// restored only into the backend that made it; it has no byte form.
+pub struct Xp4Checkpoint {
+    pub state: Box<dyn std::any::Any>,
+    pub ticks: u64,
+    pub instructions: Vec<u64>,
+    /// False when any device was captured through its observational JSON (interim).
+    pub exact: bool,
+    pub observational_devices: Vec<String>,
+}
+
 pub trait Xp4Backend {
+    fn checkpoint(&self) -> PyResult<Xp4Checkpoint>;
+    fn restore_checkpoint(&self, saved: &Xp4Checkpoint) -> PyResult<()>;
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()>;
     fn read_register(&self, core: usize, register: Register) -> PyResult<u64>;
     fn write_register(&self, core: usize, register: Register, value: u64) -> PyResult<()>;

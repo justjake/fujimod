@@ -86,6 +86,13 @@ impl Maintenance {
         })
     }
 
+    /// The attached owner capability of one core, for whole-owner snapshots.
+    pub(super) fn owner(&self, core: usize) -> Result<&native::Owner, String> {
+        self.owners
+            .get(core)
+            .ok_or_else(|| "Translation owner of an unknown core".to_owned())
+    }
+
     fn statuses(&self, cpus: &[Core]) -> Result<Vec<Status>, String> {
         if cpus.len() != self.owners.len() {
             return Err("Translation domain membership changed".into());
