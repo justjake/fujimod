@@ -94,7 +94,6 @@ const EFFECT: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }]
 const GRAIN: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
 
 /** A row's icon: a stock Q menu vector, or a mod's own artwork. */
-/** A row's icon: a stock Q menu vector, or a mod's own artwork. */
 type RowIcon = { stock: number } | { mod: string };
 
 /** A slider's steps in order; numbers show signed, words as written. */
@@ -276,6 +275,11 @@ const LEGEND_SPACE = 52;
 const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
+/** Where clipped rows or choices fade out, to show that more follow. */
+const FADE = 18;
+/** From a slider's ends to its first and last steps: half a value thumb and
+ * its selection outline. */
+const INSET = 26;
 
 /** The same scroll for every column, so A and B stay in lockstep. */
 function scrollFor(focus: number, height: number): number {
@@ -358,9 +362,10 @@ function ChoiceStrip(props: {
     const centered = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
     const end = chosen.offsetLeft + chosen.offsetWidth;
     let best = 0;
+    const fits = track.scrollWidth <= props.width;
     for (const cell of Array.from(track.children) as HTMLElement[]) {
       const start = Math.max(0, cell.offsetLeft - 5);
-      if (start > chosen.offsetLeft - 5 || end - start > props.width) continue;
+      if (fits || start > chosen.offsetLeft - 5 || end - start > props.width) continue;
       if (Math.abs(start - centered) < Math.abs(best - centered)) best = start;
     }
     setOffset(best);
@@ -377,9 +382,7 @@ function ChoiceStrip(props: {
       class="relative h-[36px] overflow-hidden"
       style={{
         width: `${props.width}px`,
-        'mask-image': more()
-          ? 'linear-gradient(to right, #000 calc(100% - 18px), transparent)'
-          : undefined,
+        'mask-image': `linear-gradient(to right, ${offset() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${more() ? 'transparent' : '#000'})`,
       }}
     >
       <div
@@ -399,7 +402,6 @@ function ChoiceStrip(props: {
                   background: chosen() ? 'rgb(255 255 255 / 0.18)' : undefined,
                   'box-shadow':
                     chosen() && props.changed ? 'inset 0 -3px 0 var(--accent)' : undefined,
-                  
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -410,9 +412,7 @@ function ChoiceStrip(props: {
                   when={item.choice.icon}
                   fallback={<span class={`text-[16px] ${LIGHT}`}>{item.choice.name}</span>}
                 >
-                  {(icon) => (
-                    <Ink src={stock(icon())} class="h-[24px] w-[48px]" mode="alpha" />
-                  )}
+                  {(icon) => <Ink src={stock(icon())} class="h-[24px] w-[48px]" mode="alpha" />}
                 </Show>
               </div>
             );
@@ -434,7 +434,7 @@ function Segments(props: {
 }) {
   const count = () => props.setting.steps.length;
   const zero = () => props.setting.steps.indexOf(0);
-  const x = (i: number) => `calc(20px + (100% - 40px) * ${i / (count() - 1)})`;
+  const x = (i: number) => `calc(${INSET}px + (100% - ${2 * INSET}px) * ${i / (count() - 1)})`;
   return (
     <div
       class="relative mx-[6px] h-[34px] flex-1"
@@ -442,17 +442,20 @@ function Segments(props: {
         e.stopPropagation();
         const box = e.currentTarget.getBoundingClientRect();
         const scale = box.width / e.currentTarget.offsetWidth;
-        const inner = (e.clientX - box.left) / scale - 22;
-        const i = Math.round((inner / (e.currentTarget.offsetWidth - 44)) * (count() - 1));
+        const inner = (e.clientX - box.left) / scale - INSET;
+        const i = Math.round((inner / (e.currentTarget.offsetWidth - 2 * INSET)) * (count() - 1));
         props.pick(Math.max(0, Math.min(count() - 1, i)));
       }}
     >
-      <div class="absolute top-1/2 h-[2px] -translate-y-1/2 bg-white/35" style={{ left: '22px', right: '22px' }} />
+      <div
+        class="absolute top-1/2 h-[2px] -translate-y-1/2 bg-white/35"
+        style={{ left: `${INSET}px`, right: `${INSET}px` }}
+      />
       <div
         class="absolute top-1/2 h-[4px] -translate-y-1/2 bg-(--accent)"
         style={{
           left: x(Math.min(zero(), props.value)),
-          width: `calc((100% - 40px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
+          width: `calc((100% - ${2 * INSET}px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
         }}
       />
       <For each={props.setting.steps.map((step, i) => i)}>
@@ -462,7 +465,12 @@ function Segments(props: {
             style={
               i === zero()
                 ? { left: x(i), width: '4px', height: '26px', background: '#fff' }
-                : { left: x(i), width: '2px', height: '10px', background: 'rgb(255 255 255 / 0.55)' }
+                : {
+                    left: x(i),
+                    width: '2px',
+                    height: '10px',
+                    background: 'rgb(255 255 255 / 0.55)',
+                  }
             }
           />
         )}
@@ -519,10 +527,7 @@ function SettingRow(props: {
       >
         <RowIconView icon={props.setting.icon} />
       </div>
-      <div
-        class="flex min-w-0 flex-1 items-center"
-        style={{ background: DRAWERS[props.drawer] }}
-      >
+      <div class="flex min-w-0 flex-1 items-center" style={{ background: DRAWERS[props.drawer] }}>
         <Show
           when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
           fallback={
@@ -565,6 +570,7 @@ function Column(props: {
   send: Send;
 }) {
   const height = () => 480 - (props.side ? COMPARE_HEADER + LEGEND_SPACE : 0);
+  const scroll = () => scrollFor(props.focus, height());
   const edge = () =>
     props.side === 'b' ? props.skin.edge.replaceAll('inset -', 'inset ') : props.skin.edge;
   return (
@@ -591,8 +597,13 @@ function Column(props: {
           {props.side === 'a' ? 'A' : 'B'}
         </div>
       </Show>
-      <div class="relative flex-1 overflow-hidden">
-        <div style={{ transform: `translateY(${-scrollFor(props.focus, height())}px)` }}>
+      <div
+        class="relative flex-1 overflow-hidden"
+        style={{
+          'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
+        }}
+      >
+        <div style={{ transform: `translateY(${-scroll()}px)` }}>
           <For each={SETTINGS}>
             {(setting, i) => (
               <SettingRow
@@ -765,7 +776,6 @@ interface EditorState {
   comparing: boolean;
   /** The compare column that takes edits. */
   side: Side;
-  name: string;
   finish: Finish;
   drawer: Drawer;
 }
@@ -773,7 +783,8 @@ interface EditorState {
 function valueName(setting: Setting, recipe: Recipe): string {
   return setting.kind === 'choice'
     ? setting.choices[recipe[setting.id]].name
-    : (STEP_NAMES[String(setting.steps[recipe[setting.id]])] ?? fmt(setting.steps[recipe[setting.id]]));
+    : (STEP_NAMES[String(setting.steps[recipe[setting.id]])] ??
+        fmt(setting.steps[recipe[setting.id]]));
 }
 
 function Editor(props: { state: EditorState; send?: Send }) {
@@ -892,7 +903,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
             skin={skin()}
             title="WB SHIFT"
             value={`R${fmt(s().recipe.shiftR)} B${fmt(s().recipe.shiftB)}`}
-            bodyHeight={262}
+            bodyHeight={274}
             onClick={() => send({ key: 'Escape' })}
           >
             <div class="flex h-full items-center justify-center">
@@ -979,7 +990,6 @@ const INITIAL: EditorState = {
   fly: 'none',
   comparing: false,
   side: 'b',
-  name: 'DSCF4182',
   finish: 'flat',
   drawer: 'line',
 };
@@ -1004,6 +1014,33 @@ const FINISHES: { finish: Finish; label: string }[] = [
   { finish: 'emboss', label: 'Embossed' },
 ];
 
+/** One of several page options, as a single segmented control. */
+function Segmented<T extends string>(props: {
+  choices: { value: T; label: string }[];
+  value: T;
+  pick: (value: T) => void;
+}) {
+  return (
+    <div class="flex rounded-[12px] bg-[#1e1e20] p-[3px]">
+      <For each={props.choices}>
+        {(choice) => (
+          <button
+            type="button"
+            class="min-h-[38px] rounded-[9px] px-[14px] text-[15px] font-semibold"
+            style={{
+              background: props.value === choice.value ? '#0068d8' : undefined,
+              color: props.value === choice.value ? '#fff' : '#aaa',
+            }}
+            onClick={() => props.pick(choice.value)}
+          >
+            {choice.label}
+          </button>
+        )}
+      </For>
+    </div>
+  );
+}
+
 function Live() {
   const [state, setState] = createSignal<EditorState>(INITIAL);
   const send: Send = (action) => setState(apply(state(), action));
@@ -1019,31 +1056,17 @@ function Live() {
         }
       }}
     >
-      <div class="mb-[10px] flex flex-wrap gap-[8px]">
-        <For each={FINISHES}>
-          {(choice) => (
-            <button
-              type="button"
-              class="min-h-[40px] rounded-[10px] px-[12px] text-[15px] font-semibold"
-              style={{ background: state().finish === choice.finish ? '#0068d8' : '#2a2a2c' }}
-              onClick={() => setState({ ...state(), finish: choice.finish })}
-            >
-              {choice.label}
-            </button>
-          )}
-        </For>
-        <For each={DRAWER_CHOICES}>
-          {(choice) => (
-            <button
-              type="button"
-              class="min-h-[40px] rounded-[10px] px-[12px] text-[15px] font-semibold"
-              style={{ background: state().drawer === choice.drawer ? '#0068d8' : '#2a2a2c' }}
-              onClick={() => setState({ ...state(), drawer: choice.drawer })}
-            >
-              {choice.label}
-            </button>
-          )}
-        </For>
+      <div class="mb-[10px] flex flex-wrap gap-[10px]">
+        <Segmented
+          choices={FINISHES.map((choice) => ({ value: choice.finish, label: choice.label }))}
+          value={state().finish}
+          pick={(finish) => setState({ ...state(), finish })}
+        />
+        <Segmented
+          choices={DRAWER_CHOICES.map((choice) => ({ value: choice.drawer, label: choice.label }))}
+          value={state().drawer}
+          pick={(drawer) => setState({ ...state(), drawer })}
+        />
       </div>
       <Fit>
         <Editor state={state()} send={send} />
@@ -1088,11 +1111,6 @@ const STATES: { id: string; title: string; state: EditorState }[] = [
   },
   { id: 'film-info', title: 'Film simulation notes', state: { ...INITIAL, focus: 0, fly: 'film' } },
   { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
-  {
-    id: 'wb-shift-flat',
-    title: 'WB SHIFT, flat',
-    state: { ...INITIAL, focus: 1, fly: 'shift', finish: 'flat' },
-  },
   {
     id: 'compare',
     title: 'Compare, editing B',
