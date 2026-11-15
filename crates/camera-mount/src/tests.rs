@@ -530,3 +530,31 @@ fn read_only_devices_refuse_file_puts() {
         b"{}"
     );
 }
+
+#[test]
+fn kept_listings_list_each_folder_once_per_command() {
+    let (mut fs, device) = filesystem();
+    fs.keep_listings();
+    for n in 0..50 {
+        device
+            .0
+            .lock()
+            .unwrap()
+            .files
+            .insert(format!("A:\\DCIM\\DSCF{n:04}.JPG"), vec![n as u8; 10]);
+    }
+    for n in 0..50 {
+        if n == 1 {
+            // Outlives the mount's short listing lifetime.
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        let node = files::list(&mut fs, &format!("DCIM/DSCF{n:04}.JPG"))
+            .unwrap()
+            .remove(0);
+        assert_eq!(files::get(&mut fs, &node, Some(4)).unwrap(), [n as u8; 4]);
+    }
+    // The root and DCIM, once each.
+    assert_eq!(device.0.lock().unwrap().lists, 2);
+    files::put(&mut fs, "DCIM/NEW.JPG", b"new").unwrap();
+    assert_eq!(files::list(&mut fs, "DCIM/NEW.JPG").unwrap()[0].size, 3);
+}

@@ -2,7 +2,28 @@
 use fujimod_camera_mount::{CameraFs, Device, Node, files, read_only::ReadOnly, usb::UsbDevice};
 use fujimod_usb::ff80::commands::memory::DebugMemoryLimits;
 use sha2::{Digest, Sha256};
-use std::{num::NonZeroU32, path::PathBuf};
+use std::{
+    num::NonZeroU32,
+    path::PathBuf,
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+/// Set by SIGINT or SIGTERM. Killing the process mid-request leaves the camera
+/// session's completion unknown, so the command instead finishes the file in
+/// flight, skips the rest and closes the session normally.
+static STOP: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn stop(_: libc::c_int) {
+    STOP.store(true, Ordering::Relaxed);
+}
+
+fn stopped() -> Result<(), String> {
+    if STOP.load(Ordering::Relaxed) {
+        Err("interrupted; the session closed after the request in flight".into())
+    } else {
+        Ok(())
+    }
+}
 
 const USAGE: &str = "Usage: fujimod-card --firmware ID [--device BUS-OR-SERIAL] COMMAND
   list PATTERN...                    print each matching file's or folder's name and size
@@ -34,6 +55,7 @@ fn run<D: Device>(
     args: Vec<String>,
 ) -> Result<(), String> {
     let mut fs = CameraFs::new(device, regions).map_err(|e| errno("card", e))?;
+    fs.keep_listings();
     let result = (|| match command {
         "list" | "get" => {
             let mut args = args.into_iter();
@@ -61,6 +83,7 @@ fn run<D: Device>(
                 let nodes: Vec<Node> =
                     files::list(&mut fs, pattern).map_err(|e| errno(pattern, e))?;
                 for node in nodes {
+                    stopped()?;
                     let mut line = serde_json::json!({"path": node.path, "bytes": node.size, "directory": node.directory});
                     if let Some(out) = out.as_ref().filter(|_| !node.directory) {
                         let data =
@@ -78,6 +101,7 @@ fn run<D: Device>(
         }
         "put" if !args.is_empty() => {
             for pair in &args {
+                stopped()?;
                 let (local, path) = pair.split_once('=').ok_or(USAGE)?;
                 let data = std::fs::read(local).map_err(|e| format!("{local}: {e}"))?;
                 let sha256 = files::put(&mut fs, path, &data).map_err(|e| errno(path, e))?;
@@ -90,6 +114,7 @@ fn run<D: Device>(
         }
         "rm" if !args.is_empty() => {
             for path in &args {
+                stopped()?;
                 files::remove(&mut fs, path).map_err(|e| errno(path, e))?;
                 println!("{}", serde_json::json!({"path": path, "removed": true}));
             }
@@ -118,6 +143,10 @@ fn main() {
     };
     let firmware = firmware.unwrap_or_else(|| fail(USAGE));
     let rest: Vec<String> = args.collect();
+    for signal in [libc::SIGINT, libc::SIGTERM] {
+        // SAFETY: the handler only stores to an atomic.
+        unsafe { libc::signal(signal, stop as libc::sighandler_t) };
+    }
     let page = NonZeroU32::new(256).expect("constant");
     let (usb, regions) = UsbDevice::connect(
         firmware,

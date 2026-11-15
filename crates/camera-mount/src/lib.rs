@@ -94,6 +94,7 @@ pub struct CameraFs<D> {
     regions_json: Vec<u8>,
     next_inode: u64,
     generation: u64,
+    listing_lifetime: Duration,
 }
 
 impl<D: Device> CameraFs<D> {
@@ -111,6 +112,12 @@ impl<D: Device> CameraFs<D> {
     }
     pub fn shutdown(&mut self) -> Result<()> {
         self.device.shutdown()
+    }
+    /// Reuse each folder's listing until this filesystem changes it. A
+    /// one-shot command does not see other writers, and a large folder costs
+    /// seconds to list again for every file.
+    pub fn keep_listings(&mut self) {
+        self.listing_lifetime = Duration::MAX;
     }
     pub fn new(device: D, mut regions: Vec<Region>) -> Result<Self> {
         regions.sort_by_key(|r| r.address);
@@ -185,6 +192,7 @@ impl<D: Device> CameraFs<D> {
             regions_json,
             next_inode: 9,
             generation: 1,
+            listing_lifetime: Duration::from_millis(250),
         })
     }
 
@@ -266,7 +274,7 @@ impl<D: Device> CameraFs<D> {
         let cached = self
             .listings
             .get(&id)
-            .is_some_and(|l| continuation || l.when.elapsed() < Duration::from_millis(250));
+            .is_some_and(|l| continuation || l.when.elapsed() < self.listing_lifetime);
         if !cached {
             let entries = self
                 .device

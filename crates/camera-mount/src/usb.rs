@@ -251,6 +251,7 @@ impl<F: Sessions> Client<F> {
         let metric = match &op {
             Operation::Memory(_, size) => Some(("memory", *size)),
             Operation::Card(Request::ReadAt { size, .. }) => Some(("sd", *size)),
+            Operation::Card(Request::ReadDirectory { .. }) => Some(("sd-list", 0)),
             Operation::Flash(_, size) => Some(("flash", *size)),
             _ => None,
         };
