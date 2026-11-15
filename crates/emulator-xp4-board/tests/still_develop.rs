@@ -1,5 +1,6 @@
 //! The XP4 RECC engine's opt-in development (X-T3 5.11: page 0xfff82000,
-//! interrupt 129): the `raw` wiring is admitted on RECC alone and checked.
+//! interrupt 129): the `raw` wiring is admitted on RECC alone and checked,
+//! and so is `firmware_color`, on a RECC with `raw`.
 use fujimod_emulator_xp4_board::{Definition, Session};
 use serde_json::{Value, json};
 
@@ -44,4 +45,18 @@ fn only_recc_develops_and_only_from_a_valid_raw() {
     let mut extra = raw.clone();
     extra["phase"] = json!([0, 0]);
     assert!(session(input("recc", json!({ "raw": extra }))).is_err());
+}
+
+#[test]
+fn the_firmware_color_is_admitted_on_a_developing_recc_alone() {
+    let raw = json!({"address": 0x473d_8fd0_u32, "pitch": 0x31e0, "site": [5, 1]});
+    session(input("recc", json!({"raw": raw, "firmware_color": true}))).unwrap();
+    let error = session(input("recc", json!({"firmware_color": true})))
+        .err()
+        .unwrap();
+    assert!(error.contains("needs a declared RAW"), "{error}");
+    let error = session(input("resz", json!({"firmware_color": true})))
+        .err()
+        .unwrap();
+    assert!(error.contains("needs a declared RAW"), "{error}");
 }

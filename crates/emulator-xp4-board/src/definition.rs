@@ -347,6 +347,11 @@ pub struct StillEngine {
     /// `crate::still`). Absent, a pass writes nothing.
     #[serde(default)]
     pub raw: Option<crate::still::Raw>,
+    /// RECC with `raw` only: its still bands develop with the color the
+    /// firmware programs into its two color pages (opt-in, see
+    /// `crate::still`). Absent, they develop with the declared sRGB law.
+    #[serde(default)]
+    pub firmware_color: bool,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the
