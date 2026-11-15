@@ -11,6 +11,10 @@ description = "Body-independent Fujifilm update-file decoding"
 [lib]
 doctest = false
 
+[[bin]]
+name = "fujimod-decompress"
+path = "src/bin/decompress.rs"
+
 [dependencies]
 sha2 = "0.11"
 thiserror.workspace = true
