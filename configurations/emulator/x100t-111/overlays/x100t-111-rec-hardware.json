@@ -6,7 +6,9 @@
   "change": {
     "kind": "preset",
     "preset": {
-      "factory_options": {},
+      "factory_options": {
+        "jpeg_decode_profile": "declared-channel9-libjpeg-yycbcr-playback-unmeasured"
+      },
       "hardware_selection": {
         "soc_profile_id": "exr2-service-transports",
         "body_profile_id": "x100t-rec-walkthrough"
