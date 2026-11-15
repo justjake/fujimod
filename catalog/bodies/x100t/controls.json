@@ -117,10 +117,42 @@
               "asserted": true
             },
             {
+              "id": "F14",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F14"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F13",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F13"
+              },
+              "asserted": true
+            },
+            {
               "id": "11",
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F11"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F10",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F10"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F9",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F9"
               },
               "asserted": true
             },
@@ -133,10 +165,42 @@
               "asserted": true
             },
             {
+              "id": "F7.1",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F7_1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F6.4",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F6_4"
+              },
+              "asserted": true
+            },
+            {
               "id": "5.6",
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F5.6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F5",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F5_0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F4.5",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F4_5"
               },
               "asserted": true
             },
@@ -149,10 +213,42 @@
               "asserted": true
             },
             {
+              "id": "F3.6",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F3_6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F3.2",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F3_2"
+              },
+              "asserted": true
+            },
+            {
               "id": "2.8",
               "key": {
                 "kind": "debug_key",
                 "name": "I-M_F2.8"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F2.5",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F2_5"
+              },
+              "asserted": true
+            },
+            {
+              "id": "F2.2",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_M_IRIS_F2_2"
               },
               "asserted": true
             },
@@ -182,8 +278,28 @@
           "description": null
         },
         {
+          "id": "F14",
+          "label": "F14",
+          "description": null
+        },
+        {
+          "id": "F13",
+          "label": "F13",
+          "description": null
+        },
+        {
           "id": "11",
           "label": "11",
+          "description": null
+        },
+        {
+          "id": "F10",
+          "label": "F10",
+          "description": null
+        },
+        {
+          "id": "F9",
+          "label": "F9",
           "description": null
         },
         {
@@ -192,8 +308,28 @@
           "description": null
         },
         {
+          "id": "F7.1",
+          "label": "F7.1",
+          "description": null
+        },
+        {
+          "id": "F6.4",
+          "label": "F6.4",
+          "description": null
+        },
+        {
           "id": "5.6",
           "label": "5.6",
+          "description": null
+        },
+        {
+          "id": "F5",
+          "label": "F5",
+          "description": null
+        },
+        {
+          "id": "F4.5",
+          "label": "F4.5",
           "description": null
         },
         {
@@ -202,8 +338,28 @@
           "description": null
         },
         {
+          "id": "F3.6",
+          "label": "F3.6",
+          "description": null
+        },
+        {
+          "id": "F3.2",
+          "label": "F3.2",
+          "description": null
+        },
+        {
           "id": "2.8",
           "label": "2.8",
+          "description": null
+        },
+        {
+          "id": "F2.5",
+          "label": "F2.5",
+          "description": null
+        },
+        {
+          "id": "F2.2",
+          "label": "F2.2",
           "description": null
         },
         {
@@ -384,58 +540,154 @@
           "kind": "positions",
           "positions": [
             {
-              "id": "−3",
+              "id": "+3",
               "key": {
-                "kind": "debug_key",
-                "name": "E-D-3.0"
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P3"
               },
               "asserted": true
             },
             {
-              "id": "−2",
+              "id": "8/3",
               "key": {
-                "kind": "debug_key",
-                "name": "E-D-2.0"
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P8_3"
               },
               "asserted": true
             },
             {
-              "id": "−1",
+              "id": "7/3",
               "key": {
-                "kind": "debug_key",
-                "name": "E-D-1.0"
-              },
-              "asserted": true
-            },
-            {
-              "id": "0",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D=0"
-              },
-              "asserted": true
-            },
-            {
-              "id": "+1",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D+1.0"
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P7_3"
               },
               "asserted": true
             },
             {
               "id": "+2",
               "key": {
-                "kind": "debug_key",
-                "name": "E-D+2.0"
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P2"
               },
               "asserted": true
             },
             {
-              "id": "+3",
+              "id": "5/3",
               "key": {
-                "kind": "debug_key",
-                "name": "E-D+3.0"
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "0",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-1/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-2/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−1",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-4/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-5/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-7/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M7_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-8/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M8_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M3"
               },
               "asserted": true
             }
@@ -447,28 +699,18 @@
       "pushable": false,
       "positions": [
         {
-          "id": "−3",
-          "label": "−3",
+          "id": "+3",
+          "label": "+3",
           "description": null
         },
         {
-          "id": "−2",
-          "label": "−2",
+          "id": "8/3",
+          "label": null,
           "description": null
         },
         {
-          "id": "−1",
-          "label": "−1",
-          "description": null
-        },
-        {
-          "id": "0",
-          "label": "0",
-          "description": null
-        },
-        {
-          "id": "+1",
-          "label": "+1",
+          "id": "7/3",
+          "label": null,
           "description": null
         },
         {
@@ -477,8 +719,78 @@
           "description": null
         },
         {
-          "id": "+3",
-          "label": "+3",
+          "id": "5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "+1",
+          "label": "+1",
+          "description": null
+        },
+        {
+          "id": "2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "0",
+          "label": "0",
+          "description": null
+        },
+        {
+          "id": "-1/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-2/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−1",
+          "label": "−1",
+          "description": null
+        },
+        {
+          "id": "-4/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-5/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−2",
+          "label": "−2",
+          "description": null
+        },
+        {
+          "id": "-7/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "-8/3",
+          "label": null,
+          "description": null
+        },
+        {
+          "id": "−3",
+          "label": "−3",
           "description": null
         }
       ],
