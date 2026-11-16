@@ -87,6 +87,7 @@ pub struct MemoryWatch {
     pub records: Vec<MemoryRecord>,
     pub violation: Option<String>,
     pub hooks: Vec<(usize, HookId)>,
+    pub writes_only: bool,
 }
 
 impl MemoryWatch {

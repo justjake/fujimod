@@ -1,0 +1,30 @@
+{
+ "update_sha256": "790d6deecf26766188b0e506e40645e6b816addfeba39a52334349405421724e",
+ "sections": [
+  {
+   "name": "stream-00300274",
+   "address": 17829888,
+   "size": 11743456,
+   "dat_offset": 3146356,
+   "encoding": "method4",
+   "sha256": "fd5f899217a833552f135d719d22e025aea2e0780b2fd1f8c66b353ead969724"
+  },
+  {
+   "name": "stream-00820274",
+   "address": 42905600,
+   "size": 15446016,
+   "dat_offset": 8520308,
+   "encoding": "method4",
+   "sha256": "d74dba337fe4078a6ee15ca5fddba7e502bdefb980825a09a15f9b13a01eb350"
+  },
+  {
+   "name": "loader-00060274",
+   "address": 262144,
+   "size": 123520,
+   "dat_offset": 393844,
+   "encoding": "raw",
+   "sha256": "84a2cfa813d6ce289a4dbd86488da73d943bc22661d72ef14d305a8a35f5f8d3"
+  }
+ ],
+ "verification": []
+}

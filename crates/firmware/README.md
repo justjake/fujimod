@@ -3,6 +3,21 @@
 Body-independent update-file mechanisms, with no filesystem or device access.
 Native Rust and `wasm32-unknown-unknown` use the same decoder.
 
+## Command-line decompression
+
+From the workspace root, decode one Method-4 stream (including its 20-byte
+header) from binary stdin to binary stdout:
+
+```sh
+cargo run --locked -p fujimod-firmware --bin fujimod-decompress -- < stream.bin > decoded.bin
+```
+
+The command validates and decompresses the stream before writing output. Errors
+go to stderr with a nonzero exit status; malformed input produces no stdout.
+No Python extension or emulator build is needed.
+
+## Library
+
 - `invert` applies whole-file XOR with `0xff`.
 - `decompress` validates a method-4 stream header and decodes bounded literal
   runs and overlapping back references, returning compression statistics.

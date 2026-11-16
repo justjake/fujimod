@@ -20,7 +20,7 @@ struct Header<S, D, E> {
     host_pause: bool,
     isolated_core: Option<usize>,
     hooks: Vec<usize>,
-    mmio: Vec<(usize, u64, usize)>,
+    mmio: Vec<(usize, u64, usize, u64)>,
     controllers: Vec<Option<usize>>,
     observations: Vec<(usize, Vec<u64>)>,
 }

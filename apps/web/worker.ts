@@ -3,6 +3,7 @@ import { releaseRoute, validateReleaseInfo, type ReleaseInfo } from './src/patch
 import { createAuth } from './src/auth/runtime.ts';
 import type { AuthEnv } from './src/auth/options.ts';
 import { serveDeviceToken, serveGoogleToken, type ProviderTokenApi } from './src/devices/routes.ts';
+import { serveDownloadEvent } from './src/downloads/routes.ts';
 import { byteRange, otaRoute } from './src/ota/routes.ts';
 
 const repository = 'justjake/fujimod';
@@ -530,6 +531,7 @@ export async function serveRequest(
     return makeAuth(env, url.origin).handler(request);
   if (url.pathname === '/api/devices/google-token')
     return serveGoogleToken(request, env.AUTH_DB, makeAuth(env, url.origin).api);
+  if (url.pathname === '/api/downloads') return serveDownloadEvent(request, env.AUTH_DB);
   if (url.pathname.startsWith('/ota/'))
     return serveOta(
       request,

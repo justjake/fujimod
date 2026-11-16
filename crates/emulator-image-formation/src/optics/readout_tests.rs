@@ -220,7 +220,7 @@ fn scene_prefix_and_readout_memos_use_complete_physical_keys() {
 }
 #[test]
 fn large_scene_sparse_cache_matches_fresh_projection_and_invalidates() {
-    let [width, height] = [2050, 2048];
+    let [width, height] = [4098, 4096];
     assert!(width * height > CACHE_PIXELS);
     let rgb: Arc<[u8]> = (0..width * height * 3)
         .map(|i| ((i * 37 + i / (width * 3) * 19) % 256) as u8)

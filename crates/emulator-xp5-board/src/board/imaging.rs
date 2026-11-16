@@ -56,6 +56,7 @@ pub fn register_all(
         Some(sensor::ImageRoutes {
             dma: Some([162, 163]),
             timing: [166, 164],
+            line_stride: false,
         }),
         (0x59, 4),
     );

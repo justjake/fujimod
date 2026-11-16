@@ -1,6 +1,7 @@
 {
   "name": "fujimod-development",
   "private": true,
+  "license": "GPL-2.0-only",
   "packageManager": "pnpm@12.18.0",
   "type": "module",
   "scripts": {

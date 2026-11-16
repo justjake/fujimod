@@ -5,11 +5,10 @@ import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
 import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
-import { CameraTable } from '../ui/cameras';
-import { cameraProgress } from '../ui/catalog-progress';
 import { PersonalNote } from '../ui/personal-note';
 import { SiteHeader } from '../ui/site-header';
 import { FeatureCatalog } from './Features';
+import { FeatureOutline } from './Outline';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
 import { sha256 } from '../patch/patcher';
@@ -18,8 +17,6 @@ import { identify } from '../recovery/identify';
 import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
 import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
-import generations from '../../devices/generations.json';
-import owners from '../../devices/owners.json';
 import '../home/site.css';
 import '../navigation.css';
 
@@ -69,8 +66,9 @@ export default function Home() {
         <SiteHeader root="" />
         <main>
           <PersonalNote />
-          <FeatureCatalog />
           <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
+          <FeatureCatalog />
+          <FeatureOutline />
           <div class="emulator-heading">
             <h2 class="section-heading" id="software">
               Software
@@ -164,7 +162,6 @@ export default function Home() {
               />
             </Show>
           </EmulatorWorkspace>
-          <CameraTable columns={generations} progress={cameraProgress} owners={owners} />
         </main>
         <footer id="preview-credit" hidden={!state.idle}>
           <Show when={state.previewCredit}>

@@ -31,6 +31,14 @@ struct Active {
 #[derive(Clone, Serialize, Deserialize)]
 struct Interface {
     system_register_enable: bool,
+    /// ICC_SRE_EL2.Enable: lets EL1 access ICC_SRE_EL1. Retained, not gating.
+    #[serde(default)]
+    hypervisor_enable: bool,
+    /// ICC_IGRPEN1_EL3.EnableGrp1S (bit 1). EnableGrp1NS (bit 0) is the Group 1 enable
+    /// `enabled[1]`, the one modeled security state, so an EL1 and an EL3 access agree.
+    /// Retained, not gating.
+    #[serde(default)]
+    el3_group1_secure: bool,
     enabled: [bool; 2],
     pmr: u8,
     bpr: [u8; 2],
@@ -42,6 +50,8 @@ impl Default for Interface {
     fn default() -> Self {
         Self {
             system_register_enable: false,
+            hypervisor_enable: false,
+            el3_group1_secure: false,
             enabled: [false; 2],
             pmr: 0,
             bpr: [0; 2],
@@ -284,6 +294,27 @@ impl Gic {
                 // This implementation has no legacy interface: SRE/DIB/DFB
                 // are RAO/WI; Enable is retained per core.
                 Ok(7 | (u64::from(self.state.interfaces[core].system_register_enable) * 8))
+            }
+            0xe64d => {
+                if let Some(v) = value {
+                    if v & !15 != 0 {
+                        return Err("unsupported GICv3 ICC_SRE_EL2 bits".into());
+                    }
+                    self.state.interfaces[core].hypervisor_enable = v & 8 != 0;
+                }
+                // As ICC_SRE_EL3: SRE/DIB/DFB are RAO/WI; Enable is retained per core.
+                Ok(7 | (u64::from(self.state.interfaces[core].hypervisor_enable) * 8))
+            }
+            0xf667 => {
+                if let Some(v) = value {
+                    if v & !3 != 0 {
+                        return Err("unsupported GICv3 ICC_IGRPEN1_EL3 bits".into());
+                    }
+                    self.state.interfaces[core].enabled[1] = v & 1 != 0;
+                    self.state.interfaces[core].el3_group1_secure = v & 2 != 0;
+                }
+                let interface = &self.state.interfaces[core];
+                Ok(u64::from(interface.enabled[1]) | (u64::from(interface.el3_group1_secure) << 1))
             }
             0xc230 => {
                 if let Some(v) = value {
@@ -673,6 +704,29 @@ mod tests {
         g.restore(&saved).unwrap();
         assert_eq!(g.system(0, 0xf665, None).unwrap(), 15);
         assert!(g.system(0, 0xf665, Some(16)).is_err());
+    }
+    #[test]
+    fn el2_sre_and_el3_group_enables_are_per_core_and_survive_checkpoint() {
+        let mut g = super::Gic::new(vec![0, 1], 128).unwrap();
+        assert_eq!(g.system(0, 0xe64d, None).unwrap(), 7);
+        assert_eq!(g.system(0, 0xe64d, Some(0xf)).unwrap(), 15);
+        assert_eq!(g.system(1, 0xe64d, None).unwrap(), 7);
+        assert_eq!(g.system(0, 0xf667, Some(3)).unwrap(), 3);
+        assert_eq!(g.system(1, 0xf667, None).unwrap(), 0);
+        // Bit 0 is the Group 1 enable the EL1 register also sets and clears.
+        assert_eq!(g.system(0, 0xc667, None).unwrap(), 1);
+        g.system(0, 0xc667, Some(0)).unwrap();
+        assert_eq!(g.system(0, 0xf667, None).unwrap(), 2);
+        g.system(0, 0xf667, Some(3)).unwrap();
+        assert_eq!(g.system(0, 0xc667, None).unwrap(), 1);
+        let saved = g.save();
+        g.system(0, 0xe64d, Some(0)).unwrap();
+        g.system(0, 0xf667, Some(0)).unwrap();
+        g.restore(&saved).unwrap();
+        assert_eq!(g.system(0, 0xe64d, None).unwrap(), 15);
+        assert_eq!(g.system(0, 0xf667, None).unwrap(), 3);
+        assert!(g.system(0, 0xe64d, Some(16)).is_err());
+        assert!(g.system(0, 0xf667, Some(4)).is_err());
     }
     use super::*;
     fn enabled(affinities: Vec<u32>) -> Gic {

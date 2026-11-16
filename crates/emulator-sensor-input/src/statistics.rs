@@ -194,8 +194,16 @@ pub struct Statistics {
     state: Arc<Mutex<State>>,
     base: u64,
     bank_size: usize,
+    /// The banks are ordinary guest memory (another device or the CPU may use
+    /// the same SRAM for other data), so frames complete by DMA into it.
+    in_memory: bool,
 }
 impl Statistics {
+    /// Statistics whose SRAM is plain guest memory rather than a device window.
+    pub fn in_memory(base: u64, bank_size: usize) -> Result<Self, String> {
+        Ok(Self { in_memory: true, ..Self::new(base, bank_size)? })
+    }
+
     pub fn new(base: u64, bank_size: usize) -> Result<Self, String> {
         if base & 31 != 0
             || !(0x1c60..=0x100000).contains(&bank_size)
@@ -212,6 +220,7 @@ impl Statistics {
             })),
             base,
             bank_size,
+            in_memory: false,
         })
     }
 
@@ -234,7 +243,8 @@ impl Statistics {
         if !matches!(planes, Planes::Color) {
             bytes.truncate(0xc00);
         }
-        if destination >= self.base
+        if !self.in_memory
+            && destination >= self.base
             && destination
                 .checked_add(bytes.len() as u64)
                 .is_some_and(|end| end <= self.base + (self.bank_size * 2) as u64)
@@ -269,14 +279,9 @@ impl Device for Statistics {
             cx.unmodeled();
             return 0;
         }
-        // Only four color planes are currently decoded. Other fields stay visible.
-        let within = at % self.bank_size;
-        if !((within + size as usize <= 0x1000)
-            || (within >= 0x1060 && within + size as usize <= 0x1c60))
-        {
-            cx.unmodeled();
-            return 0;
-        }
+        // Only four color planes are currently decoded. The rest of the bank holds no
+        // measurement for the declared uniform scene and reads back its stored bytes (zero
+        // unless a frame completion wrote them).
         let s = self.state.lock().unwrap();
         let mut bytes = [0; 8];
         bytes[..size as usize].copy_from_slice(&s.bytes[at..at + size as usize]);

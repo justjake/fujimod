@@ -14,6 +14,9 @@ pub mod persistent_inputs;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const SETTINGS_SCHEMA_URI: &str = "https://fujimod.com/schemas/settings.generated.schema.json";
+/// Leading bytes of each copy of a copied profile record: its little-endian
+/// copy number.
+pub const COPY_NUMBER_BYTES: u64 = 4;
 
 /// Located settings bank and named settings for one firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -136,7 +139,7 @@ impl SectionLength {
     }
 }
 
-/// The stock user profile: a sixteen-byte header kept by the power controller
+/// The stock user profile: a header kept by the power controller
 /// and journal records in managed flash blocks. Firmware that finds no valid
 /// header and records resets the profile to its defaults at startup.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,14 +151,19 @@ impl SectionLength {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SettingsProfile {
-    /// Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the
-    /// checksum that makes the sixteen bytes sum to zero.
+    /// Stock eight- or sixteen-byte header. The last two bytes hold marker
+    /// `0xaa` and the checksum that makes the header sum to zero.
     pub header: UpdateRange,
     /// X-Processor 4 only: the header's offset in the boot loader's handoff
     /// block. Absent for X-Processor Pro, whose header goes to sub-CPU
     /// registers.
     #[serde(default)]
     pub loader_offset: Option<u64>,
+    /// First 16-bit register of the header on a checksum SPI power controller.
+    /// The header fills one register per two bytes: four registers for an
+    /// eight-byte header, eight for a sixteen-byte one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_register: Option<u8>,
     /// Journal records the stock loader requires, by name.
     pub records: BTreeMap<String, ProfileRecord>,
     /// Fields initialized from the calibration bank or a declared fill.
@@ -271,6 +279,11 @@ pub struct ProfileRecord {
     pub parity_offset: u64,
     /// Bytes every valid record carries outside the defaults.
     pub fields: Vec<SettingsField>,
+    /// Sealed copies the stock formatter writes back to back from the start
+    /// of the block, each with its copy number in its first four bytes
+    /// (little-endian). Absent for a single copy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copies: Option<u8>,
 }
 
 /// A method-4 encoded section of the installed flash image.
@@ -449,10 +462,16 @@ impl FirmwareSettings {
             stores.insert("ram", (0x48_0000, BTreeSet::new()));
         }
         if let Some(profile) = profile {
-            if profile.header.size != 16 {
-                return fail("profile header is not sixteen bytes");
+            let size = profile.header.size;
+            if !matches!(size, 8 | 16) {
+                return fail("profile header must contain eight or sixteen bytes");
             }
-            stores.insert("header", (14, BTreeSet::new()));
+            if let Some(register) = profile.power_register
+                && u64::from(register) + size / 2 > 256
+            {
+                return fail("profile header does not fit its checksum SPI registers");
+            }
+            stores.insert("header", (size - 2, BTreeSet::new()));
             for (name, record) in &profile.records {
                 let parity_bytes = (record.parity_offset / 4).div_ceil(8);
                 if name.is_empty()
@@ -463,6 +482,13 @@ impl FirmwareSettings {
                     || record.bytes > 0x10_0000
                 {
                     return fail("profile record name, defaults or parity outside the record");
+                }
+                if record.copies.is_some_and(|copies| {
+                    !(2..=8).contains(&copies)
+                        || record.defaults_offset < COPY_NUMBER_BYTES
+                        || record.fields.iter().any(|f| f.offset < COPY_NUMBER_BYTES)
+                }) {
+                    return fail("profile record copies overlap their copy number");
                 }
                 stores.insert(name, (record.parity_offset, BTreeSet::new()));
             }
@@ -493,11 +519,19 @@ impl FirmwareSettings {
                 }
             }
         }
+        // A copied record's copy number is written per copy, never by a field.
+        let numbered = |store: &str, offset: u64| {
+            offset < COPY_NUMBER_BYTES
+                && profile
+                    .and_then(|p| p.records.get(store))
+                    .is_some_and(|record| record.copies.is_some())
+        };
         for (name, setting) in &self.settings {
             let mut sizes = setting.values.values().map(Vec::len);
             let size = sizes.next().unwrap_or(0);
             if name.is_empty()
                 || !sizes.all(|other| other == size)
+                || numbered(&setting.store, setting.offset)
                 || !place(&mut stores, &setting.store, setting.offset, size)
             {
                 return fail("named setting is empty, uneven, unstored or overlaps a field");
@@ -512,6 +546,7 @@ impl FirmwareSettings {
             };
             if field.store == "bank"
                 || field.basis.is_empty()
+                || numbered(&field.store, field.offset)
                 || !within(field.offset, field.bytes, *extent)
             {
                 return fail("derived field outside its profile store");

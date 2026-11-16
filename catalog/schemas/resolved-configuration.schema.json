@@ -339,6 +339,25 @@
       ],
       "type": "object"
     },
+    "AlarmInterval": {
+      "additionalProperties": false,
+      "description": "Constant alarm values a power-off writes instead of taking a deadline.",
+      "properties": {
+        "seconds": {
+          "description": "Values written to the alarm's seconds registers, least significant first.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "seconds"
+      ],
+      "type": "object"
+    },
     "AlarmRegisters": {
       "additionalProperties": false,
       "description": "Power-controller registers the power-off writes for the wake alarm.",
@@ -1922,6 +1941,30 @@
       },
       "required": [
         "hold"
+      ],
+      "type": "object"
+    },
+    "BootFlag": {
+      "additionalProperties": false,
+      "description": "A byte the alarm boot tests for a normal boot. Without the bit, the wake\ntakes a boot that never reaches USB. The restart sets the bit before the\nrequest; the power-off publishes it and the firmware clears it after the\nwake.",
+      "properties": {
+        "address": {
+          "description": "Address of the byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mask": {
+          "description": "The single bit the restart ORs into the byte before the request.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "mask"
       ],
       "type": "object"
     },
@@ -6719,6 +6762,11 @@
         {
           "const": "RawStatisticsControl",
           "description": "Raw Statistics Control.",
+          "type": "string"
+        },
+        {
+          "const": "SataHost",
+          "description": "SATA host controller register block.",
           "type": "string"
         },
         {
@@ -12151,6 +12199,35 @@
       ],
       "type": "object"
     },
+    "HardwareCurtains": {
+      "additionalProperties": false,
+      "description": "Declared focal-plane curtain facts.",
+      "properties": {
+        "first_output": {
+          "description": "Image-input comparator output that releases the first curtain.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "light_offset_seconds": {
+          "description": "Light added to the interval between the two comparator edges, seconds.",
+          "format": "double",
+          "type": "number"
+        },
+        "second_output": {
+          "description": "Image-input comparator output that releases the second curtain.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "first_output",
+        "second_output",
+        "light_offset_seconds"
+      ],
+      "type": "object"
+    },
     "HardwareDecompressor": {
       "additionalProperties": false,
       "description": "Declared decompressor facts.",
@@ -13478,6 +13555,18 @@
           },
           "type": "array"
         },
+        "raw_dma_irqs": {
+          "description": "Completion interrupt lines of the two RAW read-out DMA channels\n(command window +0x40 and +0xc0). Left out, the channels refuse.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "receiver_base": {
           "description": "Declared receiver base.",
           "format": "uint64",
@@ -14370,6 +14459,17 @@
       "additionalProperties": false,
       "description": "Declared radiometry facts.",
       "properties": {
+        "curtains": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareCurtains"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared focal-plane curtains; absent for a leaf-shutter body."
+        },
         "live_view": {
           "anyOf": [
             {
@@ -14395,8 +14495,15 @@
           "type": "integer"
         },
         "projection": {
-          "$ref": "#/$defs/HardwareProjection",
-          "description": "Declared projection."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareProjection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared lens projection; absent when no lens is mounted."
         },
         "rolling_references": {
           "description": "Declared rolling references.",
@@ -14411,8 +14518,15 @@
           "type": "number"
         },
         "shutter": {
-          "$ref": "#/$defs/HardwareShutter",
-          "description": "Declared shutter."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareShutter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared leaf shutter; absent for a focal-plane body."
         },
         "shutter_output": {
           "description": "Declared shutter output.",
@@ -14434,11 +14548,9 @@
       },
       "required": [
         "pixel_clock_hz",
-        "projection",
         "rolling_references",
         "mode_change_frames",
         "saturation_lux_seconds",
-        "shutter",
         "shutter_output",
         "ticks_per_second",
         "white_luminance"
@@ -15113,6 +15225,13 @@
           ],
           "description": "Declared sd host clocks."
         },
+        "sd_hosts": {
+          "description": "Declared X-Processor 4 SD hosts.",
+          "items": {
+            "$ref": "#/$defs/HardwareSdHost"
+          },
+          "type": "array"
+        },
         "serial_flash": {
           "anyOf": [
             {
@@ -15166,6 +15285,17 @@
             }
           ],
           "description": "Declared usb."
+        },
+        "usb_phy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareUsbPhy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared XP4 USB PHY programming port."
         },
         "xpp_i2c": {
           "anyOf": [
@@ -15393,6 +15523,87 @@
         "lines",
         "mode",
         "vertical"
+      ],
+      "type": "object"
+    },
+    "HardwareSdHost": {
+      "additionalProperties": false,
+      "description": "X-Processor 4 SD host: one standard SDHCI register bank at the window base.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "capabilities": {
+          "description": "Capabilities register (+0x40).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "capabilities_2": {
+          "description": "Capabilities 2 register (+0x44).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clock_ticks": {
+          "description": "Ticks for the internal clock to report stable.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq_route": {
+          "description": "Interrupt line of the SDHCI status, when it is known.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slot_and_version": {
+          "description": "Slot status halfword (+0xfc) and host controller version (+0xfe).",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transfer_ticks": {
+          "description": "Ticks of one command or data transfer.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "vendor_offsets": {
+          "description": "Offsets of vendor words beyond the standard bank that read back their\nlast write.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "capabilities",
+        "capabilities_2",
+        "clock_ticks",
+        "size",
+        "slot_and_version",
+        "transfer_ticks"
       ],
       "type": "object"
     },
@@ -16213,6 +16424,34 @@
         "out_endpoints",
         "packet_bytes",
         "transfer_ticks"
+      ],
+      "type": "object"
+    },
+    "HardwareUsbPhy": {
+      "additionalProperties": false,
+      "description": "XP4 USB PHY programming port, separate from the device controller.",
+      "properties": {
+        "base": {
+          "description": "Declared base of the indexed control, parallel and readback words.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Declared size.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "size"
       ],
       "type": "object"
     },
@@ -20553,8 +20792,8 @@
       "description": "Picture-plane pixel packing declared by a display controller.",
       "oneOf": [
         {
-          "const": "bgra8888-straight",
-          "description": "Blue, green, red and straight-alpha bytes.",
+          "const": "abgr8888-straight",
+          "description": "Straight-alpha, blue, green and red bytes, in memory order.",
           "type": "string"
         }
       ]
@@ -20611,6 +20850,17 @@
           "$ref": "#/$defs/AlarmRegisters",
           "description": "Power-controller registers for the alarm."
         },
+        "boot_flag": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BootFlag"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Wake header bit the alarm boot tests before a normal boot, where the\npower-off tests one."
+        },
         "deadline_parameter": {
           "description": "Persistent power-controller parameter offset of the saved deadline\nword, where the power-off saves it.",
           "format": "uint32",
@@ -20625,6 +20875,17 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "fixed_interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlarmInterval"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The interval the power-off arms instead of a request deadline."
         },
         "halt": {
           "description": "Its final self-branch, reached after the power cut.",
@@ -20642,22 +20903,26 @@
           "description": "Byte offset of the deadline in the request the power-off receives.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "rollover_parameter": {
           "description": "Persistent parameter offset of the alarm's rollover byte.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
         "entry",
         "halt",
         "power_cut",
-        "request_deadline_offset",
-        "alarm",
-        "rollover_parameter"
+        "alarm"
       ],
       "type": "object"
     },
@@ -20963,6 +21228,16 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "copies": {
+          "description": "Sealed copies the stock formatter writes back to back from the start\nof the block, each with its copy number in its first four bytes\n(little-endian). Absent for a single copy.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "defaults": {
           "$ref": "#/$defs/UpdateRange",
@@ -21874,7 +22149,10 @@
           "description": "Byte offset of the wake deadline in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "deferred_timer": {
           "anyOf": [
@@ -21902,7 +22180,10 @@
           "description": "Bytes of sender parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "power_off": {
           "$ref": "#/$defs/PowerOff",
@@ -21912,23 +22193,39 @@
           "description": "Request word that selects power-off with a wake.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "request_offset": {
           "description": "Byte offset of the request word in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "sender": {
           "description": "Stock routine that sends the power-off request; its first argument is\nthe address of the request parameters.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "transport": {
-          "$ref": "#/$defs/RequestTransport",
-          "description": "How the host reaches the sender."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestTransport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the host reaches the sender, where the firmware takes a request.\nA firmware whose power-off arms a fixed-interval alarm instead carries\nnone of the request fields, and `power_off.fixed_interval` says so."
         },
         "ui": {
           "$ref": "#/$defs/RecIdle",
@@ -21936,12 +22233,6 @@
         }
       },
       "required": [
-        "transport",
-        "sender",
-        "request",
-        "request_offset",
-        "deadline_offset",
-        "parameter_bytes",
         "ui",
         "power_off"
       ],
@@ -26512,7 +26803,7 @@
     },
     "SettingsProfile": {
       "additionalProperties": false,
-      "description": "The stock user profile: a sixteen-byte header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
+      "description": "The stock user profile: a header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
       "properties": {
         "derived_fields": {
           "default": [],
@@ -26524,12 +26815,22 @@
         },
         "header": {
           "$ref": "#/$defs/UpdateRange",
-          "description": "Stock header defaults. Byte 14 is the marker `0xaa`; byte 15 holds the\nchecksum that makes the sixteen bytes sum to zero."
+          "description": "Stock eight- or sixteen-byte header. The last two bytes hold marker\n`0xaa` and the checksum that makes the header sum to zero."
         },
         "loader_offset": {
           "default": null,
           "description": "X-Processor 4 only: the header's offset in the boot loader's handoff\nblock. Absent for X-Processor Pro, whose header goes to sub-CPU\nregisters.",
           "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "power_register": {
+          "description": "First 16-bit register of the header on a checksum SPI power controller.\nThe header fills one register per two bytes: four registers for an\neight-byte header, eight for a sixteen-byte one.",
+          "format": "uint8",
+          "maximum": 255,
           "minimum": 0,
           "type": [
             "integer",

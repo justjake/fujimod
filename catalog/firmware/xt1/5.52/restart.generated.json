@@ -1,0 +1,191 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xt1-552-restart",
+  "firmware_id": "xt1-552",
+  "product": "X-T1",
+  "internal_version": "2.39",
+  "code_alias": 1073741824,
+  "code_checks": [
+    {
+      "name": "query_dispatch",
+      "address": 17437800,
+      "size": 136,
+      "sha256": "31b249ca66a58df66ff9f4060cfee4f73223f84bd7f5bceb8eebb5ff6dfc5cda"
+    },
+    {
+      "name": "query_callback",
+      "address": 17446784,
+      "size": 140,
+      "sha256": "3a971de224d1510fdec17f1eb7187913637782d4e8565e172be5604c9886cf09"
+    },
+    {
+      "name": "power_off_sender",
+      "address": 17654052,
+      "size": 228,
+      "sha256": "cbf70b789629f92502b6b6c538d1fb8b75f1175bbbdcbc210f652d6f3ad68d57"
+    },
+    {
+      "name": "service_command",
+      "address": 17653868,
+      "size": 64,
+      "sha256": "ec0d6250c98fe720999945b8866f5d35b31ddd57d83c39924cf89f3c703d1fe4"
+    },
+    {
+      "name": "message_send",
+      "address": 9474136,
+      "size": 472,
+      "sha256": "6cb91992dc9c2cb708b966d3721c1ec073cb9f4dca5746965a47b36da29e4d50"
+    },
+    {
+      "name": "request_decoder",
+      "address": 18730800,
+      "size": 212,
+      "sha256": "ccc7a2c2497f293b8d166c616e97b43f1ca8b0a40bccbf2a31d297a9df1a70d8"
+    },
+    {
+      "name": "power_off",
+      "address": 18744768,
+      "size": 208,
+      "sha256": "a3d59d30ce2a9fbc75e1ade9e8d5a8a2fc15610a176000b411ae49e43ca3a85c"
+    },
+    {
+      "name": "alarm_setter",
+      "address": 8897268,
+      "size": 244,
+      "sha256": "fc201909ab7599f7b693a72df1710ddde5576043f0a430b0daa26e6239b2017e"
+    },
+    {
+      "name": "power_cut",
+      "address": 8709172,
+      "size": 100,
+      "sha256": "07515d180da2e3096315ada484ad433eb28a830f3769171e74915b875d7c5fa2"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 8839492,
+      "size": 504,
+      "sha256": "c2d62dd7eb327b74457804a7a2d4ebd1eb2ca7efa01816a473a6f7477bc286ef"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 8839996,
+      "size": 112,
+      "sha256": "cc69ad5bf205568bd9771cb25bdeaad865f271704fd69047e86594bceb753dfc"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 23524908,
+      "callback_offset": 12,
+      "stock_callback": 17733044,
+      "output_fields": 24502804,
+      "output_bytes": 8
+    },
+    "sender": 17654052,
+    "request": 130,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 8,
+    "ui": {
+      "mode_address": 12872332,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": 12872344,
+      "menu_active_address": 12684508
+    },
+    "power_off": {
+      "entry": 18744768,
+      "halt": 18744972,
+      "power_cut": 8709172,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
+      },
+      "deadline_parameter": 0,
+      "rollover_parameter": 13,
+      "fixed_interval": null
+    },
+    "early_boot": {
+      "kind": "exr2_polled_alarm",
+      "spi_channel": 1,
+      "constants": {
+        "exr2_restart_spi_base": 4294459456,
+        "exr2_restart_spi_control": 0,
+        "exr2_restart_spi_format": 4,
+        "exr2_restart_spi_fifo_control": 8,
+        "exr2_restart_spi_status": 12,
+        "exr2_restart_spi_rx_count": 16,
+        "exr2_restart_spi_tx_count": 20,
+        "exr2_restart_spi_rx": 24,
+        "exr2_restart_spi_tx": 28,
+        "exr2_restart_spi_enable": 128,
+        "exr2_restart_spi_busy": 1,
+        "exr2_restart_spi_fifo_reset": 268435456,
+        "exr2_restart_spi_status_clear": 13073,
+        "exr2_restart_spi_rx_ready": 512,
+        "exr2_restart_spi_count_mask": 31,
+        "exr2_restart_gpio_base": 4294479872,
+        "exr2_restart_gpio_stride": 64,
+        "exr2_restart_gpio_banks": 16,
+        "exr2_restart_gpio_output": 0,
+        "exr2_restart_gpio_mode1": 4,
+        "exr2_restart_gpio_mode2": 8,
+        "exr2_restart_gpio_mode3": 12,
+        "exr2_restart_gpio_mode4": 16,
+        "exr2_restart_gpio_config": 24,
+        "exr2_restart_gpio_inactive_mask": 4294901760,
+        "exr2_restart_power_hold": 4294475908,
+        "exr2_restart_power_hold_mask": 1,
+        "exr2_restart_write": 32768,
+        "exr2_restart_packet_register": 80,
+        "exr2_restart_packet_bytes": 16,
+        "exr2_restart_alarm_low": 105,
+        "exr2_restart_alarm_high": 106,
+        "exr2_restart_alarm_enable": 104,
+        "exr2_restart_power_command": 96,
+        "exr2_restart_power_off_value": 240,
+        "restart_spi_idle_control": 96,
+        "restart_spi_format_value": 6,
+        "restart_power_gpio_bank": 12,
+        "restart_gpio_pin": 3,
+        "restart_panel_gpio_bank": 11
+      },
+      "code_checks": [
+        {
+          "name": "descriptor_open",
+          "address": 8686324,
+          "size": 1632,
+          "sha256": "bae594efec40fb449b8630a0128d2035d70e570efa7da3bc5ad4002d6415dd48"
+        },
+        {
+          "name": "power_cut",
+          "address": 8709172,
+          "size": 100,
+          "sha256": "07515d180da2e3096315ada484ad433eb28a830f3769171e74915b875d7c5fa2"
+        }
+      ]
+    },
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 8839492,
+        "size": 504
+      },
+      "cancel": {
+        "address": 8839996,
+        "size": 112
+      }
+    }
+  }
+}

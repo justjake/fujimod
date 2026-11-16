@@ -91,6 +91,13 @@ impl Session {
     pub async fn read_log(&mut self, capacity: NonZeroU32) -> Result<LogReply> {
         self.core.read_log(capacity).await
     }
+    /// Retrieve up to `capacity` bytes from the secondary buffered debug source
+    /// (memory operation 4). Like `read_log`, treat this as consuming: firmware
+    /// may advance its cursor. It is a distinct operation from the operation-1
+    /// log, so issuing it is the only way to exercise operation 4.
+    pub async fn drain_debug_buffer(&mut self, capacity: NonZeroU32) -> Result<LogReply> {
+        self.core.drain_debug_buffer(capacity).await
+    }
 }
 impl<I: Io> Core<I> {
     pub(super) async fn research_command(
@@ -191,6 +198,13 @@ impl<I: Io> Core<I> {
         let maximum = capacity.get().checked_add(36).ok_or(Error::InvalidLength)?;
         self.command(debug::log_request(capacity), maximum, |r| {
             debug::decode_log(r, capacity)
+        })
+        .await
+    }
+    pub(super) async fn drain_debug_buffer(&mut self, capacity: NonZeroU32) -> Result<LogReply> {
+        let maximum = capacity.get().checked_add(36).ok_or(Error::InvalidLength)?;
+        self.command(debug::drain_request(capacity), maximum, |r| {
+            debug::decode_drain(r, capacity)
         })
         .await
     }

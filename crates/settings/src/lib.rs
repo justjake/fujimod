@@ -20,11 +20,12 @@ pub struct Settings {
 /// The user profile: the power controller's header and the flash journal records.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Profile {
-    pub header: [u8; 16],
+    pub header: Vec<u8>,
     pub records: Vec<Record>,
 }
 
-/// A sealed journal record and its flash block.
+/// A sealed journal record and its flash block. A record the layout copies
+/// holds every sealed copy back to back, each numbered in its first bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
     pub bytes: Vec<u8>,
@@ -205,7 +206,7 @@ fn profile<'a>(
 ) -> Result<Settings, String> {
     if let Some(profile) = &layout.profile {
         let header = read(section, layout, &profile.header)?;
-        if header[14] != 0xaa {
+        if header[header.len() - 2] != 0xaa {
             return Err("stock profile header has no marker".into());
         }
         stores.insert("header", header);
@@ -267,14 +268,23 @@ fn profile<'a>(
     let profile = match &layout.profile {
         None => None,
         Some(located) => {
-            let mut header: [u8; 16] = stores["header"].clone().try_into().expect("sixteen bytes");
-            header[15] = header[..15].iter().fold(0u8, |sum, b| sum.wrapping_sub(*b));
+            let mut header = stores.remove("header").expect("validated profile header");
+            let checksum = header.len() - 1;
+            header[checksum] = header[..checksum].iter().fold(0u8, |sum, b| sum.wrapping_sub(*b));
             let mut records = Vec::new();
             for (name, record) in &located.records {
                 let mut bytes = stores.remove(name.as_str()).expect("record store");
-                seal_journal(&mut bytes, record.parity_offset as usize)?;
+                let copies = record.copies.map_or(1, u32::from);
+                let mut sealed = Vec::with_capacity(bytes.len() * copies as usize);
+                for copy in 0..copies {
+                    if record.copies.is_some() {
+                        put(&mut bytes, 0, &copy.to_le_bytes());
+                    }
+                    seal_journal(&mut bytes, record.parity_offset as usize)?;
+                    sealed.extend_from_slice(&bytes);
+                }
                 records.push(Record {
-                    bytes,
+                    bytes: sealed,
                     block: record.block,
                     managed_index: record.managed_index,
                 });

@@ -73,14 +73,29 @@ struct PendingHostRequest {
     payload: Vec<u8>,
     published: bool,
 }
+/// What an equal-shape untiling copy (control 1, destination shape equal to
+/// the source extent) stores for each pixel word. The renderer writes RGBA8
+/// as memory bytes A,B,G,R; the processor selects the readback law.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PixmapReadback {
+    /// Rotates packed channels (RGBA8 to bytes B,G,R,A). The law the XPP and
+    /// XP5 boards assume; no camera measurement backs it.
+    RotatesChannels,
+    /// Keeps each pixel word, so the pixmap holds the renderer's A,B,G,R
+    /// bytes. On an X-T3 5.11 (camera runs 2026-11-11/12) a CPU word stored
+    /// in the LCD pixmap shows with alpha in its lowest byte and red in its
+    /// highest, while stock vglib screens show correctly.
+    PreservesWords,
+}
 pub struct Renderer {
     state: Arc<Mutex<State>>,
     base: u64,
     irq: u32,
+    readback: PixmapReadback,
     webgpu_bridge: bool,
 }
 impl Renderer {
-    pub fn new(base: u64, irq: u32) -> Result<Self, String> {
+    pub fn new(base: u64, irq: u32, readback: PixmapReadback) -> Result<Self, String> {
         if base & 0xfff != 0 || base > 0xffffd000 || !(32..1020).contains(&irq) {
             return Err("Invalid DMP register base or physical IRQ".into());
         }
@@ -88,6 +103,7 @@ impl Renderer {
             state: Arc::new(Mutex::new(State::default())),
             base,
             irq,
+            readback,
             webgpu_bridge: crate::webgpu_bridge_enabled(),
         })
     }
@@ -1265,7 +1281,7 @@ mod tests {
         }
     }
     fn register(bus: &mut TestBus, base: u64, size: u64) -> Result<(), String> {
-        bus.register(base, size, Box::new(Renderer::new(base, 153)?))?;
+        bus.register(base, size, Box::new(Renderer::new(base, 153, PixmapReadback::RotatesChannels)?))?;
         bus.register(0xff90e73c, 4, Box::new(AddressHigh))?;
         Ok(())
     }
@@ -1282,7 +1298,7 @@ mod tests {
     #[test]
     fn pending_dma_has_exact_deadline_early_noop_and_restorable_program_independent_effects() {
         let experiment = |base, irq, pc, core| {
-            let mut renderer = Renderer::new(base, irq).unwrap();
+            let mut renderer = Renderer::new(base, irq, PixmapReadback::RotatesChannels).unwrap();
             let mut host = RecordingHost {
                 now: 100,
                 ram_base: 0x1000,
@@ -1308,7 +1324,7 @@ mod tests {
             assert_eq!(renderer.save(), before);
             assert_eq!(host.ram, vec![0xa5; 64]);
             assert!(host.irqs.is_empty());
-            let mut restored = Renderer::new(base, irq).unwrap();
+            let mut restored = Renderer::new(base, irq, PixmapReadback::RotatesChannels).unwrap();
             restored.restore(&before).unwrap();
             host.now = 1260;
             renderer.event(&mut Cx::new(&mut host, core, pc, 0), token + 1);
@@ -1331,7 +1347,7 @@ mod tests {
     }
     #[test]
     fn copy_unit_configuration_stores_only_the_initialization_value() {
-        let mut renderer = Renderer::new(0xfff88000, 92).unwrap();
+        let mut renderer = Renderer::new(0xfff88000, 92, PixmapReadback::RotatesChannels).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0xdda2ec, 0);
         assert_eq!(renderer.read(&mut cx, 0xfff88c1c, 4), 0);
@@ -1694,7 +1710,7 @@ impl State {
             banks: None,
         })
     }
-    fn copy_job(&self, cx: &Cx<'_>, trigger: u32) -> Result<Job, String> {
+    fn copy_job(&self, cx: &Cx<'_>, trigger: u32, readback: PixmapReadback) -> Result<Job, String> {
         self.idle()?;
         let control = self.r(0xc10);
         let mode = control & 255;
@@ -1753,11 +1769,13 @@ impl State {
         }
         let input = cx.ram_bytes(source, count)?;
         let original = cx.ram_bytes(dest, destination_count)?;
+        let rotates = readback == PixmapReadback::RotatesChannels;
         let bytes = if let Some((width, height, pitch, native)) = shape {
             let mut bytes = original;
             // Control 2 uploads linear pixels into Morton tiles. Control 1
             // untiles bottom-up rows. Pitched native pixmaps retain pixel
-            // words; the equal-shape readback form rotates packed channels.
+            // words; the equal-shape readback form follows the selected
+            // PixmapReadback.
             for y in 0..height {
                 for x in 0..width {
                     let (i, j) = if mode == 2 {
@@ -1770,13 +1788,13 @@ impl State {
                     };
                     if bpp == 4 {
                         let mut p = u32::from_le_bytes(input[i..i + 4].try_into().unwrap());
-                        if mode == 1 && !native {
+                        if mode == 1 && !native && rotates {
                             p = p.rotate_right(8);
                         }
                         bytes[j..j + 4].copy_from_slice(&p.to_le_bytes());
                     } else {
                         let mut p = u16::from_le_bytes(input[i..i + 2].try_into().unwrap());
-                        if mode == 1 && !native {
+                        if mode == 1 && !native && rotates {
                             p = p.rotate_right(match format {
                                 3 => 1,
                                 4 => 4,
@@ -1889,7 +1907,7 @@ impl Device for Renderer {
                     s.begin(cx, job);
                 }
                 0xc18 if v != 0 => {
-                    let job = s.copy_job(cx, v)?;
+                    let job = s.copy_job(cx, v, self.readback)?;
                     s.regs.insert(o, v);
                     s.begin(cx, job);
                 }

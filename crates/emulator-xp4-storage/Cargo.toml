@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 doctest = false
@@ -14,6 +15,7 @@ doctest = false
 fujimod-emulator-devices.workspace = true
 serde_json = "1"
 serde = { version = "1", features = ["derive", "rc"] }
+sha2.workspace = true
 fujimod-workspace-hack.workspace = true
 
 [lints.rust]

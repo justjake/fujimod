@@ -1,0 +1,55 @@
+{
+ "update_sha256": "0d48d2ae26ac7ebab9b0e4cac56324807ec1ea8ae30df06b0b9e79066dc0a14a",
+ "sections": [
+  {
+   "name": "stream-001402bc",
+   "address": 8916992,
+   "size": 2091592,
+   "dat_offset": 1311420,
+   "encoding": "method4",
+   "sha256": "fbbacc6736e28c9bb44550fac0f450d8ae23b5a26e94b060c49cfc142cdbeaed"
+  },
+  {
+   "name": "stream-009c02bc",
+   "address": 18616320,
+   "size": 11673600,
+   "dat_offset": 10224316,
+   "encoding": "method4",
+   "sha256": "400684fa19281f9ca4c05fb4461da356885a46f8c455413cff7876047d1f96cd"
+  },
+  {
+   "name": "stream-010e02bc",
+   "address": 45674496,
+   "size": 22253568,
+   "dat_offset": 17695420,
+   "encoding": "method4",
+   "sha256": "14b0557bd724fa74b51ff641fcd5481da5b3ac64146d4fc69375086dafcfb174"
+  },
+  {
+   "name": "loader-000c02bc",
+   "address": 528384,
+   "size": 123584,
+   "dat_offset": 787132,
+   "encoding": "raw",
+   "sha256": "05caba32b0b698706d3af4ccc87fd90b1ae66ee7f4a072b5bb2b6e0df0c54a09"
+  },
+  {
+   "name": "boot-setup",
+   "address": 4286578688,
+   "size": 73728,
+   "dat_offset": 2748,
+   "encoding": "raw",
+   "sha256": "96a39ff275db2d8593d23ee5a97b613da84ab8ed9bd98c5aa43d34e6cee71a9d"
+  }
+ ],
+ "verification": [
+  {
+   "name": "stream-01a202bc",
+   "address": 94887936,
+   "dat_offset": 27394748,
+   "decoded_size": 15278080,
+   "encoding": "method4",
+   "sha256": "b752cb7b3b146377ed36346055feeac14bdc9e87857012c62c5c42653c075db7"
+  }
+ ]
+}

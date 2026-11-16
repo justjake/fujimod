@@ -1,0 +1,81 @@
+# Section5 SRAM; A53 14d3f14 copies/zeros it before stock reset release.
+# RAM entry lives in the main state (fragments contain device windows only).
+# No preload: local0 and A53fa200000 are the same allocated host bytes.
+
+[[device]]
+base = 0xff90e100
+size = 0x24
+kind = "interprocessor-mailbox"
+[device.options]
+# Provisional600MHz /6000000 reload =100Hz; silicon rate remains unmeasured.
+clock_hz = 600000000
+# Shooting-mode bring-up policy: unknown M-core peripherals keep running.
+peripheral_mode = "discovery"
+# Virtual timer period used only when the copied calibration field is zero.
+calibration_period = 1000
+# Calibration worker gate5580/55b4: shared+1b8 completes with ff.
+virtual_calibration = true
+# Replies always execute stock M-core handlers and mailbox_reply at3780.
+# The calibration options above are enabled only by --discovery.
+
+# 0x15c9a8c reads USB cable/jig connection status from bit 0; the default input is disconnected.
+[[device]]
+base = 0xff90e300
+size = 4
+kind = "usb-connection-status"
+
+# Section5 descriptor37164 channel1; local3928 constructs5f911008/+c.
+# Common clocked FIFO transport with the body's two physical chip selects.
+[[device]]
+base = 0xff911000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+receive_request = 2
+transmit_request = 3
+# Stock SSP output IRQ route is unpinned; use the next free NVIC line after DMA 83..98.
+companion_irq_line = 99
+[device.options.wire]
+kind = "gpio-selected"
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 11
+pin = 5
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "bis-configuration-registers"
+revision = [0, 0]
+idle_high = false
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 11
+pin = 3
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "lsm6ds-configuration-registers"
+
+# Local26d0c/26d3c: five channels at5f928000, three at5f929000, stride20.
+# Only channel-reset and idle data/status semantics; active sampling stops.
+# Companion code builds a 41/42-word table at local 0x39a60+0x3c and streams it via descriptor 0x22034; sink is a session assumption.
+[[device]]
+base = 0xff928000
+size = 0x1000
+kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 2, request = 32 }]
+[[device]]
+base = 0xff929000
+size = 0x1000
+kind = "input-capture"
+
+# Local227d0/227f8 use two high-address words per bank;22820 request lanes.
+[[device]]
+base = 0xff90e748
+size = 0x40
+kind = "dma-address-high"
+[[device]]
+base = 0xff90e500
+size = 0x20
+kind = "dma-request-routing"

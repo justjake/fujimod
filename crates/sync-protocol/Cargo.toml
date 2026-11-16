@@ -5,9 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Photo sync wire format shared with the camera's sync-client library"
 
 [lib]
+test = false
 doctest = false
 
 [dependencies]

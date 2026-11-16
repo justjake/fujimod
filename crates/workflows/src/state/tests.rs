@@ -29,9 +29,11 @@ fn setup() -> Vec<fujimod_usb::testing::Exchange> {
 }
 #[test]
 fn catalog_constant_outside_dram_is_read_twice_before_delivery() {
+    // Outside the E1 window the source wraps into DRAM, so the region is read
+    // with direct memory commands at its own address, never through E1.
     let mut s = setup();
-    s.extend(data(0x2000, b"ROM!"));
-    s.extend(data(0x2000, b"ROM!"));
+    s.extend(read(0x3000, b"ROM!"));
+    s.extend(read(0x3000, b"ROM!"));
     let (mut session, script) = opened(s);
     let mut captured = Vec::new();
     let mut progress = Vec::new();
@@ -62,8 +64,8 @@ fn changed_constants_fail_and_masked_constants_are_omitted() {
         let masked = second == [0; 4] || second == [255; 4];
         let first = if masked { second } else { *b"ROM!" };
         let mut s = setup();
-        s.extend(data(0x2000, &first));
-        s.extend(data(0x2000, &second));
+        s.extend(read(0x3000, &first));
+        s.extend(read(0x3000, &second));
         let (mut session, script) = opened(s);
         let result = block_on(dump(
             &mut session,
@@ -80,7 +82,7 @@ fn changed_constants_fail_and_masked_constants_are_omitted() {
 #[test]
 fn mutable_regions_are_read_once_and_sink_failure_stops() {
     let mut s = setup();
-    s.extend(data(0x2000, &[0; 4]));
+    s.extend(read(0x3000, &[0; 4]));
     let (mut session, script) = opened(s);
     let result = block_on(dump(
         &mut session,
@@ -100,10 +102,10 @@ fn mutable_regions_are_read_once_and_sink_failure_stops() {
 #[test]
 fn byte_progress_arrives_before_region_delivery_and_failure_stops_at_the_next_chunk() {
     let mut s = setup();
-    s.extend(data(0x2000, &[0; 32]));
+    s.extend(read(0x3000, &[0; 64]));
     let (mut session, script) = opened(s);
     let mut plan = state(false);
-    plan.regions[0].size = 64;
+    plan.regions[0].size = 128;
     let mut progress = Vec::new();
     let result = block_on(dump(
         &mut session,
@@ -113,7 +115,7 @@ fn byte_progress_arrives_before_region_delivery_and_failure_stops_at_the_next_ch
         &mut |_| panic!("partial region delivered"),
         &mut |done, total| {
             progress.push((done, total));
-            if done == 32 {
+            if done == 64 {
                 Err("progress callback failed".into())
             } else {
                 Ok(())
@@ -126,7 +128,7 @@ fn byte_progress_arrives_before_region_delivery_and_failure_stops_at_the_next_ch
             .to_string()
             .contains("progress callback failed")
     );
-    assert_eq!(progress, [(0, 64), (32, 64)]);
+    assert_eq!(progress, [(0, 128), (64, 128)]);
     assert_eq!(script.remaining(), 0);
     assert_eq!(session.state(), fujimod_usb::ff80::SessionState::Ready);
 }

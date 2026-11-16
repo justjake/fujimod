@@ -1,7 +1,7 @@
 //! Serialized delivery of accepted translation maintenance within one cluster.
 use fujimod_emulator_cpu::{Cpu, Identity, arm};
 use fujimod_emulator_cpu_unicorn::{Core, maintenance as native};
-use std::{cell::RefCell, collections::VecDeque};
+use std::{borrow::Borrow, cell::RefCell, collections::VecDeque};
 
 #[cfg(test)]
 #[path = "maintenance_tests.rs"]
@@ -59,10 +59,10 @@ pub(super) struct Maintenance {
 }
 
 impl Maintenance {
-    pub fn new(cpus: &[Core]) -> Result<Self, String> {
+    pub fn new(cpus: &[impl Borrow<Core>]) -> Result<Self, String> {
         let mut owners = Vec::with_capacity(cpus.len());
         let mut tokens = Vec::with_capacity(cpus.len());
-        for cpu in cpus {
+        for cpu in cpus.iter().map(Borrow::borrow) {
             // Cluster owns every Core privately, serializes execution and
             // settles its accepted events before another engine can run.
             let owner = unsafe { cpu.attach_translation_owner()? };
@@ -78,7 +78,7 @@ impl Maintenance {
         Ok(Self {
             owners,
             tokens,
-            identities: cpus.iter().map(Cpu::identity).collect(),
+            identities: cpus.iter().map(|cpu| cpu.borrow().identity()).collect(),
             state: RefCell::new(State {
                 sequences: vec![0; cpus.len()],
                 ..State::default()
@@ -86,11 +86,11 @@ impl Maintenance {
         })
     }
 
-    fn statuses(&self, cpus: &[Core]) -> Result<Vec<Status>, String> {
+    fn statuses(&self, cpus: &[impl Borrow<Core>]) -> Result<Vec<Status>, String> {
         if cpus.len() != self.owners.len() {
             return Err("Translation domain membership changed".into());
         }
-        cpus.iter().enumerate().map(|(index, cpu)| {
+        cpus.iter().map(Borrow::borrow).enumerate().map(|(index, cpu)| {
             if cpu.identity() != self.identities[index] {
                 return Err("Translation processor identity changed".into());
             }
@@ -102,7 +102,7 @@ impl Maintenance {
         }).collect()
     }
 
-    pub fn ready(&self, cpus: &[Core]) -> Result<(), String> {
+    pub fn ready(&self, cpus: &[impl Borrow<Core>]) -> Result<(), String> {
         let state = self.state.borrow();
         if let Some(error) = &state.failure {
             return Err(error.clone());
@@ -119,7 +119,7 @@ impl Maintenance {
         Ok(())
     }
 
-    pub fn snapshot(&self, cpus: &[Core]) -> Result<Snapshot, String> {
+    pub fn snapshot(&self, cpus: &[impl Borrow<Core>]) -> Result<Snapshot, String> {
         let native = self.statuses(cpus)?;
         let state = self.state.borrow();
         Ok(Snapshot {
@@ -135,7 +135,12 @@ impl Maintenance {
         })
     }
 
-    pub fn settle(&self, cpus: &[Core], source: usize, raw_error: Option<&str>) -> Result<(), String> {
+    pub fn settle(
+        &self,
+        cpus: &[impl Borrow<Core>],
+        source: usize,
+        raw_error: Option<&str>,
+    ) -> Result<(), String> {
         if let Some(error) = raw_error {
             self.state.borrow_mut().last_raw_error = Some(error.to_owned());
         }
@@ -150,7 +155,12 @@ impl Maintenance {
         result
     }
 
-    fn deliver(&self, cpus: &[Core], source: usize, raw_error: Option<&str>) -> Result<(), String> {
+    fn deliver(
+        &self,
+        cpus: &[impl Borrow<Core>],
+        source: usize,
+        raw_error: Option<&str>,
+    ) -> Result<(), String> {
         {
             let state = self.state.borrow();
             if let Some(error) = &state.failure {
@@ -172,7 +182,7 @@ impl Maintenance {
         }
         let count = statuses.get(source).ok_or("Invalid translation source core")?.pending;
         for _ in 0..count {
-            let status = cpus[source].translation_maintenance_status()?;
+            let status = cpus[source].borrow().translation_maintenance_status()?;
             if status.poison != 0 || status.pending == 0 || status.owner != self.tokens[source] {
                 return Err("Translation source queue changed during delivery".into());
             }
@@ -202,7 +212,7 @@ impl Maintenance {
             let mut peer_actlr = Vec::with_capacity(cpus.len());
             let mut recipients = 0u8;
             let mut excluded = 0u8;
-            for (core, cpu) in cpus.iter().enumerate() {
+            for (core, cpu) in cpus.iter().map(Borrow::borrow).enumerate() {
                 // The source participation state belongs to the accepted
                 // instruction; later source writes cannot rewrite that event.
                 let actlr = if core == source {
@@ -242,7 +252,7 @@ impl Maintenance {
                 }
             }
             // The complete recipient set is frozen before the first flush.
-            for (core, cpu) in cpus.iter().enumerate() {
+            for (core, cpu) in cpus.iter().map(Borrow::borrow).enumerate() {
                 if recipients & (1 << core) != 0 {
                     cpu.flush_local_translations(&self.owners[core])
                         .map_err(|error| format!("Translation delivery to core {core}: {error}"))?;
@@ -251,7 +261,9 @@ impl Maintenance {
                     state.delivered_peers += 1;
                 }
             }
-            cpus[source].acknowledge_translation_maintenance(&self.owners[source], &event)?;
+            cpus[source]
+                .borrow()
+                .acknowledge_translation_maintenance(&self.owners[source], &event)?;
             let mut state = self.state.borrow_mut();
             let mut record = state.pending.take().unwrap();
             record.acknowledged = true;

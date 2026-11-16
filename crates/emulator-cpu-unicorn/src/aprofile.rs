@@ -10,7 +10,7 @@ use crate::{
 use fujimod_emulator_cpu::*;
 use std::{
     cell::{Cell, RefCell, UnsafeCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
@@ -57,6 +57,28 @@ struct Execution {
     write_hook: Cell<Option<HookId>>,
     wide_code_watch: Cell<bool>,
     stores: RefCell<Vec<(Access, u64, i32, i64)>>,
+    // ARMv7-A owner options (see `Core::set_owner_exclusives` and the
+    // following setters).
+    exclusive_exits: Cell<bool>,
+    owner_interrupts: Cell<bool>,
+    owner_aborts: Cell<bool>,
+    // Newest entered instruction addresses, oldest first, while an owner
+    // keeps an entry trace (`Core::set_entry_trace`).
+    trace: RefCell<Option<EntryTrace>>,
+}
+struct EntryTrace {
+    capacity: usize,
+    entries: VecDeque<u64>,
+    // The ring no longer explained a settlement: the trace is unknown.
+    lost: bool,
+}
+impl EntryTrace {
+    fn push(&mut self, address: u64) {
+        if self.entries.len() == self.capacity {
+            self.entries.pop_front();
+        }
+        self.entries.push_back(address);
+    }
 }
 pub struct Core {
     execution: Rc<Execution>,
@@ -111,6 +133,10 @@ impl Core {
             write_hook: Cell::new(None),
             wide_code_watch: Cell::new(false),
             stores: RefCell::new(vec![]),
+            exclusive_exits: Cell::new(false),
+            owner_interrupts: Cell::new(false),
+            owner_aborts: Cell::new(false),
+            trace: RefCell::new(None),
         });
         let owner: Rc<dyn CodeOwner> = e.clone();
         e.id.set(e.memory.register(Rc::downgrade(&owner)));
@@ -153,6 +179,78 @@ impl Core {
         }
         Ok(Self { execution: e })
     }
+    /// The raw engine this processor runs on, for owner protocols that
+    /// address it directly (translation maintenance). Execution, mapping
+    /// and hooks go through this processor.
+    pub fn raw(&self) -> &RawCore {
+        &self.execution.cpu
+    }
+    fn owner_option(
+        &self,
+        cell: impl FnOnce(&Execution) -> &Cell<bool>,
+        on: bool,
+    ) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() || !e.a32 {
+            return Err("owner options need a stopped ARMv7-A processor".into());
+        }
+        cell(e).set(on);
+        Ok(())
+    }
+    /// ARMv7-A owners that keep their own cluster-wide exclusive monitor:
+    /// LDREX/STREX (all widths) and CLREX also exit before entry, like the
+    /// framework instructions, so the owner performs them.
+    pub fn set_owner_exclusives(&self, on: bool) -> Result<(), String> {
+        self.owner_option(|e| &e.exclusive_exits, on)?;
+        self.execution.cpu.invalidate_code(None)
+    }
+    /// ARMv7-A owners that enter IRQs at their own instruction boundaries:
+    /// an asserted, unmasked IRQ stops the run before the next block instead
+    /// of being entered here, so the owner sees it at an exact boundary.
+    pub fn set_owner_interrupts(&self, on: bool) -> Result<(), String> {
+        self.owner_option(|e| &e.owner_interrupts, on)
+    }
+    /// ARMv7-A owners that enter aborts themselves: exception observers
+    /// installed afterwards run once the abort's entry is settled, and this
+    /// processor no longer enters the abort or counts it.
+    pub fn set_owner_aborts(&self, on: bool) -> Result<(), String> {
+        if !self.execution.index.borrow().exceptions.is_empty() {
+            return Err("owner aborts must be chosen before exception observers".into());
+        }
+        self.owner_option(|e| &e.owner_aborts, on)
+    }
+    /// Keeps the addresses of the newest `capacity` entered instructions
+    /// (0 stops), in entry order, as the accounting ring settles them. The
+    /// owner drains them with [`Core::take_entries`].
+    pub fn set_entry_trace(&self, capacity: usize) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("entry trace needs a stopped processor".into());
+        }
+        if capacity > 32 {
+            return Err("entry trace keeps at most 32 entries".into());
+        }
+        *e.trace.borrow_mut() = (capacity != 0).then(|| EntryTrace {
+            capacity,
+            entries: VecDeque::new(),
+            lost: false,
+        });
+        Ok(())
+    }
+    /// Drains the entry trace, oldest first. `Err` when the accounting ring
+    /// could not explain a settlement since the trace began.
+    pub fn take_entries(&self) -> Result<Vec<u64>, String> {
+        let mut trace = self.execution.trace.borrow_mut();
+        let trace = trace.as_mut().ok_or("entry trace is off")?;
+        if trace.lost {
+            return Err("entry trace lost a settlement".into());
+        }
+        Ok(trace.entries.drain(..).collect())
+    }
+}
+/// ARMv7-A ARM-state LDREX/STREX family (any width) and CLREX encodings.
+fn exclusive_instruction(word: u32) -> bool {
+    word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f
 }
 impl Drop for Execution {
     fn drop(&mut self) {
@@ -184,6 +282,7 @@ impl Execution {
         let p = self
             .accounting()
             .settle(self.synced.get(), tail, give_back)?;
+        self.trace_settled(p.instructions, tail);
         self.count.set(
             self.count
                 .get()
@@ -194,6 +293,57 @@ impl Execution {
         self.settled_head.set(self.accounting().counters().1);
         self.manual.set(None);
         Ok(())
+    }
+    /// Appends the entries one settlement counted: every span admitted since
+    /// the last settlement ran whole, except the newest, whose `tail` did not
+    /// enter. Only the newest `capacity` entries are read from the ring.
+    fn trace_settled(&self, instructions: u64, tail: u64) {
+        let mut trace = self.trace.borrow_mut();
+        let Some(trace) = trace.as_mut().filter(|t| !t.lost) else {
+            return;
+        };
+        if instructions == 0 {
+            return;
+        }
+        let a = self.accounting();
+        let head = a.counters().1;
+        let since = self.settled_head.get();
+        let complete = head.saturating_sub(since) <= 64;
+        let oldest = since.max(head.saturating_sub(64));
+        let wanted = instructions.min(trace.capacity as u64);
+        let mut newest = Vec::with_capacity(wanted as usize);
+        let mut total = 0u64;
+        let mut skip = tail;
+        let mut index = head;
+        while index > oldest {
+            index -= 1;
+            let span = a.span(index);
+            let Some(entered) = span.instructions.checked_sub(skip) else {
+                trace.lost = true;
+                return;
+            };
+            skip = 0;
+            total += entered;
+            for i in (0..entered).rev() {
+                if newest.len() as u64 == wanted {
+                    break;
+                }
+                newest.push(span.address + 4 * i);
+            }
+            if !complete && newest.len() as u64 == wanted {
+                break;
+            }
+        }
+        if (complete && total != instructions)
+            || (newest.len() as u64) < wanted
+            || self.manual.get().is_some()
+        {
+            trace.lost = true;
+            return;
+        }
+        for address in newest.into_iter().rev() {
+            trace.push(address);
+        }
     }
     fn progress(&self) -> Option<u64> {
         if !self.active.get() || self.at_instruction.get() {
@@ -251,6 +401,7 @@ impl Execution {
     fn framework(&self, word: u32) -> bool {
         if self.a32 {
             armv7a::framework_instruction(word)
+                || (self.exclusive_exits.get() && exclusive_instruction(word))
         } else {
             arm64::framework_instruction(word)
         }
@@ -347,6 +498,7 @@ impl Execution {
         }
         self.count.set(self.count.get() + 1);
         self.at_instruction.set(true);
+        let traced = self.trace.borrow().is_some();
         for (_, hook) in self.index.borrow().instructions.at(address) {
             if let Hook::Instruction { callback, data, .. } = *hook {
                 unsafe { callback(address, size, data) }
@@ -363,12 +515,22 @@ impl Execution {
                 self.cpu.stop()?;
             }
         }
+        if traced
+            && self.exit.get().is_none()
+            && let Some(trace) = self.trace.borrow_mut().as_mut()
+        {
+            trace.push(address);
+        }
         self.at_instruction.set(false);
         self.reset();
         Ok(())
     }
     fn deliver_interrupt(&self) -> Result<bool, String> {
         if self.a32 {
+            if self.owner_interrupts.get() {
+                // Stop for the owner; it enters the IRQ itself.
+                return Ok(self.irq.get() && self.scalar(arm::CPSR)? & 0x80 == 0);
+            }
             // The ARMv7-A board profile routes IRQ only.
             let entered = self.irq.get() && armv7a::enter_irq(&*self.cpu)?;
             if entered {
@@ -479,10 +641,13 @@ unsafe fn instruction(address: u64, size: u32, data: *mut c_void) {
 unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
     let e = unsafe { &*data.cast::<Execution>() };
     e.guarded(|| {
-        if !matches!(
-            exception,
-            arm::Exception::PrefetchAbort | arm::Exception::DataAbort
-        ) {
+        let owned = e.owner_aborts.get();
+        if !owned
+            && !matches!(
+                exception,
+                arm::Exception::PrefetchAbort | arm::Exception::DataAbort
+            )
+        {
             return Err(format!("unmodeled ARMv7-A exception {exception:?}"));
         }
         e.settle(
@@ -492,6 +657,16 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
             ),
             true,
         )?;
+        if owned {
+            // The owner enters it (or refuses it) from its observers.
+            let hooks = e.index.borrow().exceptions.clone();
+            for (_, hook) in hooks {
+                if let Hook::Exception { callback, data } = hook {
+                    unsafe { callback(exception, data) }
+                }
+            }
+            return e.cpu.stop();
+        }
         e.exception.set(Some(exception));
         e.cpu.stop()
     })

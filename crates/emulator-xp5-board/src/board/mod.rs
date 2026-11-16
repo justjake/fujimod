@@ -397,11 +397,20 @@ fn register_with_resources(
                 .any(|k| {
                     !matches!(
                         k.as_str(),
-                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs"
+                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs" | "pad_model"
                     )
                 })
             {
                 return Err("unknown GPIO option".into());
+            }
+            if let Some(model) = window.options.get("pad_model") {
+                if window.kind != "gpio" {
+                    return Err("pad_model belongs on the gpio window".into());
+                }
+                let model: fujimod_emulator_devices::xp5::pins::PadModel =
+                    serde_json::from_value(serde_json::to_value(model).map_err(|e| e.to_string())?)
+                        .map_err(|e| format!("GPIO pad_model: {e}"))?;
+                resources.pins.lock().unwrap().pad_model = model;
             }
             let feedback = window
                 .options
@@ -412,6 +421,23 @@ fn register_with_resources(
                 })
                 .transpose()?
                 .unwrap_or_default();
+            let initial_inputs: Vec<gpio::InitialInput> = window
+                .options
+                .get("initial_inputs")
+                .map(|v| {
+                    serde_json::from_value(serde_json::to_value(v).map_err(|e| e.to_string())?)
+                        .map_err(|e| format!("initial GPIO inputs: {e}"))
+                })
+                .transpose()?
+                .unwrap_or_default();
+            let feedback: Vec<fujimod_emulator_devices::parts::gpio::Feedback> = feedback;
+            if initial_inputs.iter().any(|input| {
+                feedback
+                    .iter()
+                    .any(|wire| (wire.input_port, wire.input_pin) == (input.port, input.pin))
+            }) {
+                return Err("a GPIO pad driven by feedback cannot declare an initial input".into());
+            }
             bus.register(
                 window.base,
                 window.size,
@@ -432,7 +458,6 @@ fn register_with_resources(
                             .transpose()?
                             .unwrap_or_default(),
                     )?
-                    .with_feedback(feedback)?
                     .with_initial_outputs(
                         window
                             .options
@@ -446,19 +471,8 @@ fn register_with_resources(
                             .transpose()?
                             .unwrap_or_default(),
                     )?
-                    .with_initial_inputs(
-                        window
-                            .options
-                            .get("initial_inputs")
-                            .map(|v| {
-                                serde_json::from_value(
-                                    serde_json::to_value(v).map_err(|e| e.to_string())?,
-                                )
-                                .map_err(|e| format!("initial GPIO inputs: {e}"))
-                            })
-                            .transpose()?
-                            .unwrap_or_default(),
-                    )?,
+                    .with_initial_inputs(initial_inputs)?
+                    .with_feedback(feedback)?,
                 ),
             )?;
         }
@@ -590,14 +604,11 @@ pub fn register_all(
                     .ok_or("controller requires flash storage aperture")?
                 {
                     flash_storage::Medium::Nor(storage) => {
-                        // Current opcode geometry comes from the 20bb20 descriptor.
-                        if jedec != 0x20bb20 {
-                            return Err("only 0x20bb20 flash geometry is supported".into());
-                        }
+                        let part = flash_storage_controller::Part::from_jedec(jedec)?;
                         bus.register(
                             w.base,
                             w.size,
-                            Box::new(flash_storage_controller::Controller::new(storage, jedec)),
+                            Box::new(flash_storage_controller::Controller::new(storage, part)),
                         )?;
                     }
                     flash_storage::Medium::Nand(storage) => {

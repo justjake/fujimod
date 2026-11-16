@@ -3,6 +3,7 @@
 use super::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+mod aarch64;
 mod a7;
 mod r5;
 
@@ -11,6 +12,8 @@ mod r5;
 pub(super) enum Architecture {
     CortexR5f(r5::State),
     CortexA7(a7::State),
+    #[serde(rename = "armv8a")]
+    ArmV8A(aarch64::State),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -38,6 +41,7 @@ impl Imported {
         match &self.state {
             Architecture::CortexR5f(state) => state.install(cpu),
             Architecture::CortexA7(state) => state.install(cpu),
+            Architecture::ArmV8A(state) => state.install(cpu),
         }
     }
 }
@@ -45,6 +49,7 @@ pub(super) fn capture(cpu: &Core, context: &Context) -> Result<Architecture, Str
     match cpu.model {
         Model::CortexR5F => Ok(Architecture::CortexR5f(r5::State::capture(cpu, context)?)),
         Model::CortexA7 => Ok(Architecture::CortexA7(a7::State::capture(cpu, context)?)),
+        Model::ArmV8A => Ok(Architecture::ArmV8A(aarch64::State::capture(cpu, context)?)),
         model => Err(format!(
             "durable Unicorn architecture is not implemented for {model:?}"
         )),
@@ -64,6 +69,7 @@ pub(super) fn import(cpu: &Core, bytes: &[u8]) -> Result<Box<dyn Snapshot>, Stri
     match &document.architecture {
         Architecture::CortexR5f(state) => state.validate(cpu)?,
         Architecture::CortexA7(state) => state.validate(cpu)?,
+        Architecture::ArmV8A(state) => state.validate(cpu)?,
     }
     Ok(Box::new(Imported {
         owner: cpu.identity,

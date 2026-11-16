@@ -1,0 +1,30 @@
+# SD slot 0, the UHS-I SDH30 host. The stock driver (0x14912cc) addresses
+# instance n at 0xff9b0000 + (n << 14); this build uses only port 0 of the
+# instance: the register-selection words at +0x1e0/+0x1e4 (0x1492ed4), card
+# detect at +0x24 (0x14930b4) and the SDHCI clock at +0x2c (0x14923f0,
+# 0x1492268). Unlike X-T5 4.31 (0x13a636c) it never reaches the UHS-II PHY
+# block at +0x2000 or the UHS-II port at +0x2200 (its PHY power-down routine
+# 0x1492f68 has no caller), so neither is declared
+# input in x100vi-131.toml.
+#
+# Session assumptions, not camera measurements: transfer_ticks, clock_ticks and
+# rca; ram_bytes is the DMA limit, the DRAM top (0x80000000, the manifest's
+# [dram] limit). No interrupt line is declared: the boot polls, and an
+# asserted interrupt refuses.
+
+[[device]]
+base = 0xff9b0000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b0000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+ram_bytes = 0x80000000
+
+[[device]]
+base = 0xff9b01e0
+size = 8
+kind = "sd-interface"

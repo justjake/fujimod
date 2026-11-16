@@ -24,7 +24,7 @@ enum Part {
     PowerController {
         rtc_seconds: u32,
         rtc_valid: bool,
-        /// xt5-bringup: initial register overrides (address -> value), for
+        /// Bring-up: initial register overrides (address -> value), for
         /// example register 0 bit 7, which the X-T5 stage1 polls at boot.
         #[serde(default)]
         registers: std::collections::BTreeMap<String, u16>,
@@ -33,11 +33,11 @@ enum Part {
     SerialCommandRegisters(fujimod_emulator_parts_io::serial_command_registers::Wiring),
     BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
     Lsm6dsConfigurationRegisters,
-    /// xt5-bringup: an unidentified chip. Accepts every frame, records the
+    /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
     GenericSink { miso_high: bool },
 }
-/// xt5-bringup: endpoint for bring-up of bodies whose serial parts are not yet identified.
+/// Bring-up: endpoint for bring-up of bodies whose serial parts are not yet identified.
 struct GenericSink {
     miso_high: bool,
     transfers: u64,

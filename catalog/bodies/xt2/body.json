@@ -17,6 +17,180 @@
       "id": "flash-storage",
       "kind": "control",
       "signals": []
+    },
+    {
+      "id": "controls-adc-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 1,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 2,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 5,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 6,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 7,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 14,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 4,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-7-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 6,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-13-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 13,
+          "pin": 6,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-15",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 15,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-6-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 6,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-6-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 6,
+          "pin": 4,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-13",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 2,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [
@@ -36,7 +210,17 @@
     "thermal_connection_ids": [],
     "profiles": {
       "xt2-discovery": {
-        "dram_basis": "Declared discovery input from firmware, not measured: X-T2 4.41 section 5 0xcf8200 sets the attribute of 0x13d4000-0x3fffffff to 3, the value it gives its own read-write data at 0xf99000 (0xcf81b0), so the firmware uses RAM up to 1 GiB. RAM population and the camera MMU table are not read."
+        "dram_basis": "Declared discovery input from firmware, not measured: X-T2 4.41 section 5 0xcf8200 sets the attribute of 0x13d4000-0x3fffffff to 3, the value it gives its own read-write data at 0xf99000 (0xcf81b0), so the firmware uses RAM up to 1 GiB. RAM population and the camera MMU table are not read.",
+        "register_maps": {
+          "register_blocks": [
+            {
+              "base": 4290772992,
+              "size": 4096,
+              "idle_bits": [],
+              "basis": "DesignWare PCIe root-complex registers of X-T2 4.41: routine 0xa7c1e0 programs +0x710 (port link control) and, after link up, +0x18 and +0x4; 0xa80950 programs outbound translation windows through +0x900..+0x91c to 0xfe081000 (endpoint configuration header, whose +0x3c/+0x3d interrupt line and pin are checked) and 0xf0000000. Plain registers: with the PHY link down, only the +0x710 setup before the poll is reached."
+            }
+          ]
+        }
       }
     }
   }

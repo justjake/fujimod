@@ -1,56 +1,22 @@
 import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
-import featureIcons from '../ui/assets/feature-icons.svg?url';
-import iconMetrics from '../ui/assets/feature-icon-metrics.generated.json';
-import catalogData from './features.generated.json';
+import { FeatureIcon as Icon } from './FeatureIcon';
+import {
+  catalog,
+  type Choice,
+  type Control,
+  type Credits,
+  type Feature,
+} from './catalog';
+import { ChipIcon, CreditList, Premiere, Prose } from './catalog-parts';
 import { FeatureTile } from './FeatureTile';
 import { fadeLoop } from './fade-loop';
 import { featureMedia, type Media } from './feature-media';
 import './features.css';
 
-/** Inline Markdown from the docs: text, bold, italic and links. */
-type Inline = string | { b: Inline[] } | { i: Inline[] } | { href: string; text: Inline[] };
-type Credits = { premiere: boolean; inspired: Inline[][]; thanks: Inline[][] };
-/** A hover card: one control, its options and what FujiMod changed. */
-type Card = {
-  title: string;
-  path: string[];
-  summary: string | null;
-  choices: Record<string, string>;
-  related: { card: string; reason: string }[];
-  changes: string | null;
-  credits: Credits;
-  choice_credits: Record<string, Credits>;
-};
-type Choice = { label: string; stock: boolean; icon: string | null };
-type Control = {
-  title: string;
-  primary: boolean;
-  card: string | null;
-  choices: Choice[];
-  actions: string[];
-};
-/** A catalog tile: one feature, its controls and the cards its preview may come from. */
-type Feature = {
-  id: string;
-  group: string;
-  icon: string;
-  title: string;
-  path: string[];
-  summary: string;
-  card: string | null;
-  media_cards: string[];
-  controls: Control[];
-  credits: Credits;
-};
-/** The docs' website copy (python -m tools.walkthroughs docs --site-data). */
-type Catalog = { schema: 1; groups: string[]; features: Feature[]; cards: Record<string, Card> };
-/** Ink box and the symbol's own viewBox (symbol units), and the optical width and height (scripts/icon-metrics.ts). */
-type IconMetric = { box: number[]; view: number[]; width: number; height: number };
 /** What a hover card shows: a control, or one option of it. */
 type Target = { card: string; choice?: string; anchor: HTMLElement };
 
-const catalog = catalogData as Catalog;
 const CARDS = catalog.cards;
 const GROUP_TITLES: Record<string, string> = {
   photography: 'Photography',
@@ -60,123 +26,6 @@ const GROUP_TITLES: Record<string, string> = {
 };
 const MEDIA = '/artifacts/docs/';
 const media = featureMedia();
-const RATIO = /^ratio:(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/;
-
-/** A sprite icon cropped to its ink, sized by the context's --icon-size so every icon has the same optical size. */
-function Icon(props: { name: string }) {
-  const metric = () => (iconMetrics as Record<string, IconMetric>)[props.name];
-  return (
-    <svg
-      class="catalog-icon"
-      aria-hidden="true"
-      viewBox={metric().box.join(' ')}
-      style={{ '--w': metric().width, '--h': metric().height }}
-    >
-      <use
-        href={`${featureIcons}#${props.name}`}
-        x={metric().view[0]}
-        y={metric().view[1]}
-        width={metric().view[2]}
-        height={metric().view[3]}
-      />
-    </svg>
-  );
-}
-
-/** An aspect ratio choice drawn as its frame. */
-function Ratio(props: { width: number; height: number }) {
-  const scale = () => 14 / Math.max(props.width, props.height);
-  return (
-    <svg class="catalog-ratio" viewBox="0 0 14 14" aria-hidden="true">
-      <rect
-        x={(14 - props.width * scale()) / 2}
-        y={(14 - props.height * scale()) / 2}
-        width={props.width * scale()}
-        height={props.height * scale()}
-        rx="1"
-      />
-    </svg>
-  );
-}
-
-/** A chip's icon: a sprite symbol, or "ratio:W:H" drawn as its frame. */
-function ChipIcon(props: { name: string }) {
-  const ratio = () => RATIO.exec(props.name);
-  return (
-    <Show when={ratio()} fallback={<Icon name={props.name} />}>
-      {(match) => <Ratio width={Number(match()[1])} height={Number(match()[2])} />}
-    </Show>
-  );
-}
-
-/** Summary text, keeping slot ranges such as C1–C7 on one line. */
-function Prose(props: { text: string }) {
-  return (
-    <For each={props.text.split(/(C\d–C\d)/).filter(Boolean)}>
-      {(part) => (/^C\d–C\d$/.test(part) ? <span class="nowrap">{part}</span> : part)}
-    </For>
-  );
-}
-
-function Rich(props: { inline: Inline[] }) {
-  return (
-    <For each={props.inline}>
-      {(part) =>
-        typeof part === 'string' ? (
-          part
-        ) : 'b' in part ? (
-          <b>
-            <Rich inline={part.b} />
-          </b>
-        ) : 'i' in part ? (
-          <i>
-            <Rich inline={part.i} />
-          </i>
-        ) : (
-          <a href={part.href} target="_blank" rel="noreferrer">
-            <Rich inline={part.text} />
-          </a>
-        )
-      }
-    </For>
-  );
-}
-
-/** First offered in any digital camera. */
-function Premiere() {
-  return (
-    <div class="catalog-premiere">
-      <Icon name="ticket" />
-      WORLD PREMIERE
-    </div>
-  );
-}
-
-function CreditList(props: { credits: Credits }) {
-  return (
-    <Show when={props.credits.inspired.length || props.credits.thanks.length}>
-      <ul class="catalog-credits">
-        <For each={props.credits.inspired}>
-          {(line) => (
-            <li>
-              <Icon name="heart" />
-              <b>INSPIRED BY</b>: <Rich inline={line} />
-            </li>
-          )}
-        </For>
-        <For each={props.credits.thanks}>
-          {(line) => (
-            <li>
-              <Icon name="gift" />
-              <b>THANKS</b>: <Rich inline={line} />
-            </li>
-          )}
-        </For>
-      </ul>
-    </Show>
-  );
-}
-
 /** What tiles and hover cards share: the menus above the title, the title, WORLD PREMIERE, the description,
     the credits, then the rest (options or Related). */
 function Entry(props: {
@@ -241,7 +90,10 @@ function CardVideo(props: { media: Media; choice?: string }) {
 
 const NO_CREDITS: Credits = { premiere: false, inspired: [], thanks: [] };
 
-function CardBody(props: { target: Target }) {
+function CardBody(props: {
+  target: Target;
+  reference: (card: string, title: string) => JSX.Element;
+}) {
   const card = () => CARDS[props.target.card];
   const choice = () => props.target.choice;
   /** The menus above the title: a control's menus, and for an option its control too. */
@@ -276,7 +128,8 @@ function CardBody(props: { target: Target }) {
             <For each={card().related}>
               {(related) => (
                 <li>
-                  <b>{CARDS[related.card].title}</b>: {related.reason}
+                  <b>{props.reference(related.card, CARDS[related.card].title)}</b>:{' '}
+                  {related.reason}
                 </li>
               )}
             </For>
@@ -288,18 +141,68 @@ function CardBody(props: { target: Target }) {
 }
 
 export function FeatureCatalog() {
+  const [query, setQuery] = createSignal('');
+  const features = () => {
+    const words = query().trim().toLowerCase().split(/\s+/);
+    return catalog.features.filter((feature) => {
+      const text = [
+        feature.title,
+        feature.summary,
+        ...feature.path,
+        ...feature.controls.flatMap((control) => [
+          control.title,
+          ...control.choices.map((choice) => choice.label),
+        ]),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return words.every((word) => text.includes(word));
+    });
+  };
   const [target, setTarget] = createSignal<Target>();
   const [position, setPosition] = createSignal({ left: 0, top: 0 });
   let timer: ReturnType<typeof setTimeout> | undefined;
   let card: HTMLDivElement | undefined;
+  let heading: HTMLDivElement | undefined;
   let pinned = false;
   onCleanup(() => clearTimeout(timer));
-  const close = () => {
+  const cardLink = (id?: string) => {
+    const params = new URLSearchParams();
+    if (query()) params.set('search', query());
+    if (id) params.set('card', id);
+    history.replaceState(history.state, '', `#features${params.size ? `?${params}` : ''}`);
+  };
+  const close = (updateLink = true) => {
     clearTimeout(timer);
     pinned = false;
     setTarget();
+    if (
+      updateLink &&
+      location.hash.startsWith('#features?') &&
+      new URLSearchParams(location.hash.slice('#features?'.length)).has('card')
+    )
+      cardLink();
   };
   onSettled(() => {
+    const searchFromLink = () => {
+      if (location.hash === '#features') {
+        setQuery('');
+        close();
+        return;
+      }
+      if (!location.hash.startsWith('#features?')) return;
+      const params = new URLSearchParams(location.hash.slice('#features?'.length));
+      close(false);
+      setQuery(params.get('search') ?? '');
+      document.getElementById('features')?.scrollIntoView();
+      const id = params.get('card');
+      if (id && Object.hasOwn(CARDS, id) && heading) {
+        pinned = true;
+        show({ card: id, anchor: heading });
+      }
+    };
+    searchFromLink();
+    window.addEventListener('hashchange', searchFromLink);
     const outside = (event: Event) => {
       const anchor = target()?.anchor;
       if (
@@ -317,6 +220,7 @@ export function FeatureCatalog() {
     document.addEventListener('focusin', outside);
     document.addEventListener('keydown', escape);
     return () => {
+      window.removeEventListener('hashchange', searchFromLink);
       document.removeEventListener('pointerdown', outside);
       document.removeEventListener('focusin', outside);
       document.removeEventListener('keydown', escape);
@@ -336,9 +240,11 @@ export function FeatureCatalog() {
   };
   const show = (next: Target) => {
     clearTimeout(timer);
-    setTarget(next);
-    place(next.anchor);
-    requestAnimationFrame(() => place(next.anchor));
+    // A Related trigger disappears when its card is replaced; keep the tile's anchor.
+    const anchor = (card?.contains(next.anchor) && target()?.anchor) || next.anchor;
+    setTarget({ ...next, anchor });
+    place(anchor);
+    requestAnimationFrame(() => place(anchor));
   };
   const later = (action: () => void, ms: number) => {
     clearTimeout(timer);
@@ -353,6 +259,7 @@ export function FeatureCatalog() {
       if (dismiss) close();
       else {
         pinned = true;
+        cardLink(props.card);
         show({ card: props.card, choice: props.choice, anchor });
       }
     };
@@ -378,6 +285,11 @@ export function FeatureCatalog() {
           if (event.pointerType === 'mouse' && !pinned) later(close, 150);
         }}
         onFocus={(event) => {
+          // Related references stay focusable until Enter or Space activates them.
+          if (card?.contains(event.currentTarget)) {
+            clearTimeout(timer);
+            return;
+          }
           // Opening during pointer focus can cover the trigger before mouseup
           // in Safari, retargeting the click. Let the completed tap open it.
           if (pointerPinned !== undefined) return;
@@ -480,12 +392,36 @@ export function FeatureCatalog() {
 
   return (
     <div class="catalog" id="features">
-      <For each={catalog.groups.filter((group) => catalog.features.some((f) => f.group === group))}>
+      <div class="catalog-heading" ref={(element) => (heading = element)}>
+        <div>
+          <h2>Explore features</h2>
+          <p>{catalog.features.length} features · X70 catalog. Availability varies by camera.</p>
+          <p>Menu previews may show earlier builds.</p>
+        </div>
+        <label class="catalog-search">
+          <span>Find a feature</span>
+          <input
+            type="search"
+            value={query()}
+            onInput={(event) => {
+              close();
+              setQuery(event.currentTarget.value);
+            }}
+            placeholder="Film, focus, custom settings…"
+          />
+        </label>
+      </div>
+      <p class="catalog-results" role="status" hidden={!query().trim()}>
+        {features().length
+          ? `${features().length} of ${catalog.features.length} features`
+          : 'No matching features.'}
+      </p>
+      <For each={catalog.groups.filter((group) => features().some((f) => f.group === group))}>
         {(group) => (
           <section class="catalog-group" aria-labelledby={`catalog-${group}-heading`}>
             <h2 id={`catalog-${group}-heading`}>{GROUP_TITLES[group]}</h2>
             <div class="catalog-grid">
-              <For each={catalog.features.filter((f) => f.group === group)}>
+              <For each={features().filter((f) => f.group === group)}>
                 {(feature) => <Tile feature={feature} />}
               </For>
             </div>
@@ -506,7 +442,14 @@ export function FeatureCatalog() {
           if (event.pointerType === 'mouse' && !pinned) later(close, 150);
         }}
       >
-        <Show when={target()}>{(current) => <CardBody target={current()} />}</Show>
+        <Show when={target()} keyed>
+          {(current) => (
+            <CardBody
+              target={current}
+              reference={(card, title) => <Ref card={card}>{title}</Ref>}
+            />
+          )}
+        </Show>
       </div>
     </div>
   );
