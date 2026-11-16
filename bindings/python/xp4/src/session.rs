@@ -463,6 +463,14 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     fn card_medium(&self, host: usize) -> PyResult<fujimod_emulator_devices::parts::sd_card::Card> {
         self.inner.card_medium(host).map_err(fujimod_python_base::error)
     }
+    fn reset_nor_program_coverage(&self) -> PyResult<()> {
+        self.inner
+            .reset_nor_program_coverage()
+            .map_err(fujimod_python_base::error)
+    }
+    fn nor_medium(&self) -> PyResult<Vec<u8>> {
+        self.inner.nor_medium().map_err(fujimod_python_base::error)
+    }
 }
 
 fn client_register(id: i32) -> Result<fujimod_emulator_cpu::Register, String> {
