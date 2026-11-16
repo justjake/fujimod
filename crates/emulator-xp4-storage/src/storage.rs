@@ -4242,6 +4242,19 @@ mod write_range_tests {
             &p.lock().unwrap().nor.bytes.as_slice()[0x1024..0x1028],
             &[0xff; 4]
         );
+        let saved = flash.save();
+        assert_eq!(saved["nor"]["write_ranges"], json!([{ "offset": 0x1000, "length": ERASE }]));
+        assert_eq!(saved["nor"]["program_count"], 1);
+        assert_eq!(saved["nor"]["programmed_ranges"], json!([[0x1004, 0x1024]]));
+        assert_eq!(&flash.nor_medium().unwrap()[0x1004..0x1024], &[0; 32]);
+        let mut restored = SerialFlashController::new(
+            shared(vec![range(0x1000, ERASE as u64)]).unwrap(), 37,
+        );
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        restored.reset_nor_program_coverage().unwrap();
+        assert_eq!(restored.save()["nor"]["program_count"], 0);
+        assert_eq!(restored.save()["nor"]["write_ranges"], saved["nor"]["write_ranges"]);
     }
 
     #[test]
