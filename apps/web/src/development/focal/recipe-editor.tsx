@@ -8,7 +8,7 @@ import './focal.css';
 /* A recipe editor over live view: settings in a translucent left column,
    the picture in the right. Choice rows scroll their choices as stock icons,
    slider rows step through segments as FUJIMOD SET-UP's color bars do, and
-   fly-outs (WB SHIFT, film notes) continue the focused row across the
+   the WB SHIFT fly-out continues the focused row across the
    picture. Compare shows the column twice, A and B, scrolled together. The
    same screen serves RAW CONVERSION in playback.
 
@@ -92,9 +92,13 @@ const DR: Choice[] = [
 
 const EFFECT: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
 const GRAIN: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
+const GRAIN_SIZE: Choice[] = [{ name: 'SMALL' }, { name: 'LARGE' }];
+const PRIORITY: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }, { name: 'AUTO' }];
+const CLARITY: Step[] = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
 
-/** A row's icon: a stock Q menu vector, or a mod's own artwork. */
-type RowIcon = { stock: number } | { mod: string };
+/** A row's icon: a stock Q menu vector, a mod's own artwork, or a word on a
+ * stock-style plate with an optional badge letter. */
+type RowIcon = { stock: number } | { mod: string } | { word: string; badge?: string };
 
 /** A slider's steps in order; numbers show signed, words as written. */
 type Step = number | string;
@@ -114,6 +118,8 @@ interface SliderSetting {
   id: string;
   name: string;
   icon: RowIcon;
+  /** A second dimension of the setting above, sharing its icon. */
+  continues?: boolean;
   steps: Step[];
 }
 interface ChoiceSetting {
@@ -121,6 +127,7 @@ interface ChoiceSetting {
   id: string;
   name: string;
   icon: RowIcon;
+  continues?: boolean;
   choices: Choice[];
 }
 type Setting = SliderSetting | ChoiceSetting;
@@ -129,6 +136,13 @@ const SETTINGS: Setting[] = [
   { kind: 'choice', id: 'film', name: 'FILM SIMULATION', icon: { stock: 0x5f3 }, choices: FILMS },
   { kind: 'choice', id: 'wb', name: 'WHITE BALANCE', icon: { stock: 0x609 }, choices: WB },
   { kind: 'choice', id: 'dr', name: 'DYNAMIC RANGE', icon: { stock: 0x5f1 }, choices: DR },
+  {
+    kind: 'choice',
+    id: 'priority',
+    name: 'D RANGE PRIORITY',
+    icon: { mod: 'd_range_priority' },
+    choices: PRIORITY,
+  },
   {
     kind: 'slider',
     id: 'highlight',
@@ -139,19 +153,20 @@ const SETTINGS: Setting[] = [
   { kind: 'slider', id: 'shadow', name: 'SHADOW TONE', icon: { stock: 0x607 }, steps: LEVELS },
   { kind: 'slider', id: 'color', name: 'COLOR', icon: { stock: 0x5f0 }, steps: LEVELS },
   { kind: 'slider', id: 'sharp', name: 'SHARPNESS', icon: { stock: 0x605 }, steps: LEVELS },
+  { kind: 'slider', id: 'clarity', name: 'CLARITY', icon: { mod: 'clarity' }, steps: CLARITY },
   { kind: 'slider', id: 'nr', name: 'NOISE REDUCTION', icon: { stock: 0x603 }, steps: NR_LEVELS },
   {
     kind: 'choice',
     id: 'chrome',
     name: 'COLOR CHROME EFFECT',
-    icon: { mod: 'color_chrome' },
+    icon: { word: 'Chrome' },
     choices: EFFECT,
   },
   {
     kind: 'choice',
     id: 'fxblue',
     name: 'COLOR CHROME FX BLUE',
-    icon: { mod: 'color_chrome_blue' },
+    icon: { word: 'Chrome', badge: 'B' },
     choices: EFFECT,
   },
   {
@@ -161,7 +176,22 @@ const SETTINGS: Setting[] = [
     icon: { mod: 'film_grain' },
     choices: GRAIN,
   },
+  {
+    kind: 'choice',
+    id: 'grainSize',
+    name: 'GRAIN SIZE',
+    icon: { mod: 'film_grain' },
+    continues: true,
+    choices: GRAIN_SIZE,
+  },
 ];
+
+/** Rows under one icon: a setting and the further dimensions that continue it. */
+const GROUPS: number[][] = SETTINGS.reduce<number[][]>((groups, setting, i) => {
+  if (setting.continues && groups.length) groups[groups.length - 1].push(i);
+  else groups.push([i]);
+  return groups;
+}, []);
 
 /** Every setting holds the index of its step or choice; WB SHIFT holds R and B. */
 type Recipe = Record<string, number> & { shiftR: number; shiftB: number };
@@ -171,6 +201,8 @@ const BASE: Recipe = {
   film: 3,
   wb: 0,
   dr: 0,
+  priority: 0,
+  clarity: at(CLARITY, 0),
   highlight: at(LEVELS, -1),
   shadow: at(LEVELS, 1),
   color: at(LEVELS, 2),
@@ -179,6 +211,7 @@ const BASE: Recipe = {
   chrome: 1,
   fxblue: 0,
   grain: 1,
+  grainSize: 0,
   shiftR: 2,
   shiftB: -3,
 };
@@ -238,6 +271,14 @@ type Depth = 'shadow' | 'fade' | 'clip';
 /** Mockup options shared by every design. */
 const [center, setCenter] = createSignal(true);
 const [depth, setDepth] = createSignal<Depth>('shadow');
+/** The accent for focus and changes outside RAW CONVERSION, which is playback's. */
+type Accent = 'custom' | 'rec' | 'setup';
+const ACCENTS: Record<Accent, { label: string; color: string }> = {
+  custom: { label: 'Custom purple', color: '#7d3fc2' },
+  rec: { label: 'Shooting red', color: 'var(--color-rec)' },
+  setup: { label: 'Setup blue', color: 'var(--color-setup)' },
+};
+const [accent, setAccent] = createSignal<Accent>('custom');
 
 interface Mark {
   focused: boolean;
@@ -910,8 +951,39 @@ function Ink(props: { src: string; class: string; color: string }) {
   );
 }
 
-function RowIconView(props: { icon: RowIcon; color: string }) {
+/** A word on a plate in the icon ink, letters cut through, as the stock
+ * Color and Sharp icons are; a badge letter on its lower right corner. */
+function Wordmark(props: { word: string; badge?: string; color: string }) {
   return (
+    <span
+      class="relative flex h-[30px] w-[39px] items-center justify-center overflow-visible rounded-[3px]"
+      style={{ background: props.color }}
+    >
+      <span
+        class="inline-block text-[22px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap"
+        style={{ color: 'rgb(0 0 0 / 0.88)', transform: 'scaleX(0.46)' }}
+      >
+        {props.word}
+      </span>
+      <Show when={props.badge}>
+        <span
+          class="absolute -right-[8px] -bottom-[6px] flex h-[16px] w-[16px] items-center justify-center rounded-[3px] text-[12px] leading-none font-bold"
+          style={{ background: props.color, color: '#000', 'box-shadow': '0 0 0 2px #000' }}
+        >
+          {props.badge}
+        </span>
+      </Show>
+    </span>
+  );
+}
+
+function RowIconView(props: { icon: RowIcon; color: string }) {
+  const word = () => ('word' in props.icon ? props.icon : undefined);
+  return (
+    <Show
+      when={!word()}
+      fallback={<Wordmark word={word()!.word} badge={word()!.badge} color={props.color} />}
+    >
     <Show
       when={'stock' in props.icon ? props.icon.stock : undefined}
       fallback={
@@ -927,6 +999,7 @@ function RowIconView(props: { icon: RowIcon; color: string }) {
         // the ink is the root menu's 39 by 30.
         <Ink src={stock(id())} class="-mx-[10px] h-[36px] w-[60px]" color={props.color} />
       )}
+    </Show>
     </Show>
   );
 }
@@ -1177,6 +1250,7 @@ function ThumbSlider(props: SliderProps & { colors: ThumbColors }) {
   );
 }
 
+/** One setting's controls, beside its group's icon. */
 function SettingRow(props: {
   setting: Setting;
   index: number;
@@ -1195,62 +1269,105 @@ function SettingRow(props: {
   return (
     <div
       class="relative flex items-stretch"
-      style={{ height: `${ROW}px`, ...d().row(props.focused) }}
+      style={{
+        height: `${ROW}px`,
+        ...d().row(props.focused),
+        'padding-top': `${d().lines.top}px`,
+        'padding-bottom': `${d().lines.bottom}px`,
+      }}
       onClick={() => props.send({ focus: props.index, side: props.side })}
     >
-      <div
-        class="flex shrink-0 items-center justify-center"
-        style={{
-          width: `${ICON_COLUMN}px`,
-          'border-right': `1px solid ${d().divider?.(props.focused) ?? 'transparent'}`,
-          'padding-bottom': `${d().lines.bottom - d().lines.top}px`,
-        }}
+      <Show
+        when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
+        fallback={
+          <Strip
+            items={(props.setting as ChoiceSetting).choices}
+            value={props.recipe[props.setting.id]}
+            width={controlWidth()}
+            design={d()}
+            focused={props.focused}
+            changed={props.changed}
+            pick={pick}
+          />
+        }
       >
-        <RowIconView icon={props.setting.icon} color={d().iconInk(props.focused)} />
-      </div>
-      <div
-        class="flex min-w-0 flex-1 items-stretch"
-        style={{
-          'padding-top': `${d().lines.top}px`,
-          'padding-bottom': `${d().lines.bottom}px`,
-        }}
-      >
-        <Show
-          when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
-          fallback={
-            <Strip
-              items={(props.setting as ChoiceSetting).choices}
-              value={props.recipe[props.setting.id]}
-              width={controlWidth()}
+        {(slider) => (
+          <div class="flex flex-1" style={d().strip.track(props.focused)}>
+            <ThumbSlider
+              setting={slider()}
+              colors={d().slider}
+              value={props.recipe[slider().id]}
               design={d()}
               focused={props.focused}
               changed={props.changed}
               pick={pick}
             />
-          }
-        >
-          {(slider) => (
-            <div class="flex flex-1" style={d().strip.track(props.focused)}>
-              <ThumbSlider
-                setting={slider()}
-                colors={d().slider}
-                value={props.recipe[slider().id]}
-                design={d()}
-                focused={props.focused}
-                changed={props.changed}
-                pick={pick}
-              />
-            </div>
-          )}
-        </Show>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+/** A setting's icon, once, beside the rows of every dimension it has; the
+ * icon's cell takes the focus when any of them has it. */
+function SettingGroup(props: {
+  rows: number[];
+  recipe: Recipe;
+  other?: Recipe;
+  focus?: number;
+  width: number;
+  design: Design;
+  side?: Side;
+  send: Send;
+}) {
+  const d = () => props.design;
+  const at = () => props.rows.indexOf(props.focus ?? -1);
+  return (
+    <div class="relative flex">
+      <div
+        class="flex shrink-0 items-center justify-center"
+        style={{
+          width: `${ICON_COLUMN}px`,
+          height: `${props.rows.length * ROW}px`,
+          ...d().row(at() >= 0),
+          'border-right': `1px solid ${d().divider?.(at() >= 0) ?? 'transparent'}`,
+          'padding-bottom': `${d().lines.bottom - d().lines.top}px`,
+        }}
+        onClick={() => props.send({ focus: props.rows[Math.max(0, at())], side: props.side })}
+      >
+        <RowIconView icon={SETTINGS[props.rows[0]].icon} color={d().iconInk(at() >= 0)} />
       </div>
-      <Show when={props.focused}>
-        <Show when={d().focus === 'stripe'}>
-          <span
-            class="pointer-events-none absolute top-[1px] bottom-[2px] left-0"
-            style={{ width: `${STRIPE}px`, background: d().focusColor }}
-          />
-        </Show>
+      <div class="flex min-w-0 flex-1 flex-col">
+        <For each={props.rows}>
+          {(index) => (
+            <SettingRow
+              setting={SETTINGS[index]}
+              index={index}
+              recipe={props.recipe}
+              focused={index === props.focus}
+              changed={
+                props.other !== undefined &&
+                props.other[SETTINGS[index].id] !== props.recipe[SETTINGS[index].id]
+              }
+              width={props.width}
+              design={d()}
+              side={props.side}
+              send={props.send}
+            />
+          )}
+        </For>
+      </div>
+      <Show when={at() >= 0 && d().focus === 'stripe'}>
+        <span
+          class="pointer-events-none absolute left-0"
+          style={{
+            top: `${at() * ROW + 1}px`,
+            height: `${ROW - 3}px`,
+            width: `${STRIPE}px`,
+            background: d().focusColor,
+          }}
+        />
       </Show>
     </div>
   );
@@ -1287,16 +1404,13 @@ function Column(props: {
         }}
       >
         <div style={{ transform: `translateY(${-scroll()}px)` }}>
-          <For each={SETTINGS}>
-            {(setting, i) => (
-              <SettingRow
-                setting={setting}
-                index={i()}
+          <For each={GROUPS}>
+            {(rows) => (
+              <SettingGroup
+                rows={rows}
                 recipe={props.recipe}
-                focused={i() === props.focus && props.active !== false}
-                changed={
-                  props.other !== undefined && props.other[setting.id] !== props.recipe[setting.id]
-                }
+                other={props.other}
+                focus={props.active !== false ? props.focus : undefined}
                 width={props.width}
                 design={props.design}
                 side={props.side}
@@ -1452,7 +1566,7 @@ function Legend(props: {
 
 /* ---- The editor screen ------------------------------------------------------- */
 
-type Fly = 'none' | 'shift' | 'film';
+type Fly = 'none' | 'shift';
 type Mode = 'live' | 'raw';
 
 interface EditorState {
@@ -1490,8 +1604,6 @@ function Editor(props: { state: EditorState; send?: Send }) {
     if (compare()) list.push({ glyph: 'AEL', label: 'A/B', key: 'Tab' });
     else if (focused().id === 'wb' && s().fly === 'none')
       list.push({ glyph: '▲', label: 'SHIFT', key: 's' });
-    else if (focused().id === 'film' && s().fly === 'none')
-      list.push({ glyph: 'DISP', label: 'INFO', key: 'i' });
     if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
     else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
     list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
@@ -1504,7 +1616,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
       style={{
         '--hairline': colors.hairline,
         '--focus': colors.focus,
-        '--accent': s().mode === 'raw' ? 'var(--color-play)' : 'var(--color-rec)',
+        '--accent': s().mode === 'raw' ? 'var(--color-play)' : ACCENTS[accent()].color,
       }}
     >
       <Photo recipe={s().recipe} />
@@ -1565,39 +1677,36 @@ function Editor(props: { state: EditorState; send?: Send }) {
             class="absolute top-[10px] flex flex-col items-start gap-[4px]"
             style={{ left: `${WIDTH + 12}px` }}
           >
-            <span
-              class={`px-[12px] py-[6px] text-[22px] ${design().card.class}`}
-              style={design().card.style}
-            >
-              {focused().name}
-            </span>
+            <Show when={focused().id !== 'film'}>
+              <span
+                class={`px-[12px] py-[6px] text-[22px] ${design().card.class}`}
+                style={design().card.style}
+              >
+                {focused().name}
+              </span>
+            </Show>
             <span
               class={`px-[12px] py-[4px] text-[22px] ${design().card.class}`}
               style={design().card.style}
             >
               {valueName(focused(), s().recipe)}
             </span>
+            <Show when={focused().id === 'film' ? FILMS[s().recipe.film].note : undefined}>
+              {(note) => (
+                <p
+                  class="max-w-[400px] px-[12px] py-[8px] text-[19px] leading-[26px] font-light tracking-[0.03em]"
+                  style={{ ...design().card.style }}
+                >
+                  {note()}
+                </p>
+              )}
+            </Show>
           </div>
         </Show>
         <Show when={s().mode === 'raw'}>
           <span class="absolute top-[10px] right-[12px] bg-(--accent) px-[8px] py-[2px] text-[17px] font-bold">
             RAW
           </span>
-        </Show>
-        <Show when={s().fly === 'film'}>
-          <RowExtension
-            top={rowTop()}
-            left={WIDTH}
-            width={300}
-            design={design()}
-            title={FILMS[s().recipe.film].name}
-            bodyHeight={104}
-            onClick={() => send({ key: 'i' })}
-          >
-            <p class="text-[19px] leading-[27px] font-light tracking-[0.04em]">
-              {FILMS[s().recipe.film].note}
-            </p>
-          </RowExtension>
         </Show>
         <Show when={s().fly === 'shift'}>
           <RowExtension
@@ -1669,8 +1778,6 @@ function onKey(state: EditorState, key: string): EditorState {
   if (key === 'ArrowLeft') return step(state, -1);
   if (key === 'ArrowRight') return step(state, 1);
   if (key === 's' && id === 'wb' && !state.comparing) return { ...state, fly: 'shift' };
-  if (key === 'i' && id === 'film' && !state.comparing)
-    return { ...state, fly: state.fly === 'film' ? 'none' : 'film' };
   if (key === 'a') return { ...state, snapshot: { ...state.recipe }, comparing: false, side: 'b' };
   if (key === 'q' && state.snapshot)
     return { ...state, comparing: !state.comparing, fly: 'none', side: 'b' };
@@ -1772,6 +1879,14 @@ function Live() {
           value={depth()}
           pick={setDepth}
         />
+        <Segmented
+          choices={(Object.keys(ACCENTS) as Accent[]).map((id) => ({
+            value: id,
+            label: ACCENTS[id].label,
+          }))}
+          value={accent()}
+          pick={setAccent}
+        />
         <label class="flex min-h-[44px] items-center gap-[8px] px-[6px] text-[15px] font-semibold">
           <input
             type="checkbox"
@@ -1810,6 +1925,8 @@ const EDITED: Recipe = {
   color: at(LEVELS, -1),
   nr: at(NR_LEVELS, 'SNR'),
   grain: 2,
+  grainSize: 1,
+  clarity: at(CLARITY, 2),
   shiftR: 4,
   shiftB: -5,
 };
@@ -1848,9 +1965,10 @@ const STATES: { id: string; title: string; state: EditorState }[] = [
   {
     id: 'nr',
     title: 'NOISE REDUCTION with the levels below -2',
-    state: { ...INITIAL, focus: 7, recipe: EDITED },
+    state: { ...INITIAL, focus: 9, recipe: EDITED },
   },
-  { id: 'film-info', title: 'Film simulation notes', state: { ...INITIAL, focus: 0, fly: 'film' } },
+  { id: 'film-notes', title: 'Film simulation', state: { ...INITIAL, focus: 0 } },
+  { id: 'grain-size', title: 'GRAIN SIZE under the grain icon', state: { ...INITIAL, focus: 13, recipe: EDITED } },
   { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
   {
     id: 'compare',
