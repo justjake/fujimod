@@ -20,6 +20,15 @@ pub const BASES: [u64; 13] = [
     0xfffae000,
 ];
 
+pub const COMMAND6_BASES: [u64; 3] = [0xff704000, 0xff706000, 0xfffae000];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Command6Delays {
+    pub request_ticks: u64,
+    pub settle_ticks: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Inputs {
@@ -27,6 +36,9 @@ pub struct Inputs {
     pub initial_status: Vec<u32>,
     pub request_ticks: Vec<u64>,
     pub settle_ticks: Vec<u64>,
+    /// Optional command-6 model hypothesis with unmeasured delays in COMMAND6_BASES order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command6_delays: Option<[Command6Delays; 3]>,
 }
 impl Inputs {
     pub(crate) fn validate(&self) -> Result<(), String> {
@@ -37,7 +49,26 @@ impl Inputs {
         {
             return Err("Invalid explicit XP4 base-parameter inputs".into());
         }
+        if self.command6_delays.is_some_and(|delays| {
+            delays.iter().any(|delay| {
+                !(1..=1_000_000).contains(&delay.request_ticks)
+                    || !(1..=1_000_000).contains(&delay.settle_ticks)
+            })
+        }) {
+            return Err("Invalid explicit XP4 command-6 parameter delays".into());
+        }
         Ok(())
+    }
+    fn delays(&self, index: usize, command: u32) -> Option<(u64, u64)> {
+        match command {
+            3 => Some((self.request_ticks[index], self.settle_ticks[index])),
+            6 => {
+                let delays = self.command6_delays?;
+                let group = COMMAND6_BASES.iter().position(|&base| base == BASES[index])?;
+                Some((delays[group].request_ticks, delays[group].settle_ticks))
+            }
+            _ => None,
+        }
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +76,7 @@ enum Phase { Request, Settling }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Pending {
+    command: u32,
     request_at: u64,
     settle_at: u64,
     request_token: u64,
@@ -79,10 +111,16 @@ impl BaseParameters {
     pub(crate) fn windows(&self) -> Vec<(u64, u64)> {
         BASES.iter().flat_map(|base| [*base, base + 8, base + 0xf0]).map(|address| (address, address + 4)).collect()
     }
-    pub(crate) fn busy(&self, base: u64) -> bool { Self::index(base).is_some_and(|i| self.pending[i].is_some()) }
-    pub(crate) fn request_value(&self, base: u64) -> u64 {
+    fn pending(&self, base: u64) -> Option<&Pending> {
         Self::index(base).and_then(|i| self.pending[i].as_ref())
-            .map_or(0, |p| if p.phase == Phase::Request { 3 } else { 0 })
+    }
+    pub(crate) fn pending_command(&self, base: u64) -> Option<u32> {
+        self.pending(base).map(|pending| pending.command)
+    }
+    pub(crate) fn busy(&self, base: u64) -> bool { self.pending(base).is_some() }
+    pub(crate) fn request_value(&self, base: u64) -> u64 {
+        self.pending(base).filter(|pending| pending.phase == Phase::Request)
+            .map_or(0, |pending| u64::from(pending.command))
     }
     fn admit(&mut self, cx: &mut Cx<'_>) {
         if self.admitted { return; }
@@ -97,6 +135,15 @@ impl BaseParameters {
                 ("request_ticks_unmeasured", Field::int(self.inputs.request_ticks[index])),
                 ("settle_ticks_unmeasured", Field::int(self.inputs.settle_ticks[index])),
             ]));
+        }
+        if let Some(delays) = self.inputs.command6_delays {
+            for (base, delay) in COMMAND6_BASES.into_iter().zip(delays) {
+                cx.record(Record::new("XP4 experimental command 6 hypothesis; no physical clock effects", [
+                    ("base", Field::int(base)),
+                    ("request_ticks_unmeasured", Field::int(delay.request_ticks)),
+                    ("settle_ticks_unmeasured", Field::int(delay.settle_ticks)),
+                ]));
+            }
         }
         self.admitted = true;
     }
@@ -116,26 +163,38 @@ impl BaseParameters {
             ("address", Field::int(address)), ("value", Field::int(value)),
         ]));
     }
-    pub(crate) fn deadlines(&self, base: u64, now: u64) -> Result<(u64, u64), String> {
+    pub(crate) fn deadlines(&self, base: u64, command: u32, now: u64) -> Result<(u64, u64), String> {
         let index = Self::index(base).ok_or("XP4 base has no parameter pair")?;
-        if self.written[index] != [true, true] { return Err("XP4 command 3 requires both parameter writes".into()); }
-        let request_at = now.checked_add(self.inputs.request_ticks[index]).ok_or("XP4 parameter request deadline overflow")?;
-        let settle_at = request_at.checked_add(self.inputs.settle_ticks[index]).ok_or("XP4 parameter settling deadline overflow")?;
+        let (request_ticks, settle_ticks) = self.inputs.delays(index, command)
+            .ok_or("XP4 parameter command is not declared for this group")?;
+        if self.written[index] != [true, true] { return Err(format!("XP4 command {command} requires both parameter writes")); }
+        let request_at = now.checked_add(request_ticks).ok_or("XP4 parameter request deadline overflow")?;
+        let settle_at = request_at.checked_add(settle_ticks).ok_or("XP4 parameter settling deadline overflow")?;
         Ok((request_at, settle_at))
     }
     pub(crate) fn reissue(&self, cx: &mut Cx<'_>, base: u64) {
-        let pending = self.pending[Self::index(base).unwrap()].as_ref().unwrap();
-        cx.record(Record::new("XP4 experimental command 3 reissue preserves both deadlines", [
+        let pending = self.pending(base).unwrap();
+        let label = if pending.command == 3 {
+            "XP4 experimental command 3 reissue preserves both deadlines"
+        } else {
+            "XP4 experimental command 6 reissue preserves both deadlines"
+        };
+        cx.record(Record::new(label, [
             ("request_address", Field::int(base + 0x80)), ("request_deadline", Field::int(pending.request_at)),
             ("settle_deadline", Field::int(pending.settle_at)),
         ]));
     }
-    pub(crate) fn submit(&mut self, cx: &mut Cx<'_>, base: u64, deadlines: (u64, u64), tokens: (u64, u64)) {
+    pub(crate) fn submit(&mut self, cx: &mut Cx<'_>, base: u64, command: u32, deadlines: (u64, u64), tokens: (u64, u64)) {
         let index = Self::index(base).unwrap(); let pair = self.staged[index]; self.admit(cx);
         self.status[index] = 1;
-        self.pending[index] = Some(Pending { request_at: deadlines.0, settle_at: deadlines.1,
+        self.pending[index] = Some(Pending { command, request_at: deadlines.0, settle_at: deadlines.1,
             request_token: tokens.0, settle_token: tokens.1, phase: Phase::Request, pair });
-        cx.record(Record::new("XP4 experimental command 3 scheduled", [
+        let label = if command == 3 {
+            "XP4 experimental command 3 scheduled"
+        } else {
+            "XP4 experimental command 6 scheduled"
+        };
+        cx.record(Record::new(label, [
             ("request_address", Field::int(base + 0x80)), ("first", Field::int(pair[0])),
             ("second", Field::int(pair[1])), ("request_deadline", Field::int(deadlines.0)),
             ("settle_deadline", Field::int(deadlines.1)),
@@ -150,7 +209,12 @@ impl BaseParameters {
             let Some(pending) = &mut self.pending[index] else { continue; };
             if pending.phase == Phase::Request && pending.request_token == token && pending.request_at <= cx.now() {
                 pending.phase = Phase::Settling;
-                cx.record(Record::new("XP4 experimental command 3 acknowledged; settling remains busy", [
+                let label = if pending.command == 3 {
+                    "XP4 experimental command 3 acknowledged; settling remains busy"
+                } else {
+                    "XP4 experimental command 6 acknowledged; settling remains busy"
+                };
+                cx.record(Record::new(label, [
                     ("request_address", Field::int(BASES[index] + 0x80)),
                     ("deadline", Field::int(pending.request_at)), ("tick", Field::int(cx.now())),
                 ]));
@@ -179,9 +243,11 @@ impl BaseParameters {
                 || (0..2).any(|word| !self.written[index][word] && self.staged[index][word] != self.inputs.initial_pairs[index][word])
             { return Err("Invalid XP4 parameter checkpoint write history".into()); }
             if let Some(p) = &self.pending[index] {
+                let (request_ticks, settle_ticks) = self.inputs.delays(index, p.command)
+                    .ok_or("Undeclared XP4 parameter command checkpoint")?;
                 if self.written[index] != [true, true] || self.status[index] != 1 || p.pair != self.staged[index]
-                    || p.request_at < self.inputs.request_ticks[index]
-                    || p.request_at.checked_add(self.inputs.settle_ticks[index]) != Some(p.settle_at)
+                    || p.request_at < request_ticks
+                    || p.request_at.checked_add(settle_ticks) != Some(p.settle_at)
                     || p.request_token == 0 || p.request_token.checked_add(1) != Some(p.settle_token)
                     || p.settle_token > generation || !tokens.insert(p.request_token) || !tokens.insert(p.settle_token)
                 { return Err("Invalid XP4 parameter checkpoint phase, deadline or token".into()); }
