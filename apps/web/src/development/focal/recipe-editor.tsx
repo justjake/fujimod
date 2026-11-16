@@ -263,7 +263,17 @@ function Photo(props: { recipe: Recipe }) {
    small LCD), sets sliders in the same channel, and sets every other surface: the column, row focus, icons, the
    title box, the legend and the fly-outs. */
 
-type DesignId = 'embossed' | 'loupe' | 'drum' | 'film' | 'keys' | 'lcd' | 'mono';
+type DesignId =
+  | 'embossed'
+  | 'loupe'
+  | 'drum'
+  | 'film'
+  | 'keys'
+  | 'lcd'
+  | 'mono'
+  | 'glass'
+  | 'wheel'
+  | 'hasselblad';
 
 /** How a drawer shows that its choices continue past its ends. */
 type Depth = 'shadow' | 'fade' | 'clip';
@@ -301,6 +311,8 @@ interface Look {
   corners?: CornerMarks;
   /** A small square in the top right corner. */
   pip?: string;
+  /** A small dot under the middle. */
+  dot?: string;
 }
 
 /** One cell of a strip: whether it is the chosen one, how many cells away
@@ -339,6 +351,28 @@ interface ThumbColors {
   value: (mark: Mark) => Look;
 }
 
+/** A ruler slider: a tick scale with each step labeled. The scale slides
+ * under a fixed needle in the middle, or stays put while the needle moves. */
+interface Ruler {
+  kind: 'ruler';
+  fixed: boolean;
+  /** Between steps, when the scale slides. */
+  spacing: number;
+  tick: string;
+  major: string;
+  /** The ticks from zero to the value. */
+  fill: string;
+  /** Unchosen step labels; none hides them. */
+  label?: string;
+  /** The needle and the chosen step's label. */
+  chosen: (mark: Mark) => string;
+  font: string;
+}
+
+/** Title case, for designs that do not write in capitals. */
+const titleCase = (name: string) =>
+  name.toLowerCase().replace(/(^|[\s+-])(\S)/g, (_, gap: string, c: string) => gap + c.toUpperCase());
+
 interface Card {
   style: JSX.CSSProperties;
   class: string;
@@ -351,7 +385,9 @@ interface Design {
   edge: (side: 'left' | 'right') => string | undefined;
   row: (focused: boolean) => JSX.CSSProperties;
   /** The row's own top and bottom lines, which a drawer's contents stay between. */
-  lines: { top: number; bottom: number };
+  lines: { top: number; bottom: number; right?: number };
+  /** How the design writes setting and choice names. */
+  text?: (name: string) => string;
   /** How the focused row is marked, beyond its own surface. */
   focus: 'stripe' | 'none';
   focusColor: string;
@@ -360,7 +396,7 @@ interface Design {
   divider?: (focused: boolean) => string | undefined;
   strip: Strip;
   /** The slider, set in the strip's channel. */
-  slider: ThumbColors;
+  slider: ThumbColors | Ruler;
   card: Card;
   legend: { box: JSX.CSSProperties; key: JSX.CSSProperties };
   /** The fly-out's body below its band; the band is the focused row. */
@@ -391,7 +427,7 @@ const LCD_INK = '#141a10';
 const MONO = '#b4b4b0';
 const MONO_INK = '#101010';
 
-const BASE_DESIGNS: Record<Exclude<DesignId, 'mono'>, Design> = {
+const BASE_DESIGNS: Record<Exclude<DesignId, 'mono' | 'glass' | 'wheel' | 'hasselblad'>, Design> = {
   embossed: {
     label: 'Embossed',
     panel: { background: 'rgb(34 34 36 / 0.88)' },
@@ -809,6 +845,13 @@ const BASE_DESIGNS: Record<Exclude<DesignId, 'mono'>, Design> = {
 
 /* The top LCD in monochrome: gray segments, and the focused row's LCD
    outlined in the shooting accent rather than lit. */
+/** A pane of dark glass, lit along its top edge. */
+const GLASS: JSX.CSSProperties = {
+  background: 'rgb(30 30 32 / 0.52)',
+  'backdrop-filter': 'blur(24px) saturate(1.15)',
+  'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 0 0 1px rgb(255 255 255 / 0.1)',
+};
+
 const DESIGNS: Record<DesignId, Design> = {
   ...BASE_DESIGNS,
   mono: {
@@ -847,6 +890,175 @@ const DESIGNS: Record<DesignId, Design> = {
   legend: { ...BASE_DESIGNS.lcd.legend, key: { background: MONO, color: MONO_INK } },
   body: { background: MONO, color: MONO_INK, 'box-shadow': ring(2, '#050505') },
 
+  },
+
+  /* Apple, Liquid Glass: the column a pane of dark glass, each row's choices
+     on a rounded track that brightens with focus, the chosen one a white
+     capsule (the accent when changed). Sliders are rulers sliding under a
+     fixed needle. Names in title case. */
+  glass: {
+    label: 'Glass',
+    panel: { background: 'rgb(22 22 24 / 0.5)', 'backdrop-filter': 'blur(24px) saturate(1.15)' },
+    edge: (side) =>
+      side === 'right' ? 'inset -1px 0 0 rgb(255 255 255 / 0.22)' : 'inset 1px 0 0 rgb(255 255 255 / 0.22)',
+    row: () => ({}),
+    lines: { top: 3, bottom: 3, right: 6 },
+    text: titleCase,
+    focus: 'none',
+    focusColor: ACCENT,
+    iconInk: (focused) => (focused ? '#fff' : 'rgb(255 255 255 / 0.78)'),
+    strip: {
+      track: (focused) => ({
+        background: focused ? 'rgb(255 255 255 / 0.17)' : 'rgb(255 255 255 / 0.06)',
+        'border-radius': '13px',
+        'box-shadow': focused
+          ? 'inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.14)'
+          : undefined,
+      }),
+      inset: 4,
+      gap: 2,
+      pad: 11,
+      min: 30,
+      font: 'text-[16px] font-medium',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: c.changed ? ACCENT : '#fff',
+                'border-radius': '10px',
+                'box-shadow': '0 1px 5px rgb(0 0 0 / 0.35)',
+              },
+              ink: c.changed ? '#fff' : '#000',
+            }
+          : { style: {}, ink: `rgb(255 255 255 / ${fade(c.distance, [0.92, 0.66, 0.45, 0.3])})` },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.5)', shadow: 'rgb(0 0 0 / 0.3)' },
+    },
+    slider: {
+      kind: 'ruler',
+      fixed: false,
+      spacing: 38,
+      tick: 'rgb(255 255 255 / 0.3)',
+      major: 'rgb(255 255 255 / 0.65)',
+      fill: ACCENT,
+      label: 'rgb(255 255 255 / 0.5)',
+      chosen: (m) => (m.changed ? ACCENT : '#fff'),
+      font: 'text-[12px] font-medium',
+    },
+    card: {
+      style: { ...GLASS, 'border-radius': '14px', color: '#fff' },
+      class: 'font-semibold',
+    },
+    legend: {
+      box: { ...GLASS, 'border-radius': '12px', color: '#fff' },
+      key: { background: '#fff', color: '#000', 'border-radius': '6px' },
+    },
+    body: { ...GLASS, 'border-radius': '16px', color: '#fff' },
+  },
+
+  /* The iPhone Camera's mode dial: each row's choices a line of words, the
+     chosen one held in the middle in the accent while the row has focus, a
+     dot under it when changed. The focused row's icon turns the accent too.
+     Sliders are rulers under a fixed needle. */
+  wheel: {
+    label: 'Camera wheel',
+    panel: { background: 'rgb(0 0 0 / 0.55)' },
+    edge: () => undefined,
+    row: (focused) => ({ background: focused ? 'rgb(255 255 255 / 0.09)' : undefined }),
+    lines: { top: 0, bottom: 0 },
+    focus: 'none',
+    focusColor: ACCENT,
+    iconInk: (focused) => (focused ? ACCENT : '#fff'),
+    strip: {
+      track: () => ({}),
+      inset: 0,
+      gap: 0,
+      pad: 11,
+      min: 30,
+      font: 'text-[15px] font-semibold tracking-[0.08em] uppercase',
+      cell: (c) =>
+        c.chosen
+          ? { style: {}, ink: c.focused ? ACCENT : '#fff', dot: c.changed ? ACCENT : undefined }
+          : { style: {}, ink: `rgb(255 255 255 / ${fade(c.distance, [0.75, 0.5, 0.32, 0.2])})` },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.6)', shadow: 'rgb(0 0 0 / 0.5)' },
+    },
+    slider: {
+      kind: 'ruler',
+      fixed: false,
+      spacing: 34,
+      tick: 'rgb(255 255 255 / 0.35)',
+      major: 'rgb(255 255 255 / 0.75)',
+      fill: '#fff',
+      label: 'rgb(255 255 255 / 0.5)',
+      chosen: (m) => (m.focused || m.changed ? ACCENT : '#fff'),
+      font: 'text-[12px] font-semibold',
+    },
+    card: {
+      style: { background: 'rgb(0 0 0 / 0.5)', 'border-radius': '8px', color: '#fff' },
+      class: 'font-semibold tracking-[0.06em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(0 0 0 / 0.5)', 'border-radius': '8px', color: '#fff' },
+      key: { background: '#fff', color: '#000', 'border-radius': '5px' },
+    },
+    body: { background: 'rgb(0 0 0 / 0.7)', 'border-radius': '12px', color: '#fff' },
+  },
+
+  /* Hasselblad's control screen: black, light type, hairlines; the chosen
+     choice outlined as its AF box is, and filled white with focus. Sliders
+     are its exposure scale: a fixed scale with the ticks from zero lit and
+     the value over the needle. */
+  hasselblad: {
+    label: 'Hasselblad',
+    panel: { background: 'rgb(0 0 0 / 0.8)' },
+    edge: (side) => (side === 'right' ? 'inset -1px 0 0 rgb(255 255 255 / 0.18)' : 'inset 1px 0 0 rgb(255 255 255 / 0.18)'),
+    row: (focused) => ({
+      background: focused ? 'rgb(255 255 255 / 0.1)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.14)',
+    }),
+    lines: { top: 0, bottom: 1 },
+    text: titleCase,
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => '#fff',
+    strip: {
+      track: () => ({}),
+      inset: 6,
+      gap: 4,
+      pad: 8,
+      min: 30,
+      font: 'text-[17px] font-light tracking-[0.02em]',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: c.focused ? '#fff' : undefined,
+                'border-radius': '4px',
+                'box-shadow': edges(c.changed && bottom(3, ACCENT), ring(1.5, '#fff')),
+              },
+              ink: c.focused ? '#000' : '#fff',
+            }
+          : { style: {}, ink: 'rgb(255 255 255 / 0.5)' },
+      ends: { ink: '#fff', shadow: 'rgb(0 0 0 / 0.6)' },
+    },
+    slider: {
+      kind: 'ruler',
+      fixed: true,
+      spacing: 0,
+      tick: 'rgb(255 255 255 / 0.4)',
+      major: 'rgb(255 255 255 / 0.7)',
+      fill: ACCENT,
+      chosen: () => '#fff',
+      font: 'text-[12px] font-light',
+    },
+    card: {
+      style: { background: 'rgb(0 0 0 / 0.72)', color: '#fff' },
+      class: 'font-light tracking-[0.02em]',
+    },
+    legend: {
+      box: { background: 'rgb(0 0 0 / 0.72)', color: '#fff' },
+      key: { background: '#fff', color: '#000', 'border-radius': '4px' },
+    },
+    body: { background: 'rgb(0 0 0 / 0.85)', color: '#fff' },
   },
 };
 
@@ -911,6 +1123,14 @@ function Marks(props: { look: Look }) {
   return (
     <>
       <Show when={props.look.corners}>{(corners) => <Corners {...corners()} />}</Show>
+      <Show when={props.look.dot}>
+        {(color) => (
+          <span
+            class="pointer-events-none absolute bottom-[3px] left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full"
+            style={{ background: color() }}
+          />
+        )}
+      </Show>
       <Show when={props.look.pip}>
         {(color) => (
           <span
@@ -1116,7 +1336,7 @@ function Strip(props: ControlProps & { items: StripItem[]; value: number; width:
                     when={entry.item.icon}
                     fallback={
                       <span class={strip().font} style={{ color: look().ink }}>
-                        {entry.item.name}
+                        {props.design.text?.(entry.item.name) ?? entry.item.name}
                       </span>
                     }
                   >
@@ -1251,6 +1471,90 @@ function ThumbSlider(props: SliderProps & { colors: ThumbColors }) {
 }
 
 /** One setting's controls, beside its group's icon. */
+/** Steps between labeled ticks. */
+const RULER_DIVISIONS = 4;
+
+function RulerSlider(props: SliderProps & { ruler: Ruler; width: number }) {
+  const ruler = () => props.ruler;
+  const mark = () => ({ focused: props.focused, changed: props.changed });
+  const count = () => props.setting.steps.length;
+  const zero = () => Math.max(0, props.setting.steps.indexOf(0));
+  const pad = 26;
+  const spacing = () => (ruler().fixed ? (props.width - 2 * pad) / (count() - 1) : ruler().spacing);
+  /** Where step 0 sits in the control. */
+  const origin = () => (ruler().fixed ? pad : props.width / 2 - props.value * spacing());
+  const low = () => Math.min(zero(), props.value);
+  const high = () => Math.max(zero(), props.value);
+  const ticks = () => Array.from({ length: (count() - 1) * RULER_DIVISIONS + 1 }, (_, t) => t);
+  return (
+    <div
+      class="relative h-full overflow-hidden"
+      style={{
+        width: `${props.width}px`,
+        'mask-image': ruler().fixed
+          ? undefined
+          : 'linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent)',
+      }}
+      onClick={(e) => {
+        const element = e.currentTarget;
+        e.stopPropagation();
+        const box = element.getBoundingClientRect();
+        const local = ((e.clientX - box.left) / box.width) * element.offsetWidth;
+        const i = Math.round((local - origin()) / spacing());
+        props.pick(Math.max(0, Math.min(count() - 1, i)));
+      }}
+    >
+      <div
+        class="absolute inset-y-0 left-0 transition-transform duration-150 ease-out"
+        style={{ transform: `translateX(${origin()}px)` }}
+      >
+        <For each={ticks()}>
+          {(t) => {
+            const at = t / RULER_DIVISIONS;
+            const major = t % RULER_DIVISIONS === 0;
+            const lit = () => at >= low() && at <= high() && high() > low();
+            return (
+              <span
+                class="absolute bottom-[6px] -translate-x-1/2 transition-colors duration-150"
+                style={{
+                  left: `${at * spacing()}px`,
+                  width: major ? '2px' : '1px',
+                  height: `${at === zero() ? 15 : major ? 11 : lit() ? 8 : 6}px`,
+                  background: lit() ? ruler().fill : major ? ruler().major : ruler().tick,
+                }}
+              />
+            );
+          }}
+        </For>
+        <For each={props.setting.steps}>
+          {(step, i) => (
+            <Show when={i() !== props.value && ruler().label}>
+              {(color) => (
+                <span
+                  class={`absolute top-[4px] -translate-x-1/2 leading-none tabular-nums ${ruler().font}`}
+                  style={{ left: `${i() * spacing()}px`, color: color() }}
+                >
+                  {fmt(step)}
+                </span>
+              )}
+            </Show>
+          )}
+        </For>
+      </div>
+      <span
+        class="absolute top-[2px] -translate-x-1/2 text-[16px] leading-none font-semibold tabular-nums transition-[left] duration-150 ease-out"
+        style={{ left: `${origin() + props.value * spacing()}px`, color: ruler().chosen(mark()) }}
+      >
+        {fmt(props.setting.steps[props.value])}
+      </span>
+      <span
+        class="absolute bottom-[3px] h-[20px] w-[3px] -translate-x-1/2 rounded-full transition-[left] duration-150 ease-out"
+        style={{ left: `${origin() + props.value * spacing()}px`, background: ruler().chosen(mark()) }}
+      />
+    </div>
+  );
+}
+
 function SettingRow(props: {
   setting: Setting;
   index: number;
@@ -1263,7 +1567,7 @@ function SettingRow(props: {
   send: Send;
 }) {
   const d = () => props.design;
-  const controlWidth = () => props.width - ICON_COLUMN - 1;
+  const controlWidth = () => props.width - ICON_COLUMN - 1 - (d().lines.right ?? 0);
   const pick = (value: number) =>
     props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   return (
@@ -1274,6 +1578,7 @@ function SettingRow(props: {
         ...d().row(props.focused),
         'padding-top': `${d().lines.top}px`,
         'padding-bottom': `${d().lines.bottom}px`,
+        'padding-right': `${d().lines.right ?? 0}px`,
       }}
       onClick={() => props.send({ focus: props.index, side: props.side })}
     >
@@ -1292,16 +1597,34 @@ function SettingRow(props: {
         }
       >
         {(slider) => (
-          <div class="flex flex-1" style={d().strip.track(props.focused)}>
-            <ThumbSlider
-              setting={slider()}
-              colors={d().slider}
-              value={props.recipe[slider().id]}
-              design={d()}
-              focused={props.focused}
-              changed={props.changed}
-              pick={pick}
-            />
+          <div class="flex flex-1 overflow-hidden" style={d().strip.track(props.focused)}>
+            <Show
+              when={'kind' in d().slider ? (d().slider as Ruler) : undefined}
+              fallback={
+                <ThumbSlider
+                  setting={slider()}
+                  colors={d().slider as ThumbColors}
+                  value={props.recipe[slider().id]}
+                  design={d()}
+                  focused={props.focused}
+                  changed={props.changed}
+                  pick={pick}
+                />
+              }
+            >
+              {(ruler) => (
+                <RulerSlider
+                  setting={slider()}
+                  ruler={ruler()}
+                  width={controlWidth()}
+                  value={props.recipe[slider().id]}
+                  design={d()}
+                  focused={props.focused}
+                  changed={props.changed}
+                  pick={pick}
+                />
+              )}
+            </Show>
           </div>
         )}
       </Show>
@@ -1682,14 +2005,15 @@ function Editor(props: { state: EditorState; send?: Send }) {
                 class={`px-[12px] py-[6px] text-[22px] ${design().card.class}`}
                 style={design().card.style}
               >
-                {focused().name}
+                {design().text?.(focused().name) ?? focused().name}
               </span>
             </Show>
             <span
               class={`px-[12px] py-[4px] text-[22px] ${design().card.class}`}
               style={design().card.style}
             >
-              {valueName(focused(), s().recipe)}
+              {design().text?.(valueName(focused(), s().recipe)) ??
+                valueName(focused(), s().recipe)}
             </span>
             <Show when={focused().id === 'film' ? FILMS[s().recipe.film].note : undefined}>
               {(note) => (
@@ -1826,7 +2150,7 @@ function Segmented<T extends string>(props: {
   pick: (value: T) => void;
 }) {
   return (
-    <div class="flex rounded-[12px] bg-[#1e1e20] p-[3px]">
+    <div class="flex flex-wrap rounded-[12px] bg-[#1e1e20] p-[3px]">
       <For each={props.choices}>
         {(choice) => (
           <button
