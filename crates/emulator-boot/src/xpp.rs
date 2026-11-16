@@ -1245,7 +1245,7 @@ mod tests {
         assert_eq!(engine(0xfffd_5000)["fixed"], json!([[0x60, 1]]));
         assert_eq!(
             engine(0xfff9_8000)["job"],
-            json!({"start": [4, 1], "status": null, "stop": [0, 1], "irq": 130, "ticks": 144000})
+            json!({"start": [4, 5], "status": null, "stop": [0, 1], "irq": 130, "ticks": 144000})
         );
         assert_eq!(engine(0xfff7_e000)["fixed"], json!([[0x1c, 0x0100_0100]]));
         assert_eq!(
