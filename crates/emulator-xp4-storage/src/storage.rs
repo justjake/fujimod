@@ -170,6 +170,17 @@ pub struct ErasedRange {
     pub length: u64,
 }
 
+/// An array-relative extent that an experiment declares writable.
+/// Offsets and lengths are relative to the array, not CPU addresses. Each
+/// admitted erase or program extent must lie wholly inside one range; ranges
+/// are an admission rule, not a model of physical block-protection bits.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WriteRange {
+    pub offset: u64,
+    pub length: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReadBacking {
@@ -186,6 +197,7 @@ pub struct Nor {
     bytes: frozen::Source,
     prefix: Option<ImmutablePrefix>,
     write_protect: bool,
+    write_ranges: Vec<WriteRange>,
     read_backing: Option<ReadBacking>,
     pub jedec: u32,
     pub write_enable: bool,
@@ -217,6 +229,7 @@ impl Nor {
             bytes: frozen::Source::new(bytes)?,
             prefix: None,
             write_protect: false,
+            write_ranges: Vec::new(),
             read_backing: None,
             jedec,
             write_enable: false,
@@ -271,6 +284,53 @@ impl Nor {
         backing.erased_ranges = ranges;
         Ok(self)
     }
+    /// Admit mutations only inside the declared array extents. Each
+    /// erase/program extent must lie wholly inside one range; the underlying
+    /// source bytes, hash and immutable prefix remain unchanged, and admitted
+    /// mutations use the existing disposable overlay. This is a synthetic
+    /// experiment admission rule, not a physical protection-bit model.
+    ///
+    /// Requires strict read backing, so every admitted extent is already
+    /// covered by supplied bytes or explicitly erased ranges. Contradicts
+    /// whole-array write protection.
+    pub fn with_write_ranges(mut self, mut ranges: Vec<WriteRange>) -> Result<Self, String> {
+        if self.write_protect {
+            return Err("NOR write ranges contradict whole-array write protection".into());
+        }
+        if ranges.is_empty() {
+            return Err("NOR write ranges must not be empty".into());
+        }
+        if self.read_backing.is_none() {
+            return Err("NOR write ranges require explicit strict read backing".into());
+        }
+        let page = self.geometry.page_bytes as u64;
+        ranges.sort_by_key(|range| range.offset);
+        let mut previous_end = 0u64;
+        for range in &ranges {
+            let end = range
+                .offset
+                .checked_add(range.length)
+                .ok_or("NOR write range overflows")?;
+            if range.length == 0
+                || !range.offset.is_multiple_of(page)
+                || !range.length.is_multiple_of(page)
+                || end > FLASH_SIZE
+                || range.offset < previous_end
+            {
+                return Err("Invalid, overlapping or out-of-aperture NOR write range".into());
+            }
+            if self
+                .prefix
+                .is_some_and(|prefix| range.offset < prefix.bytes() as u64)
+            {
+                return Err("NOR write range intersects immutable prefix".into());
+            }
+            self.check_read_backing(FLASH + range.offset, range.length as usize)?;
+            previous_end = end;
+        }
+        self.write_ranges = ranges;
+        Ok(self)
+    }
     fn check_read_backing(&self, address: u64, size: usize) -> Result<(), String> {
         let Some(backing) = &self.read_backing else { return Ok(()) };
         let offset = address.checked_sub(FLASH).ok_or("NOR address below aperture")?;
@@ -309,6 +369,14 @@ impl Nor {
         if self.write_protect && !Self::read_only_command(opcode) {
             return Err(format!("Write-type NOR command {opcode:#x} on a write-protected array"));
         }
+        if !self.write_ranges.is_empty()
+            && !Self::read_only_command(opcode)
+            && !matches!(opcode, 0x06 | 0xdc | 0x21)
+        {
+            return Err(format!(
+                "NOR command {opcode:#x} is not a declared write-range mutation"
+            ));
+        }
         Ok(())
     }
     fn check_mutation(&self, address: u64, size: usize) -> Result<(), String> {
@@ -320,13 +388,41 @@ impl Nor {
             && address.checked_add(size as u64).is_none_or(|end| end > FLASH)) {
             return Err("Mutation intersects immutable NOR prefix".into());
         }
+        if !self.write_ranges.is_empty() && size != 0 {
+            let end = address
+                .checked_add(size as u64)
+                .ok_or("NOR mutation extent overflows")?;
+            if address < FLASH + FLASH_SIZE && end > FLASH {
+                let offset = address
+                    .checked_sub(FLASH)
+                    .ok_or("NOR mutation crosses the array aperture")?;
+                let admitted = self.write_ranges.iter().any(|range| {
+                    offset >= range.offset && end - FLASH <= range.offset + range.length
+                });
+                if !admitted {
+                    return Err(format!(
+                        "NOR mutation outside declared write ranges: offset={offset:#x} size={size:#x}"
+                    ));
+                }
+            }
+        }
         Ok(())
     }
     fn check_command(&self, command: u32, address: u32) -> Result<(), String> {
-        if self.prefix.is_none() { return Ok(()); }
-        let size = match (command >> 24) as u8 { 0xdc => self.geometry.erase_bytes, 0x21 => 4096, _ => return Ok(()) };
-        let offset = u64::from(address).checked_sub(FLASH).filter(|a| *a < FLASH_SIZE).ok_or("NOR erase outside aperture")?;
+        let size = match (command >> 24) as u8 {
+            0xdc => self.geometry.erase_bytes,
+            0x21 => 4096,
+            _ => return Ok(()),
+        };
+        let offset = u64::from(address)
+            .checked_sub(FLASH)
+            .filter(|a| *a < FLASH_SIZE)
+            .ok_or("NOR erase outside aperture")?;
         let address = FLASH + offset / size as u64 * size as u64;
+        address
+            .checked_add(size as u64)
+            .filter(|end| *end <= FLASH + FLASH_SIZE)
+            .ok_or("NOR erase outside aperture")?;
         self.check_mutation(address, size)
     }
     // Internal mutation assembly still needs complete pages, including erased
@@ -455,7 +551,8 @@ impl Nor {
             "erase_bytes":self.geometry.erase_bytes,"page_bytes":self.geometry.page_bytes,
             "erase_ticks":self.geometry.erase_ticks,"page_ticks":self.geometry.page_ticks,
             "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes()),
-            "write_protect":self.write_protect,"read_backing":self.read_backing})
+            "write_protect":self.write_protect,"write_ranges":self.write_ranges,
+            "read_backing":self.read_backing})
     }
 }
 
@@ -3525,5 +3622,371 @@ mod write_protect_tests {
         assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
         let saved = f.save();
         assert!(SerialFlashController::new(nor(false), 37).restore(&saved).is_err());
+    }
+}
+
+#[cfg(test)]
+mod write_range_tests {
+    use super::*;
+    use fujimod_emulator_devices::Host;
+
+    const PAGE: usize = 0x100;
+    const ERASE: usize = 0x1000;
+
+    struct HostState {
+        now: u64,
+        ram: Vec<u8>,
+        irqs: Vec<(u32, bool)>,
+        events: Vec<(usize, u64, u64)>,
+        records: Vec<Record>,
+    }
+    impl Host for HostState {
+        fn now(&self) -> u64 {
+            self.now
+        }
+        fn schedule(&mut self, d: usize, t: u64, k: u64) {
+            self.events.push((d, t, k));
+        }
+        fn set_irq(&mut self, l: u32, v: bool) {
+            self.irqs.push((l, v));
+        }
+        fn raise_irq(&mut self, _c: usize, _l: u32) -> Result<(), String> {
+            panic!("GIC uses physical levels")
+        }
+        fn ram_read(&self, a: u64, b: &mut [u8]) -> Result<(), String> {
+            b.copy_from_slice(
+                self.ram
+                    .get(a as usize..a as usize + b.len())
+                    .ok_or("DMA read bounds")?,
+            );
+            Ok(())
+        }
+        fn ram_write(&mut self, a: u64, b: &[u8]) -> Result<(), String> {
+            self.ram
+                .get_mut(a as usize..a as usize + b.len())
+                .ok_or("DMA write bounds")?
+                .copy_from_slice(b);
+            Ok(())
+        }
+        fn record(&mut self, r: Record) {
+            self.records.push(r);
+        }
+    }
+    fn range(offset: u64, length: u64) -> WriteRange {
+        WriteRange { offset, length }
+    }
+    fn strict() -> Nor {
+        let mut bytes = vec![0xff; 0x4000];
+        bytes[0x1000..0x1004].copy_from_slice(&0x1234_5678u32.to_le_bytes());
+        bytes[0x1004..0x1024].fill(0x0f);
+        bytes[0x2000..0x2004].copy_from_slice(&0xdead_beefu32.to_le_bytes());
+        Nor::new(
+            bytes,
+            0x20,
+            Geometry {
+                erase_bytes: ERASE,
+                page_bytes: PAGE,
+                erase_ticks: 20,
+                page_ticks: 12,
+            },
+        )
+        .unwrap()
+        .with_strict_backing()
+    }
+    fn shared(ranges: Vec<WriteRange>) -> Result<Shared, String> {
+        let nor = if ranges.is_empty() {
+            strict()
+        } else {
+            strict().with_write_ranges(ranges)?
+        };
+        Ok(port_from_nor(nor))
+    }
+    fn write(d: &mut dyn Device, h: &mut HostState, id: usize, a: u64, v: u64) {
+        let mut cx = Cx::new(h, 3, 0, id);
+        d.write(&mut cx, a, 4, v);
+        assert_eq!(cx.refusal(), None);
+    }
+    fn event(d: &mut dyn Device, h: &mut HostState, id: usize, token: u64) {
+        let mut cx = Cx::new(h, 0, 0, id);
+        d.event(&mut cx, token);
+        assert_eq!(cx.refusal(), None);
+    }
+    fn refused(d: &mut dyn Device, h: &mut HostState, a: u64, v: u64) -> String {
+        let mut cx = Cx::new(h, 3, 0, 0);
+        d.write(&mut cx, a, 4, v);
+        cx.refusal().expect("mutation must be refused").to_string()
+    }
+    fn host() -> HostState {
+        HostState {
+            now: 100,
+            ram: vec![0; 0x4000],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        }
+    }
+    fn controller(ranges: Vec<WriteRange>) -> (Shared, SerialFlashController, HostState) {
+        let p = shared(ranges).unwrap();
+        let flash = SerialFlashController::new(p.clone(), 37);
+        (p, flash, host())
+    }
+
+    #[test]
+    fn write_ranges_reject_contradictions_and_invalid_extents() {
+        assert!(Nor::new(vec![0xff; 0x4000], 0x20, Geometry {
+            erase_bytes: ERASE, page_bytes: PAGE, erase_ticks: 20, page_ticks: 12,
+        }).unwrap().with_write_ranges(vec![range(0x1000, PAGE as u64)]).is_err());
+        assert!(strict().with_write_protect().with_write_ranges(vec![range(0x1000, PAGE as u64)]).is_err());
+        for ranges in [
+            vec![],
+            vec![range(0x1000, 0)],
+            vec![range(0x1001, PAGE as u64)],
+            vec![range(0x1000, PAGE as u64 + 1)],
+            vec![range(FLASH_SIZE, PAGE as u64)],
+            vec![range(0x1000, u64::MAX)],
+            vec![range(0x1000, 0x200), range(0x1100, 0x200)],
+            vec![range(0x8000, PAGE as u64)],
+        ] {
+            assert!(strict().with_write_ranges(ranges).is_err());
+        }
+        assert!(strict().with_write_ranges(vec![range(0x1000, PAGE as u64)]).is_ok());
+    }
+
+    #[test]
+    fn write_range_erase_reports_wel_wip_deadline_completion_irq_and_ff_result() {
+        let (p, mut f, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x44, 0x4000);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        assert!(p.lock().unwrap().nor.write_enable);
+        assert_eq!(p.lock().unwrap().nor.status(), 2);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x44, 0);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x44, 0x4000);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x94, FLASH + 0x1000);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0xdc0b0001);
+        h.now = 116;
+        event(&mut f, &mut h, 0, 1);
+        assert!(!p.lock().unwrap().nor.write_enable);
+        assert_eq!(p.lock().unwrap().nor.status(), 1);
+        assert_eq!(f.next_deadline(116), Some(136));
+        assert_eq!(h.irqs.last(), Some(&(37, true)));
+        let before = f.save();
+        h.now = 135;
+        f.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(f.save(), before);
+        h.now = 136;
+        f.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(p.lock().unwrap().nor.status(), 0);
+        assert_eq!(
+            p.lock().unwrap().nor.read(FLASH + 0x1000, ERASE).unwrap(),
+            vec![0xff; ERASE]
+        );
+        assert_eq!(
+            p.lock().unwrap().nor.read(FLASH + 0x2000, 4).unwrap(),
+            0xdead_beefu32.to_le_bytes()
+        );
+        assert_eq!(
+            &p.lock().unwrap().nor.bytes.as_slice()[0x1000..0x1004],
+            &0x1234_5678u32.to_le_bytes()
+        );
+        let overlay = &p.lock().unwrap().nor.overlay;
+        assert!(overlay.contains_key(&(0x1000 / PAGE)));
+        assert!(!overlay.contains_key(&(0x2000 / PAGE)));
+    }
+
+    #[test]
+    fn write_range_refuses_outside_and_straddling_erase_atomically() {
+        let (p, mut f, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        assert!(p.lock().unwrap().nor.write_enable);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x94, FLASH + 0x2000);
+        let before = f.save();
+        assert!(refused(&mut f, &mut h, CONTROLLER + 0x90, 0xdc0b0001)
+            .contains("outside declared write ranges"));
+        assert_eq!(f.save(), before);
+        assert!(p.lock().unwrap().nor.write_enable);
+        assert!(p.lock().unwrap().nor.pending.is_none());
+        assert!(p.lock().unwrap().nor.overlay.is_empty());
+
+        let (p, mut f, mut h) = controller(vec![range(0x1000, 0x800)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x94, FLASH + 0x1000);
+        let before = f.save();
+        assert!(refused(&mut f, &mut h, CONTROLLER + 0x90, 0xdc0b0001)
+            .contains("outside declared write ranges"));
+        assert_eq!(f.save(), before);
+        assert!(p.lock().unwrap().nor.pending.is_none());
+    }
+
+    #[test]
+    fn write_range_refuses_a_program_stream_that_crosses_the_range() {
+        let (p, mut f, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        for (o, v) in [(0x20u64, 0x202u64), (0x78, FLASH + 0x1f00), (0x7c, 0x200)] {
+            write(&mut f, &mut h, 0, CONTROLLER + o, v);
+        }
+        let before = f.save();
+        assert!(refused(&mut f, &mut h, CONTROLLER + 0x70, 1)
+            .contains("outside declared write ranges"));
+        assert_eq!(f.save(), before);
+        assert!(p.lock().unwrap().nor.pending.is_none());
+        assert!(p.lock().unwrap().nor.overlay.is_empty());
+        assert!(p.lock().unwrap().nor.write_enable);
+    }
+
+    #[test]
+    fn write_range_program_is_one_to_zero_and_leaves_neighbors_alone() {
+        let (p, mut flash, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
+        let mut dma = DmaController::new(p.clone(), std::array::from_fn(|n| 207 + n as u32));
+        h.ram[0x1000..0x1020].fill(0xf0);
+        write(&mut flash, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut flash, &mut h, 0, 1);
+        for (o, v) in [
+            (0x14u64, 0x1000u64),
+            (0x18, FLASH + 0x1004),
+            (0x10, 31),
+            (0x1c, 0x30f00),
+            (0x20, 0x30f04),
+            (0x24, 0),
+            (0x28, 0x10201011),
+        ] {
+            write(&mut dma, &mut h, 1, DMA + o, v);
+        }
+        write(&mut dma, &mut h, 1, 0xfff4a500, 0x12c2b);
+        for (o, v) in [(0x20u64, 0x202u64), (0x78, FLASH + 0x1004), (0x7c, 32), (0x70, 1)] {
+            write(&mut flash, &mut h, 0, CONTROLLER + o, v);
+        }
+        h.now = 128;
+        event(&mut flash, &mut h, 0, 4);
+        dma.advance(&mut Cx::new(&mut h, 0, 0, 1));
+        // The model preserves the scheduled acceptance tick (116), so the
+        // DMA completes at 134 even when the guest delivers event 4 late.
+        assert_eq!(dma.next_deadline(128), Some(134));
+        h.now = 134;
+        event(&mut dma, &mut h, 1, 0);
+        flash.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(flash.next_deadline(134), Some(146));
+        h.now = 146;
+        flash.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(p.lock().unwrap().nor.status(), 0);
+        assert_eq!(
+            p.lock().unwrap().nor.read(FLASH + 0x1004, 32).unwrap(),
+            vec![0; 32]
+        );
+        assert_eq!(
+            p.lock().unwrap().nor.read(FLASH + 0x1000, 4).unwrap(),
+            0x1234_5678u32.to_le_bytes()
+        );
+        assert_eq!(
+            p.lock().unwrap().nor.read(FLASH + 0x1024, 4).unwrap(),
+            [0xff; 4]
+        );
+        assert_eq!(
+            &p.lock().unwrap().nor.bytes.as_slice()[0x1004..0x1024],
+            &[0x0f; 32]
+        );
+        assert_eq!(
+            &p.lock().unwrap().nor.bytes.as_slice()[0x1024..0x1028],
+            &[0xff; 4]
+        );
+    }
+
+    #[test]
+    fn write_range_checkpoint_requires_identical_policy_and_valid_extents() {
+        let (_p, mut f, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x94, FLASH + 0x1000);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0xdc0b0001);
+        h.now = 116;
+        event(&mut f, &mut h, 0, 1);
+        h.now = 136;
+        f.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        let saved = f.save();
+
+        let mut same = SerialFlashController::new(
+            shared(vec![range(0x1000, ERASE as u64)]).unwrap(),
+            37,
+        );
+        same.restore(&saved).unwrap();
+
+        for ranges in [vec![range(0x2000, ERASE as u64)], vec![]] {
+            let mut other = SerialFlashController::new(shared(ranges).unwrap(), 37);
+            assert!(other.restore(&saved).is_err());
+        }
+        let mut other = SerialFlashController::new(
+            shared(vec![range(0x1000, ERASE as u64)]).unwrap(),
+            37,
+        );
+        let mut bad = saved.clone();
+        bad["nor"]["overlay"] = json!({"48": vec![0u8; PAGE]});
+        assert!(other.restore(&bad).is_err());
+
+        let mut missing = saved.clone();
+        missing["nor"].as_object_mut().unwrap().remove("write_ranges");
+        assert!(other.restore(&missing).is_err());
+
+        let mut pending = saved.clone();
+        pending["nor"]["pending"] =
+            json!({"at": 200, "erase_address": FLASH + 0x3000u64, "size": ERASE});
+        pending["nor"]["overlay"] = json!({});
+        assert!(other.restore(&pending).is_err());
+    }
+
+    #[test]
+    fn write_range_refuses_an_aligned_down_erase_that_leaves_the_range() {
+        let (p, mut f, mut h) = controller(vec![range(0x1000, 0x800)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        // The raw address is inside the range, but the declared 0x1000 erase
+        // geometry aligns down to 0x1000 and would clear through 0x2000.
+        write(&mut f, &mut h, 0, CONTROLLER + 0x94, FLASH + 0x1400);
+        let before = f.save();
+        assert!(refused(&mut f, &mut h, CONTROLLER + 0x90, 0xdc0b0001)
+            .contains("outside declared write ranges"));
+        assert_eq!(f.save(), before);
+        assert!(p.lock().unwrap().nor.pending.is_none());
+        assert!(p.lock().unwrap().nor.write_enable);
+    }
+
+    #[test]
+    fn write_range_checkpoint_refuses_a_write_stream_outside_the_range() {
+        let (_p, mut f, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
+        write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);
+        h.now = 108;
+        event(&mut f, &mut h, 0, 1);
+        for (o, v) in [(0x20u64, 0x202u64), (0x78, FLASH + 0x1000), (0x7c, 32), (0x70, 1)] {
+            write(&mut f, &mut h, 0, CONTROLLER + o, v);
+        }
+        h.now = 116;
+        event(&mut f, &mut h, 0, 4);
+        let saved = f.save();
+        assert_eq!(saved["stream"]["write"], json!(true));
+        assert_eq!(saved["stream"]["accepted"], json!(true));
+
+        let mut same = SerialFlashController::new(
+            shared(vec![range(0x1000, ERASE as u64)]).unwrap(),
+            37,
+        );
+        same.restore(&saved).unwrap();
+
+        let mut outside = saved.clone();
+        outside["stream"]["address"] = json!(FLASH + 0x3000u64);
+        assert!(same.restore(&outside).is_err());
+
+        let mut cross = saved.clone();
+        cross["stream"]["address"] = json!(FLASH + 0x1f00u64);
+        cross["stream"]["size"] = json!(0x200);
+        assert!(same.restore(&cross).is_err());
     }
 }
