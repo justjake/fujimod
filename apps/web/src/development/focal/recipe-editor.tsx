@@ -1058,19 +1058,20 @@ function Strip(props: ControlProps & { items: StripItem[]; value: number; width:
           </For>
         </div>
       </div>
+      <Show when={depth() === 'shadow'}>
+        {/* The drawer is a recess: its walls shade both ends and the top,
+            whether or not anything lies past them. */}
+        <span
+          class="pointer-events-none absolute inset-0"
+          style={{
+            background: `linear-gradient(to right, ${strip().ends.shadow}, transparent ${LANE + 14}px, transparent calc(100% - ${LANE + 14}px), ${strip().ends.shadow})`,
+            'box-shadow': `inset 0 5px 6px -4px ${strip().ends.shadow}`,
+          }}
+        />
+      </Show>
       <For each={['left', 'right'] as const}>
         {(side) => (
           <Show when={side === 'left' ? before() : after()}>
-            <Show when={depth() === 'shadow'}>
-              <span
-                class="pointer-events-none absolute inset-y-0"
-                style={{
-                  [side]: '0',
-                  width: `${LANE + 22}px`,
-                  background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${strip().ends.shadow} ${LANE - 4}px, transparent)`,
-                }}
-              />
-            </Show>
             <span
               class="pointer-events-none absolute inset-y-0 flex items-center"
               style={{ [side]: '3px' }}
