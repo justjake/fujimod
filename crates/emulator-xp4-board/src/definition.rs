@@ -306,6 +306,9 @@ pub struct Pl011Uart {
     pub base: u64,
     #[serde(default)]
     pub irq: Option<u32>,
+    /// Optional virtual programming peer, with a declared code-flash geometry.
+    #[serde(default)]
+    pub rl78: Option<fujimod_emulator_ip_arm::pl011::Rl78Config>,
 }
 
 /// The XP4 JPEG encoder: register page base, completion interrupt line,
