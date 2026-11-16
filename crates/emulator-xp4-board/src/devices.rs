@@ -675,12 +675,19 @@ impl Devices {
         if let Some(raw) = wiring.raw {
             model = model.developing(raw)?;
         }
-        let (lo, hi) = model.window();
-        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
+        if wiring.firmware_color {
+            model = model.firmware_color()?;
+        }
+        let windows = model.windows();
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
             return Err("Overlapping XP4 still engine window".into());
         }
         let id = self.models.len();
-        self.windows.push((lo, hi, id));
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
