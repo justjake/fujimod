@@ -289,6 +289,16 @@ verifies, then one green pulse, or one, two or three red pulses) and leaving a s
 It never reads the flash aperture and writes nothing but its own block, the lamp pins, the stage's stack and, through
 the stage's copy function, the destination. The armed loader shows four green blinks (verified-only two).
 
+`sd-boot-v1-startup` and `sd-boot-v1-ram-startup` accept `--ram-overlay FILE` (XP5), a JSON
+description of bytes to add to the RAM image before it is packaged, so the loader's length and
+CRC checks cover them (`Recipe::build_startup_with_overlay` and `image::Overlay` are the library
+forms). It lists `regions` (`name`, `address`, `size`, `file`, `sha256`; each file is a basename in
+the description's directory) and `edits` (`address`, `old`, `new`, `what`). A region must lie in
+zero bytes outside every initialized section and every BSS extent of the RAM plan, since the stock
+startup may clear BSS after the image is loaded. An edit must replace the expected word of
+initialized bytes outside the regions. Nothing is written unless every check passes.
+`sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup` and `sd-boot-v1-copy-stub-startup` refuse an overlay, since their RAM image is never run.
+
 `sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units

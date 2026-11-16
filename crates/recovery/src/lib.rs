@@ -395,7 +395,21 @@ impl Recipe {
         source: &[u8],
         options: StartupOptions,
     ) -> Result<Vec<File>> {
-        self.startup_inputs(source, options, None)
+        self.startup_inputs(source, options, None, None)
+    }
+    /// `build_startup_with_options` with `overlay` applied to the XP5 RAM image before it is
+    /// packaged, so the loader's length and CRC checks cover it. With `internal_flash` the
+    /// result is the boot files alone, as from `build_boot_files`.
+    pub fn build_startup_with_overlay(
+        &self, source: &[u8], options: StartupOptions, overlay: &image::Overlay,
+    ) -> Result<Vec<File>> {
+        require(matches!(self.generation, Generation::Xp5), "RAM overlays require XP5")?;
+        let files = self.startup_inputs(source, options, None, Some(overlay))?;
+        if options.internal_flash {
+            boot_files_only(files, &self.update_filename)
+        } else {
+            Ok(files)
+        }
     }
     /// `build_startup_with_options` without the update: exactly the two files the
     /// boot ROM and the loader read, `marble_init.bin` and `ffboot.bin` (an XP5
@@ -410,7 +424,7 @@ impl Recipe {
         &self, source: &[u8], storage: &[u8], options: StartupOptions,
     ) -> Result<Vec<File>> {
         require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
-        self.startup_inputs(source, options, Some(storage))
+        self.startup_inputs(source, options, Some(storage), None)
     }
     /// Identifies the `FFSYS.BIN` that `build_ota_startup` writes, without the
     /// update: firmwares with the same value share one card's boot files.
@@ -450,8 +464,18 @@ impl Recipe {
         Ok(files)
     }
 
-    fn startup_inputs(&self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>)
-        -> Result<Vec<File>> {
+    fn startup_inputs(
+        &self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>,
+        overlay: Option<&image::Overlay>,
+    ) -> Result<Vec<File>> {
+        require(
+            overlay.is_none() || matches!(self.generation, Generation::Xp5),
+            "RAM overlays require XP5",
+        )?;
+        require(
+            overlay.is_none() || options.read_only_destination.is_none(),
+            "The read-only startup never runs its RAM image and takes no RAM overlay",
+        )?;
         require(
             options.hold_units()? == 0 || matches!(self.generation, Generation::Xp5),
             "Success hold requires XP5",
@@ -566,7 +590,10 @@ impl Recipe {
                             "Missing XP5 post-setup SD loader and handoff facts".into(),
                         )
                     })?;
-                    let ram = image::transform(&inverted, plan)?;
+                    let mut ram = image::transform(&inverted, plan)?;
+                    if let Some(overlay) = overlay {
+                        image::overlay(&mut ram, plan, overlay)?;
+                    }
                     if let (Some(destination), Some(mode)) =
                         (options.read_only_destination, options.checked_redirect)
                     {
