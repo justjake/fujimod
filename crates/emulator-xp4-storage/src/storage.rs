@@ -190,6 +190,67 @@ struct ReadBacking {
     erased_ranges: Vec<ErasedRange>,
 }
 
+// Byte-granular coverage is bounded by the physical aperture, including in the
+// worst case of alternating programmed and unprogrammed bytes. It is allocated
+// only when a program completes. Erase clears coverage but not the event count.
+#[derive(Default)]
+struct ProgramCoverage {
+    count: u64,
+    bits: Vec<u8>,
+    first: usize,
+    end: usize,
+}
+impl ProgramCoverage {
+    fn mark(&mut self, start: usize, end: usize, programmed: bool) {
+        if self.bits.is_empty() {
+            if !programmed {
+                return;
+            }
+            self.bits = vec![0; FLASH_SIZE as usize / 8];
+            self.first = start / 8;
+        }
+        self.first = self.first.min(start / 8);
+        self.end = self.end.max(end.div_ceil(8));
+        for byte in start / 8..end.div_ceil(8) {
+            let lo = start.saturating_sub(byte * 8).min(8);
+            let hi = end.saturating_sub(byte * 8).min(8);
+            let mask = ((0xffu16 << lo) & (0xffu16 >> (8 - hi))) as u8;
+            if programmed {
+                self.bits[byte] |= mask;
+            } else {
+                self.bits[byte] &= !mask;
+            }
+        }
+    }
+    fn ranges(&self) -> Vec<(usize, usize)> {
+        let mut result = Vec::new();
+        let mut start = None;
+        for index in self.first..self.end {
+            let byte = self.bits[index];
+            if byte == 0 {
+                if let Some(begin) = start.take() {
+                    result.push((begin, index * 8));
+                }
+            } else if byte == 0xff {
+                start.get_or_insert(index * 8);
+            } else {
+                for bit in 0..8 {
+                    let offset = index * 8 + bit;
+                    if byte & (1 << bit) != 0 {
+                        start.get_or_insert(offset);
+                    } else if let Some(begin) = start.take() {
+                        result.push((begin, offset));
+                    }
+                }
+            }
+        }
+        if let Some(begin) = start {
+            result.push((begin, self.end * 8));
+        }
+        result
+    }
+}
+
 /// External NOR contents and identity, supplied by the board. Uninitialized
 /// bytes are erased unless strict external read backing is selected.
 /// No firmware structures or executable signatures enter it.
@@ -204,6 +265,7 @@ pub struct Nor {
     geometry: Geometry,
     overlay: BTreeMap<usize, Vec<u8>>,
     pending: Option<(u64, Mutation)>,
+    program_coverage: ProgramCoverage,
     /// Counts completed erases and programs and changes of the controller's mapped-read state (control, clock, sample,
     /// mode and pad words): a consumer of copies derived from mapped reads compares it to know they are stale.
     epoch: Arc<AtomicU64>,
@@ -236,6 +298,7 @@ impl Nor {
             geometry,
             overlay: BTreeMap::new(),
             pending: None,
+            program_coverage: ProgramCoverage::default(),
             epoch: Arc::new(AtomicU64::new(0)),
         })
     }
