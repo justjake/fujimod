@@ -230,7 +230,14 @@ function Photo(props: { recipe: Recipe }) {
    small LCD), sets sliders in the same channel, and sets every other surface: the column, row focus, icons, the
    title box, the legend and the fly-outs. */
 
-type DesignId = 'embossed' | 'loupe' | 'drum' | 'film' | 'keys' | 'lcd';
+type DesignId = 'embossed' | 'loupe' | 'drum' | 'film' | 'keys' | 'lcd' | 'mono';
+
+/** How a drawer shows that its choices continue past its ends. */
+type Depth = 'shadow' | 'fade' | 'clip';
+
+/** Mockup options shared by every design. */
+const [center, setCenter] = createSignal(true);
+const [depth, setDepth] = createSignal<Depth>('shadow');
 
 interface Mark {
   focused: boolean;
@@ -265,8 +272,6 @@ interface CellState extends Mark {
 /** The sideways-scrolling object a row's choices (and, in most designs, its
  * slider steps) sit in. */
 interface Strip {
-  /** The chosen cell stays in the middle and the strip slides under it. */
-  centered: boolean;
   /** The fixed channel the strip runs in. */
   track: (focused: boolean) => JSX.CSSProperties;
   /** The strip's own surface, which slides with its cells. */
@@ -279,8 +284,9 @@ interface Strip {
   min: number;
   font: string;
   cell: (state: CellState) => Look;
-  /** What shows at an end with more cells beyond it. */
-  ends: { kind: 'chevron' | 'fade'; ink: string; cap: string };
+  /** The chevron at an end with more cells beyond it, its halo, and the
+   * shadow cast over cells at that end. */
+  ends: { ink: string; halo?: string; shadow: string };
 }
 
 /** The FUJIMOD SET-UP slider: a track, zero to the value filled, a thumb. */
@@ -341,8 +347,10 @@ const FILM_LIT = '#f4ead4';
 const LCD = '#a6b19a';
 const LCD_LIT = '#c9d6b8';
 const LCD_INK = '#141a10';
+const MONO = '#b4b4b0';
+const MONO_INK = '#101010';
 
-const DESIGNS: Record<DesignId, Design> = {
+const BASE_DESIGNS: Record<Exclude<DesignId, 'mono'>, Design> = {
   embossed: {
     label: 'Embossed',
     panel: { background: 'rgb(34 34 36 / 0.88)' },
@@ -360,7 +368,6 @@ const DESIGNS: Record<DesignId, Design> = {
     iconInk: () => '#fff',
     divider: () => 'rgb(255 255 255 / 0.22)',
     strip: {
-      centered: false,
       track: () => ({ background: 'rgb(255 255 255 / 0.11)' }),
       inset: 0,
       gap: 0,
@@ -377,7 +384,7 @@ const DESIGNS: Record<DesignId, Design> = {
               ink: '#fff',
             }
           : { style: {}, ink: '#fff' },
-      ends: { kind: 'fade', ink: '#fff', cap: 'transparent' },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: 'rgb(0 0 0 / 0.85)' },
     },
     slider: {
       track: 'rgb(255 255 255 / 0.35)',
@@ -419,7 +426,6 @@ const DESIGNS: Record<DesignId, Design> = {
     focusColor: ACCENT,
     iconInk: () => '#fff',
     strip: {
-      centered: true,
       track: (focused) => ({
         background: focused ? '#141416' : '#0c0c0d',
         'box-shadow': RECESSED,
@@ -443,7 +449,7 @@ const DESIGNS: Record<DesignId, Design> = {
               ink: '#fff',
             }
           : { style: { opacity: fade(c.distance, [1, 0.62, 0.4, 0.26]) }, ink: '#fff' },
-      ends: { kind: 'chevron', ink: '#fff', cap: '#0c0c0d' },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: '#000' },
     },
     slider: {
       track: 'rgb(255 255 255 / 0.22)',
@@ -486,7 +492,6 @@ const DESIGNS: Record<DesignId, Design> = {
     iconInk: () => '#fff',
     divider: () => 'rgb(255 255 255 / 0.14)',
     strip: {
-      centered: true,
       track: (focused) => ({
         background: focused ? '#2c2c30' : '#1d1d20',
         'box-shadow': edges(
@@ -522,7 +527,7 @@ const DESIGNS: Record<DesignId, Design> = {
               ink: '#fff',
             };
       },
-      ends: { kind: 'fade', ink: '#fff', cap: 'transparent' },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: 'rgb(0 0 0 / 0.85)' },
     },
     slider: {
       track: 'rgb(255 255 255 / 0.3)',
@@ -567,7 +572,6 @@ const DESIGNS: Record<DesignId, Design> = {
     focusColor: ACCENT,
     iconInk: () => FILM_LIT,
     strip: {
-      centered: true,
       track: () => ({ background: FILM_EDGE }),
       film: {
         background: FILM_BASE,
@@ -594,7 +598,7 @@ const DESIGNS: Record<DesignId, Design> = {
               style: { background: 'rgb(255 230 190 / 0.08)' },
               ink: `rgb(244 234 212 / ${fade(c.distance, [1, 0.75, 0.55, 0.4])})`,
             },
-      ends: { kind: 'fade', ink: FILM_LIT, cap: 'transparent' },
+      ends: { ink: FILM_LIT, halo: 'rgb(0 0 0 / 0.55)', shadow: FILM_EDGE },
     },
     slider: {
       track: 'rgb(244 234 212 / 0.3)',
@@ -636,7 +640,6 @@ const DESIGNS: Record<DesignId, Design> = {
     iconInk: () => '#fff',
     divider: () => 'rgb(0 0 0 / 0.8)',
     strip: {
-      centered: false,
       track: () => ({ background: '#0a0a0b', 'box-shadow': 'inset 0 2px 0 #000' }),
       inset: 4,
       gap: 4,
@@ -666,7 +669,7 @@ const DESIGNS: Record<DesignId, Design> = {
               ink: 'rgb(255 255 255 / 0.85)',
             };
       },
-      ends: { kind: 'chevron', ink: '#fff', cap: '#0a0a0b' },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: '#000' },
     },
     slider: {
       track: 'rgb(255 255 255 / 0.2)',
@@ -720,7 +723,6 @@ const DESIGNS: Record<DesignId, Design> = {
     focusColor: ACCENT,
     iconInk: () => '#fff',
     strip: {
-      centered: false,
       track: (focused) => ({
         background: focused ? LCD_LIT : LCD,
         'box-shadow': edges(ring(2, '#050505'), 'inset 0 4px 0 rgb(0 0 0 / 0.28)'),
@@ -740,7 +742,7 @@ const DESIGNS: Record<DesignId, Design> = {
               ink: c.focused ? LCD_LIT : LCD,
             }
           : { style: {}, ink: 'rgb(20 26 16 / 0.32)' },
-      ends: { kind: 'chevron', ink: LCD_INK, cap: 'transparent' },
+      ends: { ink: LCD_INK, shadow: 'rgb(20 26 16 / 0.45)' },
     },
     slider: {
       track: 'rgb(20 26 16 / 0.35)',
@@ -764,6 +766,49 @@ const DESIGNS: Record<DesignId, Design> = {
   },
 };
 
+/* The top LCD in monochrome: gray segments, and the focused row's LCD
+   outlined in the shooting accent rather than lit. */
+const DESIGNS: Record<DesignId, Design> = {
+  ...BASE_DESIGNS,
+  mono: {
+  ...BASE_DESIGNS.lcd,
+  label: 'Mono LCD',
+  focus: 'none',
+  strip: {
+    ...BASE_DESIGNS.lcd.strip,
+    track: (focused) => ({
+      background: MONO,
+      'box-shadow': edges(
+        focused ? ring(3, ACCENT) : ring(2, '#050505'),
+        'inset 0 4px 0 rgb(0 0 0 / 0.28)',
+      ),
+    }),
+    cell: (c) =>
+      c.chosen
+        ? {
+            style: { background: MONO_INK, 'box-shadow': c.changed ? bottom(3, ACCENT) : undefined },
+            ink: MONO,
+          }
+        : { style: {}, ink: 'rgb(16 16 16 / 0.32)' },
+    ends: { ink: MONO_INK, shadow: 'rgb(16 16 16 / 0.45)' },
+  },
+  slider: {
+    track: 'rgb(16 16 16 / 0.35)',
+    tick: 'rgb(16 16 16 / 0.5)',
+    zero: MONO_INK,
+    fill: MONO_INK,
+    value: (m) => ({
+      style: { background: MONO_INK, 'box-shadow': m.changed ? bottom(3, ACCENT) : undefined },
+      ink: MONO,
+    }),
+  },
+  card: { ...BASE_DESIGNS.lcd.card, style: { background: MONO, color: MONO_INK, 'box-shadow': ring(2, '#050505') } },
+  legend: { ...BASE_DESIGNS.lcd.legend, key: { background: MONO, color: MONO_INK } },
+  body: { background: MONO, color: MONO_INK, 'box-shadow': ring(2, '#050505') },
+
+  },
+};
+
 /* ---- Layout ------------------------------------------------------------------ */
 
 /** Eleven rows fill the 480-pixel screen without scrolling. */
@@ -775,9 +820,9 @@ const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
 /** Where clipped rows or choices fade out, to show that more follow. */
-const FADE = 18;
-/** The cap at a strip's end that holds its chevron. */
-const CAP = 12;
+const FADE_WIDTH = 18;
+/** The space at a strip's end that its chevron keeps clear. */
+const LANE = 16;
 /** The focus frame around a value thumb, and the gap between the frame and the thumb. */
 const FRAME = 3;
 const FRAME_GAP = 2;
@@ -907,13 +952,13 @@ function Strip(props: ControlProps & { items: StripItem[]; value: number; width:
   const [before, setBefore] = createSignal(false);
   const [after, setAfter] = createSignal(false);
   /** Space before the first cell and after the last, so either can sit in the middle. */
-  const lead = () => (strip().centered ? props.width / 2 : 0);
+  const lead = () => (center() ? props.width / 2 : 0);
   const follow = () => {
     const chosen = track?.children[props.value] as HTMLElement | undefined;
     if (!track || !chosen) return;
     const cells = Array.from(track.children) as HTMLElement[];
     let next: number;
-    if (strip().centered) {
+    if (center()) {
       next = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
     } else {
       // Start on a whole cell, the one that best centers the chosen one.
@@ -934,22 +979,24 @@ function Strip(props: ControlProps & { items: StripItem[]; value: number; width:
     setAfter(last.offsetLeft + last.offsetWidth > next + props.width);
   };
   createEffect(
-    () => [props.value, props.width, props.design],
+    () => [props.value, props.width, props.design, center()],
     () => {
       requestAnimationFrame(follow);
     },
   );
-  /** Cells fade out toward an end with more beyond it; behind a chevron's cap
-   * they are already gone by the cap's edge. */
+  /** Cells give way to the chevron's lane at an end with more beyond it:
+   * fading out, or cut off at the lane. */
   const fadeMask = () => {
-    const from = strip().ends.kind === 'chevron' ? CAP : 0;
+    if (depth() === 'shadow') return undefined;
+    const from = LANE;
+    const width = depth() === 'fade' ? FADE_WIDTH : 0;
     const end = (more: boolean, side: 'start' | 'end') =>
       side === 'start'
         ? more
-          ? `transparent ${from}px, #000 ${from + FADE}px`
+          ? `transparent ${from}px, #000 ${from + width}px`
           : '#000 0'
         : more
-          ? `#000 calc(100% - ${from + FADE}px), transparent calc(100% - ${from}px)`
+          ? `#000 calc(100% - ${from + width}px), transparent calc(100% - ${from}px)`
           : '#000 100%';
     return `linear-gradient(to right, ${end(before(), 'start')}, ${end(after(), 'end')})`;
   };
@@ -1011,27 +1058,53 @@ function Strip(props: ControlProps & { items: StripItem[]; value: number; width:
           </For>
         </div>
       </div>
-      <Show when={strip().ends.kind === 'chevron'}>
-        <For each={['left', 'right'] as const}>
-          {(side) => (
-            <Show when={side === 'left' ? before() : after()}>
+      <For each={['left', 'right'] as const}>
+        {(side) => (
+          <Show when={side === 'left' ? before() : after()}>
+            <Show when={depth() === 'shadow'}>
               <span
-                class="pointer-events-none absolute inset-y-0 flex items-center justify-center"
-                style={{ [side]: '0', width: `${CAP}px`, background: strip().ends.cap }}
-              >
-                <span
-                  class="border-y-[6px] border-y-transparent"
-                  style={{
-                    [side === 'left' ? 'border-right' : 'border-left']:
-                      `6px solid ${strip().ends.ink}`,
-                  }}
-                />
-              </span>
+                class="pointer-events-none absolute inset-y-0"
+                style={{
+                  [side]: '0',
+                  width: `${LANE + 22}px`,
+                  background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${strip().ends.shadow} ${LANE - 4}px, transparent)`,
+                }}
+              />
             </Show>
-          )}
-        </For>
-      </Show>
+            <span
+              class="pointer-events-none absolute inset-y-0 flex items-center"
+              style={{ [side]: '3px' }}
+            >
+              <Chevron side={side} ink={strip().ends.ink} halo={strip().ends.halo} />
+            </span>
+          </Show>
+        )}
+      </For>
     </div>
+  );
+}
+
+/** The toolkit's chevron, small, pointing toward the choices past this end. */
+function Chevron(props: { side: 'left' | 'right'; ink: string; halo?: string }) {
+  return (
+    <svg
+      width="9"
+      height="16"
+      viewBox="0 0 9 16"
+      style={{
+        color: props.ink,
+        filter: props.halo ? `drop-shadow(0 1px 1px ${props.halo})` : undefined,
+      }}
+    >
+      <path
+        d={props.side === 'left' ? 'M7 2l-5 6 5 6' : 'M2 2l5 6-5 6'}
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -1209,7 +1282,7 @@ function Column(props: {
       <div
         class="relative flex-1 overflow-hidden"
         style={{
-          'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
+          'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE_WIDTH}px, #000 calc(100% - ${FADE_WIDTH}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
         }}
       >
         <div style={{ transform: `translateY(${-scroll()}px)` }}>
@@ -1689,6 +1762,24 @@ function Live() {
           value={state().design}
           pick={(design) => setState({ ...state(), design })}
         />
+        <Segmented
+          choices={[
+            { value: 'shadow', label: 'Shadow' },
+            { value: 'fade', label: 'Fade' },
+            { value: 'clip', label: 'Clip' },
+          ]}
+          value={depth()}
+          pick={setDepth}
+        />
+        <label class="flex min-h-[44px] items-center gap-[8px] px-[6px] text-[15px] font-semibold">
+          <input
+            type="checkbox"
+            class="size-[20px]"
+            checked={center()}
+            onChange={(e) => setCenter(e.currentTarget.checked)}
+          />
+          Center selected
+        </label>
       </div>
       <Fit>
         <Editor state={state()} send={send} />
