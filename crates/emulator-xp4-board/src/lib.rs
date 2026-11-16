@@ -1302,6 +1302,7 @@ impl Session {
             storage_dma_routes,
             spi_inputs,
             control_requests,
+            request_fff4f01c_ticks,
             xp4_functional_system_control,
             storage_geometry,
             storage_irq,
@@ -2098,6 +2099,11 @@ impl Session {
         }
         for input in byte_i2c {
             devices.get_or_insert_with(devices::Devices::empty).byte_i2c(input)?;
+        }
+        if let Some(ticks) = request_fff4f01c_ticks {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .request_fff4f01c(ticks)?;
         }
         let timer = timer_layout
             .map(|layout| timer::Timer::new(layout, &timer_routes))
