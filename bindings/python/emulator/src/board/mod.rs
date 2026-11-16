@@ -1681,10 +1681,7 @@ impl Board {
     }
     fn failure(&self, py: Python<'_>) -> PyResult<String> {
         if let Some(Backend::Xp4(session)) = &self.backend {
-            let state = session.state(py, false)?;
-            let failure = state
-                .get_item("failure")?
-                .ok_or_else(|| PyRuntimeError::new_err("XP4 state is missing failure"))?;
+            let failure = session.failure();
             return py
                 .import("json")?
                 .call_method1("dumps", (failure,))?
