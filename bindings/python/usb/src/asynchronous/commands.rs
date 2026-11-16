@@ -315,6 +315,12 @@ impl AsyncSession {
             .await
             .map(|inner| LogReply { inner })
     }
+    async fn drain_debug_buffer(&self, capacity: u32) -> PyResult<LogReply> {
+        let capacity = nz(capacity)?;
+        self.with(move |s| Box::pin(s.drain_debug_buffer(capacity)))
+            .await
+            .map(|inner| LogReply { inner })
+    }
     async fn poll_console(&self, capacity: u32) -> PyResult<ConsoleReply> {
         let capacity = nz(capacity)?;
         self.with(move |s| Box::pin(s.poll_console(capacity)))
