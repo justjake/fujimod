@@ -2,6 +2,7 @@
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
 mod client;
+mod counted;
 mod definition;
 mod initial_security;
 pub mod maintenance;
@@ -103,6 +104,15 @@ struct RunState {
     pending_calls: Vec<BTreeMap<u32, Vec<usize>>>,
     // Addresses that may need a passive observation (see `mark_observed`).
     observe_filter: Vec<u64>,
+    // Counted execution (`counted.rs`): entries of the current internal run
+    // already accounted, the core inside the engine, call returns waiting
+    // for their observer per core, the addresses observed per core, and the last
+    // observed (address, entered instruction count) per core.
+    accounted: u64,
+    counted_core: Option<usize>,
+    return_requests: Vec<Vec<u32>>,
+    observed: Vec<BTreeSet<u32>>,
+    last_observed: Vec<Option<(u32, u64)>>,
     exclusive: Vec<Option<(u64, usize)>>,
     recorder: Option<observe::Recorder>,
     memory_watch: Option<observation::MemoryWatch>,
@@ -119,7 +129,10 @@ struct RunState {
 
 struct Cluster {
     // Destroy processors before their RAM backing and callback contexts.
-    cpus: Vec<Core>,
+    cpus: Vec<counted::Processor>,
+    // Counted native-block execution (`counted.rs`) instead of the
+    // per-instruction hook.
+    counted: bool,
     maintenance: maintenance::Maintenance,
     ram: Backing,
     dram_alias: Option<u64>,
@@ -288,7 +301,7 @@ impl Cluster {
     fn cpu(&self, core: usize) -> Result<&dyn Cpu, String> {
         self.cpus
             .get(core)
-            .map(|cpu| cpu as &dyn Cpu)
+            .map(|cpu| &**cpu)
             .ok_or_else(|| "Invalid ARMv7-A core".to_owned())
     }
     fn reg(&self, core: usize, register: Register) -> Result<u32, String> {
@@ -680,6 +693,14 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         trace.pop_front();
     }
     trace.push_back((address as u32, word));
+    observe(c, core, address)?;
+    special(c, core, address, word)
+}
+/// Passive observations at an entered instruction: labels (milestones and
+/// calls), call returns, the scalar recorder and explicit PC observers.
+/// They never select device or CPU behavior.
+fn observe(c: &Cluster, core: usize, address: u64) -> Result<(), String> {
+    let state = unsafe { &mut *c.state.get() };
     // Passive call/return observations cannot select device or CPU behavior.
     // The filter holds every label, pending return and PC observer address
     // (never cleared, so a set bit only means "look it up").
@@ -767,6 +788,12 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
             return Err("ARMv7-A PC observers may inspect or change registers, but cannot redirect execution".into());
         }
     }
+    Ok(())
+}
+/// The instructions the board performs itself (PMU profile, exclusives,
+/// CLREX, identity reads, WFI/WFE/SEV) at an entered instruction whose word
+/// is `word`. Anything else returns without effect, for the engine to run.
+fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), String> {
     let state = unsafe { &mut *c.state.get() };
     // PMCR, PMCNTENSET/CLR and PMCCNTR follow the shared ARMv7-A PMU profile.
     if word & 0x0fef0f10 == 0x0e090f10
@@ -775,7 +802,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
     {
         use fujimod_emulator::board::armv7a::Entry;
         if !matches!(
-            pmu.before(&c.cpus[core], address, state.ticks)?,
+            pmu.before(&*c.cpus[core], address, state.ticks)?,
             Entry::Execute
         ) {
             state.redirected = Some(address as u32 + 4);
@@ -869,6 +896,13 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
                 c.write_reg(core, arm::CORE[rd + 1], (value >> 32) as u32)?;
             }
             state.exclusive[core] = Some((physical, size));
+            if c.counted {
+                // Counted runs see stores on watched pages only: route
+                // every core's stores to this monitor through `store`.
+                for cpu in &c.cpus {
+                    cpu.watch_stores(physical, size as u64)?;
+                }
+            }
         } else {
             let success = state.exclusive[core] == Some((physical, size));
             state.exclusive[core] = None;
@@ -1079,6 +1113,11 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
         c.fail(hook.core, "Unsupported MMIO width".into());
         return 0;
     }
+    let counted = c.counted_core(hook.core);
+    if counted && let Err(error) = c.before_access(hook.core) {
+        c.fail(hook.core, error);
+        return 0;
+    }
     let result = (|| -> Result<u64, String> {
         let pc = c.reg(hook.core, arm::PC)?;
         if let Some(guard) = unsafe { &mut (*c.state.get()).driver_guard } {
@@ -1140,7 +1179,13 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
             );
         }
         Ok(response)
-    })();
+    })()
+    .and_then(|response| {
+        if counted {
+            c.after_access(hook.core)?;
+        }
+        Ok(response)
+    });
     match result {
         Ok(response) => response,
         Err(error) => {
@@ -1167,6 +1212,11 @@ impl Session {
         self.inner.maintenance.snapshot(&self.inner.cpus)
     }
 
+    /// Whether this session runs counted native blocks (`FUJIMOD_XP4_COUNTED`)
+    /// instead of the per-instruction hook.
+    pub fn counted_execution(&self) -> bool {
+        self.inner.counted
+    }
     pub fn ram_bytes(&self) -> usize {
         self.inner.ram.len()
     }
@@ -1347,6 +1397,12 @@ impl Session {
             return Err("Invalid ARMv7-A peripheral reset inputs".to_owned());
         }
         let ram = Backing::zeros(ram_size);
+        // The boot ROM window runs Thumb code, which only the
+        // per-instruction hook counts.
+        let boot_rom = xpp_boot.is_some()
+            || memory_regions
+                .iter()
+                .any(|r| r.base < 0xfff0_8000 && 0xfff0_0000 < r.base + r.size as u64);
         let memory = memory::allocate(memory_regions, ram_size)?;
         let low_alias = xpp_boot
             .as_ref()
@@ -1403,10 +1459,32 @@ impl Session {
         let translation_cache_size_bytes =
             fujimod_emulator::board::factory::translation_cache_size_bytes(cores)?;
         let library = Library::linked()?;
+        let mut counted = counted::requested();
+        if counted
+            && let Some(name) = counted::unsupported(
+                boot_rom,
+                pmu_cycles_per_tick.is_some(),
+                storage_immutable_prefix.is_some(),
+            )
+        {
+            eprintln!("FUJIMOD_XP4_COUNTED ignored: counted execution does not support {name}");
+            counted = false;
+        }
         let cpus = (0..cores)
-            .map(|_| {
-                library
-                    .open(cpu::Model::CortexA7, translation_cache_size_bytes)
+            .map(|_| -> Result<counted::Processor, String> {
+                let raw = library.open(cpu::Model::CortexA7, translation_cache_size_bytes)?;
+                if !counted {
+                    return Ok(counted::Processor::Exact(raw));
+                }
+                let core = fujimod_emulator_cpu_unicorn::aprofile::Core::new(
+                    raw,
+                    fujimod_emulator_cpu_unicorn::memory::Memory::default(),
+                )?;
+                core.set_owner_exclusives(true)?;
+                core.set_owner_interrupts(true)?;
+                core.set_owner_aborts(true)?;
+                core.set_entry_trace(32)?;
+                Ok(counted::Processor::Counted(core))
             })
             .collect::<Result<Vec<_>, _>>()?;
         let maintenance = maintenance::Maintenance::new(&cpus)?;
@@ -2011,8 +2089,10 @@ impl Session {
             mark_observed(&mut observe_filter, u64::from(label));
         }
         let xip_source = devices.as_ref().and_then(|d| d.nor_epoch());
+        let labels_set: BTreeSet<u32> = labels.iter().copied().collect();
         let mut inner = Box::new(Cluster {
             cpus,
+            counted,
             maintenance,
             ram,
             dram_alias,
@@ -2054,6 +2134,11 @@ impl Session {
                 calls: Vec::new(),
                 pending_calls: vec![BTreeMap::new(); cores],
                 observe_filter,
+                accounted: 0,
+                counted_core: None,
+                return_requests: vec![Vec::new(); cores],
+                observed: vec![labels_set.clone(); cores],
+                last_observed: vec![None; cores],
                 exclusive: vec![None; cores],
                 recorder: None,
                 memory_watch: None,
@@ -2103,14 +2188,15 @@ impl Session {
                 }?;
             }
             if let Some(alias) = inner.dram_alias {
-                unsafe {
-                    inner.cpus[core].map_backing(
-                        alias,
-                        ram_size,
-                        7,
-                        NonNull::new(inner.ram.as_ptr()).unwrap(),
-                    )
-                }?;
+                let ram = NonNull::new(inner.ram.as_ptr()).unwrap();
+                if inner.counted {
+                    // The counted engine's shared memory keeps one physical
+                    // identity per backing: the alias is DRAM at physical 0.
+                    // The raw engine maps it exactly as `map_backing` does.
+                    unsafe { inner.cpus[core].map_physical(alias, 0, ram_size, 7, ram) }?;
+                } else {
+                    unsafe { inner.cpus[core].map_backing(alias, ram_size, 7, ram) }?;
+                }
             }
             if let Some(view) = &inner.frozen_nor {
                 // The view retains the canonical allocation until after all CPUs drop.
@@ -2135,12 +2221,31 @@ impl Session {
                 core,
             }));
             let data = (&*inner.hooks[core] as *const Hook).cast_mut().cast();
+            if inner.counted {
+                // Labels are single-address observers in counted runs.
+                let labels = inner.labels.clone();
+                for label in labels {
+                    unsafe {
+                        inner.cpus[core].install_hook(CpuHook::Instruction {
+                            callback: counted::counted_observer,
+                            data,
+                            range: HookRange::Inclusive {
+                                begin: u64::from(label),
+                                end: u64::from(label),
+                            },
+                        })
+                    }?;
+                }
+            } else {
+                unsafe {
+                    inner.cpus[core].install_hook(CpuHook::Instruction {
+                        callback: code,
+                        data,
+                        range: HookRange::All,
+                    })
+                }?;
+            }
             for hook in [
-                CpuHook::Instruction {
-                    callback: code,
-                    data,
-                    range: HookRange::All,
-                },
                 CpuHook::Fault {
                     callback: invalid,
                     data,
@@ -2160,11 +2265,18 @@ impl Session {
                     },
                 },
             ] {
-                unsafe { inner.cpus[core].install_hook(hook) }?;
+                let id = unsafe { inner.cpus[core].install_hook(hook) }?;
+                if inner.counted && matches!(hook, CpuHook::Memory { .. }) {
+                    // Store observations only clear exclusive monitors: in
+                    // counted runs they reach the board on watched pages,
+                    // and every armed monitor's page is watched. An
+                    // unwatched hook would take every store off the fast path.
+                    inner.cpus[core].hook_watched(id, true)?;
+                }
             }
             for window in &inner.memory {
                 if window.permissions & 2 != 0 {
-                    unsafe {
+                    let id = unsafe {
                         inner.cpus[core].install_hook(CpuHook::Memory {
                             callback: store,
                             data,
@@ -2176,11 +2288,37 @@ impl Session {
                             },
                         })
                     }?;
+                    if inner.counted {
+                        // Monitors live in DRAM only, so these never fire.
+                        inner.cpus[core].hook_watched(id, true)?;
+                    }
+                }
+            }
+            if inner.counted {
+                let backings: Vec<_> = std::iter::once((0, ram_size as u64))
+                    .chain(inner.dram_alias.map(|a| (a, a + ram_size as u64)))
+                    .chain(
+                        inner
+                            .memory
+                            .iter()
+                            .map(|w| (w.base, w.base + w.data.len() as u64)),
+                    )
+                    .collect();
+                for (begin, end) in counted::device_space(&backings) {
+                    unsafe {
+                        inner.cpus[core].install_hook(CpuHook::Memory {
+                            callback: counted::device_marker,
+                            data,
+                            read: true,
+                            write: true,
+                            range: HookRange::Inclusive { begin, end },
+                        })
+                    }?;
                 }
             }
             let security = initial_security.get(core);
             if let Some(initial) = security {
-                initial.apply(&inner.cpus[core])?;
+                initial.apply(std::borrow::Borrow::borrow(&inner.cpus[core]))?;
             } else {
                 inner.write_reg(core, arm::CPSR, 0xd3)?;
             }
@@ -2193,13 +2331,16 @@ impl Session {
                     if initial_security::is_cpsr(register) {
                         initial_cpsr = value;
                         if let Some(initial) = security {
-                            initial.verify(&inner.cpus[core], initial_cpsr)?;
+                            initial.verify(
+                                std::borrow::Borrow::borrow(&inner.cpus[core]),
+                                initial_cpsr,
+                            )?;
                         }
                     }
                 }
             }
             if let Some(initial) = security {
-                initial.verify(&inner.cpus[core], initial_cpsr)?;
+                initial.verify(std::borrow::Borrow::borrow(&inner.cpus[core]), initial_cpsr)?;
             }
         }
         if let Some(base) = cbar {
@@ -2229,6 +2370,9 @@ impl Session {
     ) -> Result<(), String> {
         self.inner.host_mutation()?;
         self.inner.cpu(core)?;
+        if self.inner.counted {
+            return Err(counted::NEEDS_EXACT.to_owned());
+        }
         let state = unsafe { &mut *self.inner.state.get() };
         if state.driver_guard.is_some()
             || state.discovery.enabled
@@ -2309,6 +2453,9 @@ impl Session {
     pub fn instruction_points(&self, core: usize, addresses: Vec<u64>) -> Result<(), String> {
         self.inner.host_mutation()?;
         self.inner.cpu(core)?;
+        if self.inner.counted && !addresses.is_empty() {
+            return Err(counted::NEEDS_EXACT.to_owned());
+        }
         if unsafe { (*self.inner.state.get()).driver_guard.is_some() } && !addresses.is_empty() {
             return Err("PC observers cannot change guarded routine inputs".to_owned());
         }
@@ -2328,6 +2475,9 @@ impl Session {
     /// `writes_only` records stores alone, so reads and fetches of hot ranges do not consume the record bound.
     pub fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> Result<(), String> {
         self.inner.host_mutation()?;
+        if self.inner.counted {
+            return Err(counted::NEEDS_EXACT.to_owned());
+        }
         if ranges.is_empty()
             || ranges.len() > 256
             || limit == 0
@@ -2421,6 +2571,9 @@ impl Session {
         quota_per_edge: bool,
     ) -> Result<(), String> {
         self.inner.host_mutation()?;
+        if self.inner.counted {
+            return Err(counted::NEEDS_EXACT.to_owned());
+        }
         if unsafe { (*self.inner.state.get()).driver_guard.is_some() } {
             return Err("Scalar recorder cannot attach during a guarded routine".to_owned());
         }
@@ -2522,6 +2675,9 @@ impl Session {
         if target > u64::from(u32::MAX) || target & 1 != 0 {
             return Err("Run-to target must be an even 32-bit instruction address".to_owned());
         }
+        if self.inner.counted {
+            return Err(counted::NEEDS_EXACT.to_owned());
+        }
         self.run_inner(core, budget, Some(target))
     }
     fn run_inner(&self, core: usize, budget: usize, until: Option<u64>) -> Result<(), String> {
@@ -2560,6 +2716,18 @@ impl Session {
             let start = c.reg(core, arm::PC)? | (c.reg(core, arm::CPSR)? >> 5 & 1);
             unsafe {
                 (*c.state.get()).redirected = None;
+            }
+            if c.counted {
+                c.run_counted(core, budget)?;
+                if let Some(pc) = unsafe { (*c.state.get()).redirected.take() } {
+                    c.write_reg(core, arm::PC, pc)?;
+                }
+                c.due();
+                c.healthy()?;
+                c.flush_dma()?;
+                let state = unsafe { &mut *c.state.get() };
+                state.discovery.settle_trials(core, state.per_core[core]);
+                return Ok(());
             }
             let mut exit = cpu.run(Run {
                 begin: u64::from(start),

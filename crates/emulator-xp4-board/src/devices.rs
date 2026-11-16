@@ -1,7 +1,6 @@
 //! Common Device/Host adapter owned by the Unicorn application CPU profile.
 //! Devices receive physical RAM, guest time and IRQ lines, never CPU state.
 use super::Cluster;
-use fujimod_emulator_cpu::Cpu;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device, Host, Record};
 use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
