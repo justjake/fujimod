@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex},
+    sync::{atomic::{AtomicU64, Ordering}, Arc, Mutex},
 };
 mod checkpoint;
 mod frozen;
@@ -192,8 +192,14 @@ pub struct Nor {
     geometry: Geometry,
     overlay: BTreeMap<usize, Vec<u8>>,
     pending: Option<(u64, Mutation)>,
+    /// Counts completed erases and programs and changes of the controller's mapped-read state (control, clock, sample,
+    /// mode and pad words): a consumer of copies derived from mapped reads compares it to know they are stale.
+    epoch: Arc<AtomicU64>,
 }
 impl Nor {
+    pub fn epoch(&self) -> Arc<AtomicU64> {
+        self.epoch.clone()
+    }
     pub fn new(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Self, String> {
         if bytes.len() as u64 > FLASH_SIZE
             || jedec > 0xffffff
@@ -217,6 +223,7 @@ impl Nor {
             geometry,
             overlay: BTreeMap::new(),
             pending: None,
+            epoch: Arc::new(AtomicU64::new(0)),
         })
     }
     pub fn with_immutable_prefix(mut self, prefix: ImmutablePrefix) -> Result<Self, String> {
@@ -425,6 +432,7 @@ impl Nor {
                 (address, bytes.len(), "XP4 NOR program complete")
             }
         };
+        self.epoch.fetch_add(1, Ordering::SeqCst);
         cx.record(Record::new(
             name,
             [
@@ -469,7 +477,11 @@ pub type Shared = Arc<Mutex<Port>>;
 pub fn port_from_nor(nor: Nor) -> Shared {
     Arc::new(Mutex::new(Port { nor, request: None, program_data: None }))
 }
-impl Port { pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() } }
+impl Port {
+    pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() }
+    /// The array's and the controller's mapped-read epoch (see `Nor::epoch`).
+    pub fn epoch(&self) -> Arc<AtomicU64> { self.nor.epoch() }
+}
 pub fn port(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Shared, String> {
     Ok(Arc::new(Mutex::new(Port {
         nor: Nor::new(bytes, jedec, geometry)?,
@@ -488,10 +500,13 @@ pub struct SerialFlashController {
     gate: Option<MappedReadGate>,
     pad: u32,
     mapped_misses: u64,
+    epoch: Arc<AtomicU64>,
 }
 impl SerialFlashController {
     pub fn new(port: Shared, irq: u32) -> Self {
+        let epoch = port.lock().unwrap().epoch();
         Self {
+            epoch,
             port,
             regs: [0; 64],
             due: None,
@@ -607,7 +622,11 @@ impl SerialFlashController {
             }
             if write {
                 let mask = value >> 16;
-                self.pad = (self.pad & !mask) | (value & mask);
+                let pad = (self.pad & !mask) | (value & mask);
+                if pad != self.pad {
+                    self.epoch.fetch_add(1, Ordering::SeqCst);
+                }
+                self.pad = pad;
             }
             return Ok(u64::from(self.pad));
         }
@@ -619,6 +638,8 @@ impl SerialFlashController {
         if !write {
             return Ok(self.regs[o / 4] as u64);
         }
+        // Control bit 31 is the command-done status, not part of the state a mapped read is taken in.
+        let read_state = [self.regs[0] & !0x8000_0000, self.regs[1], self.regs[4], self.regs[5]];
         if (o == 0x90 || o == 0x94)
             && ((o == 0x90 && value & 1 != 0) || self.due.is_some_and(|(_, token)| token == 1))
         {
@@ -749,6 +770,9 @@ impl SerialFlashController {
                 cx.schedule(cx.now() + 8, 4);
             }
             _ => self.regs[o / 4] = value,
+        }
+        if read_state != [self.regs[0] & !0x8000_0000, self.regs[1], self.regs[4], self.regs[5]] {
+            self.epoch.fetch_add(1, Ordering::SeqCst);
         }
         // +44 rearms future completions; enabling it must not replay an old
         // completed command. Disabling it acknowledges the live IRQ latch.
@@ -2187,6 +2211,38 @@ mod tests {
         assert_eq!(resumed_flash.save(), flash.save());
         assert_eq!(resumed_host.ram, h.ram);
         assert_eq!(resumed_host.irqs, h.irqs);
+    }
+    #[test]
+    fn the_epoch_moves_on_completed_mutations_and_on_read_state_changes_only() {
+        let geometry = Geometry { erase_bytes: 131072, page_bytes: 256, erase_ticks: 20, page_ticks: 7 };
+        let source = port(vec![0; geometry.erase_bytes], 0x123456, geometry).unwrap();
+        let epoch = source.lock().unwrap().epoch();
+        let mut flash = SerialFlashController::new(source.clone(), 37);
+        let mut host = TestHost { now: 100, ram: vec![], irqs: vec![], events: vec![], records: vec![] };
+        let now = || epoch.load(Ordering::SeqCst);
+        let start = now();
+        // Clock, sample point and mode change the state a mapped read is taken in; an unchanged rewrite does not.
+        write(&mut flash, &mut host, 0, CONTROLLER + 4, 0x13, 0);
+        assert_eq!(now(), start + 1);
+        write(&mut flash, &mut host, 0, CONTROLLER + 4, 0x13, 0);
+        assert_eq!(now(), start + 1);
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x10, 5, 0);
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x14, 0x101003, 0);
+        assert_eq!(now(), start + 3);
+        // Command traffic that changes no array byte leaves it.
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x90, 0x06000001, 0);
+        host.now = 108;
+        event(&mut flash, &mut host, 0, 1);
+        assert_eq!(now(), start + 3);
+        // The erase moves it when it completes, not when it is accepted.
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x94, FLASH + 0x1234, 0);
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x90, 0x210b0001, 0);
+        host.now = 116;
+        event(&mut flash, &mut host, 0, 1);
+        assert_eq!(now(), start + 3);
+        host.now = 136;
+        flash.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(now(), start + 4);
     }
     #[test]
     fn four_kib_erase_checkpoint_preserves_a_larger_physical_block_geometry() {
