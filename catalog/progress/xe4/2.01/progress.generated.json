@@ -5,8 +5,8 @@
   "model": "X-E4",
   "version": "2.01",
   "facts": {
-    "located": 15,
-    "total": 22
+    "located": 22,
+    "total": 23
   },
   "boot_rom": null,
   "tracks": [
@@ -20,12 +20,12 @@
         {
           "id": "research",
           "title": "Update file registered, unpacked and its corpus exported",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "analysis",
           "title": "Function index built and facts located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "catalog",
@@ -93,18 +93,17 @@
           "id": "research",
           "label": "Update file registered, unpacked and its corpus exported",
           "stage": "research",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "analysis",
           "label": "Function index built and facts located",
           "stage": "analysis",
-          "result": "not-run",
-          "passed": 15,
-          "total": 22,
-          "detail": "15 of 22 facts"
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "catalog",
@@ -206,7 +205,7 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
@@ -221,7 +220,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -249,8 +248,8 @@
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -289,8 +288,8 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -377,12 +376,12 @@
         {
           "id": "camera-identity",
           "title": "Identified over FF80 in service mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
@@ -392,22 +391,22 @@
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
           "title": "Internal flash backed up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-fast-memory",
           "title": "Memory capture measured at 8 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-fast-flash",
@@ -417,12 +416,12 @@
         {
           "id": "camera-debug",
           "title": "Debug mode saved persistently",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-normal",
           "title": "FF80 answers in normal mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-restart",
@@ -432,7 +431,7 @@
         {
           "id": "camera-menu",
           "title": "Menus driven over FF80",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-mods",
@@ -445,17 +444,17 @@
           "id": "camera-identity",
           "label": "Identified over FF80 in service mode",
           "stage": "camera-identity",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
@@ -469,33 +468,33 @@
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
           "label": "Internal flash backed up",
           "stage": "camera-backup",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-snapshot",
           "label": "Camera state dumped (RAM at least)",
           "stage": "camera-snapshot",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-fast-memory",
           "label": "Memory capture measured at 8 MiB/s or more",
           "stage": "camera-fast-memory",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-fast-flash",
@@ -509,17 +508,17 @@
           "id": "camera-debug",
           "label": "Debug mode saved persistently",
           "stage": "camera-debug",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-normal",
           "label": "FF80 answers in normal mode",
           "stage": "camera-normal",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-restart",
@@ -533,9 +532,9 @@
           "id": "camera-menu",
           "label": "Menus driven over FF80",
           "stage": "camera-menu",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-mods",
@@ -562,7 +561,7 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "mod-build",
@@ -603,7 +602,7 @@
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -658,6 +657,14 @@
         {
           "id": "walkthroughs/raw-teleconverter",
           "label": "raw-teleconverter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/raw-crop-file",
+          "label": "raw-crop-file",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -720,6 +727,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/movie-film",
+          "label": "movie-film",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/card-films",
           "label": "card-films",
           "stage": "walkthroughs",
@@ -746,6 +761,14 @@
         {
           "id": "walkthroughs/film-grain",
           "label": "film-grain",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/grain-texture",
+          "label": "grain-texture",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -786,6 +809,14 @@
         {
           "id": "walkthroughs/clarity",
           "label": "clarity",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/monochromatic-color",
+          "label": "monochromatic-color",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1032,8 +1063,40 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/iso-auto-min-shutter",
+          "label": "iso-auto-min-shutter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/custom-settings-bkt",
           "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/ae-bkt-setting",
+          "label": "ae-bkt-setting",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/multiple-exposure-control",
+          "label": "multiple-exposure-control",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/interval-timer",
+          "label": "interval-timer",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1107,7 +1170,7 @@
         {
           "id": "boot-rom-loads-sd-card-on-camera",
           "title": "Boot ROM: loads an SD card on a camera",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
@@ -1145,9 +1208,9 @@
           "id": "boot-rom-loads-sd-card-on-camera",
           "label": "Boot ROM: loads an SD card on a camera",
           "stage": "boot-rom-loads-sd-card-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
@@ -1224,6 +1287,7 @@
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
+    "raw-crop-file": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -1231,15 +1295,18 @@
     "noise-reduction": "not-run",
     "framing-guideline": "not-run",
     "film-sims": "not-run",
+    "movie-film": "not-run",
     "card-films": "not-run",
     "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
+    "grain-texture": "not-run",
     "color-chrome": "not-run",
     "halation": "not-run",
     "light-leaks": "not-run",
     "film-borders": "not-run",
     "clarity": "not-run",
+    "monochromatic-color": "not-run",
     "tone-curve": "not-run",
     "tone-steps": "not-run",
     "d-range-priority": "not-run",
@@ -1270,7 +1337,11 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "iso-auto-min-shutter": "not-run",
     "custom-settings-bkt": "not-run",
+    "ae-bkt-setting": "not-run",
+    "multiple-exposure-control": "not-run",
+    "interval-timer": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",

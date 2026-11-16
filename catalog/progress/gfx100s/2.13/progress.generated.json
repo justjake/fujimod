@@ -4,7 +4,10 @@
   "firmware_id": "gfx100s-213",
   "model": "GFX100S",
   "version": "2.13",
-  "facts": null,
+  "facts": {
+    "located": 20,
+    "total": 22
+  },
   "boot_rom": null,
   "tracks": [
     {
@@ -17,12 +20,12 @@
         {
           "id": "research",
           "title": "Update file registered, unpacked and its corpus exported",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "analysis",
           "title": "Function index built and facts located",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "catalog",
@@ -32,7 +35,7 @@
         {
           "id": "service-facts",
           "title": "Service-mode entry, debug gate and FF80 memory access located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "bulk-source",
@@ -72,7 +75,7 @@
         {
           "id": "sd-facts",
           "title": "SD-boot load map and packaging located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "nand-boot-facts",
@@ -90,17 +93,18 @@
           "id": "research",
           "label": "Update file registered, unpacked and its corpus exported",
           "stage": "research",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "analysis",
           "label": "Function index built and facts located",
           "stage": "analysis",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "fail",
+          "passed": 20,
+          "total": 22,
+          "detail": "20 of 22 facts"
         },
         {
           "id": "catalog",
@@ -114,9 +118,9 @@
           "id": "service-facts",
           "label": "Service-mode entry, debug gate and FF80 memory access located",
           "stage": "service-facts",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "bulk-source",
@@ -178,9 +182,9 @@
           "id": "sd-facts",
           "label": "SD-boot load map and packaging located",
           "stage": "sd-facts",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "boot-rom",
@@ -660,6 +664,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/raw-crop-file",
+          "label": "raw-crop-file",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/surround-view",
           "label": "surround-view",
           "stage": "walkthroughs",
@@ -716,6 +728,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/movie-film",
+          "label": "movie-film",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/card-films",
           "label": "card-films",
           "stage": "walkthroughs",
@@ -742,6 +762,14 @@
         {
           "id": "walkthroughs/film-grain",
           "label": "film-grain",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/grain-texture",
+          "label": "grain-texture",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -782,6 +810,14 @@
         {
           "id": "walkthroughs/clarity",
           "label": "clarity",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/monochromatic-color",
+          "label": "monochromatic-color",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1028,8 +1064,40 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/iso-auto-min-shutter",
+          "label": "iso-auto-min-shutter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/custom-settings-bkt",
           "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/ae-bkt-setting",
+          "label": "ae-bkt-setting",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/multiple-exposure-control",
+          "label": "multiple-exposure-control",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/interval-timer",
+          "label": "interval-timer",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1220,6 +1288,7 @@
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
+    "raw-crop-file": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -1227,15 +1296,18 @@
     "noise-reduction": "not-run",
     "framing-guideline": "not-run",
     "film-sims": "not-run",
+    "movie-film": "not-run",
     "card-films": "not-run",
     "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
+    "grain-texture": "not-run",
     "color-chrome": "not-run",
     "halation": "not-run",
     "light-leaks": "not-run",
     "film-borders": "not-run",
     "clarity": "not-run",
+    "monochromatic-color": "not-run",
     "tone-curve": "not-run",
     "tone-steps": "not-run",
     "d-range-priority": "not-run",
@@ -1266,7 +1338,11 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "iso-auto-min-shutter": "not-run",
     "custom-settings-bkt": "not-run",
+    "ae-bkt-setting": "not-run",
+    "multiple-exposure-control": "not-run",
+    "interval-timer": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",

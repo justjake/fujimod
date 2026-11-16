@@ -40,37 +40,37 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -125,31 +125,31 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -157,7 +157,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -165,17 +165,17 @@
           "id": "controls",
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "sd-facts",
@@ -225,7 +225,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "partial"
+          "result": "not-run"
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
@@ -256,8 +256,8 @@
           "id": "stock/record-picture",
           "label": "Record picture",
           "stage": "stock",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -272,8 +272,8 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -320,8 +320,8 @@
           "id": "stock/playback-picture",
           "label": "Playback picture",
           "stage": "stock",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -344,8 +344,8 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -411,7 +411,7 @@
         {
           "id": "camera-fast-flash",
           "title": "Flash capture measured at 8 MiB/s or more",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "camera-debug",
@@ -500,9 +500,9 @@
           "id": "camera-fast-flash",
           "label": "Flash capture measured at 8 MiB/s or more",
           "stage": "camera-fast-flash",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "camera-debug",
@@ -556,7 +556,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-target",
@@ -594,9 +594,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-target",
@@ -663,6 +663,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/raw-crop-file",
+          "label": "raw-crop-file",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/surround-view",
           "label": "surround-view",
           "stage": "walkthroughs",
@@ -719,6 +727,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/movie-film",
+          "label": "movie-film",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/card-films",
           "label": "card-films",
           "stage": "walkthroughs",
@@ -745,6 +761,14 @@
         {
           "id": "walkthroughs/film-grain",
           "label": "film-grain",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/grain-texture",
+          "label": "grain-texture",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -785,6 +809,14 @@
         {
           "id": "walkthroughs/clarity",
           "label": "clarity",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/monochromatic-color",
+          "label": "monochromatic-color",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1031,8 +1063,40 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/iso-auto-min-shutter",
+          "label": "iso-auto-min-shutter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/custom-settings-bkt",
           "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/ae-bkt-setting",
+          "label": "ae-bkt-setting",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/multiple-exposure-control",
+          "label": "multiple-exposure-control",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/interval-timer",
+          "label": "interval-timer",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1185,7 +1249,7 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 1,
       "total": 1
     },
@@ -1195,7 +1259,7 @@
       "total": 2
     },
     "control-input": {
-      "result": "pass",
+      "result": "stale",
       "passed": 60,
       "total": 60
     },
@@ -1215,7 +1279,7 @@
       "total": 9
     },
     "playback-picture": {
-      "result": "pass",
+      "result": "stale",
       "passed": 4,
       "total": 4
     },
@@ -1230,7 +1294,7 @@
       "total": 3
     },
     "sd": {
-      "result": "pass",
+      "result": "stale",
       "passed": 2,
       "total": 2
     },
@@ -1243,6 +1307,7 @@
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "not-run",
+    "raw-crop-file": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -1250,15 +1315,18 @@
     "noise-reduction": "not-run",
     "framing-guideline": "not-run",
     "film-sims": "not-run",
+    "movie-film": "not-run",
     "card-films": "not-run",
     "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
+    "grain-texture": "not-run",
     "color-chrome": "not-run",
     "halation": "not-run",
     "light-leaks": "not-run",
     "film-borders": "not-run",
     "clarity": "not-run",
+    "monochromatic-color": "not-run",
     "tone-curve": "not-run",
     "tone-steps": "not-run",
     "d-range-priority": "not-run",
@@ -1289,7 +1357,11 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "iso-auto-min-shutter": "not-run",
     "custom-settings-bkt": "not-run",
+    "ae-bkt-setting": "not-run",
+    "multiple-exposure-control": "not-run",
+    "interval-timer": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",
