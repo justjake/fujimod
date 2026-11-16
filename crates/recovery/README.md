@@ -273,7 +273,23 @@ checked once more (the DRAM copy's CRC-32 and RAM 0) and taken back if either ch
 change that cannot be verified or taken back halts (`-901`). The binding must carry
 `orr x0, x20, #destination` as its word, which the loader decodes.
 
-`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-copy-stub-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5)
+takes the same inputs as the checked redirect and replaces its one-word source change by a **copy stub**
+(`StartupOptions::copy_stub`; loader `assets/sd-boot-v1-xp5-copy-stub-loader.generated.{bin,json}`, the stub itself
+`assets/sd-boot-v1-xp5-copy-stub.generated.{bin,json}`). The packager finds the run of `nop` words between the
+reset entry's last helper (ending in `ret`) and the first exception vector table of the stock reset image, refuses the image
+unless nothing in it refers to that padding, binds the position-independent stub into it and a `bl` to the stub in
+place of the stage's copy call (the function the two section-table copies also call). With `--apply` the loader
+proves what the checked redirect proves, that the padding holds only `nop` words and that the stub bytes have the
+bound CRC-32, writes the stub first and the call word last, reads RAM 0 back against the packager's patched image
+(stock image, stub and call word) and takes everything back on any difference. At the moment of the call the stub
+checks the CRC-32 of the DRAM copy, copies from it with the stage's own copy function, checks the CRC-32 of the
+destination and copies from the flash instead on any difference, showing the path on the lamp (orange while it
+verifies, then one green pulse, or one, two or three red pulses) and leaving a status word in its parameter block.
+It never reads the flash aperture and writes nothing but its own block, the lamp pins, the stage's stack and, through
+the stage's copy function, the destination. The armed loader shows four green blinks (verified-only two).
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per

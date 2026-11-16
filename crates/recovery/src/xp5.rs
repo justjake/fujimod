@@ -28,6 +28,20 @@ mod checked_redirect_template {
     include!(concat!(env!("OUT_DIR"), "/xp5_checked_redirect_loader.rs"));
 }
 
+/// The copy-stub build: the checked-redirect build whose redirect is a stub of its own, written into
+/// dead padding of the stock reset image. It never installs its card-resident hooks or its gate.
+#[allow(dead_code)]
+mod copy_stub_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_copy_stub_loader.rs"));
+}
+
+/// The stub's own image (position independent code and a zero parameter block) and the offsets of
+/// the parameters in it.
+#[allow(dead_code)]
+mod stub_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_copy_stub.rs"));
+}
+
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
 /// loader (`template`); `INTERNAL_FLASH` is the same sources built for a startup that keeps the
 /// installed flash attached (`flash_template`); `READ_ONLY` only reads the RAM image into spare
@@ -51,8 +65,10 @@ struct Loader {
     internal_flash_binding: Option<usize>,
     /// Offset of the read-only binding; only the read-only and checked-redirect builds have one.
     read_only_binding: Option<usize>,
-    /// Offset of the checked-redirect binding; only the checked-redirect build has one.
+    /// Offset of the checked-redirect binding; only the checked-redirect and copy-stub builds have one.
     redirect_binding: Option<usize>,
+    /// Offset of the copy-stub binding; only the copy-stub build has one.
+    copy_stub_binding: Option<usize>,
 }
 /// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
 /// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
@@ -84,6 +100,7 @@ const CARD: Loader = Loader {
     internal_flash_binding: None,
     read_only_binding: None,
     redirect_binding: None,
+    copy_stub_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -103,6 +120,7 @@ const INTERNAL_FLASH: Loader = Loader {
     internal_flash_binding: Some(flash_template::SETUP_SD_INTERNAL_FLASH),
     read_only_binding: None,
     redirect_binding: None,
+    copy_stub_binding: None,
 };
 const READ_ONLY: Loader = Loader {
     image: read_only_template::IMAGE,
@@ -122,6 +140,7 @@ const READ_ONLY: Loader = Loader {
     internal_flash_binding: None,
     read_only_binding: Some(read_only_template::SETUP_SD_READ_ONLY),
     redirect_binding: None,
+    copy_stub_binding: None,
 };
 const CHECKED_REDIRECT: Loader = Loader {
     image: checked_redirect_template::IMAGE,
@@ -141,6 +160,27 @@ const CHECKED_REDIRECT: Loader = Loader {
     internal_flash_binding: None,
     read_only_binding: Some(checked_redirect_template::SETUP_SD_READ_ONLY),
     redirect_binding: Some(checked_redirect_template::SETUP_SD_REDIRECT),
+    copy_stub_binding: None,
+};
+const COPY_STUB: Loader = Loader {
+    image: copy_stub_template::IMAGE,
+    prelude_stack_max: copy_stub_template::PRELUDE_STACK_MAX,
+    setup_entry: copy_stub_template::XP5_SETUP_ENTRY,
+    setup_configuration: copy_stub_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: copy_stub_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: copy_stub_template::XP5_SETUP_STACK,
+    setup_stack_top: copy_stub_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: copy_stub_template::SETUP_SD_INITIALIZE,
+    sd_request: copy_stub_template::SETUP_SD_REQUEST,
+    sd_progress: copy_stub_template::SETUP_SD_PROGRESS,
+    sd_board: copy_stub_template::SETUP_SD_BOARD,
+    boot_ready: copy_stub_template::A64_BOOT_READY,
+    boot_zero_gate: copy_stub_template::A64_BOOT_ZERO_GATE,
+    externals: copy_stub_template::EXTERNALS,
+    internal_flash_binding: None,
+    read_only_binding: Some(copy_stub_template::SETUP_SD_READ_ONLY),
+    redirect_binding: Some(copy_stub_template::SETUP_SD_REDIRECT),
+    copy_stub_binding: Some(copy_stub_template::SETUP_SD_COPY_STUB),
 };
 /// The DRAM a read-only startup may fill: the same two numbers as `READ_ONLY_FLOOR` and
 /// `READ_ONLY_CEILING` in the loader source `read_only.h`, which refuses anything else. It is the
@@ -411,7 +451,7 @@ pub(crate) fn package_read_only(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: None }),
+        Some(ReadOnly { destination, redirect: None, stub: None }),
     )
 }
 
@@ -489,7 +529,57 @@ pub(crate) fn package_checked_redirect(
         success_hold_units,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(binding) }),
+        Some(ReadOnly { destination, redirect: Some(binding), stub: None }),
+    )
+}
+
+/// The checked redirect with a copy stub in place of the one-word source change. The loader
+/// proves the same things (tables, the flash range, the DRAM copy equal to it, the stock reset
+/// image) and, with `Apply`, writes a stub into the nop padding of the stock reset image and
+/// replaces the stage's copy call by a call to it. The stub checks the DRAM copy and the destination
+/// at the moment of use and copies from the flash on any difference (`redirect.rs`, `copy_stub.S`).
+/// `ffboot.bin` is the same cut image as the checked redirect's.
+pub(crate) fn package_copy_stub(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    mode: CheckedRedirect,
+) -> Result<Vec<File>> {
+    let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
+    let bias = setup
+        .reset_dat
+        .checked_sub(redirect::RESET_FLASH)
+        .ok_or_else(|| image::Error::Invalid("The reset image precedes its flash offset".into()))?;
+    let reset = extent(&ram, 0, setup.reset_copy_size)?.to_vec();
+    let plan = redirect::locate(&reset, inverted, bias, &ram)?;
+    let prefix = (plan.dst as usize + plan.bytes + 0xfff) & !0xfff;
+    require(prefix <= ram.len(), "The redirected section lies outside the RAM image")?;
+    ram.truncate(prefix);
+    let lamp = &setup.lamp;
+    let binding = redirect::stub_binding(
+        &plan,
+        &reset,
+        inverted,
+        bias,
+        setup.flash.aperture,
+        destination,
+        setup.reset_copy_size,
+        ram.len(),
+        mode == CheckedRedirect::Apply,
+        &redirect::StubLamp {
+            pio_base: lamp.pio_base,
+            green_port: lamp.green_port,
+            red_port: lamp.red_port,
+            pin: lamp.pin,
+        },
+        stub_template::IMAGE,
+    )?;
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_seconds,
+        None,
+        None,
+        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding) }),
     )
 }
 
@@ -499,6 +589,9 @@ struct ReadOnly {
     destination: u64,
     /// The checked redirect the loader proves (and, if bound to, makes) once the file is read.
     redirect: Option<redirect::Binding>,
+    /// The copy stub of the copy-stub build: with it, `redirect` is the stub build's binding of the
+    /// copy call, not of the source translator.
+    stub: Option<redirect::StubBinding>,
 }
 
 /// How an internal-flash startup differs from a card-resident one.
@@ -645,7 +738,13 @@ fn package_inner(
     )?;
     let prefix = setup.verify(inverted)?;
     let loader = if let Some(read_only) = &read_only {
-        if read_only.redirect.is_some() { &CHECKED_REDIRECT } else { &READ_ONLY }
+        if read_only.stub.is_some() {
+            &COPY_STUB
+        } else if read_only.redirect.is_some() {
+            &CHECKED_REDIRECT
+        } else {
+            &READ_ONLY
+        }
     } else if internal_flash.is_some() {
         &INTERNAL_FLASH
     } else {
@@ -793,6 +892,12 @@ fn package_inner(
                 image::Error::Invalid("This XP5 loader build has no checked-redirect binding".into())
             })?;
             redirect::bind(&mut program, at, binding)?;
+        }
+        if let Some(stub) = &read_only.stub {
+            let at = loader.copy_stub_binding.ok_or_else(|| {
+                image::Error::Invalid("This XP5 loader build has no copy-stub binding".into())
+            })?;
+            redirect::bind_stub(&mut program, at, stub)?;
         }
     }
     let restore = loader.setup_return_branch;
@@ -1825,6 +1930,121 @@ mod tests {
         ] {
             assert!(!other.contains("setup_sd_redirect"));
         }
+    }
+
+    #[test]
+    fn the_copy_stub_packages_the_same_cut_image_and_binds_the_stub_and_every_proof() {
+        let (data, s, ram) = redirect_fixture();
+        let at = 0xc000 + copy_stub_template::SETUP_SD_REDIRECT;
+        let stub_at = 0xc000 + copy_stub_template::SETUP_SD_COPY_STUB;
+        let read_only = 0xc000 + copy_stub_template::SETUP_SD_READ_ONLY;
+        let checked = package_checked_redirect(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        for (mode, apply) in [(CheckedRedirect::Apply, 1u64), (CheckedRedirect::VerifyOnly, 0)] {
+            let files = package_copy_stub(&data, &s, ram.clone(), 0, 0x3000_0000, mode).unwrap();
+            assert_eq!(
+                files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+                ["marble_init.bin", "ffboot.bin"]
+            );
+            // The file is the checked redirect's cut image, byte for byte.
+            assert_eq!(files[1].bytes, checked[1].bytes);
+            let marble = &files[0].bytes;
+            let word64 = |at: usize, n: usize| u64::from_le_bytes(marble[at + 8 * n..at + 8 * n + 8].try_into().unwrap());
+            // The call word is the copy call (0x2d04), its stock word and a `bl` to the stub at 0x200.
+            assert_eq!((word64(at, 0), word64(at, 1), word64(at, 2)), (1, apply, 0x2d04));
+            assert_eq!(word64(at, 3), 0x9400_0000 | (((0xa090i64 - 0x2d04) / 4) as u64 & 0x03ff_ffff));
+            assert_eq!(word64(at, 4), 0x9400_0000 | (((0x200i64 - 0x2d04) / 4) as u64 & 0x03ff_ffff));
+            assert_eq!((word64(at, 7), word64(at, 8), word64(at, 9)), (0x8_1000, 0x2000, 0xf00c_0000));
+            assert!((16..20).all(|n| word64(at, n) == 0));
+            // The stub binding: where, how long, the filler word, the CRC-32, the bytes, zero outputs.
+            let len = stub_template::IMAGE.len() as u64;
+            assert_eq!((word64(stub_at, 0), word64(stub_at, 1), word64(stub_at, 2), word64(stub_at, 3)), (1, 0x200, len, 0xd503_201f));
+            let image = &marble[stub_at + 48..stub_at + 48 + len as usize];
+            assert_eq!(word64(stub_at, 4), u64::from(crate::xp4::crc32(image)));
+            assert_eq!(word64(stub_at, 5), stub_template::XP5_STUB_PARAMS as u64);
+            assert_eq!(image[..stub_template::XP5_STUB_PARAMS], stub_template::IMAGE[..stub_template::XP5_STUB_PARAMS]);
+            assert!(marble[stub_at + 48 + len as usize..stub_at + 48 + 1024 + 32].iter().all(|b| *b == 0));
+            assert_eq!(word64(read_only, 1), 0x3000_0000);
+            let request = 0xc000 + copy_stub_template::SETUP_SD_REQUEST;
+            assert_eq!(
+                (word64(request, 1), word64(request, 2)),
+                (files[1].bytes.len() as u64, u64::from(crate::xp4::crc32(&files[1].bytes)))
+            );
+        }
+        let apply = package_copy_stub(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        let verify = package_copy_stub(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::VerifyOnly).unwrap();
+        let differing: Vec<usize> =
+            (0..apply[0].bytes.len()).filter(|&n| apply[0].bytes[n] != verify[0].bytes[n]).collect();
+        assert_eq!(differing, [at + 8]);
+        // The loader itself is a build of its own: the checked-redirect card's loader differs.
+        assert_ne!(apply[0].bytes, checked[0].bytes);
+    }
+
+    #[test]
+    fn the_copy_stub_refuses_what_it_cannot_prove_or_place() {
+        let (data, s, ram) = redirect_fixture();
+        let go = |data: &[u8], s: &Setup, ram: Vec<u8>, destination: u64| {
+            package_copy_stub(data, s, ram, 0, destination, CheckedRedirect::Apply)
+        };
+        assert!(go(&data, &s, ram.clone(), 0x3000_0000).is_ok());
+        for bad in [0x2000_0000, 0x3000_0004, READ_ONLY_CEILING, 0x2445_9000 - 0x1000] {
+            assert!(go(&data, &s, ram.clone(), bad).is_err(), "{bad:#x}");
+        }
+        let mut bad = ram.clone();
+        bad[0x8_1000 + 5] ^= 1;
+        assert!(go(&data, &s, bad, 0x3000_0000).is_err());
+        // A stage whose padding is not nops, or which refers to it.
+        for (at, value) in [(0x3c0usize, 0xaa1f_03e1u32), (0x3000, 0x9400_0000 | (((0x400i64 - 0x3000) / 4) as u32 & 0x03ff_ffff))] {
+            let mut other = data.clone();
+            other[0x40000 + at..0x40000 + at + 4].copy_from_slice(&value.to_le_bytes());
+            let mut ram_other = ram.clone();
+            ram_other[at..at + 4].copy_from_slice(&value.to_le_bytes());
+            assert!(go(&other, &s, ram_other, 0x3000_0000).is_err(), "{at:#x}");
+        }
+        // The plain fixture has no such stage at all.
+        let (plain, plain_setup, plain_ram) = fixture();
+        assert!(go(&plain, &plain_setup, plain_ram, 0x3000_0000).is_err());
+    }
+
+    #[test]
+    fn the_copy_stub_loader_asset_keeps_its_three_binding_templates_and_no_other_build_has_the_stub_one() {
+        use copy_stub_template as t;
+        assert_eq!((t::SETUP_SD_REDIRECT % 8, t::SETUP_SD_READ_ONLY % 8, t::SETUP_SD_COPY_STUB % 8), (0, 0, 0));
+        let mut template = vec![0u8; 48 + 1024 + 32];
+        template[..8].copy_from_slice(&1u64.to_le_bytes());
+        assert_eq!(&t::IMAGE[t::SETUP_SD_COPY_STUB..t::SETUP_SD_COPY_STUB + template.len()], template);
+        assert_eq!(COPY_STUB.copy_stub_binding, Some(t::SETUP_SD_COPY_STUB));
+        assert_eq!(COPY_STUB.redirect_binding, Some(t::SETUP_SD_REDIRECT));
+        assert_eq!(
+            (CARD.copy_stub_binding, INTERNAL_FLASH.copy_stub_binding, READ_ONLY.copy_stub_binding, CHECKED_REDIRECT.copy_stub_binding),
+            (None, None, None, None)
+        );
+        for other in [
+            include_str!("../assets/sd-boot-v1-xp5-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-internal-flash-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-read-only-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-checked-redirect-loader.generated.json"),
+        ] {
+            assert!(!other.contains("setup_sd_copy_stub"));
+        }
+        // The stub image is position independent, a multiple of 8 bytes, with its parameter block last.
+        let stub = stub_template::IMAGE;
+        assert_eq!((stub.len() % 8, stub_template::XP5_STUB_PARAMS + 176, stub_template::XP5_STUB_ENTRY), (0, stub.len(), 0));
+        assert!(stub[stub_template::XP5_STUB_PARAMS..].iter().all(|b| *b == 0));
+        // None of the stub's parameter offsets overlaps another.
+        let mut offsets = vec![
+            stub_template::XP5_STUB_P_SELF, stub_template::XP5_STUB_P_DST, stub_template::XP5_STUB_P_FLASH,
+            stub_template::XP5_STUB_P_BYTES, stub_template::XP5_STUB_P_DRAM, stub_template::XP5_STUB_P_CRC,
+            stub_template::XP5_STUB_P_COPY, stub_template::XP5_STUB_P_GREEN, stub_template::XP5_STUB_P_RED,
+            stub_template::XP5_STUB_P_PIN, stub_template::XP5_STUB_P_PULSE, stub_template::XP5_STUB_P_GAP,
+            stub_template::XP5_STUB_P_ENABLE, stub_template::XP5_STUB_P_ENABLE_GREEN,
+            stub_template::XP5_STUB_P_ENABLE_RED, stub_template::XP5_STUB_P_MUX, stub_template::XP5_STUB_P_RETURN,
+            stub_template::XP5_STUB_P_RESTORE,
+            stub_template::XP5_STUB_OUT_STATUS, stub_template::XP5_STUB_OUT_SRC_CRC,
+            stub_template::XP5_STUB_OUT_DST_CRC, stub_template::XP5_STUB_OUT_RESULT,
+        ];
+        offsets.sort_unstable();
+        assert!(offsets.windows(2).all(|w| w[1] == w[0] + 8));
+        assert_eq!(offsets[0], stub_template::XP5_STUB_PARAMS);
     }
 
     #[test]
