@@ -26,6 +26,8 @@ struct NorState {
     #[serde(default)]
     write_protect: bool,
     #[serde(default)]
+    write_ranges: Vec<WriteRange>,
+    #[serde(default)]
     read_backing: Option<ReadBacking>,
     jedec: u32,
     write_enable: bool,
@@ -66,6 +68,7 @@ impl Nor {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
             || state.write_protect != self.write_protect
+            || state.write_ranges != self.write_ranges
             || state.read_backing != self.read_backing
             || state.jedec != self.jedec
             || state.erase_bytes != g.erase_bytes

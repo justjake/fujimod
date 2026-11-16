@@ -1147,6 +1147,7 @@ impl Devices {
         prefix: Option<storage::ImmutablePrefix>,
         mapped_read: Option<storage::MappedReadGate>,
         write_protect: bool,
+        write_ranges: Vec<storage::WriteRange>,
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
         audio: Option<storage::AudioPacing>,
@@ -1174,6 +1175,7 @@ impl Devices {
         if write_protect { nor = nor.with_write_protect(); }
         if strict_backing { nor = nor.with_strict_backing(); }
         if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
+        if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
         let view = nor.immutable_view();
         let port = storage::port_from_nor(nor);
         let mut dma = DmaController::new(port.clone(), routes).with_audio(audio)?;
