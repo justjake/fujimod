@@ -289,7 +289,24 @@ verifies, then one green pulse, or one, two or three red pulses) and leaving a s
 It never reads the flash aperture and writes nothing but its own block, the lamp pins, the stage's stack and, through
 the stage's copy function, the destination. The armed loader shows four green blinks (verified-only two).
 
-`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-marker-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5)
+takes the copy-stub startup's inputs and writes the same two files (`ffboot.bin` is byte for byte the copy stub's:
+the stock-derived image cut after the first section), but binds a **change to that section** which the loader makes
+itself (`StartupOptions::marker`; loader `assets/sd-boot-v1-xp5-marker-loader.generated.{bin,json}`, the program
+`assets/sd-boot-v1-xp5-marker.generated.{bin,json}`). The packager finds the section's entry point in the
+section's own header, replaces its first instruction by a branch to a short program and writes that program into
+the run of zero words in front of the section's first exception vector table (refusing the image unless the
+section has exactly one such run and nothing in it refers to the run). It names every changed word (offset, stock
+word, new word; none at or above the section's declared size) and binds the CRC-32 of the changed section. The loader
+proves the flash range, that every named word holds its bound stock word in the flash, that the file's copy equals the
+flash word for word and that applying the names gives the bound CRC-32; with `--apply` it then writes the names into
+the DRAM copy, reads the copy against the flash again (equal but for the names) and takes them back otherwise. The
+copy stub of the copy-stub startup then checks the changed copy and the destination against the changed section's
+CRC-32 at the moment of use and copies the flash's section on any difference. The program lights the lamp orange,
+green, orange on core 0 and returns to the instruction after the hook. The armed loader shows five green blinks
+(verified-only two).
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
