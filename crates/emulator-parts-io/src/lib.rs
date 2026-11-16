@@ -5,6 +5,7 @@ pub mod command_data_output;
 pub mod i2c;
 pub mod lsm6ds;
 pub mod power_controller;
+pub mod rl78_programmer;
 pub mod serial;
 pub mod serial_calibration;
 pub mod serial_command_registers;

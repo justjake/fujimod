@@ -727,7 +727,7 @@ impl Devices {
     }
     pub fn pl011_uart(&mut self, wiring: &crate::definition::Pl011Uart) -> Result<(), String> {
         use fujimod_emulator_ip_arm::pl011::{Pl011, WINDOW};
-        let model = Pl011::new(wiring.base, wiring.irq)?;
+        let model = Pl011::with_rl78(wiring.base, wiring.irq, wiring.rl78.clone())?;
         let (lo, hi) = (wiring.base, wiring.base + WINDOW);
         if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
             return Err("Overlapping PL011 UART window".into());

@@ -65,6 +65,10 @@ fn the_ports_are_explicit_and_own_their_pages() {
     twice["pl011_uarts"] = json!([{"base": PORT}, {"base": PORT}]);
     let error = session(twice).err().unwrap();
     assert!(error.contains("Overlapping PL011 UART"), "{error}");
+    let mut invalid_peer = input();
+    invalid_peer["pl011_uarts"] = json!([{"base": PORT, "rl78": {"flash_bytes": 1000}}]);
+    let error = session(invalid_peer).err().unwrap();
+    assert!(error.contains("Invalid virtual RL78"), "{error}");
     let mut extra = one.clone();
     extra["pl011_uarts"][0]["extra"] = json!(true);
     assert!(serde_json::from_value::<Definition>(extra).is_err());
@@ -142,4 +146,40 @@ fn a_guest_opens_port_0_and_its_transmit_interrupt_reaches_the_declared_line() {
     // The level interrupt stays pending until ICR clears the transmit bit.
     let pending = &board.interrupt_state().unwrap()[0].pending;
     assert_ne!(pending[(IRQ / 32) as usize] & 1 << (IRQ % 32), 0);
+}
+
+#[test]
+fn declared_rl78_peer_replies_to_a_guest_uart_exchange() {
+    let mut selected = input();
+    selected["pl011_uarts"] = json!([{"base": PORT, "irq": IRQ, "rl78": {"flash_bytes": 49152}}]);
+    let board = session(selected).unwrap();
+    let mut program = Vec::new();
+    for byte in [1u32, 3, 0x9a, 0, 0x21, 0x42, 3] {
+        program.extend([0xe3a0_2000 | byte, 0xe5c0_2000]); // MOV r2, byte; STRB r2, [r0]
+    }
+    for offset in 0..7 {
+        program.extend([0xe5d0_2000, 0xe5c3_2000 | offset]); // LDRB r2, [r0]; STRB r2, [r3, offset]
+    }
+    program.push(0xe320_f003); // WFI
+    let bytes: Vec<u8> = program
+        .iter()
+        .flat_map(|word: &u32| word.to_le_bytes())
+        .collect();
+    board.write(CODE, &bytes).unwrap();
+    board.write_register(0, arm::CORE[0], PORT.into()).unwrap();
+    board
+        .write_register(0, arm::CORE[3], (RESULT as u32).into())
+        .unwrap();
+    board.run_board(4000, 100).unwrap();
+    assert!(board.state(false).failure.is_none());
+    let mut reply = [0u8; 7];
+    board.read(RESULT, &mut reply).unwrap();
+    assert_eq!(reply, [2, 3, 6, 32, 0, 0xd7, 3]);
+    let states = board.device_state_json();
+    let uart: Value = serde_json::from_str(&states["pl011"]).unwrap();
+    assert_eq!(uart["rl78"]["baud_set"], true);
+    assert_eq!(uart["rl78"]["flash"], json!({"bytes": 49152}));
+    assert_eq!(uart["rl78"]["frame"], json!({"bytes": 0}));
+    assert_eq!(uart["sent_count"], 7);
+    assert!(uart.get("rx").is_none());
 }
