@@ -1127,6 +1127,7 @@ impl Session {
             storage_immutable_prefix,
             storage_mapped_read,
             storage_write_protect,
+            storage_write_ranges,
             storage_strict_backing,
             storage_erased_ranges,
             standalone_dma,
@@ -1355,6 +1356,14 @@ impl Session {
         if !storage_erased_ranges.is_empty() && !storage_strict_backing {
             return Err("Erased NOR ranges require strict read backing".into());
         }
+        if storage_write_protect && !storage_write_ranges.is_empty() {
+            return Err("NOR write ranges contradict whole-array write protection".into());
+        }
+        if !storage_write_ranges.is_empty()
+            && (storage_jedec.is_none() || !storage_strict_backing)
+        {
+            return Err("NOR write ranges require an XP4 NOR owner and strict read backing".into());
+        }
         if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
             // The prefix is mapped as memory, so its reads would bypass the gate.
             return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
@@ -1376,6 +1385,7 @@ impl Session {
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
                 storage_mapped_read,
                 storage_write_protect,
+                storage_write_ranges,
                 storage_strict_backing,
                 storage_erased_ranges,
                 storage_dma_audio,

@@ -69,6 +69,11 @@ pub struct Definition {
     /// Refuse every write-enable, erase and program request to the NOR.
     #[serde(default)]
     pub storage_write_protect: bool,
+    /// Declared array-relative extents that a synthetic experiment admits
+    /// mutation into. Requires strict read backing; contradicts whole-array
+    /// write protection. Empty preserves the existing behavior.
+    #[serde(default)]
+    pub storage_write_ranges: Vec<fujimod_emulator_xp4_storage::storage::WriteRange>,
     /// Bound external NOR reads to the supplied asset. Omitted preserves
     /// erased bytes beyond the asset; this does not declare chip capacity.
     #[serde(default)]
