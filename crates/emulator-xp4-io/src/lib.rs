@@ -7,6 +7,7 @@ pub mod filter_engine;
 pub mod interval_timers;
 pub mod mali_v61;
 pub mod power_serial;
+pub mod request_fff4f01c;
 pub mod requests;
 pub mod rtc;
 pub mod register_bank;
