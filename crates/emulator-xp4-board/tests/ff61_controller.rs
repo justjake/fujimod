@@ -1,8 +1,9 @@
 //! FF61/FF51 controller boundary at the current model limit.
 //!
-//! The catalog's X-T3 5.11 basis describes channel-1 request/lock/apply words,
-//! but only the explicit `commands` entries are modeled. These tests separate
-//! plain retention of configuration words from readiness/status transitions and
+//! The catalog's X-T3 5.11 basis describes channel-1 request/lock/apply words
+//! and declares `fixed_words` plus `idle_bits` for them; the shared model
+//! applies fixed first and ORs idle over the stored word. These tests separate
+//! plain retention of configuration words from that declared readiness, and
 //! keep every readiness result labelled synthetic. No GFX100S firmware runs
 //! here, and nothing here claims training, timing or a physical result.
 use fujimod_emulator_cpu::arm;
@@ -18,6 +19,8 @@ const LOCK_BLOCK: u32 = 0xFF61_4000;
 const LOCK: u32 = 0xFF61_4670;
 const APPLY_BLOCK: u32 = 0xFF51_7000;
 const APPLY: u32 = 0xFF51_7C18;
+const CLEAR_BLOCK: u32 = 0xFF51_5000;
+const CLEAR: u32 = 0xFF51_5384;
 
 fn input(idle: Value) -> Value {
     json!({"ram_size": 65536, "cores": 1, "discovery": false, "cbar": CBAR,
@@ -26,7 +29,8 @@ fn input(idle: Value) -> Value {
         {"base": REQUEST, "size": 0x1000, "idle": [],
          "commands": [{"word": 0, "value": 0xB01, "status": 0x110, "mask": 1, "state": 1}]},
         {"base": LOCK_BLOCK, "size": 0x1000, "idle": idle},
-        {"base": APPLY_BLOCK, "size": 0x1000, "idle": []}
+        {"base": APPLY_BLOCK, "size": 0x1000, "idle": []},
+        {"base": CLEAR_BLOCK, "size": 0x1000, "idle": [], "fixed": [[0x384, 0]]}
     ]})
 }
 
@@ -83,7 +87,6 @@ fn retained_configuration_does_not_satisfy_status_polls() {
         0,
         "retention must not satisfy the 0x30000 lock poll"
     );
-    let before = word(&board, RESULT);
     run(&board, CODE + 0x40, &STATUS, &[(0, REQUEST), (1, 0xB00), (3, RESULT as u32)]).unwrap();
     assert_eq!(word(&board, RESULT), 0, "the status program actually ran");
     assert_eq!(
@@ -152,6 +155,11 @@ fn catalog_declared_idle_and_fixed_words_satisfy_the_polls_from_reset() {
     assert_eq!(word(&board, RESULT), 0x924 | 0x30003);
     run(&board, CODE + 0x80, &LOAD, &[(0, APPLY), (3, RESULT as u32)]).unwrap();
     assert_eq!(word(&board, RESULT), 1, "catalog fixed word is ready from reset");
+    run(&board, CODE + 0xC0, &LOAD, &[(0, CLEAR), (3, RESULT as u32)]).unwrap();
+    assert_eq!(word(&board, RESULT), 0, "catalog apply-clear fixed word reads zero");
+    // The stock firmware writes 0x40000000 to FF517C18; a fixed word must win.
+    run(&board, CODE + 0x100, &COPY, &[(0, APPLY), (1, 0x4000_0000), (3, RESULT as u32)]).unwrap();
+    assert_eq!(word(&board, RESULT), 1, "fixed wins over the stock write");
 }
 
 #[test]
