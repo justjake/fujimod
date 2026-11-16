@@ -51,6 +51,10 @@ pub struct StartupOptions {
     /// stock stage loads that section from the DRAM copy. `ffboot.bin` is then the unedited image
     /// cut after that section. See `xp5::CheckedRedirect`.
     pub checked_redirect: Option<CheckedRedirect>,
+    /// With `checked_redirect`: replace the stage's copy call by a stub that the loader writes into
+    /// dead padding of the stock reset image, and that checks the DRAM copy and the destination at
+    /// the moment of use and falls back to the flash copy (`xp5::package_copy_stub`).
+    pub copy_stub: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -458,6 +462,10 @@ impl Recipe {
             "The checked redirect requires the read-only startup",
         )?;
         require(
+            !options.copy_stub || options.checked_redirect.is_some(),
+            "The copy stub requires the checked redirect",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -552,14 +560,25 @@ impl Recipe {
                             contract.verify(&ram)?;
                         }
                         redirect_checked = true;
-                        xp5::package_checked_redirect(
-                            &inverted,
-                            setup,
-                            ram,
-                            options.success_hold_seconds,
-                            destination,
-                            mode,
-                        )?
+                        if options.copy_stub {
+                            xp5::package_copy_stub(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.success_hold_seconds,
+                                destination,
+                                mode,
+                            )?
+                        } else {
+                            xp5::package_checked_redirect(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.success_hold_seconds,
+                                destination,
+                                mode,
+                            )?
+                        }
                     } else if let Some(destination) = options.read_only_destination {
                         xp5::package_read_only(
                             &inverted,

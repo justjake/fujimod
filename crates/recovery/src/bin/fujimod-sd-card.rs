@@ -69,13 +69,13 @@ fn take_destination(
 ) -> Result<Option<u64>, Box<dyn std::error::Error>> {
     let Some(at) = args.iter().position(|arg| arg == "--destination") else {
         return if allowed {
-            Err("sd-boot-v1-read-only-startup and sd-boot-v1-checked-redirect-startup require --destination ADDRESS".into())
+            Err("sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup require --destination ADDRESS".into())
         } else {
             Ok(None)
         };
     };
     if !allowed {
-        return Err("--destination requires sd-boot-v1-read-only-startup or sd-boot-v1-checked-redirect-startup".into());
+        return Err("--destination requires sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup or sd-boot-v1-copy-stub-startup".into());
     }
     let text = args.get(at + 1).ok_or("Missing --destination value")?;
     let value = match text.strip_prefix("0x") {
@@ -102,12 +102,12 @@ fn take_redirect_mode(
         return if given.is_empty() {
             Ok(None)
         } else {
-            Err("--verify-only and --apply require sd-boot-v1-checked-redirect-startup".into())
+            Err("--verify-only and --apply require sd-boot-v1-checked-redirect-startup or sd-boot-v1-copy-stub-startup".into())
         };
     }
     let count = args.iter().filter(|a| flags.contains(&a.as_str())).count();
     if given.len() != 1 || count != 1 {
-        return Err("sd-boot-v1-checked-redirect-startup requires exactly one of --verify-only and --apply".into());
+        return Err("sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup require exactly one of --verify-only and --apply".into());
     }
     args.retain(|a| !flags.contains(&a.as_str()));
     Ok(Some(if given[0] == "--apply" { CheckedRedirect::Apply } else { CheckedRedirect::VerifyOnly }))
@@ -129,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
-            | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -142,20 +142,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let fallback_wait_seconds =
                 take_fallback_wait(&mut inputs, command == "sd-boot-v1-ram-startup")?;
-            let redirect_command = command == "sd-boot-v1-checked-redirect-startup";
+            let stub_command = command == "sd-boot-v1-copy-stub-startup";
+            let redirect_command = command == "sd-boot-v1-checked-redirect-startup" || stub_command;
             let checked_redirect = take_redirect_mode(&mut inputs, redirect_command)?;
             let read_only_destination = take_destination(
                 &mut inputs,
-                matches!(command, "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup"),
+                matches!(command, "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup"),
             )?;
             let (firmware, dat, output, success_hold_seconds) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup"))?;
+                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup"))?;
             let options = StartupOptions {
                 success_hold_seconds,
                 internal_flash: command == "sd-boot-v1-ram-startup",
                 fallback_wait_seconds,
                 read_only_destination,
                 checked_redirect,
+                copy_stub: stub_command,
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
@@ -171,7 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 recipe.build_ota_startup(&source)?
             } else if command == "sd-boot-v1-stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
-            } else if matches!(command, "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup") {
+            } else if matches!(command, "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup") {
                 // The update stays an independent input and is not written.
                 recipe.build_boot_files(&source, options)?
             } else {
@@ -188,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup and sd-boot-v1-checked-redirect-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup, one required)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-boot-v1-copy-stub-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, one required)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
