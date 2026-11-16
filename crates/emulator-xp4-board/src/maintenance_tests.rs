@@ -157,3 +157,56 @@ fn source_capability_failure_preserves_all_peer_flushes_without_ack_or_retry() {
     assert_failed_session_is_frozen(&session, &error);
     assert_eq!(foreign.translation_maintenance_status().unwrap().pending, 0);
 }
+
+#[test]
+fn status_storage_exposes_only_the_admitted_processors() {
+    for cores in 1..=MAX_CORES {
+        let definition: Definition = serde_json::from_value(json!({
+            "ram_size": 65536, "cores": cores, "discovery": false,
+            "cbar": 0x2000_0000u32,
+        })).unwrap();
+        let session = Session::new(definition, None, vec![]).unwrap();
+        let cluster = &session.inner;
+        let before = session.translation_maintenance_state().unwrap();
+        assert_eq!(before.native.len(), cores);
+        assert_eq!(before.identities.len(), cores);
+        cluster.maintenance.ready(&cluster.cpus).unwrap();
+        assert_eq!(cluster.maintenance.deliver(&cluster.cpus, cores, None).unwrap_err(),
+            "Invalid translation source core");
+        assert_eq!(session.translation_maintenance_state().unwrap(), before);
+    }
+    for cores in [0, MAX_CORES + 1] {
+        let definition: Definition = serde_json::from_value(json!({
+            "ram_size": 65536, "cores": cores, "discovery": false,
+            "cbar": 0x2000_0000u32,
+        })).unwrap();
+        match Session::new(definition, None, vec![]) {
+            Err(error) => assert_eq!(error,
+                "ARMv7-A needs 1..4 cores and page aligned physical RAM"),
+            Ok(_) => panic!("Unsupported processor count was admitted"),
+        }
+    }
+}
+
+#[test]
+fn later_identity_failure_precedes_earlier_pending_work() {
+    let mut session = session();
+    let cluster = &mut session.inner;
+    // Deliberately leave one accepted event unsettled to check error priority.
+    cluster.cpus[0].run(crate::Run {
+        begin: ENTRY, until: None, watchdog_us: 0, instructions: Some(1),
+    }).unwrap();
+    assert_eq!(cluster.cpus[0].translation_maintenance_status().unwrap().pending, 1);
+    let original = cluster.maintenance.identities[2];
+    cluster.maintenance.identities[2] = cluster.maintenance.identities[0];
+    assert_eq!(cluster.maintenance.ready(&cluster.cpus).unwrap_err(),
+        "Translation processor identity changed");
+    assert_eq!(cluster.maintenance.deliver(&cluster.cpus, 1, None).unwrap_err(),
+        "Translation processor identity changed");
+    cluster.maintenance.identities[2] = original;
+    assert_eq!(cluster.maintenance.ready(&cluster.cpus).unwrap_err(),
+        "Core 0 has unsettled translation maintenance: 1 pending, poison 0");
+    assert_eq!(cluster.maintenance.deliver(&cluster.cpus, 1, None).unwrap_err(),
+        "Paused core 0 has unexpected translation work");
+    assert_eq!(cluster.cpus[0].translation_maintenance_status().unwrap().pending, 1);
+}
