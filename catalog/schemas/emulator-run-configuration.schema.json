@@ -2235,6 +2235,17 @@
             "integer",
             "null"
           ]
+        },
+        "xp4_still_capture": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunXp4StillCapture"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared XP4 still-development RAW source and its backing."
         }
       },
       "type": "object"
@@ -4842,6 +4853,63 @@
         "declared-wifi-sdio-one-function-enumeration-unmeasured"
       ],
       "type": "string"
+    },
+    "RunXp4StillCapture": {
+      "additionalProperties": false,
+      "description": "Opt-in XP4 still-engine inputs and bounded physical RAW backing.",
+      "properties": {
+        "basis": {
+          "type": "string"
+        },
+        "memory_base": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memory_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_address": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_pitch": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_site": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        }
+      },
+      "required": [
+        "raw_address",
+        "raw_pitch",
+        "raw_site",
+        "memory_base",
+        "memory_size",
+        "basis"
+      ],
+      "type": "object"
     },
     "TimingOperation": {
       "description": "Device operation to which a run's functional delay applies.",
