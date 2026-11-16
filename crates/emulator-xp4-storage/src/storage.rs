@@ -4258,6 +4258,42 @@ mod write_range_tests {
     }
 
     #[test]
+    fn coalesced_program_coverage_restores_across_adjacent_write_ranges() {
+        let ranges = vec![range(0x1000, PAGE as u64), range(0x1100, PAGE as u64)];
+        let (p, flash, mut h) = controller(ranges.clone());
+        for offset in [0x10ff, 0x1100] {
+            let mut port = p.lock().unwrap();
+            port.nor.write_enable = true;
+            port.nor.begin(h.now, Mutation::Program {
+                address: FLASH + offset, bytes: vec![0],
+            }).unwrap();
+            h.now += 12;
+            port.nor.complete(&mut Cx::new(&mut h, 0, 0, 0));
+        }
+        assert!(p.lock().unwrap().nor.check_mutation(FLASH + 0x10ff, 2).is_err());
+        let saved = flash.save();
+        assert_eq!(saved["nor"]["programmed_ranges"], json!([[0x10ff, 0x1101]]));
+        let mut restored = SerialFlashController::new(shared(ranges).unwrap(), 37);
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        let mut crossing = saved.clone();
+        crossing["nor"]["programmed_ranges"] = json!([[0x10ff, 0x1201]]);
+        assert!(restored.restore(&crossing).is_err());
+        let mut with_gap = SerialFlashController::new(
+            shared(vec![range(0x1000, PAGE as u64), range(0x1200, PAGE as u64)]).unwrap(), 37,
+        );
+        let mut gap_state = with_gap.save();
+        gap_state["nor"]["program_count"] = json!(2);
+        gap_state["nor"]["programmed_ranges"] = json!([[0x10ff, 0x1201]]);
+        assert!(with_gap.restore(&gap_state).is_err());
+        let mut protected = SerialFlashController::new(port_from_nor(strict().with_write_protect()), 37);
+        let mut protected_state = protected.save();
+        protected_state["nor"]["program_count"] = json!(1);
+        protected_state["nor"]["programmed_ranges"] = json!([[0x1000, 0x1001]]);
+        assert!(protected.restore(&protected_state).is_err());
+    }
+
+    #[test]
     fn write_range_checkpoint_requires_identical_policy_and_valid_extents() {
         let (_p, mut f, mut h) = controller(vec![range(0x1000, ERASE as u64)]);
         write(&mut f, &mut h, 0, CONTROLLER + 0x90, 0x06000001);

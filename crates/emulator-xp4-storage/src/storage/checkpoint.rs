@@ -49,6 +49,31 @@ fn extent(address: u64, size: usize) -> bool {
         .is_some_and(|end| end <= FLASH_SIZE)
 }
 impl Nor {
+    // Coverage combines completed operations, so adjacent authorized ranges may
+    // form one span even though no single write may cross their boundary.
+    fn coverage_is_admitted(&self, start: usize, end: usize) -> bool {
+        if self.write_ranges.is_empty() {
+            return self.check_mutation(FLASH + start as u64, end - start).is_ok();
+        }
+        let mut cursor = start as u64;
+        for range in &self.write_ranges {
+            if range.offset > cursor {
+                break;
+            }
+            let limit = (range.offset + range.length).min(end as u64);
+            if limit > cursor {
+                if self.check_mutation(FLASH + cursor, (limit - cursor) as usize).is_err() {
+                    return false;
+                }
+                cursor = limit;
+                if cursor == end as u64 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     fn capture_state(&self) -> NorState {
         NorState {
             immutable_prefix: self.prefix.map(|prefix| prefix.bytes()),
@@ -130,9 +155,7 @@ impl Nor {
             if start >= end
                 || end > FLASH_SIZE as usize
                 || previous_end.is_some_and(|previous| start <= previous)
-                || self
-                    .check_mutation(FLASH + start as u64, end - start)
-                    .is_err()
+                || !self.coverage_is_admitted(start, end)
                 || state.program_count == 0
             {
                 return Err("Invalid XP4 NOR program coverage".into());
