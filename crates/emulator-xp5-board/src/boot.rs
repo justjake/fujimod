@@ -14,11 +14,11 @@ use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog::{
     firmware::FirmwareProfile,
     profiles::RegisterWindow,
-    reference::{ProcessorModel, ResolvedSelection, SocBlockKind},
+    reference::{ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
     soc::{ApplicationHardware, InterruptControllerHardware},
 };
 use fujimod_emulator_cpu::{Register, arm64};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, gpio::Feedback, pins::DriveInput}};
 use fujimod_emulator_parts_controls::key_input::{ControlsOptions, KeyInput};
 use fujimod_emulator::board::aprofile::generic_timer;
 use fujimod_emulator_ip_arm::gicv3::Gic;
@@ -483,7 +483,64 @@ pub fn windows(
         kind: "unmodeled-bus-drain".into(),
         options: Default::default(),
     });
+    let feedback = gpio_feedback(selection)?;
+    if !feedback.is_empty() {
+        let gpio = devices
+            .iter_mut()
+            .find(|window| window.kind == "gpio")
+            .ok_or_else(|| format!("SoC profile {profile_id} has no GPIO window for body feedback"))?;
+        if gpio.options.contains_key("feedback") {
+            return Err(format!(
+                "SoC profile {profile_id} GPIO window and body {} both declare feedback",
+                selection.body.id
+            ));
+        }
+        gpio.options.insert(
+            "feedback".into(),
+            toml::Value::try_from(feedback).map_err(|error| error.to_string())?,
+        );
+    }
     Ok(devices)
+}
+
+/// The body's GPIO feedback wires: each drives an input pad from the output
+/// latch bit of the same pin number (register 0, the port's drive field).
+fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String> {
+    let body = &selection.body;
+    let Some(hardware) = body.hardware.as_ref() else {
+        return Ok(vec![]);
+    };
+    let pin = |id: &str| -> Result<(usize, usize, bool), String> {
+        let connection = body
+            .connections
+            .iter()
+            .find(|connection| connection.id == id)
+            .ok_or_else(|| format!("body {} feedback refers to missing connection {id}", body.id))?;
+        match connection.signals.as_slice() {
+            [ConnectionSignal::Gpio { port, pin, active_level }] => {
+                Ok((usize::from(*port), usize::from(*pin), *active_level))
+            }
+            _ => Err(format!(
+                "body {} feedback connection {id} must be exactly one GPIO pin",
+                body.id
+            )),
+        }
+    };
+    hardware
+        .gpio_feedback
+        .iter()
+        .map(|wire| {
+            let (port, bit, output_level) = pin(&wire.output_connection_id)?;
+            let (input_port, input_pin, input_level) = pin(&wire.input_connection_id)?;
+            if output_level != input_level {
+                return Err(format!(
+                    "body {} inverting GPIO feedback {} -> {} is unmodeled",
+                    body.id, wire.output_connection_id, wire.input_connection_id
+                ));
+            }
+            Ok(Feedback { port, register: 0, bit, input_port, input_pin })
+        })
+        .collect()
 }
 
 /// An XP5 device bus assembled from the selected SoC profile.
@@ -710,5 +767,57 @@ mod bus_drain_tests {
         selection.body.hardware.as_mut().unwrap().bus_drain = None;
         let error = windows(&selection, "xp5").err().unwrap();
         assert!(error.contains("no bus-drain address"), "{error}");
+    }
+}
+
+#[cfg(test)]
+mod gpio_feedback_tests {
+    use super::windows;
+    use fujimod_catalog::reference::ConnectionSignal;
+    use serde_json::json;
+
+    fn selection(body: &str, firmware: &str) -> fujimod_catalog::ResolvedSelection {
+        fujimod_catalog::ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve(body, firmware)
+            .unwrap()
+    }
+
+    fn feedback(selection: &fujimod_catalog::ResolvedSelection) -> serde_json::Value {
+        let windows = windows(selection, "xp5").unwrap();
+        let gpio = windows.iter().find(|window| window.kind == "gpio").unwrap();
+        serde_json::to_value(gpio.options.get("feedback")).unwrap()
+    }
+
+    #[test]
+    fn declared_bodies_feed_the_sensor_power_enable_back_to_its_pad() {
+        let wire = json!([{"port": 4, "register": 0, "bit": 4, "input_port": 4, "input_pin": 4}]);
+        assert_eq!(feedback(&selection("x100vi", "x100vi-131")), wire);
+        assert_eq!(feedback(&selection("xt5", "xt5-431")), wire);
+    }
+
+    #[test]
+    fn a_body_without_feedback_leaves_the_gpio_window_unchanged() {
+        let mut selection = selection("xt5", "xt5-431");
+        selection.body.hardware.as_mut().unwrap().gpio_feedback.clear();
+        assert_eq!(feedback(&selection), serde_json::Value::Null);
+    }
+
+    #[test]
+    fn inverting_and_non_gpio_feedback_wires_are_refused() {
+        let mut inverted = selection("xt5", "xt5-431");
+        let input = inverted.body.hardware.as_ref().unwrap().gpio_feedback[0]
+            .input_connection_id
+            .clone();
+        let connection = inverted.body.connections.iter_mut().find(|c| c.id == input).unwrap();
+        connection.signals = vec![ConnectionSignal::Gpio { port: 4, pin: 4, active_level: false }];
+        let error = windows(&inverted, "xp5").err().unwrap();
+        assert!(error.contains("inverting GPIO feedback"), "{error}");
+
+        let mut analog = selection("xt5", "xt5-431");
+        let connection = analog.body.connections.iter_mut().find(|c| c.id == input).unwrap();
+        connection.signals = vec![ConnectionSignal::Adc { channel: 0, threshold: None }];
+        let error = windows(&analog, "xp5").err().unwrap();
+        assert!(error.contains("exactly one GPIO pin"), "{error}");
     }
 }
