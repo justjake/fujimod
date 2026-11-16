@@ -910,7 +910,7 @@ mod tests {
     fn nested_configuration_deadline_event_and_restore_use_the_original_device_context() {
         let mut cfg = config(None);
         cfg.configuration_requests = Some(crate::configuration_request::Inputs {
-            initial_values: vec![0; 52], completion_ticks: vec![8; 20], base_parameters: None,
+            initial_values: vec![0; 52], completion_ticks: vec![8; 20], command5_completion_ticks: None, base_parameters: None,
         });
         let mut d = SystemControl::new(cfg.clone()).unwrap(); let mut c = Clock::default();
         write(&mut d, &mut c, 0xff701a40, 4, 0x100).unwrap();
@@ -937,7 +937,7 @@ mod tests {
     fn selection_state_routes_three_words_without_owning_or_coupling_b14() {
         let mut cfg = banks_config(0);
         cfg.configuration_requests = Some(crate::configuration_request::Inputs {
-            initial_values: vec![0; 52], completion_ticks: vec![8; 20], base_parameters: None,
+            initial_values: vec![0; 52], completion_ticks: vec![8; 20], command5_completion_ticks: None, base_parameters: None,
         });
         cfg.selection_special = Some(crate::selection_special::Inputs {
             selection_reset: 0, special52_reset: 2, special53_reset: 0,
@@ -959,6 +959,29 @@ mod tests {
         assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), saved);
         let mut absent = SystemControl::new(config(None)).unwrap();
         assert!(read(&mut absent, &mut c, 0xfff48600, 4).is_err());
+    }
+
+    #[test]
+    fn command5_uses_the_parent_request_owner_and_restores_pending_completion() {
+        let mut cfg = config(None);
+        cfg.configuration_requests = Some(crate::configuration_request::Inputs {
+            initial_values: vec![0; 52], completion_ticks: vec![8; 20],
+            command5_completion_ticks: Some([8, 16, 32]), base_parameters: None,
+        });
+        let mut model = SystemControl::new(cfg.clone()).unwrap(); let mut clock = Clock::default();
+        write(&mut model, &mut clock, 0xff704080, 4, 5).unwrap();
+        assert_eq!(model.next_deadline(0), Some(8)); assert_eq!(clock.events, [(8, 1)]);
+        let saved = model.save(); let mut resumed = SystemControl::new(cfg).unwrap(); resumed.restore(&saved).unwrap();
+        assert_eq!(read(&mut resumed, &mut clock, 0xff704080, 4).unwrap(), 5);
+        clock.now = 7; resumed.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(read(&mut resumed, &mut clock, 0xff704080, 4).unwrap(), 5);
+        clock.now = 8; resumed.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(read(&mut resumed, &mut clock, 0xff704080, 4).unwrap(), 0);
+        let final_state = resumed.save();
+        for key in ["staged", "applied", "written", "base_state"] {
+            assert_eq!(final_state["configuration_state"][key], saved["configuration_state"][key]);
+        }
+        assert_eq!(resumed.control, 7); assert_eq!(resumed.generation, 0);
     }
 
 }
