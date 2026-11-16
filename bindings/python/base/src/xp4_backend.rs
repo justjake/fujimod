@@ -95,6 +95,8 @@ pub trait Xp4Backend {
     fn device_records<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>>;
     fn translation_maintenance_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
     fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>>;
+    fn scheduler_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
+    fn failure(&self) -> Option<String>;
     fn frontier(&self, by_count: bool) -> Vec<FrontierEntry>;
     fn discovery_shadow(&self) -> Vec<(u64, u8)>;
     fn interventions(&self) -> Vec<Intervention>;

@@ -2688,9 +2688,9 @@ impl Session {
                 .unwrap_or_default()
         }
     }
-    pub fn state(&self, observations: bool) -> observation::State {
+    pub fn scheduler_state(&self) -> observation::SchedulerState {
         let s = unsafe { &*self.inner.state.get() };
-        observation::State {
+        observation::SchedulerState {
             instructions: s.instructions,
             virtual_ticks: s.ticks,
             per_core: s.per_core.clone(),
@@ -2715,6 +2715,28 @@ impl Session {
                 .collect(),
             failure: s.failure.clone(),
             cbar_reads: s.cbar_reads,
+        }
+    }
+    /// Current sticky failure without constructing an execution snapshot.
+    pub fn failure(&self) -> Option<String> {
+        unsafe { (&*self.inner.state.get()).failure.clone() }
+    }
+    pub fn state(&self, observations: bool) -> observation::State {
+        let saved = self.scheduler_state();
+        let s = unsafe { &*self.inner.state.get() };
+        observation::State {
+            instructions: saved.instructions,
+            virtual_ticks: saved.virtual_ticks,
+            per_core: saved.per_core,
+            waiting: saved.waiting,
+            irq_entries: saved.irq_entries,
+            undefined_entries: saved.undefined_entries,
+            prefetch_aborts: saved.prefetch_aborts,
+            data_aborts: saved.data_aborts,
+            next_device_tick: saved.next_device_tick,
+            eligible_irqs: saved.eligible_irqs,
+            failure: saved.failure,
+            cbar_reads: saved.cbar_reads,
             gpio: s
                 .devices
                 .as_ref()

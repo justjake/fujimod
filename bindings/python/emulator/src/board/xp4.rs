@@ -207,6 +207,10 @@ impl Xp4 {
     fn translation_maintenance_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         self.with(py, |s| s.translation_maintenance_state(py))
     }
+    /// Execution counters and deadlines without GPIO or observation history.
+    fn scheduler_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        self.with(py, |s| s.scheduler_state(py))
+    }
     #[pyo3(signature=(observations=true))]
     fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>> {
         self.with(py, |s| s.state(py, observations))
