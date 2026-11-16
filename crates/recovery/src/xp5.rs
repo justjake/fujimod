@@ -1957,10 +1957,11 @@ mod tests {
             // The stub binding: where, how long, the filler word, the CRC-32, the bytes, zero outputs.
             let len = stub_template::IMAGE.len() as u64;
             assert_eq!((word64(stub_at, 0), word64(stub_at, 1), word64(stub_at, 2), word64(stub_at, 3)), (1, 0x200, len, 0xd503_201f));
-            let image = &marble[stub_at + 40..stub_at + 40 + len as usize];
+            let image = &marble[stub_at + 48..stub_at + 48 + len as usize];
             assert_eq!(word64(stub_at, 4), u64::from(crate::xp4::crc32(image)));
+            assert_eq!(word64(stub_at, 5), stub_template::XP5_STUB_PARAMS as u64);
             assert_eq!(image[..stub_template::XP5_STUB_PARAMS], stub_template::IMAGE[..stub_template::XP5_STUB_PARAMS]);
-            assert!(marble[stub_at + 40 + len as usize..stub_at + 40 + 1024 + 32].iter().all(|b| *b == 0));
+            assert!(marble[stub_at + 48 + len as usize..stub_at + 48 + 1024 + 32].iter().all(|b| *b == 0));
             assert_eq!(word64(read_only, 1), 0x3000_0000);
             let request = 0xc000 + copy_stub_template::SETUP_SD_REQUEST;
             assert_eq!(
@@ -2007,7 +2008,7 @@ mod tests {
     fn the_copy_stub_loader_asset_keeps_its_three_binding_templates_and_no_other_build_has_the_stub_one() {
         use copy_stub_template as t;
         assert_eq!((t::SETUP_SD_REDIRECT % 8, t::SETUP_SD_READ_ONLY % 8, t::SETUP_SD_COPY_STUB % 8), (0, 0, 0));
-        let mut template = vec![0u8; 40 + 1024 + 32];
+        let mut template = vec![0u8; 48 + 1024 + 32];
         template[..8].copy_from_slice(&1u64.to_le_bytes());
         assert_eq!(&t::IMAGE[t::SETUP_SD_COPY_STUB..t::SETUP_SD_COPY_STUB + template.len()], template);
         assert_eq!(COPY_STUB.copy_stub_binding, Some(t::SETUP_SD_COPY_STUB));
@@ -2026,7 +2027,7 @@ mod tests {
         }
         // The stub image is position independent, a multiple of 8 bytes, with its parameter block last.
         let stub = stub_template::IMAGE;
-        assert_eq!((stub.len() % 8, stub_template::XP5_STUB_PARAMS + 160, stub_template::XP5_STUB_ENTRY), (0, stub.len(), 0));
+        assert_eq!((stub.len() % 8, stub_template::XP5_STUB_PARAMS + 176, stub_template::XP5_STUB_ENTRY), (0, stub.len(), 0));
         assert!(stub[stub_template::XP5_STUB_PARAMS..].iter().all(|b| *b == 0));
         // None of the stub's parameter offsets overlaps another.
         let mut offsets = vec![
@@ -2035,7 +2036,8 @@ mod tests {
             stub_template::XP5_STUB_P_COPY, stub_template::XP5_STUB_P_GREEN, stub_template::XP5_STUB_P_RED,
             stub_template::XP5_STUB_P_PIN, stub_template::XP5_STUB_P_PULSE, stub_template::XP5_STUB_P_GAP,
             stub_template::XP5_STUB_P_ENABLE, stub_template::XP5_STUB_P_ENABLE_GREEN,
-            stub_template::XP5_STUB_P_ENABLE_RED, stub_template::XP5_STUB_P_MUX,
+            stub_template::XP5_STUB_P_ENABLE_RED, stub_template::XP5_STUB_P_MUX, stub_template::XP5_STUB_P_RETURN,
+            stub_template::XP5_STUB_P_RESTORE,
             stub_template::XP5_STUB_OUT_STATUS, stub_template::XP5_STUB_OUT_SRC_CRC,
             stub_template::XP5_STUB_OUT_DST_CRC, stub_template::XP5_STUB_OUT_RESULT,
         ];

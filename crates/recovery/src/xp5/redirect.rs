@@ -467,6 +467,8 @@ pub(super) struct StubValues {
     pub enable_green: u64,
     pub enable_red: u64,
     pub mux: u64,
+    pub ret: u64,
+    pub restore: u64,
 }
 
 /// The stub image with its parameter block filled in. The template's block must be all zero and the
@@ -476,7 +478,7 @@ pub(super) fn fill_stub(template: &[u8], values: &StubValues) -> Result<Vec<u8>>
     let params = t::XP5_STUB_PARAMS;
     require(
         template.len() == t::XP5_STUB_END
-            && params + 160 == template.len()
+            && params + 176 == template.len()
             && template[params..].iter().all(|b| *b == 0),
         "The copy stub template changed",
     )?;
@@ -498,6 +500,8 @@ pub(super) fn fill_stub(template: &[u8], values: &StubValues) -> Result<Vec<u8>>
         (t::XP5_STUB_P_ENABLE_GREEN, values.enable_green),
         (t::XP5_STUB_P_ENABLE_RED, values.enable_red),
         (t::XP5_STUB_P_MUX, values.mux),
+        (t::XP5_STUB_P_RETURN, values.ret),
+        (t::XP5_STUB_P_RESTORE, values.restore),
     ] {
         require(offset >= params && offset + 8 <= image.len(), "A copy stub parameter is outside its block")?;
         put64(&mut image, offset, value)?;
@@ -511,6 +515,7 @@ pub(super) fn fill_stub(template: &[u8], values: &StubValues) -> Result<Vec<u8>>
 pub(super) struct StubBinding {
     pub redirect: Binding,
     pub offset: usize,
+    pub params_offset: usize,
     pub image: Vec<u8>,
     pub crc32: u32,
 }
@@ -576,6 +581,8 @@ pub(super) fn stub_binding(
             enable_green: (1u64 << (lamp.green_port + 16)) | (1u64 << lamp.green_port),
             enable_red: (1u64 << (lamp.red_port + 16)) | (1u64 << lamp.red_port),
             mux: 3u64 << (2 * lamp.pin + 16),
+            ret: plan.copy_site as u64 + 4,
+            restore: (1u64 << (lamp.pin + 16)) | (1u64 << lamp.pin),
         },
     )?;
     let new = bl_word(plan.copy_site, offset)?;
@@ -601,13 +608,19 @@ pub(super) fn stub_binding(
         words[12 + n] = aperture + flash;
         words[14 + n] = u64::from(crc32(table));
     }
-    Ok(StubBinding { redirect: Binding(words), offset, crc32: crc32(&image), image })
+    Ok(StubBinding {
+        redirect: Binding(words),
+        offset,
+        params_offset: super::stub_template::XP5_STUB_PARAMS,
+        crc32: crc32(&image),
+        image,
+    })
 }
 
 /// Write the stub binding into the loader at `at` after checking that the template is untouched
-/// (`abi` 1, everything else zero: the struct is 40 + `STUB_MAX` + 32 bytes).
+/// (`abi` 1, everything else zero: the struct is 48 + `STUB_MAX` + 32 bytes).
 pub(super) fn bind_stub(program: &mut [u8], at: usize, stub: &StubBinding) -> Result<()> {
-    let size = 40 + STUB_MAX + 32;
+    let size = 48 + STUB_MAX + 32;
     let mut template = vec![0u8; size];
     template[..8].copy_from_slice(&1u64.to_le_bytes());
     require(extent(program, at, size)? == template, "XP5 copy-stub binding template changed")?;
@@ -619,7 +632,8 @@ pub(super) fn bind_stub(program: &mut [u8], at: usize, stub: &StubBinding) -> Re
     put64(program, at + 16, stub.image.len() as u64)?;
     put64(program, at + 24, u64::from(NOP))?;
     put64(program, at + 32, u64::from(stub.crc32))?;
-    program[at + 40..at + 40 + stub.image.len()].copy_from_slice(&stub.image);
+    put64(program, at + 40, stub.params_offset as u64)?;
+    program[at + 48..at + 48 + stub.image.len()].copy_from_slice(&stub.image);
     Ok(())
 }
 
@@ -848,7 +862,7 @@ pub(in crate::xp5) mod tests {
     fn the_stub_goes_into_the_padding_before_the_vector_tables() {
         let (reset, _, _) = fixture();
         // The padding is 0x1c4..0x800; the stub starts on the next 0x40 boundary with room after it.
-        assert_eq!(sled(&reset, 816).unwrap(), 0x200);
+        assert_eq!(sled(&reset, 872).unwrap(), 0x200);
         assert_eq!(sled(&reset, 0x400 - 0x40).unwrap(), 0x200);
         for bad in [0, 2, 1028, 0x7c0 - 0x200 + 4, 2048] {
             assert!(sled(&reset, bad).is_err(), "{bad}");
@@ -858,14 +872,14 @@ pub(in crate::xp5) mod tests {
         // A word that is not a nop inside the run shortens it so that the stub no longer fits.
         let mut broken = reset.clone();
         put(&mut broken, 0x2c0, 0xaa1f_03e1).unwrap();
-        assert!(sled(&broken, 816).is_err());
+        assert!(sled(&broken, 872).is_err());
         // Without the `ret` before it, or not ending at a vector table, the run is not the padding.
         let mut no_ret = reset.clone();
         put(&mut no_ret, 0x1c0, NOP).unwrap();
-        assert!(sled(&no_ret, 816).is_err());
+        assert!(sled(&no_ret, 872).is_err());
         let mut short = reset.clone();
         put(&mut short, 0x7fc, 0xaa1f_03e1).unwrap();
-        assert!(sled(&short, 816).is_err());
+        assert!(sled(&short, 872).is_err());
     }
 
     #[test]
@@ -874,7 +888,7 @@ pub(in crate::xp5) mod tests {
         let refers = |put_it: &dyn Fn(&mut Vec<u8>)| {
             let mut image = reset.clone();
             put_it(&mut image);
-            sled(&image, 816).is_err()
+            sled(&image, 872).is_err()
         };
         // A branch, a conditional branch, a compare branch, a test branch, an adr, a literal load, an
         // adrp whose page holds the padding, and a 64-bit pointer: each into the padding.
@@ -899,7 +913,7 @@ pub(in crate::xp5) mod tests {
         put(&mut fine, 0x300c, adrp(0x300c, 0, 0x1000)).unwrap();
         fine[0x3010..0x3018].copy_from_slice(&0x1c0u64.to_le_bytes());
         fine[0x3018..0x3020].copy_from_slice(&0x800u64.to_le_bytes());
-        assert_eq!(sled(&fine, 816).unwrap(), 0x200);
+        assert_eq!(sled(&fine, 872).unwrap(), 0x200);
     }
 
     #[test]
@@ -941,6 +955,8 @@ pub(in crate::xp5) mod tests {
             (q(stub::XP5_STUB_P_ENABLE), q(stub::XP5_STUB_P_ENABLE_GREEN), q(stub::XP5_STUB_P_ENABLE_RED), q(stub::XP5_STUB_P_MUX)),
             (0xff90_7500, 0x0100_0100, 0x0040_0040, 0x0030_0000)
         );
+        assert_eq!((q(stub::XP5_STUB_P_RETURN), q(stub::XP5_STUB_P_RESTORE)), ((FUNCTION + 56) as u64, 0x0004_0004));
+        assert_eq!(b.params_offset, stub::XP5_STUB_PARAMS);
         assert!(b.image[stub::XP5_STUB_OUT_STATUS..].iter().all(|v| *v == 0), "outputs start at zero");
         assert_eq!(b.crc32, crc32(&b.image));
         // The patched image: the stock image with the stub in the padding and the call word replaced.
