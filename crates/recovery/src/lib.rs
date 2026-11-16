@@ -581,7 +581,7 @@ impl Recipe {
                                 &inverted,
                                 setup,
                                 ram,
-                                options.success_hold_seconds,
+                                options.hold_units()?,
                                 destination,
                                 mode,
                             )?
@@ -590,7 +590,7 @@ impl Recipe {
                                 &inverted,
                                 setup,
                                 ram,
-                                options.success_hold_seconds,
+                                options.hold_units()?,
                                 destination,
                                 mode,
                             )?

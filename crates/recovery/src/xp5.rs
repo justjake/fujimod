@@ -448,7 +448,7 @@ pub(crate) fn package_read_only(
         inverted,
         &setup,
         Some(ram),
-        success_hold_seconds,
+        success_hold_units,
         None,
         None,
         Some(ReadOnly { destination, redirect: None, stub: None }),
@@ -498,7 +498,7 @@ pub enum CheckedRedirect {
 /// file is read in a fraction of a second. Nothing the loader does can change what the stock stage
 /// copies, only where it copies it from; an unproven redirect is never made.
 pub(crate) fn package_checked_redirect(
-    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64, destination: u64,
     mode: CheckedRedirect,
 ) -> Result<Vec<File>> {
     let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
@@ -540,7 +540,7 @@ pub(crate) fn package_checked_redirect(
 /// at the moment of use and copies from the flash on any difference (`redirect.rs`, `copy_stub.S`).
 /// `ffboot.bin` is the same cut image as the checked redirect's.
 pub(crate) fn package_copy_stub(
-    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64, destination: u64,
     mode: CheckedRedirect,
 ) -> Result<Vec<File>> {
     let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
@@ -576,7 +576,7 @@ pub(crate) fn package_copy_stub(
         inverted,
         &setup,
         Some(ram),
-        success_hold_seconds,
+        success_hold_units,
         None,
         None,
         Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding) }),
