@@ -108,6 +108,7 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         options.device,
         options.limits,
         options.flash_reader,
+        false,
     )
     .map_err(|error| error as Box<dyn std::error::Error>)?;
     if options.benchmark_usb {
