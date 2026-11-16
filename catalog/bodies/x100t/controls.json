@@ -851,10 +851,10 @@
         "kind": "switch",
         "positions": [
           {
-            "id": "M",
+            "id": "S",
             "key": {
               "kind": "debug_key",
-              "name": "MF_AF_M"
+              "name": "MF_AF_A"
             },
             "asserted": true
           },
@@ -867,10 +867,10 @@
             "asserted": true
           },
           {
-            "id": "S",
+            "id": "M",
             "key": {
               "kind": "debug_key",
-              "name": "MF_AF_A"
+              "name": "MF_AF_M"
             },
             "asserted": true
           }
@@ -879,8 +879,8 @@
       "pushable": false,
       "positions": [
         {
-          "id": "M",
-          "label": "M",
+          "id": "S",
+          "label": "S",
           "description": null
         },
         {
@@ -889,8 +889,8 @@
           "description": null
         },
         {
-          "id": "S",
-          "label": "S",
+          "id": "M",
+          "label": "M",
           "description": null
         }
       ],
