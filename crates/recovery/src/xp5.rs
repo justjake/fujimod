@@ -5,6 +5,7 @@ mod banks;
 pub use banks::Banks;
 mod card_boot;
 pub use card_boot::CardBoot;
+mod redirect;
 mod template {
     include!(concat!(env!("OUT_DIR"), "/xp5_sd_loader.rs"));
 }
@@ -18,6 +19,13 @@ mod flash_template {
 #[allow(dead_code)]
 mod read_only_template {
     include!(concat!(env!("OUT_DIR"), "/xp5_read_only_loader.rs"));
+}
+
+/// The checked-redirect build: the read-only build plus one proven redirect of the stock reset
+/// stage's section load. It never installs its card-resident hooks or its gate either.
+#[allow(dead_code)]
+mod checked_redirect_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_checked_redirect_loader.rs"));
 }
 
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
@@ -41,8 +49,10 @@ struct Loader {
     externals: &'static [(usize, u32, &'static str)],
     /// Offset of the internal-flash binding; only the internal-flash build has one.
     internal_flash_binding: Option<usize>,
-    /// Offset of the read-only binding; only the read-only build has one.
+    /// Offset of the read-only binding; only the read-only and checked-redirect builds have one.
     read_only_binding: Option<usize>,
+    /// Offset of the checked-redirect binding; only the checked-redirect build has one.
+    redirect_binding: Option<usize>,
 }
 /// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
 /// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
@@ -73,6 +83,7 @@ const CARD: Loader = Loader {
     externals: template::EXTERNALS,
     internal_flash_binding: None,
     read_only_binding: None,
+    redirect_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -91,6 +102,7 @@ const INTERNAL_FLASH: Loader = Loader {
     externals: flash_template::EXTERNALS,
     internal_flash_binding: Some(flash_template::SETUP_SD_INTERNAL_FLASH),
     read_only_binding: None,
+    redirect_binding: None,
 };
 const READ_ONLY: Loader = Loader {
     image: read_only_template::IMAGE,
@@ -109,6 +121,26 @@ const READ_ONLY: Loader = Loader {
     externals: read_only_template::EXTERNALS,
     internal_flash_binding: None,
     read_only_binding: Some(read_only_template::SETUP_SD_READ_ONLY),
+    redirect_binding: None,
+};
+const CHECKED_REDIRECT: Loader = Loader {
+    image: checked_redirect_template::IMAGE,
+    prelude_stack_max: checked_redirect_template::PRELUDE_STACK_MAX,
+    setup_entry: checked_redirect_template::XP5_SETUP_ENTRY,
+    setup_configuration: checked_redirect_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: checked_redirect_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: checked_redirect_template::XP5_SETUP_STACK,
+    setup_stack_top: checked_redirect_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: checked_redirect_template::SETUP_SD_INITIALIZE,
+    sd_request: checked_redirect_template::SETUP_SD_REQUEST,
+    sd_progress: checked_redirect_template::SETUP_SD_PROGRESS,
+    sd_board: checked_redirect_template::SETUP_SD_BOARD,
+    boot_ready: checked_redirect_template::A64_BOOT_READY,
+    boot_zero_gate: checked_redirect_template::A64_BOOT_ZERO_GATE,
+    externals: checked_redirect_template::EXTERNALS,
+    internal_flash_binding: None,
+    read_only_binding: Some(checked_redirect_template::SETUP_SD_READ_ONLY),
+    redirect_binding: Some(checked_redirect_template::SETUP_SD_REDIRECT),
 };
 /// The DRAM a read-only startup may fill: the same two numbers as `READ_ONLY_FLOOR` and
 /// `READ_ONLY_CEILING` in the loader source `read_only.h`, which refuses anything else. It is the
@@ -371,6 +403,21 @@ pub(crate) fn package_internal_flash(
 pub(crate) fn package_read_only(
     inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64, destination: u64,
 ) -> Result<Vec<File>> {
+    let (setup, ram) = read_only_inputs(inverted, setup, ram)?;
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_seconds,
+        None,
+        None,
+        Some(ReadOnly { destination, redirect: None }),
+    )
+}
+
+/// What a read-only startup of the stock update is built from: the setup without the
+/// card-resident parts and the RAM image with the stock selector.
+fn read_only_inputs(inverted: &[u8], setup: &Setup, ram: Vec<u8>) -> Result<(Setup, Vec<u8>)> {
     let mut setup = setup.clone();
     // The RAM edits are for a card that runs the image; this one only reads it.
     setup.internal_flash_ram_edits = Vec::new();
@@ -391,6 +438,50 @@ pub(crate) fn package_read_only(
         "XP5 RAM image does not carry the preloaded selector",
     )?;
     ram[setup.selector..setup.selector + 8].copy_from_slice(&stock[setup.selector..setup.selector + 8]);
+    Ok((setup, ram))
+}
+
+/// Whether the loader changes RAM 0 once the redirect is proven.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CheckedRedirect {
+    /// Prove the redirect (the DRAM copy equals the flash) and report it; write nothing to RAM 0.
+    VerifyOnly,
+    /// Also change the one word of the stock reset image that sends the stage to the DRAM copy.
+    Apply,
+}
+
+/// A read-only startup plus one checked redirect: the loader proves, against the installed flash,
+/// that a section of the DRAM copy it just read equals what the flash holds, and with `Apply`
+/// changes the one word of the stock reset image in RAM 0 that makes the stock reset stage copy
+/// that section from the DRAM copy instead of from the flash (`redirect.rs`). `ffboot.bin` is the
+/// unedited image cut after that section, so the card holds only what the redirect names and the
+/// file is read in a fraction of a second. Nothing the loader does can change what the stock stage
+/// copies, only where it copies it from; an unproven redirect is never made.
+pub(crate) fn package_checked_redirect(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    mode: CheckedRedirect,
+) -> Result<Vec<File>> {
+    let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
+    let bias = setup
+        .reset_dat
+        .checked_sub(redirect::RESET_FLASH)
+        .ok_or_else(|| image::Error::Invalid("The reset image precedes its flash offset".into()))?;
+    let reset = extent(&ram, 0, setup.reset_copy_size)?.to_vec();
+    let plan = redirect::locate(&reset, inverted, bias, &ram)?;
+    let prefix = (plan.dst as usize + plan.bytes + 0xfff) & !0xfff;
+    require(prefix <= ram.len(), "The redirected section lies outside the RAM image")?;
+    ram.truncate(prefix);
+    let binding = redirect::binding(
+        &plan,
+        &reset,
+        inverted,
+        bias,
+        setup.flash.aperture,
+        destination,
+        setup.reset_copy_size,
+        ram.len(),
+        mode == CheckedRedirect::Apply,
+    )?;
     package_inner(
         inverted,
         &setup,
@@ -398,15 +489,16 @@ pub(crate) fn package_read_only(
         success_hold_units,
         None,
         None,
-        Some(ReadOnly { destination }),
+        Some(ReadOnly { destination, redirect: Some(binding) }),
     )
 }
 
 /// How a read-only startup differs from a card-resident one.
-#[derive(Clone)]
 struct ReadOnly {
     /// DRAM address the loader streams the file to.
     destination: u64,
+    /// The checked redirect the loader proves (and, if bound to, makes) once the file is read.
+    redirect: Option<redirect::Binding>,
 }
 
 /// How an internal-flash startup differs from a card-resident one.
@@ -552,8 +644,8 @@ fn package_inner(
         "An XP5 startup is internal-flash or read-only, not both",
     )?;
     let prefix = setup.verify(inverted)?;
-    let loader = if read_only.is_some() {
-        &READ_ONLY
+    let loader = if let Some(read_only) = &read_only {
+        if read_only.redirect.is_some() { &CHECKED_REDIRECT } else { &READ_ONLY }
     } else if internal_flash.is_some() {
         &INTERNAL_FLASH
     } else {
@@ -696,6 +788,12 @@ fn package_inner(
     if let Some(read_only) = &read_only {
         let bytes = ram.as_ref().map_or(0, Vec::len);
         bind_read_only(&mut program, loader, setup, read_only, bytes)?;
+        if let Some(binding) = &read_only.redirect {
+            let at = loader.redirect_binding.ok_or_else(|| {
+                image::Error::Invalid("This XP5 loader build has no checked-redirect binding".into())
+            })?;
+            redirect::bind(&mut program, at, binding)?;
+        }
     }
     let restore = loader.setup_return_branch;
     require(
@@ -883,7 +981,7 @@ fn package_inner(
 mod tests {
     use super::*;
     use card_boot::Payload;
-    fn source(bytes: &[u8]) -> Source {
+    pub(super) fn source(bytes: &[u8]) -> Source {
         Source {
             dat_offset: 0,
             size: bytes.len(),
@@ -893,7 +991,7 @@ mod tests {
             initialized_prefix: None,
         }
     }
-    fn fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+    pub(super) fn fixture() -> (Vec<u8>, Setup, Vec<u8>) {
         let base = 0xff800000;
         let mut data = vec![0xff; 0x41000];
         for (at, value) in [
@@ -1610,6 +1708,123 @@ mod tests {
         // Same prelude as the other two builds.
         assert_eq!(t::PRELUDE_STACK_MAX, template::PRELUDE_STACK_MAX);
         assert_eq!(t::XP5_SETUP_RETURN_BRANCH, template::XP5_SETUP_RETURN_BRANCH);
+    }
+
+    /// The synthetic update of `redirect::tests::stage` in the xp5 fixture's setup: the stock reset
+    /// stage with the section load, both table copies, both tables and a raw section 0.
+    fn redirect_fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+        let (fixture_data, mut s, _) = fixture();
+        let (reset, mut update, _) = redirect::tests::stage(0);
+        let ram_size = 0x8_1000 + redirect::tests::E2E_SECTION_BYTES;
+        // The fixture's first 0x40000 bytes stay (its prefix proofs hash them); the stage sits where
+        // the fixture's reset image does, with the selector word 1.
+        update[..0x40000].copy_from_slice(&fixture_data[..0x40000]);
+        let mut stock = reset.clone();
+        put64(&mut stock, s.selector, 1).unwrap();
+        update[0x40000..0x40000 + stock.len()].copy_from_slice(&stock);
+        s.reset_copy_size = 0xb000;
+        let mut ram = vec![0u8; ram_size];
+        ram[..0xb000].copy_from_slice(&stock);
+        put64(&mut ram, s.selector, 0).unwrap();
+        ram[0x4_0000..0x4_0800].copy_from_slice(&update[0x64_0000..0x64_0800]);
+        ram[0x8_1000..].copy_from_slice(&update[0xc_0000..0xc_0000 + redirect::tests::E2E_SECTION_BYTES]);
+        (update, s, ram)
+    }
+
+    #[test]
+    fn the_checked_redirect_packages_a_cut_image_and_binds_every_proof() {
+        let (data, s, ram) = redirect_fixture();
+        let at = 0xc000 + checked_redirect_template::SETUP_SD_REDIRECT;
+        let read_only = 0xc000 + checked_redirect_template::SETUP_SD_READ_ONLY;
+        for (mode, apply) in [(CheckedRedirect::Apply, 1u64), (CheckedRedirect::VerifyOnly, 0)] {
+            let files = package_checked_redirect(&data, &s, ram.clone(), 0, 0x3000_0000, mode).unwrap();
+            assert_eq!(
+                files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+                ["marble_init.bin", "ffboot.bin"]
+            );
+            // The image is cut after the section, and is the unedited image's prefix.
+            let ffboot = &files[1].bytes;
+            assert_eq!(ffboot.len(), 0x8_3000);
+            let mut expected = ram.clone();
+            put64(&mut expected, s.selector, 1).unwrap();
+            assert_eq!(ffboot[..], expected[..0x8_3000]);
+            let marble = &files[0].bytes;
+            let word64 = |at: usize, n: usize| u64::from_le_bytes(marble[at + 8 * n..at + 8 * n + 8].try_into().unwrap());
+            assert_eq!((word64(at, 0), word64(at, 1), word64(at, 2)), (1, apply, 0x2cf0));
+            assert_eq!(word64(at, 4), 0xb264_0680);
+            assert_eq!((word64(at, 7), word64(at, 8), word64(at, 9)), (0x8_1000, 0x2000, 0xf00c_0000));
+            // The outputs stay zero, the request names the cut file, the read-only binding the destination.
+            assert!((16..20).all(|n| word64(at, n) == 0));
+            let request = 0xc000 + checked_redirect_template::SETUP_SD_REQUEST;
+            assert_eq!(
+                (word64(request, 1), word64(request, 2)),
+                (ffboot.len() as u64, u64::from(crate::xp4::crc32(ffboot)))
+            );
+            assert_eq!(word64(read_only, 1), 0x3000_0000);
+        }
+        // The two modes differ in the apply word alone.
+        let apply = package_checked_redirect(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        let verify = package_checked_redirect(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::VerifyOnly).unwrap();
+        let differing: Vec<usize> =
+            (0..apply[0].bytes.len()).filter(|&n| apply[0].bytes[n] != verify[0].bytes[n]).collect();
+        assert_eq!(differing, [at + 8]);
+        assert_eq!(apply[1].bytes, verify[1].bytes);
+    }
+
+    #[test]
+    fn the_checked_redirect_refuses_what_it_cannot_prove() {
+        let (data, s, ram) = redirect_fixture();
+        let go = |data: &[u8], s: &Setup, ram: Vec<u8>, destination: u64| {
+            package_checked_redirect(data, s, ram, 0, destination, CheckedRedirect::Apply)
+        };
+        assert!(go(&data, &s, ram.clone(), 0x3000_0000).is_ok());
+        // A destination outside the window, unaligned, not one run of ones, or one that overlaps the
+        // section's own address.
+        for bad in [0x2000_0000, 0x3000_0004, 0x3000_1000, READ_ONLY_CEILING, 0x2445_9000] {
+            assert!(go(&data, &s, ram.clone(), bad).is_err(), "{bad:#x}");
+        }
+        // The card's section differs from the flash's, the cold table differs, the stage differs.
+        let mut bad = ram.clone();
+        bad[0x8_1000 + 5] ^= 1;
+        assert!(go(&data, &s, bad, 0x3000_0000).is_err());
+        let mut bad = ram.clone();
+        bad[0x4_0058] ^= 1;
+        assert!(go(&data, &s, bad, 0x3000_0000).is_err());
+        let mut other = data.clone();
+        other[0x40000 + 0x2cf0] ^= 0x20;
+        let mut ram_other = ram.clone();
+        ram_other[0x2cf0] ^= 0x20;
+        assert!(go(&other, &s, ram_other, 0x3000_0000).is_err());
+        // The plain fixture has no such stage at all.
+        let (plain, plain_setup, plain_ram) = fixture();
+        assert!(go(&plain, &plain_setup, plain_ram, 0x3000_0000).is_err());
+    }
+
+    #[test]
+    fn the_checked_redirect_loader_asset_keeps_its_two_binding_templates_and_no_other_build_has_them() {
+        use checked_redirect_template as t;
+        assert_eq!((t::SETUP_SD_REDIRECT % 8, t::SETUP_SD_READ_ONLY % 8), (0, 0));
+        let mut template = vec![1u64];
+        template.resize(20, 0);
+        assert_eq!(
+            &t::IMAGE[t::SETUP_SD_REDIRECT..t::SETUP_SD_REDIRECT + 160],
+            template.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>()
+        );
+        assert_eq!(CHECKED_REDIRECT.redirect_binding, Some(t::SETUP_SD_REDIRECT));
+        assert_eq!(CHECKED_REDIRECT.read_only_binding, Some(t::SETUP_SD_READ_ONLY));
+        assert_eq!(
+            (CARD.redirect_binding, INTERNAL_FLASH.redirect_binding, READ_ONLY.redirect_binding),
+            (None, None, None)
+        );
+        let layout = include_str!("../assets/sd-boot-v1-xp5-checked-redirect-loader.generated.json");
+        assert!(layout.contains("setup_sd_redirect") && layout.contains("setup_sd_read_only"));
+        for other in [
+            include_str!("../assets/sd-boot-v1-xp5-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-internal-flash-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-read-only-loader.generated.json"),
+        ] {
+            assert!(!other.contains("setup_sd_redirect"));
+        }
     }
 
     #[test]
