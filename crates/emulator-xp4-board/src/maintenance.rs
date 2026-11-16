@@ -8,7 +8,6 @@ use std::{cell::RefCell, collections::VecDeque};
 mod tests;
 
 pub use native::{Event, Status};
-pub(super) const MAX_CORES: usize = 4;
 pub const RECORD_LIMIT: usize = 64;
 const SMP: u32 = 1 << 6;
 const DDVM: u32 = 1 << 15;
@@ -87,17 +86,11 @@ impl Maintenance {
         })
     }
 
-    fn statuses<'a>(
-        &self,
-        cpus: &[Core],
-        storage: &'a mut [Status; MAX_CORES],
-    ) -> Result<&'a [Status], String> {
+    fn statuses(&self, cpus: &[Core]) -> Result<Vec<Status>, String> {
         if cpus.len() != self.owners.len() {
             return Err("Translation domain membership changed".into());
         }
-        let statuses = storage.get_mut(..cpus.len())
-            .ok_or("Translation domain membership changed")?;
-        for (index, cpu) in cpus.iter().enumerate() {
+        cpus.iter().enumerate().map(|(index, cpu)| {
             if cpu.identity() != self.identities[index] {
                 return Err("Translation processor identity changed".into());
             }
@@ -105,11 +98,8 @@ impl Maintenance {
             if status.owner != self.tokens[index] || status.pending > native::CAPACITY {
                 return Err("Invalid translation owner status".into());
             }
-            statuses[index] = status;
-        }
-        // Complete membership/status validation before callers inspect pending
-        // work or poison, preserving the priority of later-core failures.
-        Ok(statuses)
+            Ok(status)
+        }).collect()
     }
 
     pub fn ready(&self, cpus: &[Core]) -> Result<(), String> {
@@ -120,8 +110,7 @@ impl Maintenance {
         if state.pending.is_some() {
             return Err("Translation delivery remains incomplete".into());
         }
-        let mut storage = [Status::default(); MAX_CORES];
-        for (core, status) in self.statuses(cpus, &mut storage)?.iter().enumerate() {
+        for (core, status) in self.statuses(cpus)?.iter().enumerate() {
             if status.pending != 0 || status.poison != 0 {
                 return Err(format!("Core {core} has unsettled translation maintenance: {} pending, poison {}",
                     status.pending, status.poison));
@@ -131,8 +120,7 @@ impl Maintenance {
     }
 
     pub fn snapshot(&self, cpus: &[Core]) -> Result<Snapshot, String> {
-        let mut storage = [Status::default(); MAX_CORES];
-        let native = self.statuses(cpus, &mut storage)?.to_vec();
+        let native = self.statuses(cpus)?;
         let state = self.state.borrow();
         Ok(Snapshot {
             identities: self.identities.clone(),
@@ -172,8 +160,7 @@ impl Maintenance {
                 return Err("Translation delivery cannot be retried".into());
             }
         }
-        let mut storage = [Status::default(); MAX_CORES];
-        let statuses = self.statuses(cpus, &mut storage)?;
+        let statuses = self.statuses(cpus)?;
         // Poison anywhere freezes the domain before any new peer effect.
         for (core, status) in statuses.iter().enumerate() {
             if status.poison != 0 {

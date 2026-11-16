@@ -1210,7 +1210,7 @@ impl Session {
         if instructions_per_tick.0 < instructions_per_tick.1 {
             return Err("A7 needs at least one instruction per guest tick".to_owned());
         }
-        if !(1..=maintenance::MAX_CORES).contains(&cores)
+        if !(1..=4).contains(&cores)
             || pmu_cycles_per_tick == Some(0)
             || ram_size < 0x10000
             || ram_size & 4095 != 0
