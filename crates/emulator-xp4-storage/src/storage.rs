@@ -571,6 +571,7 @@ impl Nor {
                         self.overlay.insert(index, vec![255; page]);
                     }
                 }
+                self.program_coverage.mark(start, start + size, false);
                 (address, size, "XP4 NOR erase complete")
             }
             Mutation::Program { address, bytes } => {
@@ -588,6 +589,9 @@ impl Nor {
                 }
                 self.overlay
                     .insert((address - FLASH) as usize / self.geometry.page_bytes, page);
+                let offset = (address - FLASH) as usize;
+                self.program_coverage.mark(offset, offset + bytes.len(), true);
+                self.program_coverage.count = self.program_coverage.count.saturating_add(1);
                 (address, bytes.len(), "XP4 NOR program complete")
             }
         };
@@ -613,7 +617,9 @@ impl Nor {
         json!({"jedec":self.jedec,"write_enable":self.write_enable,"pending":pending,
             "erase_bytes":self.geometry.erase_bytes,"page_bytes":self.geometry.page_bytes,
             "erase_ticks":self.geometry.erase_ticks,"page_ticks":self.geometry.page_ticks,
-            "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes()),
+            "overlay":self.overlay,"program_count":self.program_coverage.count,
+            "programmed_ranges":self.program_coverage.ranges(),
+            "immutable_prefix":self.prefix.map(|p| p.bytes()),
             "write_protect":self.write_protect,"write_ranges":self.write_ranges,
             "read_backing":self.read_backing})
     }
@@ -684,6 +690,51 @@ impl SerialFlashController {
         gate.validate()?;
         self.gate = Some(gate);
         Ok(self)
+    }
+    /// Begin an observation epoch only when no earlier mutation can complete later.
+    pub fn reset_nor_program_coverage(&self) -> Result<(), String> {
+        let mut port = self.port.lock().map_err(|_| "NOR port lock poisoned")?;
+        if self.due.is_some()
+            || port.nor.pending.is_some()
+            || port.program_data.is_some()
+            || port.request.as_ref().is_some_and(|request| request.write)
+        {
+            return Err(
+                "Cannot reset NOR observation while a command or program is pending".into(),
+            );
+        }
+        port.nor.program_coverage = ProgramCoverage::default();
+        Ok(())
+    }
+    /// Export completed, explicitly backed array contents for a fresh boot.
+    pub fn nor_medium(&self) -> Result<Vec<u8>, String> {
+        let port = self.port.lock().map_err(|_| "NOR port lock poisoned")?;
+        if self.due.is_some()
+            || port.nor.pending.is_some()
+            || port.program_data.is_some()
+            || port.request.as_ref().is_some_and(|request| request.write)
+        {
+            return Err("Cannot export NOR while a command or program is pending".into());
+        }
+        let nor = &port.nor;
+        let mut end = nor.bytes.len();
+        if let Some(backing) = &nor.read_backing {
+            for range in &backing.erased_ranges {
+                if range.offset != end as u64 {
+                    break;
+                }
+                end = (range.offset + range.length) as usize;
+            }
+        }
+        if nor.overlay.iter().any(|(&page, bytes)| {
+            let start = page * nor.geometry.page_bytes;
+            start >= end
+                || (start + bytes.len() > end
+                    && bytes[end - start..].iter().any(|&byte| byte != 0xff))
+        }) {
+            return Err("NOR changes extend beyond contiguous backed media".into());
+        }
+        nor.read(FLASH, end)
     }
     /// Pad register word owned by the mapped-read gate, if any.
     pub fn pad_register(&self) -> Option<u64> {
@@ -2421,6 +2472,237 @@ mod tests {
         host.now = 136;
         flash.advance(&mut Cx::new(&mut host, 0, 0, 0));
         assert_eq!(now(), start + 4);
+    }
+    #[test]
+    fn nor_medium_includes_only_contiguous_declared_erased_ranges() {
+        let geometry = Geometry {
+            erase_bytes: 4096,
+            page_bytes: 256,
+            erase_ticks: 2,
+            page_ticks: 2,
+        };
+        let nor = Nor::new(vec![0x7f; 17], 0x123456, geometry)
+            .unwrap()
+            .with_strict_backing()
+            .with_erased_ranges(vec![
+                ErasedRange { offset: 17, length: 15 },
+                ErasedRange { offset: 64, length: 16 },
+            ])
+            .unwrap();
+        let flash = SerialFlashController::new(port_from_nor(nor), 37);
+        let medium = flash.nor_medium().unwrap();
+        assert_eq!(&medium[..17], &[0x7f; 17]);
+        assert_eq!(&medium[17..], &[0xff; 15]);
+    }
+    #[test]
+    fn nor_medium_exports_only_completed_contiguous_backing() {
+        let geometry = Geometry {
+            erase_bytes: 4096,
+            page_bytes: 256,
+            erase_ticks: 2,
+            page_ticks: 2,
+        };
+        let mut nor = Nor::new(vec![0x7f; 8192], 0x123456, geometry)
+            .unwrap()
+            .with_strict_backing();
+        nor.overlay.insert(16, vec![0x23; 256]);
+        let port = port_from_nor(nor);
+        let mut flash = SerialFlashController::new(port.clone(), 37);
+        let medium = flash.nor_medium().unwrap();
+        assert_eq!(medium.len(), 8192);
+        assert_eq!(medium[4099], 0x23);
+        let state = flash.save();
+        // Restoring requires the same strict-backing declaration.
+        let fresh = port_from_nor(
+            Nor::new(vec![0x7f; 8192], 0x123456, geometry)
+                .unwrap()
+                .with_strict_backing(),
+        );
+        let mut restored = SerialFlashController::new(fresh, 37);
+        restored.restore(&state).unwrap();
+        assert_eq!(restored.nor_medium().unwrap(), medium);
+        flash.due = Some((1, 1));
+        assert!(flash.nor_medium().is_err());
+        assert!(flash.reset_nor_program_coverage().is_err());
+        flash.due = None;
+        port.lock().unwrap().nor.overlay.insert(32, vec![0; 256]);
+        assert!(flash.nor_medium().is_err());
+    }
+    #[test]
+    fn program_coverage_coalesces_byte_edges_and_clear_splits() {
+        let mut coverage = ProgramCoverage::default();
+        coverage.mark(7, 10, true);
+        coverage.mark(12, 17, true);
+        assert_eq!(coverage.ranges(), vec![(7, 10), (12, 17)]);
+        coverage.mark(10, 12, true);
+        assert_eq!(coverage.ranges(), vec![(7, 17)]);
+        coverage.mark(8, 16, false);
+        assert_eq!(coverage.ranges(), vec![(7, 8), (16, 17)]);
+        coverage.mark(FLASH_SIZE as usize - 1, FLASH_SIZE as usize, true);
+        assert_eq!(
+            coverage.ranges(),
+            vec![
+                (7, 8),
+                (16, 17),
+                (FLASH_SIZE as usize - 1, FLASH_SIZE as usize)
+            ]
+        );
+    }
+    #[test]
+    fn completion_coverage_tracks_identical_programs_erase_and_restore() {
+        let geometry = Geometry {
+            erase_bytes: 4096,
+            page_bytes: 256,
+            erase_ticks: 20,
+            page_ticks: 7,
+        };
+        let source = port(vec![0xff; 8192], 0x123456, geometry).unwrap();
+        let flash = SerialFlashController::new(source.clone(), 37);
+        let mut host = TestHost {
+            now: 100,
+            ram: vec![],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        assert_eq!(flash.save()["nor"]["program_count"], 0);
+        assert_eq!(flash.save()["nor"]["programmed_ranges"], json!([]));
+        {
+            let mut p = source.lock().unwrap();
+            // Disabled and invalid requests never contribute to coverage.
+            assert!(
+                p.nor
+                    .begin(
+                        100,
+                        Mutation::Program {
+                            address: FLASH + 10,
+                            bytes: vec![0xff]
+                        }
+                    )
+                    .is_err()
+            );
+            p.nor.write_enable = true;
+            assert!(
+                p.nor
+                    .begin(
+                        100,
+                        Mutation::Program {
+                            address: FLASH + 255,
+                            bytes: vec![0xff; 2]
+                        }
+                    )
+                    .is_err()
+            );
+            p.nor
+                .begin(
+                    100,
+                    Mutation::Program {
+                        address: FLASH + 10,
+                        bytes: vec![0xff; 3],
+                    },
+                )
+                .unwrap();
+        }
+        host.now = 106;
+        source
+            .lock()
+            .unwrap()
+            .nor
+            .complete(&mut Cx::new(&mut host, 0, 0, 0));
+        let pending = flash.save();
+        assert!(flash.reset_nor_program_coverage().is_err());
+        assert_eq!(pending["nor"]["program_count"], 0);
+        assert_eq!(pending["nor"]["programmed_ranges"], json!([]));
+        let target = port(vec![0xff; 8192], 0x123456, geometry).unwrap();
+        let mut resumed = SerialFlashController::new(target.clone(), 37);
+        resumed.restore(&pending).unwrap();
+        host.now = 107;
+        target
+            .lock()
+            .unwrap()
+            .nor
+            .complete(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(resumed.save()["nor"]["program_count"], 1);
+        assert_eq!(
+            resumed.save()["nor"]["programmed_ranges"],
+            json!([[10, 13]])
+        );
+        // Adjacent identical writes coalesce and each completion is counted.
+        {
+            let mut p = target.lock().unwrap();
+            p.nor.write_enable = true;
+            p.nor
+                .begin(
+                    107,
+                    Mutation::Program {
+                        address: FLASH + 13,
+                        bytes: vec![0xff; 3],
+                    },
+                )
+                .unwrap();
+        }
+        host.now = 114;
+        target
+            .lock()
+            .unwrap()
+            .nor
+            .complete(&mut Cx::new(&mut host, 0, 0, 0));
+        let complete = resumed.save();
+        assert_eq!(complete["nor"]["program_count"], 2);
+        assert_eq!(complete["nor"]["programmed_ranges"], json!([[10, 16]]));
+        let fresh = port(vec![0xff; 8192], 0x123456, geometry).unwrap();
+        let mut restored = SerialFlashController::new(fresh.clone(), 37);
+        restored.restore(&complete).unwrap();
+        assert_eq!(restored.save(), complete);
+        let mut invalid = complete.clone();
+        invalid["nor"]["programmed_ranges"] = json!([[10, 13], [13, 16]]);
+        assert!(restored.restore(&invalid).is_err());
+        assert_eq!(restored.save(), complete);
+        let mut old = complete.clone();
+        old["nor"].as_object_mut().unwrap().remove("program_count");
+        old["nor"]
+            .as_object_mut()
+            .unwrap()
+            .remove("programmed_ranges");
+        restored.restore(&old).unwrap();
+        assert_eq!(restored.save()["nor"]["programmed_ranges"], json!([]));
+        restored.restore(&complete).unwrap();
+        {
+            let mut p = fresh.lock().unwrap();
+            p.nor.write_enable = true;
+            p.nor
+                .begin(
+                    114,
+                    Mutation::Erase {
+                        address: FLASH,
+                        size: 4096,
+                    },
+                )
+                .unwrap();
+        }
+        host.now = 133;
+        fresh
+            .lock()
+            .unwrap()
+            .nor
+            .complete(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(
+            restored.save()["nor"]["programmed_ranges"],
+            json!([[10, 16]])
+        );
+        host.now = 134;
+        fresh
+            .lock()
+            .unwrap()
+            .nor
+            .complete(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(restored.save()["nor"]["program_count"], 2);
+        assert_eq!(restored.save()["nor"]["programmed_ranges"], json!([]));
+        let medium = restored.nor_medium().unwrap();
+        restored.reset_nor_program_coverage().unwrap();
+        assert_eq!(restored.save()["nor"]["program_count"], 0);
+        assert_eq!(restored.save()["nor"]["programmed_ranges"], json!([]));
+        assert_eq!(restored.nor_medium().unwrap(), medium);
     }
     #[test]
     fn four_kib_erase_checkpoint_preserves_a_larger_physical_block_geometry() {

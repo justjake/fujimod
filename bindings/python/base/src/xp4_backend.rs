@@ -103,6 +103,10 @@ pub trait Xp4Backend {
     fn interventions(&self) -> Vec<Intervention>;
     /// A copy of the medium in the `host`th SD card slot, refused while the host is mid-transfer.
     fn card_medium(&self, host: usize) -> PyResult<Card>;
+    /// Reset NOR program observation, refusing unsettled commands.
+    fn reset_nor_program_coverage(&self) -> PyResult<()>;
+    /// Completed NOR contents, without controller or CPU state.
+    fn nor_medium(&self) -> PyResult<Vec<u8>>;
 }
 
 /// Builds an XP4 session from its definition JSON, optional storage image, SD card files and

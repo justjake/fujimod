@@ -1268,6 +1268,28 @@ impl Session {
                 .card_medium(host)
         }
     }
+    /// Reset only the NOR program observation, refusing unsettled commands.
+    pub fn reset_nor_program_coverage(&self) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        unsafe {
+            (*self.inner.state.get())
+                .devices
+                .as_ref()
+                .ok_or("Board has no devices")?
+                .reset_nor_program_coverage()
+        }
+    }
+    /// Completed XP4 NOR media for use as the storage image in a fresh session.
+    pub fn nor_medium(&self) -> Result<Vec<u8>, String> {
+        self.inner.host_mutation()?;
+        unsafe {
+            (*self.inner.state.get())
+                .devices
+                .as_ref()
+                .ok_or("Board has no devices")?
+                .nor_medium()
+        }
+    }
     /// Like `new`, with an existing medium in place of the formatted SD card of the
     /// listed SD hosts (index in declaration order).
     pub fn new_with_media(

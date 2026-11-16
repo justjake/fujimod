@@ -56,6 +56,7 @@ impl<T: Device> Device for Connected<T> {
 }
 
 pub struct Devices {
+    nor_controller: Option<Arc<Mutex<SerialFlashController>>>,
     models: Vec<Option<Box<dyn Device>>>,
     events: BTreeSet<(u64, usize, u64)>,
     windows: Vec<(u64, u64, usize)>,
@@ -1057,6 +1058,7 @@ impl Devices {
     }
     pub fn empty() -> Self {
         Self {
+            nor_controller: None,
             models: vec![],
             events: Default::default(),
             windows: vec![],
@@ -1205,9 +1207,11 @@ impl Devices {
             controller = controller.with_mapped_read_gate(gate)?;
         }
         let pad = controller.pad_register();
+        let controller = Arc::new(Mutex::new(controller));
         let mut devices = Self {
+            nor_controller: Some(controller.clone()),
             models: vec![
-                Some(Box::new(controller)),
+                Some(Box::new(Connected(controller))),
                 Some(Box::new(dma)),
             ],
             events: Default::default(),
@@ -1990,6 +1994,22 @@ impl Devices {
         Ok(())
     }
 
+    pub fn reset_nor_program_coverage(&self) -> Result<(), String> {
+        self.nor_controller
+            .as_ref()
+            .ok_or("Board has no XP4 NOR")?
+            .lock()
+            .map_err(|_| "NOR controller lock poisoned")?
+            .reset_nor_program_coverage()
+    }
+    pub fn nor_medium(&self) -> Result<Vec<u8>, String> {
+        self.nor_controller
+            .as_ref()
+            .ok_or("Board has no XP4 NOR")?
+            .lock()
+            .map_err(|_| "NOR controller lock poisoned")?
+            .nor_medium()
+    }
     pub fn snapshots(&self) -> std::collections::BTreeMap<String, String> {
         let mut counts = BTreeMap::new();
         for model in self.models.iter().flatten() {

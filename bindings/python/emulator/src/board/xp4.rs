@@ -1,6 +1,6 @@
 //! XP4-specific host capabilities borrowed from the single Board owner.
 use super::*;
-use pyo3::types::PyList;
+use pyo3::types::{PyBytes, PyList};
 
 #[pyclass(unsendable, module = "fujimod._native.emulator")]
 pub struct Xp4 {
@@ -22,6 +22,14 @@ impl Xp4 {
     /// A copy of the medium in the `host`th SD card slot (SD host declaration order).
     fn card_medium(&self, py: Python<'_>, host: usize) -> PyResult<CardMedium> {
         self.with(py, |s| s.card_medium(host).map(CardMedium))
+    }
+    /// Reset only program observation; unsettled NOR commands are refused.
+    fn reset_nor_program_coverage(&self, py: Python<'_>) -> PyResult<()> {
+        self.with(py, |s| s.reset_nor_program_coverage())
+    }
+    /// A copy of the backed NOR medium after completed writes.
+    fn nor_medium<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        self.with(py, |s| s.nor_medium().map(|bytes| PyBytes::new(py, &bytes)))
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         visit.call(&self.owner)

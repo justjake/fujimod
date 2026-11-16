@@ -37,6 +37,10 @@ struct NorState {
     erase_ticks: u64,
     page_ticks: u64,
     overlay: BTreeMap<usize, Vec<u8>>,
+    #[serde(default)]
+    program_count: u64,
+    #[serde(default)]
+    programmed_ranges: Vec<(usize, usize)>,
 }
 fn extent(address: u64, size: usize) -> bool {
     address
@@ -62,10 +66,15 @@ impl Nor {
             erase_bytes: self.geometry.erase_bytes, page_bytes: self.geometry.page_bytes,
             erase_ticks: self.geometry.erase_ticks, page_ticks: self.geometry.page_ticks,
             overlay: self.overlay.clone(),
+            program_count: self.program_coverage.count,
+            programmed_ranges: self.program_coverage.ranges(),
         }
     }
 
-    fn validate_state(&self, state: &NorState) -> Result<Option<(u64, Mutation)>, String> {
+    fn validate_state(
+        &self,
+        state: &NorState,
+    ) -> Result<(Option<(u64, Mutation)>, ProgramCoverage), String> {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
             || state.write_protect != self.write_protect
@@ -116,13 +125,35 @@ impl Nor {
             }
             None => None,
         };
-        Ok(pending)
+        let mut previous_end = None;
+        for &(start, end) in &state.programmed_ranges {
+            if start >= end
+                || end > FLASH_SIZE as usize
+                || previous_end.is_some_and(|previous| start <= previous)
+                || self
+                    .check_mutation(FLASH + start as u64, end - start)
+                    .is_err()
+                || state.program_count == 0
+            {
+                return Err("Invalid XP4 NOR program coverage".into());
+            }
+            previous_end = Some(end);
+        }
+        let mut coverage = ProgramCoverage {
+            count: state.program_count,
+            ..Default::default()
+        };
+        for &(start, end) in &state.programmed_ranges {
+            coverage.mark(start, end, true);
+        }
+        Ok((pending, coverage))
     }
 
     fn apply_state(&mut self, state: NorState) -> Result<(), String> {
-        let pending = self.validate_state(&state)?;
+        let (pending, coverage) = self.validate_state(&state)?;
         self.write_enable = state.write_enable;
         self.overlay = state.overlay;
+        self.program_coverage = coverage;
         self.pending = pending;
         Ok(())
     }
