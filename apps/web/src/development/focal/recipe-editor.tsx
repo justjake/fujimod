@@ -227,7 +227,7 @@ function Photo(props: { recipe: Recipe }) {
 /* Five whole designs of the same layout, beside the embossed one built first.
    Each gives a row's choices a physical object that plainly scrolls sideways
    (a recessed channel under a loupe, a drum, a film strip, a row of keys, a
-   small LCD) and sets every other surface: the column, row focus, icons, the
+   small LCD), sets sliders in the same channel, and sets every other surface: the column, row focus, icons, the
    title box, the legend and the fly-outs. */
 
 type DesignId = 'embossed' | 'loupe' | 'drum' | 'film' | 'keys' | 'lcd';
@@ -312,8 +312,8 @@ interface Design {
   /** The stroke after the icon column. */
   divider?: (focused: boolean) => string | undefined;
   strip: Strip;
-  /** Sliders as their own thumb control, or as a strip of their steps. */
-  slider: { kind: 'thumb'; colors: ThumbColors } | { kind: 'strip' };
+  /** The slider, set in the strip's channel. */
+  slider: ThumbColors;
   card: Card;
   legend: { box: JSX.CSSProperties; key: JSX.CSSProperties };
   /** The fly-out's body below its band; the band is the focused row. */
@@ -380,17 +380,14 @@ const DESIGNS: Record<DesignId, Design> = {
       ends: { kind: 'fade', ink: '#fff', cap: 'transparent' },
     },
     slider: {
-      kind: 'thumb',
-      colors: {
-        track: 'rgb(255 255 255 / 0.35)',
-        tick: 'rgb(255 255 255 / 0.55)',
-        zero: '#fff',
-        fill: ACCENT,
-        value: (m) => ({
-          style: { background: '#fff', 'box-shadow': m.focused ? ring(3, '#fff') : undefined },
-          ink: m.changed ? ACCENT : '#000',
-        }),
-      },
+      track: 'rgb(255 255 255 / 0.35)',
+      tick: 'rgb(255 255 255 / 0.55)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => ({
+        style: { background: '#fff', 'box-shadow': m.focused ? ring(3, '#fff') : undefined },
+        ink: m.changed ? ACCENT : '#000',
+      }),
     },
     card: {
       style: { background: 'rgb(24 24 24 / 0.82)', color: '#fff' },
@@ -448,7 +445,19 @@ const DESIGNS: Record<DesignId, Design> = {
           : { style: { opacity: fade(c.distance, [1, 0.62, 0.4, 0.26]) }, ink: '#fff' },
       ends: { kind: 'chevron', ink: '#fff', cap: '#0c0c0d' },
     },
-    slider: { kind: 'strip' },
+    slider: {
+      track: 'rgb(255 255 255 / 0.22)',
+      tick: 'rgb(255 255 255 / 0.4)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: m.focused ? '#5e5e64' : '#3e3e42',
+          'box-shadow': edges(m.focused && ring(2, '#fff'), RAISED, m.changed && bottom(3, ACCENT)),
+        },
+        ink: '#fff',
+      }),
+    },
     card: {
       style: { background: 'rgb(40 40 43 / 0.94)', color: '#fff', 'box-shadow': RAISED },
       class: 'font-light tracking-[0.14em] uppercase',
@@ -515,7 +524,22 @@ const DESIGNS: Record<DesignId, Design> = {
       },
       ends: { kind: 'fade', ink: '#fff', cap: 'transparent' },
     },
-    slider: { kind: 'strip' },
+    slider: {
+      track: 'rgb(255 255 255 / 0.3)',
+      tick: 'rgb(255 255 255 / 0.45)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => {
+        const rail = m.changed ? ACCENT : m.focused ? '#fff' : 'rgb(255 255 255 / 0.7)';
+        return {
+          style: {
+            background: m.focused ? '#3a3a3f' : '#1d1d20',
+            'box-shadow': edges(top(2, rail), bottom(2, rail)),
+          },
+          ink: '#fff',
+        };
+      },
+    },
     card: {
       style: { background: 'rgb(18 18 20 / 0.9)', color: '#fff', 'box-shadow': edges(top(2, '#fff'), bottom(2, '#fff')) },
       class: 'font-medium tracking-[0.12em] uppercase',
@@ -572,7 +596,19 @@ const DESIGNS: Record<DesignId, Design> = {
             },
       ends: { kind: 'fade', ink: FILM_LIT, cap: 'transparent' },
     },
-    slider: { kind: 'strip' },
+    slider: {
+      track: 'rgb(244 234 212 / 0.3)',
+      tick: 'rgb(244 234 212 / 0.5)',
+      zero: FILM_LIT,
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: FILM_LIT,
+          'box-shadow': edges(m.focused && ring(2, ACCENT), m.changed && bottom(3, ACCENT)),
+        },
+        ink: FILM_EDGE,
+      }),
+    },
     card: {
       style: { background: FILM_LIT, color: FILM_EDGE },
       class: 'font-medium tracking-[0.12em] uppercase',
@@ -632,7 +668,23 @@ const DESIGNS: Record<DesignId, Design> = {
       },
       ends: { kind: 'chevron', ink: '#fff', cap: '#0a0a0b' },
     },
-    slider: { kind: 'strip' },
+    slider: {
+      track: 'rgb(255 255 255 / 0.2)',
+      tick: 'rgb(255 255 255 / 0.4)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: '#3b3b3f',
+          'box-shadow': edges(
+            top(3, m.changed ? ACCENT : m.focused ? '#fff' : 'rgb(255 255 255 / 0.75)'),
+            m.focused && ring(1, '#fff'),
+            'inset 0 -3px 0 #232326, 0 2px 0 #000',
+          ),
+        },
+        ink: '#fff',
+      }),
+    },
     card: {
       style: {
         background: '#3b3b3f',
@@ -690,7 +742,16 @@ const DESIGNS: Record<DesignId, Design> = {
           : { style: {}, ink: 'rgb(20 26 16 / 0.32)' },
       ends: { kind: 'chevron', ink: LCD_INK, cap: 'transparent' },
     },
-    slider: { kind: 'strip' },
+    slider: {
+      track: 'rgb(20 26 16 / 0.35)',
+      tick: 'rgb(20 26 16 / 0.5)',
+      zero: LCD_INK,
+      fill: LCD_INK,
+      value: (m) => ({
+        style: { background: LCD_INK, 'box-shadow': m.changed ? bottom(3, ACCENT) : undefined },
+        ink: m.focused ? LCD_LIT : LCD,
+      }),
+    },
     card: {
       style: { background: LCD_LIT, color: LCD_INK, 'box-shadow': ring(2, '#050505') },
       class: 'font-bold tracking-[0.08em] uppercase',
@@ -1094,30 +1155,19 @@ function SettingRow(props: {
             />
           }
         >
-          {(slider) => {
-            const form = d().slider;
-            return form.kind === 'thumb' ? (
+          {(slider) => (
+            <div class="flex flex-1" style={d().strip.track(props.focused)}>
               <ThumbSlider
                 setting={slider()}
-                colors={form.colors}
+                colors={d().slider}
                 value={props.recipe[slider().id]}
                 design={d()}
                 focused={props.focused}
                 changed={props.changed}
                 pick={pick}
               />
-            ) : (
-              <Strip
-                items={slider().steps.map((step) => ({ name: fmt(step) }))}
-                value={props.recipe[slider().id]}
-                width={controlWidth()}
-                design={d()}
-                focused={props.focused}
-                changed={props.changed}
-                pick={pick}
-              />
-            );
-          }}
+            </div>
+          )}
         </Show>
       </div>
       <Show when={props.focused}>
