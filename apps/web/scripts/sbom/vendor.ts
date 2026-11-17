@@ -50,7 +50,7 @@ export function vendoredComponents(root: string, directory: string, product: Pro
       const file = typeof notice === 'string' ? notice : notice.file;
       const text = readFileSync(resolve(upstream, file), 'utf8');
       if (typeof notice === 'string') return text;
-      const comment = /^\s*\/\*[\s\S]*?\*\//.exec(text)?.[0];
+      const comment = /^(?:\s*\/\*[\s\S]*?\*\/)+/.exec(text)?.[0];
       if (!comment || !/permission|redistribution/i.test(comment))
         throw Error(`${pkg.name}: no license in the header of ${file}`);
       return comment;
