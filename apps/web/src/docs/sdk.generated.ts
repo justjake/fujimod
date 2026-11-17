@@ -3268,7 +3268,12 @@ export const focalComponents: readonly FocalComponent[] = [
           {
             "name": "custom_slot",
             "type": "unsigned char",
-            "comment": "The selected custom setting's favorite slot, 1 to 7, drawn as a badge (C1) before the page counter; 0 draws none."
+            "comment": "The selected custom setting, drawn before the page counter in the custom-setting color: its favorite slot, 1 to 7, as a badge (C1), or with slot 0 the icon glyph of a file in no slot. Both zero draw none."
+          },
+          {
+            "name": "custom_glyph",
+            "type": "unsigned int",
+            "comment": ""
           },
           {
             "name": "appearance",
@@ -3298,7 +3303,7 @@ export const focalComponents: readonly FocalComponent[] = [
         "slug": "page-title",
         "description": "A page title with its position in a set of pages.",
         "source": "FOCAL_PREVIEW(\"Page title\",\n               .description = \"A page title with its position in a set of pages.\") {\n    (void)props;\n    const struct Focal_Theme *theme = &Focal_Theme_x100vi;\n    FOCAL_THEME(theme) {\n        CLAY(CLAY_ID(\"page\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},\n                       .layoutDirection = CLAY_TOP_TO_BOTTOM},\n            .backgroundColor = theme->background,\n        }) {\n            FOCAL_TITLE_BAR(.title = {.utf8 = \"IMAGE QUALITY\"}, .page = 2, .pages = 5,\n                            .appearance = FOCAL_TITLE_APPEARANCE_DEFAULT);\n        }\n    }\n}",
-        "line": 228,
+        "line": 236,
         "width": 720,
         "height": 480,
         "page": "/docs/sdk/focal/title-bar/page-title/preview.html"
