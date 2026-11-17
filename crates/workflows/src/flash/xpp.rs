@@ -331,6 +331,12 @@ pub(crate) async fn read(
         "XPP transfer buffer exceeds the E1 window",
     )?;
     (callbacks.progress)(0, target.size).map_err(BulkError::Check)?;
+    // XPP FF80 handlers accept one byte per RAM write and configuration
+    // request. Apply the limits before bulk setup as well as reader upload
+    // and cleanup, since those operations share the same session.
+    let mut limits = limits;
+    limits.memory.write = NonZeroU32::MIN;
+    limits.configuration = NonZeroU32::MIN;
     let mut reader = Qualified::prepare(session, bulk, limits).await?;
     let outcome = execute(&mut reader, bulk, flash, payload, image, target, callbacks).await;
     let restored = reader.restore().await;
