@@ -51,6 +51,15 @@ impl PanelSerial {
         cx.log(&format!("panel SPI9 tx{word:#06x}"));
     }
 }
+impl PanelSerial {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state.pending.is_some() != state.deadline.is_some() {
+            return Err("panel serial pending word/deadline disagree".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for PanelSerial {
     fn name(&self) -> &'static str {
         "spi9-write-only-panel"
@@ -157,15 +166,14 @@ impl Device for PanelSerial {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.s.deadline
     }
+    fujimod_emulator_devices::checkpoint_state!(s: State, Self::validate_state);
     fn save(&self) -> Value {
         serde_json::to_value(&self.s).unwrap()
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(v.clone())
             .map_err(|e| format!("panel serial checkpoint: {e}"))?;
-        if state.pending.is_some() != state.deadline.is_some() {
-            return Err("panel serial pending word/deadline disagree".into());
-        }
+        self.validate_state(&state)?;
         self.s = state;
         Ok(())
     }

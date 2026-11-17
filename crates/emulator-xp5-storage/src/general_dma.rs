@@ -26,6 +26,7 @@ impl Device for Global {
             cx.unmodeled();
         }
     }
+    fujimod_emulator_devices::checkpoint_fields!(regs: [u32; 7]);
     fn save(&self) -> Value {
         serde_json::json!(self.regs)
     }

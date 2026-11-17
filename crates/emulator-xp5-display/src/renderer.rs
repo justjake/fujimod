@@ -1,8 +1,18 @@
 //! XP5 renderer DMA high-address register. The DMP engine is shared.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 
 pub struct AddressHigh;
 impl Device for AddressHigh {
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode(self.name())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)
+    }
     fn name(&self) -> &'static str {
         "dmp-pixmap-high-zero"
     }
