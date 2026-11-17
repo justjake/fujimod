@@ -103,6 +103,30 @@ test('the recipes outline is reachable from the shooting menu and includes favor
   expect(recipes.querySelector('ul')?.textContent).toContain('MY RECIPES');
 });
 
+test('the shooting outline follows the built X70 menu through stock and mod siblings', () => {
+  dispose = render(() => <FeatureOutline />, document.body);
+  flush();
+  const shooting = [...document.querySelectorAll('.outline-section')].find(
+    (section) => section.querySelector('h3')?.textContent === 'SHOOTING MENU',
+  )!;
+  const titles = [
+    ...shooting.querySelectorAll('.outline-tree > li > .outline-row > .outline-title'),
+  ].map((label) => label.textContent ?? '');
+  const expected = [
+    'IMAGE SIZE',
+    'SHAPE & ASPECT',
+    'COLOR',
+    'NOISE REDUCTION',
+    'CLARITY',
+    'AUTOFOCUS SETTING',
+    'PHOTOMETRY',
+    'DIGITAL TELE-CONV.',
+    'MOVIE SET-UP',
+    'CUSTOM SETTINGS BKT',
+  ];
+  expect(titles.filter((title) => expected.includes(title))).toEqual(expected);
+});
+
 test('the catalog uses the setup page, Fn assignment template, and DRIVE route', () => {
   const hideFeatures = ['SET-UP', 'FUJIMOD SET-UP', 'HIDE FEATURES'];
   expect(

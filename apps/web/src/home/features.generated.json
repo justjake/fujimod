@@ -4277,9 +4277,19 @@
       "icon": "mod-software-nd-item"
     },
     {
+      "path": ["PLAYBACK MENU"],
+      "title": "RAW CONVERSION",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 1
+    },
+    {
       "title": "CLARITY",
       "path": ["PLAYBACK MENU", "RAW CONVERSION"],
-      "order": 4112,
+      "order": 11,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -4289,7 +4299,7 @@
     {
       "title": "GRAIN EFFECT",
       "path": ["PLAYBACK MENU", "RAW CONVERSION"],
-      "order": 4125,
+      "order": 6,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -4299,7 +4309,7 @@
     {
       "title": "MONOCHROME MG",
       "path": ["PLAYBACK MENU", "RAW CONVERSION"],
-      "order": 4124,
+      "order": 5,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -4309,7 +4319,7 @@
     {
       "title": "MONOCHROME WC",
       "path": ["PLAYBACK MENU", "RAW CONVERSION"],
-      "order": 4123,
+      "order": 4,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -4317,9 +4327,19 @@
       "icon": null
     },
     {
+      "path": ["SET-UP"],
+      "title": "BUTTON/DIAL SETTING",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 7
+    },
+    {
       "title": "DEVTOOLS",
       "path": ["SET-UP"],
-      "order": 4313,
+      "order": 17,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4329,7 +4349,7 @@
     {
       "title": "FUJIMOD SET-UP",
       "path": ["SET-UP"],
-      "order": 4314,
+      "order": 18,
       "kind": "page",
       "stock": false,
       "card": "fujimod_setup_item",
@@ -4339,7 +4359,7 @@
     {
       "title": "HDMI OUTPUT",
       "path": ["SET-UP"],
-      "order": 4312,
+      "order": 16,
       "kind": "value",
       "stock": false,
       "card": "hdmi_rec_behavior_item",
@@ -4349,12 +4369,42 @@
     {
       "title": "MENU STYLE",
       "path": ["SET-UP"],
-      "order": 272,
+      "order": 15,
       "kind": "value",
       "stock": false,
       "card": "menu_style_item",
       "feature": "menu_theme",
       "icon": "mod-menu-style-item"
+    },
+    {
+      "path": ["SET-UP"],
+      "title": "POWER MANAGEMENT",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 10
+    },
+    {
+      "path": ["SET-UP"],
+      "title": "SAVE DATA SET-UP",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 11
+    },
+    {
+      "path": ["SET-UP"],
+      "title": "SCREEN SET-UP",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 6
     },
     {
       "title": "TOUCH SCREEN SETTING",
@@ -4363,13 +4413,23 @@
       "card": "touch_screen_setting",
       "feature": null,
       "kind": "value",
-      "order": 198,
+      "order": 9,
       "icon": null
+    },
+    {
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "title": "FUNCTION (Fn) SETTING",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 0
     },
     {
       "title": "UNLOCKED CONTROLS",
       "path": ["SET-UP", "BUTTON/DIAL SETTING"],
-      "order": 5,
+      "order": 3,
       "kind": "group",
       "stock": false,
       "card": null,
@@ -4389,7 +4449,7 @@
     {
       "title": "AE-L/AF-L",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 13,
+      "order": 7,
       "kind": "value",
       "stock": false,
       "card": "bindings_row_af_ae_lock_button",
@@ -4399,7 +4459,7 @@
     {
       "title": "APERTURE RING",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 11,
+      "order": 5,
       "kind": "page",
       "stock": false,
       "card": "bindings_row_aperture_ring",
@@ -4409,7 +4469,7 @@
     {
       "title": "AUTO LEVER",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 9,
+      "order": 3,
       "kind": "page",
       "stock": false,
       "card": "bindings_row_auto_mode_selector_lever",
@@ -4419,7 +4479,7 @@
     {
       "title": "COMMAND CONTROL",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 7,
+      "order": 1,
       "kind": "value",
       "stock": false,
       "card": "bindings_row_command_control",
@@ -4429,7 +4489,7 @@
     {
       "title": "COMMAND PRESS",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 16,
+      "order": 10,
       "kind": "value",
       "stock": false,
       "card": "bindings_row_command_control_press",
@@ -4439,7 +4499,7 @@
     {
       "title": "CONTROL RING",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 8,
+      "order": 2,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -4449,7 +4509,7 @@
     {
       "title": "DRIVE BUTTON",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 14,
+      "order": 8,
       "kind": "value",
       "stock": false,
       "card": "bindings_row_drive_button",
@@ -4459,7 +4519,7 @@
     {
       "title": "EV DIAL",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 6,
+      "order": 0,
       "kind": "page",
       "stock": false,
       "card": "bindings_row_exposure_compensation_dial",
@@ -4469,7 +4529,7 @@
     {
       "title": "FOCUS MODE SELECTOR",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 12,
+      "order": 6,
       "kind": "page",
       "stock": false,
       "card": "bindings_row_focus_mode_selector",
@@ -4479,7 +4539,7 @@
     {
       "title": "Q BUTTON",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 15,
+      "order": 9,
       "kind": "value",
       "stock": false,
       "card": "bindings_row_quick_menu_button",
@@ -4489,7 +4549,7 @@
     {
       "title": "SHUTTER DIAL",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"],
-      "order": 10,
+      "order": 4,
       "kind": "page",
       "stock": false,
       "card": "bindings_row_shutter_speed_dial",
@@ -4791,7 +4851,7 @@
     {
       "title": "SEARCH AGAIN",
       "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CONNECT WI-FI"],
-      "order": 1,
+      "order": 0,
       "kind": "command",
       "stock": false,
       "card": null,
@@ -4801,7 +4861,7 @@
     {
       "title": "QUICK START",
       "path": ["SET-UP", "POWER MANAGEMENT"],
-      "order": 4121,
+      "order": 2,
       "kind": "value",
       "stock": false,
       "card": "quick_start_item",
@@ -4811,7 +4871,7 @@
     {
       "title": "DATE FOLDERS",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "order": 4108,
+      "order": 4,
       "kind": "value",
       "stock": false,
       "card": "date_folders_item",
@@ -4821,7 +4881,7 @@
     {
       "title": "FORMAT CARD NAME",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "order": 4109,
+      "order": 5,
       "kind": "value",
       "stock": false,
       "card": "sd_volume_name_item",
@@ -4831,7 +4891,7 @@
     {
       "title": "RAW CROP FILE",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "order": 8,
+      "order": 3,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -4841,7 +4901,7 @@
     {
       "title": "FILM ICONS",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 417,
+      "order": 10,
       "kind": "value",
       "stock": false,
       "card": "film_icons_item",
@@ -4851,7 +4911,7 @@
     {
       "title": "FRAMING GUIDELINE",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 12,
+      "order": 5,
       "kind": "value",
       "stock": true,
       "card": null,
@@ -4861,7 +4921,7 @@
     {
       "title": "INDICATOR OPACITY",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 4138,
+      "order": 12,
       "kind": "value",
       "stock": false,
       "card": "opacity_indicators_item",
@@ -4871,7 +4931,7 @@
     {
       "title": "MENU ANIMATIONS",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 4139,
+      "order": 13,
       "kind": "value",
       "stock": false,
       "card": "menu_animations_item",
@@ -4881,7 +4941,7 @@
     {
       "title": "MENU OPACITY",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 4137,
+      "order": 11,
       "kind": "value",
       "stock": false,
       "card": "opacity_menu_item",
@@ -4891,7 +4951,7 @@
     {
       "title": "AE/AF & SCENE",
       "path": ["SHOOTING MENU"],
-      "order": 87,
+      "order": 36,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4899,9 +4959,19 @@
       "icon": "mod-ae-af-lock-item"
     },
     {
+      "path": ["SHOOTING MENU"],
+      "title": "AUTOFOCUS SETTING",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 23
+    },
+    {
       "title": "CLARITY",
       "path": ["SHOOTING MENU"],
-      "order": 4298,
+      "order": 21,
       "kind": "value",
       "stock": false,
       "card": "clarity_item",
@@ -4911,7 +4981,7 @@
     {
       "title": "COLOR",
       "path": ["SHOOTING MENU"],
-      "order": 3,
+      "order": 18,
       "kind": "value",
       "stock": true,
       "card": "3",
@@ -4921,7 +4991,7 @@
     {
       "title": "COLOR CHROME",
       "path": ["SHOOTING MENU"],
-      "order": 4300,
+      "order": 15,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4931,7 +5001,7 @@
     {
       "title": "CONTROL RING SETTING",
       "path": ["SHOOTING MENU"],
-      "order": 95,
+      "order": 38,
       "kind": "value",
       "stock": true,
       "card": "control_ring_setting",
@@ -4941,7 +5011,7 @@
     {
       "title": "CUSTOM SETTINGS BKT",
       "path": ["SHOOTING MENU"],
-      "order": 432,
+      "order": 44,
       "kind": "page",
       "stock": false,
       "card": "custom_settings_bkt_item",
@@ -4951,7 +5021,7 @@
     {
       "title": "D RANGE PRIORITY",
       "path": ["SHOOTING MENU"],
-      "order": 4302,
+      "order": 14,
       "kind": "value",
       "stock": false,
       "card": "d_range_priority_item",
@@ -4965,13 +5035,13 @@
       "card": "digital_tele_conv",
       "feature": "digital_focal_length",
       "kind": "value",
-      "order": 107,
+      "order": 34,
       "icon": null
     },
     {
       "title": "EDIT/SAVE CUSTOM SETTING",
       "path": ["SHOOTING MENU"],
-      "order": 105,
+      "order": 7,
       "kind": "page",
       "stock": false,
       "card": "recipes_library",
@@ -4981,7 +5051,7 @@
     {
       "title": "FILM EDITOR",
       "path": ["SHOOTING MENU"],
-      "order": 4309,
+      "order": 5,
       "kind": "command",
       "stock": false,
       "card": "film_editor_item",
@@ -4991,7 +5061,7 @@
     {
       "title": "FILM EFFECTS",
       "path": ["SHOOTING MENU"],
-      "order": 4301,
+      "order": 9,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -5001,7 +5071,7 @@
     {
       "title": "FILM SIMULATION",
       "path": ["SHOOTING MENU"],
-      "order": 22,
+      "order": 3,
       "kind": "value",
       "stock": true,
       "card": "film_simulation",
@@ -5009,9 +5079,19 @@
       "icon": null
     },
     {
+      "path": ["SHOOTING MENU"],
+      "title": "FILM SIMULATION BKT",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 35
+    },
+    {
       "title": "FUJIMOD",
       "path": ["SHOOTING MENU"],
-      "order": 4316,
+      "order": 10,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -5021,7 +5101,7 @@
     {
       "title": "GRAIN EFFECT",
       "path": ["SHOOTING MENU"],
-      "order": 4307,
+      "order": 8,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -5031,7 +5111,7 @@
     {
       "title": "IMAGE QUALITY",
       "path": ["SHOOTING MENU"],
-      "order": 61,
+      "order": 2,
       "kind": "value",
       "stock": true,
       "card": "image_quality",
@@ -5041,7 +5121,7 @@
     {
       "title": "IMAGE SIZE",
       "path": ["SHOOTING MENU"],
-      "order": 59,
+      "order": 0,
       "kind": "value",
       "stock": true,
       "card": "image_size",
@@ -5055,13 +5135,13 @@
       "card": "interval_timer_shooting",
       "feature": "interval_timer",
       "kind": "value",
-      "order": 142,
+      "order": 30,
       "icon": null
     },
     {
       "title": "MF SNAP FOCUS",
       "path": ["SHOOTING MENU"],
-      "order": 420,
+      "order": 25,
       "kind": "value",
       "stock": false,
       "card": "snap_menu_item",
@@ -5071,7 +5151,7 @@
     {
       "title": "MONOCHROMATIC COLOR",
       "path": ["SHOOTING MENU"],
-      "order": 4308,
+      "order": 4,
       "kind": "page",
       "stock": false,
       "card": "monochromatic_color_item",
@@ -5079,9 +5159,19 @@
       "icon": null
     },
     {
+      "path": ["SHOOTING MENU"],
+      "title": "MOVIE SET-UP",
+      "kind": "page",
+      "stock": true,
+      "card": null,
+      "feature": null,
+      "icon": null,
+      "order": 41
+    },
+    {
       "title": "NOISE REDUCTION",
       "path": ["SHOOTING MENU"],
-      "order": 32,
+      "order": 20,
       "kind": "value",
       "stock": true,
       "card": "noise_reduction",
@@ -5091,7 +5181,7 @@
     {
       "title": "PHOTOMETRY",
       "path": ["SHOOTING MENU"],
-      "order": 20,
+      "order": 31,
       "kind": "value",
       "stock": true,
       "card": "photometry",
@@ -5101,7 +5191,7 @@
     {
       "title": "SHADOW TONE",
       "path": ["SHOOTING MENU"],
-      "order": 30,
+      "order": 17,
       "kind": "info",
       "stock": false,
       "card": null,
@@ -5111,7 +5201,7 @@
     {
       "title": "SHAPE & ASPECT",
       "path": ["SHOOTING MENU"],
-      "order": 4318,
+      "order": 1,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -5121,7 +5211,7 @@
     {
       "title": "TONE CURVE",
       "path": ["SHOOTING MENU"],
-      "order": 29,
+      "order": 16,
       "kind": "command",
       "stock": false,
       "card": "tone_curve_item",
@@ -5161,7 +5251,7 @@
     {
       "title": "AF MISS",
       "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
-      "order": 4107,
+      "order": 9,
       "kind": "value",
       "stock": false,
       "card": "af_miss_item",
@@ -5171,7 +5261,7 @@
     {
       "title": "AF RANGE",
       "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
-      "order": 4106,
+      "order": 8,
       "kind": "value",
       "stock": false,
       "card": "af_range_item",
@@ -5737,7 +5827,7 @@
     {
       "title": "TEXTURE",
       "path": ["SHOOTING MENU", "GRAIN EFFECT"],
-      "order": 3,
+      "order": 2,
       "kind": "value",
       "stock": false,
       "card": null,
@@ -5767,7 +5857,7 @@
     {
       "title": "F-Log RECORDING",
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "order": 4111,
+      "order": 4,
       "kind": "value",
       "stock": false,
       "card": "f_log_recording_item",
@@ -5777,7 +5867,7 @@
     {
       "title": "FILM SIMULATION",
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "order": 4112,
+      "order": 5,
       "kind": "value",
       "stock": false,
       "card": "movie_film_item",
@@ -5847,7 +5937,7 @@
     {
       "title": "ADD RATIO",
       "path": ["SHOOTING MENU", "SHAPE & ASPECT", "EDIT ASPECT RATIOS"],
-      "order": 1,
+      "order": 11,
       "kind": "command",
       "stock": false,
       "card": null,

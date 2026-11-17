@@ -28,8 +28,8 @@ for (const feature of catalog.features)
   for (const control of feature.controls)
     if (control.card && !options.has(control.card)) options.set(control.card, control.choices);
 const rowPlace = (row: MenuRow) => [...row.path, row.title];
-/** Stock rows FujiMod leaves as they are. */
-const shownRows = catalog.menus.filter((row) => !row.stock || row.card);
+/** Stock pages with documented descendants still have their own position. */
+const shownRows = catalog.menus.filter((row) => !row.stock || row.card || row.kind === 'page');
 const placed = new Set(shownRows.map((row) => row.feature));
 const placeKey = (place: readonly string[]) => place.join('\u0000');
 /** Features without a row of their own that change a row: listed on it (RAW on DIGITAL TELE-CONV.). */
