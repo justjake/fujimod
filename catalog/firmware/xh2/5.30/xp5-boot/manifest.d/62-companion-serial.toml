@@ -47,6 +47,7 @@ active_high = false
 [device.options.wire.endpoints.part]
 kind = "bis-configuration-registers"
 revision = [0, 0]
+samples = [0, 0]
 idle_high = false
 [[device.options.wire.endpoints]]
 [device.options.wire.endpoints.select]
@@ -55,3 +56,4 @@ pin = 9
 active_high = false
 [device.options.wire.endpoints.part]
 kind = "lsm6ds-configuration-registers"
+temperature = 0
