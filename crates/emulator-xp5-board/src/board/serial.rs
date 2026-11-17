@@ -35,6 +35,8 @@ pub(super) enum Part {
         revision: [u8; 2],
         samples: [u16; 2],
         idle_high: bool,
+        #[serde(default)]
+        block: Option<[u8; 6]>,
     },
     Lsm6dsConfigurationRegisters {
         temperature: i16,
@@ -234,8 +236,9 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
             revision,
             samples,
             idle_high,
-        } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::new(
-            revision, samples, idle_high,
+            block,
+        } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::with_block(
+            revision, samples, idle_high, block,
         )?),
         Part::Lsm6dsConfigurationRegisters { temperature, motion } => {
             Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature, motion))
