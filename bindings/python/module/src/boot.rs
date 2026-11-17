@@ -26,7 +26,8 @@ impl Boot for CatalogBoot {
         let resolved = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(
             &inputs.configuration_id, &inputs.overlays,
         )?;
-        boot::open(resolved, boot::Options {
+        #[allow(irrefutable_let_patterns)]
+        let boot::Opened::Exr2(session) = boot::open(resolved, boot::StartupInputs::Exr2(boot::Options {
             update: inputs.update,
             boot_rom: inputs.boot_rom,
             nand: inputs.nand,
@@ -36,7 +37,10 @@ impl Boot for CatalogBoot {
             camera: inputs.camera,
             access_point,
             capability_reply,
-        })
+        }))? else {
+            return Err("EXR II startup returned another processor generation".into());
+        };
+        Ok(*session)
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

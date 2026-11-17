@@ -832,9 +832,40 @@ impl Prepared {
     }
 }
 
+/// Files and startup settings for the selected processor generation.
+pub enum StartupInputs {
+    Exr2(Options),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Xp5(xp5::Startup),
+}
+
+/// An unexecuted session and the generation-specific state needed to drive it.
+pub enum Opened {
+    Exr2(Box<Session>),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Xp5(Box<xp5::Started>),
+}
+
+/// Open the configured board from caller-selected files.
+pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Opened, String> {
+    match (resolved.configuration.inputs.as_ref(), inputs) {
+        (Some(RunInputs::Exr2(_)), StartupInputs::Exr2(inputs)) => {
+            Ok(Opened::Exr2(Box::new(open_exr2(resolved, inputs)?)))
+        }
+        #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+        (Some(RunInputs::Xp5(_)), StartupInputs::Xp5(inputs)) => {
+            Ok(Opened::Xp5(Box::new(xp5::open_startup(&resolved, inputs)?)))
+        }
+        _ => Err(format!(
+            "startup inputs do not match configuration {}",
+            resolved.configuration.id
+        )),
+    }
+}
+
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
-pub fn open(resolved: ResolvedConfiguration, options: Options) -> Result<Session, String> {
+fn open_exr2(resolved: ResolvedConfiguration, options: Options) -> Result<Session, String> {
     let mut prepared = prepared(resolved)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;

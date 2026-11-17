@@ -217,7 +217,7 @@ mod tests {
             std::fs::read(directory.join("bank0-000001.png")).unwrap(),
             b"preserved"
         );
-        let expected = super::frontend::rgba_png(130, 130, &rgba).unwrap();
+        let expected = crate::xp5::frontend::rgba_png(130, 130, &rgba).unwrap();
         let publication: Value = serde_json::from_slice(
             &std::fs::read(directory.join("bank0-publication.json")).unwrap(),
         )

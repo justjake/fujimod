@@ -2,9 +2,7 @@
 //! the outcome in the run directory.
 use super::{
     emulator_patch,
-    firmware::Firmware,
-    manifest::BootState,
-    mod_loader, open as session_open, rom_start,
+    Startup, Started, mod_loader, open as session_open,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -188,14 +186,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .iter()
         .map(|stub| parse_stub(stub))
         .collect::<Result<Vec<_>, _>>()?;
-    let configuration_id = &configuration.configuration.id;
-    let start_rom = matches!(
-        configuration.configuration.start,
-        fujimod_catalog_configuration::RunStart::Rom
-    );
-    let dials_held = true;
-    let card_present = true;
-    let scene = scene;
+    let configuration_id = configuration.configuration.id.clone();
     // Input-only parsing comes first, so a malformed spec fails before the run directory exists
     // and before the board is opened. Patch times stay in milliseconds and the key delays stay
     // durations until the run starts and its tick rate is known.
@@ -239,51 +230,22 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             keys.push((delay, key, pressed));
         }
     }
-    let firmware_id = configuration.configuration.firmware_id.clone();
-    let state = BootState::for_firmware(&firmware_id)?;
-    let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
-    let firmware = Firmware::from_update(&firmware_id, update_bytes, true)?;
-    std::fs::create_dir_all(&run_directory).map_err(|error| error.to_string())?;
-    let rom = if start_rom {
-        let start = rom_start::RomStart::load(
-            rom_path.as_deref().ok_or("--start rom needs --rom FILE")?,
-            dials_held,
-            card_files,
-            card_present,
-        )?;
-        Some(match &sd_image {
-            Some(image) => {
-                let start = start.with_card_image(image)?;
-                if let Some(card) = &start.card_image {
-                    for line in &card.layout {
-                        eprintln!("FUJIMOD card image {}: {line}", image.display());
-                    }
-                    eprintln!("FUJIMOD card image root names: {:?}", card.names);
-                }
-                start
-            }
-            None => start,
-        })
-    } else if rom_path.is_some()
-        || sd_image.is_some()
-        || !card_files.is_empty()
-        || !card_present
-        || !dials_held
-    {
-        return Err("--rom, --sd-file, --sd-image, --sd-absent and --dials apply to --start rom only".into());
-    } else {
-        None
-    };
-    let opened = session_open::open_from(
-        &firmware,
-        &state,
-        &configuration,
-        scene.as_deref(),
-        &run_directory,
+    let request = Startup {
+        update,
+        boot_rom: rom_path,
+        card_image: sd_image,
+        card_files,
+        scene,
+        output: run_directory.clone(),
         mode,
-        quantum_override,
-        rom.as_ref(),
-    )?;
+        quantum: quantum_override,
+    };
+    let crate::Opened::Xp5(started) =
+        crate::open(configuration, crate::StartupInputs::Xp5(request))?
+    else {
+        return Err("XP5 startup returned another processor generation".into());
+    };
+    let Started { firmware, state, opened } = *started;
     let session_open::Opened {
         flash_shadow,
         mut session,

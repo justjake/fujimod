@@ -518,7 +518,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
     };
 
     let direct = snapshot(
-        open(ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(), Options {
+        open_exr2(ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(), Options {
             update: PathBuf::from(&update),
             boot_rom: PathBuf::from(&boot_rom),
             nand: None,
@@ -557,7 +557,7 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
         std::env::var_os("FUJIMOD_TEST_BOOT_ROM"),
         std::env::var_os("FUJIMOD_TEST_RESTART_IMAGE"),
     ) else { return };
-    let mut session = open(ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(), Options {
+    let mut session = open_exr2(ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(), Options {
         update: update.into(), boot_rom: boot_rom.into(), nand: None, settings: None,
         clock_seconds_2000: None, preferred_languages: vec![], camera: Some(reference_camera()),
         access_point: None, capability_reply: None,

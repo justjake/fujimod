@@ -213,7 +213,11 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
         return Err("instruction limit must be positive".into());
     }
     let execution_policy = boot_options.execution_policy()?;
-    let mut session = boot::open(resolved, options)?;
+    let boot::Opened::Exr2(mut session) =
+        boot::open(resolved, boot::StartupInputs::Exr2(options))?
+    else {
+        return Err("EXR II startup returned another processor generation".into());
+    };
     session.board.set_execution_policy(execution_policy)?;
     let report = boot::to_rec(&mut session, limit)?;
     println!(
