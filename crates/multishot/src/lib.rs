@@ -18,6 +18,7 @@ pub mod demosaic;
 pub mod dng;
 pub mod fit;
 pub mod jpeg;
+pub mod local;
 pub mod measure;
 pub mod merge;
 pub mod noise;

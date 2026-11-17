@@ -4,9 +4,11 @@ use fujimod_multishot::align::{AlignParams, Alignment, Pyramid, align, register,
 use fujimod_multishot::demosaic;
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::Affine;
+use fujimod_multishot::local::{LocalParams, residual_fields};
 use fujimod_multishot::measure::{crop, luma, patch_noise, slanted_edge};
 use fujimod_multishot::merge::{
-    ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, StripSink, Tee, merge_resolution,
+    ColorMerge, ImageSink, MergeReport, OutputGrid, Region, ResolutionParams, StripSink, Tee,
+    merge_resolution,
 };
 use fujimod_multishot::plane::read_block_planes;
 use fujimod_multishot::preview::{PreviewSink, auto_gain, write_png};
@@ -31,6 +33,8 @@ options:
   --sigma S            kernel standard deviation in sites (default 0.38)
   --radius R           kernel radius in sites (default 1.5)
   --color MODE         green-guided (default) or independent
+  --local              add per-tile residual shifts to each frame's global alignment
+  --local-tile N       residual alignment tile size in sites (default 96)
   --reference N        reference frame index (default: sharpest)
   --alignment FILE     reuse an alignment.json
   --region X,Y,W,H     merge only this reference region (sites)
@@ -55,7 +59,7 @@ fn parse_args() -> Result<Args, String> {
     let mut flags = std::collections::HashSet::new();
     while let Some(a) = it.next() {
         if let Some(name) = a.strip_prefix("--") {
-            if name == "no-robustness" {
+            if name == "no-robustness" || name == "local" {
                 flags.insert(name.to_string());
             } else {
                 let v = it.next().ok_or(format!("--{name} needs a value"))?;
@@ -342,6 +346,15 @@ fn resolution_params(args: &Args) -> Result<ResolutionParams, String> {
             Some("independent") => ColorMerge::Independent,
             Some(v) => return Err(format!("--color: unknown mode {v:?}")),
         },
+        local: if args.flags.contains("local") {
+            let l = LocalParams::default();
+            Some(LocalParams {
+                tile: args.num("local-tile", l.tile)?,
+                ..l
+            })
+        } else {
+            None
+        },
         region: args.region("region")?,
         ..d
     })
@@ -434,14 +447,14 @@ fn run_variants(
     alignment: &Alignment,
     params: &ResolutionParams,
     region: Region,
-) -> Result<(OutputGrid, Vec<Variant>), String> {
+) -> Result<(OutputGrid, Vec<Variant>, MergeReport), String> {
     let p = ResolutionParams {
         region: Some(region),
         ..params.clone()
     };
     let grid = OutputGrid::new(region, p.scale);
     let mut merged = ImageSink::new(grid.width, grid.height);
-    merge_resolution(frames, alignment, &p, &mut merged).map_err(|e| e.to_string())?;
+    let report = merge_resolution(frames, alignment, &p, &mut merged).map_err(|e| e.to_string())?;
     let mut single_alignment = alignment.clone();
     for (k, f) in single_alignment.frames.iter_mut().enumerate() {
         if k != alignment.reference {
@@ -468,6 +481,7 @@ fn run_variants(
                 rgb: baseline,
             },
         ],
+        report,
     ))
 }
 
@@ -489,7 +503,7 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
     let wb = rafs[alignment.reference].calibration().wb;
     let edge = args.region("edge")?.ok_or("--edge X,Y,W,H is required")?;
     let mut results = serde_json::Map::new();
-    let (grid, variants) = run_variants(&frames, &alignment, &params, edge)?;
+    let (grid, variants, report) = run_variants(&frames, &alignment, &params, edge)?;
     let gain = auto_gain(&variants[2].rgb, wb);
     println!(
         "edge region {:?} at scale {} ({} frames merged)",
@@ -551,6 +565,14 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
     // of its edge, mapped into the reference, from the reference's edge.
     println!("  per-frame demosaic MTF50 at the edge (focus and blur differ between frames):");
     let mut per_frame = Vec::new();
+    let fields = match &params.local {
+        Some(lp) => {
+            residual_fields(&frames, &alignment, edge, params.radius + 2.0, lp)
+                .map_err(|e| e.to_string())?
+                .0
+        }
+        None => vec![None; frames.len()],
+    };
     for (k, f) in alignment.frames.iter().enumerate() {
         let Some(t) = f.to_frame else { continue };
         let (cx, cy) = (
@@ -577,35 +599,46 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
         let edge_fit = slanted_edge(&luma(&rgb, wb), g.width, g.height);
         // Perpendicular offset (sites) of this frame's edge midpoint, mapped
         // to the reference, from the reference edge line.
-        let offset = match (&edge_fit, ref_line, t.inverse()) {
+        // The same after the frame's residual field, when local alignment
+        // is enabled.
+        let offsets = match (&edge_fit, ref_line, t.inverse()) {
             (Ok(m), Some([(x0, y0), (x1, y1)]), Some(inv)) => {
                 let (px, py) = g.to_site(
                     0.5 * (m.line[0].0 + m.line[1].0),
                     0.5 * (m.line[0].1 + m.line[1].1),
                 );
-                let (qx, qy) = inv.apply(px, py);
                 let (dx, dy) = (x1 - x0, y1 - y0);
-                Some(((qx - x0) * dy - (qy - y0) * dx) / (dx * dx + dy * dy).sqrt())
+                let across =
+                    |(qx, qy): (f64, f64)| ((qx - x0) * dy - (qy - y0) * dx) / dx.hypot(dy);
+                let global = inv.apply(px, py);
+                let local = fields[k].as_ref().map(|field| {
+                    let (sx, sy) = field.at(global.0, global.1);
+                    across(inv.apply(px - sx, py - sy))
+                });
+                Some((across(global), local))
             }
             _ => None,
         };
+        let offset = offsets.map(|o| o.0);
+        let local_offset = offsets.and_then(|o| o.1);
         match &edge_fit {
             Ok(m) => println!(
-                "    {:<16} {:.4}   edge offset {:+.3} sites",
+                "    {:<16} {:.4}   edge offset {:+.3} sites, after local field {:+.3}",
                 f.label,
                 m.mtf50 * params.scale,
-                offset.unwrap_or(f64::NAN)
+                offset.unwrap_or(f64::NAN),
+                local_offset.unwrap_or(f64::NAN)
             ),
             Err(e) => println!("    {:<16} {e}", f.label),
         }
-        per_frame.push(json!({ "frame": f.label, "mtf50_cycles_per_site": edge_fit.as_ref().ok().map(|m| m.mtf50 * params.scale), "edge_offset_sites": offset }));
+        per_frame.push(json!({ "frame": f.label, "mtf50_cycles_per_site": edge_fit.as_ref().ok().map(|m| m.mtf50 * params.scale), "edge_offset_sites": offset, "local_edge_offset_sites": local_offset }));
     }
     results.insert(
         "edge".into(),
-        json!({ "region": edge, "mtf": mtf, "per_frame_demosaic": per_frame }),
+        json!({ "region": edge, "mtf": mtf, "per_frame_demosaic": per_frame, "merge": report }),
     );
     if let Some(flat) = args.region("flat")? {
-        let (fgrid, fvariants) = run_variants(&frames, &alignment, &params, flat)?;
+        let (fgrid, fvariants, _) = run_variants(&frames, &alignment, &params, flat)?;
         println!("flat region {flat:?}");
         let mut noise = serde_json::Map::new();
         for v in &fvariants {
