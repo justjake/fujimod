@@ -2,7 +2,8 @@
 //! `fujimod_python_base::boot` when the module initializes.
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_session::Session;
-use fujimod_python_base::boot::{Boot, Inputs};
+use fujimod_python_base::boot::{Boot, Inputs, Opened};
+use fujimod_catalog_configuration::{RunInputs, RunInstructionRate};
 
 struct CatalogBoot;
 
@@ -11,7 +12,47 @@ impl Boot for CatalogBoot {
         let prepared = boot::prepare(configuration_id, overlays)?;
         serde_json::to_string(&prepared.to_json()).map_err(|failure| failure.to_string())
     }
-    fn open(&self, inputs: Inputs) -> Result<Session, String> {
+    fn open(&self, inputs: Inputs) -> Result<Opened, String> {
+        let mut resolved = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(
+            &inputs.configuration_id, &inputs.overlays,
+        )?;
+        if let Some(engine) = inputs.engine {
+            resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
+                .engine = serde_json::from_value(serde_json::Value::String(engine))
+                    .map_err(|error| format!("invalid CPU engine: {error}"))?;
+        }
+        if let Some((numerator, denominator)) = inputs.instruction_rate {
+            let rate = RunInstructionRate { numerator, denominator };
+            rate.validate()?;
+            resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
+                .instructions_per_tick = rate;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+            if inputs.nand.is_some() || inputs.settings.is_some() || inputs.clock_seconds_2000.is_some()
+                || !inputs.preferred_languages.is_empty() || inputs.camera.is_some()
+                || inputs.access_point.is_some() || inputs.capability_reply.is_some()
+            {
+                return Err("EXR II startup settings do not apply to XP5".into());
+            }
+            let mode = if inputs.discovery {
+                fujimod_emulator::board::bus::Mode::Discovery
+            } else {
+                fujimod_emulator::board::bus::Mode::Strict
+            };
+            let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
+                update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
+                card_image: None, card_files: vec![], scene: None, output: None,
+                mode, quantum: inputs.quantum,
+            }))? else {
+                return Err("XP5 startup returned another processor generation".into());
+            };
+            let (session, inputs, read_limit) = started.into_loader_session()?;
+            return Ok(Opened::Xp5 {session, inputs, read_limit});
+        }
+        if inputs.manifest.is_some() || inputs.discovery || inputs.quantum.is_some() {
+            return Err("XP5 startup settings do not apply to this configuration".into());
+        }
         let access_point = inputs
             .access_point
             .as_deref()
@@ -23,12 +64,9 @@ impl Boot for CatalogBoot {
             .as_deref()
             .map(|bytes| <[u8; 20]>::try_from(bytes).map_err(|_| "MT5931 capability fixture must be 20 bytes"))
             .transpose()?;
-        let resolved = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(
-            &inputs.configuration_id, &inputs.overlays,
-        )?;
         let options = boot::Options {
             update: inputs.update,
-            boot_rom: inputs.boot_rom,
+            boot_rom: inputs.boot_rom.ok_or("EXR II requires a boot ROM")?,
             nand: inputs.nand,
             settings: inputs.settings,
             clock_seconds_2000: inputs.clock_seconds_2000,
@@ -37,7 +75,7 @@ impl Boot for CatalogBoot {
             access_point,
             capability_reply,
         };
-        boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2()
+        boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2().map(Opened::Exr2)
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

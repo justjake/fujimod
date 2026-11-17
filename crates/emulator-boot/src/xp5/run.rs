@@ -296,7 +296,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         card_image: sd_image,
         card_files,
         scene,
-        output: run_directory.clone(),
+        output: Some(run_directory.clone()),
         mode,
         quantum: quantum_override,
     };
@@ -313,6 +313,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         outputs,
         ticks_per_second,
         quantum,
+        ..
     } = opened;
     if let Some(path) = load_snapshot {
         crate::load_snapshot(&mut session, &path)?;

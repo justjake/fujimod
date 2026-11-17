@@ -32,7 +32,7 @@ pub struct Startup {
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
     pub scene: Option<PathBuf>,
-    pub output: PathBuf,
+    pub output: Option<PathBuf>,
     pub mode: Mode,
     pub quantum: Option<usize>,
 }
@@ -44,6 +44,16 @@ pub struct Started {
 }
 
 impl Started {
+    /// Transfer a loader-start board and its physical controls to a language binding.
+    pub fn into_loader_session(
+        self,
+    ) -> Result<(fujimod_emulator_session::Session, fujimod_emulator_xp5_board::session::Inputs, usize), String> {
+        if self.opened.flash_shadow.is_some() {
+            return Err("XP5 ROM start needs the flash aperture driver".into());
+        }
+        Ok((self.opened.session, self.opened.inputs, self.opened.read_limit))
+    }
+
     pub fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
         &mut self.opened.session
     }
@@ -55,12 +65,18 @@ pub(super) fn open_startup(
 ) -> Result<Started, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
         scene, output: run_directory, mode, quantum: quantum_override } = startup;
-    let start_rom = matches!(configuration.configuration.start, RunStart::Rom);
+    let start_rom = match configuration.configuration.start {
+        RunStart::Rom => true,
+        RunStart::Loader => false,
+        RunStart::SdCard => return Err("XP5 SD card startup is unavailable".into()),
+    };
     let firmware_id = configuration.configuration.firmware_id.clone();
     let state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
     let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
     let firmware = firmware::Firmware::from_update(&firmware_id, update_bytes, true)?;
-    std::fs::create_dir_all(&run_directory).map_err(|error| error.to_string())?;
+    if let Some(directory) = &run_directory {
+        std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
+    }
     let rom = if start_rom {
         let start = rom_start::RomStart::load(
             rom_path.as_deref().ok_or("--start rom needs --rom FILE")?,
@@ -94,7 +110,7 @@ pub(super) fn open_startup(
         &state,
         configuration,
         scene.as_deref(),
-        &run_directory,
+        run_directory.as_deref(),
         mode,
         quantum_override,
         rom.as_ref(),

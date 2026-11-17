@@ -230,7 +230,7 @@ class Board:
         configuration_id: str,
         overlays: Sequence[str] = (),
         update: str | PathLike[str],
-        boot_rom: str | PathLike[str],
+        boot_rom: str | PathLike[str] | None = None,
         nand: str | PathLike[str] | None = None,
         settings: str | PathLike[str] | None = None,
         clock_seconds_2000: int | None = None,
@@ -238,6 +238,11 @@ class Board:
         camera: str | PathLike[str] | None = None,
         access_point: Mapping[str, object] | None = None,
         capability_reply: Sequence[int] | None = None,
+        engine: str | None = None,
+        manifest: str | PathLike[str] | None = None,
+        discovery: bool = False,
+        quantum: int | None = None,
+        instruction_rate: tuple[int, int] | None = None,
     ) -> Self:
         """Boot a catalog runtime from files selected by the caller.
 
@@ -248,7 +253,7 @@ class Board:
         ``overlays`` selects named catalog overlays in order. Each overlay
         must apply to the selected run configuration.
 
-        ``update`` and ``boot_rom`` are required files. ``nand`` and
+        ``update`` is required. ROM starts require ``boot_rom``. ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
         is inferred from the selected configuration.
 
@@ -281,7 +286,8 @@ class Board:
         if len(selected_overlays) != len(set(selected_overlays)):
             raise ValueError("overlays must contain unique catalog identities")
         update = cls._input_path(update, "update")
-        boot_rom = cls._input_path(boot_rom, "boot_rom")
+        boot_rom = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
+        manifest = None if manifest is None else cls._input_path(manifest, "manifest")
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
         camera = None if camera is None else fspath(camera)
@@ -318,6 +324,11 @@ class Board:
             camera=camera,
             access_point=access_point_text,
             capability_reply=capability,
+            engine=engine,
+            manifest=manifest,
+            discovery=discovery,
+            quantum=quantum,
+            instruction_rate=instruction_rate,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

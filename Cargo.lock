@@ -2899,6 +2899,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-session",
+ "fujimod-emulator-xp5-board",
  "fujimod-workspace-hack",
  "pyo3",
 ]
@@ -2982,7 +2983,9 @@ dependencies = [
 name = "fujimod-python-module"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-configuration",
  "fujimod-catalog-resolution",
+ "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",

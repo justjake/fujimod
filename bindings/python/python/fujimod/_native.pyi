@@ -66,7 +66,7 @@ class emulator:
             configuration_id: str,
             overlays: Sequence[str] = ...,
             update: str | PathLike[str],
-            boot_rom: str | PathLike[str],
+            boot_rom: str | PathLike[str] | None = None,
             nand: str | PathLike[str] | None = None,
             settings: str | PathLike[str] | None = None,
             clock_seconds_2000: int | None = None,
@@ -74,6 +74,11 @@ class emulator:
             camera: str | PathLike[str] | None = None,
             access_point: str | None = None,
             capability_reply: bytes | None = None,
+            engine: str | None = None,
+            manifest: str | PathLike[str] | None = None,
+            discovery: bool = False,
+            quantum: int | None = None,
+            instruction_rate: tuple[int, int] | None = None,
         ) -> emulator.Board: ...
         def boot_to_rec(
             self, /, instruction_limit: SupportsIndex = ...

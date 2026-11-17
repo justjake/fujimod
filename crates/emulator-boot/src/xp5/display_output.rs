@@ -54,12 +54,6 @@ impl Outputs {
                 })
                 .transpose()
         };
-        let directory = PathBuf::from(
-            options
-                .get("frame_dir")
-                .and_then(toml::Value::as_str)
-                .ok_or("display requires frame_dir")?,
-        );
         let mut config = Config {
             period_ns: number("frame_period_ns")?,
             ..Default::default()
@@ -71,6 +65,11 @@ impl Outputs {
                 )?);
             }
         }
+        let Some(directory) = options.get("frame_dir") else {
+            // Observers can consume raw scanout through the session.
+            return Ok(config);
+        };
+        let directory = PathBuf::from(directory.as_str().ok_or("frame_dir must be a path")?);
         let viewer = if let Some(port) = number("viewer_port")? {
             if bank != 0 {
                 return Err("start viewer only on display bank0".into());

@@ -42,6 +42,7 @@ pub(crate) struct Opened {
     /// Instructions per scheduler turn: the run configuration's
     /// `execution.quantum` unless the caller overrides it for this run.
     pub quantum: usize,
+    pub read_limit: usize,
 }
 
 fn merge_image(
@@ -115,7 +116,7 @@ fn devices_and_resources(
     state: &BootState,
     firmware: &Firmware,
     controls: Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
-    run_directory: &Path,
+    run_directory: Option<&Path>,
     outputs: &super::display_output::Outputs,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
@@ -189,14 +190,14 @@ fn devices_and_resources(
             }
             "display" => {
                 let mut options = window.options.clone();
-                options.entry("frame_dir").or_insert_with(|| {
-                    toml::Value::String(
-                        run_directory
-                            .join(format!("display-{:x}", window.base))
-                            .to_string_lossy()
-                            .into_owned(),
-                    )
-                });
+                if let Some(directory) = run_directory {
+                    options.entry("frame_dir").or_insert_with(|| {
+                        toml::Value::String(directory.join(format!("display-{:x}", window.base))
+                            .to_string_lossy().into_owned())
+                    });
+                } else {
+                    options.remove("frame_dir");
+                }
                 let display = outputs.configure(window.base, &options, None)?;
                 resources.displays.insert(window.base, display);
                 window.options.clear();
@@ -445,7 +446,7 @@ pub(crate) fn open_from(
     state: &BootState,
     resolved: &ResolvedConfiguration,
     scene_override: Option<&Path>,
-    run_directory: &Path,
+    run_directory: Option<&Path>,
     mode: Mode,
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
@@ -840,6 +841,9 @@ pub(crate) fn open_from(
         );
     }
     let storage = resources.storage.clone();
+    let read_limit = execution.ram.iter().try_fold(0usize, |bytes, region| {
+        bytes.checked_add(region.size).ok_or("XP5 RAM extent overflows")
+    })?;
     let (mut session, inputs) = xp5_boot::open(xp5_boot::OpenOptions {
         definition,
         mode,
@@ -863,6 +867,7 @@ pub(crate) fn open_from(
         outputs,
         ticks_per_second,
         quantum,
+        read_limit,
     })
 }
 
