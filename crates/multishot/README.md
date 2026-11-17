@@ -5,8 +5,10 @@ three nested loops (burst frames, exposure steps, focus steps); the merge is a
 list of stages, each reducing one loop. This crate implements the
 **resolution** stage, handheld multi-frame super-resolution after Wronski et
 al., "Handheld Multi-Frame Super-Resolution" (2019), and the plain robust
-average that falls out of it at scale 1. Exposure (HDR) and focus stages are
-declared in `plan.rs` so plans can be validated; they are refused at run time.
+average that falls out of it at scale 1, and the **exposure** (HDR) stage for
+exposure brackets of single frames. The focus stage, and exposure merges of
+bursts per step, are declared in `plan.rs` so plans can be validated; they
+are refused.
 
 ## Pipeline
 
@@ -54,6 +56,21 @@ declared in `plan.rs` so plans can be validated; they are refused at run time.
    gradient tensor is not one-directional (eigenvalue ratio at least 0.3, so
    a lone edge cannot invent a shift along itself). Outliers against the 3x3
    median are dropped and empty tiles filled from neighbors.
+   With `--bracket` the frames are an exposure bracket. Alignment measures
+   each frame's exposure factor to the reference (`gain`: the median ratio
+   of block luma over mid-tones in `[0.01, 0.5]` in both frames) and scales
+   the noise-model estimate to it. The merge scales every sample by its
+   frame's gain and weights it by inverse noise variance relative to a
+   reference sample at the same level, `(aL + b) / (g a L + g^2 b)` from the
+   burst noise model, so long exposures carry the shadows; clipped sites
+   are skipped, so highlights come from the short exposures. Robustness
+   compares gain-scaled frames against the noise of both. A clipped
+   reference block only bounds the radiance from below, so its prior then
+   barely counts. The output is scaled so that 1.0 is the shortest
+   exposure's white level. Without `--reference`, a bracket (recorded
+   exposures spanning more than 1/6 EV) takes its shortest exposure as the
+   reference: least motion blur, no clipped highlights. Gradient energy
+   would pick the brightest frame instead.
 4. **Output** (`dng.rs`, `preview.rs`): a three-sample LinearRaw DNG, 16
    bits per sample, written one strip per merge strip after a header that
    already holds every strip offset; plus an sRGB PNG preview. The DNG uses
@@ -73,6 +90,8 @@ cargo run --release -p fujimod-multishot -- info FRAME.RAF
 cargo run --release -p fujimod-multishot -- look FRAME.RAF --out look.png [--region X,Y,W,H]
 cargo run --release -p fujimod-multishot -- merge --out OUT [--scale 1.5] [--region X,Y,W,H] FRAMES/*.RAF
 cargo run --release -p fujimod-multishot -- measure --out OUT --edge X,Y,W,H --flat X,Y,W,H FRAMES/*.RAF
+cargo run --release -p fujimod-multishot -- merge --out OUT --bracket --scale 1 BRACKET/*.RAF
+cargo run --release -p fujimod-multishot -- measure-hdr --out OUT --scale 1 --dark X,Y,W,H --bright X,Y,W,H BRACKET/*.RAF
 cargo run --release -p fujimod-multishot -- align-jpeg --out OUT FRAMES/*.JPG
 cargo run --release -p fujimod-multishot -- synth --out OUT [--width W --height H --frames N]
 ```
@@ -83,7 +102,10 @@ CFA phase). `look` writes a block preview (one pixel per 3x3 sites) for
 choosing regions. `merge` writes `alignment.json`, `merged.dng`,
 `preview.png` and `report.json`; `--alignment` reuses an alignment, and
 `--region` merges one reference region quickly. `measure` writes PNG crops of
-each variant and `measure.json`. `align-jpeg` registers camera JPEGs with
+each variant and `measure.json`. `measure-hdr` merges a bracket and each of
+its frames alone through the same kernels over a dark flat patch, and
+reports the green noise floor against each one's clip level in stops,
+plus the clipped fraction of a bright region. `align-jpeg` registers camera JPEGs with
 the same matcher, fit and refinement when no RAW exists. `synth` writes
 uncompressed RAFs of the synthetic chart for end-to-end checks.
 
@@ -168,8 +190,8 @@ phase.
   slant), which the slanted-edge method cannot sample. A resolution
   measurement needs a stopped-down (f/5.6 to f/8), distant, static target
   with an edge slanted 3 to 10° and shutter speeds of 1/250 s or faster.
-- The exposure bracket shot with it (9 frames, 1/250 to 1/40 s) is input
-  for the exposure stage, not the resolution stage.
+- The exposure bracket shot with it (9 frames, 1/250 to 1/40 s) is measured
+  under Exposure brackets below.
 
 **Stopped-down burst**: 15 frames, 1/250 s, f/8, ISO 1600, 56 mm, handheld,
 a tape-measure blade on a dark shirt. The plain shirt gives too few tiles for
@@ -216,6 +238,49 @@ show:
   stays sharp, then fail as defocus removes it. A focus stage must chain
   adjacent focus steps and check drift against the reference.
 
+### Exposure brackets
+
+Synthetic (`bracket_merge_extends_range`): the chart at exposures 1, 2.2 and
+3.5, shortest as reference. Measured gains match the exposures within 2%.
+In a dark flat patch the merge's noise is 0.000327 against 0.000318 for the
+ideal inverse-variance combination of the three frames alone (0.000939,
+0.000558, 0.000425), and its mean is within 0.4% of the truth. A bright
+patch clipped in both long frames merges to 0.49999 against a truth of
+0.5. Merged without exposure scaling (and without robustness, which
+otherwise rejects the brighter frames as motion), the shadows come out too
+bright.
+
+Three X-H2S AE brackets of 9 frames each, in 1/3 EV steps over 2.67 EV,
+handheld at 56 mm. Alignment measures gains of 0.155 to 0.395 against the
+shortest exposure, matching the true third-stop shutter series (1/40 s:
+6.38x, 1/50 s: 5.06x, 1/64 s: 4.03x and so on). The dark patch is flat
+in reference coordinates and identical for every variant; each frame merged
+alone is in its own units (white 1.0):
+
+| Bracket | Frames | Merge | Best single frame | Gain |
+| --- | --- | --- | --- | --- |
+| DSCF0591-0599, f/1.8, ISO 800, 1/250-1/40 s | 9 of 9 | 12.18 stops | 10.61 (1/250 s) | +1.57 stops |
+| DSCF0648-0656, f/5.6, ISO 800, 1/80-1/13 s | 8 of 9 | 12.25 stops | 10.87 (1/80 s) | +1.38 stops |
+| DSCF0667-0675, f/5.6, ISO 12800, 1/640-1/100 s | 9 of 9 | 10.28 stops | 8.34 (1/640 s) | +1.94 stops |
+
+The single frames' variances in the first bracket fit
+`2.9e-8 + 3.8e-7 g`: a floor of 0.00017 common to all frames (patch texture
+or fixed-pattern noise, which no merge removes) plus noise. Without that
+floor the merge's noise is 0.000132 against an ideal of 0.000118, and the
+gain over the shortest frame is 2.2 stops. Motion rejection and local
+alignment leave the patch unchanged. In the second bracket the 1/13 s
+frame fails alignment (motion blur). With it as reference (the sharpest by
+gradient energy), 7 of the 8 other frames failed even with a subject
+region; with the shortest as reference, 8 of 9 align.
+
+None of these scenes clips: no site of any frame reaches the clip level, so
+highlight recovery is shown only on the synthetic chart. A full-frame merge
+of the ISO 12800 bracket takes 65 s with a peak strip memory of 92 MiB
+(RSS 130 MB). The LCD digits of the remote, invisible in its 1/640 s
+frame, are readable in the merge, with no visible ghosting. The 16-bit DNG
+quantizes the merged shadows finely enough: the dark patch's noise is 14
+counts.
+
 ## Limits and next steps
 
 - Compressed RAFs (lossless and lossy) are refused.
@@ -227,4 +292,8 @@ show:
   still compares frames through their global transforms.
 - Coverage and inlier gates are caller policy; shallow depth-of-field bursts
   need a policy that accepts a well-supported subject region.
-- Exposure (HDR) and focus stages are declared in `plan.rs` and not built.
+- The exposure stage merges brackets of single frames from CFA; merging
+  bursts per exposure step first (an image stage) and the focus stage are
+  declared in `plan.rs` and not built.
+- The tested brackets span only 2.67 EV and never clip; a wider bracket of a
+  scene with clipped highlights is the next real test.

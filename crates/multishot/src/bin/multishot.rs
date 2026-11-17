@@ -1,6 +1,8 @@
 //! `fujimod-multishot`: align, merge and measure X-Trans RAF bursts.
 
-use fujimod_multishot::align::{AlignParams, Alignment, Pyramid, align, register, sharpest};
+use fujimod_multishot::align::{
+    AlignParams, Alignment, Pyramid, align, register, sharpest, shortest_exposure,
+};
 use fujimod_multishot::demosaic;
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::Affine;
@@ -27,15 +29,18 @@ usage:
   fujimod-multishot merge --out DIR [options] RAF...
   fujimod-multishot synth --out DIR [--width W] [--height H] [--frames N]
   fujimod-multishot measure --out DIR --edge X,Y,W,H [--flat X,Y,W,H] [options] RAF...
+  fujimod-multishot measure-hdr --out DIR --dark X,Y,W,H --bright X,Y,W,H [options] RAF...
 
 options:
   --scale S            output pixels per sensor site (default 1.5)
   --sigma S            kernel standard deviation in sites (default 0.38)
   --radius R           kernel radius in sites (default 1.5)
   --color MODE         green-guided (default) or independent
+  --bracket            merge an exposure bracket (HDR): scale frames by exposure, weight by noise
   --local              add per-tile residual shifts to each frame's global alignment
   --local-tile N       residual alignment tile size in sites (default 96)
-  --reference N        reference frame index (default: sharpest)
+  --reference N        reference frame index (default: the shortest exposure of a
+                       bracket, else the sharpest frame)
   --alignment FILE     reuse an alignment.json
   --region X,Y,W,H     merge only this reference region (sites)
   --align-region X,Y,W,H  fit alignment only on this subject region (sites)
@@ -59,7 +64,7 @@ fn parse_args() -> Result<Args, String> {
     let mut flags = std::collections::HashSet::new();
     while let Some(a) = it.next() {
         if let Some(name) = a.strip_prefix("--") {
-            if name == "no-robustness" || name == "local" {
+            if name == "no-robustness" || name == "local" || name == "bracket" {
                 flags.insert(name.to_string());
             } else {
                 let v = it.next().ok_or(format!("--{name} needs a value"))?;
@@ -277,7 +282,10 @@ fn get_alignment(
         Some(v) => v
             .parse()
             .map_err(|_| "--reference: expected a frame index".to_string())?,
-        None => sharpest(frames).map_err(|e| e.to_string())?,
+        None => match shortest_exposure(frames) {
+            Some(k) => k,
+            None => sharpest(frames).map_err(|e| e.to_string())?,
+        },
     };
     if reference >= frames.len() {
         return Err("--reference is past the last frame".into());
@@ -355,6 +363,7 @@ fn resolution_params(args: &Args) -> Result<ResolutionParams, String> {
         } else {
             None
         },
+        bracket: args.flags.contains("bracket"),
         region: args.region("region")?,
         ..d
     })
@@ -808,6 +817,180 @@ fn synth(args: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// `region` moved by the frame's motion at its center (rounded to sites), or
+/// `None` when the moved region leaves the frame.
+fn follow(region: Region, t: &Affine, frame: &dyn FrameSource) -> Option<Region> {
+    let (cx, cy) = (
+        region.x as f64 + region.width as f64 / 2.0,
+        region.y as f64 + region.height as f64 / 2.0,
+    );
+    let (u, v) = t.apply(cx, cy);
+    let (x, y) = (
+        region.x as i64 + (u - cx).round() as i64,
+        region.y as i64 + (v - cy).round() as i64,
+    );
+    (x >= 0
+        && y >= 0
+        && x as usize + region.width <= frame.width()
+        && y as usize + region.height <= frame.height())
+    .then_some(Region {
+        x: x as usize,
+        y: y as usize,
+        ..region
+    })
+}
+
+/// Fraction of a frame's sites in `region` at the clip level.
+fn clipped_fraction(frame: &dyn FrameSource, region: Region) -> Result<f64, String> {
+    let w = frame.width();
+    let mut raw = vec![0u16; region.height * w];
+    frame
+        .read_rows(region.y, &mut raw)
+        .map_err(|e| e.to_string())?;
+    let cal = frame.calibration();
+    let mut clipped = 0usize;
+    for r in 0..region.height {
+        for x in region.x..region.x + region.width {
+            if cal.linear(raw[r * w + x], x, region.y + r).1 {
+                clipped += 1;
+            }
+        }
+    }
+    Ok(clipped as f64 / (region.width * region.height) as f64)
+}
+
+/// Dynamic range of a bracket merge against each single frame: the green
+/// noise floor in a dark flat patch (plane removed, inset from the border)
+/// relative to the clip level, in stops, and the clipped fraction of a
+/// bright region. Each single frame goes through the same merge alone, so
+/// the kernels filter its noise alike; it comes out in its own units (white
+/// 1.0), and the merge's white is the shortest exposure's.
+fn measure_hdr_cmd(args: &Args) -> Result<(), String> {
+    let out = args.out()?;
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let rafs = open_all(&args.files, None)?;
+    let frames: Vec<&dyn FrameSource> = rafs.iter().map(|r| r as &dyn FrameSource).collect();
+    let alignment = get_alignment(args, &frames, &out)?;
+    let params = ResolutionParams {
+        bracket: true,
+        ..resolution_params(args)?
+    };
+    let dark = args.region("dark")?.ok_or("--dark X,Y,W,H is required")?;
+    let bright = args
+        .region("bright")?
+        .ok_or("--bright X,Y,W,H is required")?;
+    let wb = rafs[alignment.reference].calibration().wb;
+    let inset = 4usize;
+    let noise_of = |rgb: &[f32], grid: &OutputGrid| {
+        let c = crop(
+            rgb,
+            grid.width,
+            3,
+            inset,
+            inset,
+            grid.width - 2 * inset,
+            grid.height - 2 * inset,
+        );
+        patch_noise(&c, grid.width - 2 * inset, wb)
+    };
+    let p = ResolutionParams {
+        region: Some(dark),
+        ..params.clone()
+    };
+    let grid = OutputGrid::new(dark, p.scale);
+    let mut merged = ImageSink::new(grid.width, grid.height);
+    let report =
+        merge_resolution(&frames, &alignment, &p, &mut merged).map_err(|e| e.to_string())?;
+    let mn = noise_of(&merged.rgb, &grid);
+    let merged_dr = (1.0 / mn.std[1]).log2();
+    println!(
+        "dark {dark:?}: merge ({} frames, output scale {:.4}) green mean {:.6} std {:.6} -> {:.2} stops",
+        alignment.accepted(),
+        report.output_scale,
+        mn.mean[1],
+        mn.std[1],
+        merged_dr
+    );
+    let mut singles = Vec::new();
+    let mut best: Option<(String, f64)> = None;
+    for (k, f) in alignment.frames.iter().enumerate() {
+        let Some(t) = f.to_frame else { continue };
+        let (Some(d), Some(b)) = (follow(dark, &t, frames[k]), follow(bright, &t, frames[k]))
+        else {
+            println!("  {:<16} regions leave the frame", f.label);
+            continue;
+        };
+        let _ = d;
+        let mut alone = alignment.clone();
+        for (j, a) in alone.frames.iter_mut().enumerate() {
+            if j != k {
+                a.to_frame = None;
+            }
+        }
+        let mut sink = ImageSink::new(grid.width, grid.height);
+        merge_resolution(&frames, &alone, &p, &mut sink).map_err(|e| e.to_string())?;
+        let n = noise_of(&sink.rgb, &grid);
+        let dr = (1.0 / n.std[1]).log2();
+        let clip = clipped_fraction(frames[k], b)?;
+        println!(
+            "  {:<16} gain {:>6.3}  green mean {:.6} std {:.6} -> {:.2} stops  bright clipped {:.2}%",
+            f.label,
+            f.gain,
+            n.mean[1],
+            n.std[1],
+            dr,
+            100.0 * clip
+        );
+        if best.as_ref().is_none_or(|b| dr > b.1) {
+            best = Some((f.label.clone(), dr));
+        }
+        singles.push(json!({ "frame": f.label, "gain": f.gain, "dark_noise": n, "dynamic_range_stops": dr, "bright_clipped_fraction": clip }));
+    }
+    // The merge clips only where every frame clips: at most the shortest
+    // exposure's (largest gain's) clipped fraction.
+    let shortest = alignment
+        .frames
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| f.to_frame.is_some())
+        .max_by(|a, b| a.1.gain.total_cmp(&b.1.gain))
+        .map(|(k, _)| k)
+        .ok_or("no accepted frames")?;
+    let merged_clip = match follow(
+        bright,
+        &alignment.frames[shortest].to_frame.unwrap(),
+        frames[shortest],
+    ) {
+        Some(b) => clipped_fraction(frames[shortest], b)?,
+        None => f64::NAN,
+    };
+    let (best_label, best_dr) = best.ok_or("no single frame measured")?;
+    println!(
+        "merge {:.2} stops vs best single frame {} {:.2} stops: +{:.2} stops; merge bright clipped at most {:.2}%",
+        merged_dr,
+        best_label,
+        best_dr,
+        merged_dr - best_dr,
+        100.0 * merged_clip
+    );
+    let results = json!({
+        "dark": dark,
+        "bright": bright,
+        "merge": { "dark_noise": mn, "dynamic_range_stops": merged_dr, "bright_clipped_fraction_at_most": merged_clip, "report": report },
+        "frames": singles,
+        "best_single": { "frame": best_label, "dynamic_range_stops": best_dr },
+        "gain_stops": merged_dr - best_dr,
+        "params": params,
+    });
+    std::fs::write(
+        out.join("measure-hdr.json"),
+        serde_json::to_string_pretty(&results).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+    println!("wrote {}", out.display());
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let result = parse_args().and_then(|args| match args.command.as_str() {
         "info" => info(&args),
@@ -823,6 +1006,7 @@ fn main() -> ExitCode {
         "merge" => merge_cmd(&args),
         "synth" => synth(&args),
         "measure" => measure_cmd(&args),
+        "measure-hdr" => measure_hdr_cmd(&args),
         _ => Err(USAGE.into()),
     });
     match result {
