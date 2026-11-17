@@ -349,6 +349,13 @@
     "width": 0.859,
     "height": 1.14
   },
+  "interval": {
+    "sprite": "feature",
+    "box": [4.75, 1.75, 26.5, 31.5],
+    "view": [0, 0, 36, 36],
+    "width": 0.917,
+    "height": 1.09
+  },
   "mod-borders-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
@@ -447,19 +454,26 @@
     "width": 1.137,
     "height": 0.775
   },
+  "mod-fm-features-setup-row": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.143,
+    "height": 0.78
+  },
+  "mod-fm-features-shooting-row": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.143,
+    "height": 0.78
+  },
   "mod-fujimod-page-item": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
     "view": [0, 0, 45, 30],
     "width": 1.128,
     "height": 0.771
-  },
-  "mod-fujimod-setup-item": {
-    "sprite": "mod",
-    "box": [0, 0, 44, 30],
-    "view": [0, 0, 45, 30],
-    "width": 1.145,
-    "height": 0.78
   },
   "mod-halation-item": {
     "sprite": "mod",

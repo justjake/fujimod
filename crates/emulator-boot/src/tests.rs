@@ -68,6 +68,14 @@ fn startup_presentation_uses_active_outputs_and_rejects_inactive_buffers() {
 }
 
 #[test]
+fn display_timing_does_not_publish_an_output_hold_wire() {
+    let prepared = prepare("x70-110-rec", &[]).unwrap();
+    assert!(!prepared.plan.wires.contains_key("display_output_hold"));
+    assert!(prepared.devices_value["wires"].get("display_output_hold").is_none());
+    assert!(model(&prepared, "display_timing")["options"].get("output_hold").is_none());
+}
+
+#[test]
 fn runtime_catalog_builds_checked_graph_without_language_adapters() {
     let spec = prepare("x70-110-rec", &[]).unwrap();
     let graph = &spec.execution;

@@ -530,6 +530,251 @@
       }
     },
     {
+      "id": "monochromatic_color",
+      "group": "photography",
+      "icon": "white-balance",
+      "title": "MONOCHROMATIC COLOR",
+      "path": ["SHOOTING MENU"],
+      "summary": "Tone monochrome photographs warm or cool, magenta or green.",
+      "card": "monochromatic_color_item",
+      "attached": false,
+      "media_cards": [
+        "monochromatic_color_item",
+        "monochromatic_warm_cool_item",
+        "monochromatic_magenta_green_item"
+      ],
+      "controls": [
+        {
+          "title": "WARM-COOL",
+          "primary": false,
+          "card": "monochromatic_warm_cool_item",
+          "choices": [
+            {
+              "label": "-9",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-8",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-7",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-6",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-5",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-4",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-3",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-2",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-1",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "0",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+1",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+2",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+3",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+4",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+5",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+6",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+7",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+8",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+9",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        },
+        {
+          "title": "MAGENTA-GREEN",
+          "primary": false,
+          "card": "monochromatic_magenta_green_item",
+          "choices": [
+            {
+              "label": "-9",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-8",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-7",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-6",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-5",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-4",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-3",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-2",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "-1",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "0",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+1",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+2",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+3",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+4",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+5",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+6",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+7",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+8",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "+9",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        }
+      ],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
+      "id": "interval_timer",
+      "group": "photography",
+      "icon": "interval",
+      "title": "INTERVAL TIMER SHOOTING",
+      "path": ["SHOOTING MENU"],
+      "summary": "Choose ∞ for NUMBER OF TIMES to keep interval shooting until you cancel it, as on the X100VI.",
+      "card": "interval_timer_shooting",
+      "attached": false,
+      "media_cards": ["interval_timer_shooting"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      }
+    },
+    {
       "id": "framing_guideline",
       "group": "photography",
       "icon": "golden-ratio",
@@ -671,6 +916,31 @@
       }
     },
     {
+      "id": "movie_film",
+      "group": "videography",
+      "icon": "movie",
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "summary": "Choose a film simulation for movies independently of photos.",
+      "card": "movie_film_item",
+      "attached": false,
+      "media_cards": ["movie_film_item"],
+      "controls": [],
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://github.com/justjake/fujimod/issues/51",
+              "text": ["suggested"]
+            },
+            " by jody (jobs891)"
+          ]
+        ]
+      }
+    },
+    {
       "id": "desqueeze",
       "group": "videography",
       "icon": "mod-shape-desqueeze-item",
@@ -760,7 +1030,7 @@
       "summary": "Keep up to 255 named custom settings on an SD card, with seven favorites for Q and Fn.",
       "card": null,
       "attached": false,
-      "media_cards": ["recipes", "recipes_setting_page", "recipes_compare_page"],
+      "media_cards": ["recipes_library", "recipes_setting_page", "recipes_compare_page"],
       "controls": [
         {
           "title": "EDIT/SAVE CUSTOM SETTING",
@@ -831,7 +1101,7 @@
           "card": "film_simulation",
           "choices": [
             {
-              "label": "ETERNA",
+              "label": "ETERNA/CINEMA",
               "stock": false,
               "icon": "eterna"
             },
@@ -2603,6 +2873,29 @@
       },
       "choice_credits": {}
     },
+    "movie_film_item": {
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "summary": "Choose the movie look. F-Log takes precedence while enabled.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": [
+          [
+            {
+              "href": "https://github.com/justjake/fujimod/issues/51",
+              "text": ["suggested"]
+            },
+            " by jody (jobs891)"
+          ]
+        ]
+      },
+      "choice_credits": {}
+    },
     "film_editor_item": {
       "title": "FILM EDITOR",
       "path": ["SHOOTING MENU"],
@@ -2839,6 +3132,51 @@
           "reason": "keep CLARITY the same for every custom setting, or give each its own"
         }
       ],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "monochromatic_color_item": {
+      "title": "MONOCHROMATIC COLOR",
+      "path": ["SHOOTING MENU"],
+      "summary": "Applies to MONOCHROME, MONOCHROME with a filter and the ACROS films. With any other film the row is grayed and photographs are not toned. RAW CONVERSION keeps the values the RAF was shot with.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "monochromatic_warm_cool_item": {
+      "title": "WARM-COOL",
+      "path": ["SHOOTING MENU", "MONOCHROMATIC COLOR"],
+      "summary": "Positive values tone the photograph warm, negative values cool. Still JPEGs are toned; live view and movies are not.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "monochromatic_magenta_green_item": {
+      "title": "MAGENTA-GREEN",
+      "path": ["SHOOTING MENU", "MONOCHROMATIC COLOR"],
+      "summary": "Positive values tone the photograph green, negative values magenta. Still JPEGs are toned; live view and movies are not.",
+      "choices": {},
+      "related": [],
       "changes": null,
       "drive_mode": null,
       "credits": {
@@ -3283,7 +3621,7 @@
       },
       "choice_credits": {}
     },
-    "recipes": {
+    "recipes_library": {
       "title": "EDIT/SAVE CUSTOM SETTING",
       "path": ["SHOOTING MENU"],
       "summary": "Store up to 255 custom settings (aka recipes) in your LIBRARY on the SD card. Move settings to your FAVORITES (C1-C7) for quick access. Download and share recipes in JSON format, browse BY AUTHOR and remix the original to make it your own. Yes, custom settings now include WHITE BALANCE SHIFT.",
@@ -3778,6 +4116,21 @@
       },
       "choice_credits": {}
     },
+    "interval_timer_shooting": {
+      "title": "INTERVAL TIMER SHOOTING",
+      "path": ["SHOOTING MENU"],
+      "summary": null,
+      "choices": {},
+      "related": [],
+      "changes": "NUMBER OF TIMES offers ∞, between 999 and 1. The shooting display shows the count of frames taken.",
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
     "row:SET-UP/FUJIMOD SET-UP/MODS": {
       "title": "MODS",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
@@ -3939,9 +4292,559 @@
       "icon": null
     },
     {
+      "title": "AF RECOVERY",
+      "path": ["HIDE FEATURES"],
+      "order": 10,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ASPECT RATIO",
+      "path": ["HIDE FEATURES"],
+      "order": 20,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BUG REPORT",
+      "path": ["HIDE FEATURES"],
+      "order": 30,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CARD FILMS",
+      "path": ["HIDE FEATURES"],
+      "order": 33,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CLARITY",
+      "path": ["HIDE FEATURES"],
+      "order": 35,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CUSTOM SETTINGS BKT",
+      "path": ["HIDE FEATURES"],
+      "order": 40,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "D RANGE PRIORITY",
+      "path": ["HIDE FEATURES"],
+      "order": 43,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DATE FOLDERS",
+      "path": ["HIDE FEATURES"],
+      "order": 47,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DATE STAMP",
+      "path": ["HIDE FEATURES"],
+      "order": 50,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DESQUEEZE",
+      "path": ["HIDE FEATURES"],
+      "order": 60,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DESQUEEZE JPEG",
+      "path": ["HIDE FEATURES"],
+      "order": 70,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DIGITAL FOCAL LENGTH",
+      "path": ["HIDE FEATURES"],
+      "order": 75,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "DISPOSABLE",
+      "path": ["HIDE FEATURES"],
+      "order": 80,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "F-LOG RECORDING",
+      "path": ["HIDE FEATURES"],
+      "order": 85,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM BORDERS",
+      "path": ["HIDE FEATURES"],
+      "order": 90,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM EDITOR",
+      "path": ["HIDE FEATURES"],
+      "order": 100,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FILM SIMULATIONS",
+      "path": ["HIDE FEATURES"],
+      "order": 105,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FOCALIZED UI",
+      "path": ["HIDE FEATURES"],
+      "order": 110,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FORMAT CARD NAME",
+      "path": ["HIDE FEATURES"],
+      "order": 113,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FRAMING GUIDELINE",
+      "path": ["HIDE FEATURES"],
+      "order": 114,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "GRAIN EFFECT",
+      "path": ["HIDE FEATURES"],
+      "order": 115,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "GRAIN TEXTURE",
+      "path": ["HIDE FEATURES"],
+      "order": 311,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HALATION",
+      "path": ["HIDE FEATURES"],
+      "order": 120,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HDMI OUTPUT",
+      "path": ["HIDE FEATURES"],
+      "order": 130,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HIDE FILMS",
+      "path": ["HIDE FEATURES"],
+      "order": 140,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HIGHLIGHT METERING",
+      "path": ["HIDE FEATURES"],
+      "order": 150,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HUD LAYOUT",
+      "path": ["HIDE FEATURES"],
+      "order": 160,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "INTERVAL TIMER SHOOTING",
+      "path": ["HIDE FEATURES"],
+      "order": 330,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "LIGHT LEAKS",
+      "path": ["HIDE FEATURES"],
+      "order": 180,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MENU ANIMATIONS",
+      "path": ["HIDE FEATURES"],
+      "order": 190,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MENU OPACITY",
+      "path": ["HIDE FEATURES"],
+      "order": 193,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MENU TAP",
+      "path": ["HIDE FEATURES"],
+      "order": 195,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MF SNAP FOCUS",
+      "path": ["HIDE FEATURES"],
+      "order": 200,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MIN. SHUTTER SPEED AUTO",
+      "path": ["HIDE FEATURES"],
+      "order": 340,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MONOCHROMATIC COLOR",
+      "path": ["HIDE FEATURES"],
+      "order": 205,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MOVIE FILM SIMULATION",
+      "path": ["HIDE FEATURES"],
+      "order": 207,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "NOISE REDUCTION -3/-4",
+      "path": ["HIDE FEATURES"],
+      "order": 220,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "OTA UPDATE",
+      "path": ["HIDE FEATURES"],
+      "order": 230,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "PIXEL MAPPING",
+      "path": ["HIDE FEATURES"],
+      "order": 235,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RAW HIGHLIGHT",
+      "path": ["HIDE FEATURES"],
+      "order": 240,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RAW TELECONVERTER",
+      "path": ["HIDE FEATURES"],
+      "order": 245,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RAW VIEW",
+      "path": ["HIDE FEATURES"],
+      "order": 250,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RECIPE IN EXIF",
+      "path": ["HIDE FEATURES"],
+      "order": 260,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RECIPES",
+      "path": ["HIDE FEATURES"],
+      "order": 270,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SOFTWARE ND",
+      "path": ["HIDE FEATURES"],
+      "order": 280,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SURROUND VIEW",
+      "path": ["HIDE FEATURES"],
+      "order": 290,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "TONE CURVE",
+      "path": ["HIDE FEATURES"],
+      "order": 292,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "TONE STEPS",
+      "path": ["HIDE FEATURES"],
+      "order": 293,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ULTRAFINE",
+      "path": ["HIDE FEATURES"],
+      "order": 295,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "WELCOME SHEET",
+      "path": ["HIDE FEATURES"],
+      "order": 300,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ZONE FOCUS",
+      "path": ["HIDE FEATURES"],
+      "order": 310,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CLARITY",
+      "path": ["PLAYBACK MENU", "RAW CONVERSION"],
+      "order": 0,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "GRAIN EFFECT",
+      "path": ["PLAYBACK MENU", "RAW CONVERSION"],
+      "order": 20,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MONOCHROME MG",
+      "path": ["PLAYBACK MENU", "RAW CONVERSION"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MONOCHROME WC",
+      "path": ["PLAYBACK MENU", "RAW CONVERSION"],
+      "order": 0,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "DEVTOOLS",
       "path": ["SET-UP"],
-      "order": 368,
+      "order": 4313,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -3951,17 +4854,17 @@
     {
       "title": "FUJIMOD SET-UP",
       "path": ["SET-UP"],
-      "order": 352,
+      "order": 4314,
       "kind": "page",
       "stock": false,
       "card": "fujimod_setup_item",
       "feature": null,
-      "icon": "mod-fujimod-setup-item"
+      "icon": null
     },
     {
       "title": "HDMI OUTPUT",
       "path": ["SET-UP"],
-      "order": 288,
+      "order": 4312,
       "kind": "setting",
       "stock": false,
       "card": "hdmi_rec_behavior_item",
@@ -4099,6 +5002,16 @@
       "icon": null
     },
     {
+      "title": "UNLOCKED CONTROLS",
+      "path": ["SET-UP", "BUTTON/DIAL SETTING"],
+      "order": 0,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "RAW VIEW",
       "path": ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "{button}"],
       "stock": false,
@@ -4111,7 +5024,7 @@
     {
       "title": "BUG REPORT SHORTCUT",
       "path": ["SET-UP", "DEVTOOLS"],
-      "order": 3,
+      "order": 2,
       "kind": "setting",
       "stock": false,
       "card": "bug_report_shortcut",
@@ -4151,77 +5064,257 @@
     {
       "title": "APPEARANCE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 10,
+      "kind": "heading",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/APPEARANCE",
+      "card": null,
       "feature": null,
-      "order": -1,
-      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "Appearance",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 4,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
       "title": "BACK UP INTERNAL DATA",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 8,
+      "kind": "page",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/BACK UP INTERNAL DATA",
-      "feature": "internal_data_backup",
-      "order": -3,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BACKGROUND COLOR",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 14,
       "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
       "title": "BOOT SETUP",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 6,
+      "kind": "heading",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP",
-      "feature": "bootloader_install",
-      "order": -4,
-      "kind": "setting",
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BUILT",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 3,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CHANGE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 7,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
       "title": "CHECK FOR UPDATES",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 5,
+      "kind": "page",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES",
-      "feature": "updates",
-      "order": -5,
-      "kind": "setting",
+      "card": null,
+      "feature": null,
       "icon": null
+    },
+    {
+      "title": "COMMIT",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 4,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FIRMWARE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 1,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HIDE FEATURES",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 420,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-fm-features-setup-row"
     },
     {
       "title": "MODS",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 2,
+      "kind": "page",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/MODS",
+      "card": null,
       "feature": null,
-      "order": -6,
+      "icon": null
+    },
+    {
+      "title": "PLAY COLOR",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 13,
       "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "REC COLOR",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 11,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SET-UP COLOR",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 12,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
       "title": "SHOW WELCOME MESSAGE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 9,
+      "kind": "command",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/SHOW WELCOME MESSAGE",
+      "card": null,
       "feature": null,
-      "order": -2,
-      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "BACK UP",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "BACK UP INTERNAL DATA"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "AUTOMATIC",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
+      "order": 2,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BACK UP INTERNAL DATA",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
+      "order": 2,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MANUAL",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CHECK AGAIN",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
       "title": "CONNECT WI-FI",
       "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "order": 2,
+      "kind": "page",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI",
+      "card": null,
       "feature": null,
-      "order": 1000,
-      "kind": "setting",
+      "icon": null
+    },
+    {
+      "title": "DOWNLOAD",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "order": 3,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "RESTART TO UPDATE",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
+      "order": 4,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SEARCH AGAIN",
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CONNECT WI-FI"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
       "title": "QUICK START",
       "path": ["SET-UP", "POWER MANAGEMENT"],
-      "order": 272,
+      "order": 4121,
       "kind": "setting",
       "stock": false,
       "card": "quick_start_item",
@@ -4231,7 +5324,7 @@
     {
       "title": "DATE FOLDERS",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "order": 5,
+      "order": 4108,
       "kind": "setting",
       "stock": false,
       "card": "date_folders_item",
@@ -4241,11 +5334,21 @@
     {
       "title": "FORMAT CARD NAME",
       "path": ["SET-UP", "SAVE DATA SET-UP"],
-      "order": 6,
+      "order": 4109,
       "kind": "setting",
       "stock": false,
       "card": "sd_volume_name_item",
       "feature": "date_card_name",
+      "icon": null
+    },
+    {
+      "title": "RAW CROP FILE",
+      "path": ["SET-UP", "SAVE DATA SET-UP"],
+      "order": 8,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
@@ -4271,7 +5374,7 @@
     {
       "title": "INDICATOR OPACITY",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 273,
+      "order": 4138,
       "kind": "setting",
       "stock": false,
       "card": "opacity_indicators_item",
@@ -4281,7 +5384,7 @@
     {
       "title": "MENU ANIMATIONS",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 274,
+      "order": 4139,
       "kind": "setting",
       "stock": false,
       "card": "menu_animations_item",
@@ -4291,7 +5394,7 @@
     {
       "title": "MENU OPACITY",
       "path": ["SET-UP", "SCREEN SET-UP"],
-      "order": 272,
+      "order": 4137,
       "kind": "setting",
       "stock": false,
       "card": "opacity_menu_item",
@@ -4299,9 +5402,19 @@
       "icon": null
     },
     {
+      "title": "AE/AF & SCENE",
+      "path": ["SHOOTING MENU"],
+      "order": 0,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "CLARITY",
       "path": ["SHOOTING MENU"],
-      "order": 323,
+      "order": 4298,
       "kind": "setting",
       "stock": false,
       "card": "clarity_item",
@@ -4321,7 +5434,7 @@
     {
       "title": "COLOR CHROME",
       "path": ["SHOOTING MENU"],
-      "order": 322,
+      "order": 4300,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4351,7 +5464,7 @@
     {
       "title": "D RANGE PRIORITY",
       "path": ["SHOOTING MENU"],
-      "order": 384,
+      "order": 4302,
       "kind": "setting",
       "stock": false,
       "card": "d_range_priority_item",
@@ -4374,14 +5487,14 @@
       "order": 105,
       "kind": "page",
       "stock": false,
-      "card": "recipes",
+      "card": "recipes_library",
       "feature": null,
       "icon": null
     },
     {
       "title": "FILM EDITOR",
       "path": ["SHOOTING MENU"],
-      "order": 419,
+      "order": 4309,
       "kind": "command",
       "stock": false,
       "card": "film_editor_item",
@@ -4391,7 +5504,7 @@
     {
       "title": "FILM EFFECTS",
       "path": ["SHOOTING MENU"],
-      "order": 324,
+      "order": 4301,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4411,7 +5524,7 @@
     {
       "title": "FUJIMOD",
       "path": ["SHOOTING MENU"],
-      "order": 416,
+      "order": 4316,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4421,7 +5534,7 @@
     {
       "title": "GRAIN EFFECT",
       "path": ["SHOOTING MENU"],
-      "order": 320,
+      "order": 4307,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4459,6 +5572,16 @@
       "icon": null
     },
     {
+      "title": "INTERVAL TIMER SHOOTING",
+      "path": ["SHOOTING MENU"],
+      "stock": true,
+      "card": "interval_timer_shooting",
+      "feature": "interval_timer",
+      "order": 1000,
+      "kind": "setting",
+      "icon": null
+    },
+    {
       "title": "MF SNAP FOCUS",
       "path": ["SHOOTING MENU"],
       "order": 420,
@@ -4467,6 +5590,16 @@
       "card": "snap_menu_item",
       "feature": "snap_focus",
       "icon": "mod-snap-menu-item"
+    },
+    {
+      "title": "MONOCHROMATIC COLOR",
+      "path": ["SHOOTING MENU"],
+      "order": 4308,
+      "kind": "page",
+      "stock": false,
+      "card": "monochromatic_color_item",
+      "feature": "monochromatic_color",
+      "icon": null
     },
     {
       "title": "NOISE REDUCTION",
@@ -4501,7 +5634,7 @@
     {
       "title": "SHAPE & ASPECT",
       "path": ["SHOOTING MENU"],
-      "order": 418,
+      "order": 4318,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4519,9 +5652,39 @@
       "icon": null
     },
     {
+      "title": "AE/AF-LOCK BUTTON",
+      "path": ["SHOOTING MENU", "AE/AF & SCENE"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "AE/AF-LOCK MODE",
+      "path": ["SHOOTING MENU", "AE/AF & SCENE"],
+      "order": 0,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SCENE POSITION",
+      "path": ["SHOOTING MENU", "AE/AF & SCENE"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "AF MISS",
       "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
-      "order": 328,
+      "order": 4107,
       "kind": "setting",
       "stock": false,
       "card": "af_miss_item",
@@ -4531,7 +5694,7 @@
     {
       "title": "AF RANGE",
       "path": ["SHOOTING MENU", "AUTOFOCUS SETTING"],
-      "order": 327,
+      "order": 4106,
       "kind": "setting",
       "stock": false,
       "card": "af_range_item",
@@ -4541,7 +5704,7 @@
     {
       "title": "COLOR CHROME EFFECT",
       "path": ["SHOOTING MENU", "COLOR CHROME"],
-      "order": 1,
+      "order": 10,
       "kind": "setting",
       "stock": false,
       "card": "color_chrome_effect_item",
@@ -4551,7 +5714,7 @@
     {
       "title": "COLOR CHROME FX BLUE",
       "path": ["SHOOTING MENU", "COLOR CHROME"],
-      "order": 2,
+      "order": 11,
       "kind": "setting",
       "stock": false,
       "card": "color_chrome_blue_item",
@@ -4559,9 +5722,159 @@
       "icon": "mod-color-chrome-blue-item"
     },
     {
+      "title": "ANY COLOR",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 4,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ANY MONOCHROME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 5,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "AUTO-UPDATE CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 2,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BY AUTHOR",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 3,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BY FILM SIMULATION",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 2,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "BY NAME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 1,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CURRENT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 0,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "ERASE HIDDEN",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 8,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FAVORITES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 1,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "HIDDEN",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 7,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "LIBRARY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 2,
+      "kind": "heading",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MY RECIPES",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 0,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "SAVE CURRENT AS NEW",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 1,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "UNSELECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 3,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "USES CUSTOM FILM",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 6,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "DATE STAMP",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "order": 5,
+      "order": 14,
       "kind": "page",
       "stock": false,
       "card": "date_stamp_item",
@@ -4571,7 +5884,7 @@
     {
       "title": "FILM BORDERS",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "order": 3,
+      "order": 12,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4581,7 +5894,7 @@
     {
       "title": "HALATION",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "order": 1,
+      "order": 10,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4591,7 +5904,7 @@
     {
       "title": "LIGHT LEAKS",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "order": 2,
+      "order": 11,
       "kind": "page",
       "stock": false,
       "card": null,
@@ -4601,7 +5914,7 @@
     {
       "title": "NEGATIVE",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
-      "order": 4,
+      "order": 13,
       "kind": "setting",
       "stock": false,
       "card": "negative_item",
@@ -4611,47 +5924,47 @@
     {
       "title": "CORNER",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
-      "order": 4,
+      "order": 13,
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_corner_item",
-      "feature": "date_stamp",
+      "feature": null,
       "icon": null
     },
     {
       "title": "FORMAT",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
-      "order": 3,
+      "order": 12,
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_format_item",
-      "feature": "date_stamp",
+      "feature": null,
       "icon": null
     },
     {
       "title": "STAMP",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
-      "order": 1,
+      "order": 10,
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_on_item",
-      "feature": "date_stamp",
+      "feature": null,
       "icon": null
     },
     {
       "title": "STYLE",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"],
-      "order": 2,
+      "order": 11,
       "kind": "setting",
       "stock": false,
       "card": "date_stamp_style_item",
-      "feature": "date_stamp",
+      "feature": null,
       "icon": null
     },
     {
       "title": "BORDERS",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
-      "order": 1,
+      "order": 10,
       "kind": "setting",
       "stock": false,
       "card": "borders_enabled_item",
@@ -4661,7 +5974,7 @@
     {
       "title": "STYLE",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"],
-      "order": 2,
+      "order": 11,
       "kind": "setting",
       "stock": false,
       "card": "borders_style_item",
@@ -4671,7 +5984,7 @@
     {
       "title": "COLOR",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
-      "order": 2,
+      "order": 11,
       "kind": "setting",
       "stock": false,
       "card": "halation_color_item",
@@ -4681,7 +5994,7 @@
     {
       "title": "STRENGTH",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
-      "order": 1,
+      "order": 10,
       "kind": "setting",
       "stock": false,
       "card": "halation_strength_item",
@@ -4691,7 +6004,7 @@
     {
       "title": "COLOR",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
-      "order": 2,
+      "order": 11,
       "kind": "setting",
       "stock": false,
       "card": "light_leaks_color_item",
@@ -4701,7 +6014,7 @@
     {
       "title": "EXPIRED",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
-      "order": 3,
+      "order": 12,
       "kind": "setting",
       "stock": false,
       "card": "light_leaks_expired_item",
@@ -4711,7 +6024,7 @@
     {
       "title": "LEAKS",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"],
-      "order": 1,
+      "order": 10,
       "kind": "setting",
       "stock": false,
       "card": "light_leaks_level_item",
@@ -4757,6 +6070,16 @@
       "card": null,
       "feature": "disposable",
       "icon": "mod-disposable-item"
+    },
+    {
+      "title": "HIDE FEATURES",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 420,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-fm-features-shooting-row"
     },
     {
       "title": "HIDE FILMS",
@@ -4835,7 +6158,7 @@
       "kind": "command",
       "stock": false,
       "card": "disposable_start_item",
-      "feature": "disposable",
+      "feature": null,
       "icon": null
     },
     {
@@ -4899,13 +6222,53 @@
       "icon": null
     },
     {
+      "title": "TEXTURE",
+      "path": ["SHOOTING MENU", "GRAIN EFFECT"],
+      "order": 3,
+      "kind": "setting",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "MAGENTA-GREEN",
+      "path": ["SHOOTING MENU", "MONOCHROMATIC COLOR"],
+      "order": 11,
+      "kind": "setting",
+      "stock": false,
+      "card": "monochromatic_magenta_green_item",
+      "feature": "monochromatic_color",
+      "icon": null
+    },
+    {
+      "title": "WARM-COOL",
+      "path": ["SHOOTING MENU", "MONOCHROMATIC COLOR"],
+      "order": 10,
+      "kind": "setting",
+      "stock": false,
+      "card": "monochromatic_warm_cool_item",
+      "feature": "monochromatic_color",
+      "icon": null
+    },
+    {
       "title": "F-Log RECORDING",
       "path": ["SHOOTING MENU", "MOVIE SET-UP"],
-      "order": 256,
+      "order": 4111,
       "kind": "setting",
       "stock": false,
       "card": "f_log_recording_item",
       "feature": "f_log",
+      "icon": null
+    },
+    {
+      "title": "FILM SIMULATION",
+      "path": ["SHOOTING MENU", "MOVIE SET-UP"],
+      "order": 4112,
+      "kind": "setting",
+      "stock": false,
+      "card": "movie_film_item",
+      "feature": "movie_film",
       "icon": null
     },
     {
@@ -4957,6 +6320,16 @@
       "card": "shape_surround_item",
       "feature": "surround_view",
       "icon": "mod-shape-surround-item"
+    },
+    {
+      "title": "ADD RATIO",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT", "EDIT ASPECT RATIOS"],
+      "order": 1,
+      "kind": "command",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
     },
     {
       "title": "AUTOFOCUS",

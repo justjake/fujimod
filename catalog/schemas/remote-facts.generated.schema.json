@@ -243,10 +243,83 @@
       ],
       "type": "object"
     },
+    "BindingApply": {
+      "additionalProperties": false,
+      "description": "Accepted binding-choice writer and its compiled menu owners.",
+      "properties": {
+        "callback": {
+          "description": "Linked callback entry.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "controls": {
+          "description": "Control IDs and their selected choice records.",
+          "items": {
+            "$ref": "#/$defs/BindingApplyControl"
+          },
+          "type": "array"
+        },
+        "function_owner": {
+          "description": "Record that owns the compiled function choices.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "callback",
+        "function_owner",
+        "controls"
+      ],
+      "type": "object"
+    },
+    "BindingApplyControl": {
+      "additionalProperties": false,
+      "description": "Compiled row and choice owners for one control ID.",
+      "properties": {
+        "choice_owner": {
+          "description": "Record whose choices are committed for the control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Control ID accepted by the writer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_owner": {
+          "description": "Menu row representing the control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "control",
+        "row_owner",
+        "choice_owner"
+      ],
+      "type": "object"
+    },
     "BindingChoices": {
       "additionalProperties": false,
       "description": "Exact binding picker owners.",
       "properties": {
+        "accepted_apply": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingApply"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Accepted writer and control owners for compiled function choices."
+        },
         "count": {
           "description": "Selectable count.",
           "format": "uint32",
@@ -619,6 +692,17 @@
             "$ref": "#/$defs/BuildMemory"
           },
           "type": "array"
+        },
+        "menu_tree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MenuTreeCatalog"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Static declarations served by the unified menu-tree provider."
         },
         "owner_constants": {
           "additionalProperties": {
@@ -3684,6 +3768,161 @@
         "q_grid"
       ],
       "type": "object"
+    },
+    "MenuTreeAttachment": {
+      "additionalProperties": false,
+      "description": "A declared root's placement in a stock menu.",
+      "properties": {
+        "anchor": {
+          "description": "Stock menu anchor.",
+          "type": "string"
+        },
+        "order": {
+          "description": "Order among roots at this anchor and placement.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "place": {
+          "$ref": "#/$defs/MenuTreePlace",
+          "description": "How the root is placed at the anchor."
+        },
+        "record": {
+          "description": "Existing record symbol when the mod supplies one.",
+          "type": "string"
+        },
+        "root": {
+          "description": "Declared root path.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "anchor",
+        "place",
+        "order",
+        "record"
+      ],
+      "type": "object"
+    },
+    "MenuTreeCatalog": {
+      "additionalProperties": false,
+      "description": "Static FM_MENU declarations used by the compiled menu-tree provider.",
+      "properties": {
+        "attachments": {
+          "description": "Declared roots attached at stock menu anchors.",
+          "items": {
+            "$ref": "#/$defs/MenuTreeAttachment"
+          },
+          "type": "array"
+        },
+        "nodes": {
+          "description": "Declared tree nodes in provider order.",
+          "items": {
+            "$ref": "#/$defs/MenuTreeNode"
+          },
+          "type": "array"
+        },
+        "schema": {
+          "description": "Format version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "nodes",
+        "attachments"
+      ],
+      "type": "object"
+    },
+    "MenuTreeNode": {
+      "additionalProperties": false,
+      "description": "One declared node and its stable owner/path identity.",
+      "properties": {
+        "action": {
+          "description": "Action named by a VALUE or COMMAND node, when present.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Number assigned by the menu declaration generator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "Stable owner/name identity.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MenuTreeNodeKind",
+          "description": "Declared menu-node kind."
+        },
+        "label_text": {
+          "description": "Static label literal, or empty when the provider supplies it at runtime.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Name within its declaring tree, including its path from that tree's root.",
+          "type": "string"
+        },
+        "order": {
+          "description": "Position among the node's siblings or attached roots.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "description": "Owning mod or library.",
+          "type": "string"
+        },
+        "parent": {
+          "description": "Declared parent node path; none for roots attached to a stock anchor.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "description": "Node path named by a LINK node, when present.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "identity",
+        "owner",
+        "id",
+        "kind",
+        "label_text",
+        "order",
+        "action",
+        "target"
+      ],
+      "type": "object"
+    },
+    "MenuTreeNodeKind": {
+      "description": "FM_MENU node kinds.",
+      "enum": [
+        "PAGE",
+        "GROUP",
+        "VALUE",
+        "COMMAND",
+        "INFO",
+        "LINK",
+        "ROWS"
+      ],
+      "type": "string"
+    },
+    "MenuTreePlace": {
+      "description": "Placement of a declared tree at a stock menu anchor.",
+      "enum": [
+        "in",
+        "after",
+        "replace"
+      ],
+      "type": "string"
     },
     "ModeBusy": {
       "additionalProperties": false,
