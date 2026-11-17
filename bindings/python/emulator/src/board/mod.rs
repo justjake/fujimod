@@ -1883,6 +1883,10 @@ impl Board {
             })
             .collect())
     }
+    /// Digest a physical RAM range without routing a guest access.
+    fn range_digest(&self, address: u64, length: u64) -> PyResult<String> {
+        Ok(self.board()?.range_digest(address, length).to_string())
+    }
     fn state(&self, py: Python<'_>) -> PyResult<String> {
         if let Some(Backend::Xp4(session)) = &self.backend {
             return py
