@@ -165,15 +165,13 @@ impl Boot {
         let engine = self
             .text("--engine")?
             .map(|value| {
-                serde_json::from_value::<RunEngine>(serde_json::Value::String(value))
+                value.parse::<RunEngine>()
                     .map_err(|error| format!("--engine: {error}"))
             })
             .transpose()?;
         let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &self.overlays)?;
         if let Some(engine) = engine {
-            resolved.configuration.execution.as_mut()
-                .ok_or_else(|| format!("configuration {configuration_id} declares no execution policy"))?
-                .engine = engine;
+            resolved.override_engine(engine)?;
         }
         Ok(resolved)
     }

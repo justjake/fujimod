@@ -523,7 +523,7 @@ impl Board {
         continue_refusals: bool,
         engine: &str,
     ) -> PyResult<Self> {
-        let engine: RunEngine = serde_json::from_value(serde_json::Value::String(engine.into()))
+        let engine: RunEngine = engine.parse()
             .map_err(|e| PyValueError::new_err(format!("invalid engine: {e}")))?;
         let mode = match execution_mode {
             "strict" => Mode::Strict,

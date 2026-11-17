@@ -17,9 +17,8 @@ impl Boot for CatalogBoot {
             &inputs.configuration_id, &inputs.overlays,
         )?;
         if let Some(engine) = inputs.engine {
-            resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
-                .engine = serde_json::from_value(serde_json::Value::String(engine))
-                    .map_err(|error| format!("invalid CPU engine: {error}"))?;
+            resolved.override_engine(engine.parse()
+                .map_err(|error| format!("invalid CPU engine: {error}"))?)?;
         }
         if let Some((numerator, denominator)) = inputs.instruction_rate {
             let rate = RunInstructionRate { numerator, denominator };

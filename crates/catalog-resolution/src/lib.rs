@@ -46,6 +46,14 @@ impl ResolvedConfiguration {
         Self::resolve_and_apply(configuration, &selected)
     }
 
+    /// Apply an explicit engine choice after catalog overlays have resolved.
+    pub fn override_engine(&mut self, engine: RunEngine) -> Result<(), String> {
+        self.configuration.execution.as_mut()
+            .ok_or_else(|| format!("configuration {} declares no execution policy", self.configuration.id))?
+            .engine = engine;
+        Ok(())
+    }
+
     /// Resolve the selected caller-neutral body reset inputs, if the run names one.
     pub fn hardware_inputs(&self) -> Result<Option<HardwareInputs>, String> {
         let Some(id) = self
