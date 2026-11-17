@@ -19,6 +19,7 @@ pub mod dng;
 pub mod fit;
 pub mod jpeg;
 pub mod local;
+pub mod markesteijn;
 pub mod measure;
 pub mod merge;
 pub mod noise;

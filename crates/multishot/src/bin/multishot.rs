@@ -3,7 +3,7 @@
 use fujimod_multishot::align::{
     AlignParams, Alignment, Pyramid, align, register, sharpest, shortest_exposure,
 };
-use fujimod_multishot::demosaic;
+use fujimod_multishot::demosaic::{self, Demosaic};
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::Affine;
 use fujimod_multishot::local::{LocalParams, residual_fields};
@@ -223,7 +223,7 @@ fn look(args: &Args) -> Result<(), String> {
     let wb = raf.calibration().wb;
     if let Some(region) = args.region("region")? {
         let grid = OutputGrid::new(region, 1.0);
-        let rgb = demosaic::baseline(raf, &grid).map_err(|e| e.to_string())?;
+        let rgb = demosaic::baseline(raf, &grid, Demosaic::Gaussian).map_err(|e| e.to_string())?;
         write_png(&out, &rgb, grid.width, grid.height, wb, auto_gain(&rgb, wb))
             .map_err(|e| e.to_string())?;
     } else {
@@ -472,8 +472,14 @@ fn run_variants(
     }
     let mut single = ImageSink::new(grid.width, grid.height);
     merge_resolution(frames, &single_alignment, &p, &mut single).map_err(|e| e.to_string())?;
-    let baseline =
-        demosaic::baseline(frames[alignment.reference], &grid).map_err(|e| e.to_string())?;
+    let baseline = demosaic::baseline(frames[alignment.reference], &grid, Demosaic::Gaussian)
+        .map_err(|e| e.to_string())?;
+    let markesteijn = demosaic::baseline(
+        frames[alignment.reference],
+        &grid,
+        Demosaic::Markesteijn { passes: 3 },
+    )
+    .map_err(|e| e.to_string())?;
     Ok((
         grid,
         vec![
@@ -488,6 +494,10 @@ fn run_variants(
             Variant {
                 name: "demosaic-upscale",
                 rgb: baseline,
+            },
+            Variant {
+                name: "markesteijn3-upscale",
+                rgb: markesteijn,
             },
         ],
         report,
@@ -604,7 +614,8 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
             ..edge
         };
         let g = OutputGrid::new(r, params.scale);
-        let rgb = demosaic::baseline(frames[k], &g).map_err(|e| e.to_string())?;
+        let rgb =
+            demosaic::baseline(frames[k], &g, Demosaic::Gaussian).map_err(|e| e.to_string())?;
         let edge_fit = slanted_edge(&luma(&rgb, wb), g.width, g.height);
         // Perpendicular offset (sites) of this frame's edge midpoint, mapped
         // to the reference, from the reference edge line.
