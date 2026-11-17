@@ -2,6 +2,7 @@
 //! Allocation owners retain interior-mutable storage; freezing is enforced here,
 //! independently of the backend's privileged ROM-write behavior.
 use fujimod_emulator_cpu::Identity;
+use std::ptr::NonNull;
 use std::sync::{Mutex, atomic::{AtomicU64, Ordering}};
 #[derive(Clone)]
 struct Mapping { id:u64, core:Identity, address:u64, pointer:usize, bytes:usize, frozen:bool, mapped:bool }
@@ -20,6 +21,12 @@ pub(super) fn poison(core:Identity,message:String)->String {
     let mut errors=POISON.lock().unwrap();
     if !errors.iter().any(|(owner,_)|*owner==core) {errors.push((core,message.clone()));}
     message
+}
+pub(super) fn backings(core: Identity) -> Vec<(NonNull<u8>, usize)> {
+    MAPPINGS.lock().unwrap().iter()
+        .filter(|mapping| mapping.core == core && mapping.mapped)
+        .map(|mapping| (NonNull::new(mapping.pointer as *mut u8).unwrap(), mapping.bytes))
+        .collect()
 }
 pub(super) fn views(core: Identity) -> Vec<(u64, usize)> {
     let mut ranges = MAPPINGS

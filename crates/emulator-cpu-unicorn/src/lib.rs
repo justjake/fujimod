@@ -88,6 +88,7 @@ impl Library {
             tlbi_owner: Cell::new(None),
             tlbi_executing: Cell::new(false),
             memory_regions: RefCell::new(None),
+            has_engine_ram: Cell::new(false),
             #[cfg(test)]
             memory_region_queries: Cell::new(0),
             mmio: RefCell::new(BTreeMap::new()),
@@ -144,6 +145,7 @@ pub struct Core {
     tlbi_owner: Cell<Option<u64>>,
     tlbi_executing: Cell<bool>,
     memory_regions: RefCell<Option<Vec<MemoryRegion>>>,
+    has_engine_ram: Cell<bool>,
     #[cfg(test)]
     memory_region_queries: Cell<u64>,
     // Stable callback contexts survive partial unmaps and remapping. They are
@@ -747,6 +749,12 @@ impl Cpu for Core {
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self.cached_memory_regions()?.to_vec())
     }
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        if self.has_engine_ram.get() {
+            return Err("processor has engine-owned RAM outside the board checkpoint".into());
+        }
+        Ok(frozen::backings(self.identity))
+    }
     unsafe fn map_backing(
         &self,
         address: u64,
@@ -834,6 +842,7 @@ impl Cpu for Core {
         self.check_tlbi_mutation()?;
         frozen::check(self.identity, address, bytes)?;
         self.check(unsafe { (self.api.uc_mem_map)(self.raw, address, bytes as u64, permissions) })?;
+        self.has_engine_ram.set(true);
         self.invalidate_memory_regions();
         Ok(())
     }
