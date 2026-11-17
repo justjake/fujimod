@@ -18,6 +18,8 @@ pub struct EdgeMtf {
     pub mtf_at_quarter: f64,
     /// `(cycles per pixel, mtf)`.
     pub curve: Vec<(f64, f64)>,
+    /// Two points `(x, y)` on the fitted edge line, in image pixels.
+    pub line: [(f64, f64); 2],
 }
 
 /// White-balanced luma of an interleaved RGB image.
@@ -85,7 +87,8 @@ pub fn slanted_edge(image: &[f32], width: usize, height: usize) -> Result<EdgeMt
     // Signed sums: an edge has one polarity, while thin lines and texture
     // (scale ticks, fabric) rise and fall and cancel, so they cannot flip the
     // orientation.
-    let (data, w, h) = if gx.abs() >= gy.abs() {
+    let transposed = gx.abs() < gy.abs();
+    let (data, w, h) = if !transposed {
         (image.to_vec(), width, height)
     } else {
         (transpose(image, width, height), height, width)
@@ -248,11 +251,16 @@ pub fn slanted_edge(image: &[f32], width: usize, height: usize) -> Result<EdgeMt
         .min_by(|x, y| (x.0 - 0.25).abs().total_cmp(&(y.0 - 0.25).abs()))
         .unwrap()
         .1;
+    let point = |row: f64| {
+        let col = a + b * row;
+        if transposed { (row, col) } else { (col, row) }
+    };
     Ok(EdgeMtf {
         angle_deg: angle.to_degrees(),
         mtf50,
         mtf_at_quarter,
         curve,
+        line: [point(0.0), point((h - 1) as f64)],
     })
 }
 
