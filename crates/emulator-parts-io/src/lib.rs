@@ -2,6 +2,7 @@
 pub mod audio_sink;
 pub mod bis_configuration;
 pub mod command_data_output;
+pub mod framed_command_peer;
 pub mod i2c;
 pub mod lsm6ds;
 pub mod power_controller;

@@ -20,7 +20,7 @@ pub(super) struct Connection {
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
-enum Part {
+pub(super) enum Part {
     PowerController {
         rtc_seconds: u32,
         rtc_valid: bool,
@@ -37,6 +37,7 @@ enum Part {
         idle_high: bool,
     },
     Lsm6dsConfigurationRegisters { temperature: i16 },
+    FramedCommandPeer { idle_frame: u32 },
     /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
     GenericSink { miso_high: bool },
@@ -235,6 +236,9 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         Part::Lsm6dsConfigurationRegisters { temperature } => {
             Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature))
         }
+        Part::FramedCommandPeer { idle_frame } => {
+            Box::new(fujimod_emulator_parts_io::framed_command_peer::Peer::new(idle_frame)?)
+        }
         Part::GenericSink { miso_high } => Box::new(GenericSink { miso_high, transfers: 0, last: vec![] }),
     })
 }
@@ -251,6 +255,11 @@ fn attachments(
             ))
         })
         .collect()
+}
+pub(super) fn dedicated_wire(
+    part: Part,
+) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
+    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None)?)))
 }
 pub(super) fn gpio_wire(
     pins: SharedPins,

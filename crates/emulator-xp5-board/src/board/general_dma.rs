@@ -54,6 +54,9 @@ enum WireInput {
     },
     /// The X-mount lens connector; the registered device wraps the controller.
     XMountLens(fujimod_emulator_xp5_io::x_mount::Options),
+    Dedicated {
+        part: super::serial::Part,
+    },
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -148,6 +151,7 @@ pub fn register_all(
                 lens = Some((options, choice, port));
                 wire
             }
+            WireInput::Dedicated { part } => super::serial::dedicated_wire(part)?,
         };
         let serial = Controller::new(
             w.base,
