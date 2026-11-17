@@ -634,6 +634,16 @@ const AE_APEX: u64 = 0x4b73ff0 + 0x540;
 /// Lines of `sensor exposure:` before the log goes quiet.
 const EXPOSURE_LOG_LIMIT: u32 = 200;
 
+/// Sensor unit configuration block (XP5). X-H2S 7.30 programs a config block
+/// at 0x400..0x42c (writer 0x1678a00); the words are latched: a read returns
+/// the last write, and what they drive on the sensor is unknown. The same
+/// firmware's table blocks at 0x440..0x47c (set 0x1675eac, reset 0x1676370)
+/// and per-unit control words at 0x480 (unit 2) and 0x4c0 (unit 3; bit 0
+/// enable, bits 16..26 a count of at most 0x400, read-modify-written by
+/// 0x167538c and read back by 0x16754a0) are the input buffer words above.
+fn unit_latch(o: u64) -> bool {
+    matches!(o, 0x400..=0x42c)
+}
 pub struct Command {
     base: u64,
     state: State,
@@ -800,6 +810,7 @@ impl Device for Command {
                     u64::from(self.reg(o))
                 }
             }
+            _ if unit_latch(o) => u64::from(self.reg(o)),
             _ if self.retain_unmodeled && o < self.retain_limit => u64::from(self.reg(o)),
             _ => {
                 cx.unmodeled();
@@ -886,6 +897,9 @@ impl Device for Command {
                 } else {
                     self.state.registers.insert(o, value);
                 }
+            }
+            _ if unit_latch(o) => {
+                self.state.registers.insert(o, value);
             }
             _ if self.retain_unmodeled && o < self.retain_limit => {
                 self.state.registers.insert(o, value);
@@ -1621,7 +1635,7 @@ mod tests {
         );
         // Offsets past the six channel blocks stay unmodeled.
         let mut cx = Cx::new(&mut host, 1, 0, 0);
-        command.read(&mut cx, 0xfff6c000 + 0x400, 4);
+        command.read(&mut cx, 0xfff6c000 + 0x430, 4);
         assert!(cx.is_unmodeled());
     }
     #[test]
@@ -1700,6 +1714,26 @@ mod tests {
             let mut cx = Cx::new(&mut host, 1, 0, 0);
             command.write(&mut cx, o, 4, 0);
             assert!(cx.refusal().is_some());
+        }
+    }
+    #[test]
+    fn unit_configuration_words_latch() {
+        let sensor = Sensor::new(None, (0x51, 8));
+        let mut command = Command::new(0xff948000, sensor, 17).unwrap();
+        let mut host = RecordingHost::default();
+        for (o, v) in [(0x400, 0x11), (0x42c, 0x22), (0x440, 0x0033_0001), (0x47c, 0x0044_0044), (0x480, 0x0400_0001), (0x4c0, 0x0010_0001)] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert!(cx.refusal().is_none() && !cx.is_unmodeled());
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), v);
+        }
+        for o in [0x430, 0x4c8] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.read(&mut cx, 0xff948000 + o, 4);
+            assert!(cx.is_unmodeled(), "{o:#x} read");
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, 1);
+            assert!(cx.is_unmodeled(), "{o:#x} write");
         }
     }
 }
