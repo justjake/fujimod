@@ -6,6 +6,7 @@ use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::test_host::{
     TestHost, advance, advance_from_checkpoint, assert_exact_restore, read, write,
 };
+use fujimod_emulator_ip::jpeg;
 use fujimod_emulator_ip::socionext::gpio::Pins;
 
 fn poke(d: &mut dyn Device, address: u64, value: u32) {
@@ -104,9 +105,15 @@ fn frame_sources_resume_their_periodic_work() {
 
 #[test]
 fn jpeg_engines_restore_tables_and_status() {
-    let mut encoder = jpeg::Encoder::new(0x80000, 100, 10).unwrap();
+    let mut encoder = jpeg::Encoder::new(
+        "xpp-jpeg-encoder",
+        0x80000,
+        100,
+        10,
+        jpeg::Registers::LastWrite,
+    ).unwrap();
     assert_exact_restore(&mut encoder, |d| poke(d, 0x80000 + 0x8c, 0x11223344));
-    let mut decoder = jpeg::Decoder::new(0x80000, 100, 10).unwrap();
+    let mut decoder = jpeg::Decoder::new("xpp-jpeg-decoder", 0x80000, 100, 10).unwrap();
     assert_exact_restore(&mut decoder, |d| poke(d, 0x80000 + 0x118, 1));
 }
 

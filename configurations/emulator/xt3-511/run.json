@@ -9,6 +9,10 @@
     "kind": "loader"
   },
   "execution": null,
+  "dram_address_space": {
+    "limit_bytes": 4026531840,
+    "basis": "The X-T3 5.11 still memory plan places buffers up to 0xf0000000: the last of its eight still buffers ends there, and the JPEG file buffer of the still capture lies within that space. The software-visible DRAM space therefore ends at 0xf0000000; the installed capacity is not measured."
+  },
   "inputs": {
     "kind": "xp4",
     "ticks_per_second": 54000000,

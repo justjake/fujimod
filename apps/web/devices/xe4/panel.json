@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "body": "xe4",
+  "layout": [
+    {
+      "kind": "grid",
+      "className": "g2",
+      "children": [
+        {
+          "kind": "control",
+          "id": "shutter_speed_dial",
+          "variant": "dial",
+          "caption": "SPEED"
+        },
+        {
+          "kind": "control",
+          "id": "exposure_compensation_dial",
+          "variant": "dial",
+          "caption": "EV"
+        },
+        {
+          "kind": "control",
+          "id": "shutter_button",
+          "variant": "shutter",
+          "caption": "SHUTTER"
+        },
+        {
+          "kind": "control",
+          "id": "on_off_switch",
+          "variant": "segment",
+          "operation": "power",
+          "caption": "POWER",
+          "labels": {
+            "OFF": "OFF",
+            "ON": "ON"
+          }
+        },
+        {
+          "kind": "control",
+          "id": "fn_button",
+          "variant": "key",
+          "face": [
+            "Fn"
+          ]
+        },
+        {
+          "kind": "control",
+          "id": "front_command_dial",
+          "variant": "ticks",
+          "caption": "FRONT DIAL"
+        }
+      ]
+    },
+    {
+      "kind": "divider"
+    },
+    {
+      "kind": "grid",
+      "className": "g2",
+      "children": [
+        {
+          "kind": "control",
+          "id": "drive_delete_button",
+          "variant": "key",
+          "face": [
+            "DRIVE",
+            "DELETE"
+          ]
+        },
+        {
+          "kind": "control",
+          "id": "play_button",
+          "variant": "key",
+          "icon": "playback"
+        },
+        {
+          "kind": "control",
+          "id": "ael_afl_button",
+          "variant": "key",
+          "face": [
+            "AEL",
+            "AFL"
+          ]
+        },
+        {
+          "kind": "control",
+          "id": "q_button",
+          "variant": "key",
+          "face": [
+            "Q"
+          ]
+        },
+        {
+          "kind": "dpad",
+          "id": "focus_stick",
+          "caption": "FOCUS",
+          "bindings": {
+            "up": "focus_stick.up",
+            "down": "focus_stick.down",
+            "left": "focus_stick.left",
+            "right": "focus_stick.right"
+          }
+        },
+        {
+          "kind": "control",
+          "id": "menu_ok_button",
+          "variant": "key",
+          "face": [
+            "MENU",
+            "OK"
+          ]
+        },
+        {
+          "kind": "control",
+          "id": "disp_back_button",
+          "variant": "key",
+          "face": [
+            "DISP",
+            "BACK"
+          ]
+        }
+      ]
+    }
+  ],
+  "combos": []
+}

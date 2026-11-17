@@ -48,7 +48,7 @@
       228
     ]
   },
-  "analog_levels": 1024,
+  "analog_levels": 4096,
   "boot": {
     "sd": {
       "usb": false,

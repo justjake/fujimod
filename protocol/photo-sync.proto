@@ -34,17 +34,30 @@ message Welcome {
   uint32 window_bytes = 3;
   // Empty means the complete manifest is required.
   string high_water_path = 4;
+  // Receiver diagnostics: build, platform, destination and free space.
+  string client = 5;
 }
 message ManifestEntry {
   // SD card-relative path including directory and original extension.
+  // A directory receiver may also use it as a slash-separated path relative
+  // to the offered root.
   string path = 1;
   uint64 size_bytes = 2;
   // Packed FAT date and time as read from the directory entry.
   uint32 fat_timestamp = 3;
+  // True for a directory. Its size_bytes and sha256 are zero or empty.
+  bool directory = 4;
+  // SHA-256 of the file's whole contents. Empty when the sender does not
+  // compute it.
+  bytes sha256 = 5;
 }
 message ManifestBatch {
   repeated ManifestEntry entries = 1;
   bool last = 2;
+  // True when this batch completes a snapshot of the sender's whole tree.
+  // A live sync receiver removes paths in its managed destination that this
+  // snapshot does not list. One-shot file senders leave it false.
+  bool complete = 3;
 }
 message Wants {
   message Entry {

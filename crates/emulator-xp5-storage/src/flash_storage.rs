@@ -1,5 +1,6 @@
 //! Read-only NOR flash-storage aperture and sparse session NOR storage. Evidence and
 //! erased-tail behavior is an explicit storage assumption.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::storage_reads::StorageReads;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -20,9 +21,32 @@ pub struct Session {
     pub controller_complete: bool,
     pub reads: StorageReads,
 }
+impl Session {
+    fn validate(&self) -> Result<(), String> {
+        let pages = SIZE / PAGE as u64;
+        if self.pages.keys().any(|&index| index >= pages)
+            || self.pages.values().any(|page| page.len() != PAGE)
+        {
+            return Err("Invalid flash storage checkpoint pages".into());
+        }
+        self.reads.validate(SIZE)
+    }
+}
+#[derive(Serialize)]
+enum StoredRef<'a> {
+    Nor(&'a Session),
+    Nand(&'a crate::nand_storage::NandSession),
+}
+#[derive(Deserialize)]
+enum Stored {
+    Nor(Session),
+    Nand(crate::nand_storage::NandSession),
+}
 pub struct Storage {
     image: Vec<u8>,
     pub session: Session,
+    /// Overlay pages written (seed, program, erase) since the last `take_dirty_pages`.
+    dirty: std::collections::BTreeSet<u64>,
 }
 impl Storage {
     pub fn new(image: Vec<u8>) -> Result<Self, String> {
@@ -32,6 +56,7 @@ impl Storage {
         Ok(Self {
             image,
             session: Session::default(),
+            dirty: Default::default(),
         })
     }
     fn extent(offset: u64, n: usize) -> Result<(), String> {
@@ -70,7 +95,13 @@ impl Storage {
         self.session.reads.record(offset, n as u64, SIZE)?;
         Ok(bytes)
     }
+    /// Indices (4 KiB) of the pages changed since the previous call. A caller that keeps its own
+    /// copy of the linear image refreshes exactly these.
+    pub fn take_dirty_pages(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.dirty).into_iter().collect()
+    }
     fn page(&mut self, index: u64) -> &mut Vec<u8> {
+        self.dirty.insert(index);
         self.session.pages.entry(index).or_insert_with(|| {
             let start = index as usize * PAGE;
             (start..start + PAGE)
@@ -187,7 +218,7 @@ impl Device for Aperture {
             ("nor", Medium::Nor(s)) => {
                 let session: Session = serde_json::from_value(session.clone())
                     .map_err(|e| format!("invalid flash storage checkpoint: {e}"))?;
-                session.reads.validate(SIZE)?;
+                session.validate()?;
                 s.lock().unwrap().session = session;
                 Ok(())
             }
@@ -199,6 +230,54 @@ impl Device for Aperture {
                 s.lock().unwrap().session = session;
                 Ok(())
             }
+            _ => Err("flash storage checkpoint medium differs from the device".into()),
+        }
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        match &self.0 {
+            Medium::Nor(s) => {
+                let s = s.lock().unwrap();
+                Checkpoint::encode(self.name(), &StoredRef::Nor(&s.session))
+            }
+            Medium::Nand(s) => {
+                let s = s.lock().unwrap();
+                Checkpoint::encode(self.name(), &StoredRef::Nand(&s.session))
+            }
+        }
+    }
+    fn validate_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), String> {
+        self.validate_stored(&checkpoint.decode::<Stored>(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, checkpoint: &Checkpoint) -> Result<(), String> {
+        let stored: Stored = checkpoint.decode(self.name())?;
+        self.validate_stored(&stored)?;
+        match (&self.0, stored) {
+            (Medium::Nor(s), Stored::Nor(session)) => s.lock().unwrap().session = session,
+            (Medium::Nand(s), Stored::Nand(session)) => s.lock().unwrap().session = session,
+            _ => unreachable!("validated flash storage checkpoint medium changed"),
+        }
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(match &self.0 {
+            Medium::Nor(s) => {
+                let session = serde_json::to_value(&s.lock().unwrap().session)
+                    .map_err(|e| e.to_string())?;
+                serde_json::json!({"medium": "nor", "session": session})
+            }
+            Medium::Nand(s) => {
+                let session = serde_json::to_value(&s.lock().unwrap().session)
+                    .map_err(|e| e.to_string())?;
+                serde_json::json!({"medium": "nand", "session": session})
+            }
+        })
+    }
+}
+impl Aperture {
+    fn validate_stored(&self, stored: &Stored) -> Result<(), String> {
+        match (&self.0, stored) {
+            (Medium::Nor(_), Stored::Nor(session)) => session.validate(),
+            (Medium::Nand(_), Stored::Nand(session)) => session.reads.validate(SIZE),
             _ => Err("flash storage checkpoint medium differs from the device".into()),
         }
     }
@@ -253,5 +332,29 @@ mod tests {
         assert_eq!(s.image[PAGE - 1], 0xa5);
         assert_eq!(s.read(SIZE - 1, 1).unwrap(), [0xff]);
         assert!(s.read(SIZE - 1, 2).is_err());
+    }
+
+    #[test]
+    fn programmed_and_erased_pages_are_reported_once() {
+        let mut storage = Storage::new(vec![0; 3 * 4096]).unwrap();
+        assert!(storage.take_dirty_pages().is_empty());
+        storage.seed(5000, 1).unwrap();
+        storage.session.write_enable = true;
+        storage.erase(8192, 4096).unwrap();
+        assert_eq!(storage.take_dirty_pages(), vec![1, 2]);
+        assert!(storage.take_dirty_pages().is_empty());
+        assert_eq!(storage.read(5000, 1).unwrap(), vec![1]);
+    }
+    #[test]
+    fn session_checkpoint_round_trips_overlay_and_reads() {
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0xa5; 16]).unwrap()));
+        let mut aperture = Aperture(Medium::Nor(storage.clone()));
+        storage.lock().unwrap().read_device(4, 4).unwrap();
+        let saved = aperture.save();
+        let checkpoint = aperture.checkpoint().unwrap();
+        aperture.validate_checkpoint(&checkpoint).unwrap();
+        storage.lock().unwrap().session.write_enable = true;
+        aperture.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(aperture.save(), saved);
     }
 }

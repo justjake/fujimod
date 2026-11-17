@@ -6,7 +6,7 @@ use fujimod_emulator_exr2_plan::{
     construction::{Builder, Built, Constructors, decode, line},
 };
 use fujimod_emulator_ip::sdhci::host as sdhc;
-use fujimod_emulator_parts_io::wifi_module::WifiModule;
+use fujimod_emulator_parts_wifi::WifiModule;
 use fujimod_emulator_storage::fat;
 
 /// Add this crate's EXR II constructors.
@@ -136,7 +136,7 @@ fn sdio_host(_builder: Builder<'_>, model: Model) -> Result<Built, String> {
     };
     Ok(Built::Device({
         let options: crate::sdio::Options = decode(options)?;
-        let module: fujimod_emulator_parts_io::wifi_module::Options = decode(module)?;
+        let module: fujimod_emulator_parts_wifi::Options = decode(module)?;
         Box::new(sdio::SdioHost::new(
             options,
             sdio::Wiring {

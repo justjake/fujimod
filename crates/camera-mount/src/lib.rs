@@ -4,6 +4,7 @@
 pub mod bridge;
 pub mod display;
 mod display_tree;
+pub mod files;
 mod flash;
 pub mod harness;
 use display_tree::DISPLAY;
@@ -48,6 +49,13 @@ pub trait Device: Send {
     fn has_card(&self) -> bool;
     fn list(&mut self, path: &str) -> Result<Vec<DirectoryEntry>>;
     fn read(&mut self, path: &str, offset: u32, size: u32) -> Result<Vec<u8>>;
+    /// Several `read`s; a device may run them in one camera transaction.
+    fn read_many(&mut self, reads: &[(&str, u32, u32)]) -> Result<Vec<Vec<u8>>> {
+        reads
+            .iter()
+            .map(|(path, offset, size)| self.read(path, *offset, *size))
+            .collect()
+    }
     fn write(&mut self, path: &str, offset: u32, data: &[u8]) -> Result<()>;
     fn create(&mut self, path: &str) -> Result<()>;
     fn delete(&mut self, path: &str) -> Result<()>;
@@ -93,6 +101,7 @@ pub struct CameraFs<D> {
     regions_json: Vec<u8>,
     next_inode: u64,
     generation: u64,
+    listing_lifetime: Duration,
 }
 
 impl<D: Device> CameraFs<D> {
@@ -110,6 +119,12 @@ impl<D: Device> CameraFs<D> {
     }
     pub fn shutdown(&mut self) -> Result<()> {
         self.device.shutdown()
+    }
+    /// Reuse each folder's listing until this filesystem changes it. A
+    /// one-shot command does not see other writers, and a large folder costs
+    /// seconds to list again for every file.
+    pub fn keep_listings(&mut self) {
+        self.listing_lifetime = Duration::MAX;
     }
     pub fn new(device: D, mut regions: Vec<Region>) -> Result<Self> {
         regions.sort_by_key(|r| r.address);
@@ -184,6 +199,7 @@ impl<D: Device> CameraFs<D> {
             regions_json,
             next_inode: 9,
             generation: 1,
+            listing_lifetime: Duration::from_millis(250),
         })
     }
 
@@ -265,7 +281,7 @@ impl<D: Device> CameraFs<D> {
         let cached = self
             .listings
             .get(&id)
-            .is_some_and(|l| continuation || l.when.elapsed() < Duration::from_millis(250));
+            .is_some_and(|l| continuation || l.when.elapsed() < self.listing_lifetime);
         if !cached {
             let entries = self
                 .device

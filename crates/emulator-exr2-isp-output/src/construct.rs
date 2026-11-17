@@ -148,6 +148,6 @@ fn image_transfer(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         return Err("image transfer requires its register window".into());
     }
     Ok(Built::Device(Box::new(
-        crate::transfer::ImageTransfer::new(route(irq)?),
+        fujimod_emulator_exr2_image_transfer::ImageTransfer::new(route(irq)?),
     )))
 }

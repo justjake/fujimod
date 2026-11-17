@@ -36,6 +36,15 @@ pub trait Controls: Send {
     fn edge_at_raw_readout_end(&self) -> bool {
         false
     }
+    /// Guest ticks for a span of sensor pixel clocks, when the sensor drives
+    /// a frame clock. Receiver comparators place their points with it.
+    fn pixel_clock_ticks(&self, _clocks: u64) -> Option<u64> {
+        None
+    }
+    /// A receiver comparator output fired at this guest tick.
+    fn comparator_edge(&mut self, _output: usize, _tick: u64) -> Result<(), String> {
+        Ok(())
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -168,6 +177,12 @@ impl Sensor {
     }
     pub fn edge_at_raw_readout_end(&self) -> bool {
         self.controls.as_ref().is_some_and(|c| c.edge_at_raw_readout_end())
+    }
+    pub fn pixel_clock_ticks(&self, clocks: u64) -> Option<u64> {
+        self.controls.as_ref().and_then(|c| c.pixel_clock_ticks(clocks))
+    }
+    pub fn comparator_edge(&mut self, output: usize, tick: u64) -> Result<(), String> {
+        self.controls.as_mut().map_or(Ok(()), |c| c.comparator_edge(output, tick))
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {
         self.controls.as_mut().map_or(Ok(()), |c| c.command(bytes))
@@ -656,6 +671,7 @@ mod tests {
                             rolling_references: vec![],
                             mode_change_frames: 0,
                             preview_field: None,
+                            curtains: None,
                         },
                         wire.clone(),
                         iris.clone(),

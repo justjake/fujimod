@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xh2s-730-settings",
+  "firmware_id": "xh2s-730",
+  "source": {
+    "flash_offset": 3145728,
+    "address": 21106688,
+    "size": 12015376,
+    "sha256": "a32a90b7efefaebcf3b9c3f076cb23f82c1f4dda45bf828a024487fc0fb06c16"
+  },
+  "configuration": {
+    "flash_offset": 786432,
+    "bytes": 814080,
+    "sha256": "cdfcbae5044d2da5df41ac68bbe532998d11778e7f805b36465df873b5ff0311",
+    "basis": "At startup the stock configuration initializer zero-fills the configuration store when its stored signature is invalid and, when the firmware image enables it, copies these installed flash bytes to store offset 0."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": null,
+  "settings": {},
+  "sections": []
+}

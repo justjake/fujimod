@@ -293,6 +293,25 @@ impl<'a> Qualified<'a> {
             .bulk_progress(&mut self.access, target, progress)
             .await
     }
+    /// Read CPU addresses outside the E1 window with direct memory reads.
+    pub(crate) async fn read_direct_progress(
+        &mut self,
+        target: BulkRange,
+        progress: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+    ) -> Result<Vec<u8>> {
+        let step = u64::from(self.access.limits.memory.read.get());
+        let mut bytes = Vec::new();
+        while (bytes.len() as u64) < target.size {
+            let size = step.min(target.size - bytes.len() as u64);
+            bytes.extend(
+                self.access
+                    .raw(target.address + bytes.len() as u64, size)
+                    .await?,
+            );
+            progress(size).map_err(BulkError::Check)?;
+        }
+        Ok(bytes)
+    }
     pub(crate) async fn restore(&mut self) -> Result<()> {
         let result = self.source.restore(&mut self.access).await;
         if result.is_err() {

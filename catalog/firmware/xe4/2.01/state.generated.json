@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xe4-201-state",
+  "firmware_id": "xe4-201",
+  "regions": [
+    {
+      "name": "resident-5",
+      "address": 16912384,
+      "size": 6930896,
+      "constant": false
+    },
+    {
+      "name": "resident-6",
+      "address": 30953472,
+      "size": 9187328,
+      "constant": false
+    }
+  ]
+}

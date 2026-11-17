@@ -29,6 +29,9 @@ impl<D: Device> Device for ReadOnly<D> {
     fn read(&mut self, path: &str, offset: u32, size: u32) -> Result<Vec<u8>> {
         self.0.read(path, offset, size)
     }
+    fn read_many(&mut self, reads: &[(&str, u32, u32)]) -> Result<Vec<Vec<u8>>> {
+        self.0.read_many(reads)
+    }
     fn write(&mut self, _: &str, _: u32, _: &[u8]) -> Result<()> {
         Err(libc::EROFS)
     }

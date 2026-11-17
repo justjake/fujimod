@@ -235,6 +235,111 @@ fn byte(v: i32) -> u8 {
     v.clamp(0, 255) as u8
 }
 
+/// X-T3 5.11 firmware color of a still development (opt-in), read from the
+/// words the firmware programs into two parameter pages of the still RECC
+/// engine:
+///
+/// - the tone page (RECC + 0x4000, 0xfff86000): a 3x3 Q10 matrix at +0x204
+///   (rows 8 bytes apart, signed 13-bit halves), then three tone curves at
+///   +0x224, +0x264 and +0x2a4 (31 points of 14 bits, two a word, one curve
+///   per R, G, B output). The thirty segments between the points go three
+///   per nibble of +0x21c / +0x220, each 2^nibble wide; only their ratios
+///   count, since the 14-bit input spans their sum;
+/// - the YCbCr page (RECC + 0x5000, 0xfff87000): the Q10 RGB to YCbCr matrix
+///   at +0x204 (nine packed signed 13-bit halves, rows Y, Cb, Cr).
+///
+/// Declared, not read: the black and white levels ([`crate::imaging::BLACK`],
+/// [`crate::imaging::WHITE`]), no white balance, the points joined linearly,
+/// a curve's output taken as its top 8 bits and the chroma offset 128. The
+/// pages' other units (brightness gain, chroma modes and matrix, luma bands,
+/// channel gains, 3D lookup table) are not applied.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FirmwareColor {
+    matrix: [[i32; 3]; 3],
+    /// One 14-bit input to byte lookup per output channel.
+    curves: [Vec<u8>; 3],
+    ycbcr: [[i32; 3]; 3],
+}
+
+const TONE_MATRIX: u64 = 0x204;
+const TONE_WIDTHS: u64 = 0x21c;
+const TONE_CURVES: [u64; 3] = [0x224, 0x264, 0x2a4];
+const YCBCR_MATRIX: u64 = 0x204;
+
+fn signed13(v: u32) -> i32 {
+    ((v << 19) as i32) >> 19
+}
+
+/// Points joined linearly over segments `widths` wide, at `x / 16384`
+/// (rounded).
+fn joined(points: &[i64], widths: &[i64], x: i64) -> i64 {
+    let mut start = 0;
+    for (k, &width) in widths.iter().enumerate() {
+        let span = width << 14;
+        if x < start + span {
+            let rise = points[k + 1] - points[k];
+            return points[k] + (rise * (x - start) + span / 2).div_euclid(span);
+        }
+        start += span;
+    }
+    *points.last().unwrap()
+}
+
+impl FirmwareColor {
+    /// The law of the tone page's and the YCbCr page's current words (offsets
+    /// within each page). A matrix row of zeros, or a zero luma row, refuses:
+    /// the pages are not programmed.
+    pub fn from_words(
+        tone: &BTreeMap<u64, u32>,
+        ycbcr: &BTreeMap<u64, u32>,
+    ) -> Result<Self, String> {
+        let t = |o: u64| tone.get(&o).copied().unwrap_or(0);
+        let c = |o: u64| ycbcr.get(&o).copied().unwrap_or(0);
+        let matrix: [[i32; 3]; 3] = std::array::from_fn(|row| {
+            let o = TONE_MATRIX + 8 * row as u64;
+            [signed13(t(o)), signed13(t(o) >> 16), signed13(t(o + 4))]
+        });
+        let half = |i: usize| signed13(c(YCBCR_MATRIX + 4 * (i / 2) as u64) >> (16 * (i % 2)));
+        let ycbcr: [[i32; 3]; 3] =
+            std::array::from_fn(|row| std::array::from_fn(|col| half(3 * row + col)));
+        if matrix.iter().any(|r| r == &[0; 3]) || ycbcr[0] == [0; 3] {
+            return Err("the firmware color pages are not programmed".into());
+        }
+        let nibbles = u64::from(t(TONE_WIDTHS)) | u64::from(t(TONE_WIDTHS + 4)) << 32;
+        let widths: [i64; 30] = std::array::from_fn(|i| 1 << ((nibbles >> (4 * (i / 3))) & 15));
+        let domain: i64 = widths.iter().sum();
+        let curves = TONE_CURVES.map(|slot| {
+            let points: [i64; 31] = std::array::from_fn(|i| {
+                i64::from((t(slot + 4 * (i / 2) as u64) >> (16 * (i % 2))) & 16383)
+            });
+            (0..16384)
+                .map(|v| (joined(&points, &widths, v * domain) >> 6).clamp(0, 255) as u8)
+                .collect()
+        });
+        Ok(Self {
+            matrix,
+            curves,
+            ycbcr,
+        })
+    }
+    /// Y, Cb, Cr of a 14-bit linear (R, G, B) level: the matrix, each
+    /// output's curve, then the YCbCr matrix.
+    pub fn pixel(&self, linear: [u16; 3]) -> [i32; 3] {
+        let l = linear.map(|v| i32::from(v.min(16383)));
+        let toned: [i32; 3] = std::array::from_fn(|c| {
+            let m = self.matrix[c];
+            (m[0] * l[0] + m[1] * l[1] + m[2] * l[2] + 512) >> 10
+        });
+        let rgb: [i32; 3] =
+            std::array::from_fn(|c| i32::from(self.curves[c][toned[c].clamp(0, 16383) as usize]));
+        std::array::from_fn(|row| {
+            let m = self.ycbcr[row];
+            let v = (m[0] * rgb[0] + m[1] * rgb[1] + m[2] * rgb[2] + 512) >> 10;
+            if row == 0 { v } else { v + 128 }
+        })
+    }
+}
+
 /// Packed 4:2:2 lines (Y0 Y1 Cb Cr, `2 * width` bytes rounded up to a pair)
 /// developed from `lines` lines of little-endian u16 X-Trans samples, `stride`
 /// bytes apart, whose first sample is the tile site `phase` (line, sample),
@@ -247,6 +352,31 @@ pub fn develop(
     width: usize,
     phase: (usize, usize),
     film: Option<(&Film, [u32; 3])>,
+) -> Result<Vec<Vec<u8>>, String> {
+    develop_with(raw, stride, lines, width, phase, film, None)
+}
+
+/// [`develop`] with the X-T3 firmware color (see [`FirmwareColor`]) in place
+/// of the declared sRGB; geometry, sampling and packing are the same.
+pub fn develop_firmware(
+    raw: &[u8],
+    stride: usize,
+    lines: usize,
+    width: usize,
+    phase: (usize, usize),
+    color: &FirmwareColor,
+) -> Result<Vec<Vec<u8>>, String> {
+    develop_with(raw, stride, lines, width, phase, None, Some(color))
+}
+
+fn develop_with(
+    raw: &[u8],
+    stride: usize,
+    lines: usize,
+    width: usize,
+    phase: (usize, usize),
+    film: Option<(&Film, [u32; 3])>,
+    firmware: Option<&FirmwareColor>,
 ) -> Result<Vec<Vec<u8>>, String> {
     if lines < 6 || width < 6 || stride < 2 * width || raw.len() < stride * (lines - 1) + 2 * width
     {
@@ -294,11 +424,11 @@ pub fn develop(
                     let x = (2 * pair + i).min(width - 1);
                     let site = &row[(x + phase.1) % 6];
                     let rgb = [0, 1, 2].map(|c| sample(y as i64 + site[c].0, x as i64 + site[c].1));
-                    *pixel = match pixels.as_mut() {
-                        Some(pixels) => pixels
-                            .develop([level(0, rgb[0]), level(1, rgb[1]), level(2, rgb[2])])
-                            .map(i32::from),
-                        None => ycbcr(rgb.map(|s| response[usize::from(s)])),
+                    let levels = [level(0, rgb[0]), level(1, rgb[1]), level(2, rgb[2])];
+                    *pixel = match (pixels.as_mut(), firmware) {
+                        (Some(pixels), _) => pixels.develop(levels).map(i32::from),
+                        (None, Some(color)) => color.pixel(levels),
+                        (None, None) => ycbcr(rgb.map(|s| response[usize::from(s)])),
                     };
                 }
                 if pixels.is_some() {
@@ -396,9 +526,274 @@ pub fn resample(source: &[u8], s: Scale) -> Result<Vec<Vec<u8>>, String> {
         .collect())
 }
 
+/// Bit positions of Y0, Y1, Y2, Y3, Cb and Cr in a Y0L2 block, 10 bits
+/// each (Linux drm_fourcc.h, DRM_FORMAT_Y0L2: one little-endian 64-bit word
+/// per 2 x 2 pixels, Y0 9..0, Cb 19..10, Y1 29..20, A0 30, A1 31, Y2 41..32,
+/// Cr 51..42, Y3 61..52, A2 62, A3 63). Which pixel each luma sample is
+/// (here Y0 Y1 the upper line, Y2 Y3 the lower one) is declared.
+pub const Y0L2: [u32; 6] = [0, 20, 32, 52, 10, 42];
+
+/// Y, Cb and Cr of pixel `x` of the upper (`line` 0) or lower line of a row
+/// of Y0L2 blocks.
+pub fn y0l2_sample(row: &[u8], x: usize, line: usize) -> [u16; 3] {
+    let at = x / 2 * 8;
+    let block = u64::from_le_bytes(row[at..at + 8].try_into().expect("8 bytes"));
+    let field = |bit: u32| ((block >> bit) & 0x3ff) as u16;
+    [
+        field(Y0L2[line * 2 + x % 2]),
+        field(Y0L2[4]),
+        field(Y0L2[5]),
+    ]
+}
+
+/// A Y0L2 block from its four luma samples (upper line, then lower) and its
+/// chroma; the alpha bits are 0.
+pub fn y0l2_block(luma: [u16; 4], cb: u16, cr: u16) -> u64 {
+    luma.into_iter()
+        .chain([cb, cr])
+        .zip(Y0L2)
+        .fold(0, |block, (value, bit)| {
+            block | u64::from(value & 0x3ff) << bit
+        })
+}
+
+/// How a picture's lines sit in its pitch rows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum YcLayout {
+    /// One packed 4:2:2 8-bit line (Y0 Y1 Cb Cr per pixel pair) per row.
+    Lines,
+    /// Two lines per row as Y0L2 blocks of 10-bit samples.
+    Y0l2,
+}
+
+impl YcLayout {
+    /// Picture lines per pitch row.
+    pub fn lines(self) -> usize {
+        match self {
+            Self::Lines => 1,
+            Self::Y0l2 => 2,
+        }
+    }
+}
+
+/// 10-bit Y, Cb and Cr of the `width` pixels of a line taken by nearest
+/// neighbour from a packed 4:2:2 8-bit line of `window` pixels (as
+/// [`develop`] writes them): pixel x reads pixel x * window / width and the
+/// chroma of its pair; samples are widened by << 2.
+pub fn scaled_line(line: &[u8], window: usize, width: usize) -> Vec<[u16; 3]> {
+    (0..width)
+        .map(|x| {
+            let s = x * window / width;
+            let p = s / 2 * 4;
+            [line[p + s % 2], line[p + 2], line[p + 3]].map(|b| u16::from(b) << 2)
+        })
+        .collect()
+}
+
+/// One pitch row of `layout` from its upper line and, for Y0L2, its lower
+/// one (10-bit samples; packed lines narrow them by >> 2). A pixel pair, or
+/// a Y0L2 block, takes the chroma of its upper left pixel.
+pub fn yc_row(layout: YcLayout, upper: &[[u16; 3]], lower: &[[u16; 3]]) -> Vec<u8> {
+    match layout {
+        YcLayout::Lines => upper
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0][0], p[1][0], p[0][1], p[0][2]].map(|v| (v >> 2) as u8))
+            .collect(),
+        YcLayout::Y0l2 => upper
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(lower.as_chunks::<2>().0)
+            .flat_map(|(u, d)| {
+                y0l2_block([u[0][0], u[1][0], d[0][0], d[1][0]], u[0][1], u[0][2]).to_le_bytes()
+            })
+            .collect(),
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    /// The two color pages' words as the X-T3 5.11 firmware programmed them
+    /// for the still of a bring-up capture run (offsets within each page).
+    pub(crate) fn firmware_units() -> (BTreeMap<u64, u32>, BTreeMap<u64, u32>) {
+        let curve = [
+            0x0443_0000,
+            0x058d_048c,
+            0x0780_0699,
+            0x0a7c_0878,
+            0x0e76_0c99,
+            0x155e_1244,
+            0x1da3_1811,
+            0x2540_21db,
+            0x2b64_28aa,
+            0x3009_2dad,
+            0x336d_31c3,
+            0x38dc_369b,
+            0x3bdb_3add,
+            0x3da6_3cca,
+            0x3f4b_3e82,
+            0x0000_3fff,
+        ];
+        let mut tone: BTreeMap<u64, u32> = [
+            (0x200, 0x0101_0100),
+            (0x204, 0x1fb8_041b),
+            (0x208, 0x0000_002d),
+            (0x20c, 0x0470_1fc5),
+            (0x210, 0x0000_1fcb),
+            (0x214, 0x1f36_0049),
+            (0x218, 0x0000_0481),
+            (0x21c, 0x7666_5433),
+            (0x220, 0x0000_0066),
+        ]
+        .into();
+        for slot in [0x224, 0x264, 0x2a4] {
+            for (i, w) in curve.iter().enumerate() {
+                tone.insert(slot + 4 * i as u64, *w);
+            }
+        }
+        let ycbcr = [
+            (0x200, 0x3000_1515),
+            (0x204, 0x0259_0132),
+            (0x208, 0x1f53_0075),
+            (0x20c, 0x0200_1ead),
+            (0x210, 0x1e53_0200),
+            (0x214, 0x0000_1fad),
+        ]
+        .into();
+        (tone, ycbcr)
+    }
+
+    #[test]
+    fn the_firmware_color_units_decode_as_the_shot_programs_them() {
+        let (tone, ycbcr) = firmware_units();
+        let color = FirmwareColor::from_words(&tone, &ycbcr).unwrap();
+        assert_eq!(
+            color.matrix,
+            [[1051, -72, 45], [-59, 1136, -53], [73, -202, 1153]]
+        );
+        assert_eq!(
+            color.ycbcr,
+            [[306, 601, 117], [-173, -339, 512], [512, -429, -83]]
+        );
+        for curve in &color.curves {
+            assert_eq!(curve.len(), 16384);
+            assert!(curve.windows(2).all(|w| w[0] <= w[1]));
+            // Three segments 2^n wide per nibble 3 3 4 5 6 6 6 7 6 6 sum to
+            // 1536: input 256 (x 24) is point 3 (1421), input 8192 (x 768)
+            // point 21 (13165), as 14-bit levels' top bytes.
+            assert_eq!(
+                (curve[0], curve[256], curve[8192], curve[16383]),
+                (0, 22, 205, 255)
+            );
+        }
+        // Between knots the points are joined linearly: input 128 (x 12) is
+        // halfway from point 1 to point 2.
+        let point = |i: u64| i64::from((tone[&(0x224 + 4 * (i / 2))] >> (16 * (i % 2))) & 16383);
+        assert_eq!(
+            i64::from(color.curves[0][128]),
+            ((point(1) + point(2) + 1) / 2) >> 6
+        );
+        // Rows of the matrix sum to 1024, so grey stays grey.
+        assert_eq!(color.pixel([16383; 3]), [255, 128, 128]);
+        assert_eq!(color.pixel([0; 3]), [0, 128, 128]);
+        let grey = color.pixel([4096; 3]);
+        assert_eq!(grey[1..], [128, 128]);
+        // A red level reads red: Cr above, Cb below the neutral 128.
+        let red = color.pixel([8192, 2048, 2048]);
+        assert!(red[2] > 140 && red[1] < 128, "{red:?}");
+        // Words are read, not built in: a halved red curve darkens red.
+        let mut half = tone.clone();
+        for i in 0..16u64 {
+            let w = half[&(0x224 + 4 * i)];
+            half.insert(0x224 + 4 * i, (w >> 1) & 0x7fff_7fff);
+        }
+        let darker = FirmwareColor::from_words(&half, &ycbcr)
+            .unwrap()
+            .pixel([8192, 2048, 2048]);
+        assert!(darker[2] < red[2], "{darker:?} {red:?}");
+        assert!(FirmwareColor::from_words(&BTreeMap::new(), &ycbcr).is_err());
+        assert!(FirmwareColor::from_words(&tone, &BTreeMap::new()).is_err());
+    }
+
+    #[test]
+    fn a_uniform_grey_develops_neutral_through_the_firmware_color() {
+        let (tone, ycbcr) = firmware_units();
+        let color = FirmwareColor::from_words(&tone, &ycbcr).unwrap();
+        let (black, white) = (crate::imaging::BLACK, crate::imaging::WHITE);
+        let grey = black + (white - black) / 4;
+        let (lines, width, stride) = (12, 12, 32);
+        let mut raw = vec![0; stride * lines];
+        for y in 0..lines {
+            for x in 0..width {
+                raw[y * stride + 2 * x..][..2].copy_from_slice(&grey.to_le_bytes());
+            }
+        }
+        let out = develop_firmware(&raw, stride, lines, width, (2, 2), &color).unwrap();
+        assert_eq!((out.len(), out[0].len()), (12, 24));
+        let linear = ((u32::from(grey - black)) * 16383 / u32::from(white - black)) as u16;
+        let [y, ..] = color.pixel([linear; 3]);
+        for line in &out {
+            for p in line.as_chunks::<4>().0 {
+                assert_eq!(*p, [y as u8, y as u8, 128, 128]);
+            }
+        }
+        // The declared path of the same RAW is untouched by the option.
+        let declared = develop(&raw, stride, lines, width, (2, 2), None).unwrap();
+        assert_ne!(declared, out);
+        assert!(develop_firmware(&raw, stride, lines, width + 8, (2, 2), &color).is_err());
+    }
+
+    /// drm_fourcc.h's layout: Y0 1, Cb 5, Y1 2, Y2 3, Cr 6, Y3 4.
+    #[test]
+    fn y0l2_blocks_hold_the_drm_fourcc_bit_positions() {
+        let block = y0l2_block([1, 2, 3, 4], 5, 6);
+        assert_eq!(block, 1 | 5 << 10 | 2 << 20 | 3 << 32 | 6 << 42 | 4 << 52);
+        assert_eq!(y0l2_block([0x7ff; 4], 0x7ff, 0x7ff) >> 30 & 3, 0, "alpha 0");
+        let row = [
+            block.to_le_bytes(),
+            y0l2_block([7, 8, 9, 10], 11, 12).to_le_bytes(),
+        ]
+        .concat();
+        let samples: Vec<[u16; 3]> = (0..4)
+            .flat_map(|x| [y0l2_sample(&row, x, 0), y0l2_sample(&row, x, 1)])
+            .collect();
+        assert_eq!(
+            samples,
+            [
+                [1, 5, 6],
+                [3, 5, 6],
+                [2, 5, 6],
+                [4, 5, 6],
+                [7, 11, 12],
+                [9, 11, 12],
+                [8, 11, 12],
+                [10, 11, 12]
+            ]
+        );
+    }
+
+    #[test]
+    fn yc_rows_pack_lines_or_y0l2_blocks_from_scaled_lines() {
+        // 8 pixels: luma 10 x pixel, Cb the pair, Cr 200 - the pair.
+        let line: Vec<u8> = (0..4u8)
+            .flat_map(|p| [20 * p, 20 * p + 10, p, 200 - p])
+            .collect();
+        let scaled = scaled_line(&line, 8, 6);
+        let lumas: Vec<u16> = scaled.iter().map(|s| s[0] >> 2).collect();
+        assert_eq!(lumas, [0, 10, 20, 40, 50, 60]);
+        assert_eq!(scaled[3][1..], [2 << 2, 198 << 2]);
+        let packed = yc_row(YcLayout::Lines, &scaled, &[]);
+        assert_eq!(packed[..8], [0, 10, 0, 200, 20, 40, 1, 199]);
+        let lower = scaled_line(&line, 8, 6);
+        let tiled = yc_row(YcLayout::Y0l2, &scaled, &lower);
+        assert_eq!(tiled.len(), 3 * 8);
+        assert_eq!(y0l2_sample(&tiled[8..], 1, 1), [40 << 2, 1 << 2, 199 << 2]);
+        assert_eq!(YcLayout::Y0l2.lines(), 2);
+    }
 
     #[test]
     fn size_and_step_words_decode_as_the_shot_programs_them() {

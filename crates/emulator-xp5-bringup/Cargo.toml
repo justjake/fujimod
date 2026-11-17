@@ -1,0 +1,34 @@
+[package]
+name = "fujimod-emulator-xp5-bringup"
+description = "XP5 bring-up runs on the shared session: explicit firmware images, boot manifest, ROM start, mods and run drivers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+license.workspace = true
+
+[dependencies]
+fujimod-catalog.workspace = true
+fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
+fujimod-emulator.workspace = true
+fujimod-emulator-boot.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-parts-controls.workspace = true
+fujimod-emulator-session.workspace = true
+fujimod-emulator-xp5-board.workspace = true
+fujimod-emulator-xp5-display.workspace = true
+fujimod-framebuffer.workspace = true
+fujimod-emulator-xp5-io.workspace = true
+fujimod-emulator-xp5-storage.workspace = true
+fujimod-workspace-hack.workspace = true
+fujimod-firmware.workspace = true
+ctrlc = "3"
+regex = "1"
+serde.workspace = true
+serde_json = "1"
+sha2.workspace = true
+toml = "1.1"
+zstd = "0.13"

@@ -288,6 +288,18 @@ pub struct SdCardInput {
     pub sectors: u64,
 }
 
+/// The card in the slot of one SD host at power-on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetSdSlotCard"))]
+pub struct SdSlotCard {
+    /// The card.
+    pub card: SdCardInput,
+    /// Base of the SD host whose slot holds the card.
+    pub host_base: u64,
+}
+
 /// Refresh-rate level the DRAM device reports to its controller.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -425,6 +437,62 @@ pub struct KeyLinesInput {
     pub lines: Vec<(u64, u64, u64)>,
     /// Ticks between samples of the key inputs.
     pub poll_ticks: u64,
+}
+
+/// GPIO pads wired to level-sensitive processor interrupt inputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInterrupts"))]
+pub struct GpioInterruptsInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Pad of each interrupt input and its active level.
+    pub routes: Vec<GpioInterruptRoute>,
+}
+
+/// One GPIO pad held onto a processor interrupt input while at its active level.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetGpioInterruptRoute"))]
+pub struct GpioInterruptRoute {
+    /// GPIO bank.
+    pub port: u64,
+    /// Pin within the bank.
+    pub pin: u64,
+    /// Processor interrupt input.
+    pub line: u64,
+    /// Whether the input is asserted while the pad is high.
+    pub active_high: bool,
+}
+
+/// Command dials whose quadrature phases drive countdown timer channels' count inputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetCountdownDials"))]
+pub struct CountdownDialsInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Each dial and the channel that counts it.
+    pub dials: Vec<CountdownDial>,
+}
+
+/// One command dial wired to a countdown timer channel's count inputs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetCountdownDial"))]
+pub struct CountdownDial {
+    /// Physical control id the host turns.
+    pub control: String,
+    /// Countdown timer channel that counts its edges.
+    pub channel: u64,
+    /// Ticks between successive edges of one turn.
+    pub phase_ticks: u64,
+    /// Gray-code phase at rest (A in bit 1, B in bit 0).
+    pub rest_phase: u8,
 }
 
 /// Frame period of the imaging pipeline: the frame sync, the statistics
@@ -889,6 +957,21 @@ pub struct UsbCableInput {
     pub speed: String,
 }
 
+/// USB PHY programming-port state at reset: the 32 indexed register bytes and
+/// the parallel-interface configuration word.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetUsbPhy"))]
+pub struct UsbPhyInput {
+    /// Declared basis.
+    pub basis: String,
+    /// Parallel-interface configuration word.
+    pub parallel: u64,
+    /// Register bytes selected by the control word's index.
+    pub registers: Vec<u8>,
+}
+
 /// Seconds count in four consecutive sub-CPU registers, least significant
 /// byte first, that advances with device time while its hold register's bit 0
 /// is set.
@@ -1187,6 +1270,9 @@ pub struct HardwareReset {
     /// Declared SD card in the slot at power-on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sd_card: Option<SdCardInput>,
+    /// Declared SD cards in the slots of the SD hosts at power-on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sd_cards: Vec<SdSlotCard>,
     /// Declared serial ports with nothing attached: every byte received
     /// reads 0xff.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1239,6 +1325,12 @@ pub struct HardwareReset {
     /// Declared keys on external interrupt lines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key_lines: Option<KeyLinesInput>,
+    /// Declared GPIO pads wired to level-sensitive interrupt inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gpio_interrupts: Option<GpioInterruptsInput>,
+    /// Declared command dials on countdown timer channels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub countdown_dials: Option<CountdownDialsInput>,
     /// Declared frame period of the imaging pipeline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_frames: Option<ImagingFramesInput>,
@@ -1252,6 +1344,9 @@ pub struct HardwareReset {
     /// negotiates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usb_cable: Option<UsbCableInput>,
+    /// Declared USB PHY programming-port state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_phy_input: Option<UsbPhyInput>,
     /// Declared temperature input.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature_input: Option<TemperatureInput>,

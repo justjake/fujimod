@@ -588,6 +588,20 @@ mod translation_tests {
     }
 }
 
+#[cfg(test)]
+mod framework_tests {
+    use super::framework_instruction;
+    #[test]
+    fn higher_exception_level_gic_registers_are_framework_instructions() {
+        // MSR/MRS ICC_SRE_EL2 and ICC_IGRPEN1_EL3 with x0, and ICC_SRE_EL3 as the control.
+        for word in [0xd51cc9a0u32, 0xd53cc9a0, 0xd51ecce0, 0xd53ecce0, 0xd51ecca0] {
+            assert!(framework_instruction(word), "{word:#010x}");
+        }
+        // TTBR0_EL1 is not one.
+        assert!(!framework_instruction(0xd5182000));
+    }
+}
+
 /// A-profile framework boundaries, independent of firmware or device maps.
 pub fn framework_instruction(word: u32) -> bool {
     if word & 0xffd00000 == 0xd5100000 {
@@ -597,7 +611,10 @@ pub fn framework_instruction(word: u32) -> bool {
             || r.crn == 14
             || r.crn == 15
             || encoding == 0xc230
+            // ICC_SRE_EL2 and ICC_SRE_EL3, ICC_IGRPEN1_EL3.
+            || encoding == 0xe64d
             || encoding == 0xf665
+            || encoding == 0xf667
             || (r.op0 == 3 && r.op1 == 0 && r.crn == 12 && (8..=15).contains(&r.crm))
     } else {
         matches!(word, 0xd503205f | 0xd503207f | 0xd503209f | 0xd50320bf)

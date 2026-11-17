@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xe4-201-memory-reservations",
+  "firmware_id": "xe4-201",
+  "dram_size": null,
+  "reservations": [
+    {
+      "name": "language_fonts",
+      "address": 9306112,
+      "size": 1441792
+    },
+    {
+      "name": "font_resources",
+      "address": 10092544,
+      "size": 1441792
+    },
+    {
+      "name": "language_data",
+      "address": 9043968,
+      "size": 262144
+    }
+  ],
+  "locator_failures": []
+}

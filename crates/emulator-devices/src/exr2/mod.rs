@@ -4,4 +4,5 @@ pub mod gpio;
 pub mod irq;
 pub mod irq_routes;
 pub mod pulse;
+pub mod sata_host;
 pub mod wake_alarm;

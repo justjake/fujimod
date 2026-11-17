@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onSettled } from 'solid-js';
+import { For, Show, createEffect, createSignal, onCleanup, onSettled } from 'solid-js';
 import { phases, started, type FirmwareProgress, type Phase } from './camera-progress';
 import './cameras.css';
 export interface Generation {
@@ -50,6 +50,36 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
   // A mouse opens the tip by hovering; a tap toggles it. Focus from a tap is not a keyboard visit.
   let pressed = false,
     wasOpen = false;
+  let tip: HTMLDivElement | undefined;
+  const place = () => {
+    if (!tip) return;
+    tip.style.setProperty('--tip-shift-x', '0px');
+    tip.style.setProperty('--tip-shift-y', '0px');
+    const rect = tip.getBoundingClientRect();
+    const margin = 8;
+    let x = 0;
+    let y = 0;
+    if (rect.left < margin) x = margin - rect.left;
+    else if (rect.right > innerWidth - margin) x = innerWidth - margin - rect.right;
+    if (rect.top < margin) y = margin - rect.top;
+    else if (rect.bottom > innerHeight - margin) y = innerHeight - margin - rect.bottom;
+    tip.style.setProperty('--tip-shift-x', `${x}px`);
+    tip.style.setProperty('--tip-shift-y', `${y}px`);
+  };
+  createEffect(
+    () => props.tips.open() === key(),
+    (open) => {
+      if (!open) return;
+      requestAnimationFrame(place);
+      const follow = () => place();
+      window.addEventListener('resize', follow);
+      window.addEventListener('scroll', follow, { passive: true });
+      onCleanup(() => {
+        window.removeEventListener('resize', follow);
+        window.removeEventListener('scroll', follow);
+      });
+    },
+  );
   return (
     <li
       class={{ phase: true, open: props.tips.open() === key() }}
@@ -99,47 +129,57 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
           </For>
         </div>
       </Show>
-      <div class="tip">
-        <div class="tip-label">{props.phase.label}</div>
-        <div class="tip-value">
-          {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
-            ? 'Needs an owner'
-            : props.phase.value}
-        </div>
-        <ul>
-          <For each={props.phase.steps}>
-            {(step) => (
-              <li
-                class={{ todo: step.fraction < 1, partial: step.fraction > 0 && step.fraction < 1 }}
-              >
-                {step.label}
-                <Show when={step.detail}>
-                  {(detail) => <span class="step-detail">{detail()}</span>}
-                </Show>
-              </li>
-            )}
-          </For>
-        </ul>
-        <Show when={props.phase.id === 'camera' && props.owners.length}>
-          <div class="owners">
-            Owned by{' '}
-            <For each={props.owners}>
-              {(owner, index) => (
-                <>
-                  {index() ? ', ' : ''}
-                  <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
-                </>
+      <div
+        class="tip"
+        ref={(element) => {
+          tip = element;
+        }}
+      >
+        <div class="tip-scroll">
+          <div class="tip-label">{props.phase.label}</div>
+          <div class="tip-value">
+            {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
+              ? 'Needs an owner'
+              : props.phase.value}
+          </div>
+          <ul>
+            <For each={props.phase.steps}>
+              {(step) => (
+                <li
+                  class={{
+                    todo: step.fraction < 1,
+                    partial: step.fraction > 0 && step.fraction < 1,
+                  }}
+                >
+                  {step.label}
+                  <Show when={step.detail}>
+                    {(detail) => <span class="step-detail">{detail()}</span>}
+                  </Show>
+                </li>
               )}
             </For>
-          </div>
-        </Show>
-        <Show when={help(props.model, props.phase)}>
-          {(text) => (
-            <a class="help" href={CONTRIBUTE}>
-              {text()}
-            </a>
-          )}
-        </Show>
+          </ul>
+          <Show when={props.phase.id === 'camera' && props.owners.length}>
+            <div class="owners">
+              Owned by{' '}
+              <For each={props.owners}>
+                {(owner, index) => (
+                  <>
+                    {index() ? ', ' : ''}
+                    <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
+                  </>
+                )}
+              </For>
+            </div>
+          </Show>
+          <Show when={help(props.model, props.phase)}>
+            {(text) => (
+              <a class="help" href={CONTRIBUTE}>
+                {text()}
+              </a>
+            )}
+          </Show>
+        </div>
       </div>
     </li>
   );

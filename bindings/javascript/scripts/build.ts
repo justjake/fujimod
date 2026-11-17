@@ -13,9 +13,9 @@ function run(command: string, args: string[]) {
 }
 // The test package adds the synthetic USB endpoints of fujimod-javascript-testing.
 const crate = process.argv.includes('--testing') ? 'fujimod-javascript-testing' : 'fujimod-javascript';
-run('cargo', ['build', '-p', crate, '--profile', 'dist', '--target', 'wasm32-unknown-unknown']);
+run('cargo', ['build', '-p', crate, '--profile', 'release-web', '--target', 'wasm32-unknown-unknown']);
 run(process.env.WASM_BINDGEN ?? join(root, 'target/tooling/bin/wasm-bindgen'), [
-  join(target, `wasm32-unknown-unknown/dist/${crate.replaceAll('-', '_')}.wasm`),
+  join(target, `wasm32-unknown-unknown/release-web/${crate.replaceAll('-', '_')}.wasm`),
   '--target',
   'web',
   '--out-dir',

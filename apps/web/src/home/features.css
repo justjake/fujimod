@@ -13,6 +13,46 @@
   text-transform: uppercase;
   margin: 0 0 4px;
 }
+.catalog-heading {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  margin-bottom: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.catalog-heading > div {
+  flex: 1 1 280px;
+}
+.catalog-heading p,
+.catalog-results {
+  margin: 6px 0 0;
+  color: var(--dim);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.catalog-results {
+  margin-bottom: 18px;
+}
+.catalog-search {
+  display: grid;
+  flex: 1 1 220px;
+  max-width: 300px;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.catalog-search input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
 .catalog-group + .catalog-group {
   margin-top: 22px;
 }

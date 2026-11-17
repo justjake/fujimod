@@ -114,6 +114,48 @@ test('development routes serve the configured release, observe edits, and refuse
     expect((await loadRelease(base))?.sd_card_files).toEqual(card);
     expect(await (await fetch(`${base}/releases/v2/ABCDEF01.234`)).text()).toBe(recipe);
     expect((await fetch(`${base}/releases/v2/card.json`)).status).toBe(404);
+
+    // A complete release carries its SD boot files without a separate directory.
+    options.card = undefined;
+    const root = {
+      path: 'FFBOOT.BIN',
+      asset: 'FFBOOT.BIN',
+      sha256: 'c'.repeat(64),
+      bytes: 4,
+      processor: 'EXR Processor II',
+    };
+    await writeFile(
+      join(directory, 'patches.json'),
+      JSON.stringify({ ...index, sd_card_files: [root] }),
+    );
+    await writeFile(join(directory, root.asset), 'boot');
+    expect((await loadRelease(base))?.sd_card_files).toEqual([root]);
+    expect(await (await fetch(`${base}/releases/v2/${root.asset}`)).text()).toBe('boot');
+
+    // The real builder loads a camera manifest, then its content-addressed store files.
+    const manifest = 'TEST-100-latest.json';
+    const ota = {
+      firmware: 'TEST-100',
+      version: 'v2',
+      fs: { '/firmware.patch': { sha256: 'd'.repeat(64), size: 4 } },
+    };
+    await writeFile(join(directory, manifest), JSON.stringify(ota));
+    await writeFile(join(directory, 'DDDDDDDD.DDD'), 'data');
+    await writeFile(join(directory, 'EEEEEEEE.EEE'), 'unreferenced');
+    expect(await (await fetch(`${base}/releases/v2/${manifest}`)).json()).toEqual(ota);
+    expect(await (await fetch(`${base}/releases/v2/DDDDDDDD.DDD`)).text()).toBe('data');
+    const manifestHead = await fetch(`${base}/releases/v2/${manifest}`, { method: 'HEAD' });
+    expect(manifestHead.headers.get('content-type')).toBe('application/json');
+    expect(await manifestHead.text()).toBe('');
+    for (const file of ['EEEEEEEE.EEE', 'OTHER-100-latest.json', 'secret.txt'])
+      expect((await fetch(`${base}/releases/v2/${file}`)).status).toBe(404);
+    // Re-read the manifest on each request, without exposing files from its old version.
+    ota.fs['/firmware.patch'].sha256 = 'e'.repeat(64);
+    await writeFile(join(directory, manifest), JSON.stringify(ota));
+    expect((await fetch(`${base}/releases/v2/DDDDDDDD.DDD`)).status).toBe(404);
+    expect(await (await fetch(`${base}/releases/v2/EEEEEEEE.EEE`)).text()).toBe('unreferenced');
+    await writeFile(join(directory, manifest), JSON.stringify({ ...ota, firmware: 'OTHER-100' }));
+    expect((await fetch(`${base}/releases/v2/EEEEEEEE.EEE`)).status).toBe(500);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });

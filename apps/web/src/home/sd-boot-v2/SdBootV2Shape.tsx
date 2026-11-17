@@ -1,4 +1,4 @@
-import { For, createSignal, onSettled } from 'solid-js';
+import { createSignal, onSettled } from 'solid-js';
 
 /** The card body behind the download section, drawn at the section's measured size. */
 export function SdBootV2Shape() {
@@ -39,9 +39,7 @@ export function SdBootV2Shape() {
       `A ${radius} ${radius} 0 0 1 ${radius} 0`,
       'Z',
     ].join(' ');
-    // Grip ridges molded across the bottom edge.
-    const ridges = Array.from({ length: 6 }, (_, i) => h - 24 - i * 7);
-    return { w, h, d, notchTop, notchBottom, notchDepth, ridges };
+    return { w, h, d, notchTop, notchBottom, notchDepth };
   };
   return (
     <svg
@@ -79,18 +77,6 @@ export function SdBootV2Shape() {
         rx="2.5"
         fill="url(#sd-slider)"
       />
-      <For each={geometry().ridges}>
-        {(y) => (
-          <line
-            x1="40"
-            x2={geometry().w - 40}
-            y1={y}
-            y2={y}
-            stroke="rgb(255 255 255 / 5%)"
-            stroke-width="2"
-          />
-        )}
-      </For>
     </svg>
   );
 }
