@@ -7,6 +7,11 @@
     "kind": "preset",
     "preset": {
       "factory_options": {
+        "storage_profile": "profile",
+        "camera_settings": {
+          "setup": "done",
+          "language": "en"
+        },
         "video_encoder_backend": "software",
         "audio_input_profile": "declared-silent-stereo-pcm48000",
         "jpeg_decode_profile": "declared-channel9-libjpeg-yycbcr-playback-unmeasured",
