@@ -1075,6 +1075,35 @@ pub struct BindingChoices {
     pub native_owners: Vec<u64>,
     /// Curated mod owners.
     pub mod_owners: Vec<u64>,
+    /// Accepted writer and control owners for compiled function choices.
+    #[serde(default)]
+    pub accepted_apply: Option<BindingApply>,
+}
+
+/// Accepted binding-choice writer and its compiled menu owners.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BindingApply {
+    /// Linked callback entry.
+    pub callback: u32,
+    /// Record that owns the compiled function choices.
+    pub function_owner: u64,
+    /// Control IDs and their selected choice records.
+    pub controls: Vec<BindingApplyControl>,
+}
+
+/// Compiled row and choice owners for one control ID.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BindingApplyControl {
+    /// Control ID accepted by the writer.
+    pub control: u32,
+    /// Menu row representing the control.
+    pub row_owner: u64,
+    /// Record whose choices are committed for the control.
+    pub choice_owner: u64,
 }
 
 /// Declared canvas screen identities.
