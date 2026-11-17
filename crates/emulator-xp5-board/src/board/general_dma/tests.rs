@@ -41,8 +41,8 @@ impl Fixture {
                 "pl022",
                 json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":3,"companion_irq_line":99,
                 "wire":{"kind":"gpio-selected","endpoints":[
-                    {"select":{"port":11,"pin":5,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[3,12],"idle_high":false}},
-                    {"select":{"port":11,"pin":3,"active_high":false},"part":{"kind":"lsm6ds-configuration-registers"}}
+                    {"select":{"port":11,"pin":5,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[3,12],"samples":[0,0],"idle_high":false}},
+                    {"select":{"port":11,"pin":3,"active_high":false},"part":{"kind":"lsm6ds-configuration-registers","temperature":0}}
                 ]}}),
             ),
             window(0xff930000, 0x8000, "general-dma", dma),
@@ -258,7 +258,7 @@ fn ssp5_windows(options: serde_json::Value) -> Vec<DeviceWindow> {
 #[test]
 fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
     let wire = json!({"kind":"gpio-selected","endpoints":[
-        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"idle_high":false}}
+        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"samples":[0,0],"idle_high":false}}
     ]});
     let pins = Pins::shared();
     let mut graph = DeviceGraph::new();
@@ -315,7 +315,7 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
 #[test]
 fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_line() {
     let wire = json!({"kind":"gpio-selected","endpoints":[
-        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"idle_high":false}}
+        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"samples":[0,0],"idle_high":false}}
     ]});
     let options = |extra: serde_json::Value| {
         let mut options = json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()});
