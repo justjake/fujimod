@@ -6,6 +6,7 @@ import { defineConfig } from 'vite-plus';
 import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
+import { sbomInputs } from './scripts/sbom/vite';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { localReleases } from './scripts/local-releases.ts';
 import { localMedia, previewMedia } from './scripts/local-media.ts';
@@ -247,6 +248,7 @@ export default defineConfig(({ mode, command }) => ({
     ),
   },
   plugins: [
+    sbomInputs(),
     isolationHeaders(),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,

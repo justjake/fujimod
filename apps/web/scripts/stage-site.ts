@@ -94,6 +94,7 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
       await copy(join(directory, 'licenses', entry.name), bundle + 'licenses/' + entry.name);
   }
   try {
+    await copy(join(inputs.runtime, 'sbom-components.json'), 'runtime/sbom-components.json');
     for (const firmware of emulators) {
       const config = firmware.emulate!;
       if (config.bundle !== `runtime/${firmware.id}/`)

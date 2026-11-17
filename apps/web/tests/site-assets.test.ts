@@ -53,6 +53,7 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await writeFile(join(destination, 'runtime/catalog.json'), 'installed');
     await mkdir(join(runtime, 'test-100'), { recursive: true });
     const inputs = { runtime, media: join(root, 'media') };
+    await writeFile(join(runtime, 'sbom-components.json'), '[]');
     await writeFile(join(runtime, 'catalog.json'), JSON.stringify({ schema: 1, firmwares: [] }));
     await assert.rejects(stageSite(inputs, destination), /requires runnable emulators/);
     await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
@@ -151,6 +152,7 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await writeFile(join(runtime, 'test-100-usb/wasm.json'), '{"construction":"session"}');
     await stageSite(inputs, destination);
     for (const [name, expected] of [
+      ['runtime/sbom-components.json', '[]'],
       ['runtime/test-100/service-workflow.generated.json', '{"schema":1}'],
       ['runtime/physical-100/service-workflow.generated.json', '{"schema":1,"physical":true}'],
       ['runtime/test-100/licenses/COPYING.txt', 'license'],
@@ -169,6 +171,7 @@ test('local preparation gates qualification and stages complete runtime bundles'
     assert.ok(
       manifest.files.some((file) => file.path === 'runtime/test-100-usb/licenses/COPYING.txt'),
     );
+    assert.ok(manifest.files.some((file) => file.path === 'runtime/sbom-components.json'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
