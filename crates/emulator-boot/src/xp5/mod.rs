@@ -8,11 +8,9 @@ mod card_image;
 mod display_output;
 mod emulator_patch;
 pub mod firmware;
-mod frontend;
 mod manifest;
 mod mod_loader;
 mod open;
-mod png_writer;
 mod rom_start;
 mod run;
 

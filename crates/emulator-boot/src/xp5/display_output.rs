@@ -1,26 +1,11 @@
-//! Host transport for captured scanout. Files, PNG workers and viewers never
-//! participate in modeled display state or guest timing.
-use super::frontend::{KeyHandler, Viewer};
-use fujimod_framebuffer::raster::PixelOrder;
-use fujimod_emulator_devices::graphics::scanout::Frame;
+//! XP5-specific scanout model configuration and host output wiring.
+use crate::{frame_viewer::{KeyHandler, Viewer}, output::Outputs};
 use fujimod_emulator_xp5_display::display::Config;
-use serde_json::Value;
-use std::collections::BTreeMap;
+use fujimod_framebuffer::raster::PixelOrder;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Default)]
-pub struct Outputs(Arc<Mutex<BTreeMap<usize, Output>>>);
-struct Output {
-    directory: PathBuf,
-    writer: super::png_writer::Writer,
-    next_archive: u64,
-    status: String,
-    _viewer: Option<Viewer>,
-}
-impl Outputs {
-    pub fn configure(
-        &self,
+pub(crate) fn configure(
+    outputs: &Outputs,
         base: u64,
         options: &toml::Table,
         keys: Option<KeyHandler>,
@@ -104,129 +89,6 @@ impl Outputs {
         } else {
             None
         };
-        let mut outputs = self.0.lock().unwrap();
-        if outputs.contains_key(&bank) {
-            return Err(format!("display output {bank} is already configured"));
-        }
-        outputs.insert(
-            bank,
-            Output {
-                writer: super::png_writer::Writer::new(directory.clone(), bank)?,
-                directory,
-                next_archive: 0,
-                status: String::new(),
-                _viewer: viewer,
-            },
-        );
-        drop(outputs);
-        self.status(
-            bank,
-            serde_json::json!({"bank":bank,"enabled":false,"sequence":0}),
-        )?;
-        Ok(config)
-    }
-    pub fn frame(&self, frame: Frame) -> Result<(), String> {
-        let mut outputs = self.0.lock().unwrap();
-        let output = outputs
-            .get_mut(&frame.output)
-            .ok_or("scanout output is not configured")?;
-        // Artifact names stay unique across checkpoint restores and old files.
-        // This number never enters the model or its checkpoint.
-        loop {
-            output.next_archive = output
-                .next_archive
-                .checked_add(1)
-                .ok_or("frame archive number overflow")?;
-            if !output
-                .directory
-                .join(format!(
-                    "bank{}-{:06}.png",
-                    frame.output, output.next_archive
-                ))
-                .exists()
-            {
-                break;
-            }
-        }
-        output.writer.submit(super::png_writer::Frame {
-            number: output.next_archive,
-            sequence: frame.sequence,
-            width: frame.width,
-            height: frame.height,
-            rgba: frame.rgba,
-        })
-    }
-    pub fn status(&self, bank: usize, value: Value) -> Result<(), String> {
-        let mut outputs = self.0.lock().unwrap();
-        let output = outputs
-            .get_mut(&bank)
-            .ok_or("display status output is not configured")?;
-        let value = value.to_string();
-        if value == output.status {
-            return Ok(());
-        }
-        std::fs::create_dir_all(&output.directory).map_err(|e| e.to_string())?;
-        let temporary = output.directory.join(format!(".bank{bank}-status.tmp"));
-        std::fs::write(&temporary, &value).map_err(|e| e.to_string())?;
-        std::fs::rename(
-            temporary,
-            output.directory.join(format!("bank{bank}-status.json")),
-        )
-        .map_err(|e| e.to_string())?;
-        output.status = value;
-        Ok(())
-    }
-    pub fn finish(&self) -> Result<(), String> {
-        for output in self.0.lock().unwrap().values() {
-            output.writer.flush()?;
-        }
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn archival_collisions_and_restored_sequences_are_host_only() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-output");
-        let directory = root.join(format!("display-publication-{}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
-        std::fs::write(directory.join("bank0-000001.png"), b"preserved").unwrap();
-        let outputs = Outputs::default();
-        let options = toml::Table::from_iter([(
-            "frame_dir".into(),
-            directory.to_string_lossy().to_string().into(),
-        )]);
-        outputs.configure(0xff990000, &options, None).unwrap();
-        let rgba = vec![127; 130 * 130 * 4];
-        for _ in 0..2 {
-            outputs
-                .frame(Frame {
-                    output: 0,
-                    sequence: 1,
-                    width: 130,
-                    height: 130,
-                    rgba: rgba.clone(),
-                })
-                .unwrap();
-        }
-        outputs.finish().unwrap();
-        assert_eq!(
-            std::fs::read(directory.join("bank0-000001.png")).unwrap(),
-            b"preserved"
-        );
-        let expected = crate::xp5::frontend::rgba_png(130, 130, &rgba).unwrap();
-        let publication: Value = serde_json::from_slice(
-            &std::fs::read(directory.join("bank0-publication.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(publication["sequence"], 1);
-        assert!(publication["frames"].as_u64().unwrap() >= 3);
-        assert_eq!(
-            std::fs::read(directory.join("latest-bank0.png")).unwrap(),
-            expected
-        );
-        std::fs::remove_dir_all(directory).unwrap();
-    }
+    outputs.add(bank, directory, viewer)?;
+    Ok(config)
 }

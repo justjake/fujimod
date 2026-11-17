@@ -37,7 +37,7 @@ pub(crate) struct Opened {
     pub flash_shadow: Option<flash_storage::Medium>,
     pub session: Session,
     pub inputs: Inputs,
-    pub outputs: super::display_output::Outputs,
+    pub outputs: crate::output::Outputs,
     pub ticks_per_second: u64,
     /// Instructions per scheduler turn: the run configuration's
     /// `execution.quantum` unless the caller overrides it for this run.
@@ -117,7 +117,7 @@ fn devices_and_resources(
     firmware: &Firmware,
     controls: Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
     run_directory: Option<&Path>,
-    outputs: &super::display_output::Outputs,
+    outputs: &crate::output::Outputs,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_image: Option<&fujimod_emulator_devices::parts::sd_card::Card>,
@@ -199,7 +199,7 @@ fn devices_and_resources(
                 } else {
                     options.remove("frame_dir");
                 }
-                let display = outputs.configure(window.base, &options, None)?;
+                let display = super::display_output::configure(outputs, window.base, &options, None)?;
                 resources.displays.insert(window.base, display);
                 window.options.clear();
             }
@@ -790,7 +790,7 @@ pub(crate) fn open_from(
     };
     let mut windows = state.device.clone();
     xp5_boot::apply_run_scene(&resolved, &mut windows, run_scene, ticks_per_second)?;
-    let outputs = super::display_output::Outputs::default();
+    let outputs = crate::output::Outputs::default();
     let (windows, resources, controls) = devices_and_resources(
         state,
         firmware,

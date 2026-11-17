@@ -2,6 +2,12 @@
 //!
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod frame_viewer;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod png_writer;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod output;
 mod first_start;
 use fujimod_emulator_board_graph as graph;
 mod x70;
