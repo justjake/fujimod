@@ -43,7 +43,7 @@ struct Image {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Plan {
-    Xp4 { definition: Box<xp4::Definition> },
+    Xp4 { definition: Value },
     Xpp {
         registers: Vec<Vec<(Register, u64)>>,
         #[serde(default)]
@@ -127,7 +127,9 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
     let mode = if startup.discovery { Mode::Discovery } else { Mode::Strict };
     let body = &resolved.reference;
     let board = match (body.soc.id.as_str(), document.board) {
-        ("xp4", Plan::Xp4 { mut definition }) => {
+        ("xp4", Plan::Xp4 { definition }) => {
+            let mut definition: xp4::Definition = serde_json::from_value(definition)
+                .map_err(|error| format!("XP4 board definition: {error}"))?;
             if engine != RunEngine::Unicorn {
                 return Err("XP4 application processors require Unicorn".into());
             }
@@ -135,7 +137,7 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
                 return Err("XP4 startup plan core count differs from the selected SoC".into());
             }
             definition.discovery = startup.discovery;
-            let board = xp4::Session::new(*definition, flash, files.into_iter().collect())?;
+            let board = xp4::Session::new(definition, flash, files.into_iter().collect())?;
             Board::Xp4(Box::new(board))
         }
         ("xpp", Plan::Xpp { registers, sub_cpu_registers, assets }) => {
