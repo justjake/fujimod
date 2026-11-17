@@ -31,8 +31,12 @@ enum Part {
     },
     SerialCalibrationRegisters { miso_high: bool },
     SerialCommandRegisters(fujimod_emulator_parts_io::serial_command_registers::Wiring),
-    BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
-    Lsm6dsConfigurationRegisters,
+    BisConfigurationRegisters {
+        revision: [u8; 2],
+        samples: [u16; 2],
+        idle_high: bool,
+    },
+    Lsm6dsConfigurationRegisters { temperature: i16 },
     /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
     GenericSink { miso_high: bool },
@@ -164,12 +168,13 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         ),
         Part::BisConfigurationRegisters {
             revision,
+            samples,
             idle_high,
         } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::new(
-            revision, idle_high,
+            revision, samples, idle_high,
         )?),
-        Part::Lsm6dsConfigurationRegisters => {
-            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::default())
+        Part::Lsm6dsConfigurationRegisters { temperature } => {
+            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature))
         }
         Part::GenericSink { miso_high } => Box::new(GenericSink { miso_high, transfers: 0, last: vec![] }),
     })
