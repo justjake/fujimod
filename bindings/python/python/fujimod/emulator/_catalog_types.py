@@ -555,6 +555,12 @@ class ConfigurationCheck(TypedDict, total=False):
     value: Required[int]
 
 
+class ConfigurationCheck2(TypedDict, total=False):
+    expected: Required[list[int]]
+    name: Required[str]
+    offset: Required[int]
+
+
 type ConfigurationLocation = (
     ConfigurationLocationVariant0 | ConfigurationLocationVariant1
 )
@@ -4464,6 +4470,7 @@ class Resources(TypedDict, total=False):
 
 
 class RestartMechanism(TypedDict, total=False):
+    configuration_checks: NotRequired[list[ConfigurationCheck2]]
     deadline_offset: NotRequired[int | None]
     deferred_timer: NotRequired[DeferredTimer | None]
     early_boot: NotRequired[EarlyBootMechanism | None]
