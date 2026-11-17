@@ -151,6 +151,14 @@ impl Cluster {
         };
         self.instruction_rate.budget(now, state.tick_phase, at)
     }
+    /// The NOR epoch moved since execute-in-place copies were last checked.
+    fn xip_stale(&self) -> bool {
+        let state = unsafe { &*self.state.get() };
+        state
+            .xip_source
+            .as_ref()
+            .is_some_and(|e| e.load(std::sync::atomic::Ordering::SeqCst) != state.xip_seen)
+    }
     /// Brings guest time up to the running processor's exact entry count
     /// (the current instruction included).
     fn sync_counted(&self, core: usize) -> Result<(), String> {
@@ -186,6 +194,7 @@ impl Cluster {
         let stop = state.failure.is_some()
             || state.cache_dirty
             || wakes
+            || self.xip_stale()
             || (pending && self.reg(core, arm::CPSR)? & 0x80 == 0);
         let cpu = &self.cpus[core];
         cpu.set_interrupt(Interrupt::Irq, pending)?;
@@ -218,6 +227,7 @@ impl Cluster {
     /// What the hook does before entering the next instruction. `true` ends
     /// the slice (redirect or IRQ entry).
     fn boundary(&self, core: usize) -> Result<bool, String> {
+        self.refresh_xip()?;
         self.due();
         self.healthy()?;
         let state = unsafe { &mut *self.state.get() };
@@ -332,8 +342,14 @@ impl Cluster {
                 std::mem::take(unsafe { &mut (&mut (*self.state.get()).return_requests)[core] });
             self.observe_addresses(core, &requests)?;
             // A deadline `due()` left due still runs one instruction before
-            // the next `due()`, as with the hook.
-            let room = self.room()?.max(1);
+            // the next `due()`, as with the hook. A NOR epoch that `due()`
+            // just moved drops the execute-in-place copies after one
+            // instruction, where the hook's `refresh_xip` drops them.
+            let room = if self.xip_stale() {
+                1
+            } else {
+                self.room()?.max(1)
+            };
             let cpu = &self.cpus[core];
             let pending = unsafe { (*self.state.get()).gic.next_irq(core).is_some() };
             cpu.set_interrupt(Interrupt::Irq, pending)?;
