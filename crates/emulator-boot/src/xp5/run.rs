@@ -101,6 +101,10 @@ pub struct Run {
     pub configuration: ResolvedConfiguration,
     /// The original update file.
     pub update: PathBuf,
+    pub manifest: Option<PathBuf>,
+    pub watch_pcs: Option<String>,
+    pub dump: Option<String>,
+    pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
     pub boot_rom: Option<PathBuf>,
     /// A raw SD card image in place of the in-memory volume (ROM start only).
@@ -162,6 +166,10 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let Run {
         configuration,
         update,
+        manifest,
+        watch_pcs,
+        dump,
+        hash,
         boot_rom: rom_path,
         card_image: sd_image,
         card_files,
@@ -190,24 +198,15 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     // Input-only parsing comes first, so a malformed spec fails before the run directory exists
     // and before the board is opened. Patch times stay in milliseconds and the key delays stay
     // durations until the run starts and its tick rate is known.
-    // FUJIMOD_XP5_WATCH_PCS=ADDR,ADDR,...: even instruction addresses whose first entry on each
-    // core (tick, r0..r3, backtrace) is printed when the run ends or stops. The hooks are
-    // installed on every core, so read each entry's "core" field to tell an M4 hit from an A53
-    // one (core 4 is the M4). A Thumb function at an odd address is named by its even address.
-    let watch_pcs = match std::env::var("FUJIMOD_XP5_WATCH_PCS") {
-        Ok(spec) => {
-            let mut addresses = spec
-                .split(',')
-                .filter(|item| !item.trim().is_empty())
-                .map(|item| parse_number(item.trim()))
-                .collect::<Result<Vec<_>, _>>()?;
-            addresses.sort_unstable();
-            addresses.dedup();
-            addresses
-        }
-        Err(_) => Vec::new(),
-    };
-    let dumps = parse_dumps()?;
+    let mut watch_pcs = watch_pcs.as_deref().unwrap_or_default()
+        .split(',')
+        .filter(|item| !item.trim().is_empty())
+        .map(|item| parse_number(item.trim()))
+        .collect::<Result<Vec<_>, _>>()?;
+    watch_pcs.sort_unstable();
+    watch_pcs.dedup();
+    let dumps = parse_dumps(dump.as_deref().unwrap_or_default())?;
+    let hashes = parse_ranges("--hash", hash.as_deref().unwrap_or_default())?;
     // Emulator-only guest-memory patches (--emulator-patch FILE), the way the X-T5 runner patches
     // the M4 image in memory. Each entry names the bytes it expects; the run stops if the guest
     // holds anything else. They change guest RAM of this run only and never produce an update file.
@@ -232,6 +231,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     }
     let request = Startup {
         update,
+        manifest,
         boot_rom: rom_path,
         card_image: sd_image,
         card_files,
@@ -388,7 +388,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             std::fs::write(run_directory.join("board-state.json"), bytes)
                 .map_err(|error| format!("board-state.json: {error}"))
         });
-    post_mortem(&session.board, &run_directory, &dumps);
+    post_mortem(&session.board, &run_directory, &dumps, &hashes);
     if let Some(loaded) = &fujimod {
         let report = loaded.report(&mod_loader::BoardMachine(&session.board));
         eprintln!("FUJIMOD XP5 mod status: {report}");
@@ -426,47 +426,42 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     }))
 }
 
-/// FUJIMOD_XP5_DUMP=ADDR:LEN[;ADDR:LEN...] names guest physical ranges (the BIS core's local
-/// addresses are 0xfa200000 + offset) to write, after the run ends or stops, to
-/// `<run_directory>/dump-<address>.bin`. Parsed before the run so bad input is refused up front.
+/// Limit the memory allocated for any one physical dump.
 const DUMP_LIMIT: u64 = 16 << 20;
 
-fn parse_dumps() -> Result<Vec<(u64, usize)>, String> {
-    let Ok(spec) = std::env::var("FUJIMOD_XP5_DUMP") else {
-        return Ok(Vec::new());
-    };
-    let mut dumps: Vec<(u64, usize)> = Vec::new();
-    for item in spec.split(';').filter(|item| !item.is_empty()) {
-        let (address, length) = item
-            .split_once(':')
-            .filter(|(_, length)| !length.contains(':'))
-            .ok_or_else(|| format!("FUJIMOD_XP5_DUMP item {item:?} is not ADDR:LEN"))?;
-        let (address, length) = (parse_number(address)?, parse_number(length)?);
-        if length == 0 || length > DUMP_LIMIT {
-            return Err(format!("FUJIMOD_XP5_DUMP length {length:#x} is outside 1..={DUMP_LIMIT:#x}"));
+fn parse_ranges(option: &str, spec: &str) -> Result<Vec<(u64, u64)>, String> {
+    spec.split(';').filter(|item| !item.trim().is_empty()).map(|item| {
+        let (address, length) = item.split_once(':')
+            .ok_or_else(|| format!("{option} item {item:?} is not ADDR:LEN"))?;
+        let address = parse_number(address.trim())?;
+        let length = parse_number(length.trim())?;
+        if length == 0 || address.checked_add(length).is_none() {
+            return Err(format!("{option} range {item:?} is empty or overflows"));
         }
-        if address.checked_add(length).is_none() || dumps.iter().any(|(known, _)| *known == address) {
-            return Err(format!("FUJIMOD_XP5_DUMP address {address:#x} overflows or repeats"));
+        Ok((address, length))
+    }).collect()
+}
+
+fn parse_dumps(spec: &str) -> Result<Vec<(u64, usize)>, String> {
+    let mut dumps = Vec::new();
+    for (address, length) in parse_ranges("--dump", spec)? {
+        if length > DUMP_LIMIT {
+            return Err(format!("--dump length {length:#x} exceeds {DUMP_LIMIT:#x}"));
+        }
+        if dumps.iter().any(|(known, _)| *known == address) {
+            return Err(format!("--dump address {address:#x} repeats"));
         }
         dumps.push((address, length as usize));
     }
     Ok(dumps)
 }
 
-/// FUJIMOD_XP5_HASH=ADDR:LEN[;ADDR:LEN...] (decimal or 0x) names guest physical ranges of any size whose
-/// SHA-256 and nonzero 4 KiB pages are printed (and written to `<run_directory>/hash.jsonl`) when
-/// the run ends or stops: the check that a large range holds what it should without dumping it.
-fn print_hashes(board: &fujimod_emulator::board::Board, run_directory: &Path) {
-    let Ok(spec) = std::env::var("FUJIMOD_XP5_HASH") else { return };
+fn print_hashes(board: &fujimod_emulator::board::Board, run_directory: &Path, ranges: &[(u64, u64)]) {
+    if ranges.is_empty() {
+        return;
+    }
     let mut lines = String::new();
-    for item in spec.split(';').filter(|item| !item.trim().is_empty()) {
-        let parsed = item
-            .split_once(':')
-            .and_then(|(address, length)| Some((parse_number(address.trim()).ok()?, parse_number(length.trim()).ok()?)));
-        let Some((address, length)) = parsed else {
-            eprintln!("FUJIMOD XP5 hash: {item:?} is not ADDR:LEN");
-            continue;
-        };
+    for &(address, length) in ranges {
         let line = board.range_digest(address, length).to_string();
         eprintln!("FUJIMOD XP5 hash: {line}");
         lines += &(line + "\n");
@@ -481,8 +476,9 @@ fn post_mortem(
     board: &fujimod_emulator::board::Board,
     run_directory: &Path,
     dumps: &[(u64, usize)],
+    hashes: &[(u64, u64)],
 ) {
-    print_hashes(board, run_directory);
+    print_hashes(board, run_directory, hashes);
     for &(address, length) in dumps {
         let mut bytes = vec![0u8; length];
         let path = run_directory.join(format!("dump-{address:x}.bin"));

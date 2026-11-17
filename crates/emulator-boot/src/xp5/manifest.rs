@@ -160,11 +160,10 @@ pub(crate) fn bundled(firmware: &str) -> Result<&'static Bundled, String> {
 }
 
 impl BootState {
-    /// The bundled manifest of `firmware`. `FUJIMOD_XP5_MANIFEST=FILE` replaces it with a manifest
-    /// file (and its sibling `.d` directory of device fragments) for experiments and tests.
-    pub fn for_firmware(firmware: &str) -> Result<Self, String> {
-        let state = match std::env::var_os("FUJIMOD_XP5_MANIFEST") {
-            Some(path) => Self::load(Path::new(&path))?,
+    /// Load the bundled manifest or a caller-selected manifest and its sibling device fragments.
+    pub fn for_firmware(firmware: &str, manifest: Option<&Path>) -> Result<Self, String> {
+        let state = match manifest {
+            Some(path) => Self::load(path)?,
             None => {
                 let bundled = bundled(firmware)?;
                 Self::parse(bundled.manifest, bundled.fragments)?

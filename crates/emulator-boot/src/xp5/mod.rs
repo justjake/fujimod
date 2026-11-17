@@ -27,6 +27,7 @@ use std::path::PathBuf;
 /// Explicit files and settings needed to construct an XP5 session.
 pub struct Startup {
     pub update: PathBuf,
+    pub manifest: Option<PathBuf>,
     pub boot_rom: Option<PathBuf>,
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
@@ -52,11 +53,11 @@ pub(super) fn open_startup(
     configuration: &ResolvedConfiguration,
     startup: Startup,
 ) -> Result<Started, String> {
-    let Startup { update, boot_rom: rom_path, card_image: sd_image, card_files,
+    let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
         scene, output: run_directory, mode, quantum: quantum_override } = startup;
     let start_rom = matches!(configuration.configuration.start, RunStart::Rom);
     let firmware_id = configuration.configuration.firmware_id.clone();
-    let state = manifest::BootState::for_firmware(&firmware_id)?;
+    let state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
     let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
     let firmware = firmware::Firmware::from_update(&firmware_id, update_bytes, true)?;
     std::fs::create_dir_all(&run_directory).map_err(|error| error.to_string())?;

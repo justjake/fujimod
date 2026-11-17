@@ -20,10 +20,11 @@ EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --cl
 XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH (ROM start only).\n\
+--manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 24] = [
+const VALUED: [&str; 28] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -48,6 +49,10 @@ const VALUED: [&str; 24] = [
     "--scene",
     "--card-image",
     "--card-file",
+    "--manifest",
+    "--watch-pcs",
+    "--dump",
+    "--hash",
 ];
 
 /// The options of one `boot` command, before the processor generation is known.
@@ -177,7 +182,7 @@ struct Outcome {
 fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--output", "--seconds", "--status-every", "--quantum", "--keys", "--patch", "--scene", "--card-image"],
+        &["--output", "--seconds", "--status-every", "--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash"],
     )?;
     if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.card_files.is_empty() {
         return Err("--discovery, --stub, --mod and --card-file do not apply to EXR II runs".into());
@@ -252,6 +257,10 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         .collect::<Result<Vec<_>, _>>()?;
     let run = xp5::Run {
         configuration: resolved,
+        manifest: boot_options.path("--manifest"),
+        watch_pcs: boot_options.text("--watch-pcs")?,
+        dump: boot_options.text("--dump")?,
+        hash: boot_options.text("--hash")?,
         update: boot_options.required("--update")?.into(),
         boot_rom: boot_options.path("--boot-rom"),
         card_image: boot_options.path("--card-image"),
