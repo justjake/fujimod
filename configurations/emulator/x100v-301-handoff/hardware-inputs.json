@@ -1,0 +1,127 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-hardware-inputs.generated.schema.json",
+  "schema": 1,
+  "id": "x100v-301-handoff",
+  "body_id": "x100v",
+  "reset": {
+    "kernel_unit": "kernel",
+    "loader_handoff": {
+      "address": 63596,
+      "basis": "The X100V stock RAM capture observed the 0x5d0-byte loader boot-information block at 0x0000f86c and its identical kernel copy. The cold-boot word is a declared virtual input because its reset-time physical value was not sampled.",
+      "fill": 0,
+      "size": 1488,
+      "words": [
+        {
+          "name": "Virtual cold-boot reason at +0x140",
+          "offset": 320,
+          "value": 4
+        }
+      ]
+    },
+    "adc_input": {
+      "basis": "Declared virtual XP4 startup samples; physical X100V idle samples are unmeasured.",
+      "samples": [2048, 2048, 4095, 4095, 0, 0, 0, 0, 0, 0, 2048, 2048]
+    },
+    "gpio_input": {
+      "basis": "Declared virtual XP4 startup levels; physical X100V idle levels are unmeasured.",
+      "levels": [8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 6, 0, 0, 0, 3]
+    },
+    "temperature_input": {
+      "basis": "Declared virtual ambient temperature of 25 C; physical temperature is unmeasured.",
+      "millicelsius": 25000
+    },
+    "sensor_input": {
+      "basis": "Declared virtual X100V sensor-statistics scene; physical sensor timing is unmeasured.",
+      "frame_period_ticks": 4000000,
+      "frame_active_ticks": 10000,
+      "read_gate": {
+        "register": 81,
+        "mask": 8
+      },
+      "statistics_scene": {
+        "name": "diagnostic-flat-linear-statistics",
+        "luma": 4096,
+        "samples_per_cell": 1024,
+        "black_level": 1024,
+        "signal_shift": 2
+      }
+    },
+    "processed_frame_input": {
+      "basis": "Declared virtual X100V processed-frame input.",
+      "frame_period_ticks": 1000000,
+      "luma": 81
+    },
+    "usb_cable": {
+      "basis": "Declared virtual disconnected high-speed USB cable input following the checked XP4 harness; the physical X100V VBUS pin is unmeasured.",
+      "vbus_bank": 15,
+      "vbus_pin": 15,
+      "speed": "high"
+    },
+    "spi_inputs": {
+      "1": {
+        "level": "low",
+        "basis": "Declared virtual XP4 startup inputs; physical X100V SPI levels and power-controller values are unmeasured.",
+        "power_checksum_registers": {
+          "chip_select": {
+            "port": 12,
+            "pin": 5,
+            "active_high": true
+          },
+          "inputs": {
+            "0": 64511,
+            "2": 0,
+            "3": 520,
+            "4": 640,
+            "14": 0,
+            "16": 4,
+            "25": 16,
+            "29": 65535,
+            "30": 65535,
+            "34": 0,
+            "35": 0,
+            "36": 41472,
+            "37": 0,
+            "38": 0,
+            "42": 0,
+            "43": 0,
+            "44": 0,
+            "45": 0
+          },
+          "disable_writes": [
+            {
+              "register": 25,
+              "value": 0
+            }
+          ],
+          "retained_registers": [2, 14, 18, 29, 30, 36, 37, 38, 42, 43, 44, 45],
+          "basis": "Declared virtual values follow the checked XP4 ROM-start harness. Register 16 supplies cold-boot reason 4 and register 25 reports USB power status 0x10; physical X100V values are unmeasured."
+        }
+      },
+      "4": {
+        "level": "low",
+        "basis": "Declared virtual X100V startup input; the physical SPI level is unmeasured."
+      },
+      "5": {
+        "level": "low",
+        "basis": "Declared virtual X100V startup input; the physical SPI level is unmeasured."
+      }
+    },
+    "serial_flash": {
+      "contents": "registered-update",
+      "jedec_id": 2145056,
+      "geometry": {
+        "erase_bytes": 65536,
+        "page_bytes": 256,
+        "erase_ticks": 4096,
+        "page_ticks": 512,
+        "basis": "Declared virtual 64 MiB XP4 NOR geometry; the X100V device identity and timing are unmeasured."
+      },
+      "basis": "Declared virtual 64 MiB XP4 NOR input containing the registered update; the X100V device identity and timing are unmeasured."
+    },
+    "usb_phy_input": {
+      "basis": "Virtual zeroed XP4 USB PHY input; physical X100V PHY reset values are unmeasured.",
+      "parallel": 0,
+      "registers": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+  }
+}
