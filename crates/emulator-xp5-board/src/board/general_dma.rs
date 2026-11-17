@@ -39,8 +39,9 @@ struct SerialWiring {
     gic_line: Option<u32>,
     wire: WireInput,
 }
-/// SSP instances 0..9 of the SoC (`spi0`..`spi9`), one 4 KiB window each.
-const SSP_INSTANCES: std::ops::Range<u64> = 0xff910000..0xff91a000;
+/// SSP instances 0..11 of the SoC (`spi0`..`spi11`, the instance field of the
+/// stock serial client descriptors), one 4 KiB window each.
+const SSP_INSTANCES: std::ops::Range<u64> = 0xff910000..0xff91c000;
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum WireInput {
