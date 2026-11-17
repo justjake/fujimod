@@ -1,0 +1,24 @@
+[package]
+name = "fujimod-multishot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+description = "Multi-shot stack merge of X-Trans RAF bursts: alignment, multi-frame super-resolution, linear DNG output and resolution measurement"
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "fujimod-multishot"
+path = "src/bin/multishot.rs"
+test = false
+
+[dependencies]
+png = "0.18"
+zune-core = { version = "0.5", default-features = false, features = ["std"] }
+zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+fujimod-workspace-hack.workspace = true
