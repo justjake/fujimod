@@ -63,6 +63,9 @@ fn shared_boot_summary(
         "now": state["timeline"]["now"],
         "instructions": state["instructions"],
         "serviced_mmio_trap_callbacks_by_core": board.mmio_trap_callback_counts(),
+        "loops_by_core": board
+            .loop_statistics()
+            .unwrap_or_else(|error| json!({"error": error})),
         "interactive_window_count": board.interactive_window_count(),
         "mean_interactive_window_host_duration_ns":
             board.mean_interactive_window_host_duration_ns(),
