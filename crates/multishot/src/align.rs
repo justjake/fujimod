@@ -584,6 +584,40 @@ pub struct FrameAlignment {
     pub refine: Option<RefineReport>,
     pub fine: Option<RefineReport>,
     pub rejected: Option<String>,
+    /// Factor that brings this frame's linear values to the reference's
+    /// exposure: the median ratio of reference to frame block luma over
+    /// mid-tones both expose without clipping.
+    #[serde(default = "unit_gain")]
+    pub gain: f64,
+}
+
+fn unit_gain() -> f64 {
+    1.0
+}
+
+/// Median ratio of reference to frame block luma at the frame position
+/// `t` maps each reference block to, over blocks where both lie in
+/// `[0.01, 0.5]` (well above black, well below clipping).
+pub fn exposure_gain(reference: &Plane, frame: &Plane, t: &Affine) -> Option<f64> {
+    let mut ratios = Vec::new();
+    for y in (1..reference.height - 1).step_by(2) {
+        for x in (1..reference.width - 1).step_by(2) {
+            let r = reference.at(x, y);
+            let (u, v) = t.apply(x as f64, y as f64);
+            let Some(f) = frame.bilinear(u, v) else {
+                continue;
+            };
+            if (0.01..=0.5).contains(&r) && (0.01..=0.5).contains(&f) {
+                ratios.push(r / f);
+            }
+        }
+    }
+    if ratios.len() < 1000 {
+        return None;
+    }
+    let mid = ratios.len() / 2;
+    ratios.select_nth_unstable_by(mid, f32::total_cmp);
+    Some(ratios[mid] as f64)
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -600,6 +634,29 @@ impl Alignment {
     pub fn accepted(&self) -> usize {
         self.frames.iter().filter(|f| f.to_frame.is_some()).count()
     }
+}
+
+/// For an exposure bracket (recorded exposures spanning more than 1/6 EV),
+/// the frame with the shortest exposure: it has the least motion blur and
+/// the fewest clipped highlights, while gradient energy would favor the
+/// brightest frame. `None` for a burst or when any frame lacks a shutter
+/// time.
+pub fn shortest_exposure(frames: &[&dyn FrameSource]) -> Option<usize> {
+    let values: Vec<f64> = frames
+        .iter()
+        .map(|f| {
+            let e = f.exposure();
+            let n = e.f_number.unwrap_or(1.0);
+            Some(e.seconds? * e.iso.unwrap_or(100) as f64 / (n * n))
+        })
+        .collect::<Option<_>>()?;
+    let (lo, hi) = values
+        .iter()
+        .fold((f64::MAX, f64::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
+    if !(lo > 0.0) || (hi / lo).log2() <= 1.0 / 6.0 {
+        return None;
+    }
+    values.iter().position(|&v| v == lo)
 }
 
 /// Picks the sharpest frame by block-luma gradient energy over the middle
@@ -854,6 +911,7 @@ pub fn align(
                 refine: None,
                 fine: None,
                 rejected: None,
+                gain: 1.0,
             });
             continue;
         }
@@ -879,6 +937,7 @@ pub fn align(
             refine: reg.refine.clone(),
             fine: None,
             rejected: reg.rejected.clone(),
+            gain: 1.0,
         };
         match (reg.refined, reg.mask) {
             (None, _) | (_, None) => {}
@@ -923,10 +982,17 @@ pub fn align(
                     entry.fine = Some(fine_report);
                     peak = peak.max(g.data.len() * 4 * 4 + fine_mask.len() + g.data.len() * 2);
                 }
+                entry.gain = exposure_gain(&ref_planes.luma, &planes.luma, &refined).unwrap_or(1.0);
                 entry.to_frame = Some(site);
                 prior = refined;
                 if noise.is_none() {
-                    noise = NoiseModel::estimate(&ref_planes.rgb, &planes.rgb, &grid, &refined);
+                    noise = NoiseModel::estimate(
+                        &ref_planes.rgb,
+                        &planes.rgb,
+                        &grid,
+                        &refined,
+                        entry.gain as f32,
+                    );
                 }
             }
         }

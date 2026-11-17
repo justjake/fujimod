@@ -20,15 +20,25 @@ impl NoiseModel {
         (self.a[channel] * mean.max(0.0) + self.b[channel]).max(1e-10)
     }
 
+    /// Variance, in reference units, of a frame exposed `1 / gain` times
+    /// the reference and scaled by `gain`, at reference level `mean`.
+    #[inline(always)]
+    pub fn scaled_variance(&self, channel: usize, mean: f32, gain: f32) -> f32 {
+        (gain * self.a[channel] * mean.max(0.0) + gain * gain * self.b[channel]).max(1e-10)
+    }
+
     /// Fits the model to differences between the reference and a frame
     /// sampled through `t` (reference block coordinates to frame block
-    /// coordinates). Robust to edges and moving content (median absolute
-    /// deviation per brightness bin).
+    /// coordinates) and scaled by `gain` to the reference's exposure. Robust
+    /// to edges and moving content (median absolute deviation per brightness
+    /// bin). A scaled frame's shot noise is `gain` times the reference's at
+    /// the same level, which the normalization assumes.
     pub fn estimate(
         reference: &[[f32; 3]],
         frame: &[[f32; 3]],
         grid: &BlockGrid,
         t: &Affine,
+        gain: f32,
     ) -> Option<Self> {
         if reference.len() != grid.width * grid.height || frame.len() != reference.len() {
             return None;
@@ -74,9 +84,9 @@ impl NoiseModel {
                     (1.0 - fx) * fy,
                     fx * fy,
                 ];
-                let norm = (1.0 + wts.iter().map(|w| w * w).sum::<f32>()).sqrt();
+                let norm = (1.0 + gain * wts.iter().map(|w| w * w).sum::<f32>()).sqrt();
                 for c in 0..3 {
-                    let s: f32 = wts.iter().zip(&q).map(|(w, p)| w * p[c]).sum();
+                    let s: f32 = gain * wts.iter().zip(&q).map(|(w, p)| w * p[c]).sum::<f32>();
                     let texture = neighbors
                         .iter()
                         .map(|p| (p[c] - r[c]).abs())

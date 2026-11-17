@@ -218,6 +218,22 @@ pub fn render(
     noise: Option<NoiseSpec>,
     seed: u64,
 ) -> MemoryFrame {
+    render_exposed(scene, width, height, to_frame, index, noise, seed, 1.0)
+}
+
+/// [`render`] with the scene's light multiplied by `exposure` before noise
+/// and clipping.
+#[allow(clippy::too_many_arguments)]
+pub fn render_exposed(
+    scene: &Scene,
+    width: usize,
+    height: usize,
+    to_frame: &Affine,
+    index: usize,
+    noise: Option<NoiseSpec>,
+    seed: u64,
+    exposure: f32,
+) -> MemoryFrame {
     let cfa = XTrans::standard();
     let to_ref = to_frame.inverse().expect("invertible transform");
     let mut rng = Rng(seed ^ (index as u64).wrapping_mul(0x2545f4914f6cdd1d));
@@ -231,6 +247,7 @@ pub fn render(
                 let (rx, ry) = to_ref.apply(x as f64 + dx, y as f64 + dy);
                 v += scene.radiance(rx, ry, index)[c] * CHANNEL_GAIN[c] * w;
             }
+            v *= exposure;
             if let Some(n) = noise {
                 let sigma = (n.shot * v.max(0.0) + n.read * n.read).sqrt();
                 v += sigma * rng.gaussian() as f32;

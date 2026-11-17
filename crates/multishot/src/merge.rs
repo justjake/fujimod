@@ -106,6 +106,13 @@ pub struct ResolutionParams {
     pub robustness: Option<RobustParams>,
     #[serde(default)]
     pub color: ColorMerge,
+    /// Bracketed exposures: each frame is scaled by its alignment gain to the
+    /// reference's exposure and its samples are weighted by their noise in
+    /// reference units, so long exposures carry the shadows and short ones
+    /// the highlights. The output is scaled so that 1.0 is the shortest
+    /// exposure's white level.
+    #[serde(default)]
+    pub bracket: bool,
     /// Per-tile residual alignment on top of each frame's global transform;
     /// `None` uses the global transforms only.
     #[serde(default)]
@@ -124,6 +131,7 @@ impl Default for ResolutionParams {
             prior_weight: 0.02,
             robustness: Some(RobustParams::default()),
             color: ColorMerge::default(),
+            bracket: false,
             local: None,
             strip_rows: 48,
             region: None,
@@ -182,6 +190,9 @@ pub struct FrameMergeStats {
     pub mean_weight: f32,
     /// Fraction of covered blocks with weight below 0.1.
     pub rejected_fraction: f32,
+    /// Exposure factor applied to the frame (1 outside bracket merges).
+    #[serde(default)]
+    pub gain: f32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -199,6 +210,10 @@ pub struct MergeReport {
     pub peak_strip_bytes: usize,
     /// Residual alignment, when enabled.
     pub local: Option<LocalReport>,
+    /// Factor applied to the output: 1, or for a bracket merge the inverse
+    /// of the largest frame gain.
+    #[serde(default)]
+    pub output_scale: f32,
     pub seconds: f64,
 }
 
@@ -335,6 +350,7 @@ fn robustness(
     noise: &NoiseModel,
     wb: [f32; 3],
     params: &RobustParams,
+    gain: f32,
 ) -> (BlockBand<f32>, f32, f32) {
     let (w, rows) = (reference.width, reference.rows);
     let mut raw = vec![0f32; w * rows];
@@ -345,9 +361,12 @@ fn robustness(
             let refpx = reference.data[k];
             let j = (reference.jlo + r) as f64;
             let (u, v) = to_frame_blocks.apply(i as f64, j);
-            let Some(fpx) = frame.bilinear(u, v) else {
+            let Some(mut fpx) = frame.bilinear(u, v) else {
                 continue;
             };
+            if fpx[0] >= 0.0 {
+                fpx = fpx.map(|p| p * gain);
+            }
             if refpx[0] < 0.0 || fpx[0] < 0.0 {
                 // Clipped highlights cannot be compared; keep the samples
                 // (clipped sites themselves are never merged).
@@ -369,7 +388,8 @@ fn robustness(
             let local_var = (ss / n - mean * mean).max(0.0);
             let mut d2 = 0f32;
             for c in 0..3 {
-                let expected = 2.0 * noise.variance(c, refpx[c])
+                let expected = noise.variance(c, refpx[c])
+                    + noise.scaled_variance(c, refpx[c], gain)
                     + params.texture_term * params.texture_term * local_var / (wb[c] * wb[c]);
                 d2 += (fpx[c] - refpx[c]).powi(2) / expected;
             }
@@ -533,6 +553,10 @@ fn threads() -> usize {
 struct PreparedFrame<'a> {
     k: usize,
     to_ref: Affine,
+    /// Exposure factor and per-channel noise weights `(a, b)` of the
+    /// scaled samples, relative to the reference (bracket merges only).
+    gain: f32,
+    noise_weight: Option<([f32; 3], [f32; 3])>,
     field: Option<&'a ShiftField>,
     fy0: usize,
     fy1: usize,
@@ -639,17 +663,29 @@ fn for_each_sample(
             if clipped {
                 continue;
             }
-            let wr = match &pf.weights {
-                Some(map) => {
-                    let (bu, bv) = grid.to_block(px, py);
-                    map.bilinear(bu, bv)
+            let c = fcfa.color(x, y) as usize;
+            let v = v * pf.gain;
+            // Inverse variance relative to a reference sample at the same
+            // level: (a L + b) / (g a L + g^2 b).
+            let wn = match pf.noise_weight {
+                Some((a, b)) => {
+                    let l = v.max(0.0);
+                    (a[c] * l + b[c]) / (pf.gain * a[c] * l + pf.gain * pf.gain * b[c])
                 }
                 None => 1.0,
             };
+            let wr = wn
+                * match &pf.weights {
+                    Some(map) => {
+                        let (bu, bv) = grid.to_block(px, py);
+                        map.bilinear(bu, bv)
+                    }
+                    None => 1.0,
+                };
             if wr < 1e-3 {
                 continue;
             }
-            f(fcfa.color(x, y) as usize, (px, py), v, wr);
+            f(c, (px, py), v, wr);
         }
     }
 }
@@ -748,6 +784,20 @@ pub fn merge_resolution(
         .local
         .as_ref()
         .map_or(0, |p| p.max_shift.ceil() as i64);
+    let gains: Vec<f32> = alignment
+        .frames
+        .iter()
+        .map(|f| if params.bracket { f.gain as f32 } else { 1.0 })
+        .collect();
+    // The shortest used exposure has the largest gain; its white is 1.0.
+    let output_scale = match used.iter().map(|&(k, _)| gains[k]).reduce(f32::max) {
+        Some(g) if params.bracket && g > 0.0 => 1.0 / g,
+        _ => 1.0,
+    };
+    let noise_weight = match (&alignment.noise, params.bracket) {
+        (Some(n), true) => Some((n.a, n.b)),
+        _ => None,
+    };
     let nthreads = threads().min(used.len()).max(1);
     let wb = reference.calibration().wb;
     // The prior scales with the frame count so that a burst of identical
@@ -833,6 +883,25 @@ pub fn merge_resolution(
                 .map(|p| [unclip(p[0]), p[1], p[2]])
                 .unwrap_or([0.0; 3])
         };
+        // In a bracket merge a clipped reference block only bounds the
+        // radiance from below; its prior then barely counts.
+        let prior_weight = |i: usize, j: usize| -> f32 {
+            if !params.bracket {
+                return eps;
+            }
+            let (x, y) = out.to_site(i as f64, j as f64);
+            let (bu, bv) = grid.to_block(x, y);
+            let clipped = ref_band
+                .bilinear(
+                    bu.clamp(0.0, grid.width as f64 - 1.001),
+                    bv.clamp(
+                        ref_band.jlo as f64,
+                        (ref_band.jlo + ref_band.rows) as f64 - 1.001,
+                    ),
+                )
+                .is_some_and(|p| p[0] < 0.0);
+            if clipped { eps * 1e-3 } else { eps }
+        };
         // First pass: all colors over the strip, or green over the widened
         // strip.
         let (stride1, len1) = if guided {
@@ -850,7 +919,8 @@ pub fn merge_resolution(
             let handles: Vec<_> = shares
                 .iter()
                 .map(|share| {
-                    let (ref_band, grid, splatter, fields) = (&ref_band, &grid, &splatter, &fields);
+                    let (ref_band, grid, splatter, fields, gains) =
+                        (&ref_band, &grid, &splatter, &fields, &gains);
                     scope.spawn(move || -> PrepareResult {
                         let mut acc = vec![0f32; len1 * stride1];
                         let mut frame_stats = Vec::new();
@@ -905,8 +975,9 @@ pub fn merge_resolution(
                                         width: grid.width,
                                         data: std::mem::take(&mut fb),
                                     };
-                                    let (map, mean, rejected) =
-                                        robustness(ref_band, &fband, &to_blocks, noise, wb, p);
+                                    let (map, mean, rejected) = robustness(
+                                        ref_band, &fband, &to_blocks, noise, wb, p, gains[k],
+                                    );
                                     worker_peak =
                                         worker_peak.max(fb_raw.len() * 2 + fband.data.len() * 12);
                                     fb = fband.data;
@@ -922,6 +993,12 @@ pub fn merge_resolution(
                                 k,
                                 to_ref,
                                 field: fields[k].as_ref(),
+                                gain: gains[k],
+                                noise_weight: if k == alignment.reference {
+                                    None
+                                } else {
+                                    noise_weight
+                                },
                                 fy0,
                                 fy1,
                                 raw,
@@ -990,10 +1067,11 @@ pub fn merge_resolution(
             for jr in 0..rows {
                 for i in 0..out.width {
                     let p = prior(i, j0 + jr);
+                    let e = prior_weight(i, j0 + jr);
                     let a = (jr * out.width + i) * 6;
                     for c in 0..3 {
                         rgb[(jr * out.width + i) * 3 + c] =
-                            (total[a + c] + eps * p[c]) / (total[a + 3 + c] + eps);
+                            (total[a + c] + e * p[c]) / (total[a + 3 + c] + e) * output_scale;
                     }
                 }
             }
@@ -1001,8 +1079,9 @@ pub fn merge_resolution(
             // Merged green over the widened strip.
             let green: Vec<f32> = (0..erows * out.width)
                 .map(|n| {
-                    let p = prior(n % out.width, ej0 + n / out.width);
-                    (total[2 * n] + eps * p[1]) / (total[2 * n + 1] + eps)
+                    let (i, j) = (n % out.width, ej0 + n / out.width);
+                    let (p, e) = (prior(i, j), prior_weight(i, j));
+                    (total[2 * n] + e * p[1]) / (total[2 * n + 1] + e)
                 })
                 .collect();
             drop(total);
@@ -1064,14 +1143,15 @@ pub fn merge_resolution(
             for jr in 0..rows {
                 for i in 0..out.width {
                     let p = prior(i, j0 + jr);
+                    let e = prior_weight(i, j0 + jr);
                     let g = green[(j0 - ej0 + jr) * out.width + i];
                     let a = (jr * out.width + i) * 4;
                     let o = (jr * out.width + i) * 3;
-                    rgb[o + 1] = g;
+                    rgb[o + 1] = g * output_scale;
                     for (slot, c) in [(0, 0), (1, 2)] {
-                        let d = (diff[a + slot] + eps * (p[c] * wb[c] - p[1] * wb[1]))
-                            / (diff[a + 2 + slot] + eps);
-                        rgb[o + c] = (g * wb[1] + d) / wb[c].max(1e-6);
+                        let d = (diff[a + slot] + e * (p[c] * wb[c] - p[1] * wb[1]))
+                            / (diff[a + 2 + slot] + e);
+                        rgb[o + c] = (g * wb[1] + d) / wb[c].max(1e-6) * output_scale;
                     }
                 }
             }
@@ -1113,6 +1193,7 @@ pub fn merge_resolution(
                 } else {
                     1.0
                 },
+                gain: gains[k],
             })
             .collect(),
         strips,
@@ -1120,6 +1201,7 @@ pub fn merge_resolution(
         threads: nthreads,
         peak_strip_bytes: peak,
         local: local_report,
+        output_scale,
         seconds: started.elapsed().as_secs_f64(),
     })
 }
