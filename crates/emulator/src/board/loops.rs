@@ -19,6 +19,7 @@ pub(super) struct MProfileLoops {
     /// Device-declared stable reads by processor address, per core.
     reads: Vec<Vec<(u64, FastMmioRead)>>,
     /// The active exact run: its core and the instruction count it ends at.
+    /// Deadlines scheduled during the run bound a window as well.
     run_end: Option<(usize, u64)>,
     /// The branch the previous window stopped at executes once normally.
     bypass: Option<(usize, u64)>,
@@ -175,8 +176,12 @@ impl State {
         for (r, value) in state.registers.iter_mut().enumerate() {
             *value = register(arm::CORE[r])?;
         }
-        // The run's remaining instructions, including this branch.
-        let room = end.saturating_sub(self.instructions[core]);
+        // The run's remaining instructions, including this branch, ending at
+        // the next timeline event: an access during the run may have
+        // scheduled a deadline before the run's own end.
+        let room = end
+            .saturating_sub(self.instructions[core])
+            .min(self.timeline.processor_budget(core, u64::MAX, self.clock_limit)?);
         let reads = &l.reads[core];
         let advanced = proof.advance(state, (room / proof.length()).max(1), |address, width| {
             loop_read(cpu, reads, address, width)
