@@ -4,7 +4,7 @@ use fujimod_catalog_configuration::RunEngine;
 use fujimod_catalog_assets::Asset;
 use fujimod_emulator::board::{self, Board, InterruptMap, aprofile, bus::Bus, factory, mprofile};
 use fujimod_catalog_assets::files::{Files, Location};
-use fujimod_emulator_cpu::{self as cpu, Access, Model, Register};
+use fujimod_emulator_cpu::{self as cpu, Access, Model};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, pins::DriveInput}};
 use fujimod_emulator_parts_controls::key_input::{ControlsOptions, Key, KeyInput};
 use fujimod_emulator_xp5_board::board as xp5_board;
