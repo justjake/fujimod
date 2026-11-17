@@ -1089,6 +1089,8 @@ pub struct BindingApply {
     pub callback: u32,
     /// Record that owns the compiled function choices.
     pub function_owner: u64,
+    /// Generated action ID for the computed function picker; zero when absent.
+    pub function_action: u32,
     /// Control IDs and their selected choice records.
     pub controls: Vec<BindingApplyControl>,
 }
@@ -1104,6 +1106,9 @@ pub struct BindingApplyControl {
     pub row_owner: u64,
     /// Record whose choices are committed for the control.
     pub choice_owner: u64,
+    /// High 16-bit item handle carried by the composite function action ID;
+    /// zero when absent.
+    pub function_item: u32,
 }
 
 /// Declared canvas screen identities.

@@ -17,6 +17,12 @@
           },
           "type": "array"
         },
+        "function_action": {
+          "description": "Generated action ID for the computed function picker; zero when absent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "function_owner": {
           "description": "Record that owns the compiled function choices.",
           "format": "uint64",
@@ -27,6 +33,7 @@
       "required": [
         "callback",
         "function_owner",
+        "function_action",
         "controls"
       ],
       "type": "object"
@@ -47,6 +54,12 @@
           "minimum": 0,
           "type": "integer"
         },
+        "function_item": {
+          "description": "High 16-bit item handle encoded in the composite function action ID; zero when absent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
         "row_owner": {
           "description": "Menu row representing the control.",
           "format": "uint64",
@@ -57,7 +70,8 @@
       "required": [
         "control",
         "row_owner",
-        "choice_owner"
+        "choice_owner",
+        "function_item"
       ],
       "type": "object"
     },
