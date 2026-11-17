@@ -542,6 +542,12 @@ pub struct AlignParams {
     /// skips it.
     pub fine_iterations: usize,
     pub fine_stride: usize,
+    /// Subject rectangle `[x, y, width, height]` in registration-plane
+    /// coordinates (block plane: sites / 3). When set, only tiles and
+    /// refinement pixels inside it determine the transform, so a subject at
+    /// a different depth from the background is aligned instead of the
+    /// background.
+    pub subject: Option<[f64; 4]>,
     /// Global translation search radius, in coarsest-level pixels, before
     /// tile matching. Zero disables it.
     pub global_search: i64,
@@ -558,6 +564,7 @@ impl Default for AlignParams {
             fine_iterations: 10,
             fine_stride: 1,
             global_search: 16,
+            subject: None,
         }
     }
 }
@@ -769,7 +776,13 @@ pub fn register(
     } else {
         *prior
     };
-    let (matches, stats) = match_planes(reference, &pyr, &prior, &params.matching);
+    let (mut matches, stats) = match_planes(reference, &pyr, &prior, &params.matching);
+    let inside = |x: f64, y: f64| {
+        params
+            .subject
+            .is_none_or(|[sx, sy, sw, sh]| x >= sx && y >= sy && x < sx + sw && y < sy + sh)
+    };
+    matches.retain(|c| inside(c.x, c.y));
     match fit(&matches, base.width as f64, base.height as f64, &params.fit) {
         Err(reason) => Registration {
             matches: stats,
@@ -780,13 +793,18 @@ pub fn register(
             rejected: Some(reason),
         },
         Ok(result) => {
-            let mask = refine_mask(
+            let mut mask = refine_mask(
                 base,
                 params.matching.grid_step,
                 &matches,
                 &result,
                 params.refine_min_gradient,
             );
+            if params.subject.is_some() {
+                for (i, m) in mask.iter_mut().enumerate() {
+                    *m &= inside((i % base.width) as f64, (i / base.width) as f64);
+                }
+            }
             let (refined, report) = refine_affine(
                 base,
                 frame,

@@ -33,6 +33,7 @@ options:
   --reference N        reference frame index (default: sharpest)
   --alignment FILE     reuse an alignment.json
   --region X,Y,W,H     merge only this reference region (sites)
+  --align-region X,Y,W,H  fit alignment only on this subject region (sites)
   --strip-rows N       output rows per strip (default 48)
   --frames N           use only the first N frames
   --no-robustness      merge without motion rejection
@@ -276,7 +277,19 @@ fn get_alignment(
     if reference >= frames.len() {
         return Err("--reference is past the last frame".into());
     }
-    let a = align(frames, reference, &AlignParams::default()).map_err(|e| e.to_string())?;
+    let mut params = AlignParams::default();
+    if let Some(r) = args.region("align-region")? {
+        // Sites to block-plane coordinates; coverage is judged within the
+        // subject, so the whole-frame grid gate does not apply.
+        params.subject = Some([
+            r.x as f64 / 3.0,
+            r.y as f64 / 3.0,
+            r.width as f64 / 3.0,
+            r.height as f64 / 3.0,
+        ]);
+        params.fit.min_grid_cells = 1;
+    }
+    let a = align(frames, reference, &params).map_err(|e| e.to_string())?;
     eprintln!(
         "aligned {} frames in {:.1} s (reference {}: {})",
         frames.len(),
