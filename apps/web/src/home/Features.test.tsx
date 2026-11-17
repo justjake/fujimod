@@ -103,6 +103,28 @@ test('the recipes outline is reachable from the shooting menu and includes favor
   expect(recipes.querySelector('ul')?.textContent).toContain('MY RECIPES');
 });
 
+test('the catalog uses the setup page, Fn assignment template, and DRIVE route', () => {
+  const hideFeatures = ['SET-UP', 'FUJIMOD SET-UP', 'HIDE FEATURES'];
+  expect(
+    catalog.menus.find((row) => [...row.path, row.title].join('/') === hideFeatures.join('/'))
+      ?.kind,
+  ).toBe('page');
+  expect(
+    catalog.menus.filter(
+      (row) => row.path.slice(0, hideFeatures.length).join('/') === hideFeatures.join('/'),
+    ),
+  ).toHaveLength(0);
+  const fn = 'SET-UP/BUTTON/DIAL SETTING/FUNCTION (Fn) SETTING';
+  expect(
+    catalog.menus
+      .filter((row) => row.path.join('/').startsWith(fn))
+      .map((row) => [...row.path, row.title].join('/')),
+  ).toEqual([`${fn}/{button}/RAW VIEW`]);
+  expect(catalog.menus.filter((row) => row.title === 'SOFTWARE ND').map((row) => row.path)).toEqual(
+    [['DRIVE']],
+  );
+});
+
 test('feature deep links filter the catalog on entry and on repeated navigation', () => {
   history.replaceState(null, '', '/#features?search=film');
   const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
