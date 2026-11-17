@@ -48,8 +48,15 @@ impl StillProcessor {
     /// indexing is not derivable: X30 lens correction not modeled. The words
     /// are retained and the block is an identity pass-through. X70 1.10 leaves
     /// bits 16..17 clear and never writes this window.
+    ///
+    /// 0x04..0x34 are the spatial filter stages' range-checked configuration
+    /// words (two 14-bit fields at 0x04, a 14-bit value at 0x08, two bytes at
+    /// 0x0c, dimensions at 0x10, byte rows at 0x14..0x18 and a parameter table
+    /// at 0x1c..0x34), written when the develop request enables those stages,
+    /// as X-E2S 1.11 still captures do. Spatial filtering is not modeled, so
+    /// the words are retained and not applied, like 0xb4..0xf8.
     fn valid(o: usize) -> bool {
-        matches!(o,0|0xb4..=0xf8|0x100..=0x10fc|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
+        matches!(o,0..=0x34|0xb4..=0xf8|0x100..=0x10fc|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
     }
     fn start(&mut self, cx: &Cx<'_>, control: u32) -> Result<(), String> {
         let r = |o: usize| self.r[(0x10000 + o) / 4];
@@ -276,9 +283,21 @@ impl Device for StillProcessor {
             self.r[o / 4] = v as u32 | 0x10001;
             return;
         }
+        // START's low bits select the pass's outputs: bit 0 the color window
+        // at 0x58/0x38, bit 1 the RAW writeback window at 0x60/0x40. Bit 4
+        // replaces bit 0 with a second main-window output kind; with bit 1
+        // (0x12) the firmware writes the RAW back in place and programs the
+        // main window as one row of one-byte samples. That output's content
+        // is not derivable from register programming, so 0x12 refuses.
         if o == 0x10004 {
+            if v & 0x10 != 0 {
+                cx.fail(format!(
+                    "still processor START {v:#x}: bit 4 main-window output is unmodeled"
+                ));
+                return;
+            }
             if !matches!(v, 1 | 3) {
-                cx.fail(format!("unknown still processor START {v:#x}"));
+                cx.fail(format!("unmodeled still processor START {v:#x}"));
                 return;
             }
             if let Err(e) = self.start(cx, v as u32) {

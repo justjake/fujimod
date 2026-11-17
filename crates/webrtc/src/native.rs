@@ -9,11 +9,7 @@ use aes_gcm::{
     aead::{Aead, Payload},
 };
 use async_channel::{Receiver, Sender};
-use async_tungstenite::{
-    WebSocketStream,
-    smol::{ConnectStream, connect_async},
-    tungstenite::Message,
-};
+use async_tungstenite::tungstenite::Message;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use bytes::BytesMut;
 use futures_util::StreamExt;
@@ -37,7 +33,7 @@ use webrtc::{
 fn error(e: impl std::fmt::Display) -> Error {
     Error(e.to_string())
 }
-type Socket = WebSocketStream<ConnectStream>;
+type Socket = crate::dial::Signal;
 async fn write(socket: &mut Socket, value: Value) -> Result<()> {
     socket
         .send(Message::Text(value.to_string().into()))
@@ -99,6 +95,7 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
 pub struct PeerSocket {
     send: Sender<Vec<u8>>,
     receive: Receiver<Result<Vec<u8>>>,
+    path: Receiver<String>,
     /// Closed when the I/O thread has flushed and exited.
     finished: Receiver<()>,
 }
@@ -114,6 +111,7 @@ impl PeerSocket {
         // the I/O thread when it tries to publish a result.
         let (incoming, rx) = async_channel::unbounded();
         let (ready, wait) = async_channel::bounded(1);
+        let (path, path_summary) = async_channel::bounded(1);
         let (finish, finished) = async_channel::bounded::<()>(1);
         thread::Builder::new()
             .name(name.into())
@@ -123,6 +121,7 @@ impl PeerSocket {
                         outbound,
                         incoming: incoming.clone(),
                         ready: ready.clone(),
+                        path,
                     })
                     .await
                     {
@@ -137,6 +136,7 @@ impl PeerSocket {
         Ok(Self {
             send: tx,
             receive: rx,
+            path: path_summary,
             finished,
         })
     }
@@ -200,17 +200,23 @@ impl PeerSocket {
             .await
             .map_err(|_| error("peer disconnected; completion unknown"))?
     }
+    /// The selected ICE candidate pair, available once the data channel opens.
+    pub fn path(&self) -> Option<String> {
+        self.path.try_recv().ok()
+    }
 }
 
 pub(crate) struct PeerChannels {
     outbound: Receiver<Vec<u8>>,
     incoming: Sender<Result<Vec<u8>>>,
     ready: Sender<std::result::Result<(), String>>,
+    path: Sender<String>,
 }
 impl Drop for PeerSocket {
     fn drop(&mut self) {
         self.send.close();
         self.receive.close();
+        self.path.close();
     }
 }
 
@@ -472,7 +478,7 @@ async fn run(
     signal_url
         .query_pairs_mut()
         .append_pair("room", &ticket.room);
-    let (mut signal, _) = connect_async(signal_url.as_str()).await.map_err(error)?;
+    let mut signal = crate::dial::connect_signaling(signal_url.as_str()).await?;
     progress("signaling connected");
     write(
         &mut signal,
@@ -671,6 +677,7 @@ async fn pump<P: PeerConnection>(
         outbound,
         incoming,
         ready,
+        path,
     } = channels;
     let channel = futures_lite::future::or(open(channel, &events), async {
         futures_timer::Delay::new(OPEN_TIMEOUT).await;
@@ -678,6 +685,9 @@ async fn pump<P: PeerConnection>(
     })
     .await?;
     progress("WebRTC data channel open");
+    if let Some(summary) = selected_path(&connection).await {
+        let _ = path.try_send(summary);
+    }
     if ready.send(Ok(())).await.is_err() {
         let _ = connection.close().await;
         return Ok(());
@@ -761,6 +771,26 @@ async fn pump<P: PeerConnection>(
     let _ = connection.close().await;
     result
 }
+
+async fn selected_path<P: PeerConnection>(connection: &P) -> Option<String> {
+    let sctp = connection.sctp().await?;
+    let pair = sctp
+        .transport()
+        .ice_transport()
+        .get_selected_candidate_pair()
+        .await
+        .ok()??;
+    Some(format!(
+        "path {} {}:{} <-> {} {}:{}",
+        pair.local().typ,
+        pair.local().address,
+        pair.local().port,
+        pair.remote().typ,
+        pair.remote().address,
+        pair.remote().port
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

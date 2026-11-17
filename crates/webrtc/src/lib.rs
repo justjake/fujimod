@@ -11,6 +11,8 @@ pub use policy::{CandidatePolicy, Pacing};
 pub mod share;
 
 #[cfg(not(target_arch = "wasm32"))]
+mod dial;
+#[cfg(not(target_arch = "wasm32"))]
 mod host;
 #[cfg(not(target_arch = "wasm32"))]
 mod ice;

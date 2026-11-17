@@ -1,0 +1,6 @@
+# Stock15135d0 programs4..18, writes0 at+00, waits for ready bit0.
+# Immediate functional completion; initial config words0 are session assumptions.
+[[device]]
+base = 0xff9a1000
+size = 0x1c
+kind = "display-output-link"

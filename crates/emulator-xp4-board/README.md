@@ -20,6 +20,19 @@ The optional transmit receiver is discovery-only. Its bounded offer records
 accepted bytes and does not identify an attached physical endpoint. Strict
 boards reject it.
 
+`storage_strict_backing: true` bounds external NOR reads to the supplied asset's
+byte range. CPU aperture reads, including sampling misses, and serial DMA reads
+refuse outside that range. Omission preserves the existing erased `0xff` bytes
+beyond the asset. The bound describes supplied data, not installed chip capacity;
+the mapped aperture remains unchanged. Explicit empty contents permit identity
+and status commands but no nonempty array read.
+
+Strict checkpoints retain the initial source length and SHA-256 and require the
+same backing when restored. Restored read streams must fit that bound. Programming
+and erasing still follow their own policy; internal page assembly may use erased
+bytes beyond a partial final page, but mutations never extend external read
+coverage. Use `storage_write_protect` independently when writes must be refused.
+
 Isolated driver guards admit device registers and model-initiated RAM
 transactions only through an explicit per-call device policy (see
 `crates/emulator/src/board/harness/arm32.md`). These guards remain distinct

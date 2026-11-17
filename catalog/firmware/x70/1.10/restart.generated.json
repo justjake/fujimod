@@ -109,7 +109,8 @@
         "enable_value": 1
       },
       "deadline_parameter": 0,
-      "rollover_parameter": 13
+      "rollover_parameter": 13,
+      "fixed_interval": null
     },
     "early_boot": {
       "kind": "exr2_polled_alarm",

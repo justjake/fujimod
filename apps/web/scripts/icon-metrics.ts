@@ -1,4 +1,4 @@
-// Measures every symbol in the feature icon sprite and writes the sizes that give
+// Measures every symbol in the feature icon sprite and the generated mod icon sprite, and writes the sizes that give
 // all icons the same optical size (src/ui/assets/feature-icon-metrics.generated.json).
 //
 //   node scripts/icon-metrics.ts           # regenerate
@@ -12,7 +12,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 
-const sprite = new URL('../src/ui/assets/feature-icons.svg', import.meta.url);
+const sprites = {
+  feature: new URL('../src/ui/assets/feature-icons.svg', import.meta.url),
+  mod: new URL('../src/ui/assets/mod-icons.generated.svg', import.meta.url),
+};
 const output = new URL('../src/ui/assets/feature-icon-metrics.generated.json', import.meta.url);
 
 /** Ink coverage of a typical outline icon; fuller icons are optically heavier. */
@@ -26,7 +29,13 @@ const MAX_WIDTH = 1.556;
 type Box = [number, number, number, number];
 type Measured = { box: Box; view: Box; coverage: number };
 /** Ink box and the symbol's own viewBox (symbol units), and the optical width and height. */
-export type IconMetric = { box: Box; view: Box; width: number; height: number };
+export type IconMetric = {
+  sprite: keyof typeof sprites;
+  box: Box;
+  view: Box;
+  width: number;
+  height: number;
+};
 
 async function measure(svg: string): Promise<Record<string, Measured>> {
   const browser = await chromium.launch();
@@ -82,31 +91,60 @@ async function measure(svg: string): Promise<Record<string, Measured>> {
 
 const round = (value: number) => Math.round(value * 1000) / 1000;
 
-function size({ box, view, coverage }: Measured): IconMetric {
+function size(sprite: IconMetric['sprite'], { box, view, coverage }: Measured): IconMetric {
   const [, , w, h] = box;
   let s = 1 / Math.sqrt(w * h);
   s *= Math.max(MIN_SOLID_SCALE, Math.min(1, 1 - SOLID_CORRECTION * (coverage - OUTLINE_COVERAGE)));
   s = Math.min(s, MAX_HEIGHT / h, MAX_WIDTH / w);
-  return { box: box.map(round) as Box, view, width: round(w * s), height: round(h * s) };
+  return { sprite, box: box.map(round) as Box, view, width: round(w * s), height: round(h * s) };
 }
 
-const measured = await measure(await readFile(sprite, 'utf8'));
-const metrics = Object.fromEntries(Object.entries(measured).map(([id, m]) => [id, size(m)]));
+const metrics: Record<string, IconMetric> = {};
+for (const [name, url] of Object.entries(sprites) as [IconMetric['sprite'], URL][])
+  for (const [id, m] of Object.entries(await measure(await readFile(url, 'utf8'))))
+    metrics[id] = size(name, m);
 // The repository formatter's layout: one object per icon, number arrays on one line.
 const text =
   '{\n' +
   Object.entries(metrics)
     .map(
       ([id, m]) =>
-        `  ${JSON.stringify(id)}: {\n` +
+        `  ${JSON.stringify(id)}: {\n    "sprite": ${JSON.stringify(m.sprite)},\n` +
         `    "box": [${m.box.join(', ')}],\n    "view": [${m.view.join(', ')}],\n` +
         `    "width": ${m.width},\n    "height": ${m.height}\n  }`,
     )
     .join(',\n') +
   '\n}\n';
+/**
+ * Chromium measures and anti-aliases slightly differently on each platform, so a file generated on
+ * macOS can differ from a Linux run by a rounding step. Accept differences up to this much.
+ */
+const TOLERANCE = 0.005;
+const close = (a: number[], b: number[]) =>
+  a.length === b.length && a.every((value, i) => Math.abs(value - b[i]!) <= TOLERANCE);
+function matches(current: string): boolean {
+  let stored: Record<string, IconMetric>;
+  try {
+    stored = JSON.parse(current) as Record<string, IconMetric>;
+  } catch {
+    return false;
+  }
+  const ids = Object.keys(metrics);
+  return (
+    Object.keys(stored).join() === ids.join() &&
+    ids.every((id) => {
+      const [a, b] = [stored[id]!, metrics[id]!];
+      return (
+        a.sprite === b.sprite &&
+        a.view.join() === b.view.join() &&
+        close([...a.box, a.width, a.height], [...b.box, b.width, b.height])
+      );
+    })
+  );
+}
 if (process.argv.includes('--check')) {
   const current = await readFile(output, 'utf8').catch(() => '');
-  if (current !== text) {
+  if (current !== text && !matches(current)) {
     console.error(`${output.pathname} is stale; run node scripts/icon-metrics.ts`);
     process.exit(1);
   }

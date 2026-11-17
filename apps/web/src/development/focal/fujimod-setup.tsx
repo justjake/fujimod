@@ -2,7 +2,6 @@ import { For, Match, Show, Switch } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import {
   Button,
-  ChoicePopup,
   DialKey,
   Done,
   Group,
@@ -53,8 +52,6 @@ export type Version = { version: string; commit: string; date: string };
 export type ColorRow = 'rec' | 'setup' | 'play';
 export type Colors = Record<ColorRow, string>;
 export const DEFAULT_COLORS: Colors = { rec: '#b91000', setup: '#0068d8', play: '#008c32' };
-export const START_UP_STYLES = ['FUJIMOD', 'NONE'];
-export const SHUT_DOWN_STYLES = ['CATHODE', 'NONE'];
 
 export type SetupTarget =
   | 'wifi'
@@ -63,13 +60,10 @@ export type SetupTarget =
   | 'backup'
   | 'welcome'
   | ColorRow
-  | 'background'
-  | 'startUp'
-  | 'shutDown';
+  | 'background';
 
 export type SetupPopup =
   | { kind: 'swatch'; row: ColorRow; cursor: number }
-  | { kind: 'choice'; row: 'startUp' | 'shutDown'; cursor: number }
   /** `original` is restored when the popup is backed out of. */
   | { kind: 'hue'; original: number | null };
 
@@ -80,8 +74,6 @@ export interface SetupState {
   boot: 'MANUAL' | 'AUTOMATIC';
   colors: Colors;
   hue: number | null;
-  startUp: number;
-  shutDown: number;
   popup?: SetupPopup;
 }
 
@@ -92,8 +84,6 @@ export const INITIAL_SETUP: SetupState = {
   boot: 'MANUAL',
   colors: DEFAULT_COLORS,
   hue: null,
-  startUp: 1,
-  shutDown: 1,
 };
 
 /** Focus order; Check for updates is skipped until Wi-Fi connects. */
@@ -108,8 +98,6 @@ export function setupTargets(state: SetupState): SetupTarget[] {
     'setup',
     'play',
     'background',
-    'startUp',
-    'shutDown',
   ];
   return all.filter((target) => target !== 'updates' || state.connected);
 }
@@ -130,10 +118,6 @@ function SetupPopup(props: { state: SetupState; anchor: number }) {
     const p = popup();
     return p?.kind === 'swatch' ? p : undefined;
   };
-  const choice = () => {
-    const p = popup();
-    return p?.kind === 'choice' ? p : undefined;
-  };
   const hue = () => {
     const p = popup();
     return p?.kind === 'hue' ? p : undefined;
@@ -146,17 +130,6 @@ function SetupPopup(props: { state: SetupState; anchor: number }) {
             anchor={props.anchor}
             cursor={p().cursor}
             current={Math.max(0, SWATCH_INDEX(props.state.colors[p().row]))}
-          />
-        )}
-      </Match>
-      <Match when={choice()}>
-        {(p) => (
-          <ChoicePopup
-            anchor={props.anchor}
-            options={p().row === 'startUp' ? START_UP_STYLES : SHUT_DOWN_STYLES}
-            cursor={p().cursor}
-            current={p().row === 'startUp' ? props.state.startUp : props.state.shutDown}
-            description={p().row === 'startUp' ? 'PRESS ANY BUTTON TO SKIP' : undefined}
           />
         )}
       </Match>
@@ -265,21 +238,6 @@ export function SetupPage(props: {
           focused={focused('background')}
           onSelect={select('background')}
           trailing={<Swatch color={hueColor(s().hue)} />}
-        />
-      </Group>
-
-      <Group class="mt-gap">
-        <Row
-          label="START UP STYLE"
-          value={START_UP_STYLES[s().startUp]}
-          focused={focused('startUp')}
-          onSelect={select('startUp')}
-        />
-        <Row
-          label="SHUT DOWN STYLE"
-          value={SHUT_DOWN_STYLES[s().shutDown]}
-          focused={focused('shutDown')}
-          onSelect={select('shutDown')}
         />
       </Group>
     </Screen>

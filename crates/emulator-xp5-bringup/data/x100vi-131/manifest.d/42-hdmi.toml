@@ -1,0 +1,18 @@
+# reader is 0x1514834, which returns bit 0 of 0xff90e200 (the X-T5 reader
+# 0x143fb8c is the same code). 0x1515554 drives GPIO 9.13 low
+# (0x146c3d4(0x9000d, 0)), waits 100 timer units (0x1564dc4), polls for bit 0
+# set (up to 101 polls, 5 units apart) and then drives 9.13 high again.
+# 0x1516c90 then posts event 0x184e to task 0x8c when bit 0 is clear
+# (0x1515108), or arms a 200-unit periodic poll (0x156464c, callback 0x1515150)
+# that posts it once bit 0 clears. The 0x184e handler 0x1516744 (event table
+# entry 0x1a31720) opens the HDMI I2C instance at 0xff9c0000 and arms a
+# 5000-unit timeout. So bit 0 is clear while a sink drives hot plug, and set
+# once GPIO 9.13 (taken to be the +5V supply the sink loops back) is off: the
+# connected_level = 0 is INFERRED from that order, not measured. No cable is
+# attached.
+[[device]]
+base = 0xff90e200
+size = 4
+kind = "hdmi-hot-plug-status"
+[device.options]
+connected_level = 0

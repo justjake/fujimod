@@ -1,0 +1,268 @@
+# Cold OS boot: reconstructed EL3 -> EL1t handoff at 0x9920c.
+version = 1
+firmware = "x100vi-131"
+load_firmware = true
+
+# Device windows: x100vi-131.d/*.toml, merged in filename order.
+
+[[ram]]
+base = 0
+size = 0x40000000 # Stock low Normal map; cfg0x7508000, frames0x8473000, RTOS pools.
+
+# Linux DRAM366MiB plus virtio/IPC/shared arenas through0x68000000.
+# 0x30c86b0 gives the explicit subranges; all SoC devices remain at0xfa/0xff.
+[[ram]]
+base = 0x40000000
+size = 0x28000000
+
+# The firmware uses DRAM up to 0x80000000, not the catalog body's 0x68000000: the subject-detection
+# 0x68000000 read now lands in DRAM, as in the X-T5 runner. The body's drain peripheral moves
+# onto 0x80000000 only so that it does not overlap the new RAM.
+[dram]
+limit = 0x80000000
+bus_drain = 0x80000000
+
+[[ram]]
+base = 0x68000000
+size = 0x18000000
+
+# DDR PHY register and firmware space, two PHYs of 0x1a0000 bytes (the X-T5 runner gives its DDR
+# PHY RAM the same extents: "DDR PHY register/firmware space").
+# The first half-press (S1) writes the second PHY's mailbox at 0xfb5a0000 and makes a DMA access at
+# 0xfb4a0000 (one run each); a device window cannot receive the DMA. The first PHY (0xfb000000 RAM,
+# 0xfb1a0000 stub) is X-T5 parity, not observed on the X100VI: in the runs checked its stub saw no
+# write and no read of the polled status word, and the RAM keeps no access log.
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# BIS/M-profile local SRAM: stock14d3f14 copies section5 before c928[21] release.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
+# Descriptor tables read by reset stage from flash (0x27b4 / 0x27e8).
+[[preload]]
+address = 0x40000
+dat_offset = 0x6402bc
+length = 0x800
+sha256 = "d55ffeba4c687cb7f408ecc34ad3369bd074d71f1627f0f37574049c773f9ff2"
+
+[[preload]]
+address = 0x40800
+dat_offset = 0x1202bc
+length = 0x800
+sha256 = "947069208f12faaed7f51d931640e41235e5e26039cd58d9f1c4c6d8e435f33a"
+
+# Reset hardware-info snapshot: copied18fd0 -> eeeb0 by stock0x9c308.
+# GPIO0bit0 low lets0x15ae7a4 continue normal cold power-on; other snapshot
+# inputs idle/high (card GPIO11bit12 high=absent). Live GPIO is a device model.
+[[preload]]
+address = 0x18fd0
+bytes = """
+fe ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+"""
+# Trace list0 ends immediately;0x15aa234 stops on "DETS", not32 boguszero records.
+[[preload]]
+address = 0x19020
+value = 0x53544544
+size = 4
+# Trace list1 has the same sentinel at hardware-info+0xd0.
+[[preload]]
+address = 0x190a0
+value = 0x53544544
+size = 4
+# Stock9c308 copies this to ef000; virtual input, not a camera capture.
+[[preload]]
+address = 0x19120
+value = 4
+size = 4
+# +0x154:0x4028 sets0 unless the two optional probe bytes both equal1.
+[[preload]]
+address = 0x19124
+value = 0
+size = 4
+# +0x158..15f: no timed startup; valid0x36 packet tag + byte-sum checksum0xca.
+# 0x15721xx validates these8bytes before copying to0x26a2e70.
+[[preload]]
+address = 0x19128
+bytes = "00 00 00 00 00 00 36 ca"
+# +0x1c4: RTC message construction succeeded (0x42e4 returns0).
+[[preload]]
+address = 0x19194
+value = 0
+size = 4
+# +0x1c8..1db: stock0x42e4 initializes opcode0, status0x8000, message-kind1.
+[[preload]]
+address = 0x19198
+bytes = "00 00 00 00 00 00 00 00 00 00 00 00 00 80 01 00 00 00 00 00"
+# +0x5cc: untrained flash timings;0x146fd14 passesfalse to0x1470e54.
+[[preload]]
+address = 0x1959c
+value = 0
+size = 4
+# +0x5d0 phase0 from reset0xa2e4's conservative no-training path.
+[[preload]]
+address = 0x195a0
+value = 0
+size = 4
+# +0x5d4 edge0 from the same conservative0xaa94(0,0,0,0x10b) setup.
+[[preload]]
+address = 0x195a4
+value = 0
+size = 4
+# +0x5d8 flash-clock control0x10b is the reset0xa3b4 fallback, not guessed timing.
+[[preload]]
+address = 0x195a8
+value = 0x10b
+size = 4
+# +0x5dc: virtual 20bb20 flash ID, supported row0x1cb7460.
+[[preload]]
+address = 0x195ac
+value = 0x20bb20
+size = 4
+# +0x5e0: no training status persisted to flash;0x147073c copies this byte only.
+[[preload]]
+address = 0x195b0
+value = 0
+size = 4
+
+# Run input: no card in the SD slot. Each slot still declares the blank FAT32
+# card (32 GB geometry) that an insertion would present; its contents are not read.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+# Inherited SCTLR (MMU off), D/A masks and MPIDRs are assumptions.
+# Stock replaces SP_EL0/SP_EL1 before calling C, builds its MMU map,
+# then invokes the normal section6 entry in x20. x21 names the reset
+# hardware-info buffer, initialized above for the normal virtual-board profile.
+
+[[cpu]]
+id = 0
+mpidr = 0
+pc = 0x9920c
+sp = 0x205c0
+cpsr = 0x3c4
+running = true
+[cpu.regs]
+x19 = 0
+x20 = 0x15ae230
+x21 = 0x18fd0
+[cpu.sysregs]
+# Reset-stage214c: PMR=ff, both EL1 groups enabled before loader entry.
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034 # Cortex-A53 r0p4; ordinal helper0x9ca30 selects Aff0.
+VBAR_EL1 = 0x9a800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+SP_EL0 = 0x205c0
+
+[[cpu]]
+id = 1
+mpidr = 1
+pc = 0x9920c
+sp = 0x275c0
+cpsr = 0x3c4
+running = false
+[cpu.release_when]
+address = 0x9fb2c
+value = 0xf0f0f0f0
+[cpu.regs]
+x19 = 1
+x20 = 0x15ae230
+x21 = 0x18fd0
+[cpu.sysregs]
+# Reset-stage214c: PMR=ff, both EL1 groups enabled before loader entry.
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034 # Cortex-A53 r0p4; ordinal helper0x9ca30 selects Aff0.
+VBAR_EL1 = 0x9a800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+SP_EL0 = 0x275c0
+
+[[cpu]]
+id = 2
+mpidr = 2
+pc = 0x9920c
+sp = 0x2e5c0
+cpsr = 0x3c4
+running = false
+[cpu.release_when]
+address = 0x9fb30
+value = 0xf0f0f0f0
+[cpu.regs]
+x19 = 2
+x20 = 0x15ae230
+x21 = 0x18fd0
+[cpu.sysregs]
+# Reset-stage214c: PMR=ff, both EL1 groups enabled before loader entry.
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034 # Cortex-A53 r0p4; ordinal helper0x9ca30 selects Aff0.
+VBAR_EL1 = 0x9a800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+SP_EL0 = 0x2e5c0
+
+[[cpu]]
+id = 3
+mpidr = 3
+pc = 0x9920c
+sp = 0x355c0
+cpsr = 0x3c4
+running = false
+[cpu.release_when]
+address = 0x9fb34
+value = 0xf0f0f0f0
+[cpu.regs]
+x19 = 3
+x20 = 0x15ae230
+x21 = 0x18fd0
+[cpu.sysregs]
+# Reset-stage214c: PMR=ff, both EL1 groups enabled before loader entry.
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034 # Cortex-A53 r0p4; ordinal helper0x9ca30 selects Aff0.
+VBAR_EL1 = 0x9a800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+SP_EL0 = 0x355c0
+
+[gic]
+distributor = 0xfa000000
+redistributor = 0xfa080000
+redistributor_stride = 0x20000
+# Driver classifier0x9e380 accepts INTIDs0..511. Initialization writes
+# full1024-bit arrays, including architecturally reserved trailing IDs.
+spi_max = 511
+
+# Loader9bf84 preserves CTLR and enables all groups before EL1 handoff.
+[gic.registers]
+"0x0" = 0x7

@@ -369,8 +369,8 @@ pub enum BlockHardware {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum PictureLayout {
-    /// Blue, green, red and straight-alpha bytes.
-    Bgra8888Straight,
+    /// Straight-alpha, blue, green and red bytes, in memory order.
+    Abgr8888Straight,
 }
 
 /// Video-plane pixel packing declared by a display controller.

@@ -6,6 +6,7 @@
 //! electrical description, so its edges are refused rather than approximated.
 //! No firmware memory or execution state is available at this boundary.
 use crate::resistor_keys::{Key, parse_script};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::controls::Controls;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -284,6 +285,18 @@ impl LadderKeys {
             .find(|rung| s.held.contains(&rung.key))
             .cloned()
     }
+
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state
+            .held
+            .iter()
+            .chain(state.pending.iter().map(|edge| &edge.key))
+            .any(|key| self.options.ladder_of(*key).is_none())
+        {
+            return Err("ladder controls checkpoint names a key this body has no rung for".into());
+        }
+        Ok(())
+    }
 }
 
 impl Controls for LadderKeys {
@@ -353,9 +366,19 @@ impl Controls for LadderKeys {
     fn restore(&self, v: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(v.clone())
             .map_err(|e| format!("ladder controls checkpoint: {e}"))?;
-        if state.held.iter().chain(state.pending.iter().map(|edge| &edge.key)).any(|k| self.options.ladder_of(*k).is_none()) {
-            return Err("ladder controls checkpoint names a key this body has no rung for".into());
-        }
+        self.validate_state(&state)?;
+        *self.state.lock().unwrap() = state;
+        Ok(())
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode("physical-controls", &*self.state.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_state(&saved.decode("physical-controls")?)
+    }
+    fn restore_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode("physical-controls")?;
+        self.validate_state(&state)?;
         *self.state.lock().unwrap() = state;
         Ok(())
     }

@@ -155,6 +155,11 @@
               "name": "displayformatter",
               "kind": "DisplayFormatter",
               "refs": {}
+            },
+            {
+              "name": "satahost",
+              "kind": "SataHost",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -184,7 +189,8 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "satahost"
           ],
           "attachment_order": [
             "bootcontrols",
@@ -213,7 +219,8 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "satahost"
           ]
         },
         "controllers": {
@@ -544,6 +551,11 @@
               "name": "displayformatter",
               "kind": "DisplayFormatter",
               "refs": {}
+            },
+            {
+              "name": "satahost",
+              "kind": "SataHost",
+              "refs": {}
             }
           ],
           "construction_order": [
@@ -573,7 +585,8 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "satahost"
           ],
           "attachment_order": [
             "bootcontrols",
@@ -602,7 +615,8 @@
             "graphicsaccelerator",
             "displayscanout",
             "displaytiming",
-            "displayformatter"
+            "displayformatter",
+            "satahost"
           ]
         },
         "controllers": {

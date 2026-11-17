@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -57,6 +58,48 @@ class Aarch64Image:
 
 
 @dataclass(frozen=True)
+class Aarch64Asset:
+    """Named bytes a device definition consumes, such as a flash image."""
+
+    name: str
+    data: bytes
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.data, bytes) or not self.data:
+            raise ValueError("Device asset requires immutable nonempty bytes")
+        Asset(self.name, len(self.data))
+
+
+@dataclass(frozen=True)
+class Aarch64Devices:
+    """A declared native device set and the windows a routine may reach.
+
+    ``definition`` is the native board's device definition, such as an
+    ``xp5`` set naming its windows, flash part and storage asset. ``windows``
+    are identity-mapped MMIO spans whose loads and stores dispatch through
+    that strict bus; every other device address refuses before execution.
+    ``assets`` supplies each asset the definition names.
+    """
+
+    definition: Mapping[str, object]
+    windows: tuple[Range, ...]
+    assets: tuple[Aarch64Asset, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.definition, Mapping) or self.definition.get(
+            "kind"
+        ) in (None, "none"):
+            raise ValueError("Device set requires a native device definition kind")
+        if not self.windows:
+            raise ValueError("Device set requires at least one routine window")
+        spans = sorted(_range(*w) for w in self.windows)
+        if any(a[1] > b[0] for a, b in zip(spans, spans[1:], strict=False)):
+            raise ValueError("Device windows overlap")
+        if len({a.name for a in self.assets}) != len(self.assets):
+            raise ValueError("Choose distinct device asset names")
+
+
+@dataclass(frozen=True)
 class Aarch64Inputs:
     images: tuple[Aarch64Image, ...]
     stack: Range
@@ -64,10 +107,16 @@ class Aarch64Inputs:
     return_address: int
     scratch: Range
     identity: Mapping[str, object] | None = None
+    devices: Aarch64Devices | None = None
 
     def __post_init__(self) -> None:
         if not self.images or len({i.name for i in self.images}) != len(self.images):
             raise ValueError("Choose distinct AArch64 image names")
+        if self.devices is not None:
+            if not isinstance(self.devices, Aarch64Devices):
+                raise TypeError("AArch64 devices require Aarch64Devices")
+            if {a.name for a in self.devices.assets} & {i.name for i in self.images}:
+                raise ValueError("Device asset names collide with image names")
         _range(*self.stack)
         _range(*self.scratch)
         _word(self.stack_pointer)
@@ -84,6 +133,7 @@ class Aarch64Inputs:
         spans = sorted(
             [self.stack, self.scratch, (self.return_address, self.return_address + 4)]
             + [(i.address, i.address + len(i.data)) for i in self.images]
+            + list(self.devices.windows if self.devices else ())
         )
         if any(a[1] > b[0] for a, b in zip(spans, spans[1:], strict=False)):
             raise ValueError("AArch64 images and caller reservations overlap")
@@ -121,8 +171,10 @@ class Aarch64DriverHarness:
     """Checked integer routines with fixed-return callee substitutions.
 
     Memory is sparse, flat, and explicit. Page padding is never readable or
-    writable guest input. No reset, MMU, cache, peripheral or boot state is
-    inferred. Unknown instruction families stop before execution.
+    writable guest input. Device access exists only through an explicit
+    ``Aarch64Inputs.devices`` set and its declared windows. No reset, MMU,
+    cache or boot state is inferred. Unknown instruction families stop before
+    execution.
     """
 
     def __init__(
@@ -182,7 +234,13 @@ class Aarch64DriverHarness:
         pages = _merge([
             (a & ~0x3FFF, (b + 0x3FFF) & ~0x3FFF) for a, b in reserved + fixture_ranges
         ])
+        devices = inputs.devices
+        windows = list(devices.windows) if devices else []
+        if any(a < d and c < b for a, b in pages for c, d in windows):
+            raise ValueError("Device windows overlap RAM pages")
         assets = {image.name: image.data for image in inputs.images}
+        device_assets = devices.assets if devices else ()
+        assets.update((asset.name, asset.data) for asset in device_assets)
         definition = Definition(
             execution={
                 "processors": [
@@ -223,16 +281,28 @@ class Aarch64DriverHarness:
                     {"address": a, "physical": a, "size": b - a, "permissions": 3}
                     for a, b in pages
                 ],
-                "peripherals": [],
+                "peripherals": [
+                    {"core": 0, "address": a, "physical": a, "size": b - a}
+                    for a, b in windows
+                ],
                 "decoders": [],
                 "instructions_per_tick": [1, 1],
             },
-            devices={"kind": "none"},
-            assets=tuple(Asset(i.name, len(i.data)) for i in inputs.images),
+            devices=dict(devices.definition) if devices else {"kind": "none"},
+            assets=tuple(Asset(name, len(data)) for name, data in assets.items()),
             images=tuple(Image(i.name, i.address) for i in inputs.images),
             quantum=quantum,
         )
         self._execution = dict(definition.execution)
+        self._devices = json.loads(json.dumps(dict(definition.devices)))
+        self._device_assets = [
+            {
+                "name": asset.name,
+                "size": len(asset.data),
+                "sha256": hashlib.sha256(asset.data).hexdigest(),
+            }
+            for asset in device_assets
+        ]
         self.board = make_board(definition, assets)
         try:
             for address, data in self._patches:
@@ -365,6 +435,7 @@ class Aarch64DriverHarness:
         fragment_exit: Mapping[str, int] | None = None,
         observer_limit: int = 4096,
         system_reads: Iterable[tuple[str, int]] = (),
+        transaction_limit: int = 4096,
     ) -> dict:
         """Execute a routine with optional expected CPU-model system reads.
 
@@ -451,6 +522,10 @@ class Aarch64DriverHarness:
             "executable": executable,
             "readable": readable,
             "writable": writable,
+            "devices": [
+                list(w) for w in (self.inputs.devices.windows if self.inputs.devices else ())
+            ],
+            "transaction_limit": transaction_limit,
             "store_limit": store_limit,
             "stubs": self._stubs,
             "registers": reg_values,
@@ -478,6 +553,8 @@ class Aarch64DriverHarness:
             caller=options,
             profile=dict(self.inputs.identity or {}),
             execution=json.loads(json.dumps(self._execution)),
+            devices=json.loads(json.dumps(self._devices)),
+            device_assets=[dict(asset) for asset in self._device_assets],
             native_identity={
                 "version": _native.VERSION,
                 "unicorn_abi": _native.UNICORN_ABI,
@@ -487,6 +564,11 @@ class Aarch64DriverHarness:
             runtime="shared",
             architecture="aarch64",
             vector_initial_state="v0-v31, FPCR and FPSR initialized to zero for each call",
-            limits="Isolated synthetic caller state; no MMU, cache, device, reset, boot, timing or hardware success established",
+            limits=(
+                "Isolated synthetic caller state; device behavior is only the declared native models; "
+                "no MMU, cache, reset, boot, timing or hardware success established"
+                if self.inputs.devices
+                else "Isolated synthetic caller state; no MMU, cache, device, reset, boot, timing or hardware success established"
+            ),
         )
         return result

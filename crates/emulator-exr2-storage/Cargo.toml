@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 doctest = false
@@ -14,7 +15,7 @@ doctest = false
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
-fujimod-emulator-parts-io.workspace = true
+fujimod-emulator-parts-wifi.workspace = true
 fujimod-emulator-ip.workspace = true
 fujimod-emulator-devices.workspace = true
 serde_json = "1"

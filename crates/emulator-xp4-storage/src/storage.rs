@@ -2,9 +2,10 @@
 //! flash bytes, DMA and IRQ routing are separate inputs.
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex},
+    sync::{atomic::{AtomicU64, Ordering}, Arc, Mutex},
 };
 mod checkpoint;
 mod frozen;
@@ -14,6 +15,88 @@ pub const CONTROLLER: u64 = 0xfffd8000;
 pub const DMA: u64 = 0xfffe0000;
 pub const FLASH: u64 = 0xf0000000;
 pub const FLASH_SIZE: u64 = 0x08000000;
+/// Fixed DMA addresses at or above this one are peripheral FIFOs (X-T3 5.11:
+/// serial audio port 0, receive 0xfff4f000 and transmit 0xfff4f004).
+pub const PERIPHERAL_FIFOS: u64 = 0xfff00000;
+
+/// Declared audio channels of the storage DMA (absent by default: every
+/// channel keeps the plain timing and refusals).
+///
+/// On a listed channel:
+/// - a fixed side at or above [`PERIPHERAL_FIFOS`] is an audio FIFO with
+///   nothing attached: a receive block delivers silence and a transmit block
+///   leaves the chip. The far end sets the pace: a block of `n` bytes lasts
+///   `n * ticks_per_second / bytes_per_second` ticks, and while it runs the
+///   incremented address reads where the transfer has got to, in whole
+///   transfer units;
+/// - `+0x24` may link the next descriptor (bits 31..4 its address, bit 0
+///   set; bits 1..3 must be clear): when a block completes, the channel
+///   loads `+0x10..+0x24` from the six words there and keeps running;
+/// - with `irq_at_end`, a linked block completes without raising the channel
+///   IRQ or `+0x30` bit 0; only the end of the list does.
+///
+/// X-T3 5.11 records movie sound through channel 4, from 0xfff4f000 into a
+/// self-linked ring of 5 760-byte blocks (720 frames of 8 bytes at 48 kHz,
+/// 384 000 bytes/s), while channel 8 sends a ring to serial audio port 1
+/// (0xfff78004); playback sends through channel 7 to 0xfff4f004. Its audio task finds each block end by polling the position
+/// (monitors 0x111be60 / 0x111bb74, wait 0x111bf78); a channel IRQ means
+/// "list finished": its callbacks (0x111a3a8, 0x111a370) make the driver
+/// stop the channel (0x111c818, 0x111c320).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AudioPacing {
+    pub channels: Vec<usize>,
+    pub bytes_per_second: u64,
+    pub ticks_per_second: u64,
+    #[serde(default)]
+    pub irq_at_end: bool,
+    /// Known test signal on a receive FIFO instead of silence (absent by
+    /// default): see [`TestMicrophone`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub microphone: Option<TestMicrophone>,
+}
+
+/// Known test signal a receive FIFO delivers instead of silence on a declared
+/// audio channel (absent by default), the sound counterpart of a test sensor
+/// pattern.
+///
+/// X-T3 5.11 programs serial audio port 0 for 24-bit samples in 32-bit slots
+/// (0x1078104: `+0x0c` = 0x400 | 31 << 5 | 23, 0x10783a0), two slots a frame,
+/// and DMA channel 4 reads its receive FIFO 0xfff4f000 in 4-byte units
+/// (0x111a724, 0x111ae44); the audio converter 0xfffa8000 then packs the
+/// 32-bit slots into the 24-bit samples of the movie (0x111a4bc).
+///
+/// Frame `n`, counted from the first frame the FIFO delivers, carries for each
+/// slot in order `((start + step * n) mod 2^(32 - shift)) << shift`,
+/// little-endian. Which slot is the left channel, and where the port puts
+/// 24-bit data in its slot, are declared, not measured: with `shift` 8 the
+/// value is left-justified, the layout the declared converter law expects.
+/// A block that is not made of whole frames of 4-byte units is refused.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TestMicrophone {
+    /// Receive FIFO (X-T3 5.11: 0xfff4f000).
+    pub fifo: u64,
+    /// `[start, step]` of each 4-byte slot of a frame, in FIFO order (1 to 8).
+    pub slots: Vec<[u32; 2]>,
+    /// Left shift of each value in its slot (below 32).
+    pub shift: u32,
+}
+impl TestMicrophone {
+    /// `frames` frames from frame `first` on.
+    pub fn frames(&self, first: u64, frames: u64) -> Vec<u8> {
+        let mask = (1u64 << (32 - self.shift)) - 1;
+        (first..first + frames)
+            .flat_map(|n| {
+                self.slots.iter().flat_map(move |&[start, step]| {
+                    let value =
+                        u64::from(start).wrapping_add(u64::from(step).wrapping_mul(n)) & mask;
+                    ((value as u32) << self.shift).to_le_bytes()
+                })
+            })
+            .collect()
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Geometry {
@@ -27,18 +110,96 @@ enum Mutation {
     Program { address: u64, bytes: Vec<u8> },
 }
 
+/// A declared controller state in which CPU reads of the mapped aperture
+/// reach the array.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappedReadState {
+    /// Control register (+0x00) bits this state requires: (mask, value).
+    pub control: (u32, u32),
+    /// Clock register (+0x04) value.
+    pub clock: u32,
+    /// Mode register (+0x14) value.
+    pub mode: u32,
+    /// Sample-point register (+0x10) values that capture array data; any
+    /// other sample point reads the gate's miss pattern.
+    pub samples: Vec<u32>,
+    /// Whether the state needs the pad function register set.
+    pub pad: bool,
+}
+
+/// Declared controller and pad states under which CPU reads of the mapped
+/// aperture return array bytes. Every field is a board input: the valid
+/// states and sample windows of a real part are hypotheses supplied by the
+/// caller, not facts of this model. A read in no declared state fails the
+/// run.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MappedReadGate {
+    pub states: Vec<MappedReadState>,
+    /// Byte every aperture byte reads as at a sample point outside the
+    /// state's samples.
+    pub miss_byte: u8,
+    /// One-word pad function register this controller owns, and the
+    /// (mask, value) its 16 masked bits must hold. Writes carry their mask in
+    /// the upper 16 bits.
+    pub pad: (u64, u32, u32),
+}
+impl MappedReadGate {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.states.is_empty()
+            || self.states.iter().any(|s| s.control.1 & !s.control.0 != 0)
+            || self.pad.0 & 3 != 0
+            || (CONTROLLER..CONTROLLER + 0x100).contains(&self.pad.0)
+            || (FLASH..FLASH + FLASH_SIZE).contains(&self.pad.0)
+            || self.pad.1 > 0xffff
+            || self.pad.2 & !self.pad.1 != 0
+        {
+            return Err("Invalid XP4 mapped-read gate".into());
+        }
+        Ok(())
+    }
+}
+
+/// Explicit erased initial contents outside the supplied byte asset.
+/// Offsets and lengths are relative to the array, not CPU addresses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ErasedRange {
+    pub offset: u64,
+    pub length: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReadBacking {
+    bytes: usize,
+    sha256: [u8; 32],
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    erased_ranges: Vec<ErasedRange>,
+}
+
 /// External NOR contents and identity, supplied by the board. Uninitialized
-/// bytes are erased. No firmware structures or executable signatures enter it.
+/// bytes are erased unless strict external read backing is selected.
+/// No firmware structures or executable signatures enter it.
 pub struct Nor {
     bytes: frozen::Source,
     prefix: Option<ImmutablePrefix>,
+    write_protect: bool,
+    read_backing: Option<ReadBacking>,
     pub jedec: u32,
     pub write_enable: bool,
     geometry: Geometry,
     overlay: BTreeMap<usize, Vec<u8>>,
     pending: Option<(u64, Mutation)>,
+    /// Counts completed erases and programs and changes of the controller's mapped-read state (control, clock, sample,
+    /// mode and pad words): a consumer of copies derived from mapped reads compares it to know they are stale.
+    epoch: Arc<AtomicU64>,
 }
 impl Nor {
+    pub fn epoch(&self) -> Arc<AtomicU64> {
+        self.epoch.clone()
+    }
     pub fn new(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Self, String> {
         if bytes.len() as u64 > FLASH_SIZE
             || jedec > 0xffffff
@@ -55,11 +216,14 @@ impl Nor {
         Ok(Self {
             bytes: frozen::Source::new(bytes)?,
             prefix: None,
+            write_protect: false,
+            read_backing: None,
             jedec,
             write_enable: false,
             geometry,
             overlay: BTreeMap::new(),
             pending: None,
+            epoch: Arc::new(AtomicU64::new(0)),
         })
     }
     pub fn with_immutable_prefix(mut self, prefix: ImmutablePrefix) -> Result<Self, String> {
@@ -72,7 +236,86 @@ impl Nor {
     pub fn immutable_view(&self) -> Option<ImmutableView> {
         self.prefix.map(|prefix| ImmutableView::new(self.bytes.clone(), prefix.bytes()))
     }
+    /// Declares a run in which the whole array is immutable: every
+    /// write-enable, erase and program request fails the run when issued.
+    pub fn with_write_protect(mut self) -> Self {
+        self.write_protect = true;
+        self
+    }
+    /// Refuse external array reads outside the supplied bytes. The range and
+    /// source identity remain fixed for this instance, including after writes.
+    /// This is independent of write protection and the aperture's capacity.
+    pub fn with_strict_backing(mut self) -> Self {
+        self.read_backing = Some(ReadBacking {
+            bytes: self.bytes.len(),
+            sha256: Sha256::digest(self.bytes.as_slice()).into(),
+            erased_ranges: vec![],
+        });
+        self
+    }
+    /// Add explicitly erased initial input ranges to strict read coverage.
+    /// Gaps remain inaccessible. Writes do not expand these fixed ranges.
+    pub fn with_erased_ranges(mut self, mut ranges: Vec<ErasedRange>) -> Result<Self, String> {
+        let backing = self.read_backing.as_mut()
+            .ok_or("Erased NOR ranges require strict read backing")?;
+        ranges.sort_by_key(|range| range.offset);
+        let mut previous_end = backing.bytes as u64;
+        for range in &ranges {
+            let end = range.offset.checked_add(range.length)
+                .ok_or("Erased NOR range overflows")?;
+            if range.length == 0 || range.offset < previous_end || end > FLASH_SIZE {
+                return Err("Invalid, overlapping or out-of-aperture erased NOR range".into());
+            }
+            previous_end = end;
+        }
+        backing.erased_ranges = ranges;
+        Ok(self)
+    }
+    fn check_read_backing(&self, address: u64, size: usize) -> Result<(), String> {
+        let Some(backing) = &self.read_backing else { return Ok(()) };
+        let offset = address.checked_sub(FLASH).ok_or("NOR address below aperture")?;
+        if let Some(end) = offset.checked_add(size as u64) {
+            let mut covered = if offset <= backing.bytes as u64 {
+                Some(backing.bytes as u64)
+            } else {
+                None
+            };
+            for range in &backing.erased_ranges {
+                if covered.is_some_and(|at| end <= at) { return Ok(()); }
+                let range_end = range.offset + range.length; // Constructor validated.
+                if covered.is_some_and(|at| range.offset <= at)
+                    || covered.is_none() && range.offset <= offset && offset <= range_end {
+                    covered = Some(range_end);
+                }
+            }
+            if covered.is_some_and(|at| end <= at) { return Ok(()); }
+        }
+        Err(format!(
+            "NOR read outside supplied backing: offset={offset:#x} size={size:#x} backed_bytes={:#x}",
+            backing.bytes
+        ))
+    }
+    fn read_array(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
+        self.check_read_backing(address, size)?;
+        self.read(address, size)
+    }
+    /// Commands that only read the array, identity or status. Every other
+    /// supported opcode can enable or perform a mutation.
+    fn read_only_command(command: u8) -> bool {
+        matches!(command, 0x9f | 0x05 | 0x04 | 0x03 | 0x13 | 0x0b | 0x0c)
+    }
+    fn check_protected_command(&self, command: u32) -> Result<(), String> {
+        let opcode = (command >> 24) as u8;
+        if self.write_protect && !Self::read_only_command(opcode) {
+            return Err(format!("Write-type NOR command {opcode:#x} on a write-protected array"));
+        }
+        Ok(())
+    }
     fn check_mutation(&self, address: u64, size: usize) -> Result<(), String> {
+        if self.write_protect && size != 0 && address < FLASH + FLASH_SIZE
+            && address.checked_add(size as u64).is_none_or(|end| end > FLASH) {
+            return Err("NOR mutation on a write-protected array".into());
+        }
         if self.prefix.is_some_and(|p| size != 0 && address < FLASH + p.bytes() as u64
             && address.checked_add(size as u64).is_none_or(|end| end > FLASH)) {
             return Err("Mutation intersects immutable NOR prefix".into());
@@ -86,6 +329,9 @@ impl Nor {
         let address = FLASH + offset / size as u64 * size as u64;
         self.check_mutation(address, size)
     }
+    // Internal mutation assembly still needs complete pages, including erased
+    // bytes outside a partially supplied final page. External CPU/DMA reads
+    // use read_array; writes never enlarge that fixed input coverage.
     fn read(&self, address: u64, size: usize) -> Result<Vec<u8>, String> {
         let offset = address
             .checked_sub(FLASH)
@@ -186,6 +432,7 @@ impl Nor {
                 (address, bytes.len(), "XP4 NOR program complete")
             }
         };
+        self.epoch.fetch_add(1, Ordering::SeqCst);
         cx.record(Record::new(
             name,
             [
@@ -207,7 +454,8 @@ impl Nor {
         json!({"jedec":self.jedec,"write_enable":self.write_enable,"pending":pending,
             "erase_bytes":self.geometry.erase_bytes,"page_bytes":self.geometry.page_bytes,
             "erase_ticks":self.geometry.erase_ticks,"page_ticks":self.geometry.page_ticks,
-            "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes())})
+            "overlay":self.overlay,"immutable_prefix":self.prefix.map(|p| p.bytes()),
+            "write_protect":self.write_protect,"read_backing":self.read_backing})
     }
 }
 
@@ -229,7 +477,11 @@ pub type Shared = Arc<Mutex<Port>>;
 pub fn port_from_nor(nor: Nor) -> Shared {
     Arc::new(Mutex::new(Port { nor, request: None, program_data: None }))
 }
-impl Port { pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() } }
+impl Port {
+    pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() }
+    /// The array's and the controller's mapped-read epoch (see `Nor::epoch`).
+    pub fn epoch(&self) -> Arc<AtomicU64> { self.nor.epoch() }
+}
 pub fn port(bytes: Vec<u8>, jedec: u32, geometry: Geometry) -> Result<Shared, String> {
     Ok(Arc::new(Mutex::new(Port {
         nor: Nor::new(bytes, jedec, geometry)?,
@@ -245,17 +497,55 @@ pub struct SerialFlashController {
     operations: u64,
     irq: u32,
     irq_level: bool,
+    gate: Option<MappedReadGate>,
+    pad: u32,
+    mapped_misses: u64,
+    epoch: Arc<AtomicU64>,
 }
 impl SerialFlashController {
     pub fn new(port: Shared, irq: u32) -> Self {
+        let epoch = port.lock().unwrap().epoch();
         Self {
+            epoch,
             port,
             regs: [0; 64],
             due: None,
             operations: 0,
             irq,
             irq_level: false,
+            gate: None,
+            pad: 0,
+            mapped_misses: 0,
         }
+    }
+    /// Gates mapped aperture reads on the declared controller and pad state;
+    /// the controller then also owns the gate's pad register word.
+    pub fn with_mapped_read_gate(mut self, gate: MappedReadGate) -> Result<Self, String> {
+        gate.validate()?;
+        self.gate = Some(gate);
+        Ok(self)
+    }
+    /// Pad register word owned by the mapped-read gate, if any.
+    pub fn pad_register(&self) -> Option<u64> {
+        self.gate.as_ref().map(|g| g.pad.0)
+    }
+    /// Whether a mapped read in the current state returns array data
+    /// (`Ok(true)`), the declared miss pattern (`Ok(false)`) or is refused.
+    fn mapped_read_state(&self) -> Result<bool, String> {
+        let Some(gate) = &self.gate else { return Ok(true) };
+        let (control, clock, sample, mode) = (self.regs[0], self.regs[1], self.regs[4], self.regs[5]);
+        let pad = self.pad & gate.pad.1 == gate.pad.2;
+        let mut states = gate.states.iter().filter(|s| {
+            control & s.control.0 == s.control.1 && s.clock == clock && s.mode == mode && (pad || !s.pad)
+        }).peekable();
+        if states.peek().is_none() {
+            return Err(format!(
+                "Mapped NOR read in no declared controller state: control {control:#x}, clock {clock:#x}, \
+                 mode {mode:#x}, sample {sample:#x}, pad register {:#x} = {:#x}",
+                gate.pad.0, self.pad
+            ));
+        }
+        Ok(states.any(|s| s.samples.contains(&sample)))
     }
     fn drive_irq(&mut self, cx: &mut Cx<'_>, level: bool) {
         if level != self.irq_level {
@@ -312,11 +602,33 @@ impl SerialFlashController {
             if write {
                 return Err("CPU store to NOR aperture without a program command".into());
             }
-            let bytes = self.port.lock().unwrap().nor.read(address, size as usize)?;
+            // A declared sampling miss is not permission to read outside the
+            // attached input. Check coverage before counting or returning it.
+            self.port.lock().unwrap().nor.check_read_backing(address, size as usize)?;
+            if !self.mapped_read_state()? {
+                self.mapped_misses += 1;
+                let miss = self.gate.as_ref().unwrap().miss_byte;
+                return Ok((0..size).fold(0, |v, n| v | u64::from(miss) << (8 * n)));
+            }
+            let bytes = self.port.lock().unwrap().nor.read_array(address, size as usize)?;
             return Ok(bytes
                 .iter()
                 .enumerate()
                 .fold(0, |v, (n, b)| v | u64::from(*b) << (8 * n)));
+        }
+        if self.pad_register() == Some(address) {
+            if size != 4 {
+                return Err("Pad register access is not a word".into());
+            }
+            if write {
+                let mask = value >> 16;
+                let pad = (self.pad & !mask) | (value & mask);
+                if pad != self.pad {
+                    self.epoch.fetch_add(1, Ordering::SeqCst);
+                }
+                self.pad = pad;
+            }
+            return Ok(u64::from(self.pad));
         }
         let o = address.wrapping_sub(CONTROLLER) as usize;
         if size != 4 || o & 3 != 0 || !Self::known(o) {
@@ -326,6 +638,8 @@ impl SerialFlashController {
         if !write {
             return Ok(self.regs[o / 4] as u64);
         }
+        // Control bit 31 is the command-done status, not part of the state a mapped read is taken in.
+        let read_state = [self.regs[0] & !0x8000_0000, self.regs[1], self.regs[4], self.regs[5]];
         if (o == 0x90 || o == 0x94)
             && ((o == 0x90 && value & 1 != 0) || self.due.is_some_and(|(_, token)| token == 1))
         {
@@ -390,6 +704,7 @@ impl SerialFlashController {
                 ) {
                     return Err(format!("Unsupported XP4 flash command {command:#x}"));
                 }
+                self.port.lock().unwrap().nor.check_protected_command(value)?;
                 if command != 0x05 && self.port.lock().unwrap().nor.pending.is_some() {
                     return Err("NOR command while array is busy".into());
                 }
@@ -415,7 +730,7 @@ impl SerialFlashController {
                 if self.port.lock().unwrap().nor.pending.is_some() {
                     return Err("Mapped NOR read while busy".into());
                 }
-                self.port.lock().unwrap().nor.read(address, size)?;
+                self.port.lock().unwrap().nor.read_array(address, size)?;
                 self.port.lock().unwrap().request = Some(Request {
                     address,
                     size,
@@ -431,6 +746,9 @@ impl SerialFlashController {
             0x70 if value & 1 != 0 => {
                 if self.due.is_some() || self.regs[0x20 / 4] != 0x202 {
                     return Err("Unsupported or busy XP4 program request".into());
+                }
+                if self.port.lock().unwrap().nor.write_protect {
+                    return Err("NOR stream program on a write-protected array".into());
                 }
                 let address = u64::from(self.regs[0x78 / 4]);
                 let size = self.regs[0x7c / 4] as usize;
@@ -452,6 +770,9 @@ impl SerialFlashController {
                 cx.schedule(cx.now() + 8, 4);
             }
             _ => self.regs[o / 4] = value,
+        }
+        if read_state != [self.regs[0] & !0x8000_0000, self.regs[1], self.regs[4], self.regs[5]] {
+            self.epoch.fetch_add(1, Ordering::SeqCst);
         }
         // +44 rearms future completions; enabling it must not replay an old
         // completed command. Disabling it acknowledges the live IRQ latch.
@@ -605,7 +926,8 @@ impl Device for SerialFlashController {
         let port = self.port.lock().unwrap();
         json!({"registers":self.regs.to_vec(),"next":self.due,"operations":self.operations,
             "jedec":port.nor.jedec,"nor":port.nor.snapshot(),"stream":port.request,
-            "program_fifo":port.program_data,"irq":self.irq,"irq_level":self.irq_level})
+            "program_fifo":port.program_data,"irq":self.irq,"irq_level":self.irq_level,
+            "mapped_read_gate":self.gate,"pad":self.pad,"mapped_misses":self.mapped_misses})
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         self.restore_state(value)
@@ -623,6 +945,15 @@ struct Channel {
     completed: u64,
     submitted_at: u64,
 }
+impl Channel {
+    /// The fixed side (`+0x1c` or `+0x20` bit 2) is a peripheral FIFO.
+    fn fifo(&self) -> bool {
+        let fixed = |config: usize, address: usize| {
+            self.regs[config / 4] & 4 != 0 && u64::from(self.regs[address / 4]) >= PERIPHERAL_FIFOS
+        };
+        fixed(0x1c, 0x14) || fixed(0x20, 0x18)
+    }
+}
 pub struct DmaController {
     receiver: Option<crate::tx_receiver::SharedReceiver>,
     port: Option<Shared>,
@@ -633,6 +964,9 @@ pub struct DmaController {
     mux_changed: [u64; 16],
     /// Per-channel request words at `0xfff4a800 + n*8` (+0 control, +4 selector).
     request: BTreeMap<u64, u32>,
+    audio: Option<AudioPacing>,
+    /// Frames the test microphone has delivered (see [`TestMicrophone`]).
+    microphone_frames: u64,
 }
 impl DmaController {
     pub fn new(port: Shared, routes: [u32; 16]) -> Self {
@@ -643,7 +977,88 @@ impl DmaController {
             mux: BTreeMap::new(),
             mux_changed: [0; 16],
             request: BTreeMap::new(),
+            audio: None,
+            microphone_frames: 0,
         }
+    }
+    /// Declares the audio channels (see [`AudioPacing`]); `None` keeps every
+    /// channel unchanged.
+    pub fn with_audio(mut self, audio: Option<AudioPacing>) -> Result<Self, String> {
+        if let Some(a) = &audio {
+            let unique: std::collections::BTreeSet<_> = a.channels.iter().collect();
+            if self.port.is_none()
+                || a.channels.is_empty()
+                || unique.len() != a.channels.len()
+                || a.channels.iter().any(|&n| n >= 16)
+                || a.bytes_per_second == 0
+                || a.ticks_per_second == 0
+            {
+                return Err("Invalid XP4 DMA audio channels".into());
+            }
+            if let Some(m) = &a.microphone
+                && (m.fifo < PERIPHERAL_FIFOS
+                    || m.fifo & 3 != 0
+                    || m.slots.is_empty()
+                    || m.slots.len() > 8
+                    || m.shift >= 32)
+            {
+                return Err("Invalid XP4 DMA test microphone".into());
+            }
+        }
+        self.audio = audio;
+        Ok(self)
+    }
+    fn microphone(&self) -> Option<&TestMicrophone> {
+        self.audio.as_ref().and_then(|a| a.microphone.as_ref())
+    }
+    /// Receive block of paced channel `n` from the test microphone FIFO, in
+    /// whole frames of 4-byte units; `None` when channel `n` does not read it.
+    fn microphone_block(&mut self, n: usize) -> Result<Option<Vec<u8>>, String> {
+        let Some(m) = self.microphone().filter(|_| self.paced(n)) else {
+            return Ok(None);
+        };
+        let c = &self.channels[n];
+        if c.regs[0x1c / 4] & 4 == 0 || u64::from(c.regs[0x14 / 4]) != m.fifo {
+            return Ok(None);
+        }
+        let size = u64::from(c.regs[0x10 / 4]) + 1;
+        let frame = 4 * m.slots.len() as u64;
+        if (c.regs[0x1c / 4] >> 16) & 3 != 2 || !size.is_multiple_of(frame) {
+            return Err("XP4 DMA test microphone block is not whole 4-byte frames".into());
+        }
+        let data = m.frames(self.microphone_frames, size / frame);
+        self.microphone_frames += size / frame;
+        Ok(Some(data))
+    }
+    fn audio(&self, n: usize) -> Option<&AudioPacing> {
+        self.audio.as_ref().filter(|a| a.channels.contains(&n))
+    }
+    /// Channel `n` is a declared audio channel with a peripheral FIFO side.
+    fn paced(&self, n: usize) -> bool {
+        self.audio(n).is_some() && self.channels[n].fifo()
+    }
+    /// Ticks a paced block of `bytes` lasts on channel `n`.
+    fn paced_ticks(&self, n: usize, bytes: u64) -> Option<u64> {
+        let a = self.audio(n)?;
+        u64::try_from(
+            u128::from(bytes) * u128::from(a.ticks_per_second) / u128::from(a.bytes_per_second),
+        )
+        .ok()
+    }
+    /// Bytes a running paced block of channel `n` has moved at `now`, in
+    /// whole transfer units of its incremented side (`config` = that side's
+    /// configuration word).
+    fn paced_moved(&self, n: usize, now: u64, config: usize) -> u32 {
+        let (Some(a), c) = (self.audio(n), &self.channels[n]) else {
+            return 0;
+        };
+        let bytes = u64::from(c.regs[0x10 / 4]) + 1;
+        let elapsed = now.saturating_sub(c.submitted_at);
+        let moved =
+            u128::from(elapsed) * u128::from(a.bytes_per_second) / u128::from(a.ticks_per_second);
+        let moved = moved.min(u128::from(bytes)) as u64;
+        let width = 1u64 << ((c.regs[config / 4] >> 16) & 3);
+        (moved - moved % width) as u32
     }
     pub const STANDALONE_RESET: &str = "experimental-zero-registers-v1";
     pub const STANDALONE_TIMING: &str = "functional-16-setup-16-bytes-v1";
@@ -655,7 +1070,8 @@ impl DmaController {
             return Err("Invalid explicit standalone XP4 DMA profiles or IRQ routes".into());
         }
         Ok(Self { receiver: None, port: None, standalone_admitted: false, channels: Default::default(), routes,
-            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new() })
+            mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new(), audio: None,
+            microphone_frames: 0 })
     }
     pub fn with_receiver(mut self, receiver: crate::tx_receiver::SharedReceiver) -> Self {
         self.receiver = Some(receiver);
@@ -695,6 +1111,7 @@ impl DmaController {
         let write = (FLASH..FLASH + FLASH_SIZE).contains(&dst);
         if !(FLASH..FLASH + FLASH_SIZE).contains(&src) && !write {
             if c.regs[0x20 / 4] & 4 != 0
+                && !self.paced(n)
                 && let Some(receiver) = &self.receiver
             {
                 let mux = *self
@@ -810,6 +1227,18 @@ impl DmaController {
                 .check_mutation(u64::from(c.regs[0x18 / 4]), c.regs[0x10 / 4] as usize + 1)?;
         }
         self.admit(cx);
+        let audio = self.audio(n).is_some();
+        if !write && matches!(o, 0x14 | 0x18) && self.channels[n].submitted && self.paced(n) {
+            // A paced block moves continuously: its incremented address reads
+            // where the transfer has got to (X-T3 5.11 0x107b63c reads +0x30,
+            // +0x14 and +0x18 while core 3 polls the movie audio ring).
+            let config = if o == 0x14 { 0x1c } else { 0x20 };
+            let c = &self.channels[n];
+            if c.regs[config / 4] & 4 == 0 {
+                let moved = self.paced_moved(n, cx.now(), config);
+                return Ok(u64::from(c.regs[o / 4].wrapping_add(moved)));
+            }
+        }
         let c = &mut self.channels[n];
         if !write {
             return Ok(c.regs[o / 4] as u64);
@@ -822,7 +1251,11 @@ impl DmaController {
                         return Err("XP4 DMA channel start while busy".into());
                     }
                     let count = u64::from(c.regs[0x10 / 4]) + 1;
-                    if count > FLASH_SIZE || c.regs[0x24 / 4] != 0 {
+                    // An audio channel may link its next descriptor: +0x24
+                    // bits 31..4 address, bit 0 linked (0x107ba50 writes
+                    // (x << 4) | 1); bits 1..3 are not modeled.
+                    let next = c.regs[0x24 / 4];
+                    if count > FLASH_SIZE || if audio { next & 0xe != 0 } else { next != 0 } {
                         return Err("Unsupported XP4 DMA extent/repeat".into());
                     }
                     c.regs[0x30 / 4] = 0x10000;
@@ -835,7 +1268,9 @@ impl DmaController {
                 }
             }
             0x30 => {
-                c.regs[o / 4] = 0;
+                // A running linked audio channel acknowledges one block and
+                // keeps running.
+                c.regs[o / 4] = if audio && c.submitted { 0x10000 } else { 0 };
                 cx.set_irq(self.routes[n], false);
             }
             _ => {
@@ -848,6 +1283,9 @@ impl DmaController {
         Ok(0)
     }
     fn complete(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
+        let microphone = self.microphone_block(n)?;
+        let audio = self.audio(n).map(|a| a.irq_at_end);
+        let paced = self.paced(n);
         let c = &mut self.channels[n];
         let src = u64::from(c.regs[0x14 / 4]);
         let dst = u64::from(c.regs[0x18 / 4]);
@@ -855,7 +1293,14 @@ impl DmaController {
         if let Some(port) = &self.port { port.lock().unwrap().nor.check_mutation(dst, size)?; }
         let completed_at = c.due.unwrap();
         let program = (FLASH..FLASH + FLASH_SIZE).contains(&dst);
-        if c.regs[0x20 / 4] & 4 != 0 && !program && self.receiver.is_none() {
+        // A declared audio FIFO with nothing attached: a receive block is
+        // silence, a transmit block leaves the chip.
+        let silence = paced && c.regs[0x1c / 4] & 4 != 0 && src >= PERIPHERAL_FIFOS;
+        let sink = paced && c.regs[0x20 / 4] & 4 != 0 && dst >= PERIPHERAL_FIFOS;
+        if sink && !size.is_multiple_of(1usize << ((c.regs[0x20 / 4] >> 16) & 3)) {
+            return Err("XP4 DMA count is not a multiple of transfer width".into());
+        }
+        if c.regs[0x20 / 4] & 4 != 0 && !program && !sink && self.receiver.is_none() {
             return Err("XP4 fixed-destination DMA is not modeled".into());
         }
         let data = if (FLASH..FLASH + FLASH_SIZE).contains(&src) {
@@ -867,22 +1312,30 @@ impl DmaController {
             if !r.accepted || r.write || r.address != src || r.size != size {
                 return Err("DMA differs from serial-flash request".into());
             }
-            port.nor.read(src, size)?
+            port.nor.read_array(src, size)?
         } else if c.regs[0x1c / 4] & 4 != 0 {
             let width = 1usize << ((c.regs[0x1c / 4] >> 16) & 3);
             if !size.is_multiple_of(width) {
                 return Err("XP4 DMA count is not a multiple of transfer width".into());
             }
-            cx.ram_bytes(src, width)?
-                .iter()
-                .copied()
-                .cycle()
-                .take(size)
-                .collect()
+            if let Some(data) = microphone {
+                data
+            } else if silence {
+                vec![0; size]
+            } else {
+                cx.ram_bytes(src, width)?
+                    .iter()
+                    .copied()
+                    .cycle()
+                    .take(size)
+                    .collect()
+            }
         } else {
             cx.ram_bytes(src, size)?
         };
-        if !program && c.regs[0x20 / 4] & 4 != 0 {
+        if sink {
+            // The samples leave the chip.
+        } else if !program && c.regs[0x20 / 4] & 4 != 0 {
             if c.regs[0x1c / 4] != 0x20000 || c.regs[0x20 / 4] != 0x20004 || !size.is_multiple_of(4)
             {
                 return Err("Unsupported transmit word geometry".into());
@@ -927,16 +1380,37 @@ impl DmaController {
         if c.regs[0x20 / 4] & 4 == 0 {
             c.regs[0x18 / 4] = c.regs[0x18 / 4].wrapping_add(size as u32);
         }
-        c.regs[0x30 / 4] = 1;
-        c.regs[0x28 / 4] &= !0x10000000;
-        c.submitted = false;
+        let next = c.regs[0x24 / 4];
+        let linked = audio.is_some() && next & 1 != 0;
+        let quiet = linked && audio == Some(true);
+        if linked {
+            // Linked list (0x107c028): the next descriptor holds the new
+            // +0x10..+0x24 (size - 1, source, destination, source and
+            // destination configuration, next); the channel keeps running.
+            let words = cx.ram_bytes(u64::from(next & !0xf), 24)?;
+            let word = |i: usize| u32::from_le_bytes(words[i * 4..i * 4 + 4].try_into().unwrap());
+            if word(5) & 0xe != 0 || u64::from(word(0)) + 1 > FLASH_SIZE {
+                return Err("Unsupported XP4 DMA linked descriptor".into());
+            }
+            for i in 0..6 {
+                c.regs[0x10 / 4 + i] = word(i);
+            }
+            c.regs[0x30 / 4] = if quiet { 0x10000 } else { 0x10001 };
+            c.submitted_at = completed_at;
+        } else {
+            c.regs[0x30 / 4] = 1;
+            c.regs[0x28 / 4] &= !0x10000000;
+            c.submitted = false;
+        }
         c.due = None;
         c.completed += 1;
         // 107bb3c selects 0x01100001 for software request 44 and
         // 0x00201011/0x00200011 for peripheral requests. Bit4 is absent
         // from software fills, whose callbacks use the same physical IRQ.
         // Completion status remains asserted until the guest ACKs +30.
-        cx.set_irq(self.routes[n], true);
+        if !quiet {
+            cx.set_irq(self.routes[n], true);
+        }
         cx.record(Record::new(
             "XP4 DMA complete",
             [
@@ -987,7 +1461,14 @@ impl Device for DmaController {
                 cx.fail("Standalone XP4 DMA cannot wait for a missing serial-flash peer"); return;
             }
             if let Some(started) = self.ready_time(n) {
-                let Some(at) = started.checked_add(16).and_then(|at| at.checked_add((u64::from(self.channels[n].regs[0x10 / 4]) + 1).div_ceil(16))) else {
+                let bytes = u64::from(self.channels[n].regs[0x10 / 4]) + 1;
+                // A declared audio FIFO fills or drains at its own pace.
+                let duration = if self.paced(n) {
+                    self.paced_ticks(n, bytes)
+                } else {
+                    16u64.checked_add(bytes.div_ceil(16))
+                };
+                let Some(at) = duration.and_then(|d| started.checked_add(d)) else {
                     cx.fail("XP4 DMA deadline overflow");
                     return;
                 };
@@ -1009,6 +1490,10 @@ impl Device for DmaController {
     fn save(&self) -> Value {
         let mut state = json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request});
         if self.receiver.is_some() { state["transmit_receiver_connected"] = json!(true); }
+        if let Some(audio) = &self.audio { state["audio"] = json!(audio); }
+        if self.microphone().is_some() {
+            state["microphone_frames"] = json!(self.microphone_frames);
+        }
         if self.port.is_none() {
             state["serial_flash_peer"] = json!(false);
             state["reset_profile"] = json!(Self::STANDALONE_RESET);
@@ -1075,6 +1560,476 @@ mod tests {
         d.event(&mut cx, token);
         assert_eq!(cx.refusal(), None);
     }
+    fn audio_dma(audio: Option<AudioPacing>) -> Result<DmaController, String> {
+        let p = port(
+            vec![0xff; 32],
+            0,
+            Geometry {
+                erase_bytes: 4096,
+                page_bytes: 256,
+                erase_ticks: 20,
+                page_ticks: 12,
+            },
+        )
+        .unwrap();
+        DmaController::new(p, std::array::from_fn(|n| 207 + n as u32)).with_audio(audio)
+    }
+    /// X-T3 5.11 movie sound: 384 000 bytes/s on the 54 MHz board clock.
+    fn movie_audio(channels: Vec<usize>, irq_at_end: bool) -> AudioPacing {
+        AudioPacing {
+            channels,
+            bytes_per_second: 384_000,
+            ticks_per_second: 54_000_000,
+            irq_at_end,
+            microphone: None,
+        }
+    }
+    /// 16 bytes at 384 000 bytes/s.
+    const AUDIO_BLOCK: u64 = 16 * 54_000_000 / 384_000;
+    fn descriptor(h: &mut TestHost, at: usize, words: [u32; 6]) {
+        for (i, w) in words.iter().enumerate() {
+            h.ram[at + i * 4..at + 4 + i * 4].copy_from_slice(&w.to_le_bytes());
+        }
+    }
+    /// Channel 4 receives 16-byte blocks from the fixed serial audio port 0
+    /// FIFO into RAM at 0x100, then follows `next`.
+    fn start_movie_audio(dma: &mut DmaController, h: &mut TestHost, next: u64) -> Option<String> {
+        let ch = DMA + 0x4000;
+        for (o, v) in [
+            (0x10, 15),
+            (0x14, 0xfff4f000),
+            (0x18, 0x100),
+            (0x1c, 0x20f04),
+            (0x20, 0x20f00),
+            (0x24, next),
+        ] {
+            write(dma, h, 0, ch + o, v, 0);
+        }
+        let mut cx = Cx::new(h, 3, 0, 0);
+        dma.write(&mut cx, ch + 0x28, 4, 0x10201011);
+        cx.refusal().map(str::to_owned)
+    }
+    fn advance(dma: &mut DmaController, h: &mut TestHost) {
+        dma.advance(&mut Cx::new(h, 0, 0, 0));
+    }
+    fn load(dma: &mut DmaController, h: &mut TestHost, address: u64) -> u64 {
+        dma.read(&mut Cx::new(h, 0, 0, 0), address, 4)
+    }
+
+    #[test]
+    fn audio_channels_are_explicit_and_validated() {
+        // Absent: a linked list and a FIFO source keep their refusals.
+        let mut plain = audio_dma(None).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        assert!(
+            start_movie_audio(&mut plain, &mut h, 0x201)
+                .is_some_and(|e| e.contains("extent/repeat"))
+        );
+        write(&mut plain, &mut h, 0, DMA + 0x4028, 0, 0);
+        assert_eq!(start_movie_audio(&mut plain, &mut h, 0), None);
+        advance(&mut plain, &mut h);
+        assert_eq!(plain.next_deadline(h.now), Some(100 + 16 + 1));
+        h.now = 117;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        plain.event(&mut cx, 4);
+        assert!(cx.refusal().is_some());
+        assert!(plain.save().get("audio").is_none());
+        // A listed channel only.
+        let mut other = audio_dma(Some(movie_audio(vec![5], true))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        assert!(start_movie_audio(&mut other, &mut h, 0x201).is_some());
+        for bad in [
+            movie_audio(vec![], true),
+            movie_audio(vec![16], true),
+            movie_audio(vec![4, 4], true),
+            AudioPacing {
+                bytes_per_second: 0,
+                ..movie_audio(vec![4], true)
+            },
+            AudioPacing {
+                ticks_per_second: 0,
+                ..movie_audio(vec![4], true)
+            },
+        ] {
+            assert!(audio_dma(Some(bad)).is_err());
+        }
+        let standalone = DmaController::standalone(
+            std::array::from_fn(|n| 207 + n as u32),
+            DmaController::STANDALONE_RESET,
+            DmaController::STANDALONE_TIMING,
+        )
+        .unwrap();
+        assert!(
+            standalone
+                .with_audio(Some(movie_audio(vec![4], true)))
+                .is_err()
+        );
+        let unknown = json!({"channels": [4], "bytes_per_second": 384000, "ticks_per_second": 54000000, "extra": 1});
+        assert!(serde_json::from_value::<AudioPacing>(unknown).is_err());
+    }
+
+    #[test]
+    fn a_linked_audio_channel_records_paced_silence_block_after_block() {
+        let mut dma = audio_dma(Some(movie_audio(vec![4], false))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        descriptor(&mut h, 0x200, [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        let ch = DMA + 0x4000;
+        advance(&mut dma, &mut h);
+        let first = 100 + AUDIO_BLOCK;
+        assert_eq!(dma.next_deadline(h.now), Some(first));
+        // Mid-block, the incremented destination reads where the transfer has
+        // got to, in whole 4-byte units; the fixed source does not move.
+        h.now = 100 + AUDIO_BLOCK * 10 / 16;
+        assert_eq!(load(&mut dma, &mut h, ch + 0x18), 0x108);
+        assert_eq!(load(&mut dma, &mut h, ch + 0x14), 0xfff4f000);
+        h.now = first;
+        event(&mut dma, &mut h, 0, 4);
+        assert_eq!(&h.ram[0x100..0x110], &[0; 16]);
+        assert_eq!(h.ram[0x110], 0xaa);
+        assert_eq!(h.irqs.last(), Some(&(211, true)));
+        // The next descriptor is loaded and the channel keeps running.
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 0x10001);
+        assert_eq!(dma.channels[4].regs[0x18 / 4], 0x110);
+        assert_eq!(dma.channels[4].regs[0x24 / 4], 0);
+        assert!(dma.channels[4].submitted);
+        write(&mut dma, &mut h, 0, ch + 0x30, 1, 0);
+        assert_eq!(h.irqs.last(), Some(&(211, false)));
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 0x10000);
+        advance(&mut dma, &mut h);
+        h.now = first + AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 4);
+        assert_eq!(&h.ram[0x110..0x120], &[0; 16]);
+        assert!(!dma.channels[4].submitted);
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 1);
+        assert_eq!(dma.channels[4].completed, 2);
+        // A descriptor with bits 1..3 set is refused at start and when loaded.
+        write(&mut dma, &mut h, 0, ch + 0x30, 1, 0);
+        assert!(start_movie_audio(&mut dma, &mut h, 0x203).is_some());
+        write(&mut dma, &mut h, 0, ch + 0x28, 0, 0);
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x245],
+        );
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        advance(&mut dma, &mut h);
+        h.now += AUDIO_BLOCK;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 4);
+        assert!(
+            cx.refusal()
+                .is_some_and(|e| e.contains("linked descriptor"))
+        );
+    }
+
+    #[test]
+    fn irq_at_end_keeps_a_linked_audio_channel_quiet_until_the_list_ends() {
+        let mut dma = audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // A self-linked descriptor (the firmware's ring), then a terminal one.
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x201],
+        );
+        descriptor(&mut h, 0x240, [15, 0xfff4f000, 0x120, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        for k in 1..=3u64 {
+            advance(&mut dma, &mut h);
+            assert_eq!(dma.next_deadline(h.now), Some(100 + k * AUDIO_BLOCK));
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            assert!(h.irqs.is_empty(), "linked block {k} raised the IRQ");
+            assert_eq!(dma.channels[4].regs[0x30 / 4], 0x10000);
+            assert!(dma.channels[4].submitted);
+        }
+        // Mid-block, the position follows the declared pace.
+        h.now += AUDIO_BLOCK / 2;
+        assert_eq!(load(&mut dma, &mut h, DMA + 0x4018), 0x118);
+        // The guest points the ring at its end: block 4 reloads the ring (now
+        // linked to the end), block 5 loads the terminal descriptor, block 6
+        // ends the list and raises the IRQ.
+        h.ram[0x214..0x218].copy_from_slice(&0x241u32.to_le_bytes());
+        for k in 4..=5u64 {
+            advance(&mut dma, &mut h);
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            assert!(h.irqs.is_empty());
+        }
+        advance(&mut dma, &mut h);
+        h.now = 100 + 6 * AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 4);
+        assert_eq!(h.irqs.last(), Some(&(211, true)));
+        assert!(!dma.channels[4].submitted);
+        assert_eq!(dma.channels[4].regs[0x30 / 4], 1);
+        assert_eq!(dma.channels[4].regs[0x18 / 4], 0x130);
+        assert_eq!(dma.channels[4].completed, 6);
+    }
+
+    #[test]
+    fn a_playback_block_drains_into_the_audio_port_at_its_pace() {
+        let mut dma = audio_dma(Some(movie_audio(vec![7], true))).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0x55; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // X-T3 5.11 playback: channel 7, source incremented, fixed destination
+        // 0xfff4f004 (serial audio port 0 transmit).
+        let ch = DMA + 0x7000;
+        let program = |dma: &mut DmaController, h: &mut TestHost, destination: u64| {
+            for (o, v) in [
+                (0x10, 31),
+                (0x14, 0x100),
+                (0x18, destination),
+                (0x1c, 0x20f00),
+                (0x20, 0x20f04),
+                (0x24, 0),
+            ] {
+                write(dma, h, 0, ch + o, v, 0);
+            }
+            write(dma, h, 0, ch + 0x28, 0x10201011, 0);
+            advance(dma, h);
+        };
+        program(&mut dma, &mut h, 0xfff4f004);
+        assert_eq!(dma.next_deadline(h.now), Some(100 + 2 * AUDIO_BLOCK));
+        h.now = 100 + AUDIO_BLOCK;
+        assert_eq!(load(&mut dma, &mut h, ch + 0x14), 0x110);
+        h.now = 100 + 2 * AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 7);
+        assert!(h.ram.iter().all(|&b| b == 0x55));
+        assert_eq!(h.irqs.last(), Some(&(214, true)));
+        assert_eq!(dma.channels[7].regs[0x14 / 4], 0x120);
+        assert_eq!(dma.channels[7].regs[0x18 / 4], 0xfff4f004);
+        assert!(!dma.channels[7].submitted);
+        // A fixed RAM destination is still refused.
+        write(&mut dma, &mut h, 0, ch + 0x30, 1, 0);
+        program(&mut dma, &mut h, 0x200);
+        h.now += 100;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        dma.event(&mut cx, 7);
+        assert!(
+            cx.refusal()
+                .is_some_and(|e| e.contains("fixed-destination"))
+        );
+    }
+
+    #[test]
+    fn a_running_audio_list_survives_a_checkpoint_bound_to_its_declaration() {
+        let declared = || audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        let mut dma = declared();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x201],
+        );
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        advance(&mut dma, &mut h);
+        h.now = 100 + AUDIO_BLOCK;
+        event(&mut dma, &mut h, 0, 4);
+        advance(&mut dma, &mut h);
+        h.now += AUDIO_BLOCK / 2;
+        let saved = dma.save();
+        assert_eq!(saved["audio"]["channels"], json!([4]));
+        let mut restored = declared();
+        restored.restore(&saved).unwrap();
+        assert_eq!(load(&mut restored, &mut h, DMA + 0x4018), 0x118);
+        assert_eq!(restored.next_deadline(h.now), Some(100 + 2 * AUDIO_BLOCK));
+        // A different declaration, or none, refuses the checkpoint.
+        for other in [
+            None,
+            Some(movie_audio(vec![4], false)),
+            Some(movie_audio(vec![4, 7], true)),
+        ] {
+            assert!(audio_dma(other).unwrap().restore(&saved).is_err());
+        }
+        let mut undeclared = saved.clone();
+        undeclared.as_object_mut().unwrap().remove("audio");
+        assert!(audio_dma(None).unwrap().restore(&undeclared).is_err());
+    }
+
+    /// X-T3 5.11 movie sound: two 32-bit slots a frame, 24-bit samples
+    /// left-justified (shift 8); left = n + 1, right = 0xfffffe + 2n, so the
+    /// right ramp wraps 24 bits within the test.
+    fn test_microphone() -> AudioPacing {
+        AudioPacing {
+            microphone: Some(TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[1, 1], [0xfffffe, 2]],
+                shift: 8,
+            }),
+            ..movie_audio(vec![4], true)
+        }
+    }
+
+    #[test]
+    fn a_test_microphone_fills_the_movie_audio_ring_with_its_declared_ramp() {
+        let mut dma = audio_dma(Some(test_microphone())).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: vec![0xaa; 0x400],
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // Three linked 16-byte blocks of 2 frames each.
+        descriptor(
+            &mut h,
+            0x200,
+            [15, 0xfff4f000, 0x110, 0x20f04, 0x20f00, 0x241],
+        );
+        descriptor(&mut h, 0x240, [15, 0xfff4f000, 0x120, 0x20f04, 0x20f00, 0]);
+        assert_eq!(start_movie_audio(&mut dma, &mut h, 0x201), None);
+        let mut saved = None;
+        for k in 1..=3u64 {
+            advance(&mut dma, &mut h);
+            h.now = 100 + k * AUDIO_BLOCK;
+            event(&mut dma, &mut h, 0, 4);
+            if k == 1 {
+                saved = Some(dma.save());
+            }
+        }
+        assert!(!dma.channels[4].submitted);
+        let slot = |a: usize| u32::from_le_bytes(h.ram[a..a + 4].try_into().unwrap());
+        // Frames 0..5 in order, each slot = value << 8 (low byte zero).
+        let expect = [(1, 0xfffffe), (2, 0), (3, 2), (4, 4), (5, 6), (6, 8)];
+        for (f, (l, r)) in expect.into_iter().enumerate() {
+            assert_eq!(
+                (slot(0x100 + f * 8), slot(0x104 + f * 8)),
+                (l << 8, r << 8),
+                "frame {f}"
+            );
+        }
+        assert_eq!(&h.ram[0x130..0x140], &[0xaa; 16]);
+        assert_eq!(dma.microphone_frames, 6);
+        assert_eq!(dma.save()["microphone_frames"], 6);
+
+        // The frame count is checkpointed, and only with the option.
+        let saved = saved.unwrap();
+        assert_eq!(saved["microphone_frames"], 2);
+        let mut again = audio_dma(Some(test_microphone())).unwrap();
+        again.restore(&saved).unwrap();
+        assert_eq!(again.microphone_frames, 2);
+        let mut missing = saved.clone();
+        missing.as_object_mut().unwrap().remove("microphone_frames");
+        assert!(
+            audio_dma(Some(test_microphone()))
+                .unwrap()
+                .restore(&missing)
+                .is_err()
+        );
+        let silent = audio_dma(Some(movie_audio(vec![4], true))).unwrap();
+        assert!(silent.save().get("microphone_frames").is_none());
+        assert!(silent.save()["audio"].get("microphone").is_none());
+        assert!(
+            audio_dma(Some(movie_audio(vec![4], true)))
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
+
+        // A block of partial frames, or of 2-byte units, is refused.
+        for (size, source) in [(11, 0x20f04), (15, 0x10f04)] {
+            let mut dma = audio_dma(Some(test_microphone())).unwrap();
+            let mut h = TestHost {
+                now: 100,
+                ram: vec![0xaa; 0x400],
+                irqs: vec![],
+                events: vec![],
+                records: vec![],
+            };
+            for (o, v) in [
+                (0x10, size),
+                (0x14, 0xfff4f000),
+                (0x18, 0x100),
+                (0x1c, source),
+                (0x20, 0x20f00),
+                (0x24, 0),
+                (0x28, 0x10201011),
+            ] {
+                write(&mut dma, &mut h, 0, DMA + 0x4000 + o, v, 0);
+            }
+            advance(&mut dma, &mut h);
+            h.now += AUDIO_BLOCK;
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            dma.event(&mut cx, 4);
+            assert!(
+                cx.refusal()
+                    .is_some_and(|e| e.contains("whole 4-byte frames")),
+                "{size} {source:#x}"
+            );
+        }
+
+        // Invalid declarations are refused.
+        for bad in [
+            TestMicrophone {
+                fifo: 0x1000,
+                slots: vec![[0, 1]],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f002,
+                slots: vec![[0, 1]],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[0, 1]; 9],
+                shift: 8,
+            },
+            TestMicrophone {
+                fifo: 0xfff4f000,
+                slots: vec![[0, 1]],
+                shift: 32,
+            },
+        ] {
+            let audio = AudioPacing {
+                microphone: Some(bad),
+                ..movie_audio(vec![4], true)
+            };
+            assert!(audio_dma(Some(audio)).is_err());
+        }
+    }
+
     #[test]
     fn initialization_status_requires_enable_then_configuration_and_survives_restore() {
         let make = || {
@@ -1256,6 +2211,38 @@ mod tests {
         assert_eq!(resumed_flash.save(), flash.save());
         assert_eq!(resumed_host.ram, h.ram);
         assert_eq!(resumed_host.irqs, h.irqs);
+    }
+    #[test]
+    fn the_epoch_moves_on_completed_mutations_and_on_read_state_changes_only() {
+        let geometry = Geometry { erase_bytes: 131072, page_bytes: 256, erase_ticks: 20, page_ticks: 7 };
+        let source = port(vec![0; geometry.erase_bytes], 0x123456, geometry).unwrap();
+        let epoch = source.lock().unwrap().epoch();
+        let mut flash = SerialFlashController::new(source.clone(), 37);
+        let mut host = TestHost { now: 100, ram: vec![], irqs: vec![], events: vec![], records: vec![] };
+        let now = || epoch.load(Ordering::SeqCst);
+        let start = now();
+        // Clock, sample point and mode change the state a mapped read is taken in; an unchanged rewrite does not.
+        write(&mut flash, &mut host, 0, CONTROLLER + 4, 0x13, 0);
+        assert_eq!(now(), start + 1);
+        write(&mut flash, &mut host, 0, CONTROLLER + 4, 0x13, 0);
+        assert_eq!(now(), start + 1);
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x10, 5, 0);
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x14, 0x101003, 0);
+        assert_eq!(now(), start + 3);
+        // Command traffic that changes no array byte leaves it.
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x90, 0x06000001, 0);
+        host.now = 108;
+        event(&mut flash, &mut host, 0, 1);
+        assert_eq!(now(), start + 3);
+        // The erase moves it when it completes, not when it is accepted.
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x94, FLASH + 0x1234, 0);
+        write(&mut flash, &mut host, 0, CONTROLLER + 0x90, 0x210b0001, 0);
+        host.now = 116;
+        event(&mut flash, &mut host, 0, 1);
+        assert_eq!(now(), start + 3);
+        host.now = 136;
+        flash.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(now(), start + 4);
     }
     #[test]
     fn four_kib_erase_checkpoint_preserves_a_larger_physical_block_geometry() {
@@ -1978,4 +2965,547 @@ mod tests {
         assert_eq!(json!([host.events,host.irqs,host.records]),effects);
     }
 
+}
+
+#[cfg(test)]
+mod mapped_read_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::TestHost;
+
+    const PAD: u64 = 0xfff4108c;
+    const PREFIX: [u32; 4] = [0xffffffff, 0, 0xaaaaaaaa, 0x55555555];
+    const SCAN: (u32, u32) = (0x0800000b, 0x00101002);
+    const RUN: (u32, u32) = (0x13, 0x00101003);
+    const GOOD: std::ops::RangeInclusive<u32> = 4..=11;
+
+    fn state((clock, mode): (u32, u32), good: &[u32]) -> MappedReadState {
+        MappedReadState {
+            control: (0x0078_0071, 0x0008_0041),
+            clock,
+            mode,
+            samples: good.iter().map(|s| 1 | s << 1).collect(),
+            pad: true,
+        }
+    }
+    fn gate(good: impl IntoIterator<Item = u32>) -> MappedReadGate {
+        let good: Vec<u32> = good.into_iter().collect();
+        MappedReadGate {
+            states: vec![state(SCAN, &good), state(RUN, &good)],
+            miss_byte: 0xa5,
+            pad: (PAD, 0xffff, 0x5545),
+        }
+    }
+    fn nor() -> Shared {
+        let mut bytes = vec![0xff; 0x2000];
+        for (n, word) in PREFIX.iter().enumerate() {
+            bytes[n * 4..n * 4 + 4].copy_from_slice(&word.to_le_bytes());
+        }
+        bytes[0x1000..0x1004].copy_from_slice(&0x1234_5678u32.to_le_bytes());
+        port_from_nor(Nor::new(bytes, 0x20, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12 }).unwrap())
+    }
+    fn gated(good: impl IntoIterator<Item = u32>) -> SerialFlashController {
+        SerialFlashController::new(nor(), 37).with_mapped_read_gate(gate(good)).unwrap()
+    }
+    fn store(f: &mut SerialFlashController, h: &mut TestHost, address: u64, value: u32) {
+        let mut cx = h.cx();
+        f.write(&mut cx, address, 4, value as u64);
+        assert_eq!(cx.refusal(), None, "{address:#x}={value:#x}");
+    }
+    /// A mapped word, or the refusal it ends the run with.
+    fn load(f: &mut SerialFlashController, h: &mut TestHost, address: u64) -> Result<u32, String> {
+        let mut cx = h.cx();
+        let value = f.read(&mut cx, address, 4) as u32;
+        cx.refusal().map_or(Ok(value), |e| Err(format!("{e:?}")))
+    }
+    fn enable(f: &mut SerialFlashController, h: &mut TestHost) {
+        let mut control = load(f, h, CONTROLLER).unwrap();
+        control = (control & !0x0078_0000) + 0x0008_0000;
+        control = ((control | 0x40) & !0x30) | 1;
+        store(f, h, CONTROLLER, control);
+    }
+    /// The boot ROM's mode-1 sample scan: the second sample that reads the
+    /// prefix ends it. Returns that sample register value.
+    fn scan(f: &mut SerialFlashController, h: &mut TestHost) -> Result<Option<u32>, String> {
+        store(f, h, CONTROLLER + 4, SCAN.0);
+        store(f, h, CONTROLLER + 0x14, SCAN.1);
+        let mut found = false;
+        for sample in 0..16 {
+            store(f, h, CONTROLLER + 0x10, 1 | sample << 1);
+            let words = (0..4).map(|n| load(f, h, FLASH + n * 4)).collect::<Result<Vec<_>, _>>()?;
+            if words == PREFIX {
+                if found {
+                    return Ok(Some(1 | sample << 1));
+                }
+                found = true;
+            }
+        }
+        Ok(None)
+    }
+    fn initialized(good: impl IntoIterator<Item = u32>) -> (SerialFlashController, TestHost) {
+        let (mut f, mut h) = (gated(good), TestHost::new());
+        enable(&mut f, &mut h);
+        store(&mut f, &mut h, PAD, 0xffff_5545);
+        (f, h)
+    }
+
+    #[test]
+    fn rom_initialization_scans_to_the_second_good_sample_then_reads_array_data() {
+        let (mut f, mut h) = initialized(GOOD);
+        assert_eq!(scan(&mut f, &mut h), Ok(Some(1 | 5 << 1)));
+        assert_eq!(f.mapped_misses, 4 * 4);
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, RUN.1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+        assert_eq!(load(&mut f, &mut h, FLASH + 8), Ok(0xaaaa_aaaa));
+        assert_eq!(load(&mut f, &mut h, PAD), Ok(0x5545));
+        let saved = f.save();
+        let mut resumed = gated(GOOD);
+        resumed.restore(&saved).unwrap();
+        assert_eq!(resumed.save(), saved);
+        assert!(SerialFlashController::new(nor(), 37).restore(&saved).is_err());
+        assert!(gated(5..=12).restore(&saved).is_err());
+    }
+
+    #[test]
+    fn a_read_before_initialization_is_refused() {
+        let (mut f, mut h) = (gated(GOOD), TestHost::new());
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+    }
+
+    #[test]
+    fn a_read_without_the_enable_bits_is_refused() {
+        let (mut f, mut h) = (gated(GOOD), TestHost::new());
+        store(&mut f, &mut h, PAD, 0xffff_5545);
+        assert!(scan(&mut f, &mut h).is_err());
+        // A bank field other than the declared one is also outside the read state.
+        enable(&mut f, &mut h);
+        store(&mut f, &mut h, CONTROLLER, 0x0010_0041);
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+    }
+
+    #[test]
+    fn a_read_without_the_pad_function_is_refused() {
+        let (mut f, mut h) = (gated(GOOD), TestHost::new());
+        enable(&mut f, &mut h);
+        assert!(scan(&mut f, &mut h).is_err());
+        // The pad word is masked: a write that leaves a field unset is not enough.
+        store(&mut f, &mut h, PAD, 0x00ff_0045);
+        assert!(scan(&mut f, &mut h).is_err());
+        store(&mut f, &mut h, PAD, 0xff00_5500);
+        assert_eq!(scan(&mut f, &mut h), Ok(Some(1 | 5 << 1)));
+    }
+
+    #[test]
+    fn a_sample_outside_the_declared_window_reads_the_miss_pattern() {
+        let (mut f, mut h) = initialized(GOOD);
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, RUN.1);
+        store(&mut f, &mut h, CONTROLLER + 0x10, 1 | 3 << 1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0xa5a5_a5a5));
+        let mut cx = h.cx();
+        assert_eq!(f.read(&mut cx, FLASH + 1, 1), 0xa5);
+        // No sample in the window: the scan finds none.
+        let (mut f, mut h) = initialized([]);
+        assert_eq!(scan(&mut f, &mut h), Ok(None));
+        // One good sample is not enough for the ROM's scan either.
+        let (mut f, mut h) = initialized([7]);
+        assert_eq!(scan(&mut f, &mut h), Ok(None));
+    }
+
+    #[test]
+    fn undeclared_clock_or_mode_is_refused() {
+        let (mut f, mut h) = initialized(GOOD);
+        assert!(scan(&mut f, &mut h).unwrap().is_some());
+        store(&mut f, &mut h, CONTROLLER + 4, 0x0900000b);
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, SCAN.1);
+        assert!(load(&mut f, &mut h, FLASH).is_err());
+    }
+
+    #[test]
+    fn a_state_without_the_pad_requirement_reads_before_the_pad_is_set() {
+        // A state may be declared without the pad function (for example the
+        // controller's reset state); only its own registers then select it.
+        let mut g = gate(GOOD);
+        g.states.push(MappedReadState { control: (u32::MAX >> 1, 0), clock: RUN.0, mode: RUN.1, samples: vec![0], pad: false });
+        let (mut f, mut h) = (SerialFlashController::new(nor(), 37).with_mapped_read_gate(g).unwrap(), TestHost::new());
+        store(&mut f, &mut h, CONTROLLER + 4, RUN.0);
+        store(&mut f, &mut h, CONTROLLER + 0x14, RUN.1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+        store(&mut f, &mut h, CONTROLLER + 0x10, 1 | 4 << 1);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0xa5a5_a5a5));
+        // Once the control register leaves that state, the pad is required.
+        enable(&mut f, &mut h);
+        assert!(load(&mut f, &mut h, FLASH + 0x1000).is_err());
+        store(&mut f, &mut h, PAD, 0xffff_5545);
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+    }
+
+    #[test]
+    fn an_aperture_store_is_refused() {
+        let (mut f, mut h) = initialized(GOOD);
+        let mut cx = h.cx();
+        f.write(&mut cx, FLASH + 0x1000, 4, 0);
+        assert!(cx.refusal().is_some());
+    }
+
+    #[test]
+    fn the_gate_declaration_is_checked() {
+        let mut bad = gate(GOOD);
+        bad.pad.0 = CONTROLLER + 0x10;
+        assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+        let mut bad = gate(GOOD);
+        bad.states.clear();
+        assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+        let mut bad = gate(GOOD);
+        bad.states[1].control = (1, 3);
+        assert!(SerialFlashController::new(nor(), 37).with_mapped_read_gate(bad).is_err());
+    }
+}
+
+#[cfg(test)]
+mod strict_backing_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::TestHost;
+
+    fn nor(bytes: Vec<u8>, strict: bool) -> Nor {
+        let nor = Nor::new(bytes, 0x20, Geometry {
+            erase_bytes: 4096, page_bytes: 256, erase_ticks: 8, page_ticks: 2,
+        }).unwrap();
+        if strict { nor.with_strict_backing() } else { nor }
+    }
+    fn controller(bytes: Vec<u8>, strict: bool) -> SerialFlashController {
+        SerialFlashController::new(port_from_nor(nor(bytes, strict)), 37)
+    }
+
+    #[test]
+    fn exact_backing_bounds_empty_reads_and_default_erased_bytes() {
+        let bytes = vec![0x42; 17];
+        let strict = nor(bytes.clone(), true);
+        assert_eq!(strict.read_array(FLASH, 17).unwrap(), bytes);
+        assert_eq!(strict.read_array(FLASH + 16, 1).unwrap(), [0x42]);
+        assert_eq!(strict.read_array(FLASH + 17, 0).unwrap(), Vec::<u8>::new());
+        for (address, size) in [
+            (FLASH + 16, 2), (FLASH + 17, 1), (FLASH + 18, 0),
+            (FLASH - 1, 0), (u64::MAX, 8), (FLASH + 1, usize::MAX),
+        ] {
+            assert!(strict.read_array(address, size).is_err(), "{address:#x}+{size:#x}");
+        }
+        let empty = nor(vec![], true);
+        assert_eq!(empty.read_array(FLASH, 0).unwrap(), Vec::<u8>::new());
+        assert!(empty.read_array(FLASH, 1).is_err());
+        let erased = nor(vec![0x42; 17], false);
+        assert_eq!(erased.read_array(FLASH + 16, 4).unwrap(), [0x42, 255, 255, 255]);
+        assert_eq!(erased.read_array(FLASH + 17, 4).unwrap(), [255; 4]);
+        assert!(erased.read_array(FLASH + FLASH_SIZE - 1, 2).is_err());
+    }
+
+    fn declared_ranges() -> Vec<ErasedRange> {
+        vec![ErasedRange { offset: 17, length: 15 },
+             ErasedRange { offset: 64, length: 16 },
+             ErasedRange { offset: 80, length: 16 }]
+    }
+
+    #[test]
+    fn declared_erased_ranges_cover_only_their_union_with_the_asset() {
+        let n = nor(vec![0x42; 17], true).with_erased_ranges(declared_ranges()).unwrap();
+        assert_eq!(n.read_array(FLASH + 16, 16).unwrap(),
+                   [vec![0x42], vec![255; 15]].concat());
+        assert_eq!(n.read_array(FLASH + 64, 32).unwrap(), vec![255; 32]);
+        for offset in [0, 17, 32, 64, 80, 96] {
+            assert_eq!(n.read_array(FLASH + offset, 0).unwrap(), Vec::<u8>::new());
+        }
+        for (offset, size) in [(31, 2), (32, 1), (33, 0), (63, 2), (95, 2), (97, 0)] {
+            assert!(n.read_array(FLASH + offset, size).is_err());
+        }
+        assert!(nor(vec![0x42; 17], false).with_erased_ranges(declared_ranges()).is_err());
+        for ranges in [
+            vec![ErasedRange { offset: 16, length: 1 }],
+            vec![ErasedRange { offset: 17, length: 0 }],
+            vec![ErasedRange { offset: FLASH_SIZE, length: 1 }],
+            vec![ErasedRange { offset: u64::MAX, length: 2 }],
+            vec![ErasedRange { offset: 64, length: 16 }, ErasedRange { offset: 70, length: 16 }],
+        ] {
+            assert!(nor(vec![0x42; 17], true).with_erased_ranges(ranges).is_err());
+        }
+        let mut reversed = declared_ranges();
+        reversed.reverse();
+        assert_eq!(nor(vec![0x42; 17], true).with_erased_ranges(reversed).unwrap().read_backing,
+                   n.read_backing);
+    }
+
+    #[test]
+    fn erased_range_stream_dma_and_checkpoint_preserve_declared_coverage() {
+        let make = || SerialFlashController::new(port_from_nor(
+            nor(vec![0x42; 17], true).with_erased_ranges(declared_ranges()).unwrap()), 37);
+        let mut f = make();
+        let mut host = TestHost::new();
+        f.regs[0x20 / 4] = 0x707;
+        f.regs[0x68 / 4] = (FLASH + 64) as u32;
+        f.regs[0x6c / 4] = 32;
+        f.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1).unwrap();
+        let saved = f.save();
+        let mut restored = make();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        let mut no_ranges = controller(vec![0x42; 17], true);
+        let before = no_ranges.save();
+        assert!(no_ranges.restore(&saved).is_err());
+        assert_eq!(no_ranges.save(), before);
+        let mut changed = SerialFlashController::new(port_from_nor(
+            nor(vec![0x42; 17], true).with_erased_ranges(vec![ErasedRange { offset: 64, length: 32 }]).unwrap()), 37);
+        let before = changed.save();
+        assert!(changed.restore(&saved).is_err());
+        assert_eq!(changed.save(), before);
+        // Admission and completion both reject a request crossing a hole.
+        let mut invalid = make();
+        invalid.regs[0x20 / 4] = 0x707;
+        invalid.regs[0x68 / 4] = (FLASH + 24) as u32;
+        invalid.regs[0x6c / 4] = 48;
+        let before = invalid.save();
+        assert!(invalid.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1).is_err());
+        assert_eq!(invalid.save(), before);
+        for (offset, size, success) in [(64, 32, true), (24, 48, false)] {
+            let port = port_from_nor(nor(vec![0x42; 17], true).with_erased_ranges(declared_ranges()).unwrap());
+            port.lock().unwrap().request = Some(Request {
+                address: FLASH + offset, size, accepted: true, accepted_at: 0, write: false,
+            });
+            let mut dma = DmaController::new(port, std::array::from_fn(|n| 207 + n as u32));
+            let channel = &mut dma.channels[0];
+            channel.regs[0x14 / 4] = (FLASH + offset) as u32;
+            channel.regs[0x18 / 4] = 0x100;
+            channel.regs[0x10 / 4] = (size - 1) as u32;
+            channel.submitted = true;
+            channel.due = Some(0);
+            let mut host = TestHost::new();
+            host.ram[0x100..0x140].fill(0xa5);
+            let before = dma.save();
+            let result = dma.complete(&mut host.cx(), 0);
+            assert_eq!(result.is_ok(), success);
+            if success {
+                assert_eq!(&host.ram[0x100..0x120], &[255; 32]);
+                assert_eq!(&host.ram[0x120..0x140], &[0xa5; 32]);
+            } else {
+                assert_eq!(dma.save(), before);
+                assert_eq!(&host.ram[0x100..0x140], &[0xa5; 64]);
+                assert!(host.effects.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn coverage_precedes_sampling_miss_without_counting_an_unbacked_read() {
+        let gate = MappedReadGate {
+            states: vec![MappedReadState {
+                control: (0, 0), clock: 0, mode: 0, samples: vec![1], pad: false,
+            }],
+            miss_byte: 0xa5,
+            pad: (0xfff4108c, 0, 0),
+        };
+        let mut f = controller(vec![0x42; 17], true).with_mapped_read_gate(gate.clone()).unwrap();
+        let mut host = TestHost::new();
+        assert_eq!(f.access(&mut host.cx(), FLASH + 16, 1, false, 0).unwrap(), 0xa5);
+        assert_eq!(f.mapped_misses, 1);
+        let before = f.save();
+        let error = f.access(&mut host.cx(), FLASH + 17, 1, false, 0).unwrap_err();
+        assert!(error.contains("outside supplied backing"));
+        assert_eq!(f.save(), before);
+        let mut legacy = controller(vec![0x42; 17], false).with_mapped_read_gate(gate).unwrap();
+        assert_eq!(legacy.access(&mut host.cx(), FLASH + 17, 1, false, 0).unwrap(), 0xa5);
+    }
+
+    #[test]
+    fn stream_refuses_crossing_backing_before_acceptance_or_dma() {
+        let mut f = controller(vec![0x42; 17], true);
+        let mut host = TestHost::new();
+        f.regs[0x20 / 4] = 0x707;
+        f.regs[0x68 / 4] = (FLASH + 16) as u32;
+        f.regs[0x6c / 4] = 2;
+        let before = f.save();
+        assert!(f.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1)
+            .unwrap_err().contains("outside supplied backing"));
+        assert_eq!(f.save(), before);
+        assert!(host.effects.is_empty());
+        assert!(f.port.lock().unwrap().request.is_none());
+        assert!(f.due.is_none());
+        // A request ending exactly at the bound retains normal acceptance.
+        f.regs[0x68 / 4] = (FLASH + 1) as u32;
+        f.regs[0x6c / 4] = 16;
+        f.access(&mut host.cx(), CONTROLLER + 0x60, 4, true, 1).unwrap();
+        assert_eq!(f.due, Some((8, 2)));
+    }
+
+    #[test]
+    fn dma_completion_rechecks_read_backing_before_destination_or_completion_changes() {
+        let port = port_from_nor(nor(vec![0x42; 17], true));
+        // A deliberately inconsistent accepted request tests the independent
+        // completion boundary, not only the normal submission validation.
+        port.lock().unwrap().request = Some(Request {
+            address: FLASH + 16, size: 2, accepted: true, accepted_at: 0, write: false,
+        });
+        let mut dma = DmaController::new(port, std::array::from_fn(|n| 207 + n as u32));
+        let channel = &mut dma.channels[0];
+        channel.regs[0x14 / 4] = (FLASH + 16) as u32;
+        channel.regs[0x18 / 4] = 0x100;
+        channel.regs[0x10 / 4] = 1;
+        channel.submitted = true;
+        channel.due = Some(0);
+        let mut host = TestHost::new();
+        host.ram[0x100..0x104].fill(0xa5);
+        let before = dma.save();
+        assert!(dma.complete(&mut host.cx(), 0).unwrap_err().contains("outside supplied backing"));
+        assert_eq!(dma.save(), before);
+        assert_eq!(&host.ram[0x100..0x104], &[0xa5; 4]);
+        assert!(host.effects.is_empty());
+    }
+
+    #[test]
+    fn partial_final_page_program_uses_internal_assembly_without_extending_read_coverage() {
+        let mut n = nor(vec![255; 17], true);
+        let initial_backing = n.read_backing.clone();
+        n.write_enable = true;
+        n.begin(0, Mutation::Program { address: FLASH + 16, bytes: vec![0x5a] }).unwrap();
+        let mut host = TestHost::new();
+        host.now = 2;
+        let mut cx = host.cx();
+        n.complete(&mut cx);
+        assert_eq!(cx.refusal(), None);
+        assert!(n.pending.is_none());
+        assert_eq!(n.read_array(FLASH + 16, 1).unwrap(), [0x5a]);
+        assert_eq!(n.read(FLASH + 17, 1).unwrap(), [255]);
+        assert!(n.read_array(FLASH + 17, 1).is_err());
+        assert_eq!(n.read_backing, initial_backing);
+        // Explicitly programmed bytes outside the input do not silently turn
+        // a fixed read-coverage declaration into a larger one either.
+        n.write_enable = true;
+        n.begin(2, Mutation::Program { address: FLASH + 17, bytes: vec![0x12] }).unwrap();
+        host.now = 4;
+        n.complete(&mut host.cx());
+        assert_eq!(n.read(FLASH + 17, 1).unwrap(), [0x12]);
+        assert!(n.read_array(FLASH + 17, 1).is_err());
+    }
+
+    #[test]
+    fn checkpoint_requires_identical_backing_and_refuses_unbacked_read_stream_atomically() {
+        let mut original = controller(vec![0x42; 17], true);
+        original.regs[0] = 0x123;
+        let saved = original.save();
+        let mut same = controller(vec![0x42; 17], true);
+        same.restore(&saved).unwrap();
+        assert_eq!(same.save(), saved);
+        for mut other in [controller(vec![0x42; 17], false),
+                          controller(vec![0x42; 18], true),
+                          controller(vec![0x43; 17], true)] {
+            let before = other.save();
+            assert!(other.restore(&saved).is_err());
+            assert_eq!(other.save(), before);
+        }
+        for (address, size) in [(FLASH + 16, 2), (FLASH + 18, 0), (u64::MAX, 8)] {
+            let mut bad = saved.clone();
+            bad["registers"][0] = json!(0x456);
+            bad["stream"] = json!({"address":address,"size":size,"accepted":true,
+                                  "accepted_at":0,"write":false});
+            assert!(same.restore(&bad).is_err());
+            assert_eq!(same.save(), saved);
+        }
+        let mut accepted = saved.clone();
+        accepted["stream"] = json!({"address":FLASH + 1,"size":16,"accepted":true,
+                                   "accepted_at":0,"write":false});
+        same.restore(&accepted).unwrap();
+        assert_eq!(same.save(), accepted);
+        let mut legacy = controller(vec![0x42; 17], false);
+        let mut old = legacy.save();
+        old["nor"].as_object_mut().unwrap().remove("read_backing");
+        legacy.restore(&old).unwrap();
+        assert!(original.restore(&old).is_err());
+        assert_eq!(original.save(), saved);
+    }
+}
+
+#[cfg(test)]
+mod write_protect_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::TestHost;
+
+    fn nor(write_protect: bool) -> Shared {
+        let mut bytes = vec![0xff; 0x2000];
+        bytes[0x1000..0x1004].copy_from_slice(&0x1234_5678u32.to_le_bytes());
+        let nor = Nor::new(bytes, 0x20, Geometry { erase_bytes: 4096, page_bytes: 256, erase_ticks: 20, page_ticks: 12 }).unwrap();
+        port_from_nor(if write_protect { nor.with_write_protect() } else { nor })
+    }
+    fn store(f: &mut SerialFlashController, h: &mut TestHost, address: u64, value: u32) {
+        let mut cx = h.cx();
+        f.write(&mut cx, address, 4, value as u64);
+        assert_eq!(cx.refusal(), None, "{address:#x}={value:#x}");
+    }
+    fn load(f: &mut SerialFlashController, h: &mut TestHost, address: u64) -> Result<u32, String> {
+        let mut cx = h.cx();
+        let value = f.read(&mut cx, address, 4) as u32;
+        cx.refusal().map_or(Ok(value), |e| Err(format!("{e:?}")))
+    }
+    fn protected() -> (SerialFlashController, TestHost) {
+        (SerialFlashController::new(nor(true), 37), TestHost::new())
+    }
+    fn command(f: &mut SerialFlashController, h: &mut TestHost, value: u32) -> Result<(), String> {
+        let mut cx = h.cx();
+        f.write(&mut cx, CONTROLLER + 0x90, 4, value as u64);
+        cx.refusal().map_or(Ok(()), |e| Err(format!("{e:?}")))
+    }
+
+    #[test]
+    fn write_protection_refuses_write_enable() {
+        let (mut f, mut h) = protected();
+        assert!(command(&mut f, &mut h, 0x0600_0001).is_err());
+        assert!(!f.port.lock().unwrap().nor.write_enable);
+    }
+
+    #[test]
+    fn write_protection_refuses_erase() {
+        for opcode in [0xdc, 0x21] {
+            let (mut f, mut h) = protected();
+            store(&mut f, &mut h, CONTROLLER + 0x94, FLASH as u32);
+            assert!(command(&mut f, &mut h, opcode << 24 | 0x000b_0001).is_err());
+        }
+    }
+
+    #[test]
+    fn write_protection_refuses_program() {
+        let (mut f, mut h) = protected();
+        // Even with write enable already latched, the stream never starts.
+        f.port.lock().unwrap().nor.write_enable = true;
+        store(&mut f, &mut h, CONTROLLER + 0x20, 0x202);
+        store(&mut f, &mut h, CONTROLLER + 0x78, FLASH as u32);
+        store(&mut f, &mut h, CONTROLLER + 0x7c, 256);
+        let mut cx = h.cx();
+        f.write(&mut cx, CONTROLLER + 0x70, 4, 1);
+        assert!(cx.refusal().is_some());
+        assert!(f.port.lock().unwrap().nor.begin(0, Mutation::Program { address: FLASH, bytes: vec![0] }).is_err());
+    }
+
+    #[test]
+    fn write_protection_leaves_transfers_outside_the_array_alone() {
+        let port = nor(true);
+        let nor = &port.lock().unwrap().nor;
+        assert!(nor.check_mutation(0x1000, 0x100).is_ok());
+        assert!(nor.check_mutation(FLASH - 4, 4).is_ok());
+        assert!(nor.check_mutation(FLASH - 4, 8).is_err());
+        assert!(nor.check_mutation(FLASH + FLASH_SIZE - 4, 4).is_err());
+    }
+
+    #[test]
+    fn write_protection_keeps_identity_status_and_mapped_reads() {
+        let (mut f, mut h) = protected();
+        for (value, result) in [(0x9fa0_0001u32, 0x20u32), (0x0500_0001, 0), (0x0400_0001, 0)] {
+            command(&mut f, &mut h, value).unwrap();
+            h.now += 8;
+            let mut cx = h.cx();
+            f.event(&mut cx, 1);
+            assert_eq!(cx.refusal(), None);
+            assert_eq!(f.regs[0xa0 / 4], result);
+        }
+        assert_eq!(load(&mut f, &mut h, FLASH + 0x1000), Ok(0x1234_5678));
+        let saved = f.save();
+        assert!(SerialFlashController::new(nor(false), 37).restore(&saved).is_err());
+    }
 }

@@ -274,7 +274,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     '--locked',
     '-j2',
     '--profile',
-    'dist',
+    'release-web',
     '--lib',
     ...(selected.perf ? ['--features', 'perf'] : []),
     '--target',
@@ -303,7 +303,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
   const cmakeBuild = ['ninja', '-j2', '-C', unicorn, 'unicorn'];
   const link = [
     'emcc',
-    join(target, 'wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a'),
+    join(target, 'wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a'),
     '-o',
     join(out, 'camera.mjs'),
     // Keep the standalone module within static hosting's per-file size budget.
@@ -531,7 +531,7 @@ export function build(selected: BuildOptions) {
       '--locked',
       '-j2',
       '--profile',
-      'dist',
+      'release-web',
       '--lib',
       '--target',
       'wasm32-unknown-unknown',
@@ -547,7 +547,7 @@ export function build(selected: BuildOptions) {
       wasmBindgen(process.env),
       join(
         webgpuEnv.CARGO_TARGET_DIR!,
-        'wasm32-unknown-unknown/dist/fujimod_emulator_ip_dmp_webgpu.wasm',
+        'wasm32-unknown-unknown/release-web/fujimod_emulator_ip_dmp_webgpu.wasm',
       ),
       '--target',
       'web',
@@ -559,7 +559,7 @@ export function build(selected: BuildOptions) {
     webgpuEnv,
   );
   const webgpuSeconds = (performance.now() - webgpuStart) / 1000;
-  const archive = join(out, 'rust/wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a');
+  const archive = join(out, 'rust/wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a');
   const symbols = capture([
     'emnm',
     '--defined-only',

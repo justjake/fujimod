@@ -3,5 +3,10 @@
     "name": "Jake Teton-Landis",
     "github": "justjake",
     "bodies": ["X70", "X100V", "X-M5", "X100VI"]
+  },
+  {
+    "name": "Chris Rudmin",
+    "github": "chris-rudmin",
+    "bodies": ["X-E2S"]
   }
 ]

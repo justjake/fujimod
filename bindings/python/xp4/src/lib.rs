@@ -8,11 +8,13 @@ fn open(
     definition: &str,
     storage_image: Option<Vec<u8>>,
     card_files: Vec<(String, Vec<u8>)>,
+    card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
 ) -> PyResult<Box<dyn Xp4Backend>> {
     Ok(Box::new(session::Xp4Session::from_definition(
         definition,
         storage_image,
         card_files,
+        card_media,
     )?))
 }
 
