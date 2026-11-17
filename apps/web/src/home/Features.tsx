@@ -1,13 +1,7 @@
 import { For, Show, createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { FeatureIcon as Icon } from './FeatureIcon';
-import {
-  catalog,
-  type Choice,
-  type Control,
-  type Credits,
-  type Feature,
-} from './catalog';
+import { catalog, type Choice, type Control, type Credits, type Feature } from './catalog';
 import { ChipIcon, CreditList, Premiere, Prose } from './catalog-parts';
 import { FeatureTile } from './FeatureTile';
 import { fadeLoop } from './fade-loop';
@@ -26,6 +20,11 @@ const GROUP_TITLES: Record<string, string> = {
 };
 const MEDIA = '/artifacts/docs/';
 const media = featureMedia();
+const anonymousGroups = new Set(
+  catalog.menus
+    .filter((row) => row.anonymous)
+    .map((row) => JSON.stringify([...row.path, row.title])),
+);
 /** What tiles and hover cards share: the menus above the title, the title, WORLD PREMIERE, the description,
     the credits, then the rest (options or Related). */
 function Entry(props: {
@@ -35,10 +34,14 @@ function Entry(props: {
   credits: Credits;
   children?: JSX.Element;
 }) {
+  const crumbs = () =>
+    props.path.filter(
+      (_, index) => !anonymousGroups.has(JSON.stringify(props.path.slice(0, index + 1))),
+    );
   return (
     <>
-      <Show when={props.path.length}>
-        <div class="catalog-path">{`${props.path.join(' › ')} ›`}</div>
+      <Show when={crumbs().length}>
+        <div class="catalog-path">{`${crumbs().join(' › ')} ›`}</div>
       </Show>
       {props.title}
       <Show when={props.credits.premiere}>

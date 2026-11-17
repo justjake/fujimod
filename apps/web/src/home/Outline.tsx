@@ -14,11 +14,7 @@ import './outline.css';
 /** Top menus, and the DRIVE button's popup, in the order the outline lists them. */
 const TOP_ORDER = ['DRIVE', 'SHOOTING MENU', 'SET-UP', 'SYSTEM CHANGES', 'PLAYBACK MENU'];
 /** Top menus per desktop column: shooting, set-up, then system and playback. */
-const COLUMNS = [
-  ['DRIVE', 'SHOOTING MENU'],
-  ['SET-UP'],
-  ['SYSTEM CHANGES', 'PLAYBACK MENU'],
-];
+const COLUMNS = [['DRIVE', 'SHOOTING MENU'], ['SET-UP'], ['SYSTEM CHANGES', 'PLAYBACK MENU']];
 const TOP_MENUS = new Set(TOP_ORDER);
 
 const features = new Map(catalog.features.map((feature) => [feature.id, feature]));
@@ -68,21 +64,11 @@ function tree(rows: readonly MenuRow[]) {
   return root;
 }
 
-/** Children in menu order, with the rows after each heading gathered under it. */
+/** Children in menu order under their declared parent. */
 function ordered(node: Node): Node[] {
   const rank = (child: Node) =>
     child.row ? child.row.order : TOP_MENUS.has(child.title) ? TOP_ORDER.indexOf(child.title) : 0;
-  const children = [...node.children.values()].sort((a, b) => rank(a) - rank(b));
-  const out: Node[] = [];
-  let heading: Node | undefined;
-  for (const child of children) {
-    if (child.row?.kind === 'heading') {
-      heading = { ...child, children: new Map(child.children) };
-      out.push(heading);
-    } else if (heading) heading.children.set(child.title + heading.children.size, child);
-    else out.push(child);
-  }
-  return out;
+  return [...node.children.values()].sort((a, b) => rank(a) - rank(b));
 }
 
 const NO_CREDITS: Credits = { premiere: false, inspired: [], thanks: [] };
@@ -136,60 +122,63 @@ function OutlineNode(props: { node: Node }) {
     if (cardKey()) return tiles.get(cardKey()!);
     const own = props.node.row?.feature ? features.get(props.node.row.feature) : undefined;
     const stands = props.node.row?.card?.startsWith('row:') || own?.title === props.node.title;
-    return own && (!own.card || props.node.row?.card?.startsWith('row:')) && stands ? own : undefined;
+    return own && (!own.card || props.node.row?.card?.startsWith('row:')) && stands
+      ? own
+      : undefined;
   };
   const credits = () => feature()?.credits ?? card()?.credits ?? NO_CREDITS;
   /** One description: what FujiMod changes in a stock row, else the card's, else the tile's. */
   const text = () => card()?.changes ?? card()?.summary ?? feature()?.summary;
-  const also = () => (props.node.row ? (attached.get(placeKey(rowPlace(props.node.row))) ?? []) : []);
+  const also = () =>
+    props.node.row ? (attached.get(placeKey(rowPlace(props.node.row))) ?? []) : [];
   const choices = () => (card() ? choicesOf(cardKey()!, card()!) : []);
   const switched = () => isSwitch(choices());
   return (
-    <li class={{ heading: props.node.row?.kind === 'heading' }}>
-      <div class="outline-row">
-        <Show when={props.node.row?.icon ?? feature()?.icon}>
-          {(name) => <FeatureIcon name={name()} />}
+    <li class={{ group: props.node.row?.kind === 'group' }}>
+      <Show when={!props.node.row?.anonymous}>
+        <div class="outline-row">
+          <Show when={props.node.row?.icon ?? feature()?.icon}>
+            {(name) => <FeatureIcon name={name()} />}
+          </Show>
+          <Show
+            when={/^\{(.+)\}$/.exec(props.node.title)?.[1]}
+            fallback={<span class="outline-title">{props.node.title}</span>}
+          >
+            {(entry) => <span class="outline-title outline-entry">chosen {entry()}</span>}
+          </Show>
+          <Show when={switched()}>
+            <span class="outline-switch">ON/OFF</span>
+          </Show>
+          <Show when={card()?.drive_mode}>
+            <FeatureIcon name="drive-single" />
+          </Show>
+          <Kind row={props.node.row} />
+          <Show when={credits().premiere}>
+            <Premiere />
+          </Show>
+        </div>
+        <Show when={text()}>
+          {(found) => (
+            <p class="outline-text">
+              <Prose text={found()} />
+            </p>
+          )}
         </Show>
-        <Show
-          when={/^\{(.+)\}$/.exec(props.node.title)?.[1]}
-          fallback={<span class="outline-title">{props.node.title}</span>}
-        >
-          {(entry) => <span class="outline-title outline-entry">chosen {entry()}</span>}
+        <For each={also()}>
+          {(extra) => (
+            <p class="outline-text">
+              <Prose text={extra.summary} />
+            </p>
+          )}
+        </For>
+        <Show when={card() && choices().length && !switched()}>
+          <Options choices={choices()} card={card()!} />
         </Show>
-        <Show when={switched()}>
-          <span class="outline-switch">ON/OFF</span>
-        </Show>
-        <Show when={card()?.drive_mode}>
-          <FeatureIcon name="drive-single" />
-        </Show>
-        <Kind row={props.node.row} />
-        <Show when={credits().premiere}>
-          <Premiere />
-        </Show>
-      </div>
-      <Show when={text()}>
-        {(found) => (
-          <p class="outline-text">
-            <Prose text={found()} />
-          </p>
-        )}
+        <CreditList credits={credits()} />
       </Show>
-      <For each={also()}>
-        {(extra) => (
-          <p class="outline-text">
-            <Prose text={extra.summary} />
-          </p>
-        )}
-      </For>
-      <Show when={card() && choices().length && !switched()}>
-        <Options choices={choices()} card={card()!} />
-      </Show>
-      <CreditList credits={credits()} />
       <Show when={props.node.children.size}>
         <ul>
-          <For each={ordered(props.node)}>
-            {(child) => <OutlineNode node={child} />}
-          </For>
+          <For each={ordered(props.node)}>{(child) => <OutlineNode node={child} />}</For>
         </ul>
       </Show>
     </li>
