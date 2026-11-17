@@ -536,8 +536,14 @@ mod tests {
                 size: 4,
                 sha256: hex(&checks::sha256_bytes(&code)),
             }];
-            let mut steps = crate::bulk::tests::info(3, &restart.product);
-            steps.extend(crate::bulk::tests::info(4, &restart.internal_version));
+            let mut steps = crate::bulk::tests::info(
+                fujimod_usb::ff80::commands::info::InfoSelector::Product as u32,
+                &restart.product,
+            );
+            steps.extend(crate::bulk::tests::info(
+                fujimod_usb::ff80::commands::info::InfoSelector::InternalVersion as u32,
+                &restart.internal_version,
+            ));
             steps.extend(read((0x8000 + restart.code_alias) as u32, &code));
             steps.extend(configuration_read(1, &[1, 1]));
             steps.extend(configuration_read(0, &[0, 0]));
