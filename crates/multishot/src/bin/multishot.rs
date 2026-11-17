@@ -507,7 +507,44 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
             Err(e) => println!("  {:<20} {e}", v.name),
         }
     }
-    results.insert("edge".into(), json!({ "region": edge, "mtf": mtf }));
+    // Each accepted frame's own sharpness at the edge: its demosaiced,
+    // upscaled MTF50 over the region shifted by its motion.
+    println!("  per-frame demosaic MTF50 at the edge (focus and blur differ between frames):");
+    let mut per_frame = Vec::new();
+    for (k, f) in alignment.frames.iter().enumerate() {
+        let Some(t) = f.to_frame else { continue };
+        let (cx, cy) = (
+            edge.x as f64 + edge.width as f64 / 2.0,
+            edge.y as f64 + edge.height as f64 / 2.0,
+        );
+        let (u, v) = t.apply(cx, cy);
+        let (dx, dy) = ((u - cx).round() as i64, (v - cy).round() as i64);
+        let (x, y) = (edge.x as i64 + dx, edge.y as i64 + dy);
+        if x < 0
+            || y < 0
+            || x as usize + edge.width > frames[k].width()
+            || y as usize + edge.height > frames[k].height()
+        {
+            continue;
+        }
+        let r = Region {
+            x: x as usize,
+            y: y as usize,
+            ..edge
+        };
+        let g = OutputGrid::new(r, params.scale);
+        let rgb = demosaic::baseline(frames[k], &g).map_err(|e| e.to_string())?;
+        let m = slanted_edge(&luma(&rgb, wb), g.width, g.height).map(|m| m.mtf50 * params.scale);
+        match &m {
+            Ok(v) => println!("    {:<16} {:.4}", f.label, v),
+            Err(e) => println!("    {:<16} {e}", f.label),
+        }
+        per_frame.push(json!({ "frame": f.label, "mtf50_cycles_per_site": m.ok() }));
+    }
+    results.insert(
+        "edge".into(),
+        json!({ "region": edge, "mtf": mtf, "per_frame_demosaic": per_frame }),
+    );
     if let Some(flat) = args.region("flat")? {
         let (fgrid, fvariants) = run_variants(&frames, &alignment, &params, flat)?;
         println!("flat region {flat:?}");
@@ -524,7 +561,7 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
                 fgrid.width - 2 * m,
                 fgrid.height - 2 * m,
             );
-            let n = patch_noise(&c, wb);
+            let n = patch_noise(&c, fgrid.width - 2 * m, wb);
             println!(
                 "  {:<20} luma relative std {:.5}  rgb std {:.5} {:.5} {:.5}",
                 v.name, n.luma_relative_std, n.std[0], n.std[1], n.std[2]

@@ -124,9 +124,36 @@ were rejected by the inlier gates, as designed, rather than merged.
 
 ### Real X-H2S data
 
-Uncompressed handheld RAFs are still needed for a real-scene resolution
-measurement; the first RAW sets were compressed and are refused. Camera
-JPEGs of handheld brackets and bursts registered with `align-jpeg` show:
+**Uncompressed handheld burst**: 10 frames, 1/100 s, f/1.8, ISO 800, 56 mm,
+electronic shutter, close-up of a printed box. The reader takes geometry
+(plane 6336x4188, active 6240x4160 at 12,13), 14-bit data, black 1024, the
+X-Trans layout and the as-shot white balance (Fuji directory 0xf00e) from
+the files; same-color tile positions agree within 1%, confirming the CFA
+phase.
+
+- Alignment: 9 of 10 frames accepted (one fails the 8-of-16 coverage gate),
+  shifts up to 39 pixels and 0.21° of roll against the reference; 90 s.
+- Merge: 9 frames into 9360x6240 in 119 s, mean robustness weights 0.82 to
+  0.97, peak strip memory 115.8 MiB, process maximum RSS 580 MB.
+- Noise, flat patches with a fitted plane removed: luma relative standard
+  deviation 0.0116 (merge) against 0.0256 (demosaic + upscale) and 0.0204
+  against 0.0424 on a second patch, **2.1 to 2.2x lower**.
+- Resolution: **not measurable on this burst.** At f/1.8 the depth of field
+  is shallower than the hand's fore-aft sway, so focus moves between frames:
+  a stroke that measures MTF50 0.047 cycles per site in one frame measures
+  0.043 in another, and the sharpest single-frame edge found anywhere is
+  near 0.1 cycles per site, a fifth of the sensor's 0.5 limit. The scene has
+  no detail near the sampling limit for super-resolution to recover, and
+  merging frames focused at different depths softens rather than sharpens.
+  The printed strokes are also almost exactly vertical (under 0.5° of
+  slant), which the slanted-edge method cannot sample. A resolution
+  measurement needs a stopped-down (f/5.6 to f/8), distant, static target
+  with an edge slanted 3 to 10° and shutter speeds of 1/250 s or faster.
+- The exposure bracket shot with it (9 frames, 1/250 to 1/40 s) is input
+  for the exposure stage, not the resolution stage.
+
+**Camera JPEGs** of earlier brackets and bursts registered with `align-jpeg`
+show:
 
 - frame-to-frame hand motion up to about 90 pixels and 0.18° of roll, with
   scale within 0.2%; the global translation search keeps such motion inside
@@ -142,6 +169,9 @@ JPEGs of handheld brackets and bursts registered with `align-jpeg` show:
 ## Limits and next steps
 
 - Compressed RAFs (lossless and lossy) are refused.
+- Frames focused at different depths are merged as if equally sharp; a
+  per-region sharpness weight (shared with the focus stage) would keep the
+  sharpest frames' detail.
 - The DNG color matrix is a placeholder.
 - One global transform per frame; local residual motion is rejected by
   robustness rather than aligned. A per-tile residual field would keep more
