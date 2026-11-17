@@ -7,6 +7,7 @@ use fujimod_multishot::align::{
 use fujimod_multishot::demosaic;
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::{Affine, FitParams};
+use fujimod_multishot::local::{LocalParams, residual_fields};
 use fujimod_multishot::measure::{crop, luma, patch_noise, rmse, slanted_edge};
 use fujimod_multishot::merge::{
     ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, merge_resolution,
@@ -391,4 +392,70 @@ fn noise_model_from_manual_alignment_is_used() {
     merge_resolution(&fr, &a, &p, &mut sink).unwrap();
     let c = crop(&sink.rgb, 90, 3, 10, 10, 10, 10);
     assert!(c.iter().all(|v| v.is_finite()));
+}
+
+#[test]
+fn local_alignment_corrects_residual_shift() {
+    // Each frame's true transform is pushed 0.4 sites off, alternating in
+    // sign across the near-vertical edge (the noise model comes from a real
+    // alignment). The residual field must measure
+    // the error back and the merge must regain the correctly aligned
+    // sharpness, which the global-only merge loses.
+    let scene = Scene::chart(W, H);
+    let truth = handheld_transforms(8, W, H, 11);
+    let frames = burst(&scene, &truth, Some(NOISE));
+    let fr = refs(&frames);
+    let mut aligned = align(&fr, 0, &test_align_params()).unwrap();
+    assert_eq!(aligned.accepted(), 8);
+    for (f, t) in aligned.frames.iter_mut().zip(&truth) {
+        f.to_frame = Some(*t);
+    }
+    let mut shifted = aligned.clone();
+    let mut errors = vec![0.0; 8];
+    for (k, f) in shifted.frames.iter_mut().enumerate().skip(1) {
+        let dx = if k % 2 == 0 { 0.4 } else { -0.4 };
+        errors[k] = dx;
+        let mut t = f.to_frame.unwrap();
+        t.0[4] += dx;
+        f.to_frame = Some(t);
+    }
+    let edge = region(scene.edge_region());
+    let params = ResolutionParams {
+        local: Some(LocalParams::default()),
+        ..ResolutionParams::default()
+    };
+    let (fields, report) =
+        residual_fields(&fr, &shifted, edge, 4.0, params.local.as_ref().unwrap()).unwrap();
+    let (cx, cy) = (
+        edge.x as f64 + edge.width as f64 / 2.0,
+        edge.y as f64 + edge.height as f64 / 2.0,
+    );
+    for (k, &dx) in errors.iter().enumerate().skip(1) {
+        let (sx, sy) = fields[k].as_ref().unwrap().at(cx, cy);
+        assert!(
+            (sx + dx).abs() < 0.1 && sy.abs() < 0.1,
+            "frame {k}: field ({sx:.3}, {sy:.3}) for an error of {dx}"
+        );
+    }
+    // The edge panel is a lone edge; its tiles are filled from the star.
+    assert!(report.frames.iter().all(|f| f.measured > 0));
+
+    let global = ResolutionParams {
+        local: None,
+        ..params.clone()
+    };
+    let (grid, good) = merge(&fr, &aligned, &global, edge);
+    let (_, off) = merge(&fr, &shifted, &global, edge);
+    let (_, fixed) = merge(&fr, &shifted, &params, edge);
+    let (mg, mo, mf) = (
+        mtf50(&good, &grid),
+        mtf50(&off, &grid),
+        mtf50(&fixed, &grid),
+    );
+    println!("MTF50: aligned {mg:.4}  0.4-site error {mo:.4}  error with local alignment {mf:.4}");
+    assert!(
+        mo < 0.95 * mg,
+        "the shifted alignment {mo} should lose sharpness against {mg}"
+    );
+    assert!(mf > 0.97 * mg, "local alignment {mf} should recover {mg}");
 }

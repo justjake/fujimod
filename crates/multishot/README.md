@@ -47,6 +47,13 @@ declared in `plan.rs` so plans can be validated; they are refused at run time.
    takes the 3x3 minimum, so moving subjects are rejected instead of ghosted.
    A weak prior from the reference's block means fills sparse output
    pixels. The output is full-color linear camera RGB with no demosaic.
+   With `--local` (`local.rs`), each frame also gets a residual shift field
+   on 96-site tiles: a translation with gain and offset is refined by
+   Gauss-Newton on full-resolution green from the global transform. A tile
+   counts only when its shift has a standard error under 0.05 sites and its
+   gradient tensor is not one-directional (eigenvalue ratio at least 0.3, so
+   a lone edge cannot invent a shift along itself). Outliers against the 3x3
+   median are dropped and empty tiles filled from neighbors.
 4. **Output** (`dng.rs`, `preview.rs`): a three-sample LinearRaw DNG, 16
    bits per sample, written one strip per merge strip after a header that
    already holds every strip offset; plus an sRGB PNG preview. The DNG uses
@@ -114,6 +121,9 @@ independent merge is better: RMSE 0.0182 against 0.0204.
   identical frames returns the identity within 1e-3 sites.
 - **Alignment:** recovered transforms are within 0.087 sites of the truth
   at the image corners over six frames.
+- **Local alignment:** with every frame's true transform pushed 0.4 sites
+  off (alternating sign), edge MTF50 falls from 0.315 to 0.265; the residual
+  field measures the error back and the merge recovers 0.314.
 - **Moving subject:** a disc moving 6 sites per frame leaves an error of
   0.021 against the reference scene with robustness and 0.069 without.
 - **Noise model:** the measured green block-mean variance at 0.3 is 0.53x the
@@ -182,6 +192,16 @@ merged green (0.153), so the remaining gap is in green itself. Per-frame edge
 positions after warping scatter by 0.1 to 0.45 sites and differ across the
 frame, which one global transform per frame cannot correct.
 
+With `--local`, the RMS of those per-frame edge offsets falls from 0.167 to
+0.075 sites and from 0.254 to 0.161 at two of the three edges and rises from
+0.099 to 0.138 at the third; merged MTF50 changes by +0.7%, +0.8% and -0.3%
+(0.153, 0.120, 0.140). Registration is no longer what limits this burst; the
+frames' own sharpness at the edge (0.14 to 0.18 per frame) varies more. Over
+the whole frame the fields find 0.3 to 0.9 sites RMS of residual motion
+(the global fit used only the blade) and double the merge time (212 s
+against 102 s for 13 frames; peak strip memory 130 MiB either way), so
+local alignment is off by default.
+
 **Camera JPEGs** of earlier brackets and bursts registered with `align-jpeg`
 show:
 
@@ -203,9 +223,8 @@ show:
   per-region sharpness weight (shared with the focus stage) would keep the
   sharpest frames' detail.
 - The DNG color matrix is a placeholder.
-- One global transform per frame; local residual motion is rejected by
-  robustness rather than aligned. A per-tile residual field would keep more
-  samples in scenes with parallax.
+- Local alignment is optional and translation-only per tile; robustness
+  still compares frames through their global transforms.
 - Coverage and inlier gates are caller policy; shallow depth-of-field bursts
   need a policy that accepts a well-supported subject region.
 - Exposure (HDR) and focus stages are declared in `plan.rs` and not built.
