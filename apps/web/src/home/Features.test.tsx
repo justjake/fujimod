@@ -87,6 +87,22 @@ test('the outline keeps the declared FUJIMOD SET-UP groups and link placement', 
   ).toHaveLength(2);
 });
 
+test('the recipes outline is reachable from the shooting menu and includes favorites', () => {
+  dispose = render(() => <FeatureOutline />, document.body);
+  flush();
+  const shooting = [...document.querySelectorAll('.outline-section')].find(
+    (section) => section.querySelector('h3')?.textContent === 'SHOOTING MENU',
+  );
+  const recipes = [...shooting!.querySelectorAll('.outline-title')]
+    .find((title) => title.textContent === 'EDIT/SAVE CUSTOM SETTING')!
+    .closest('li')!;
+  const favorites = [...recipes.querySelectorAll('.outline-title')]
+    .find((title) => title.textContent === 'FAVORITES')!
+    .closest('li')!;
+  expect(favorites.querySelector('ul .outline-entry')?.textContent).toBe('chosen favorite');
+  expect(recipes.querySelector('ul')?.textContent).toContain('MY RECIPES');
+});
+
 test('feature deep links filter the catalog on entry and on repeated navigation', () => {
   history.replaceState(null, '', '/#features?search=film');
   const original = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
