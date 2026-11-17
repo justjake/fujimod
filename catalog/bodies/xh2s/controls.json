@@ -988,5 +988,167 @@
       "positions": [],
       "short_name": "BATTERY"
     }
-  }
+  },
+  "ladders": [
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 5
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel through 0x016c8898 (ADC block register 0xff906010+4*channel, masked 0xfff, cached by 0x017298ec at 0x02394b90+2*channel). Bands come from the factory configuration page (flash 0xc0000, XOR-DAT 0xc0274 decoded with 0xff); a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "view_mode_button",
+          "band_low": 2117,
+          "band_high": 2344,
+          "sample": 2230,
+          "basis": "Band 2117..2344, configuration tags 0x36da/0x36d8 (halfwords at page offsets) tested by the firmware key callback (VIEW phys 0x1c cb 0x1728bc8); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "drive_delete_button",
+          "band_low": 2637,
+          "band_high": 3102,
+          "sample": 2869,
+          "basis": "Band 2637..3102, configuration tags 0x36e2/0x36e0 (halfwords at page offsets) tested by the firmware key callback (DRIVE phys 0x10 cb 0x1728d04); no other control on this wire accepts it alone. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 6
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel through 0x016c8898 (ADC block register 0xff906010+4*channel, masked 0xfff, cached by 0x017298ec at 0x02394b90+2*channel). Bands come from the factory configuration page (flash 0xc0000, XOR-DAT 0xc0274 decoded with 0xff); a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "menu_ok_button",
+          "band_low": 0,
+          "band_high": 782,
+          "sample": 391,
+          "basis": "Band 0..782, configuration tags 0x38ab/0x38a9 (halfwords at page offsets) tested by the firmware key callback (EXE_M phys 0xd cb 0x17283cc); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "disp_back_button",
+          "band_low": 2637,
+          "band_high": 3102,
+          "sample": 2869,
+          "basis": "Band 2637..3102, configuration tags 0x38c3/0x38c1 (halfwords at page offsets) tested by the firmware key callback (DISP_B phys 0xf cb 0x17285f0); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "quick_menu_button",
+          "band_low": 3103,
+          "band_high": 3776,
+          "sample": 3439,
+          "basis": "Band 3103..3776, configuration tags 0x38c7/0x38c5 (halfwords at page offsets) tested by the firmware key callback (K_Q phys 0x11 cb 0x172872c); no other control on this wire accepts it alone. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 12
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel through 0x016c8898 (ADC block register 0xff906010+4*channel, masked 0xfff, cached by 0x017298ec at 0x02394b90+2*channel). Bands come from the factory configuration page (flash 0xc0000, XOR-DAT 0xc0274 decoded with 0xff); a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "fn2_button",
+          "band_low": 2117,
+          "band_high": 2344,
+          "sample": 2230,
+          "basis": "Band 2117..2344, configuration tags 0x3756/0x3754 (halfwords at page offsets) tested by the firmware key callback (FUNCTION2 phys 0x1b cb 0x1728f7c); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "fn1_button",
+          "band_low": 2637,
+          "band_high": 3102,
+          "sample": 2869,
+          "basis": "Band 2637..3102, configuration tags 0x375e/0x375c (halfwords at page offsets) tested by the firmware key callback (FUNCTION phys 0x19 cb 0x17290b8); no other control on this wire accepts it alone. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 13
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel through 0x016c8898 (ADC block register 0xff906010+4*channel, masked 0xfff, cached by 0x017298ec at 0x02394b90+2*channel). Bands come from the factory configuration page (flash 0xc0000, XOR-DAT 0xc0274 decoded with 0xff); a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "selector_up_button",
+          "band_low": 1448,
+          "band_high": 1688,
+          "sample": 1568,
+          "basis": "Band 1448..1688, configuration tags 0x3847/0x3845 (halfwords at page offsets) tested by the firmware key callback (UP phys 0x15 cb 0x1728290); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "selector_right_button",
+          "band_low": 1930,
+          "band_high": 2219,
+          "sample": 2074,
+          "basis": "Band 1930..2219, configuration tags 0x384f/0x384d (halfwords at page offsets) tested by the firmware key callback (RIGHT phys 0x18 cb 0x1727edc); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "selector_left_button",
+          "band_low": 2606,
+          "band_high": 3041,
+          "sample": 2823,
+          "basis": "Band 2606..3041, configuration tags 0x3857/0x3855 (halfwords at page offsets) tested by the firmware key callback (LEFT phys 0x17 cb 0x1728018); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "selector_down_button",
+          "band_low": 3042,
+          "band_high": 3719,
+          "sample": 3380,
+          "basis": "Band 3042..3719, configuration tags 0x385b/0x3859 (halfwords at page offsets) tested by the firmware key callback (DOWN phys 0x16 cb 0x1728154); no other control on this wire accepts it alone. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 14
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel through 0x016c8898 (ADC block register 0xff906010+4*channel, masked 0xfff, cached by 0x017298ec at 0x02394b90+2*channel). Bands come from the factory configuration page (flash 0xc0000, XOR-DAT 0xc0274 decoded with 0xff); a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1448,
+          "band_high": 1688,
+          "sample": 1568,
+          "basis": "Band 1448..1688, configuration tags 0x3869/0x386b (halfwords at page offsets) tested by the firmware key callback (8DIR_U phys 0x29); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 1930,
+          "band_high": 2219,
+          "sample": 2074,
+          "basis": "Band 1930..2219, configuration tags 0x3871/0x3873 (halfwords at page offsets) tested by the firmware key callback (8DIR_R phys 0x2b); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2606,
+          "band_high": 3041,
+          "sample": 2823,
+          "basis": "Band 2606..3041, configuration tags 0x3879/0x387b (halfwords at page offsets) tested by the firmware key callback (8DIR_L phys 0x2c); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3042,
+          "band_high": 3719,
+          "sample": 3380,
+          "basis": "Band 3042..3719, configuration tags 0x387d/0x387f (halfwords at page offsets) tested by the firmware key callback (8DIR_D phys 0x2a); no other control on this wire accepts it alone. The sample is the band midpoint."
+        }
+      ]
+    }
+  ]
 }

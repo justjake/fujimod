@@ -25,14 +25,16 @@ use fujimod_emulator_parts_controls::{key_input::Key, ladder_keys};
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
-const CONTROL_KEYS: [(&str, Key); 19] = [
+const CONTROL_KEYS: [(&str, Key); 21] = [
     ("menu_ok_button", Key::Menu),
     ("disp_back_bluetooth_button", Key::Back),
+    ("disp_back_button", Key::Back),
     ("selector_up_button", Key::Up),
     ("selector_down_button", Key::Down),
     ("selector_left_button", Key::Left),
     ("selector_right_button", Key::Right),
     ("delete_button", Key::Delete),
+    ("drive_delete_button", Key::Delete),
     ("view_mode_button", Key::ViewMode),
     ("fn1_button", Key::Fn1),
     ("fn2_button", Key::Fn2),
@@ -584,11 +586,28 @@ mod tests {
 
     #[test]
     fn every_mapped_identity_is_a_catalog_control() {
-        let document = xt5().reference.physical_controls.unwrap();
-        let controls = PhysicalControls::decode_document(&document, "xt5").unwrap();
+        let bodies = [("xt5-431", "xt5"), ("xh2s-730", "xh2s")].map(|(configuration, body)| {
+            let document = ResolvedConfiguration::bundled(configuration)
+                .unwrap()
+                .reference
+                .physical_controls
+                .unwrap();
+            PhysicalControls::decode_document(&document, body).unwrap()
+        });
         for (id, _) in CONTROL_KEYS {
-            controls.control(id).unwrap();
+            assert!(
+                bodies.iter().any(|controls| controls.control(id).is_ok()),
+                "{id} is no body's catalog control"
+            );
         }
+    }
+
+    #[test]
+    fn xh2s_ladders_become_the_ladder_key_model() {
+        let options = ladder_keys(&ResolvedConfiguration::bundled("xh2s-730").unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(options.ladders.len(), 5);
     }
 
     #[test]
