@@ -4,7 +4,7 @@
 use fujimod_multishot::align::{
     AlignParams, Alignment, FrameAlignment, MatchParams, MatchStats, align,
 };
-use fujimod_multishot::demosaic;
+use fujimod_multishot::demosaic::{self, Demosaic};
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::{Affine, FitParams};
 use fujimod_multishot::local::{LocalParams, residual_fields};
@@ -147,24 +147,32 @@ fn merge_beats_single_frame() {
     let edge = region(scene.edge_region());
     let (grid, merged) = merge(&fr, &a, &params, edge);
     let (_, single) = merge(&fr, &reference_only(&a), &params, edge);
-    let baseline = demosaic::baseline(fr[0], &grid).unwrap();
+    let baseline = demosaic::baseline(fr[0], &grid, Demosaic::Gaussian).unwrap();
     let (m, s, b) = (
         mtf50(&merged, &grid),
         mtf50(&single, &grid),
         mtf50(&baseline, &grid),
     );
-    println!("MTF50 cycles/site: merge {m:.4}  single-frame merge {s:.4}  demosaic+upscale {b:.4}");
+    let mk = demosaic::baseline(fr[0], &grid, Demosaic::Markesteijn { passes: 3 }).unwrap();
+    let k = mtf50(&mk, &grid);
+    println!(
+        "MTF50 cycles/site: merge {m:.4}  single-frame merge {s:.4}  demosaic+upscale {b:.4}  Markesteijn-3+upscale {k:.4}"
+    );
 
     let detail = region(scene.detail_region());
     let (dgrid, dmerged) = merge(&fr, &a, &params, detail);
-    let dbase = demosaic::baseline(fr[0], &dgrid).unwrap();
+    let dbase = demosaic::baseline(fr[0], &dgrid, Demosaic::Gaussian).unwrap();
     let ideal = scene.truth(&dgrid, 0);
     let (em, eb) = (rmse(&dmerged, &ideal), rmse(&dbase, &ideal));
-    println!("detail RMSE vs full-color truth: merge {em:.5}  demosaic+upscale {eb:.5}");
+    let dmk = demosaic::baseline(fr[0], &dgrid, Demosaic::Markesteijn { passes: 3 }).unwrap();
+    let ek = rmse(&dmk, &ideal);
+    println!(
+        "detail RMSE vs full-color truth: merge {em:.5}  demosaic+upscale {eb:.5}  Markesteijn-3+upscale {ek:.5}"
+    );
 
     let flat = region(scene.flat_region());
     let (fgrid, fmerged) = merge(&fr, &a, &params, flat);
-    let fbase = demosaic::baseline(fr[0], &fgrid).unwrap();
+    let fbase = demosaic::baseline(fr[0], &fgrid, Demosaic::Gaussian).unwrap();
     let inset = |v: &[f32]| crop(v, fgrid.width, 3, 4, 4, fgrid.width - 8, fgrid.height - 8);
     let (nm, nb) = (
         patch_noise(&inset(&fmerged), fgrid.width - 8, WB),
@@ -179,6 +187,12 @@ fn merge_beats_single_frame() {
     assert!(m > 1.05 * b, "merge MTF50 {m} vs baseline {b}");
     assert!(m > 1.15 * s, "merge MTF50 {m} vs single-frame merge {s}");
     assert!(em < 0.75 * eb, "merge RMSE {em} vs baseline {eb}");
+    assert!(m > k, "merge MTF50 {m} vs Markesteijn-3 {k}");
+    assert!(em < ek, "merge RMSE {em} vs Markesteijn-3 {ek}");
+    assert!(
+        ek < eb,
+        "Markesteijn-3 RMSE {ek} should beat the Gaussian demosaic {eb}"
+    );
 
     // Red and blue merged on their own are sparser than green and blur luma
     // on gray detail. Uncorrelated color texture is the worst case for

@@ -1,9 +1,11 @@
-//! Single-frame baseline: X-Trans demosaic and upscaling to the merge grid.
+//! Single-frame baselines: X-Trans demosaic and upscaling to the merge grid.
 //!
-//! Green is interpolated by normalized Gaussian convolution of the green
-//! sites; red and blue by interpolating the color differences `R - G` and
-//! `B - G` the same way with a wider kernel. The result is resampled onto the
-//! merge's output grid with Catmull-Rom bicubic interpolation.
+//! [`Demosaic::Gaussian`] interpolates green by normalized Gaussian
+//! convolution of the green sites, and red and blue by interpolating the
+//! color differences `R - G` and `B - G` the same way with a wider kernel.
+//! [`Demosaic::Markesteijn`] is the edge-directed X-Trans demosaic of
+//! [`crate::markesteijn`]. The result is resampled onto the merge's output
+//! grid with Catmull-Rom bicubic interpolation.
 
 use crate::merge::{OutputGrid, Region};
 use crate::plane::{Plane, cubic_weights};
@@ -102,9 +104,34 @@ pub fn demosaic(
     ))
 }
 
+/// Single-frame demosaic of a baseline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Demosaic {
+    Gaussian,
+    Markesteijn { passes: usize },
+}
+
+impl Demosaic {
+    pub fn name(&self) -> String {
+        match self {
+            Demosaic::Gaussian => "demosaic".into(),
+            Demosaic::Markesteijn { passes } => format!("markesteijn{passes}"),
+        }
+    }
+}
+
 /// The baseline image on `out`'s grid: demosaic, then bicubic upscaling.
-pub fn baseline(frame: &dyn FrameSource, out: &OutputGrid) -> io::Result<Vec<f32>> {
-    let (covered, planes) = demosaic(frame, out.region, 4)?;
+pub fn baseline(
+    frame: &dyn FrameSource,
+    out: &OutputGrid,
+    method: Demosaic,
+) -> io::Result<Vec<f32>> {
+    let (covered, planes) = match method {
+        Demosaic::Gaussian => demosaic(frame, out.region, 4)?,
+        Demosaic::Markesteijn { passes } => {
+            crate::markesteijn::demosaic(frame, out.region, crate::markesteijn::BORDER + 4, passes)?
+        }
+    };
     let mut rgb = vec![0f32; out.width * out.height * 3];
     for j in 0..out.height {
         for i in 0..out.width {
