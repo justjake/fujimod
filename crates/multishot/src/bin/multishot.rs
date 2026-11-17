@@ -519,9 +519,29 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
             }
             Err(e) => println!("  {:<20} {e}", v.name),
         }
+        // Green alone: the densest CFA color, so its MTF separates
+        // registration from red/blue sampling density.
+        let g: Vec<f32> = v.rgb.chunks_exact(3).map(|p| p[1]).collect();
+        if let Ok(m) = slanted_edge(&g, grid.width, grid.height) {
+            println!(
+                "  {:<20} {:>12} {:>14.4}  (green)",
+                "",
+                "",
+                m.mtf50 * params.scale
+            );
+            if let Some(e) = mtf.get_mut(v.name) {
+                e["green_mtf50_cycles_per_site"] = json!(m.mtf50 * params.scale);
+            }
+        }
     }
+    // The reference's edge line in site coordinates, to check where each
+    // frame's own edge lands after its transform.
+    let ref_line = slanted_edge(&luma(&variants[2].rgb, wb), grid.width, grid.height)
+        .ok()
+        .map(|m| m.line.map(|(x, y)| grid.to_site(x, y)));
     // Each accepted frame's own sharpness at the edge: its demosaiced,
-    // upscaled MTF50 over the region shifted by its motion.
+    // upscaled MTF50 over the region shifted by its motion, and the distance
+    // of its edge, mapped into the reference, from the reference's edge.
     println!("  per-frame demosaic MTF50 at the edge (focus and blur differ between frames):");
     let mut per_frame = Vec::new();
     for (k, f) in alignment.frames.iter().enumerate() {
@@ -547,12 +567,31 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
         };
         let g = OutputGrid::new(r, params.scale);
         let rgb = demosaic::baseline(frames[k], &g).map_err(|e| e.to_string())?;
-        let m = slanted_edge(&luma(&rgb, wb), g.width, g.height).map(|m| m.mtf50 * params.scale);
-        match &m {
-            Ok(v) => println!("    {:<16} {:.4}", f.label, v),
+        let edge_fit = slanted_edge(&luma(&rgb, wb), g.width, g.height);
+        // Perpendicular offset (sites) of this frame's edge midpoint, mapped
+        // to the reference, from the reference edge line.
+        let offset = match (&edge_fit, ref_line, t.inverse()) {
+            (Ok(m), Some([(x0, y0), (x1, y1)]), Some(inv)) => {
+                let (px, py) = g.to_site(
+                    0.5 * (m.line[0].0 + m.line[1].0),
+                    0.5 * (m.line[0].1 + m.line[1].1),
+                );
+                let (qx, qy) = inv.apply(px, py);
+                let (dx, dy) = (x1 - x0, y1 - y0);
+                Some(((qx - x0) * dy - (qy - y0) * dx) / (dx * dx + dy * dy).sqrt())
+            }
+            _ => None,
+        };
+        match &edge_fit {
+            Ok(m) => println!(
+                "    {:<16} {:.4}   edge offset {:+.3} sites",
+                f.label,
+                m.mtf50 * params.scale,
+                offset.unwrap_or(f64::NAN)
+            ),
             Err(e) => println!("    {:<16} {e}", f.label),
         }
-        per_frame.push(json!({ "frame": f.label, "mtf50_cycles_per_site": m.ok() }));
+        per_frame.push(json!({ "frame": f.label, "mtf50_cycles_per_site": edge_fit.as_ref().ok().map(|m| m.mtf50 * params.scale), "edge_offset_sites": offset }));
     }
     results.insert(
         "edge".into(),
