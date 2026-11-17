@@ -81,6 +81,8 @@ fn t32_subset_decodes_each_supported_shape() {
         vec![0xf1b0, 0x0001, 0xf47f, 0xaffc],         // SUBS.W; BNE.W
         vec![0xea5f, 0x0141, 0x4019, 0xe7fb],         // MOVS.W LSL; ANDS; B
         vec![0xe7fe],                                 // B .
+        vec![0x8815, 0xf005, 0x0504, 0xb2ad, 0x2d00, 0xd0f9], // LDRH; AND.W; UXTH; CMP; BEQ
+        vec![0x8815, 0xfa5f, 0xf585, 0x2d00, 0xd0fa], // LDRH; UXTB.W; CMP; BEQ
     ] {
         assert!(t32(&code).is_some(), "{code:04x?}");
     }
@@ -102,6 +104,8 @@ fn t32_stores_system_writeback_and_it_misuse_never_prove() {
         vec![0x2900, 0xb101, 0x2900, 0xe7fb], // CBZ to a target inside the loop
         vec![0x6811, 0xbf28, 0x0000, 0xe7fb], // MOVS inside IT (unpredictable)
         vec![0x4687, 0xe7fd],                 // MOV PC, R0
+        vec![0xb22d, 0xe7fd],                 // SXTH (sign extension)
+        vec![0xfa1f, 0xf5a5, 0x2d00, 0xe7fb], // UXTH.W with rotation
     ] {
         assert!(t32(&code).is_none(), "{code:04x?}");
     }
@@ -171,4 +175,19 @@ fn t32_modified_immediates_expand_with_their_carry() {
         assert_eq!((v, c), (value, carry), "{imm12:03x}");
     }
     assert!(t32::expand(0x100).is_none());
+}
+#[test]
+fn t32_zero_extension_masks_without_flags() {
+    // LDRH; AND.W #4; UXTH; CMP #0; BEQ over a value with bit 2 clear, then set.
+    let proof = t32(&[0x8815, 0xf005, 0x0504, 0xb2ad, 0x2d00, 0xd0f9]).unwrap();
+    let mut entry = state(0x6000_0000);
+    entry.registers[2] = 0x40;
+    let read = |value: u32| {
+        move |address: u32, width: usize| (address == 0x40 && width == 2).then_some(value)
+    };
+    assert_eq!(proof.advance(entry, 9, read(0xfffb)).unwrap().iterations, 9);
+    assert_eq!(
+        proof.advance(entry, 9, read(4)),
+        Err(AdvanceFailure::ConditionNotTaken)
+    );
 }

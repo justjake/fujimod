@@ -371,9 +371,10 @@ fn thumb_status_polls_match_instruction_execution() {
         vec![0x6811, 0xb101, 0xe7fc, WFI], // LDR; CBZ out; B
         vec![0x6811, 0x2900, 0xbf0c, 0x2301, 0x2302, 0x2b02, 0xd0f8, WFI], // ITE EQ
         vec![0xe7fe],                      // B .
+        vec![0x8815, 0xf005, 0x0504, 0xb2ad, 0x2d00, 0xd0f9, WFI], // LDRH; AND.W; UXTH; CMP; BEQ
     ] {
         let mut accelerated = false;
-        for flag in [0, 1] {
+        for flag in [0, 1, 4] {
             for budget in (1..40).chain([100, 1000]) {
                 accelerated |= compare_thumb(&code, budget, 1, flag);
             }
