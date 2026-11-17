@@ -97,7 +97,9 @@ companion_irq_line = 107
 # (literal 0x10009), writes six 16-bit words (the halves of three 32-bit axis
 # drive values at +0x718/+0x714/+0x71c) through 0x19f5c -> 0x1a5b4 and drops 1.9;
 # no caller reads a received word. The peer is an off-chip actuator driver; its
-# MISO is not used, so the wire is an explicit fixed low input.
+# MISO is not used, so the wire is an explicit fixed low input. On the camera in REC
+# SSP9 is an enabled 16-bit mode-0 master (CR0 0xf, CR1 0xa, CPSR 0x1c) whose receive
+# FIFO is full and overrun (SR 0xf, RIS 0xf), and 1.9 rests low: nothing reads MISO.
 [device.options.wire]
 kind = "input-level"
 high = false

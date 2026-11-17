@@ -43,6 +43,8 @@ initial_inputs = [{ port = 11, pin = 4, high = false }]
 # 1.14 high (0x17176b4) and the companion reads pad 0.4 low at boot (0x18bd8), then
 # reports STATUS bit1 on its rise (0x18c54, or IRQ handler 0x18d50 on NVIC 27). The
 # peer answers 1.14 on 0.4 after rise_delay ticks (ns); the delay is a board guess.
+# The camera contradicts the wire in REC: pad 0.4 reads 1 while 1.14 is low (port 1
+# latch 0x13). The level of 0.4 in REC is right; its dependence on 1.14 is not.
 feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000 }]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
 
