@@ -8,6 +8,7 @@ fn main() {
 }
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 fn main() -> Result<(), String> {
+    use fujimod_catalog_configuration::RunEngine;
     use fujimod_emulator_cpu::*;
     use fujimod_emulator_cpu_hvf::Vm;
     use std::{
@@ -69,7 +70,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
         };
         let options = || {
-            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024)
+            Options::new(RunEngine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024)
         };
         let mut concurrent = graph(
             (0..2)
@@ -1007,7 +1008,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1)?,
         };
         let mut built = graph.build(
-            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             Some(InterruptMap {
                 gic: Box::new(gic),
@@ -1194,7 +1195,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1)?,
         };
         let mut board = graph.build(
-            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             Some(InterruptMap {
                 gic: Box::new(gic),
@@ -1349,7 +1350,7 @@ fn main() -> Result<(), String> {
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1)?,
         };
         let mut board = graph.build(
-            Options::new(Engine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024),
             Bus::new(Mode::Strict),
             None,
         )?;
