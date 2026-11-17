@@ -12,7 +12,7 @@ use fujimod_multishot::merge::{
     ColorMerge, ImageSink, MergeReport, OutputGrid, Region, ResolutionParams, SharpnessParams,
     StripSink, Tee, merge_resolution,
 };
-use fujimod_multishot::pixelshift::{ShiftPlan, report as shift_report};
+use fujimod_multishot::pixelshift::{ShiftPlan, predicted_alignment, report as shift_report};
 use fujimod_multishot::plane::read_block_planes;
 use fujimod_multishot::preview::{PreviewSink, auto_gain, write_png};
 use fujimod_multishot::raf::Raf;
@@ -1083,8 +1083,8 @@ fn pixelshift_cmd(args: &Args) -> Result<(), String> {
     let alignment = get_alignment(args, &frames, &out, Some(&plan))?;
     let r = shift_report(&plan, &alignment);
     println!(
-        "  {:<14} {:>14} {:>18} {:>18} {:>18}",
-        "frame", "counts", "commanded (sites)", "measured", "measured-commanded"
+        "  {:<14} {:>14} {:>18} {:>18} {:>18} {:>18}",
+        "frame", "counts", "commanded (sites)", "measured", "measured-commanded", "predicted"
     );
     for f in &r.frames {
         let fmt = |v: Option<[f64; 2]>| match v {
@@ -1092,13 +1092,14 @@ fn pixelshift_cmd(args: &Args) -> Result<(), String> {
             None => "rejected".into(),
         };
         println!(
-            "  {:<14} {:>6} {:>6}   {}   {}   {}",
+            "  {:<14} {:>6} {:>6}   {}   {}   {}   {}",
             f.label,
             f.counts[0],
             f.counts[1],
             fmt(Some(f.commanded)),
             fmt(f.measured),
-            fmt(f.difference)
+            fmt(f.difference),
+            fmt(f.predicted)
         );
     }
     if let Some([x, y]) = r.zero_spread {
@@ -1119,6 +1120,12 @@ fn pixelshift_cmd(args: &Args) -> Result<(), String> {
     std::fs::write(
         out.join("pixelshift.json"),
         serde_json::to_string_pretty(&r).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+    // For `merge --alignment`: every frame at its predicted position.
+    std::fs::write(
+        out.join("alignment-predicted.json"),
+        serde_json::to_string_pretty(&predicted_alignment(&r, &alignment)).unwrap(),
     )
     .map_err(|e| e.to_string())?;
     println!("wrote {}", out.display());
