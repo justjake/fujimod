@@ -64,7 +64,7 @@ pub(crate) struct WindowOptions {
 
 impl Fragment {
     pub fn bundled() -> Result<Self, String> {
-        toml::from_str(include_str!("../../xp5-data/rom-start.toml"))
+        toml::from_str(include_str!("../../../../catalog/soc/xp5/rom-start.toml"))
             .map_err(|error| format!("data/rom-start.toml: {error}"))
     }
 }

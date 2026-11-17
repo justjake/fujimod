@@ -1,5 +1,12 @@
 # XP5 receiver and image-processing windows for the catalog run scene.
 [[device]]
+base = 0xff948000
+size = 0x1000
+kind = "imaging-sensor"
+[device.options]
+command_latency_us = 1
+
+[[device]]
 base = 0xff940000
 size = 0x1000
 kind = "imaging-receiver"

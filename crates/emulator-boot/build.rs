@@ -1,5 +1,15 @@
-//! Bundle the per-firmware boot manifests and stream layouts under `data/`.
+//! Bundle native XP5 startup facts alongside each firmware catalog record.
 use std::{env, fmt::Write, fs, path::Path};
+
+fn directories(path: &Path) -> Vec<std::path::PathBuf> {
+    let mut paths: Vec<_> = fs::read_dir(path)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_dir())
+        .collect();
+    paths.sort();
+    paths
+}
 
 fn main() {
     if env::var_os("CARGO_FEATURE_XP5_STARTUP").is_none()
@@ -7,33 +17,39 @@ fn main() {
     {
         return;
     }
-    let data = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("xp5-data");
-    println!("cargo:rerun-if-changed=xp5-data");
-    let mut ids: Vec<_> = fs::read_dir(&data)
-        .unwrap()
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .map(|entry| entry.file_name().into_string().unwrap())
-        .collect();
-    ids.sort();
+    let catalog = Path::new("../../catalog/firmware");
+    println!("cargo:rerun-if-changed={}", catalog.display());
     let mut source = String::from("pub(crate) static BUNDLED: &[Bundled] = &[\n");
-    for id in ids {
-        let directory = data.join(&id);
-        let mut fragments: Vec<_> = fs::read_dir(directory.join("manifest.d"))
-            .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
-            .unwrap_or_default();
-        fragments.sort();
-        let mut list = String::new();
-        for fragment in fragments {
-            write!(list, "include_str!({:?}), ", fragment.display().to_string()).unwrap();
+    for body in directories(catalog) {
+        for version in directories(&body) {
+            let directory = version.join("xp5-boot");
+            if !directory.is_dir() {
+                continue;
+            }
+            let directory = directory.canonicalize().unwrap();
+            let manifest = directory.join("manifest.toml");
+            let manifest_text = fs::read_to_string(&manifest).unwrap();
+            let id = manifest_text.lines()
+                .find_map(|line| line.strip_prefix("firmware = \"").and_then(|id| id.strip_suffix('"')))
+                .expect("XP5 manifest must declare its firmware ID");
+            let mut fragments: Vec<_> = fs::read_dir(directory.join("manifest.d"))
+                .map(|entries| entries.map(|entry| entry.unwrap().path())
+                    .filter(|path| path.extension().is_some_and(|extension| extension == "toml"))
+                    .collect())
+                .unwrap_or_default();
+            fragments.sort();
+            let mut list = String::new();
+            for fragment in fragments {
+                write!(list, "include_str!({:?}), ", fragment.display().to_string()).unwrap();
+            }
+            writeln!(
+                source,
+                "    Bundled {{ firmware: {id:?}, manifest: include_str!({:?}), fragments: &[{list}], streams: include_str!({:?}) }},",
+                manifest.display().to_string(),
+                directory.join("streams.json").display().to_string(),
+            )
+            .unwrap();
         }
-        writeln!(
-            source,
-            "    Bundled {{ firmware: {id:?}, manifest: include_str!({:?}), fragments: &[{list}], streams: include_str!({:?}) }},",
-            directory.join("manifest.toml").display().to_string(),
-            directory.join("streams.json").display().to_string(),
-        )
-        .unwrap();
     }
     source.push_str("];\n");
     fs::write(Path::new(&env::var("OUT_DIR").unwrap()).join("bundled.rs"), source).unwrap();
