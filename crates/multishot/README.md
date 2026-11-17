@@ -77,11 +77,18 @@ are refused.
    the as-shot neutral and an sRGB-primaries color matrix (no calibrated
    X-H2S matrix yet), so color is approximate; resolution and noise are
    measured on the linear data.
-5. **Measurement** (`measure.rs`, `demosaic.rs`): ISO 12233 slanted-edge MTF
-   and flat-patch noise of the merge, of the reference alone through the same
-   merge, and of the reference demosaiced (green by normalized convolution,
-   red and blue by color differences) and upscaled bicubically to the same
-   grid.
+5. **Measurement** (`measure.rs`, `demosaic.rs`, `markesteijn.rs`): ISO
+   12233 slanted-edge MTF and flat-patch noise of the merge, of the
+   reference alone through the same merge, and of the reference demosaiced
+   and upscaled bicubically to the same grid, two ways: a simple demosaic
+   (green by normalized convolution, red and blue by color differences) and
+   Markesteijn's 3-pass X-Trans demosaic, the strongest open-source single
+   frame baseline. `markesteijn.rs` is written from the algorithm as
+   LibRaw's `xtrans_interpolate` (LGPL-2.1) describes it, in floating
+   point; on a 500x260-site crop of a real frame it agrees with LibRaw 0.22.1
+   (through rawpy, 3 passes) within 0.5% (green) to 1.6% (blue) mean
+   absolute difference, correlation 0.998 to 0.9998; the simple demosaic
+   differs from LibRaw by 3% to 20%.
 
 ## Command line
 
@@ -121,17 +128,19 @@ CFA with shot and read noise. The truth is what a full-color sensor at the
 reference position would record, on the output grid. Twelve frames, scale
 1.5, default parameters:
 
-| Measure | Merge | Single frame, same merge | Demosaic + bicubic | Truth |
-| --- | --- | --- | --- | --- |
-| Slanted-edge MTF50 (cycles per site) | **0.314** | 0.271 | 0.276 | 0.329 |
-| Fine-detail RMSE against truth | **0.0152** | | 0.0352 | 0 |
-| Flat-patch luma noise (relative std) | **0.0017** | | 0.0073 | |
+| Measure | Merge | Single frame, same merge | Demosaic + bicubic | Markesteijn-3 + bicubic | Truth |
+| --- | --- | --- | --- | --- | --- |
+| Slanted-edge MTF50 (cycles per site) | **0.314** | 0.271 | 0.276 | 0.301 | 0.329 |
+| Fine-detail RMSE against truth | **0.0152** | | 0.0352 | 0.0267 | 0 |
+| Flat-patch luma noise (relative std) | **0.0017** | | 0.0073 | | |
 
 The merge resolves a neutral edge 14% better than demosaicing and upscaling
 the best single frame (16% better than the single frame through the same
 kernels), recovers fine color detail with 2.3x lower error and has 4.3x lower
 noise. Demosaicing a neutral edge is the single frame's best case; the gain
-on colored and aliasing-prone detail is the RMSE column.
+on colored and aliasing-prone detail is the RMSE column. Against
+Markesteijn's demosaic the merge is 4% sharper and has 1.8x lower detail
+error.
 
 Merging red and blue independently instead gives edge MTF50 0.298 and Siemens
 star RMSE 0.0083 (green-guided 0.0069). On the chart's random color cells,
@@ -200,15 +209,20 @@ the whole-frame coverage gate, so alignment is fitted on the blade
 (-4.6°, scale ticks reaching within a few sites of it), each frame
 demosaiced and upscaled measures MTF50 0.14 to 0.18 cycles per site:
 
-| | Merge (13 frames) | Single frame, same merge | Demosaic + bicubic |
-| --- | --- | --- | --- |
-| Edge MTF50 (cycles per site) | 0.152 | 0.149 | 0.165 |
-| Shirt noise, R G B std (plane removed) | 0.00047 0.00091 0.00072 | | 0.00098 0.00118 0.00113 |
+| | Merge (13 frames) | Single frame, same merge | Demosaic + bicubic | Markesteijn-3 + bicubic |
+| --- | --- | --- | --- | --- |
+| Edge MTF50, luma (cycles per site) | 0.152 | 0.149 | 0.165 | 0.158 |
+| Edge MTF50, green | 0.153 | 0.149 | 0.144 | 0.163 |
+| Shirt std, R G B (plane removed) | 0.00050 0.00091 0.00075 | 0.00090 0.00117 0.00112 | 0.00098 0.00118 0.00113 | 0.00068 0.00125 0.00090 |
 
-On this real edge the merge is 2% sharper than the same kernels on one frame
-but 8% softer than demosaicing and bicubic upscaling, while lowering noise
-1.3 to 2.1x (the shirt's weave counts as noise in these figures; noise was
-measured before the green-guided color merge). Merging red and blue
+At the blade's other two edges (1500,2380 and 4700,2150) the merge measures
+0.140 and 0.119 against Markesteijn's 0.152 and 0.130. On this real burst
+the merge is 2% sharper than the same kernels on one frame but 3% to 9%
+softer than Markesteijn's demosaic of the reference. The simple demosaic's
+luma MTF50 (0.165) exceeds its own green's (0.144); its red and blue add
+contrast at the edge that Markesteijn's do not. The shirt patch is not flat
+(luma relative std 0.5 to 0.7 in every variant): its standard deviations
+mostly measure weave, which the merge softens, not noise. Merging red and blue
 independently measures 0.148 here; the green-guided luma now matches the
 merged green (0.153), so the remaining gap is in green itself. Per-frame edge
 positions after warping scatter by 0.1 to 0.45 sites and differ across the
@@ -284,9 +298,11 @@ counts.
 ## Limits and next steps
 
 - Compressed RAFs (lossless and lossy) are refused.
-- Frames focused at different depths are merged as if equally sharp; a
-  per-region sharpness weight (shared with the focus stage) would keep the
-  sharpest frames' detail.
+- Frames focused at different depths, or blurred by motion, are merged as if
+  equally sharp; a per-frame or per-region sharpness weight (shared with the
+  focus stage) would keep the sharpest frames' detail. On the real
+  stopped-down burst the merge is 3% to 9% softer than Markesteijn's
+  demosaic of the best frame; this is the leading lever.
 - The DNG color matrix is a placeholder.
 - Local alignment is optional and translation-only per tile; robustness
   still compares frames through their global transforms.
