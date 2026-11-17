@@ -4,33 +4,12 @@ use super::{
     emulator_patch,
     Startup, Started, mod_loader, open as session_open,
 };
+use crate::host::{parse_number, parse_seconds as seconds, parse_stub};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-
-fn parse_number(s: &str) -> Result<u64, String> {
-    if let Some(s) = s.strip_prefix("0x") {
-        u64::from_str_radix(s, 16).map_err(|e| e.to_string())
-    } else {
-        s.parse()
-            .map_err(|e: std::num::ParseIntError| e.to_string())
-    }
-}
-/// Instructions per scheduler turn for `--quantum`; replaces the run
-/// configuration's `execution.quantum` for this run only.
-fn quantum(s: &str) -> Result<usize, String> {
-    let value = usize::try_from(parse_number(s)?).map_err(|error| error.to_string())?;
-    if value == 0 {
-        return Err("--quantum needs a positive instruction count".into());
-    }
-    Ok(value)
-}
-fn seconds(s: &str) -> Result<Duration, String> {
-    let n = s.parse::<f64>().map_err(|e| e.to_string())?;
-    Duration::try_from_secs_f64(n).map_err(|e| e.to_string())
-}
 
 fn shared_boot_summary(
     state: &Value,
@@ -141,30 +120,6 @@ pub struct Run {
     pub execution_policy: ExecutionPolicy,
     /// Directory for the run's records (display frames, board state, dumps).
     pub output: PathBuf,
-}
-
-pub fn parse_stub(specification: &str) -> Result<fujimod_emulator::board::discovery::CalleeStub, String> {
-    let (name, rest) = specification
-        .split_once('@')
-        .ok_or("--stub needs NAME@ADDR=VALUE")?;
-    let (address, value) = rest.split_once('=').ok_or("--stub needs NAME@ADDR=VALUE")?;
-    if name.is_empty() {
-        return Err("discovery callee stub name is empty".into());
-    }
-    Ok(fujimod_emulator::board::discovery::CalleeStub {
-        name: name.to_owned(),
-        core: 0,
-        address: parse_number(address)?,
-        value: parse_number(value)?,
-    })
-}
-
-pub fn parse_quantum(text: &str) -> Result<usize, String> {
-    quantum(text)
-}
-
-pub fn parse_seconds(text: &str) -> Result<Duration, String> {
-    seconds(text)
 }
 
 fn parse_gpio(spec: &str) -> Result<(usize, usize, bool), String> {

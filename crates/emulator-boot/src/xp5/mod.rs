@@ -14,7 +14,7 @@ mod open;
 mod rom_start;
 mod run;
 
-pub use run::{Run, parse_quantum, parse_seconds, run_boot};
+pub use run::{Run, run_boot};
 
 
 use fujimod_catalog_configuration::RunStart;

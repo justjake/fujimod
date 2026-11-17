@@ -210,7 +210,7 @@ impl Boot {
         }
     }
     fn duration(&mut self, key: &str) -> Result<Option<Duration>, String> {
-        self.text(key)?.as_deref().map(xp5::parse_seconds).transpose()
+        self.text(key)?.as_deref().map(boot::host::parse_seconds).transpose()
     }
 
     fn viewer_port(&mut self) -> Result<Option<u16>, String> {
@@ -237,8 +237,8 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
         "EXR II",
         &["--application-plan", "--quantum", "--keys", "--patch", "--scene", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
     )?;
-    if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.pokes.is_empty() {
-        return Err("--discovery, --stub, --mod and --poke do not apply to EXR II runs".into());
+    if !boot_options.mods.is_empty() || !boot_options.pokes.is_empty() {
+        return Err("--mod and --poke do not apply to EXR II runs".into());
     }
     let clock_seconds_2000 = boot_options
         .text("--clock-seconds-2000")?
@@ -262,7 +262,11 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
     let pc_trace = boot_options.pc_trace()?;
     let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
-    let mut session = boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2()?;
+    let mode = boot::discovery_mode(boot_options.discovery);
+    let stubs = boot_options.stubs.iter().map(|specification| boot::host::parse_stub(specification))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2()?;
+    session.board.install_discovery_callee_stubs(&stubs)?;
     if let Some(path) = boot_options.path("--load-snapshot") {
         boot::load_snapshot(&mut session, &path)?;
     }
@@ -303,6 +307,7 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     if let Some((output, trace)) = pc_trace.zip(trace) {
         output.write(trace)?;
     }
+    session.board.check_discovery_callee_stubs()?;
     let report = report?;
     if let Some(directory) = directory {
         let path = directory.join("board-state.json");
@@ -360,16 +365,16 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         scene: boot_options.path("--scene"),
         quantum: boot_options
             .text("--quantum")?
-            .map(|value| xp5::parse_quantum(&value))
+            .map(|value| boot::host::parse_quantum(&value))
             .transpose()?,
         seconds: boot_options
             .text("--seconds")?
-            .map(|value| xp5::parse_seconds(&value))
+            .map(|value| boot::host::parse_seconds(&value))
             .transpose()?,
         instruction_limit: boot_options.instruction_limit()?,
         status_every: boot_options
             .text("--status-every")?
-            .map(|value| xp5::parse_seconds(&value))
+            .map(|value| boot::host::parse_seconds(&value))
             .transpose()?
             .unwrap_or(Duration::from_secs(5)),
         execution_policy,
@@ -383,11 +388,6 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
     Ok(Outcome { success: true })
 }
 
-fn guest_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
-    (duration.as_nanos().saturating_mul(u128::from(ticks_per_second)) / 1_000_000_000)
-        .min(u128::from(u64::MAX)) as u64
-}
-
 fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     let request = boot::application::Startup {
         update: options.required("--update")?.into(),
@@ -395,7 +395,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         card_image: options.path("--card-image"),
         card_files: options.sd_files()?,
         discovery: options.discovery,
-        quantum: options.text("--quantum")?.as_deref().map(xp5::parse_quantum).transpose()?,
+        quantum: options.text("--quantum")?.as_deref().map(boot::host::parse_quantum).transpose()?,
     };
     let instructions = options.instruction_limit()?;
     let duration = options.duration("--seconds")?;
@@ -407,7 +407,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let save_snapshot = options.path("--save-snapshot");
     let trace_output = options.pc_trace()?;
     let policy = options.execution_policy(trace_output.is_some())?;
-    if !options.values.is_empty() || !options.stubs.is_empty() || !options.mods.is_empty()
+    if !options.values.is_empty() || !options.mods.is_empty()
         || !options.preferred_languages.is_empty() || !options.pokes.is_empty()
     {
         return Err("application-profile runtime needs supported options and media in its startup plan".into());
@@ -416,15 +416,21 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     else {
         return Err("application startup returned another processor generation".into());
     };
+    let stubs = options.stubs.iter().map(|specification| boot::host::parse_stub(specification))
+        .collect::<Result<Vec<_>, _>>()?;
     let trace = match &mut started.board {
         boot::application::Board::Xpp(session) => {
             if let Some(path) = load_snapshot {
                 boot::load_snapshot(session, &path)?;
             }
             session.board.set_execution_policy(policy)?;
+            session.board.install_discovery_callee_stubs(&stubs)?;
             trace_output.as_ref().map(|output| output.begin(session)).transpose()?
         }
         boot::application::Board::Xp4(_) => {
+            if !stubs.is_empty() {
+                return Err("XP4 CLI substitutions require the shared board backend".into());
+            }
             if load_snapshot.is_some() || save_snapshot.is_some() || trace_output.is_some() {
                 return Err("XP4 portable snapshots and PC traces require the shared board backend".into());
             }
@@ -438,7 +444,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         return Err("--viewer-port requires --output".into());
     }
     let (_, start) = started.progress();
-    let status_period = status.map(|duration| guest_ticks(duration, started.ticks_per_second));
+    let status_period = status.map(|duration| boot::host::duration_ticks(duration, started.ticks_per_second));
     let mut next_status = status_period.map(|_| start);
     let mut next_frame = output.as_ref().map(|_| start);
     let mut sequences = BTreeMap::new();
@@ -460,6 +466,9 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     }
     if let Some((output, trace)) = trace_output.zip(trace) {
         output.write(trace)?;
+    }
+    if let boot::application::Board::Xpp(session) = &started.board {
+        session.board.check_discovery_callee_stubs()?;
     }
     if let (Some(path), boot::application::Board::Xpp(session)) = (save_snapshot, &started.board) {
         boot::save_snapshot(session, &path)?;

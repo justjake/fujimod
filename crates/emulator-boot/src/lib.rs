@@ -13,7 +13,7 @@ pub mod media;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
-mod host;
+pub mod host;
 use fujimod_emulator_board_graph as graph;
 mod x70;
 pub mod xpp;
@@ -28,7 +28,7 @@ use fujimod_emulator_session::Session;
 use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunExecution, RunExecutionMode, RunInputs, RunPurpose, RunScene,
+    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene,
     RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -843,9 +843,14 @@ impl Prepared {
     }
 }
 
+/// Select whether undeclared accesses stop or are recorded for model discovery.
+pub fn discovery_mode(discovery: bool) -> Mode {
+    if discovery { Mode::Discovery } else { Mode::Strict }
+}
+
 /// Files and startup settings for the selected processor generation.
 pub enum StartupInputs {
-    Exr2(Options),
+    Exr2 { options: Options, mode: Mode },
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
     Xp5(xp5::Startup),
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
@@ -875,8 +880,8 @@ impl Opened {
 /// Open the configured board from caller-selected files.
 pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Opened, String> {
     match (resolved.configuration.inputs.as_ref(), inputs) {
-        (Some(RunInputs::Exr2(_)), StartupInputs::Exr2(inputs)) => {
-            Ok(Opened::Exr2(Box::new(open_exr2(resolved, inputs)?)))
+        (Some(RunInputs::Exr2(_)), StartupInputs::Exr2 { options, mode }) => {
+            Ok(Opened::Exr2(Box::new(open_exr2(resolved, options, mode)?)))
         }
         #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
         (Some(RunInputs::Xp5(_)), StartupInputs::Xp5(inputs)) => {
@@ -939,7 +944,7 @@ pub fn save_snapshot(session: &Session, path: &Path) -> Result<(), String> {
 
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
-fn open_exr2(resolved: ResolvedConfiguration, options: Options) -> Result<Session, String> {
+fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> Result<Session, String> {
     let mut prepared = prepared(resolved)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
@@ -968,7 +973,7 @@ fn open_exr2(resolved: ResolvedConfiguration, options: Options) -> Result<Sessio
             .transpose()?
             .unwrap_or_default(),
     };
-    open_prepared(prepared, inputs)
+    open_prepared_mode(prepared, inputs, mode)
 }
 
 impl Prepared {
@@ -1038,11 +1043,12 @@ fn camera_sections(
 struct RestartBuilder {
     prepared: Prepared,
     inputs: InputBytes,
+    mode: Mode,
 }
 impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
     fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
         open_prepared_epoch(
-            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)),
+            self.prepared.duplicate()?, self.inputs.clone(), self.mode, Some((tick, counts, packet)),
         )
     }
 }
@@ -1051,15 +1057,19 @@ impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
 /// A SoC that declares its power-on RAM contents starts with them, and its
 /// RAM is retained over restarts.
 pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
+    open_prepared_mode(prepared, inputs, Mode::Strict)
+}
+
+fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Result<Session, String> {
     let ram = if power_on_ram_fill(&prepared).is_some() {
         prepared.execution.ram.iter().map(|r| (r.base, r.size)).collect()
     } else { Vec::new() };
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
-        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone() })
+        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), mode })
     } else {
         None
     };
-    let mut session = open_prepared_epoch(prepared, inputs, None)?;
+    let mut session = open_prepared_epoch(prepared, inputs, mode, None)?;
     if let Some(builder) = cycle {
         let media = fujimod_emulator_session::durable::Spec {
             cards: session.contacts.keys().cloned().collect(),
@@ -1079,6 +1089,7 @@ fn power_on_ram_fill(prepared: &Prepared) -> Option<u8> {
 fn open_prepared_epoch(
     prepared: Prepared,
     inputs: InputBytes,
+    mode: Mode,
     epoch: Option<(u64, Vec<u64>, [u8; 16])>,
 ) -> Result<Session, String> {
     let ram_fill = power_on_ram_fill(&prepared);
@@ -1099,6 +1110,7 @@ fn open_prepared_epoch(
         return Err("NAND image must be at most 256 MiB".into());
     }
     let mut session_definition = prepared.to_json();
+    session_definition["mode"] = json!(mode.name());
     session_definition["inputs"]["nand_selected"] = json!(inputs.nand.is_some());
     session_definition["inputs"]["settings_selected"] = json!(inputs.settings.is_some());
     let InputBytes {
@@ -1267,10 +1279,7 @@ fn open_prepared_epoch(
         .map_err(|e| e.to_string())?
         .build(&assets)?;
     let built = plan.build(resources, epoch.as_ref().map_or(0, |e| e.0), &mut RefuseAdapters)?;
-    let bus_mode = match prepared.execution_policy.mode {
-        RunExecutionMode::Strict => Mode::Strict,
-    };
-    let bus = Bus::from_graph(bus_mode, built.graph)?;
+    let bus = Bus::from_graph(mode, built.graph)?;
     let mut options = factory::Options::new(prepared.execution_policy.engine);
     if epoch.is_none()
         && let Some(byte) = ram_fill

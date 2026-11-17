@@ -2,7 +2,7 @@
 use fujimod_emulator_session::Session;
 use std::time::Duration;
 
-pub(crate) fn duration_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
+pub fn duration_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
     (duration.as_nanos().saturating_mul(u128::from(ticks_per_second)) / 1_000_000_000)
         .min(u128::from(u64::MAX)) as u64
 }
@@ -64,3 +64,42 @@ impl Limits {
             || before_instructions != session.board.instruction_counts())
     }
 }
+
+pub(crate) fn parse_number(s: &str) -> Result<u64, String> {
+    if let Some(s) = s.strip_prefix("0x") {
+        u64::from_str_radix(s, 16).map_err(|e| e.to_string())
+    } else {
+        s.parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())
+    }
+}
+/// Instructions per scheduler turn for `--quantum`; replaces the run
+/// configuration's `execution.quantum` for this run only.
+pub fn parse_quantum(s: &str) -> Result<usize, String> {
+    let value = usize::try_from(parse_number(s)?).map_err(|error| error.to_string())?;
+    if value == 0 {
+        return Err("--quantum needs a positive instruction count".into());
+    }
+    Ok(value)
+}
+pub fn parse_seconds(s: &str) -> Result<Duration, String> {
+    let n = s.parse::<f64>().map_err(|e| e.to_string())?;
+    Duration::try_from_secs_f64(n).map_err(|e| e.to_string())
+}
+
+pub fn parse_stub(specification: &str) -> Result<fujimod_emulator::board::discovery::CalleeStub, String> {
+    let (name, rest) = specification
+        .split_once('@')
+        .ok_or("--stub needs NAME@ADDR=VALUE")?;
+    let (address, value) = rest.split_once('=').ok_or("--stub needs NAME@ADDR=VALUE")?;
+    if name.is_empty() {
+        return Err("discovery callee stub name is empty".into());
+    }
+    Ok(fujimod_emulator::board::discovery::CalleeStub {
+        name: name.to_owned(),
+        core: 0,
+        address: parse_number(address)?,
+        value: parse_number(value)?,
+    })
+}
+

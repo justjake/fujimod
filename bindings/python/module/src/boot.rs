@@ -1,6 +1,7 @@
 //! Catalog run preparation and boot for the Python emulator bindings, installed through
 //! `fujimod_python_base::boot` when the module initializes.
 use fujimod_emulator_boot as boot;
+use fujimod_emulator::board::bus::Mode;
 use fujimod_emulator_session::Session;
 use fujimod_python_base::boot::{Boot, Inputs, Opened};
 use fujimod_catalog_configuration::{RunInputs, RunInstructionRate};
@@ -54,6 +55,7 @@ impl Boot for CatalogBoot {
         if inputs.application_plan.is_some() {
             return Err("application startup plan does not match this configuration".into());
         }
+        let mode = if inputs.discovery { Mode::Discovery } else { Mode::Strict };
         #[cfg(not(target_arch = "wasm32"))]
         if matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
             if inputs.nand.is_some() || inputs.settings.is_some() || inputs.clock_seconds_2000.is_some()
@@ -62,11 +64,6 @@ impl Boot for CatalogBoot {
             {
                 return Err("EXR II startup settings do not apply to XP5".into());
             }
-            let mode = if inputs.discovery {
-                fujimod_emulator::board::bus::Mode::Discovery
-            } else {
-                fujimod_emulator::board::bus::Mode::Strict
-            };
             let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
                 update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
                 card_image: None, card_files: vec![], scene: None, output: None, viewer_port: None,
@@ -77,7 +74,7 @@ impl Boot for CatalogBoot {
             let (session, inputs, read_limit) = started.into_loader_session()?;
             return Ok(Opened::Xp5 {session, inputs, read_limit});
         }
-        if inputs.manifest.is_some() || inputs.discovery || inputs.quantum.is_some() {
+        if inputs.manifest.is_some() || inputs.quantum.is_some() {
             return Err("XP5 startup settings do not apply to this configuration".into());
         }
         let access_point = inputs
@@ -102,7 +99,7 @@ impl Boot for CatalogBoot {
             access_point,
             capability_reply,
         };
-        boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2().map(Opened::Graph)
+        boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2().map(Opened::Graph)
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;
