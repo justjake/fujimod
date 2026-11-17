@@ -235,11 +235,17 @@ pub fn read_block_planes(frame: &dyn FrameSource, keep_rgb: bool) -> io::Result<
 /// like luma), other sites by normalized Gaussian interpolation of their
 /// green neighbors.
 pub fn green_plane(frame: &dyn FrameSource) -> io::Result<Plane> {
-    let (w, h) = (frame.width(), frame.height());
+    green_band(frame, 0, frame.height())
+}
+
+/// [`green_plane`] for frame rows `y0..y0 + h`; plane row 0 is frame row
+/// `y0`. Interpolation uses only green sites inside the band.
+pub fn green_band(frame: &dyn FrameSource, y0: usize, h: usize) -> io::Result<Plane> {
+    let w = frame.width();
     let cfa = frame.cfa();
     let cal = frame.calibration();
     let mut raw = vec![0u16; w * h];
-    frame.read_rows(0, &mut raw)?;
+    frame.read_rows(y0, &mut raw)?;
     let mut out = Plane::new(w, h);
     let threads = std::thread::available_parallelism()
         .map(|n| n.get())
@@ -261,11 +267,13 @@ pub fn green_plane(frame: &dyn FrameSource) -> io::Result<Plane> {
         for (t, chunk) in out.data.chunks_mut(rows_per * w).enumerate() {
             let (raw, taps) = (&raw, &taps);
             s.spawn(move || {
-                let g = |x: usize, y: usize| cal.linear(raw[y * w + x], x, y).0 * cal.wb[1];
+                // Band row `y` is frame row `y0 + y`.
+                let g = |x: usize, y: usize| cal.linear(raw[y * w + x], x, y0 + y).0 * cal.wb[1];
+                let green = |x: usize, y: usize| cfa.color(x, y0 + y) == crate::xtrans::GREEN;
                 for (r, row) in chunk.chunks_mut(w).enumerate() {
                     let y = t * rows_per + r;
                     for (x, o) in row.iter_mut().enumerate() {
-                        if cfa.color(x, y) == crate::xtrans::GREEN {
+                        if green(x, y) {
                             *o = g(x, y);
                             continue;
                         }
@@ -276,7 +284,7 @@ pub fn green_plane(frame: &dyn FrameSource) -> io::Result<Plane> {
                                 continue;
                             }
                             let (xx, yy) = (xx as usize, yy as usize);
-                            if cfa.color(xx, yy) == crate::xtrans::GREEN {
+                            if green(xx, yy) {
                                 num += k * g(xx, yy);
                                 den += k;
                             }

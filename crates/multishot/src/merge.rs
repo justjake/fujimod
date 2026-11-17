@@ -22,6 +22,7 @@
 
 use crate::align::Alignment;
 use crate::fit::Affine;
+use crate::local::{LocalParams, LocalReport, ShiftField, residual_fields};
 use crate::noise::NoiseModel;
 use crate::plane::{BlockGrid, block_luma, block_rgb};
 use crate::source::FrameSource;
@@ -105,6 +106,10 @@ pub struct ResolutionParams {
     pub robustness: Option<RobustParams>,
     #[serde(default)]
     pub color: ColorMerge,
+    /// Per-tile residual alignment on top of each frame's global transform;
+    /// `None` uses the global transforms only.
+    #[serde(default)]
+    pub local: Option<LocalParams>,
     pub strip_rows: usize,
     pub region: Option<Region>,
 }
@@ -119,6 +124,7 @@ impl Default for ResolutionParams {
             prior_weight: 0.02,
             robustness: Some(RobustParams::default()),
             color: ColorMerge::default(),
+            local: None,
             strip_rows: 48,
             region: None,
         }
@@ -191,6 +197,8 @@ pub struct MergeReport {
     /// Largest working memory of one strip: accumulators, frame row bands,
     /// block bands and the output strip.
     pub peak_strip_bytes: usize,
+    /// Residual alignment, when enabled.
+    pub local: Option<LocalReport>,
     pub seconds: f64,
 }
 
@@ -522,9 +530,10 @@ fn threads() -> usize {
 }
 
 /// One frame's rows for a strip, with its robustness map.
-struct PreparedFrame {
+struct PreparedFrame<'a> {
     k: usize,
     to_ref: Affine,
+    field: Option<&'a ShiftField>,
     fy0: usize,
     fy1: usize,
     raw: Vec<u16>,
@@ -613,6 +622,16 @@ fn for_each_sample(
                 px += ddx;
                 py += ddy;
             }
+            // The residual field shifts the frame position; map it back
+            // through the linear part of the global transform.
+            let (px, py) = match pf.field {
+                Some(field) => {
+                    let (dx, dy) = field.at(px, py);
+                    let m = &pf.to_ref.0;
+                    (px - m[0] * dx - m[1] * dy, py - m[2] * dx - m[3] * dy)
+                }
+                None => (px, py),
+            };
             if py < y_lo || py > y_hi || px < x_lo || px > x_hi {
                 continue;
             }
@@ -649,7 +668,12 @@ fn plane_bilinear(plane: &[f32], width: usize, rows: usize, x: f64, y: f64) -> f
     top + (bottom - top) * fy
 }
 
-type PrepareResult = io::Result<(Vec<f32>, Vec<(usize, f32, f32)>, usize, Vec<PreparedFrame>)>;
+type PrepareResult<'a> = io::Result<(
+    Vec<f32>,
+    Vec<(usize, f32, f32)>,
+    usize,
+    Vec<PreparedFrame<'a>>,
+)>;
 
 /// Merges the accepted frames of `alignment` into `sink`.
 pub fn merge_resolution(
@@ -712,6 +736,18 @@ pub fn merge_resolution(
             -(grid.oy as f64 + 1.0) / 3.0,
         )
     };
+    let (fields, local_report) = match &params.local {
+        Some(p) if used.len() > 1 => {
+            let (f, r) = residual_fields(frames, alignment, region, radius + 2.0, p)?;
+            (f, Some(r))
+        }
+        _ => (vec![None; frames.len()], None),
+    };
+    // Frame rows a residual shift can move into the strip.
+    let shift_rows = params
+        .local
+        .as_ref()
+        .map_or(0, |p| p.max_shift.ceil() as i64);
     let nthreads = threads().min(used.len()).max(1);
     let wb = reference.calibration().wb;
     // The prior scales with the frame count so that a burst of identical
@@ -810,11 +846,11 @@ pub fn merge_resolution(
         let shares: Vec<Vec<(usize, Affine)>> = (0..nthreads)
             .map(|t| used.iter().copied().skip(t).step_by(nthreads).collect())
             .collect();
-        let results: Vec<PrepareResult> = std::thread::scope(|scope| {
+        let results: Vec<PrepareResult<'_>> = std::thread::scope(|scope| {
             let handles: Vec<_> = shares
                 .iter()
                 .map(|share| {
-                    let (ref_band, grid, splatter) = (&ref_band, &grid, &splatter);
+                    let (ref_band, grid, splatter, fields) = (&ref_band, &grid, &splatter, &fields);
                     scope.spawn(move || -> PrepareResult {
                         let mut acc = vec![0f32; len1 * stride1];
                         let mut frame_stats = Vec::new();
@@ -836,8 +872,10 @@ pub fn merge_resolution(
                                 vmin = vmin.min(v);
                                 vmax = vmax.max(v);
                             }
-                            let fy0 = (vmin.floor() as i64 - 1).clamp(0, h as i64) as usize;
-                            let fy1 = (vmax.ceil() as i64 + 2).clamp(0, h as i64) as usize;
+                            let fy0 =
+                                (vmin.floor() as i64 - 1 - shift_rows).clamp(0, h as i64) as usize;
+                            let fy1 =
+                                (vmax.ceil() as i64 + 2 + shift_rows).clamp(0, h as i64) as usize;
                             if fy1 <= fy0 {
                                 frame_stats.push((k, 0.0, 1.0));
                                 continue;
@@ -883,6 +921,7 @@ pub fn merge_resolution(
                             let pf = PreparedFrame {
                                 k,
                                 to_ref,
+                                field: fields[k].as_ref(),
                                 fy0,
                                 fy1,
                                 raw,
@@ -1080,6 +1119,7 @@ pub fn merge_resolution(
         strip_rows: params.strip_rows,
         threads: nthreads,
         peak_strip_bytes: peak,
+        local: local_report,
         seconds: started.elapsed().as_secs_f64(),
     })
 }
