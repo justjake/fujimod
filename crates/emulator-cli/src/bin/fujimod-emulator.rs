@@ -383,6 +383,11 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
     Ok(Outcome { success: true })
 }
 
+fn guest_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
+    (duration.as_nanos().saturating_mul(u128::from(ticks_per_second)) / 1_000_000_000)
+        .min(u128::from(u64::MAX)) as u64
+}
+
 fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     let request = boot::application::Startup {
         update: options.required("--update")?.into(),
@@ -392,9 +397,16 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         discovery: options.discovery,
         quantum: options.text("--quantum")?.as_deref().map(xp5::parse_quantum).transpose()?,
     };
-    let instructions = options.instruction_limit()?.ok_or("application startup requires --instruction-limit")?;
+    let instructions = options.instruction_limit()?;
     let duration = options.duration("--seconds")?;
     let output = options.path("--output");
+    let screenshot = options.path("--screenshot");
+    let viewer_port = options.viewer_port()?;
+    let status = options.duration("--status-every")?;
+    let load_snapshot = options.path("--load-snapshot");
+    let save_snapshot = options.path("--save-snapshot");
+    let trace_output = options.pc_trace()?;
+    let policy = options.execution_policy(trace_output.is_some())?;
     if !options.values.is_empty() || !options.stubs.is_empty() || !options.mods.is_empty()
         || !options.preferred_languages.is_empty() || !options.pokes.is_empty()
     {
@@ -404,7 +416,59 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     else {
         return Err("application startup returned another processor generation".into());
     };
-    let state = started.run(instructions, duration)?;
+    let trace = match &mut started.board {
+        boot::application::Board::Xpp(session) => {
+            if let Some(path) = load_snapshot {
+                boot::load_snapshot(session, &path)?;
+            }
+            session.board.set_execution_policy(policy)?;
+            trace_output.as_ref().map(|output| output.begin(session)).transpose()?
+        }
+        boot::application::Board::Xp4(_) => {
+            if load_snapshot.is_some() || save_snapshot.is_some() || trace_output.is_some() {
+                return Err("XP4 portable snapshots and PC traces require the shared board backend".into());
+            }
+            None
+        }
+    };
+    let frames = boot::output::Outputs::default();
+    if let Some(directory) = &output {
+        frames.attach(0, directory.clone(), viewer_port)?;
+    } else if viewer_port.is_some() {
+        return Err("--viewer-port requires --output".into());
+    }
+    let (_, start) = started.progress();
+    let status_period = status.map(|duration| guest_ticks(duration, started.ticks_per_second));
+    let mut next_status = status_period.map(|_| start);
+    let mut next_frame = output.as_ref().map(|_| start);
+    let mut sequences = BTreeMap::new();
+    let state = started.run_with(instructions, duration, |board| {
+        let (counts, now) = board.progress();
+        if next_status.is_some_and(|at| at <= now) {
+            eprintln!("FUJIMOD status {}", serde_json::json!({"engine":board.engine,"instructions":counts,"now":now}));
+            next_status = status_period.filter(|period| *period != 0).map(|period| now.saturating_add(period));
+        }
+        if next_frame.is_some_and(|at| at <= now) {
+            frames.capture(output.as_deref().unwrap(), board.display_frames(), &mut sequences)?;
+            next_frame = Some(now.saturating_add((board.ticks_per_second / 30).max(1)));
+        }
+        Ok(next_status.into_iter().chain(next_frame).min())
+    })?;
+    if let Some(directory) = &output {
+        frames.capture(directory, started.display_frames(), &mut sequences)?;
+        frames.finish()?;
+    }
+    if let Some((output, trace)) = trace_output.zip(trace) {
+        output.write(trace)?;
+    }
+    if let (Some(path), boot::application::Board::Xpp(session)) = (save_snapshot, &started.board) {
+        boot::save_snapshot(session, &path)?;
+    }
+    if let Some(path) = screenshot {
+        let shown = started.display_frames();
+        let frame = shown.first().ok_or("no active scanout published a frame")?;
+        boot::output::Outputs::write_screenshot(&path, frame)?;
+    }
     let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
     if let Some(output) = output {
         std::fs::create_dir_all(&output).map_err(|error| error.to_string())?;

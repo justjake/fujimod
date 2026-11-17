@@ -20,21 +20,33 @@ impl Limits {
         duration: Option<Duration>,
         ticks_per_second: u64,
     ) -> Result<Self, String> {
+        Self::from_boundary(session.board.now(), &session.board.instruction_counts(),
+            instructions, duration, ticks_per_second)
+    }
+
+    pub fn from_boundary(
+        now: u64,
+        counts: &[u64],
+        instructions: Option<u64>,
+        duration: Option<Duration>,
+        ticks_per_second: u64,
+    ) -> Result<Self, String> {
         let instructions = match instructions {
             Some(0) => return Err("instruction limit must be positive".into()),
-            Some(limit) => session.board.instruction_counts().into_iter()
-                .try_fold(limit, u64::checked_add).ok_or("instruction limit overflows")?,
+            Some(limit) => counts.iter().copied().try_fold(limit, u64::checked_add)
+                .ok_or("instruction limit overflows")?,
             None => u64::MAX,
         };
-        let tick = duration.map(|duration| {
-            session.board.now().saturating_add(duration_ticks(duration, ticks_per_second))
-        });
+        let tick = duration.map(|duration| now.saturating_add(duration_ticks(duration, ticks_per_second)));
         Ok(Self { instructions, tick })
     }
 
     pub fn reached(&self, session: &Session) -> bool {
-        self.tick.is_some_and(|tick| session.board.now() >= tick)
-            || session.board.instruction_counts().into_iter().sum::<u64>() >= self.instructions
+        self.reached_at(session.board.now(), session.board.instruction_counts().into_iter().sum())
+    }
+
+    pub fn reached_at(&self, now: u64, instructions: u64) -> bool {
+        self.tick.is_some_and(|tick| now >= tick) || instructions >= self.instructions
     }
 
     pub fn step(

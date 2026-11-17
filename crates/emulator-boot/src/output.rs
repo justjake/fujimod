@@ -81,6 +81,31 @@ impl Outputs {
         self.status(0, serde_json::json!({"bank":0,"enabled":true,"sequence":sequence}))
     }
 
+    /// Publish each newly observed output sequence through the shared frame writer.
+    pub fn capture(
+        &self, directory: &Path, frames: impl IntoIterator<Item = Frame>,
+        sequences: &mut BTreeMap<usize, u64>,
+    ) -> Result<(), String> {
+        for frame in frames {
+            let (bank, sequence) = (frame.output, frame.sequence);
+            if sequences.get(&bank) == Some(&sequence) {
+                continue;
+            }
+            if !self.0.lock().unwrap().contains_key(&bank) {
+                self.attach(bank, directory.to_owned(), None)?;
+            }
+            self.frame(frame)?;
+            self.status(bank, serde_json::json!({"bank":bank,"enabled":true,"sequence":sequence}))?;
+            sequences.insert(bank, sequence);
+        }
+        Ok(())
+    }
+
+    pub fn write_screenshot(path: &Path, frame: &Frame) -> Result<(), String> {
+        let bytes = crate::frame_viewer::rgba_png(frame.width, frame.height, &frame.rgba)?;
+        std::fs::write(path, bytes).map_err(|error| format!("{}: {error}", path.display()))
+    }
+
     pub fn frame(&self, frame: Frame) -> Result<(), String> {
         let mut outputs = self.0.lock().unwrap();
         let output = outputs

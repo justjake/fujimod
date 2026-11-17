@@ -4,6 +4,7 @@ use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
 use fujimod_emulator_cpu::Register;
+use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_session::Session;
 use fujimod_emulator_xp4_board as xp4;
 use serde::Deserialize;
@@ -68,24 +69,66 @@ pub struct Started {
 }
 
 impl Started {
-    /// Drive a stopped application-profile board by its declared quantum.
-    pub fn run(&mut self, instruction_limit: u64, duration: Option<std::time::Duration>) -> Result<Value, String> {
-        let (instructions, ticks, state) = match &mut self.board {
-            Board::Xp4(board) => {
-                if duration.is_some() {
-                    return Err("XP4 currently requires an instruction limit".into());
+    pub fn progress(&self) -> (Vec<u64>, u64) {
+        match &self.board {
+            Board::Xp4(board) => (board.instructions(), board.now()),
+            Board::Xpp(session) => (session.board.instruction_counts(), session.board.now()),
+        }
+    }
+
+    pub fn display_frames(&self) -> Vec<Frame> {
+        match &self.board {
+            Board::Xp4(board) => board.scanout_frames().into_iter().map(|frame| Frame {
+                output: frame.output,
+                sequence: frame.sequence,
+                width: frame.width,
+                height: frame.height,
+                rgba: frame.rgba,
+            }).collect(),
+            Board::Xpp(session) => session.board.display_frames(),
+        }
+    }
+
+    /// Drive each scheduler window to the next requested host observation or stop.
+    pub fn run_with(
+        &mut self,
+        instruction_limit: Option<u64>,
+        duration: Option<std::time::Duration>,
+        mut observe: impl FnMut(&Self) -> Result<Option<u64>, String>,
+    ) -> Result<Value, String> {
+        if instruction_limit.is_none() && duration.is_none() {
+            return Err("application startup requires an instruction or time limit".into());
+        }
+        if matches!(self.board, Board::Xp4(_)) && duration.is_some() {
+            return Err("XP4 currently requires an instruction limit".into());
+        }
+        let (counts, now) = self.progress();
+        let limits = crate::host::Limits::from_boundary(now, &counts, instruction_limit, duration, self.ticks_per_second)?;
+        loop {
+            let until = observe(self)?;
+            let (before_counts, before_tick) = self.progress();
+            let total = before_counts.iter().copied().sum();
+            if limits.reached_at(before_tick, total) {
+                break;
+            }
+            let advanced = match &mut self.board {
+                Board::Xp4(board) => {
+                    let remaining = limits.instructions - total;
+                    board.run_board(remaining.min(self.quantum as u64), self.quantum)?;
+                    board.now() != before_tick || board.instructions() != before_counts
                 }
-                board.run_board(instruction_limit, self.quantum)?;
-                let state = serde_json::to_value(board.state(false)).map_err(|error| error.to_string())?;
-                (board.instructions(), board.now(), state)
+                Board::Xpp(session) => limits.step(session, self.quantum, None, until)?,
+            };
+            if !advanced {
+                break;
             }
-            Board::Xpp(session) => {
-                let limits = crate::host::Limits::new(session, Some(instruction_limit), duration, self.ticks_per_second)?;
-                limits.step(session, self.quantum, None, None)?;
-                (session.board.instruction_counts(), session.board.now(), session.board.state())
-            }
+        }
+        let (instructions, now) = self.progress();
+        let state = match &self.board {
+            Board::Xp4(board) => serde_json::to_value(board.state(false)).map_err(|error| error.to_string())?,
+            Board::Xpp(session) => session.board.state(),
         };
-        Ok(json!({"engine":self.engine,"instructions":instructions,"now":ticks,"state":state}))
+        Ok(json!({"engine":self.engine,"instructions":instructions,"now":now,"state":state}))
     }
 }
 
