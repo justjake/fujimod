@@ -419,9 +419,9 @@ mod tests {
             ("exact", ExecutionPolicy::Exact),
         ] {
             let mut boot = parse(args(&["boot", "--execution-policy", value])).unwrap().unwrap();
-            assert_eq!(boot.execution_policy().unwrap(), expected);
+            assert_eq!(boot.execution_policy(false).unwrap(), expected);
         }
         let mut boot = parse(args(&["boot", "--execution-policy", "approximate"])).unwrap().unwrap();
-        assert_eq!(boot.execution_policy().unwrap_err(), "unknown CPU execution policy: approximate");
+        assert_eq!(boot.execution_policy(false).unwrap_err(), "unknown CPU execution policy: approximate");
     }
 }
