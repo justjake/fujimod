@@ -846,6 +846,17 @@ pub enum Opened {
     Xp5(Box<xp5::Started>),
 }
 
+impl Opened {
+    /// Extract the EXR II session for callers that drive the EXR II boot workflow.
+    pub fn into_exr2(self) -> Result<Session, String> {
+        match self {
+            Self::Exr2(session) => Ok(*session),
+            #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+            Self::Xp5(_) => Err("EXR II startup returned an XP5 session".into()),
+        }
+    }
+}
+
 /// Open the configured board from caller-selected files.
 pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Opened, String> {
     match (resolved.configuration.inputs.as_ref(), inputs) {
