@@ -22,10 +22,11 @@ XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N
 --card-image IMAGE, --card-file NAME=PATH (ROM start only).\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
+Session snapshots: --load-snapshot FILE, --save-snapshot FILE.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 31] = [
+const VALUED: [&str; 33] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -57,6 +58,8 @@ const VALUED: [&str; 31] = [
     "--gpio",
     "--poke",
     "--press",
+    "--load-snapshot",
+    "--save-snapshot",
 ];
 
 /// The options of one `boot` command, before the processor generation is known.
@@ -226,8 +229,14 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
     let execution_policy = boot_options.execution_policy()?;
     let mut session = boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2()?;
+    if let Some(path) = boot_options.path("--load-snapshot") {
+        boot::load_snapshot(&mut session, &path)?;
+    }
     session.board.set_execution_policy(execution_policy)?;
     let report = boot::to_rec(&mut session, limit)?;
+    if let Some(path) = boot_options.path("--save-snapshot") {
+        boot::save_snapshot(&session, &path)?;
+    }
     println!(
         "{}",
         serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
@@ -260,6 +269,8 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         .collect::<Result<Vec<_>, _>>()?;
     let run = xp5::Run {
         configuration: resolved,
+        load_snapshot: boot_options.path("--load-snapshot"),
+        save_snapshot: boot_options.path("--save-snapshot"),
         manifest: boot_options.path("--manifest"),
         watch_pcs: boot_options.text("--watch-pcs")?,
         dump: boot_options.text("--dump")?,

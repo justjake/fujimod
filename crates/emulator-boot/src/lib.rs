@@ -874,6 +874,25 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Op
     }
 }
 
+/// Restore a portable snapshot into a session built from the same inputs.
+pub fn load_snapshot(session: &mut Session, path: &Path) -> Result<(), String> {
+    let mut restore = || -> Result<(), String> {
+        let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+        let point = session.import_snapshot(&bytes)?;
+        session.restore(&point)
+    };
+    restore().map_err(|error| format!("{}: {error}", path.display()))
+}
+
+/// Write a portable snapshot of the current session boundary.
+pub fn save_snapshot(session: &Session, path: &Path) -> Result<(), String> {
+    let save = || -> Result<(), String> {
+        let bytes = session.checkpoint(None)?.export()?;
+        std::fs::write(path, bytes).map_err(|error| error.to_string())
+    };
+    save().map_err(|error| format!("{}: {error}", path.display()))
+}
+
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
 fn open_exr2(resolved: ResolvedConfiguration, options: Options) -> Result<Session, String> {

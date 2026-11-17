@@ -99,6 +99,8 @@ fn shared_boot_summary(
 /// One XP5 boot: the run configuration plus the caller's input files.
 pub struct Run {
     pub configuration: ResolvedConfiguration,
+    pub load_snapshot: Option<PathBuf>,
+    pub save_snapshot: Option<PathBuf>,
     /// The original update file.
     pub update: PathBuf,
     pub manifest: Option<PathBuf>,
@@ -208,6 +210,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     };
     let Run {
         configuration,
+        load_snapshot,
+        save_snapshot,
         update,
         manifest,
         watch_pcs,
@@ -310,6 +314,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         ticks_per_second,
         quantum,
     } = opened;
+    if let Some(path) = load_snapshot {
+        crate::load_snapshot(&mut session, &path)?;
+    }
     session
         .board
         .install_discovery_callee_stubs(&callee_stubs)?;
@@ -453,6 +460,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     // execution policy, watch hooks, key scheduling, the Ctrl-C handler) return before anything
     // has run and leave no board state; a panic would also bypass this path.
     let outcome = drive();
+    let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
     let output_finish = outputs.finish();
     let state = session.board.state();
@@ -471,6 +479,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         }
     }
     let cleanup = [
+        ("snapshot", snapshot_write),
         ("board", board_finish),
         ("outputs", output_finish),
         ("board state", state_write),
