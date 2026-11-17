@@ -27,6 +27,32 @@ impl Boot for CatalogBoot {
                 .instructions_per_tick = rate;
         }
         #[cfg(not(target_arch = "wasm32"))]
+        if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") {
+            if inputs.boot_rom.is_some() || inputs.manifest.is_some() || inputs.nand.is_some()
+                || inputs.settings.is_some() || inputs.camera.is_some() || inputs.access_point.is_some()
+                || inputs.capability_reply.is_some() || inputs.clock_seconds_2000.is_some()
+                || !inputs.preferred_languages.is_empty()
+            {
+                return Err("application-profile inputs belong in the startup plan".into());
+            }
+            let plan = inputs.application_plan.ok_or("application startup needs an application plan")?;
+            let boot::Opened::Application(started) = boot::open(resolved, boot::StartupInputs::Application(
+                boot::application::Startup {
+                    update: inputs.update, plan, discovery: inputs.discovery, quantum: inputs.quantum,
+                },
+            ))? else {
+                return Err("application startup returned another processor generation".into());
+            };
+            return match started.board {
+                boot::application::Board::Xp4(session) => fujimod_python_xp4::adopt(*session, started.quantum)
+                    .map(Opened::Xp4).map_err(|error| error.to_string()),
+                boot::application::Board::Xpp(session) => Ok(Opened::Graph(*session)),
+            };
+        }
+        if inputs.application_plan.is_some() {
+            return Err("application startup plan does not match this configuration".into());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
         if matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
             if inputs.nand.is_some() || inputs.settings.is_some() || inputs.clock_seconds_2000.is_some()
                 || !inputs.preferred_languages.is_empty() || inputs.camera.is_some()
@@ -74,7 +100,7 @@ impl Boot for CatalogBoot {
             access_point,
             capability_reply,
         };
-        boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2().map(Opened::Exr2)
+        boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2().map(Opened::Graph)
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

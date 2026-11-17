@@ -36,7 +36,7 @@ impl<'a> Owner<'a> {
 #[pymethods]
 impl Board {
     #[staticmethod]
-    #[pyo3(signature=(*, configuration_id, update, boot_rom=None, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, engine=None, manifest=None, discovery=false, quantum=None, instruction_rate=None))]
+    #[pyo3(signature=(*, configuration_id, update, boot_rom=None, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, engine=None, manifest=None, application_plan=None, discovery=false, quantum=None, instruction_rate=None))]
     fn from_inputs(
         configuration_id: String,
         update: PathBuf,
@@ -51,6 +51,7 @@ impl Board {
         capability_reply: Option<Vec<u8>>,
         engine: Option<String>,
         manifest: Option<PathBuf>,
+        application_plan: Option<PathBuf>,
         discovery: bool,
         quantum: Option<usize>,
         instruction_rate: Option<(u64, u64)>,
@@ -70,13 +71,14 @@ impl Board {
             capability_reply,
             engine,
             manifest,
+            application_plan,
             discovery,
             quantum,
             instruction_rate,
             })
             .map_err(error)?;
         let (backend, read_limit) = match opened {
-            Opened::Exr2(session) => {
+            Opened::Graph(session) => {
                 let graph: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
                     .map_err(|e| error(e.to_string()))?;
                 let read_limit = graph
@@ -95,6 +97,10 @@ impl Board {
                             .ok_or_else(|| error("declared RAM extent overflows".into()))
                     })?;
                 (Backend::Graph(session), read_limit)
+            }
+            Opened::Xp4(session) => {
+                let read_limit = session.ram_bytes();
+                (Backend::Xp4(session), read_limit)
             }
             Opened::Xp5 {session, inputs, read_limit} => (
                 Backend::Xp5(Box::new(super::xp5::Opened {session, inputs})),
@@ -115,6 +121,10 @@ impl Board {
     }
     #[getter]
     fn boot_quantum(&self) -> PyResult<usize> {
+        if let Some(Backend::Xp4(session)) = &self.backend {
+            return session.catalog_quantum()
+                .ok_or_else(|| error("board was not constructed from boot inputs".into()));
+        }
         self.session()?.definition["quantum"]
             .as_u64()
             .and_then(|v| v.try_into().ok())

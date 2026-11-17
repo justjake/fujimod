@@ -76,6 +76,7 @@ class emulator:
             capability_reply: bytes | None = None,
             engine: str | None = None,
             manifest: str | PathLike[str] | None = None,
+            application_plan: str | PathLike[str] | None = None,
             discovery: bool = False,
             quantum: int | None = None,
             instruction_rate: tuple[int, int] | None = None,

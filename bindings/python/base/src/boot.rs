@@ -13,6 +13,7 @@ pub struct Inputs {
     pub boot_rom: Option<PathBuf>,
     pub engine: Option<String>,
     pub manifest: Option<PathBuf>,
+    pub application_plan: Option<PathBuf>,
     pub discovery: bool,
     pub quantum: Option<usize>,
     pub instruction_rate: Option<(u64, u64)>,
@@ -29,7 +30,8 @@ pub struct Inputs {
 
 /// A native catalog session with its processor-specific physical input handle.
 pub enum Opened {
-    Exr2(Session),
+    Graph(Session),
+    Xp4(Box<dyn crate::xp4_backend::Xp4Backend>),
     Xp5 {
         session: Session,
         inputs: fujimod_emulator_xp5_board::session::Inputs,

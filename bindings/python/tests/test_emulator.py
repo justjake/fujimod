@@ -252,6 +252,7 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.Monk
             "capability_reply": None,
             "engine": None,
             "manifest": None,
+            "application_plan": None,
             "discovery": False,
             "quantum": None,
             "instruction_rate": None,

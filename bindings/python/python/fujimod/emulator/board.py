@@ -240,6 +240,7 @@ class Board:
         capability_reply: Sequence[int] | None = None,
         engine: str | None = None,
         manifest: str | PathLike[str] | None = None,
+        application_plan: str | PathLike[str] | None = None,
         discovery: bool = False,
         quantum: int | None = None,
         instruction_rate: tuple[int, int] | None = None,
@@ -253,7 +254,9 @@ class Board:
         ``overlays`` selects named catalog overlays in order. Each overlay
         must apply to the selected run configuration.
 
-        ``update`` is required. ROM starts require ``boot_rom``. ``nand`` and
+        ``update`` is required. ROM starts require ``boot_rom``. XP4 and
+        X-Processor Pro runs accept startup files through ``application_plan``.
+        ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
         is inferred from the selected configuration.
 
@@ -288,6 +291,8 @@ class Board:
         update = cls._input_path(update, "update")
         boot_rom = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
         manifest = None if manifest is None else cls._input_path(manifest, "manifest")
+        if application_plan is not None:
+            application_plan = cls._input_path(application_plan, "application_plan")
         nand = None if nand is None else cls._input_path(nand, "nand")
         settings = None if settings is None else cls._input_path(settings, "settings")
         camera = None if camera is None else fspath(camera)
@@ -326,6 +331,7 @@ class Board:
             capability_reply=capability,
             engine=engine,
             manifest=manifest,
+            application_plan=application_plan,
             discovery=discovery,
             quantum=quantum,
             instruction_rate=instruction_rate,
