@@ -12,6 +12,11 @@
 //! structure (after Wronski et al.): narrow across edges, long along them and
 //! wide in flat regions.
 //!
+//! Red and blue sites are sparse on X-Trans (2 of 9 each), so by default green
+//! is merged first and red and blue are merged as white-balanced differences
+//! to the merged green at their own sample positions. Color differences vary
+//! slowly, so red and blue inherit green's resolution instead of their own.
+//!
 //! Output rows are produced in strips; each strip reads only the rows of each
 //! frame that map into it.
 
@@ -73,6 +78,18 @@ impl Default for KernelShape {
     }
 }
 
+/// How red and blue are merged.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ColorMerge {
+    /// Each color is splatted from its own samples only.
+    Independent,
+    /// Green is merged first; red and blue are merged as white-balanced
+    /// differences to the merged green.
+    #[default]
+    GreenGuided,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ResolutionParams {
     /// Output pixels per sensor site along each axis.
@@ -86,6 +103,8 @@ pub struct ResolutionParams {
     /// Weight of the reference block-mean prior relative to one sample.
     pub prior_weight: f32,
     pub robustness: Option<RobustParams>,
+    #[serde(default)]
+    pub color: ColorMerge,
     pub strip_rows: usize,
     pub region: Option<Region>,
 }
@@ -99,6 +118,7 @@ impl Default for ResolutionParams {
             radius: 1.5,
             prior_weight: 0.02,
             robustness: Some(RobustParams::default()),
+            color: ColorMerge::default(),
             strip_rows: 48,
             region: None,
         }
@@ -501,6 +521,136 @@ fn threads() -> usize {
         .min(16)
 }
 
+/// One frame's rows for a strip, with its robustness map.
+struct PreparedFrame {
+    k: usize,
+    to_ref: Affine,
+    fy0: usize,
+    fy1: usize,
+    raw: Vec<u16>,
+    weights: Option<BlockBand<f32>>,
+}
+
+/// Gaussian splatting onto output rows `j0..j0 + rows` of an accumulator
+/// holding `stride` values per pixel: weighted sums first, weights `half`
+/// values later.
+struct Splatter<'a> {
+    out: &'a OutputGrid,
+    /// Kernels for output rows from `kernel_j0`.
+    kernels: &'a [[f32; 3]],
+    kernel_j0: usize,
+    lut: &'a [f32],
+    scale: f64,
+    radius: f64,
+}
+
+impl Splatter<'_> {
+    #[inline(always)]
+    #[allow(clippy::too_many_arguments)]
+    fn splat(
+        &self,
+        acc: &mut [f32],
+        stride: usize,
+        half: usize,
+        slot: usize,
+        j0: usize,
+        rows: usize,
+        (qx, qy): (f64, f64),
+        value: f32,
+        weight: f32,
+    ) {
+        let s = self.scale;
+        let rs = self.radius * s;
+        let r2 = self.radius * self.radius;
+        let width = self.out.width;
+        let i0 = ((qx - rs).ceil() as i64).max(0);
+        let i1 = ((qx + rs).floor() as i64).min(width as i64 - 1);
+        let jj0 = ((qy - rs).ceil() as i64).max(j0 as i64);
+        let jj1 = ((qy + rs).floor() as i64).min((j0 + rows) as i64 - 1);
+        for j in jj0..=jj1 {
+            let dy = (j as f64 - qy) / s;
+            let row = (j as usize - j0) * width;
+            let krow = (j as usize - self.kernel_j0) * width;
+            for i in i0..=i1 {
+                let dx = (i as f64 - qx) / s;
+                if dx * dx + dy * dy >= r2 {
+                    continue;
+                }
+                let k = self.kernels[krow + i as usize];
+                let (dx, dy) = (dx as f32, dy as f32);
+                let arg = k[0] * dx * dx + 2.0 * k[1] * dx * dy + k[2] * dy * dy;
+                if arg >= LUT_RANGE as f32 {
+                    continue;
+                }
+                let g = self.lut[(arg * (LUT as f64 / LUT_RANGE) as f32) as usize] * weight;
+                let a = (row + i as usize) * stride;
+                acc[a + slot] += g * value;
+                acc[a + half + slot] += g;
+            }
+        }
+    }
+}
+
+/// Calls `f(color, reference position, linear value, robustness weight)` for
+/// every unclipped sample of `frame` that maps inside `[x_lo, x_hi] x [y_lo,
+/// y_hi]` of the reference and has a usable weight.
+fn for_each_sample(
+    frame: &dyn FrameSource,
+    pf: &PreparedFrame,
+    grid: &BlockGrid,
+    (x_lo, x_hi, y_lo, y_hi): (f64, f64, f64, f64),
+    mut f: impl FnMut(usize, (f64, f64), f32, f32),
+) {
+    let w = frame.width();
+    let cal = frame.calibration();
+    let fcfa = frame.cfa();
+    for y in pf.fy0..pf.fy1 {
+        let row = &pf.raw[(y - pf.fy0) * w..(y - pf.fy0 + 1) * w];
+        let (mut px, mut py) = pf.to_ref.apply(0.0, y as f64);
+        let (ddx, ddy) = (pf.to_ref.0[0], pf.to_ref.0[2]);
+        for (x, &value) in row.iter().enumerate() {
+            if x > 0 {
+                px += ddx;
+                py += ddy;
+            }
+            if py < y_lo || py > y_hi || px < x_lo || px > x_hi {
+                continue;
+            }
+            let (v, clipped) = cal.linear(value, x, y);
+            if clipped {
+                continue;
+            }
+            let wr = match &pf.weights {
+                Some(map) => {
+                    let (bu, bv) = grid.to_block(px, py);
+                    map.bilinear(bu, bv)
+                }
+                None => 1.0,
+            };
+            if wr < 1e-3 {
+                continue;
+            }
+            f(fcfa.color(x, y) as usize, (px, py), v, wr);
+        }
+    }
+}
+
+/// Bilinear lookup in a `width`-wide plane of `rows` rows, clamped to its
+/// edges.
+#[inline(always)]
+fn plane_bilinear(plane: &[f32], width: usize, rows: usize, x: f64, y: f64) -> f32 {
+    let x = x.clamp(0.0, (width - 1) as f64);
+    let y = y.clamp(0.0, (rows - 1) as f64);
+    let (x0, y0) = (x.floor() as usize, y.floor() as usize);
+    let (x1, y1) = ((x0 + 1).min(width - 1), (y0 + 1).min(rows - 1));
+    let (fx, fy) = ((x - x0 as f64) as f32, (y - y0 as f64) as f32);
+    let top = plane[y0 * width + x0] + (plane[y0 * width + x1] - plane[y0 * width + x0]) * fx;
+    let bottom = plane[y1 * width + x0] + (plane[y1 * width + x1] - plane[y1 * width + x0]) * fx;
+    top + (bottom - top) * fy
+}
+
+type PrepareResult = io::Result<(Vec<f32>, Vec<(usize, f32, f32)>, usize, Vec<PreparedFrame>)>;
+
 /// Merges the accepted frames of `alignment` into `sink`.
 pub fn merge_resolution(
     frames: &[&dyn FrameSource],
@@ -533,7 +683,7 @@ pub fn merge_resolution(
     let out = OutputGrid::new(region, params.scale);
     let s = params.scale;
     let radius = params.radius;
-    let r2 = radius * radius;
+    let guided = params.color == ColorMerge::GreenGuided;
     // exp(-a) for a in [0, LUT_RANGE].
     let lut: Vec<f32> = (0..=LUT)
         .map(|k| (-(k as f64) / LUT as f64 * LUT_RANGE).exp() as f32)
@@ -564,6 +714,17 @@ pub fn merge_resolution(
     };
     let nthreads = threads().min(used.len()).max(1);
     let wb = reference.calibration().wb;
+    // The prior scales with the frame count so that a burst of identical
+    // frames merges to exactly the single-frame result.
+    let eps = params.prior_weight * used.len() as f32;
+    // Green-guided red and blue look up the merged green within a kernel
+    // radius (plus a bilinear step) of the strip, so green is merged over
+    // that many extra output rows on each side.
+    let green_margin = if guided {
+        (radius * s).ceil() as usize + 2
+    } else {
+        0
+    };
     let mut stats: Vec<(f32, f32, usize)> = vec![(0.0, 0.0, 0); frames.len()];
     let mut peak = 0usize;
     let mut strips = 0usize;
@@ -571,16 +732,24 @@ pub fn merge_resolution(
     let mut j0 = 0usize;
     let x_lo = region.x as f64 - radius;
     let x_hi = (region.x + region.width - 1) as f64 + radius;
+    let site_rows = |ja: usize, jb: usize| {
+        let (_, lo) = out.to_site(0.0, ja as f64);
+        let (_, hi) = out.to_site(0.0, (jb - 1) as f64);
+        (lo - radius, hi + radius)
+    };
     while j0 < out.height {
         let rows = params.strip_rows.min(out.height - j0);
-        let (_, y_lo) = out.to_site(0.0, j0 as f64);
-        let (_, y_hi) = out.to_site(0.0, (j0 + rows - 1) as f64);
-        let (y_lo, y_hi) = (y_lo - radius, y_hi + radius);
+        // Output rows of the first pass: the strip, widened for green.
+        let ej0 = j0.saturating_sub(green_margin);
+        let ej1 = (j0 + rows + green_margin).min(out.height);
+        let erows = ej1 - ej0;
+        let (y_lo, y_hi) = site_rows(j0, j0 + rows);
+        let (ey_lo, ey_hi) = site_rows(ej0, ej1);
         // Reference block band with a margin for neighborhoods and bilinear
         // lookups.
-        let jb_lo = ((grid.to_block(0.0, y_lo).1).floor() as i64 - 2).max(0) as usize;
-        let jb_hi =
-            (((grid.to_block(0.0, y_hi).1).ceil() as i64 + 2).max(0) as usize).min(grid.height - 1);
+        let jb_lo = ((grid.to_block(0.0, ey_lo).1).floor() as i64 - 2).max(0) as usize;
+        let jb_hi = (((grid.to_block(0.0, ey_hi).1).ceil() as i64 + 2).max(0) as usize)
+            .min(grid.height - 1);
         let mut ref_blocks = Vec::new();
         read_block_band(
             reference,
@@ -596,8 +765,6 @@ pub fn merge_resolution(
             width: grid.width,
             data: ref_blocks,
         };
-        let strip_len = rows * out.width;
-        let acc_bytes = strip_len * 6 * 4;
         let kernels = strip_kernels(
             params,
             &out,
@@ -605,171 +772,167 @@ pub fn merge_resolution(
             &ref_band,
             alignment.noise.as_ref(),
             wb,
-            j0,
-            rows,
+            ej0,
+            erows,
         );
+        let splatter = Splatter {
+            out: &out,
+            kernels: &kernels,
+            kernel_j0: ej0,
+            lut: &lut,
+            scale: s,
+            radius,
+        };
+        let prior = |i: usize, j: usize| -> [f32; 3] {
+            let (x, y) = out.to_site(i as f64, j as f64);
+            let (bu, bv) = grid.to_block(x, y);
+            ref_band
+                .bilinear(
+                    bu.clamp(0.0, grid.width as f64 - 1.001),
+                    bv.clamp(
+                        ref_band.jlo as f64,
+                        (ref_band.jlo + ref_band.rows) as f64 - 1.001,
+                    ),
+                )
+                .map(|p| [unclip(p[0]), p[1], p[2]])
+                .unwrap_or([0.0; 3])
+        };
+        // First pass: all colors over the strip, or green over the widened
+        // strip.
+        let (stride1, len1) = if guided {
+            (2, erows * out.width)
+        } else {
+            (6, rows * out.width)
+        };
+        let acc1_bytes = len1 * stride1 * 4;
 
         // Each worker merges a share of the frames into its own accumulator.
         let shares: Vec<Vec<(usize, Affine)>> = (0..nthreads)
             .map(|t| used.iter().copied().skip(t).step_by(nthreads).collect())
             .collect();
-        let results: Vec<io::Result<(Vec<f32>, Vec<(usize, f32, f32)>, usize)>> =
-            std::thread::scope(|scope| {
-                let handles: Vec<_> = shares
-                    .iter()
-                    .map(|share| {
-                        let (ref_band, lut, grid, kernels) = (&ref_band, &lut, &grid, &kernels);
-                        scope.spawn(
-                            move || -> io::Result<(Vec<f32>, Vec<(usize, f32, f32)>, usize)> {
-                                let mut acc = vec![0f32; strip_len * 6];
-                                let mut frame_stats = Vec::new();
-                                let mut worker_peak = 0usize;
-                                let mut raw = Vec::new();
-                                let mut fb_raw = Vec::new();
-                                let mut fb = Vec::new();
-                                for &(k, to_frame) in share {
-                                    let frame = frames[k];
-                                    let cal = frame.calibration();
-                                    let fcfa = frame.cfa();
-                                    let to_ref = to_frame.inverse().ok_or_else(|| {
-                                        io::Error::new(
-                                            io::ErrorKind::InvalidData,
-                                            "singular transform",
-                                        )
-                                    })?;
-                                    // Frame rows that map into this strip.
-                                    let corners =
-                                        [(x_lo, y_lo), (x_hi, y_lo), (x_lo, y_hi), (x_hi, y_hi)];
-                                    let (mut vmin, mut vmax) = (f64::MAX, f64::MIN);
-                                    for (x, y) in corners {
-                                        let (_, v) = to_frame.apply(x, y);
-                                        vmin = vmin.min(v);
-                                        vmax = vmax.max(v);
-                                    }
-                                    let fy0 = (vmin.floor() as i64 - 1).clamp(0, h as i64) as usize;
-                                    let fy1 = (vmax.ceil() as i64 + 2).clamp(0, h as i64) as usize;
-                                    if fy1 <= fy0 {
-                                        frame_stats.push((k, 0.0, 1.0));
-                                        continue;
-                                    }
-                                    raw.resize((fy1 - fy0) * w, 0);
-                                    frame.read_rows(fy0, &mut raw)?;
-                                    // Robustness against the reference.
-                                    let weights = match robust {
-                                        Some((p, noise)) if k != alignment.reference => {
-                                            let to_blocks = block_scale(&to_frame);
-                                            let (_, bv0) = grid.to_block(0.0, vmin);
-                                            let (_, bv1) = grid.to_block(0.0, vmax);
-                                            let fj0 = (bv0.floor() as i64 - 2).max(0) as usize;
-                                            let fj1 = ((bv1.ceil() as i64 + 2).max(0) as usize)
-                                                .min(grid.height - 1);
-                                            read_block_band(
-                                                frame,
-                                                grid,
-                                                fj0,
-                                                fj1 + 1 - fj0,
-                                                &mut fb_raw,
-                                                &mut fb,
-                                            )?;
-                                            let fband = BlockBand {
-                                                jlo: fj0,
-                                                rows: fj1 + 1 - fj0,
-                                                width: grid.width,
-                                                data: std::mem::take(&mut fb),
-                                            };
-                                            let (map, mean, rejected) = robustness(
-                                                ref_band, &fband, &to_blocks, noise, wb, p,
-                                            );
-                                            worker_peak = worker_peak
-                                                .max(fb_raw.len() * 2 + fband.data.len() * 12);
-                                            fb = fband.data;
-                                            frame_stats.push((k, mean, rejected));
-                                            Some(map)
-                                        }
-                                        _ => {
-                                            frame_stats.push((k, 1.0, 0.0));
-                                            None
-                                        }
+        let results: Vec<PrepareResult> = std::thread::scope(|scope| {
+            let handles: Vec<_> = shares
+                .iter()
+                .map(|share| {
+                    let (ref_band, grid, splatter) = (&ref_band, &grid, &splatter);
+                    scope.spawn(move || -> PrepareResult {
+                        let mut acc = vec![0f32; len1 * stride1];
+                        let mut frame_stats = Vec::new();
+                        let mut worker_peak = 0usize;
+                        let mut prepared = Vec::new();
+                        let mut fb_raw = Vec::new();
+                        let mut fb = Vec::new();
+                        for &(k, to_frame) in share {
+                            let frame = frames[k];
+                            let to_ref = to_frame.inverse().ok_or_else(|| {
+                                io::Error::new(io::ErrorKind::InvalidData, "singular transform")
+                            })?;
+                            // Frame rows that map into the widened strip.
+                            let corners =
+                                [(x_lo, ey_lo), (x_hi, ey_lo), (x_lo, ey_hi), (x_hi, ey_hi)];
+                            let (mut vmin, mut vmax) = (f64::MAX, f64::MIN);
+                            for (x, y) in corners {
+                                let (_, v) = to_frame.apply(x, y);
+                                vmin = vmin.min(v);
+                                vmax = vmax.max(v);
+                            }
+                            let fy0 = (vmin.floor() as i64 - 1).clamp(0, h as i64) as usize;
+                            let fy1 = (vmax.ceil() as i64 + 2).clamp(0, h as i64) as usize;
+                            if fy1 <= fy0 {
+                                frame_stats.push((k, 0.0, 1.0));
+                                continue;
+                            }
+                            let mut raw = vec![0u16; (fy1 - fy0) * w];
+                            frame.read_rows(fy0, &mut raw)?;
+                            // Robustness against the reference.
+                            let weights = match robust {
+                                Some((p, noise)) if k != alignment.reference => {
+                                    let to_blocks = block_scale(&to_frame);
+                                    let (_, bv0) = grid.to_block(0.0, vmin);
+                                    let (_, bv1) = grid.to_block(0.0, vmax);
+                                    let fj0 = (bv0.floor() as i64 - 2).max(0) as usize;
+                                    let fj1 = ((bv1.ceil() as i64 + 2).max(0) as usize)
+                                        .min(grid.height - 1);
+                                    read_block_band(
+                                        frame,
+                                        grid,
+                                        fj0,
+                                        fj1 + 1 - fj0,
+                                        &mut fb_raw,
+                                        &mut fb,
+                                    )?;
+                                    let fband = BlockBand {
+                                        jlo: fj0,
+                                        rows: fj1 + 1 - fj0,
+                                        width: grid.width,
+                                        data: std::mem::take(&mut fb),
                                     };
-                                    worker_peak = worker_peak.max(
-                                        raw.len() * 2
-                                            + weights.as_ref().map_or(0, |m| m.data.len() * 4)
-                                            + fb_raw.len() * 2,
-                                    );
-                                    let rs = radius * s;
-                                    for y in fy0..fy1 {
-                                        let row = &raw[(y - fy0) * w..(y - fy0 + 1) * w];
-                                        let (mut px, mut py) = to_ref.apply(0.0, y as f64);
-                                        let (ddx, ddy) = (to_ref.0[0], to_ref.0[2]);
-                                        for (x, &value) in row.iter().enumerate() {
-                                            if x > 0 {
-                                                px += ddx;
-                                                py += ddy;
-                                            }
-                                            if py < y_lo || py > y_hi || px < x_lo || px > x_hi {
-                                                continue;
-                                            }
-                                            let (v, clipped) = cal.linear(value, x, y);
-                                            if clipped {
-                                                continue;
-                                            }
-                                            let wr = match &weights {
-                                                Some(map) => {
-                                                    let (bu, bv) = grid.to_block(px, py);
-                                                    map.bilinear(bu, bv)
-                                                }
-                                                None => 1.0,
-                                            };
-                                            if wr < 1e-3 {
-                                                continue;
-                                            }
-                                            let c = fcfa.color(x, y) as usize;
-                                            let (qx, qy) = out.to_output(px, py);
-                                            let i0 = ((qx - rs).ceil() as i64).max(0);
-                                            let i1 = ((qx + rs).floor() as i64)
-                                                .min(out.width as i64 - 1);
-                                            let jj0 = ((qy - rs).ceil() as i64).max(j0 as i64);
-                                            let jj1 = ((qy + rs).floor() as i64)
-                                                .min((j0 + rows) as i64 - 1);
-                                            for j in jj0..=jj1 {
-                                                let dy = (j as f64 - qy) / s;
-                                                let base = (j as usize - j0) * out.width;
-                                                for i in i0..=i1 {
-                                                    let dx = (i as f64 - qx) / s;
-                                                    if dx * dx + dy * dy >= r2 {
-                                                        continue;
-                                                    }
-                                                    let k = kernels[base + i as usize];
-                                                    let (dx, dy) = (dx as f32, dy as f32);
-                                                    let arg = k[0] * dx * dx
-                                                        + 2.0 * k[1] * dx * dy
-                                                        + k[2] * dy * dy;
-                                                    if arg >= LUT_RANGE as f32 {
-                                                        continue;
-                                                    }
-                                                    let g = lut[(arg
-                                                        * (LUT as f64 / LUT_RANGE) as f32)
-                                                        as usize]
-                                                        * wr;
-                                                    let a = (base + i as usize) * 6;
-                                                    acc[a + c] += g * v;
-                                                    acc[a + 3 + c] += g;
-                                                }
-                                            }
-                                        }
-                                    }
+                                    let (map, mean, rejected) =
+                                        robustness(ref_band, &fband, &to_blocks, noise, wb, p);
+                                    worker_peak =
+                                        worker_peak.max(fb_raw.len() * 2 + fband.data.len() * 12);
+                                    fb = fband.data;
+                                    frame_stats.push((k, mean, rejected));
+                                    Some(map)
                                 }
-                                Ok((acc, frame_stats, worker_peak))
-                            },
-                        )
+                                _ => {
+                                    frame_stats.push((k, 1.0, 0.0));
+                                    None
+                                }
+                            };
+                            let pf = PreparedFrame {
+                                k,
+                                to_ref,
+                                fy0,
+                                fy1,
+                                raw,
+                                weights,
+                            };
+                            if guided {
+                                for_each_sample(
+                                    frame,
+                                    &pf,
+                                    grid,
+                                    (x_lo, x_hi, ey_lo, ey_hi),
+                                    |c, (px, py), v, wr| {
+                                        if c == 1 {
+                                            let q = out.to_output(px, py);
+                                            splatter.splat(&mut acc, 2, 1, 0, ej0, erows, q, v, wr);
+                                        }
+                                    },
+                                );
+                            } else {
+                                for_each_sample(
+                                    frame,
+                                    &pf,
+                                    grid,
+                                    (x_lo, x_hi, y_lo, y_hi),
+                                    |c, (px, py), v, wr| {
+                                        let q = out.to_output(px, py);
+                                        splatter.splat(&mut acc, 6, 3, c, j0, rows, q, v, wr);
+                                    },
+                                );
+                            }
+                            prepared.push(pf);
+                        }
+                        let held: usize = prepared
+                            .iter()
+                            .map(|p| {
+                                p.raw.len() * 2 + p.weights.as_ref().map_or(0, |m| m.data.len() * 4)
+                            })
+                            .sum();
+                        worker_peak = worker_peak.max(held + fb_raw.len() * 2);
+                        Ok((acc, frame_stats, worker_peak, prepared))
                     })
-                    .collect();
-                handles.into_iter().map(|h| h.join().unwrap()).collect()
-            });
-        let mut total = vec![0f32; strip_len * 6];
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        let mut total = vec![0f32; len1 * stride1];
         let mut worker_bytes = 0usize;
+        let mut prepared_shares = Vec::with_capacity(nthreads);
         for r in results {
-            let (acc, fs, wp) = r?;
+            let (acc, fs, wp, prepared) = r?;
             for (t, a) in total.iter_mut().zip(&acc) {
                 *t += a;
             }
@@ -778,43 +941,114 @@ pub fn merge_resolution(
                 stats[k].1 += rej;
                 stats[k].2 += 1;
             }
-            worker_bytes += wp + acc_bytes;
+            worker_bytes += wp + acc1_bytes;
+            prepared_shares.push(prepared);
         }
-        // Normalize with the reference block prior.
-        let mut rgb = vec![0f32; strip_len * 3];
-        // The prior scales with the frame count so that a burst of identical
-        // frames merges to exactly the single-frame result.
-        let eps = params.prior_weight * used.len() as f32;
-        for jr in 0..rows {
-            for i in 0..out.width {
-                let (x, y) = out.to_site(i as f64, (j0 + jr) as f64);
-                let (bu, bv) = grid.to_block(x, y);
-                let prior = ref_band
-                    .bilinear(
-                        bu.clamp(0.0, grid.width as f64 - 1.001),
-                        bv.clamp(
-                            ref_band.jlo as f64,
-                            (ref_band.jlo + ref_band.rows) as f64 - 1.001,
-                        ),
-                    )
-                    .map(|p| [unclip(p[0]), p[1], p[2]])
-                    .unwrap_or([0.0; 3]);
-                let a = (jr * out.width + i) * 6;
-                for c in 0..3 {
-                    rgb[(jr * out.width + i) * 3 + c] =
-                        (total[a + c] + eps * prior[c]) / (total[a + 3 + c] + eps);
+        let mut rgb = vec![0f32; rows * out.width * 3];
+        let mut extra_bytes = 0usize;
+        if !guided {
+            // Normalize with the reference block prior.
+            for jr in 0..rows {
+                for i in 0..out.width {
+                    let p = prior(i, j0 + jr);
+                    let a = (jr * out.width + i) * 6;
+                    for c in 0..3 {
+                        rgb[(jr * out.width + i) * 3 + c] =
+                            (total[a + c] + eps * p[c]) / (total[a + 3 + c] + eps);
+                    }
                 }
             }
+        } else {
+            // Merged green over the widened strip.
+            let green: Vec<f32> = (0..erows * out.width)
+                .map(|n| {
+                    let p = prior(n % out.width, ej0 + n / out.width);
+                    (total[2 * n] + eps * p[1]) / (total[2 * n + 1] + eps)
+                })
+                .collect();
+            drop(total);
+            // Second pass: white-balanced red and blue differences to the
+            // merged green at each red and blue sample.
+            let len2 = rows * out.width;
+            let results: Vec<io::Result<Vec<f32>>> = std::thread::scope(|scope| {
+                let handles: Vec<_> = prepared_shares
+                    .iter()
+                    .map(|prepared| {
+                        let (grid, splatter, green) = (&grid, &splatter, &green);
+                        scope.spawn(move || -> io::Result<Vec<f32>> {
+                            let mut acc = vec![0f32; len2 * 4];
+                            for pf in prepared {
+                                for_each_sample(
+                                    frames[pf.k],
+                                    pf,
+                                    grid,
+                                    (x_lo, x_hi, y_lo, y_hi),
+                                    |c, (px, py), v, wr| {
+                                        if c == 1 {
+                                            return;
+                                        }
+                                        let (qx, qy) = out.to_output(px, py);
+                                        let g = plane_bilinear(
+                                            green,
+                                            out.width,
+                                            erows,
+                                            qx,
+                                            qy - ej0 as f64,
+                                        );
+                                        let d = v * wb[c] - g * wb[1];
+                                        splatter.splat(
+                                            &mut acc,
+                                            4,
+                                            2,
+                                            c / 2,
+                                            j0,
+                                            rows,
+                                            (qx, qy),
+                                            d,
+                                            wr,
+                                        );
+                                    },
+                                );
+                            }
+                            Ok(acc)
+                        })
+                    })
+                    .collect();
+                handles.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            let mut diff = vec![0f32; len2 * 4];
+            for r in results {
+                for (t, a) in diff.iter_mut().zip(&r?) {
+                    *t += a;
+                }
+            }
+            for jr in 0..rows {
+                for i in 0..out.width {
+                    let p = prior(i, j0 + jr);
+                    let g = green[(j0 - ej0 + jr) * out.width + i];
+                    let a = (jr * out.width + i) * 4;
+                    let o = (jr * out.width + i) * 3;
+                    rgb[o + 1] = g;
+                    for (slot, c) in [(0, 0), (1, 2)] {
+                        let d = (diff[a + slot] + eps * (p[c] * wb[c] - p[1] * wb[1]))
+                            / (diff[a + 2 + slot] + eps);
+                        rgb[o + c] = (g * wb[1] + d) / wb[c].max(1e-6);
+                    }
+                }
+            }
+            extra_bytes = green.len() * 4 + diff.len() * 4 * (1 + nthreads);
         }
-        sink.write_strip(j0, rows, &rgb)?;
+        drop(prepared_shares);
         peak = peak.max(
             worker_bytes
-                + acc_bytes
+                + len1 * stride1 * 4
+                + extra_bytes
                 + rgb.len() * 4
                 + kernels.len() * 12
                 + ref_band.data.len() * 28
                 + raw.len() * 2,
         );
+        sink.write_strip(j0, rows, &rgb)?;
         strips += 1;
         j0 += rows;
     }
