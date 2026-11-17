@@ -337,40 +337,6 @@ enum Command {
     Frames,
     Close,
 }
-fn register(name: &str) -> Result<Register, String> {
-    match name {
-        "pc" => Ok(Register::Pc),
-        "sp" => Ok(Register::Sp),
-        "pstate" => Ok(Register::Pstate),
-        "fpcr" => Ok(Register::Fpcr),
-        "fpsr" => Ok(Register::Fpsr),
-        _ => {
-            if let Some(r) = name
-                .strip_prefix('x')
-                .and_then(|n| n.parse::<u8>().ok())
-                .filter(|n| *n <= 30)
-            {
-                return Ok(Register::X(r));
-            }
-            if let Some(r) = name
-                .strip_prefix('r')
-                .and_then(|n| n.parse::<u8>().ok())
-                .filter(|n| *n <= 15)
-            {
-                return Ok(Register::Arm32(cpu::arm::Register::R(r)));
-            }
-            if let Some(r) = name
-                .strip_prefix("sys:")
-                .and_then(|n| u16::from_str_radix(n.trim_start_matches("0x"), 16).ok())
-            {
-                return Ok(Register::Arm64System(
-                    cpu::arm::SystemRegister::from_encoding(r),
-                ));
-            }
-            Ok(Register::Arm64System(cpu::arm64::system_register(name)?))
-        }
-    }
-}
 fn access(name: &str) -> Result<Access, String> {
     match name {
         "read" => Ok(Access::Read),
@@ -550,7 +516,7 @@ impl Worker {
                     registers: p
                         .registers
                         .into_iter()
-                        .map(|r| Ok((register(&r.name)?, r.value)))
+                        .map(|r| Ok((cpu::arm64::register(&r.name)?, r.value)))
                         .collect::<Result<_, String>>()?,
                 })
             })
@@ -692,10 +658,10 @@ impl Worker {
                 Ok(Value::Null)
             }
             Command::ReadRegister { core, name } => {
-                Ok(json!(self.board.read_register(core, register(&name)?)?))
+                Ok(json!(self.board.read_register(core, cpu::arm64::register(&name)?)?))
             }
             Command::WriteRegister { core, name, value } => {
-                self.board.write_register(core, register(&name)?, value)?;
+                self.board.write_register(core, cpu::arm64::register(&name)?, value)?;
                 Ok(Value::Null)
             }
             Command::Translate {

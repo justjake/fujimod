@@ -1301,6 +1301,33 @@ impl Board {
             .coprocessor(json::<arm::Coprocessor>(selector)?, value)
             .map_err(error)
     }
+    /// Resolve a virtual address using the selected processor's current mappings.
+    fn translate(&self, core: usize, address: u64, access: &str) -> PyResult<u64> {
+        use fujimod_emulator_cpu::Access;
+        let access = match access {
+            "read" => Access::Read,
+            "write" => Access::Write,
+            "fetch" => Access::Fetch,
+            _ => return Err(PyValueError::new_err("invalid translation access")),
+        };
+        self.board()?.cpu(core).map_err(error)?.translate(address, access).map_err(error)
+    }
+    fn read_virtual<'py>(
+        &self, py: Python<'py>, core: usize, address: u64, size: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        self.check_read(size)?;
+        let cpu = self.board()?.cpu(core).map_err(error)?;
+        let result = PyBytes::new_with(py, size, |bytes| {
+            cpu.read_virtual(address, fujimod_emulator_cpu::Access::Read, bytes)
+                .map_err(error)
+        })?;
+        fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
+        Ok(result)
+    }
+    fn take_console(&mut self) -> PyResult<Vec<String>> {
+        Ok(self.board_mut()?.take_console())
+    }
+
     fn mem_read<'py>(
         &self,
         py: Python<'py>,
