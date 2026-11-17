@@ -78,39 +78,77 @@ pub fn slanted_edge(image: &[f32], width: usize, height: usize) -> Result<EdgeMt
     let (mut gx, mut gy) = (0f64, 0f64);
     for y in 1..height - 1 {
         for x in 1..width - 1 {
-            gx += (image[y * width + x + 1] - image[y * width + x - 1]).abs() as f64;
-            gy += (image[(y + 1) * width + x] - image[(y - 1) * width + x]).abs() as f64;
+            gx += (image[y * width + x + 1] - image[y * width + x - 1]) as f64;
+            gy += (image[(y + 1) * width + x] - image[(y - 1) * width + x]) as f64;
         }
     }
-    let (data, w, h) = if gx >= gy {
+    // Signed sums: an edge has one polarity, while thin lines and texture
+    // (scale ticks, fabric) rise and fall and cancel, so they cannot flip the
+    // orientation.
+    let (data, w, h) = if gx.abs() >= gy.abs() {
         (image.to_vec(), width, height)
     } else {
         (transpose(image, width, height), height, width)
     };
-    // Per-row derivative centroids, twice: the second pass windows each row
-    // around the first line estimate.
-    let mut line: Option<(f64, f64)> = None;
-    for _ in 0..2 {
-        let mut pts = Vec::new();
-        for y in 0..h {
-            let row = &data[y * w..(y + 1) * w];
-            let (mut s, mut sx) = (0f64, 0f64);
-            for x in 1..w - 1 {
-                if let Some((a, b)) = line {
-                    if (x as f64 - (a + b * y as f64)).abs() > 12.0 {
-                        continue;
-                    }
+    // Edge polarity along the measurement axis.
+    let polarity = if (if gx.abs() >= gy.abs() { gx } else { gy }) >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    // Per row: the peak of the smoothed, polarity-signed derivative, refined
+    // by the centroid of its positive lobe. Texture and thin lines barely
+    // move a peak, where they would drag a whole-row centroid.
+    let mut pts = Vec::new();
+    for y in 0..h {
+        let row = &data[y * w..(y + 1) * w];
+        let d: Vec<f64> = (0..w)
+            .map(|x| {
+                if x == 0 || x + 1 >= w {
+                    0.0
+                } else {
+                    polarity * (row[x + 1] - row[x - 1]) as f64
                 }
-                let d = ((row[x + 1] - row[x - 1]) as f64).abs();
-                s += d;
-                sx += d * x as f64;
-            }
-            if s > 0.0 {
-                pts.push((y as f64, sx / s));
+            })
+            .collect();
+        let smooth =
+            |x: usize| 0.25 * d[x.saturating_sub(1)] + 0.5 * d[x] + 0.25 * d[(x + 1).min(w - 1)];
+        let Some(peak) = (2..w - 2).max_by(|&i, &j| smooth(i).total_cmp(&smooth(j))) else {
+            continue;
+        };
+        let (mut s, mut sx) = (0f64, 0f64);
+        for x in peak.saturating_sub(4)..(peak + 5).min(w) {
+            if d[x] > 0.0 {
+                s += d[x];
+                sx += d[x] * x as f64;
             }
         }
-        line = Some(fit_line(&pts).ok_or("no edge found")?);
+        if s > 0.0 {
+            pts.push((y as f64, sx / s));
+        }
     }
+    // Line fit with outlier rejection (rows where texture outshone the edge).
+    let mut line = fit_line(&pts).ok_or("no edge found")?;
+    for _ in 0..4 {
+        let res: Vec<f64> = pts
+            .iter()
+            .map(|p| (p.1 - (line.0 + line.1 * p.0)).abs())
+            .collect();
+        let mut sorted = res.clone();
+        sorted.sort_by(f64::total_cmp);
+        let limit = (3.0 * 1.4826 * sorted[sorted.len() / 2]).max(0.5);
+        let kept: Vec<(f64, f64)> = pts
+            .iter()
+            .zip(&res)
+            .filter(|(_, r)| **r <= limit)
+            .map(|(p, _)| *p)
+            .collect();
+        if kept.len() < pts.len() / 2 {
+            return Err("edge line fit is unstable; the region holds more than one edge".into());
+        }
+        line = fit_line(&kept).ok_or("no edge found")?;
+    }
+    let line = Some(line);
     let (a, b) = line.unwrap();
     let angle = b.atan();
     if b.abs() * (h as f64) < 4.0 {
