@@ -37,6 +37,8 @@ pub struct Gpio {
     feedback: Vec<Feedback>,
     /// Due tick of each feedback wire's pending rise.
     rising: Vec<Option<u64>>,
+    /// Latching wires whose pad has risen and now stays high.
+    held: Vec<bool>,
 }
 #[derive(Serialize)]
 struct SavedRef<'a> {
@@ -44,6 +46,7 @@ struct SavedRef<'a> {
     previous: &'a [bool],
     input_irqs: &'a [InputIrq],
     rising: &'a [Option<u64>],
+    held: &'a [bool],
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -52,6 +55,7 @@ struct Saved {
     previous: Vec<bool>,
     input_irqs: Vec<InputIrq>,
     rising: Vec<Option<u64>>,
+    held: Vec<bool>,
 }
 impl Gpio {
     pub fn new(
@@ -76,6 +80,7 @@ impl Gpio {
             previous,
             feedback: Vec::new(),
             rising: Vec::new(),
+            held: Vec::new(),
         })
     }
     /// Pads wired to a core's own interrupt inputs (e.g. the companion's NVIC).
@@ -105,6 +110,7 @@ impl Gpio {
             }
         }
         self.rising = vec![None; feedback.len()];
+        self.held = vec![false; feedback.len()];
         self.feedback = feedback;
         Ok(self)
     }
@@ -178,10 +184,11 @@ impl Gpio {
     }
     fn complete_rises(&mut self, now: u64) {
         let mut pins = self.pins.lock().unwrap();
-        for (wire, rising) in self.feedback.iter().zip(&mut self.rising) {
+        for ((wire, rising), held) in self.feedback.iter().zip(&mut self.rising).zip(&mut self.held) {
             if rising.is_some_and(|due| due <= now) {
                 pins.set_input(wire.input_port, wire.input_pin, true);
                 *rising = None;
+                *held = wire.latch_high;
             }
         }
     }
@@ -204,7 +211,7 @@ impl Gpio {
         {
             return Err("GPIO interrupt wiring differs".into());
         }
-        if saved.rising.len() != self.feedback.len() {
+        if saved.rising.len() != self.feedback.len() || saved.held.len() != self.feedback.len() {
             return Err("GPIO feedback wiring differs".into());
         }
         Ok(())
@@ -289,7 +296,12 @@ impl Device for Gpio {
                     }
                 }
             }
-            for (connection, rising) in self.feedback.iter().zip(&mut self.rising) {
+            for ((connection, rising), held) in
+                self.feedback.iter().zip(&mut self.rising).zip(&self.held)
+            {
+                if *held {
+                    continue;
+                }
                 if p == connection.port
                     && r == connection.register
                     && value as u32 & (1 << (connection.bit + 16)) != 0
@@ -334,7 +346,7 @@ impl Device for Gpio {
         }
     }
     fn save(&self) -> Value {
-        json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising})
+        json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising, "held":self.held})
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         let pins: Pins = serde_json::from_value(v["pins"].clone())
@@ -349,12 +361,15 @@ impl Device for Gpio {
         }
         let rising: Vec<Option<u64>> = serde_json::from_value(v["rising"].clone())
             .map_err(|e| format!("GPIO feedback checkpoint: {e}"))?;
-        if rising.len() != self.feedback.len() {
+        let held: Vec<bool> = serde_json::from_value(v["held"].clone())
+            .map_err(|e| format!("GPIO feedback checkpoint: {e}"))?;
+        if rising.len() != self.feedback.len() || held.len() != self.feedback.len() {
             return Err("GPIO feedback wiring differs".into());
         }
         *self.pins.lock().unwrap() = pins;
         self.previous = previous;
         self.rising = rising;
+        self.held = held;
         Ok(())
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
@@ -366,6 +381,7 @@ impl Device for Gpio {
                 previous: &self.previous,
                 input_irqs: &self.input_irqs,
                 rising: &self.rising,
+                held: &self.held,
             },
         )
     }
@@ -378,10 +394,11 @@ impl Device for Gpio {
         *self.pins.lock().unwrap() = saved.pins;
         self.previous = saved.previous;
         self.rising = saved.rising;
+        self.held = saved.held;
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising}))
+        Ok(json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising, "held":self.held}))
     }
 }
 
@@ -556,6 +573,7 @@ mod wiring_tests {
                 input_port: 4,
                 input_pin: 4,
                 rise_delay: 0,
+                latch_high: false,
             }])
             .unwrap();
         let mut host = RecordingHost::default();
@@ -576,7 +594,7 @@ mod wiring_tests {
 
     #[test]
     fn a_fed_pad_starts_at_its_drive_bit_level() {
-        let wire = Feedback { port: 4, register: 0, bit: 4, input_port: 4, input_pin: 4, rise_delay: 0 };
+        let wire = Feedback { port: 4, register: 0, bit: 4, input_port: 4, input_pin: 4, rise_delay: 0, latch_high: false };
         // Undeclared pads read high; the wire pulls a low drive bit's pad low.
         let pins = Pins::shared();
         assert_eq!(pins.lock().unwrap().level(4, 4), 1);
@@ -599,7 +617,7 @@ mod wiring_tests {
 
     #[test]
     fn a_delayed_wire_rises_after_its_delay_and_edges_a_core_irq() {
-        let wire = Feedback { port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4, rise_delay: 1000 };
+        let wire = Feedback { port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4, rise_delay: 1000, latch_high: false };
         let pins = Pins::shared();
         let route = InputIrq { port: 0, pin: 4, line: 27, active_high: true };
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
@@ -638,5 +656,48 @@ mod wiring_tests {
         drop(cx);
         assert_eq!(host.core_irqs, [(1, 27, true), (1, 27, false)]);
         assert!(host.irqs.is_empty());
+    }
+
+    #[test]
+    fn a_latched_wire_holds_its_pad_high_after_the_first_rise() {
+        let wire = Feedback {
+            port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4,
+            rise_delay: 1000, latch_high: true,
+        };
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
+            .unwrap()
+            .with_feedback(vec![wire])
+            .unwrap();
+        let mut host = RecordingHost::default();
+        host.now = 100;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // A fall before the rise lands cancels it, as for an unlatched wire.
+        gpio.write(&mut cx, 0xff907040, 4, (1 << 30) | (1 << 14));
+        gpio.write(&mut cx, 0xff907040, 4, 1 << 30);
+        drop(cx);
+        host.now = 2000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.event(&mut cx, 0);
+        assert_eq!(pins.lock().unwrap().level(0, 4), 0);
+        // The first completed rise latches the pad high.
+        gpio.write(&mut cx, 0xff907040, 4, (1 << 30) | (1 << 14));
+        drop(cx);
+        host.now = 3000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.event(&mut cx, 0);
+        assert_eq!(pins.lock().unwrap().level(0, 4), 1);
+        // Later drive falls and rises leave it high, through a checkpoint.
+        gpio.write(&mut cx, 0xff907040, 4, 1 << 30);
+        gpio.advance(&mut cx);
+        assert_eq!(pins.lock().unwrap().level(0, 4), 1);
+        let saved = gpio.checkpoint().unwrap();
+        let mut copy = Gpio::new(0xff907000, Pins::shared(), false, Vec::new())
+            .unwrap()
+            .with_feedback(vec![wire])
+            .unwrap();
+        copy.restore_checkpoint(&saved).unwrap();
+        assert_eq!(copy.held, [true]);
+        assert!(cx.refusal().is_none());
     }
 }
