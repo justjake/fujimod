@@ -137,8 +137,9 @@ impl BlockGrid {
 
 /// Per-channel block means `[R, G, B]` for block rows `j0..j0 + rows`.
 /// `raw` holds active rows starting at `raw_y0` and must cover those blocks.
-/// Clipped sites still count; a block with any clipped site is marked by a
-/// negative red mean minus one so callers can skip it.
+/// Clipped sites still count; a block with any clipped site is marked by
+/// storing `-1 - red` (red is clamped at zero, so the mark is always <= -1)
+/// so callers can skip it.
 pub fn block_rgb(
     raw: &[u16],
     raw_y0: usize,
@@ -171,9 +172,11 @@ pub fn block_rgb(
                     n[c] += 1.0;
                 }
             }
-            let mut m = [sum[0] / n[0], sum[1] / n[1], sum[2] / n[2]];
+            // Red is clamped at zero so that a dark block whose noisy red mean
+            // falls below black cannot be mistaken for the clip mark.
+            let mut m = [(sum[0] / n[0]).max(0.0), sum[1] / n[1], sum[2] / n[2]];
             if clipped {
-                m[0] = -1.0 - m[0].abs();
+                m[0] = -1.0 - m[0];
             }
             out.push(m);
         }

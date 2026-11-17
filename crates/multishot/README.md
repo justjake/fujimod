@@ -152,6 +152,25 @@ phase.
 - The exposure bracket shot with it (9 frames, 1/250 to 1/40 s) is input
   for the exposure stage, not the resolution stage.
 
+**Stopped-down burst**: 15 frames, 1/250 s, f/8, ISO 1600, 56 mm, handheld,
+a tape-measure blade on a dark shirt. The plain shirt gives too few tiles for
+the whole-frame coverage gate, so alignment is fitted on the blade
+(`--align-region`); 13 of 15 frames register. On the blade's long edge
+(-4.6°, scale ticks reaching within a few sites of it), each frame
+demosaiced and upscaled measures MTF50 0.14 to 0.18 cycles per site:
+
+| | Merge (13 frames) | Single frame, same merge | Demosaic + bicubic |
+| --- | --- | --- | --- |
+| Edge MTF50 (cycles per site) | 0.148 | 0.136 | 0.165 |
+| Shirt noise, R G B std (plane removed) | 0.00047 0.00091 0.00072 | | 0.00098 0.00118 0.00113 |
+
+On this real edge the merge is 9% sharper than the same kernels on one frame
+but 10% softer than demosaicing and bicubic upscaling, while lowering noise
+1.3 to 2.1x (the shirt's weave counts as noise in these figures). The
+synthetic gain does not yet carry over; residual sub-pixel misalignment on
+real frames is the leading suspect (the scale ticks look slightly wider in
+the merge).
+
 **Camera JPEGs** of earlier brackets and bursts registered with `align-jpeg`
 show:
 
