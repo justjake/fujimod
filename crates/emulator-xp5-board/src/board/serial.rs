@@ -37,7 +37,7 @@ pub(super) enum Part {
         idle_high: bool,
     },
     Lsm6dsConfigurationRegisters { temperature: i16 },
-    FramedCommandPeer { idle_frame: u32 },
+    FramedCommandPeer { initial_frame: u32 },
     /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
     GenericSink { miso_high: bool },
@@ -177,8 +177,8 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         Part::Lsm6dsConfigurationRegisters { temperature } => {
             Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature))
         }
-        Part::FramedCommandPeer { idle_frame } => {
-            Box::new(fujimod_emulator_parts_io::framed_command_peer::Peer::new(idle_frame)?)
+        Part::FramedCommandPeer { initial_frame } => {
+            Box::new(fujimod_emulator_parts_io::framed_command_peer::Peer::new(initial_frame)?)
         }
         Part::GenericSink { miso_high } => Box::new(GenericSink { miso_high, transfers: 0, last: vec![] }),
     })
