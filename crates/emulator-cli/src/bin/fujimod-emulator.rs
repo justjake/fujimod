@@ -235,7 +235,7 @@ struct Outcome {
 fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--application-plan", "--quantum", "--keys", "--patch", "--scene", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
+        &["--application-plan", "--quantum", "--keys", "--scene", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
     )?;
     if !boot_options.mods.is_empty() || !boot_options.pokes.is_empty() {
         return Err("--mod and --poke do not apply to EXR II runs".into());
@@ -283,9 +283,13 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     } else if viewer_port.is_some() {
         return Err("--viewer-port requires --output".into());
     }
-    let mut next_status = status.map(|_| session.board.now());
+    let mut patches = boot::patch::Schedule::from_path(boot_options.path("--patch").as_deref(), &[])?;
+    let start = session.board.now();
+    let mut next_status = status.map(|_| start);
     let mut next_frame = session.board.now();
-    let report = boot::to_rec_with(&mut session, limit, duration, |session, status_report| {
+    let report = boot::to_rec_with_actions(&mut session, limit, duration,
+        |session| patches.advance(&session.board, start, boot::EXR2_TICKS_PER_SECOND),
+        |session, status_report| {
         let now = session.board.now();
         if next_status.is_some_and(|tick| now >= tick) {
             let milliseconds = status.unwrap().as_millis();

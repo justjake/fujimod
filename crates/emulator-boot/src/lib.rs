@@ -11,6 +11,8 @@ pub mod output;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod media;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod patch;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
 pub mod host;
@@ -1341,6 +1343,7 @@ pub struct RecReport {
     /// First active scanout output presenting configured graphics, when present.
     pub scanout_instance: Option<usize>,
     pub failure: Option<String>,
+    pub discovery_callee_stubs: Value,
 }
 fn word(session: &Session, address: u64) -> Result<u32, String> {
     let mut bytes = [0; 4];
@@ -1386,6 +1389,7 @@ fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<RecRepo
             .into_iter()
             .next(),
         failure: None,
+        discovery_callee_stubs: session.board.discovery_callee_stubs(),
     })
 }
 
@@ -1410,27 +1414,36 @@ fn presented_instances(display: &Value) -> Vec<usize> {
         .filter_map(|instance| instance["instance"].as_u64()?.try_into().ok())
         .collect()
 }
+type WindowAction<'a> = dyn FnMut(&mut Session) -> Result<Option<u64>, String> + 'a;
+
+struct Driver<'a> {
+    limits: host::Limits,
+    action: &'a mut WindowAction<'a>,
+}
+
+impl Driver<'_> {
 fn advance(
+    &mut self,
     session: &mut Session,
     spec: &Prepared,
-    limits: host::Limits,
     until: Option<u64>,
 ) -> Result<(), String> {
-    if limits.reached(session) {
+    if self.limits.reached(session) {
         return Err("run limit reached during first-start input".into());
     }
     let now: u64 = session.board.instruction_counts().iter().sum();
-    let pause = now.saturating_add(1_000_000).min(limits.instructions);
-    if !limits.step(session, spec.quantum, Some(pause), until)? {
+    let pause = now.saturating_add(1_000_000).min(self.limits.instructions);
+    let until = until.into_iter().chain((self.action)(session)?).min();
+    if !self.limits.step(session, spec.quantum, Some(pause), until)? {
         return Err("board is quiescent without an input or device deadline".into());
     }
     Ok(())
 }
 
 fn advance_ticks(
+    &mut self,
     session: &mut Session,
     spec: &Prepared,
-    limits: host::Limits,
     ticks: u64,
 ) -> Result<(), String> {
     let until = session
@@ -1439,9 +1452,11 @@ fn advance_ticks(
         .checked_add(ticks)
         .ok_or("input deadline overflows")?;
     while session.board.now() < until {
-        advance(session, spec, limits, Some(until))?;
+        self.advance(session, spec, Some(until))?;
     }
     Ok(())
+}
+
 }
 
 fn session_prepared(session: &Session) -> Result<Prepared, String> {
@@ -1466,7 +1481,7 @@ fn press_setup_key(
     session: &mut Session,
     spec: &Prepared,
     s: &FirstStart,
-    limits: host::Limits,
+    driver: &mut Driver<'_>,
 ) -> Result<(), String> {
     let base = if s.calibration_is_pointer {
         u64::from(word(session, s.calibration_pointer)?)
@@ -1489,11 +1504,11 @@ fn press_setup_key(
         .get_mut(s.channel)
         .ok_or("first-start key ADC channel is absent")? = (lower + upper) / 2;
     session.set_adc_samples(&s.adc, &pressed)?;
-    let held = advance_ticks(session, spec, limits, s.hold_ticks);
+    let held = driver.advance_ticks(session, spec, s.hold_ticks);
     // Release even if the instruction budget or a modeled refusal stops the hold.
     session.set_adc_samples(&s.adc, &original)?;
     held?;
-    advance_ticks(session, spec, limits, s.settle_ticks)
+    driver.advance_ticks(session, spec, s.settle_ticks)
 }
 
 fn setup_key(
@@ -1501,13 +1516,13 @@ fn setup_key(
     spec: &Prepared,
     inputs: &Exr2RunInputs,
     key: &str,
-    limits: host::Limits,
+    driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
     let key =
         first_start_key(&spec.resolved, inputs, key)?.ok_or("first-start policy is absent")?;
     *presses += 1;
-    press_setup_key(session, spec, &key, limits)
+    press_setup_key(session, spec, &key, driver)
 }
 
 fn setup_calendar(
@@ -1515,7 +1530,7 @@ fn setup_calendar(
     spec: &Prepared,
     inputs: &Exr2RunInputs,
     menu: &fujimod_catalog::first_start::FirstStartMenu,
-    limits: host::Limits,
+    driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
     let seconds = session.definition["inputs"]["clock_seconds_2000"]
@@ -1544,7 +1559,7 @@ fn setup_calendar(
             if read(session)?.1 as usize == field {
                 break;
             }
-            setup_key(session, spec, inputs, "RIGHT", limits, presses)?;
+            setup_key(session, spec, inputs, "RIGHT", driver, presses)?;
         }
         if read(session)?.1 as usize != field {
             return Err("date editor did not select the requested field".into());
@@ -1586,7 +1601,7 @@ fn setup_calendar(
                 spec,
                 inputs,
                 if increase { "UP" } else { "DOWN" },
-                limits,
+                driver,
                 presses,
             )?;
             let after = read(session)?;
@@ -1619,12 +1634,24 @@ pub fn to_rec_with(
     session: &mut Session,
     instruction_limit: u64,
     duration: Option<std::time::Duration>,
+    observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
+) -> Result<RecReport, String> {
+    to_rec_with_actions(session, instruction_limit, duration, |_| Ok(None), observe_window)
+}
+
+/// Run with explicit scheduled host actions before each scheduler window.
+pub fn to_rec_with_actions(
+    session: &mut Session,
+    instruction_limit: u64,
+    duration: Option<std::time::Duration>,
+    mut action: impl FnMut(&mut Session) -> Result<Option<u64>, String>,
     mut observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
 ) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
     let limits = host::Limits::new(session, Some(instruction_limit), duration, EXR2_TICKS_PER_SECOND)?;
-    let result = to_rec_inner(session, limits, &mut observe_window);
+    let mut driver = Driver { limits, action: &mut action };
+    let result = to_rec_inner(session, &mut driver, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
 }
@@ -1638,10 +1665,11 @@ fn boot_progress(session: &Session) -> fujimod_perf::GuestProgress {
 
 fn to_rec_inner(
     session: &mut Session,
-    limits: host::Limits,
+    driver: &mut Driver<'_>,
     observe_window: &mut impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
 ) -> Result<RecReport, String> {
     let spec = session_prepared(session)?;
+    let limits = driver.limits;
     let mut presses = 0;
     let mut confirmations = 0;
     loop {
@@ -1723,7 +1751,7 @@ fn to_rec_inner(
                     let key = if current > selected { "UP" } else { "DOWN" };
                     let key = first_start_key(&spec.resolved, inputs, key)?
                         .ok_or("first-start policy is absent")?;
-                    press_setup_key(session, &spec, &key, limits).and_then(|()| {
+                    press_setup_key(session, &spec, &key, driver).and_then(|()| {
                         let after = word(session, menu.cursor)? as usize;
                         let expected = if current > selected { current - 1 } else { current + 1 };
                         if after != expected { return Err(format!("START MENU cursor did not move from {current} to {expected}: {after}")); }
@@ -1732,18 +1760,18 @@ fn to_rec_inner(
                 } else {
                     presses += 1;
                     confirmations += 1;
-                    press_setup_key(session, &spec, start, limits)
+                    press_setup_key(session, &spec, start, driver)
                 }
             } else {
                 if word(session, u64::from(report.menu_node))? == menu.date_kind {
-                    setup_calendar(session, &spec, inputs, menu, limits, &mut presses)?;
+                    setup_calendar(session, &spec, inputs, menu, driver, &mut presses)?;
                 }
                 presses += 1;
                 confirmations += 1;
-                press_setup_key(session, &spec, start, limits)
+                press_setup_key(session, &spec, start, driver)
             }
         } else {
-            advance(session, &spec, limits, None)
+            driver.advance(session, &spec, None)
         };
         if let Err(error) = result {
             let mut report = observe(session, &spec, presses)?;

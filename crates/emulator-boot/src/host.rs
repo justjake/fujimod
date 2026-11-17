@@ -102,4 +102,3 @@ pub fn parse_stub(specification: &str) -> Result<fujimod_emulator::board::discov
         value: parse_number(value)?,
     })
 }
-

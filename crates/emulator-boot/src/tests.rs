@@ -528,7 +528,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             camera: Some(reference_camera()),
             access_point: None,
             capability_reply: None,
-        })
+        }, Mode::Strict)
         .unwrap(),
     );
     assert!(direct.1.iter().sum::<u64>() >= INSTRUCTIONS);
@@ -561,7 +561,7 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
         update: update.into(), boot_rom: boot_rom.into(), nand: None, settings: None,
         clock_seconds_2000: None, preferred_languages: vec![], camera: Some(reference_camera()),
         access_point: None, capability_reply: None,
-    }).unwrap();
+    }, Mode::Strict).unwrap();
     session.run_with_limits(5_000_000, 1000, None, None).unwrap();
     session.logic_input("usb_cable", true).unwrap();
     let image = std::fs::read(payload).unwrap();

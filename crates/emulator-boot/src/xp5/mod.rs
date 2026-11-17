@@ -6,7 +6,6 @@
 
 mod card_image;
 mod display_output;
-mod emulator_patch;
 pub mod firmware;
 mod manifest;
 mod mod_loader;

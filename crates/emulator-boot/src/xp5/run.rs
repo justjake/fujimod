@@ -1,7 +1,6 @@
 //! The XP5 bring-up run: open a session from explicit inputs, drive it in slices and record
 //! the outcome in the run directory.
 use super::{
-    emulator_patch,
     Startup, Started, mod_loader, open as session_open,
 };
 use crate::host::{parse_number, parse_seconds as seconds, parse_stub};
@@ -219,13 +218,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     watch_pcs.dedup();
     let dumps = parse_dumps(dump.as_deref().unwrap_or_default())?;
     let hashes = parse_ranges("--hash", hash.as_deref().unwrap_or_default())?;
-    // Emulator-only guest-memory patches (--emulator-patch FILE), the way the X-T5 runner patches
-    // the M4 image in memory. Each entry names the bytes it expects; the run stops if the guest
-    // holds anything else. They change guest RAM of this run only and never produce an update file.
-    let mut patches = match &patch_file {
-        Some(path) => emulator_patch::load(path)?,
-        None => Vec::new(),
-    };
+    let mut patches = crate::patch::Schedule::from_path(
+        patch_file.as_deref(), &[0..0x8000_0000, 0xfa20_0000..0xfa30_0000],
+    )?;
     let mut keys = Vec::new();
     if let Some(script) = &key_script {
         for entry in script.split(';').filter(|entry| !entry.trim().is_empty()) {
@@ -333,17 +328,11 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             if limits.reached(&session) {
                 break;
             }
-            while patches
-                .first()
-                .is_some_and(|patch| now.saturating_sub(start) >= patch.at_ticks(ticks_per_second))
-            {
-                let patch = patches.remove(0);
-                patch.apply(&mut session.board, now)?;
-            }
+            let next_patch = patches.advance(&session.board, start, ticks_per_second)?;
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }
-            let until = now.saturating_add(slice);
+            let until = next_patch.map_or(now.saturating_add(slice), |at| at.min(now.saturating_add(slice)));
             let result = limits.step(&mut session, quantum, None, Some(until));
             if let Some(storage) = &flash_shadow {
                 session_open::sync_flash_aperture(storage, &mut session)?;

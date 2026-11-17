@@ -6,7 +6,7 @@
 //! only, for the length of one run, and never write a firmware update file.
 use fujimod_emulator::board::Board;
 use serde::Deserialize;
-use std::path::Path;
+use std::{collections::VecDeque, ops::Range, path::Path};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -45,32 +45,47 @@ fn bytes(text: &str) -> Result<Vec<u8>, String> {
         .collect()
 }
 
-/// Patches are for the BIS core's image, which lives in the 1 MiB companion SRAM. This range is
-/// hard-coded to mirror the `companion-sram` memory region of the XP5 `soc.json`
-/// (fujimod/catalog/soc/xp5/soc.json: base 0xfa200000, 1048576 bytes).
-const SRAM: std::ops::Range<u64> = 0xfa20_0000..0xfa30_0000;
-/// DRAM below the 2 GiB the X100VI's page tables map. A DRAM patch lets a run stand in for a stray
-/// store or a dropped write, so that a guard that watches for one can be shown to fire; like every
-/// patch it names the bytes it replaces and stops the run if the guest holds others.
-const DRAM: std::ops::Range<u64> = 0..0x8000_0000;
+fn check_range(ranges: &[Range<u64>], address: u64, length: u64) -> Result<(), String> {
+    if let Some(end) = address.checked_add(length)
+        && (ranges.is_empty() || ranges.iter().any(|range| range.contains(&address) && end <= range.end))
+    {
+        return Ok(());
+    }
+    Err(format!("patch at {address:#x}+{length:#x} is outside configured RAM windows"))
+}
 
-fn check_range(address: u64, length: u64) -> Result<(), String> {
-    match address.checked_add(length) {
-        Some(end)
-            if (SRAM.contains(&address) && end <= SRAM.end)
-                || (DRAM.contains(&address) && end <= DRAM.end) =>
-        {
-            Ok(())
+/// Ordered checked byte replacements relative to the current run.
+#[derive(Default)]
+pub struct Schedule {
+    patches: VecDeque<Patch>,
+}
+
+impl Schedule {
+    pub fn from_path(path: Option<&Path>, allowed: &[Range<u64>]) -> Result<Self, String> {
+        match path {
+            Some(path) => Ok(Self { patches: load(path, allowed)?.into() }),
+            None => Ok(Self::default()),
         }
-        _ => Err(format!(
-            "patch at {address:#x}+{length:#x} is outside the companion SRAM {:#x}..{:#x} and DRAM {:#x}..{:#x}",
-            SRAM.start, SRAM.end, DRAM.start, DRAM.end
-        )),
+    }
+
+    /// Apply at the stopped boundary and return the next guest deadline.
+    pub fn advance(&mut self, board: &Board, start: u64, ticks_per_second: u64) -> Result<Option<u64>, String> {
+        let deadline = |patch: &Patch| start.saturating_add(patch.at_ticks(ticks_per_second));
+        let now = board.now();
+        while let Some(patch) = self.patches.front() {
+            let at = deadline(patch);
+            if now < at {
+                return Ok(Some(at));
+            }
+            patch.apply(board, now)?;
+            self.patches.pop_front();
+        }
+        Ok(None)
     }
 }
 
 /// Read a patch file; entries are ordered by their time. Ticks are not needed until the run starts.
-pub(crate) fn load(path: &Path) -> Result<Vec<Patch>, String> {
+fn load(path: &Path, allowed: &[Range<u64>]) -> Result<Vec<Patch>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let file: File = toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut patches = file
@@ -82,7 +97,7 @@ pub(crate) fn load(path: &Path) -> Result<Vec<Patch>, String> {
             if original.is_empty() || original.len() != patched.len() || entry.reason.trim().is_empty() {
                 return Err(format!("patch at {:#x} needs equal nonempty byte strings and a reason", entry.address));
             }
-            check_range(entry.address, original.len() as u64)?;
+            check_range(allowed, entry.address, original.len() as u64)?;
             Ok(Patch {
                 address: entry.address,
                 original,
@@ -103,7 +118,7 @@ impl Patch {
             as u64
     }
 
-    pub(crate) fn apply(&self, board: &mut Board, now: u64) -> Result<(), String> {
+    pub(crate) fn apply(&self, board: &Board, now: u64) -> Result<(), String> {
         let mut current = vec![0u8; self.original.len()];
         board
             .read_physical(self.address, &mut current)
@@ -118,7 +133,7 @@ impl Patch {
             .write_physical(self.address, &self.patched)
             .map_err(|e| format!("patch at {:#x}: {e}", self.address))?;
         eprintln!(
-            "FUJIMOD XP5 patch: {:#x} {:02x?} -> {:02x?} at {now}: {}",
+            "FUJIMOD patch: {:#x} {:02x?} -> {:02x?} at {now}: {}",
             self.address, self.original, self.patched, self.reason
         );
         Ok(())
@@ -128,6 +143,7 @@ impl Patch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    const RANGES: [Range<u64>; 2] = [0..0x8000_0000, 0xfa20_0000..0xfa30_0000];
 
     #[test]
     fn hex_strings_decode_and_odd_ones_are_refused() {
@@ -139,14 +155,14 @@ mod tests {
 
     #[test]
     fn patches_may_name_companion_sram_or_dram_and_nothing_else() {
-        assert!(check_range(0xfa20_0000, 2).is_ok());
-        assert!(check_range(0x100, 4).is_ok());
-        assert!(check_range(0x3000_0100, 4).is_ok());
-        assert!(check_range(0x7fff_fffc, 4).is_ok());
-        assert!(check_range(0x7fff_fffe, 4).is_err());
-        assert!(check_range(0xf000_0000, 4).is_err());
-        assert!(check_range(0xff90_7200, 4).is_err());
-        assert!(check_range(u64::MAX, 4).is_err());
+        assert!(check_range(&RANGES, 0xfa20_0000, 2).is_ok());
+        assert!(check_range(&RANGES, 0x100, 4).is_ok());
+        assert!(check_range(&RANGES, 0x3000_0100, 4).is_ok());
+        assert!(check_range(&RANGES, 0x7fff_fffc, 4).is_ok());
+        assert!(check_range(&RANGES, 0x7fff_fffe, 4).is_err());
+        assert!(check_range(&RANGES, 0xf000_0000, 4).is_err());
+        assert!(check_range(&RANGES, 0xff90_7200, 4).is_err());
+        assert!(check_range(&RANGES, u64::MAX, 4).is_err());
     }
 
     fn sample(name: &str) -> std::path::PathBuf {
@@ -163,7 +179,7 @@ mod tests {
     #[test]
     fn a_patch_file_loads_its_entries() {
         let path = sample("entries");
-        let patches = load(&path).unwrap();
+        let patches = load(&path, &RANGES).unwrap();
         std::fs::remove_file(&path).ok();
         assert_eq!(patches.len(), 2);
     }
@@ -171,7 +187,7 @@ mod tests {
     #[test]
     fn patch_times_convert_to_ticks_when_the_run_starts() {
         let path = sample("ticks");
-        let patches = load(&path).unwrap();
+        let patches = load(&path, &RANGES).unwrap();
         std::fs::remove_file(&path).ok();
         assert_eq!(patches[0].at_ticks(1_000), 5);
         assert_eq!(patches[0].at_ticks(2_000), 10);
@@ -179,10 +195,10 @@ mod tests {
 
     #[test]
     fn patches_outside_the_companion_sram_and_dram_are_refused() {
-        assert!(check_range(0xfa20_57f6, 2).is_ok());
-        assert!(check_range(0xfa2f_fffe, 2).is_ok());
-        assert!(check_range(0xfa2f_ffff, 2).is_err());
-        assert!(check_range(0x8000_0000, 2).is_err());
-        assert!(check_range(u64::MAX, 2).is_err());
+        assert!(check_range(&RANGES, 0xfa20_57f6, 2).is_ok());
+        assert!(check_range(&RANGES, 0xfa2f_fffe, 2).is_ok());
+        assert!(check_range(&RANGES, 0xfa2f_ffff, 2).is_err());
+        assert!(check_range(&RANGES, 0x8000_0000, 2).is_err());
+        assert!(check_range(&RANGES, u64::MAX, 2).is_err());
     }
 }
