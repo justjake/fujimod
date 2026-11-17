@@ -67,7 +67,7 @@ test('the outline keeps the declared FUJIMOD SET-UP groups and link placement', 
       .find((label) => label.textContent === title)
       ?.closest('li');
   const page = selectRow(setup!, 'FUJIMOD SET-UP')!;
-  const appearance = selectRow(page, 'Appearance')!;
+  const appearance = selectRow(page, 'APPEARANCE')!;
   const firmware = selectRow(page, 'FIRMWARE')!;
   const mods = selectRow(page, 'MODS')!;
   const change = selectRow(page, 'CHANGE')!;
@@ -82,7 +82,7 @@ test('the outline keeps the declared FUJIMOD SET-UP groups and link placement', 
   expect(
     [...page.querySelectorAll(':scope > ul > li > .outline-row > .outline-title')].filter(
       (label) =>
-        label.textContent === 'BACK UP INTERNAL DATA' || label.textContent === 'Appearance',
+        label.textContent === 'BACK UP INTERNAL DATA' || label.textContent === 'APPEARANCE',
     ),
   ).toHaveLength(2);
 });

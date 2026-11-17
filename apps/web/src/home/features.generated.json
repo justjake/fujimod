@@ -4161,8 +4161,8 @@
       },
       "choice_credits": {}
     },
-    "row:SET-UP/FUJIMOD SET-UP/Appearance": {
-      "title": "Appearance",
+    "row:SET-UP/FUJIMOD SET-UP/APPEARANCE": {
+      "title": "APPEARANCE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Choose the REC, SET-UP and PLAY colors and the BACKGROUND COLOR of the FUJIMOD menu style.",
       "choices": {},
@@ -4537,12 +4537,12 @@
       "icon": null
     },
     {
-      "title": "Appearance",
+      "title": "APPEARANCE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "order": 4,
       "kind": "group",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/Appearance",
+      "card": "row:SET-UP/FUJIMOD SET-UP/APPEARANCE",
       "feature": null,
       "icon": null
     },
@@ -4600,7 +4600,7 @@
     },
     {
       "title": "BACKGROUND COLOR",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "Appearance"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "APPEARANCE"],
       "order": 3,
       "kind": "value",
       "stock": false,
@@ -4610,7 +4610,7 @@
     },
     {
       "title": "PLAY COLOR",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "Appearance"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "APPEARANCE"],
       "order": 2,
       "kind": "value",
       "stock": false,
@@ -4620,7 +4620,7 @@
     },
     {
       "title": "REC COLOR",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "Appearance"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "APPEARANCE"],
       "order": 0,
       "kind": "value",
       "stock": false,
@@ -4630,7 +4630,7 @@
     },
     {
       "title": "SET-UP COLOR",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "Appearance"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "APPEARANCE"],
       "order": 1,
       "kind": "value",
       "stock": false,
