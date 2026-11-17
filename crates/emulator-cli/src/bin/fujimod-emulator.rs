@@ -17,7 +17,8 @@ NAND accepts a committed image or 128 MiB main-area image without OOB/spare.\n\
 Settings accepts a sixteen-byte MCU persistent packet.\n\
 First-start menus are accepted through MENU/OK ADC input.\n\
 EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --clock-seconds-2000 N.\n\
-XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N, --keys SCRIPT,\n\
+Run output and limits: --output DIR, --seconds N, --status-every N, --viewer-port PORT.\n\
+XP5 inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH (ROM or SD card startup).\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
@@ -26,7 +27,7 @@ Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FIL
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 35] = [
+const VALUED: [&str; 36] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -43,6 +44,7 @@ const VALUED: [&str; 35] = [
     "--output",
     "--seconds",
     "--status-every",
+    "--viewer-port",
     "--quantum",
     "--keys",
     "--stub",
@@ -196,6 +198,15 @@ impl Boot {
             (None, None) => Ok(None),
         }
     }
+    fn duration(&mut self, key: &str) -> Result<Option<Duration>, String> {
+        self.text(key)?.as_deref().map(xp5::parse_seconds).transpose()
+    }
+
+    fn viewer_port(&mut self) -> Result<Option<u16>, String> {
+        self.text("--viewer-port")?.map(|value| {
+            value.parse().map_err(|_| "--viewer-port needs a 16-bit port number".into())
+        }).transpose()
+    }
     fn execution_policy(&mut self, tracing: bool) -> Result<ExecutionPolicy, String> {
         Ok(self
             .text("--execution-policy")?
@@ -213,7 +224,7 @@ struct Outcome {
 fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--output", "--seconds", "--status-every", "--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
+        &["--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
     )?;
     if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.card_files.is_empty() || !boot_options.pokes.is_empty() {
         return Err("--discovery, --stub, --mod, --card-file and --poke do not apply to EXR II runs".into());
@@ -246,11 +257,46 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     }
     session.board.set_execution_policy(execution_policy)?;
     let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
-    let report = boot::to_rec(&mut session, limit);
+    let duration = boot_options.duration("--seconds")?;
+    let status = boot_options.duration("--status-every")?;
+    let directory = boot_options.path("--output");
+    let viewer_port = boot_options.viewer_port()?;
+    let outputs = boot::output::Outputs::default();
+    if let Some(directory) = &directory {
+        outputs.attach(0, directory.clone(), viewer_port)?;
+    } else if viewer_port.is_some() {
+        return Err("--viewer-port requires --output".into());
+    }
+    let mut next_status = status.map(|_| session.board.now());
+    let mut next_frame = session.board.now();
+    let report = boot::to_rec_with(&mut session, limit, duration, |session, status_report| {
+        let now = session.board.now();
+        if next_status.is_some_and(|tick| now >= tick) {
+            let milliseconds = status.unwrap().as_millis();
+            eprintln!("FUJIMOD status {}", serde_json::to_string(status_report).map_err(|error| error.to_string())?);
+            next_status = (milliseconds != 0).then(|| now.saturating_add(
+                ((milliseconds * u128::from(boot::EXR2_TICKS_PER_SECOND)) / 1000)
+                    .min(u128::from(u64::MAX)) as u64
+            ));
+        }
+        if directory.is_some() && now >= next_frame
+            && let Some(instance) = status_report.scanout_instance
+        {
+            outputs.capture_rec(session, instance, now)?;
+            next_frame = now.saturating_add(boot::EXR2_TICKS_PER_SECOND / 30);
+        }
+        Ok(())
+    });
+    outputs.finish()?;
     if let Some((output, trace)) = pc_trace.zip(trace) {
         output.write(trace)?;
     }
     let report = report?;
+    if let Some(directory) = directory {
+        let path = directory.join("board-state.json");
+        let state = serde_json::to_vec_pretty(&session.board.state()).map_err(|error| error.to_string())?;
+        std::fs::write(&path, state).map_err(|error| format!("{}: {error}", path.display()))?;
+    }
     if let Some(path) = boot_options.path("--save-snapshot") {
         boot::save_snapshot(&session, &path)?;
     }
@@ -262,13 +308,13 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
         std::fs::write(&path, boot::screenshot(&session)?)
             .map_err(|e| format!("{}: {e}", path.display()))?;
     }
-    Ok(Outcome { success: report.status == "rec" })
+    Ok(Outcome { success: matches!(report.status.as_str(), "rec" | "time-limit") })
 }
 
 fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "XP5",
-        &["--nand", "--settings", "--camera", "--clock-seconds-2000", "--screenshot"],
+        &["--nand", "--settings", "--camera", "--clock-seconds-2000"],
     )?;
     if !boot_options.preferred_languages.is_empty() {
         return Err("--language does not apply to XP5 runs".into());
@@ -293,6 +339,8 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         manifest: boot_options.path("--manifest"),
         watch_pcs: boot_options.text("--watch-pcs")?,
         pc_trace,
+        screenshot: boot_options.path("--screenshot"),
+        viewer_port: boot_options.viewer_port()?,
         dump: boot_options.text("--dump")?,
         hash: boot_options.text("--hash")?,
         update: boot_options.required("--update")?.into(),

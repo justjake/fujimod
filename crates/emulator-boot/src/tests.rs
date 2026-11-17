@@ -1083,7 +1083,7 @@ fn common_open_checks_generation_before_loading_startup_files() {
         card_image: None,
         card_files: vec![],
         scene: None,
-        output: None,
+        output: None, viewer_port: None,
         mode: Mode::Strict,
         quantum: None,
     });

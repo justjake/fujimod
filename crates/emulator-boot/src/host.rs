@@ -3,7 +3,7 @@ use fujimod_emulator_session::Session;
 use std::time::Duration;
 
 pub(crate) fn duration_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
-    (duration.as_nanos() * u128::from(ticks_per_second) / 1_000_000_000)
+    (duration.as_nanos().saturating_mul(u128::from(ticks_per_second)) / 1_000_000_000)
         .min(u128::from(u64::MAX)) as u64
 }
 

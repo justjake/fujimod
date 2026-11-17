@@ -41,7 +41,7 @@ impl Boot for CatalogBoot {
             };
             let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
                 update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
-                card_image: None, card_files: vec![], scene: None, output: None,
+                card_image: None, card_files: vec![], scene: None, output: None, viewer_port: None,
                 mode, quantum: inputs.quantum,
             }))? else {
                 return Err("XP5 startup returned another processor generation".into());

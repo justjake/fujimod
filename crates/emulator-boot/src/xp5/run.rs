@@ -106,6 +106,8 @@ pub struct Run {
     pub manifest: Option<PathBuf>,
     pub watch_pcs: Option<String>,
     pub pc_trace: Option<crate::TraceOutput>,
+    pub screenshot: Option<PathBuf>,
+    pub viewer_port: Option<u16>,
     pub dump: Option<String>,
     pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
@@ -217,6 +219,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         manifest,
         watch_pcs,
         pc_trace,
+        screenshot,
+        viewer_port,
         dump,
         hash,
         boot_rom: rom_path,
@@ -299,6 +303,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         card_files,
         scene,
         output: Some(run_directory.clone()),
+        viewer_port,
         mode,
         quantum: quantum_override,
     };
@@ -456,7 +461,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
-    let output_finish = outputs.finish();
+    let output_finish = screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
     let state = session.board.state();
     let state_write = serde_json::to_vec_pretty(&state)
         .map_err(|error| error.to_string())

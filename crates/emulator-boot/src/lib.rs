@@ -1563,7 +1563,7 @@ fn setup_calendar(
                 spec,
                 inputs,
                 if increase { "UP" } else { "DOWN" },
-                end,
+                limits,
                 presses,
             )?;
             let after = read(session)?;
@@ -1600,7 +1600,7 @@ pub fn to_rec_with(
 ) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
-    let limits = host::Limits::new(session, Some(instruction_limit), duration, 12_000_000)?;
+    let limits = host::Limits::new(session, Some(instruction_limit), duration, EXR2_TICKS_PER_SECOND)?;
     let result = to_rec_inner(session, limits, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
@@ -1737,6 +1737,9 @@ fn to_rec_inner(
         }
     }
 }
+
+/// Guest tick frequency for the native EXR II timebase.
+pub const EXR2_TICKS_PER_SECOND: u64 = 12_000_000;
 
 /// Capture the first active native scanout output without advancing guest time.
 pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {

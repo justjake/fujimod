@@ -60,6 +60,27 @@ impl Outputs {
         Err("no active scanout published a frame".into())
     }
 
+    /// Publish the EXR II LCD source captured from its own scanout registers.
+    pub fn capture_rec(
+        &self,
+        session: &fujimod_emulator_session::Session,
+        instance: usize,
+        sequence: u64,
+    ) -> Result<(), String> {
+        let Some(frame) = session.scanout("scanout", instance, true, false)? else {
+            return Ok(());
+        };
+        let Some(rgb) = frame.rgb else { return Ok(()); };
+        self.frame(Frame {
+            output: 0,
+            sequence,
+            width: u32::try_from(frame.width).map_err(|_| "frame width exceeds u32")?,
+            height: u32::try_from(frame.height).map_err(|_| "frame height exceeds u32")?,
+            rgba: rgb.chunks_exact(3).flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255]).collect(),
+        })?;
+        self.status(0, serde_json::json!({"bank":0,"enabled":true,"sequence":sequence}))
+    }
+
     pub fn frame(&self, frame: Frame) -> Result<(), String> {
         let mut outputs = self.0.lock().unwrap();
         let output = outputs
