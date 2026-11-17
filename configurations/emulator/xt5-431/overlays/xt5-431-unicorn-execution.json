@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt5-431-unicorn-execution",
+  "configuration_id": "xt5-431",
+  "change": {
+    "kind": "execution",
+    "execution": {
+      "mode": "strict",
+      "engine": "unicorn",
+      "quantum": 1000,
+      "instructions_per_tick": {
+        "numerator": 1,
+        "denominator": 1
+      }
+    }
+  }
+}
