@@ -9,8 +9,8 @@ use fujimod_multishot::fit::Affine;
 use fujimod_multishot::local::{LocalParams, residual_fields};
 use fujimod_multishot::measure::{crop, edge_raggedness, luma, patch_noise, slanted_edge};
 use fujimod_multishot::merge::{
-    ColorMerge, ImageSink, MergeReport, OutputGrid, Region, ResolutionParams, StripSink, Tee,
-    merge_resolution,
+    ColorMerge, ImageSink, MergeReport, OutputGrid, Region, ResolutionParams, SharpnessParams,
+    StripSink, Tee, merge_resolution,
 };
 use fujimod_multishot::pixelshift::{ShiftPlan, report as shift_report};
 use fujimod_multishot::plane::read_block_planes;
@@ -39,6 +39,8 @@ options:
   --radius R           kernel radius in sites (default 1.5)
   --color MODE         green-guided (default) or independent
   --bracket            merge an exposure bracket (HDR): scale frames by exposure, weight by noise
+  --sharpness P        weight frames by local sharpness relative to the reference, power P
+  --sharpness-radius N sharpness averaging radius in 3x3 blocks (default 4)
   --local              add per-tile residual shifts to each frame's global alignment
   --local-tile N       residual alignment tile size in sites (default 96)
   --reference N        reference frame index (default: the shortest exposure of a
@@ -376,6 +378,16 @@ fn resolution_params(args: &Args) -> Result<ResolutionParams, String> {
             None
         },
         bracket: args.flags.contains("bracket"),
+        sharpness: match args.opts.get("sharpness") {
+            None => None,
+            Some(_) => {
+                let d = SharpnessParams::default();
+                Some(SharpnessParams {
+                    power: args.num("sharpness", d.power)?,
+                    radius: args.num("sharpness-radius", d.radius)?,
+                })
+            }
+        },
         region: args.region("region")?,
         ..d
     })
