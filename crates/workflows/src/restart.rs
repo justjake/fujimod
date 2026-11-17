@@ -556,6 +556,24 @@ mod tests {
     }
 
     #[test]
+    fn malformed_stored_configuration_reply_stops_the_check() {
+        let mut steps = configuration_read(1, &[1, 1]);
+        let mut stored = configuration_read(0, &[1, 1]);
+        let Some(fujimod_usb::testing::Exchange::Read { data, .. }) = stored.last_mut() else {
+            panic!("configuration fixture ends with a reply");
+        };
+        data.pop();
+        steps.extend(stored);
+        let (mut session, script) = opened(steps);
+        let mut access = Access {
+            session: &mut session,
+            limits: configuration_limits(),
+        };
+        assert!(block_on(require_configuration(&mut access, &[configuration_check()])).is_err());
+        assert_eq!(script.remaining(), 0);
+    }
+
+    #[test]
     fn configuration_profiles_reject_ambiguous_unbounded_or_unchecked_mechanisms() {
         let valid = configuration_restart();
         valid.validate().unwrap();
@@ -608,6 +626,16 @@ mod tests {
         invalid.push(changed);
         let mut changed = valid.clone();
         changed.mechanism.transport = None;
+        invalid.push(changed);
+        let original: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x70/1.10/restart.generated.json"
+        ))
+        .unwrap();
+        let mut changed = valid.clone();
+        changed.mechanism.deferred_timer = Some(original.mechanism.deferred_timer.unwrap());
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.early_boot = Some(original.mechanism.early_boot.unwrap());
         invalid.push(changed);
         for restart in invalid {
             assert!(restart.validate().is_err());
