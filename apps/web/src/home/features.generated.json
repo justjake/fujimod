@@ -779,16 +779,16 @@
       "group": "photography",
       "icon": "golden-ratio",
       "title": "FRAMING GUIDELINE",
-      "path": ["SET-UP", "SCREEN SET-UP"],
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
       "summary": "Choose a guide to display in the shooting view, including Golden Ratio, four Golden Spiral focal points and Dynamic Symmetry.",
-      "card": "c",
+      "card": "shape_guideline_item",
       "attached": false,
-      "media_cards": ["c"],
+      "media_cards": ["shape_guideline_item"],
       "controls": [
         {
           "title": "FRAMING GUIDELINE",
           "primary": true,
-          "card": "c",
+          "card": "shape_guideline_item",
           "choices": [
             {
               "label": "NONE",
@@ -2730,10 +2730,10 @@
       },
       "choice_credits": {}
     },
-    "c": {
+    "shape_guideline_item": {
       "title": "FRAMING GUIDELINE",
-      "path": ["SET-UP", "SCREEN SET-UP"],
-      "summary": null,
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "summary": "Choose a framing guide, including Golden Ratio, Golden Spiral and Dynamic Symmetry. Guides follow the selected image bounds and aspect ratio.",
       "choices": {
         "NONE": "Hide the guide while keeping its selected type.",
         "GOLDEN RATIO": "Lines that divide the frame at the golden ratio.",
@@ -2744,7 +2744,7 @@
         "DYNAMIC SYMMETRY": "Both diagonals, plus a line from each corner that meets the opposite diagonal at a right angle."
       },
       "related": [],
-      "changes": "Adds NONE to hide the guide, GOLDEN RATIO, four GOLDEN SPIRAL focal-point placements and DYNAMIC SYMMETRY. All guides follow the selected image bounds and aspect ratio.",
+      "changes": null,
       "drive_mode": null,
       "credits": {
         "premiere": false,
@@ -5367,8 +5367,8 @@
       "order": 12,
       "kind": "setting",
       "stock": true,
-      "card": "c",
-      "feature": "framing_guideline",
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
@@ -6309,6 +6309,16 @@
       "stock": false,
       "card": "shape_aspect_ratios_editor",
       "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FRAMING GUIDELINE",
+      "path": ["SHOOTING MENU", "SHAPE & ASPECT"],
+      "order": 6,
+      "kind": "setting",
+      "stock": false,
+      "card": "shape_guideline_item",
+      "feature": "framing_guideline",
       "icon": null
     },
     {
