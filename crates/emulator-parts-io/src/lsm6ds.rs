@@ -1,6 +1,7 @@
 //! LSM6DSO-compatible SPI configuration-register subset (ST DS12140).
-//! OUT_TEMP (20h/21h) returns an explicit scenario input; no synthetic
-//! acceleration, angular rate, FIFO samples, data-ready or interrupt is supplied.
+//! OUT_TEMP (20h/21h) returns an explicit scenario input. Angular rate and
+//! acceleration outputs (22h..2Dh) answer only when the scenario declares a
+//! constant motion input; no FIFO samples, data-ready or interrupt is supplied.
 //! Software reset commits atomically with its register write on the guest wire;
 //! internal reset latency and the exact silicon identity are unmeasured.
 use super::serial::{Endpoint, Frame};
@@ -15,16 +16,26 @@ struct State {
     read: bool,
     transfers: u64,
 }
+/// A constant physical motion input: raw two's-complement output words for
+/// the gyroscope (OUTX/Y/Z_G) and accelerometer (OUTX/Y/Z_A).
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Motion {
+    pub angular_rate: [i16; 3],
+    pub acceleration: [i16; 3],
+}
 pub struct Registers {
     state: State,
     temperature: i16,
+    motion: Option<Motion>,
 }
 impl Registers {
     /// `temperature` is the raw two's-complement OUT_TEMP word.
-    pub fn new(temperature: i16) -> Self {
+    pub fn new(temperature: i16, motion: Option<Motion>) -> Self {
         let mut s = Self {
             state: State::default(),
             temperature,
+            motion,
         };
         s.reset();
         s
@@ -34,14 +45,25 @@ impl Registers {
         self.state.registers[0x12] = 4;
         self.state.offsets = [0; 3];
     }
-    fn supported(address: u8) -> bool {
+    fn supported(&self, address: u8) -> bool {
         matches!(address, 1 | 0xd | 0xf | 0x10..=0x17 | 0x20 | 0x21 | 0x73..=0x75)
+            || self.motion.is_some() && matches!(address, 0x22..=0x2d)
     }
     fn value(&self, address: u8) -> u8 {
         match address {
             0xf => 0x6c,
             0x20 => self.temperature as u8,
             0x21 => (self.temperature >> 8) as u8,
+            0x22..=0x2d => {
+                let motion = self.motion.expect("motion registers are supported only with motion");
+                let index = (address - 0x22) as usize / 2;
+                let word = if index < 3 {
+                    motion.angular_rate[index]
+                } else {
+                    motion.acceleration[index - 3]
+                };
+                (word >> (8 * ((address - 0x22) & 1))) as u8
+            }
             0x73..=0x75 => self.state.offsets[(address - 0x73) as usize],
             _ => self.state.registers[address as usize],
         }
@@ -57,12 +79,12 @@ impl Endpoint for Registers {
         }
         let word = frame.word as u8;
         if let Some(address) = self.state.address {
-            if !Self::supported(address) {
+            if !self.supported(address) {
                 return Err(format!(
                     "LSM6DS data/status or register {address:#04x} is unmodeled"
                 ));
             }
-            if !self.state.read && matches!(address, 0x20 | 0x21) {
+            if !self.state.read && matches!(address, 0x20..=0x2d) {
                 return Err(format!("LSM6DS output register {address:#04x} is read-only"));
             }
             if !self.state.read
@@ -73,7 +95,7 @@ impl Endpoint for Registers {
             {
                 return Err("LSM6DS bank, interrupt or serial mode is unmodeled".into());
             }
-        } else if !Self::supported(word & 127) {
+        } else if !self.supported(word & 127) {
             return Err(format!(
                 "LSM6DS data/status or register {:#04x} is unmodeled",
                 word & 127
@@ -111,11 +133,14 @@ impl Endpoint for Registers {
         response as u16
     }
     fn save(&self) -> Value {
-        json!({"temperature": self.temperature, "state": self.state})
+        json!({"temperature": self.temperature, "motion": self.motion, "state": self.state})
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         if v["temperature"] != json!(self.temperature) {
             return Err("LSM6DS temperature input differs".into());
+        }
+        if v["motion"] != json!(self.motion) {
+            return Err("LSM6DS motion input differs".into());
         }
         let state: State =
             serde_json::from_value(v["state"].clone()).map_err(|e| e.to_string())?;
@@ -150,7 +175,7 @@ mod tests {
 
     #[test]
     fn temperature_reads_low_byte_first_with_auto_increment() {
-        let mut part = Registers::new(-0x1234);
+        let mut part = Registers::new(-0x1234, None);
         exchange(&mut part, &[0x12, 0x44]).unwrap();
         let raw = (-0x1234i16) as u16;
         assert_eq!(
@@ -161,7 +186,7 @@ mod tests {
 
     #[test]
     fn temperature_refuses_writes_and_the_following_gyroscope_output() {
-        let mut part = Registers::new(0);
+        let mut part = Registers::new(0, None);
         let error = exchange(&mut part, &[0x20, 1]).unwrap_err();
         assert!(error.contains("read-only"), "{error}");
         let error = exchange(&mut part, &[0xa0, 0, 0, 0]).unwrap_err();
@@ -170,8 +195,26 @@ mod tests {
 
     #[test]
     fn checkpoint_requires_the_same_temperature_input() {
-        let part = Registers::new(5);
-        assert!(Registers::new(5).restore(&part.save()).is_ok());
-        assert!(Registers::new(6).restore(&part.save()).is_err());
+        let part = Registers::new(5, None);
+        assert!(Registers::new(5, None).restore(&part.save()).is_ok());
+        assert!(Registers::new(6, None).restore(&part.save()).is_err());
+    }
+
+    #[test]
+    fn declared_motion_continues_the_temperature_burst_low_byte_first() {
+        let motion = Motion { angular_rate: [1, -2, 0x0304], acceleration: [0, 0, 0x4000] };
+        let mut part = Registers::new(0x0102, Some(motion));
+        let out = exchange(&mut part, &[0xa0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(
+            out,
+            [0, 2, 1, 1, 0, 0xfe, 0xff, 4, 3, 0, 0, 0, 0, 0, 0x40]
+        );
+        let error = exchange(&mut part, &[0x22, 1]).unwrap_err();
+        assert!(error.contains("read-only"), "{error}");
+        let error = exchange(&mut part, &[0xae, 0]).unwrap_err();
+        assert!(error.contains("0x2e"), "{error}");
+        // The checkpoint carries the motion input.
+        assert!(Registers::new(0x0102, None).restore(&part.save()).is_err());
+        assert!(Registers::new(0x0102, Some(motion)).restore(&part.save()).is_ok());
     }
 }

@@ -36,7 +36,11 @@ pub(super) enum Part {
         samples: [u16; 2],
         idle_high: bool,
     },
-    Lsm6dsConfigurationRegisters { temperature: i16 },
+    Lsm6dsConfigurationRegisters {
+        temperature: i16,
+        #[serde(default)]
+        motion: Option<fujimod_emulator_parts_io::lsm6ds::Motion>,
+    },
     FramedCommandPeer { initial_frame: u32 },
     /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
@@ -174,8 +178,8 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::new(
             revision, samples, idle_high,
         )?),
-        Part::Lsm6dsConfigurationRegisters { temperature } => {
-            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature))
+        Part::Lsm6dsConfigurationRegisters { temperature, motion } => {
+            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature, motion))
         }
         Part::FramedCommandPeer { initial_frame } => {
             Box::new(fujimod_emulator_parts_io::framed_command_peer::Peer::new(initial_frame)?)
