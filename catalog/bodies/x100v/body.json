@@ -14,5 +14,16 @@
   "control_bus_chips": [],
   "connections": [],
   "parts": [],
-  "wiring": []
+  "wiring": [],
+  "hardware": {
+    "profiles": {
+      "x100v-301-handoff": {
+        "dram_basis": "The captured X100V 3.01 stock address window contains distinct readable data through 0x3fffffff; this declares a 512 MiB execution bound and does not assert physical DRAM density."
+      }
+    },
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": []
+  }
 }
