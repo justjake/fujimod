@@ -162,8 +162,8 @@ fn merge_beats_single_frame() {
     let fbase = demosaic::baseline(fr[0], &fgrid).unwrap();
     let inset = |v: &[f32]| crop(v, fgrid.width, 3, 4, 4, fgrid.width - 8, fgrid.height - 8);
     let (nm, nb) = (
-        patch_noise(&inset(&fmerged), WB),
-        patch_noise(&inset(&fbase), WB),
+        patch_noise(&inset(&fmerged), fgrid.width - 8, WB),
+        patch_noise(&inset(&fbase), fgrid.width - 8, WB),
     );
     println!(
         "flat patch luma relative std: merge {:.5}  demosaic+upscale {:.5}",

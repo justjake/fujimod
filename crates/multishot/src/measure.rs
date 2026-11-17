@@ -222,32 +222,49 @@ pub fn slanted_edge(image: &[f32], width: usize, height: usize) -> Result<EdgeMt
 pub struct PatchNoise {
     pub mean: [f64; 3],
     pub std: [f64; 3],
-    /// Standard deviation of white-balanced luma relative to its mean.
+    /// Standard deviation of white-balanced luma (plane removed) relative to
+    /// its mean.
     pub luma_relative_std: f64,
 }
 
-pub fn patch_noise(rgb: &[f32], wb: [f32; 3]) -> PatchNoise {
-    let n = (rgb.len() / 3) as f64;
-    let mut mean = [0f64; 3];
-    let mut sq = [0f64; 3];
-    for p in rgb.chunks_exact(3) {
-        for c in 0..3 {
-            mean[c] += p[c] as f64;
-            sq[c] += (p[c] as f64).powi(2);
+/// Residual of a least-squares plane `a + b*x + c*y` fitted to `v`.
+fn detrend(v: &[f64], width: usize) -> Vec<f64> {
+    let mut ata = [[0f64; 3]; 3];
+    let mut atb = [0f64; 3];
+    for (i, &z) in v.iter().enumerate() {
+        let row = [1.0, (i % width) as f64, (i / width) as f64];
+        for a in 0..3 {
+            atb[a] += row[a] * z;
+            for b in 0..3 {
+                ata[a][b] += row[a] * row[b];
+            }
         }
     }
+    let k = crate::fit::solve(ata, atb).unwrap_or([0.0; 3]);
+    v.iter()
+        .enumerate()
+        .map(|(i, &z)| z - (k[0] + k[1] * (i % width) as f64 + k[2] * (i / width) as f64))
+        .collect()
+}
+
+/// Noise of a flat patch `width` pixels wide: standard deviations after
+/// removing a fitted plane, so slow shading does not count as noise.
+pub fn patch_noise(rgb: &[f32], width: usize, wb: [f32; 3]) -> PatchNoise {
+    let n = (rgb.len() / 3) as f64;
+    let rms = |r: &[f64]| (r.iter().map(|v| v * v).sum::<f64>() / n).sqrt();
+    let mut mean = [0f64; 3];
     let mut std = [0f64; 3];
     for c in 0..3 {
-        mean[c] /= n;
-        std[c] = (sq[c] / n - mean[c] * mean[c]).max(0.0).sqrt();
+        let v: Vec<f64> = rgb.chunks_exact(3).map(|p| p[c] as f64).collect();
+        mean[c] = v.iter().sum::<f64>() / n;
+        std[c] = rms(&detrend(&v, width));
     }
-    let l = luma(rgb, wb);
-    let lm = l.iter().map(|&v| v as f64).sum::<f64>() / n;
-    let ls = (l.iter().map(|&v| (v as f64 - lm).powi(2)).sum::<f64>() / n).sqrt();
+    let l: Vec<f64> = luma(rgb, wb).iter().map(|&v| v as f64).collect();
+    let lm = l.iter().sum::<f64>() / n;
     PatchNoise {
         mean,
         std,
-        luma_relative_std: ls / lm.abs().max(1e-12),
+        luma_relative_std: rms(&detrend(&l, width)) / lm.abs().max(1e-12),
     }
 }
 

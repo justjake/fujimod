@@ -198,6 +198,12 @@ impl Raf {
             .map(|e| tiff.uints(e).map_err(bad))
             .transpose()?
             .unwrap_or_default();
+        // As-shot white balance: the metadata record when present, else the
+        // Fuji directory's WB_GRBLevels (0xf00e).
+        let wb_grb = wb_grb.or_else(|| {
+            let v = tiff.uints(find(&fuji, 0xf00e)?).ok()?;
+            (v.len() >= 3).then(|| [v[0], v[1], v[2]])
+        });
 
         let plane_bytes = raw_width as u64 * raw_height as u64 * 2;
         if strip_bytes < plane_bytes {
