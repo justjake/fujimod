@@ -13,9 +13,16 @@ pub struct Feedback {
     /// A fall reaches the pad at once and cancels a pending rise.
     #[serde(default, skip_serializing_if = "no_delay")]
     pub rise_delay: u64,
+    /// After its first completed rise the pad stays high: the far end holds
+    /// the line once it has answered, whatever the drive bit does later.
+    #[serde(default, skip_serializing_if = "not_latched")]
+    pub latch_high: bool,
 }
 fn no_delay(ticks: &u64) -> bool {
     *ticks == 0
+}
+fn not_latched(latch: &bool) -> bool {
+    !*latch
 }
 impl Feedback {
     pub fn validate(&self, ports: usize) -> Result<(), String> {
