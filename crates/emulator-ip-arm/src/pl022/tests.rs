@@ -275,29 +275,40 @@ fn interrupt_fanout_and_checkpoint_wiring_are_explicit() {
     assert_eq!(other.save(), c.save());
 }
 
-/// Each published register as the CPU would see it through the fast path.
-fn published(c: &Controller) -> Vec<(u64, u64)> {
+/// Each published register as the CPU would see it through the fast path:
+/// offset, width and value.
+fn published(c: &Controller) -> Vec<(u64, u8, u64)> {
+    use fujimod_emulator_devices::bus::FastReadValue;
+    use std::sync::atomic::Ordering;
     c.fast_reads(BASE, 0x1000)
         .into_iter()
         .map(|word| match word.value {
-            fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => {
-                (word.offset, value.load(std::sync::atomic::Ordering::Acquire) as u64)
-            }
+            FastReadValue::AtomicU32(value) => (word.offset, 4, value.load(Ordering::Acquire) as u64),
+            FastReadValue::AtomicU16(value) => (word.offset, 2, value.load(Ordering::Acquire) as u64),
             _ => panic!("PL022 publishes only atomic registers"),
         })
         .collect()
+}
+fn read_sized(c: &mut Controller, h: &mut RecordingHost, offset: u64, size: u8) -> u64 {
+    let mut cx = Cx::new(h, 0, 0x1234, 0);
+    let value = c.read(&mut cx, BASE + offset, size);
+    assert_eq!(cx.refusal(), None);
+    value
 }
 /// The fast path must equal an ordinary read after every write, DMA
 /// transfer, deadline and receive. A snapshot left stale by any of them fails.
 fn assert_published(c: &mut Controller, h: &mut RecordingHost, step: &str) {
     let fast = published(c);
-    assert_eq!(
-        fast.iter().map(|(offset, _)| *offset).collect::<Vec<_>>(),
-        vec![0, 4, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x24],
-        "{step}"
-    );
-    for (offset, value) in fast {
-        assert_eq!(value, read(c, h, offset), "{step}: offset {offset:#x}");
+    let mut offsets: Vec<_> = fast.iter().map(|(offset, _, _)| *offset).collect();
+    offsets.dedup();
+    assert_eq!(offsets, vec![0, 4, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x24], "{step}");
+    assert_eq!(fast.len(), 16, "{step}: both widths of each register");
+    for (offset, size, value) in fast {
+        assert_eq!(
+            value,
+            read_sized(c, h, offset, size),
+            "{step}: offset {offset:#x} width {size}"
+        );
     }
 }
 #[test]
@@ -346,5 +357,7 @@ fn data_and_clear_registers_are_never_published() {
     assert!(!offsets.contains(&8) && !offsets.contains(&0x20));
     // A window that covers only part of the aperture publishes only that part.
     let part: Vec<_> = c.fast_reads(BASE + 0xc, 4).into_iter().map(|w| w.offset).collect();
-    assert_eq!(part, vec![0]);
+    assert_eq!(part, vec![0, 0]);
+    let half: Vec<_> = c.fast_reads(BASE + 0xc, 2).into_iter().map(|w| w.value.width()).collect();
+    assert_eq!(half, vec![2]);
 }
