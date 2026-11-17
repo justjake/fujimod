@@ -1,7 +1,11 @@
 //! XP5 input-capture banks.
 //! Only disabled/reset and idle readback are supported. Active capture
 //! configuration refuses; no samples, cause bits or deadlines are invented.
+//! Each bank also holds a pin bitmask register at +0xa0 (bits 0..7), which the
+//! driver updates by read-modify-write; it is retained, its reset value 0 is a
+//! session assumption, and it has no modeled effect.
 use fujimod_emulator_devices::{dma::{self, Direction}, Cx, Device};
+use serde_json::{json, Value};
 
 pub struct TransmitSink;
 impl dma::Port for TransmitSink {
@@ -17,9 +21,12 @@ impl dma::Port for TransmitSink {
     }
 }
 
+const PIN_MASK: u64 = 0xa0;
+
 pub struct InputCapture {
     base: u64,
     channels: u64,
+    pin_mask: u32,
 }
 impl InputCapture {
     pub fn new(base: u64) -> Result<Self, String> {
@@ -28,7 +35,7 @@ impl InputCapture {
             0xff929000 => 3,
             _ => return Err("invalid input-capture bank".into()),
         };
-        Ok(Self { base, channels })
+        Ok(Self { base, channels, pin_mask: 0 })
     }
     fn readable(&self, address: u64, size: u8) -> bool {
         let offset = address.wrapping_sub(self.base);
@@ -40,6 +47,9 @@ impl Device for InputCapture {
         "input-capture"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if size == 4 && address.wrapping_sub(self.base) == PIN_MASK {
+            return self.pin_mask as u64;
+        }
         if !self.readable(address, size) {
             cx.unmodeled();
         }
@@ -47,6 +57,10 @@ impl Device for InputCapture {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let offset = address.wrapping_sub(self.base);
+        if size == 4 && offset == PIN_MASK && value & !0xff == 0 {
+            self.pin_mask = value as u32;
+            return;
+        }
         if size != 4 || offset / 0x20 >= self.channels {
             cx.unmodeled();
             return;
@@ -59,6 +73,17 @@ impl Device for InputCapture {
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.readable(address, size)
+    }
+    fn save(&self) -> Value {
+        json!({ "pin_mask": self.pin_mask })
+    }
+    fn restore(&mut self, value: &Value) -> Result<(), String> {
+        let mask = value["pin_mask"]
+            .as_u64()
+            .filter(|mask| mask & !0xff == 0)
+            .ok_or("input-capture checkpoint needs an 8-bit pin_mask")?;
+        self.pin_mask = mask as u32;
+        Ok(())
     }
 }
 #[cfg(test)]
@@ -81,7 +106,7 @@ mod tests {
                 assert_eq!(cx.refusal(), None);
             }
             let mut cx = Cx::new(&mut host, 0, 0, 0);
-            capture.read(&mut cx, base + channels * 0x20, 4);
+            capture.read(&mut cx, base + channels * 0x20 + 4, 4);
             assert!(cx.is_unmodeled());
             let mut cx = Cx::new(&mut host, 0, 0, 0);
             capture.write(&mut cx, base, 4, 1);
@@ -90,8 +115,20 @@ mod tests {
             capture.read(&mut cx, base, 8);
             assert!(cx.is_unmodeled());
             assert_eq!(capture.next_deadline(0), None);
-            assert!(capture.save().is_null());
-            capture.restore(&serde_json::Value::Null).unwrap();
+            let mut cx = Cx::new(&mut host, 4, 0, 0);
+            assert_eq!(capture.read(&mut cx, base + PIN_MASK, 4), 0);
+            capture.write(&mut cx, base + PIN_MASK, 4, 0x24);
+            assert_eq!(capture.read(&mut cx, base + PIN_MASK, 4), 0x24);
+            assert_eq!(cx.refusal(), None);
+            let saved = capture.save();
+            let mut restored = InputCapture::new(base).unwrap();
+            restored.restore(&saved).unwrap();
+            let mut cx = Cx::new(&mut host, 4, 0, 0);
+            assert_eq!(restored.read(&mut cx, base + PIN_MASK, 4), 0x24);
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            capture.write(&mut cx, base + PIN_MASK, 4, 0x100);
+            assert!(cx.is_unmodeled());
+            assert!(restored.restore(&json!({ "pin_mask": 0x100 })).is_err());
         }
         assert!(host.events.is_empty());
         assert!(host.irqs.is_empty());

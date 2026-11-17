@@ -69,7 +69,10 @@ pub fn register_all(
     let mut connections = BTreeMap::new();
     let mut serials = vec![];
     for w in windows.iter().filter(|w| w.kind == "pl022") {
-        if w.base != 0xff911000 || w.size != 0x1000 {
+        // The SSP instances are 0x1000 windows at 0xff910000 + n*0x1000, n = 0..11 (the
+        // instance field of the stock serial client descriptors).
+        let instance = w.base.wrapping_sub(0xff910000);
+        if w.base < 0xff910000 || instance % 0x1000 != 0 || instance / 0x1000 > 11 || w.size != 0x1000 {
             return Err("invalid XP5 PL022 window".into());
         }
         let wiring: SerialWiring = options(w)?;
