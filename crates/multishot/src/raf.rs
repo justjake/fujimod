@@ -1,18 +1,23 @@
-//! Reader for uncompressed X-Trans RAF files.
+//! Reader for X-Trans RAF files.
 //!
 //! A RAF starts with a fixed header whose big-endian offset table locates the
 //! embedded JPEG (carrying EXIF), a big-endian metadata record list and the
 //! raw section. The raw section is a TIFF stream whose Fuji directory (tag
 //! 0xf000) gives the stored plane size, sample depth, data offset, data length
-//! and black levels. Only uncompressed 16-bit-container planes are read;
-//! compressed planes are refused.
+//! and black levels. Uncompressed 16-bit-container planes are read in place;
+//! lossless compressed planes are decoded by [`crate::raf_lossless`] on first
+//! use into a temporary uncompressed copy. Lossy compressed planes are
+//! refused.
 
+use crate::raf_lossless;
 use crate::source::{Calibration, Exposure, FrameSource};
 use crate::tiff::{Tiff, find};
 use crate::xtrans::XTrans;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 
 const MAGIC: &[u8; 16] = b"FUJIFILMCCD-RAW ";
 
@@ -22,6 +27,25 @@ pub struct Rect {
     pub top: usize,
     pub width: usize,
     pub height: usize,
+}
+
+/// How the raw plane is stored in the file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Compression {
+    Uncompressed,
+    Lossless,
+}
+
+/// A decoded plane in a temporary file, removed when dropped.
+#[derive(Debug)]
+struct DecodedPlane {
+    path: PathBuf,
+}
+
+impl Drop for DecodedPlane {
+    fn drop(&mut self) {
+        std::fs::remove_file(&self.path).ok();
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -40,10 +64,15 @@ pub struct Raf {
     pub black_recorded: Vec<u32>,
     /// White balance multipliers recorded as shot, `[G, R, B]` counts.
     pub wb_grb: Option<[u32; 3]>,
+    pub compression: Compression,
+    /// File offset of the plane, or of the compressed stream.
     pub data_offset: u64,
+    /// Bytes of the plane, or of the compressed stream.
+    pub data_len: u64,
     pub exposure: Exposure,
     calibration: Calibration,
     cfa_active: XTrans,
+    decoded: Arc<OnceLock<Result<DecodedPlane, String>>>,
 }
 
 fn bad(msg: impl Into<String>) -> io::Error {
@@ -205,19 +234,29 @@ impl Raf {
             (v.len() >= 3).then(|| [v[0], v[1], v[2]])
         });
 
-        let plane_bytes = raw_width as u64 * raw_height as u64 * 2;
-        if strip_bytes < plane_bytes {
-            return Err(bad(format!(
-                "compressed RAF: the raw plane holds {strip_bytes} bytes for {raw_width}x{raw_height} sites \
-                 ({plane_bytes} bytes uncompressed). Shoot with RAW RECORDING set to UNCOMPRESSED."
-            )));
-        }
         if !(8..=16).contains(&bits) {
             return Err(bad(format!("unsupported sample depth of {bits} bits")));
         }
+        let plane_bytes = raw_width as u64 * raw_height as u64 * 2;
         let data_offset = raw_offset + strip_offset;
-        if data_offset + plane_bytes > file_len {
+        let (compression, data_len) = if strip_bytes < plane_bytes {
+            (Compression::Lossless, strip_bytes)
+        } else {
+            (Compression::Uncompressed, plane_bytes)
+        };
+        if data_offset + data_len > file_len {
             return Err(bad("RAF raw plane runs past the end of the file"));
+        }
+        if compression == Compression::Lossless {
+            let head = read_at(&mut file, data_offset, 16.min(data_len as usize))?;
+            let h = raf_lossless::read_header(&head).map_err(|e| bad(e.to_string()))?;
+            if (h.width, h.height, h.bits) != (raw_width, raw_height, bits) {
+                return Err(bad(format!(
+                    "compressed RAF plane header says {}x{} at {} bits; the Fuji directory says \
+                     {raw_width}x{raw_height} at {bits} bits",
+                    h.width, h.height, h.bits
+                )));
+            }
         }
 
         let (crop_top, crop_left) = meta_pair(&meta, 0x110).unwrap_or((0, 0));
@@ -275,11 +314,50 @@ impl Raf {
             bits,
             black_recorded,
             wb_grb,
+            compression,
             data_offset,
+            data_len,
             exposure,
             calibration: Calibration { black, white, wb },
             cfa_active,
+            decoded: Arc::default(),
         })
+    }
+
+    /// File and offset holding the uncompressed plane. A compressed plane is
+    /// decoded on first use; clones share the decoded copy.
+    fn plane_source(&self) -> io::Result<(&Path, u64)> {
+        if self.compression == Compression::Uncompressed {
+            return Ok((&self.path, self.data_offset));
+        }
+        match self
+            .decoded
+            .get_or_init(|| self.decode().map_err(|e| e.to_string()))
+        {
+            Ok(plane) => Ok((&plane.path, 0)),
+            Err(e) => Err(bad(e.clone())),
+        }
+    }
+
+    fn decode(&self) -> io::Result<DecodedPlane> {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let mut file = File::open(&self.path)?;
+        let stream = read_at(&mut file, self.data_offset, self.data_len as usize)?;
+        let mut plane = vec![0u16; self.raw_width * self.raw_height];
+        raf_lossless::decode(&stream, &self.cfa_raw.rows(), &mut plane)
+            .map_err(|e| bad(format!("{}: {e}", self.path.display())))?;
+        drop(stream);
+        let decoded = DecodedPlane {
+            path: std::env::temp_dir().join(format!(
+                "fujimod-multishot-{}-{}.plane",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            )),
+        };
+        let bytes: Vec<u8> = plane.iter().flat_map(|v| v.to_le_bytes()).collect();
+        drop(plane);
+        std::fs::write(&decoded.path, bytes)?;
+        Ok(decoded)
     }
 }
 
@@ -314,9 +392,10 @@ impl FrameSource for Raf {
                 "rows past active area",
             ));
         }
-        let mut file = File::open(&self.path)?;
+        let (path, offset) = self.plane_source()?;
+        let mut file = File::open(path)?;
         let stride = self.raw_width * 2;
-        let first = self.data_offset + ((self.active.top + y0) * stride) as u64;
+        let first = offset + ((self.active.top + y0) * stride) as u64;
         file.seek(SeekFrom::Start(first))?;
         let mut buf = vec![0u8; rows * stride];
         file.read_exact(&mut buf)?;
@@ -349,6 +428,25 @@ pub struct RafFixture<'a> {
 
 impl RafFixture<'_> {
     pub fn write(&self, path: impl AsRef<Path>) -> io::Result<()> {
+        let plane: Vec<u8> = self.data.iter().flat_map(|v| v.to_le_bytes()).collect();
+        self.write_with_plane(path, &plane)
+    }
+
+    /// Writes the fixture with its plane in lossless compressed form.
+    #[cfg(test)]
+    fn write_lossless(&self, path: impl AsRef<Path>, strip_width: usize) -> io::Result<()> {
+        let stream = raf_lossless::encode(
+            self.data,
+            self.raw_width,
+            self.raw_height,
+            strip_width,
+            &self.cfa_raw.rows(),
+            self.bits,
+        );
+        self.write_with_plane(path, &stream)
+    }
+
+    fn write_with_plane(&self, path: impl AsRef<Path>, plane: &[u8]) -> io::Result<()> {
         // Embedded JPEG: SOI, APP1 EXIF (big-endian TIFF), EOI.
         let mut t = Vec::new();
         t.extend_from_slice(b"MM\0*");
@@ -413,7 +511,7 @@ impl RafFixture<'_> {
             (0xf002, 4, 1, self.raw_height as u32),
             (0xf003, 4, 1, self.bits),
             (0xf007, 4, 1, 0),
-            (0xf008, 4, 1, (self.data.len() * 2) as u32),
+            (0xf008, 4, 1, plane.len() as u32),
             (0xf00a, 4, 36, 0),
         ];
         let fuji_at = 8 + 2 + 12 + 4;
@@ -445,9 +543,7 @@ impl RafFixture<'_> {
             r.extend_from_slice(&self.black.to_le_bytes());
         }
         r.resize(data_at, 0);
-        for v in self.data {
-            r.extend_from_slice(&v.to_le_bytes());
-        }
+        r.extend_from_slice(plane);
 
         let jpeg_offset = 160u32;
         let meta_offset = jpeg_offset + jpeg.len() as u32;
@@ -528,33 +624,92 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    #[test]
-    fn refuses_compressed_planes() {
-        let (rw, rh) = (12usize, 12usize);
-        let data = vec![0u16; rw * rh / 2];
-        let fixture = RafFixture {
+    fn fixture(rw: usize, rh: usize, data: &[u16]) -> RafFixture<'_> {
+        RafFixture {
             model: "X-H2S",
             raw_width: rw,
             raw_height: rh,
             active: Rect {
-                left: 0,
-                top: 0,
-                width: 12,
-                height: 12,
+                left: 6,
+                top: 6,
+                width: rw - 12,
+                height: rh - 12,
             },
             cfa_raw: XTrans::standard(),
             bits: 14,
             black: 1024,
-            wb_grb: [1, 1, 1],
+            wb_grb: [302, 580, 610],
             exposure_seconds: (1, 500),
             iso: 200,
-            data: &data,
-        };
-        let path =
-            std::env::temp_dir().join(format!("multishot-compressed-{}.RAF", std::process::id()));
-        fixture.write(&path).unwrap();
-        let err = Raf::open(&path).unwrap_err().to_string();
+            data,
+        }
+    }
+
+    #[test]
+    fn lossless_compressed_planes_read_like_uncompressed() {
+        let (rw, rh) = (120usize, 42usize);
+        let data: Vec<u16> = (0..rw * rh)
+            .map(|i| 1024 + ((i % rw) * 37 + (i / rw) * 91 + (i * i) % 113) as u16 % 6000)
+            .collect();
+        let dir = std::env::temp_dir().join(format!("multishot-lossless-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let plain = dir.join("plain.RAF");
+        let packed = dir.join("packed.RAF");
+        fixture(rw, rh, &data).write(&plain).unwrap();
+        fixture(rw, rh, &data).write_lossless(&packed, 48).unwrap();
+        let a = Raf::open(&plain).unwrap();
+        let b = Raf::open(&packed).unwrap();
+        assert_eq!(a.compression, Compression::Uncompressed);
+        assert_eq!(b.compression, Compression::Lossless);
+        assert!(b.data_len < a.data_len);
+        let (w, h) = (a.width(), a.height());
+        let mut ra = vec![0u16; w * h];
+        let mut rb = vec![0u16; w * h];
+        a.read_rows(0, &mut ra).unwrap();
+        b.read_rows(0, &mut rb).unwrap();
+        assert!(ra == rb, "decoded plane differs from the uncompressed one");
+        let mut part = vec![0u16; w * 5];
+        b.clone().read_rows(7, &mut part).unwrap();
+        assert!(part[..] == ra[7 * w..12 * w]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn refuses_corrupt_and_lossy_compressed_planes() {
+        let (rw, rh) = (48usize, 24usize);
+        let data: Vec<u16> = (0..rw * rh).map(|i| 1024 + (i % 977) as u16).collect();
+        let dir = std::env::temp_dir().join(format!("multishot-refuse-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("packed.RAF");
+        fixture(rw, rh, &data).write_lossless(&path, 24).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let raf = Raf::open(&path).unwrap();
+        let stream_at = raf.data_offset as usize;
+
+        // A flipped bit inside the first strip's codes.
+        let mut bad_bits = bytes.clone();
+        bad_bits[stream_at + 64 + 20] ^= 0x10;
+        let flipped = dir.join("flipped.RAF");
+        std::fs::write(&flipped, &bad_bits).unwrap();
+        let raf = Raf::open(&flipped).unwrap();
+        let mut rows = vec![0u16; raf.width() * 6];
+        let err = raf.read_rows(0, &mut rows).unwrap_err().to_string();
+        assert!(err.contains("corrupt compressed RAF plane"), "{err}");
+
+        // Format version 0 is lossy compression.
+        let mut lossy = bytes.clone();
+        lossy[stream_at + 2] = 0;
+        let lossy_path = dir.join("lossy.RAF");
+        std::fs::write(&lossy_path, &lossy).unwrap();
+        let err = Raf::open(&lossy_path).unwrap_err().to_string();
+        assert!(err.contains("lossy compression"), "{err}");
+
+        // Short plane without a compressed-stream header.
+        let short = vec![0u16; rw * rh / 2];
+        let raw = dir.join("short.RAF");
+        fixture(rw, rh, &short).write(&raw).unwrap();
+        let err = Raf::open(&raw).unwrap_err().to_string();
         assert!(err.contains("compressed RAF"), "{err}");
-        std::fs::remove_file(&path).ok();
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

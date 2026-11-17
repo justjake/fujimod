@@ -141,8 +141,8 @@ fn info(args: &Args) -> Result<(), String> {
         let cal = raf.calibration();
         println!("{}", raf.path.display());
         println!(
-            "  model {}  plane {}x{}  active {:?}  bits {}",
-            raf.model, raf.raw_width, raf.raw_height, raf.active, raf.bits
+            "  model {}  plane {}x{}  active {:?}  bits {}  {:?}",
+            raf.model, raf.raw_width, raf.raw_height, raf.active, raf.bits, raf.compression
         );
         println!(
             "  black {:?}  white {}  wb_grb {:?}",
