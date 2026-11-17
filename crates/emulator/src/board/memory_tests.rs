@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use fujimod_emulator_cpu::{Model, arm, memory::Backing};
 use fujimod_emulator_cpu_unicorn::rprofile;
@@ -270,7 +271,7 @@ fn board(released: Vec<bool>) -> (Board, Readings) {
     .unwrap();
     let board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )

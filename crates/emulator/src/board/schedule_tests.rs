@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use fujimod_emulator_cpu::Model;
 use fujimod_emulator_cpu::memory::Backing;
@@ -156,7 +157,7 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
 
 #[test]
 fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_slice_boundary() {
-    use factory::{Engine, Graph, MemoryMap, Options, Peripheral, Processor, Ram};
+    use factory::{Graph, MemoryMap, Options, Peripheral, Processor, Ram};
     use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters};
     use fujimod_emulator_exr2_resources::Resources;
     for pause in [None, Some(100), Some(137)] {
@@ -217,7 +218,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
         };
         let mut b = graph
             .build(
-                Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+                Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
                 Bus::from_graph(bus::Mode::Strict, built.graph).unwrap(),
                 None,
             )

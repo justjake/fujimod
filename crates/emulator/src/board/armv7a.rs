@@ -1,6 +1,5 @@
 //! ARMv7-A cluster identity and architectural instruction boundaries.
 //! These inputs are processor wiring, independent of any guest program.
-use fujimod_catalog_configuration::RunEngine;
 use super::{Board, scalar, set};
 use fujimod_emulator_cpu::{Access, Cpu, Hint, Model, Register, arm};
 
@@ -199,6 +198,7 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},

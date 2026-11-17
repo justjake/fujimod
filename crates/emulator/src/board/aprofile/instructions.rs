@@ -1,5 +1,4 @@
 //! Architectural boundaries for instruction-observed AArch64 backends.
-use fujimod_catalog_configuration::RunEngine;
 use crate::board::{State, scalar, set};
 use fujimod_emulator_cpu::{Access, Cpu, Hint, Register, arm};
 
@@ -81,6 +80,7 @@ impl State {
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         Board, InterruptMap, InterruptRegisters, aprofile,

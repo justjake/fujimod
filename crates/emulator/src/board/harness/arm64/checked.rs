@@ -1,6 +1,5 @@
 //! Fail-closed, flat-address AArch64 routine policy. All memory transfers are
 //! checked before execution; write callbacks are observations, never vetoes.
-use fujimod_catalog_configuration::RunEngine;
 use super::{Options, initialize};
 use crate::board::{Board, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookRange, Model, Register, arm64};
@@ -822,6 +821,7 @@ pub fn checked_call_with(
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},

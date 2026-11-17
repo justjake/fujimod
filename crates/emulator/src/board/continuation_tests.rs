@@ -1,4 +1,5 @@
 //! Synthetic seqlock publication through a different CPU view of canonical RAM.
+use fujimod_catalog_configuration::RunEngine;
 use super::super::{bus, factory};
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::rprofile;
@@ -7,7 +8,7 @@ use fujimod_emulator_cpu_unicorn::rprofile;
 /// 0x20000.
 fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     use super::super::memory::BusMapping;
-    use factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    use factory::{Graph, MemoryMap, Options, Processor, Ram};
     let maps = vec![
         MemoryMap {
             core: 0,
@@ -76,7 +77,7 @@ fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     };
     let board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus::Bus::new(bus::Mode::Strict),
             None,
         )
@@ -88,7 +89,7 @@ fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
 /// core 1 performs the watched store.
 fn two_core_store_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     use super::super::memory::BusMapping;
-    use factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    use factory::{Graph, MemoryMap, Options, Processor, Ram};
     let maps = (0..2)
         .flat_map(|core| {
             [
@@ -140,7 +141,7 @@ fn two_core_store_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     };
     let board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus::Bus::new(bus::Mode::Strict),
             None,
         )
