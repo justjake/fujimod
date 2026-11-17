@@ -678,11 +678,15 @@ impl Devices {
             model = model.firmware_color()?;
         }
         let windows = model.windows();
-        if windows
-            .iter()
-            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
-        {
-            return Err("Overlapping XP4 still engine window".into());
+        for &(lo, hi) in &windows {
+            if let Some(&(base, end, owner)) = self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi) {
+                let name = self.models.get(owner).and_then(Option::as_ref)
+                    .map_or("unknown model", |device| device.name());
+                return Err(format!(
+                    "XP4 still engine {} at {lo:#x}..{hi:#x} overlaps {name} at {base:#x}..{end:#x}",
+                    model.name(),
+                ));
+            }
         }
         let id = self.models.len();
         self.windows

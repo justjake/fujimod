@@ -102,6 +102,7 @@ impl Device for Sink {
             cx.log("virtual finder motion complete IRQ128");
         }
     }
+    fujimod_emulator_devices::checkpoint_fields!(regs: [u32; 10], rx: Option<u16>, motion_generation: u64, motion_closed: Option<bool>);
     fn save(&self) -> Value {
         serde_json::json!({"regs":self.regs,"rx":self.rx,"motion_generation":self.motion_generation,"motion_closed":self.motion_closed})
     }
