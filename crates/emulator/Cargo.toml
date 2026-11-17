@@ -27,6 +27,7 @@ fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
 fujimod-emulator-ip-arm.workspace = true
+fujimod-emulator-parts-io.workspace = true
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-exr2-plan = { path = "../emulator-exr2-plan" }
 fujimod-emulator-exr2-system = { path = "../../crates/emulator-exr2-system" }

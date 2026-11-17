@@ -23,6 +23,10 @@ pub(super) struct MProfileLoops {
     run_end: Option<(usize, u64)>,
     /// The branch the previous window stopped at executes once normally.
     bypass: Option<(usize, u64)>,
+    /// A run a window stopped before its end: its core and that end. The
+    /// scheduler resumes it before the run's clock limit applies, as ordinary
+    /// execution runs its whole counted budget.
+    resume: Option<(usize, u64)>,
     /// Loop bytes that failed structurally or have no iteration model.
     failures: BTreeMap<(usize, u64), Vec<u8>>,
     counters: Vec<BTreeMap<&'static str, u64>>,
@@ -34,12 +38,16 @@ impl MProfileLoops {
             reads: vec![Vec::new(); cores],
             run_end: None,
             bypass: None,
+            resume: None,
             failures: BTreeMap::new(),
             counters: vec![BTreeMap::new(); cores],
         }
     }
     pub(super) fn add_reads(&mut self, core: usize, address: u64, reads: &[FastMmioRead]) {
         self.reads[core].extend(reads.iter().map(|read| (address, read.clone())));
+    }
+    pub(super) fn take_resume(&mut self) -> Option<(usize, u64)> {
+        self.resume.take()
     }
     pub(super) fn begin_run(&mut self, core: usize, end: u64) {
         self.run_end = Some((core, end));
@@ -186,8 +194,9 @@ impl State {
             .min(self.timeline.processor_budget(core, u64::MAX, self.clock_limit)?)
             .min(slice);
         let reads = &l.reads[core];
+        let device_read = std::cell::Cell::new(false);
         let advanced = proof.advance(state, (room / proof.length()).max(1), |address, width| {
-            loop_read(cpu, reads, address, width)
+            loop_read(cpu, reads, address, width, &device_read)
         });
         let Advance {
             state: after,
@@ -213,6 +222,16 @@ impl State {
                 return Ok(false);
             }
         };
+        // A device access stalls a lagging processor to the frontier, so in
+        // ordinary execution the first poll read drops the lag the room above
+        // includes. A window that reads a device starts at the frontier; one
+        // ordinary iteration performs the stall first.
+        if device_read.get() && self.timeline.lags()[core] != 0 {
+            self.mprofile_loops
+                .count(core, "loop_proofs_failed_processor_lag", 1);
+            return Ok(false);
+        }
+        let l = &mut self.mprofile_loops;
         let kind = if counted {
             "loop_counted_instructions"
         } else {
@@ -240,13 +259,23 @@ impl State {
         self.instructions[core] = self.instructions[core]
             .checked_add(skipped)
             .ok_or("instruction counter overflow")?;
+        if self.instructions[core] < end {
+            self.mprofile_loops.resume = Some((core, end));
+        }
         cpu.stop()?;
         Ok(true)
     }
 }
 /// RAM through an observational host read, or a device-declared stable
-/// register at exactly its declared width. Other device reads are refused.
-fn loop_read(cpu: &dyn Cpu, reads: &[(u64, FastMmioRead)], address: u32, width: usize) -> Option<u32> {
+/// register at exactly its declared width, which sets `device_read`. Other
+/// device reads are refused.
+fn loop_read(
+    cpu: &dyn Cpu,
+    reads: &[(u64, FastMmioRead)],
+    address: u32,
+    width: usize,
+    device_read: &std::cell::Cell<bool>,
+) -> Option<u32> {
     if !(address as usize).is_multiple_of(width) {
         return None;
     }
@@ -261,7 +290,10 @@ fn loop_read(cpu: &dyn Cpu, reads: &[(u64, FastMmioRead)], address: u32, width: 
         (u64::from(address) == base + read.register_offset)
             .then(|| read.read(read.register_offset, width as u32))
             .flatten()
-            .map(|value| value as u32)
+            .map(|value| {
+                device_read.set(true);
+                value as u32
+            })
     })
 }
 
