@@ -356,12 +356,26 @@
     "width": 0.917,
     "height": 1.09
   },
+  "mod-ae-af-lock-item": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.124,
+    "height": 0.769
+  },
   "mod-borders-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
     "view": [0, 0, 45, 30],
     "width": 1.152,
     "height": 0.785
+  },
+  "mod-clarity": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.113,
+    "height": 0.761
   },
   "mod-clarity-item": {
     "sprite": "mod",
@@ -370,12 +384,26 @@
     "width": 1.113,
     "height": 0.761
   },
+  "mod-color-chrome-blue": {
+    "sprite": "mod",
+    "box": [0, 0, 39, 30],
+    "view": [0, 0, 40, 30],
+    "width": 1.094,
+    "height": 0.841
+  },
   "mod-color-chrome-blue-item": {
     "sprite": "mod",
     "box": [0, 0, 39, 30],
     "view": [0, 0, 40, 30],
     "width": 1.094,
     "height": 0.841
+  },
+  "mod-color-chrome-effect": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.148,
+    "height": 0.783
   },
   "mod-color-chrome-effect-item": {
     "sprite": "mod",
@@ -405,6 +433,20 @@
     "width": 1.307,
     "height": 0.683
   },
+  "mod-custom-settings-bkt-page": {
+    "sprite": "mod",
+    "box": [0, 5, 44, 23],
+    "view": [0, 0, 45, 30],
+    "width": 1.307,
+    "height": 0.683
+  },
+  "mod-d-range-priority": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.139,
+    "height": 0.779
+  },
   "mod-d-range-priority-item": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
@@ -432,6 +474,13 @@
     "view": [0, 0, 45, 30],
     "width": 1.149,
     "height": 0.783
+  },
+  "mod-film-editor": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.136,
+    "height": 0.774
   },
   "mod-film-editor-item": {
     "sprite": "mod",
@@ -489,6 +538,13 @@
     "width": 1.124,
     "height": 0.769
   },
+  "mod-hud-layout": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.13,
+    "height": 0.772
+  },
   "mod-hud-layout-item": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
@@ -510,12 +566,26 @@
     "width": 1.134,
     "height": 0.773
   },
+  "mod-negative": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.147,
+    "height": 0.782
+  },
   "mod-negative-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
     "view": [0, 0, 45, 30],
     "width": 1.147,
     "height": 0.782
+  },
+  "mod-pixel-map": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.161,
+    "height": 0.794
   },
   "mod-pixel-map-item": {
     "sprite": "mod",
@@ -524,12 +594,12 @@
     "width": 1.161,
     "height": 0.794
   },
-  "mod-raw-view-action": {
+  "mod-recipe-exif": {
     "sprite": "mod",
-    "box": [0, 0, 44, 30],
+    "box": [0, 0, 43.875, 30],
     "view": [0, 0, 45, 30],
-    "width": 1.146,
-    "height": 0.781
+    "width": 1.135,
+    "height": 0.776
   },
   "mod-recipe-exif-item": {
     "sprite": "mod",
@@ -538,12 +608,54 @@
     "width": 1.135,
     "height": 0.776
   },
+  "mod-recipes-root-by-author": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.164,
+    "height": 0.794
+  },
+  "mod-recipes-root-hidden": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.114,
+    "height": 0.76
+  },
+  "mod-recipes-root-mine": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.126,
+    "height": 0.768
+  },
+  "mod-recipes-root-uses-custom": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.156,
+    "height": 0.788
+  },
+  "mod-shape-aspect": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.131,
+    "height": 0.774
+  },
   "mod-shape-aspect-item": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
     "view": [0, 0, 45, 30],
     "width": 1.131,
     "height": 0.774
+  },
+  "mod-shape-desqueeze": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.129,
+    "height": 0.77
   },
   "mod-shape-desqueeze-item": {
     "sprite": "mod",
@@ -552,12 +664,26 @@
     "width": 1.129,
     "height": 0.77
   },
+  "mod-shape-jpeg": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.128,
+    "height": 0.769
+  },
   "mod-shape-jpeg-item": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
     "view": [0, 0, 45, 30],
     "width": 1.128,
     "height": 0.769
+  },
+  "mod-shape-surround": {
+    "sprite": "mod",
+    "box": [0, 0, 43.875, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.152,
+    "height": 0.788
   },
   "mod-shape-surround-item": {
     "sprite": "mod",

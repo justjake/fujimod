@@ -61,7 +61,7 @@
   font-weight: 600;
   color: #f2f2f7;
 }
-.outline-tree li.heading > .outline-row .outline-title {
+.outline-tree li.group > .outline-row .outline-title {
   color: rgb(235 235 245 / 60%);
   font-size: 12px;
   letter-spacing: 0.06em;

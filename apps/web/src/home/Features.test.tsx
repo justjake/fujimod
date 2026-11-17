@@ -2,6 +2,7 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
 import { FeatureCatalog } from './Features';
+import { FeatureOutline } from './Outline';
 import catalog from './features.generated.json';
 import metrics from '../ui/assets/feature-icon-metrics.generated.json';
 import type { Media } from './feature-media';
@@ -53,6 +54,37 @@ test('the complete text catalog renders without media and search includes native
   search.dispatchEvent(new Event('input', { bubbles: true }));
   flush();
   expect(document.querySelectorAll('.catalog-tile')).toHaveLength(catalog.features.length);
+});
+
+test('the outline keeps the declared FUJIMOD SET-UP groups and link placement', () => {
+  dispose = render(() => <FeatureOutline />, document.body);
+  flush();
+  const setup = [...document.querySelectorAll('.outline-section')].find(
+    (section) => section.querySelector('h3')?.textContent === 'SET-UP',
+  );
+  const selectRow = (parent: ParentNode, title: string) =>
+    [...parent.querySelectorAll('.outline-title')]
+      .find((label) => label.textContent === title)
+      ?.closest('li');
+  const page = selectRow(setup!, 'FUJIMOD SET-UP')!;
+  const appearance = selectRow(page, 'Appearance')!;
+  const firmware = selectRow(page, 'FIRMWARE')!;
+  const mods = selectRow(page, 'MODS')!;
+  const change = selectRow(page, 'CHANGE')!;
+  expect(
+    [...appearance.querySelectorAll(':scope > ul > li > .outline-row > .outline-title')].map(
+      (label) => label.textContent,
+    ),
+  ).toEqual(['REC COLOR', 'SET-UP COLOR', 'PLAY COLOR', 'BACKGROUND COLOR']);
+  expect(firmware.parentElement).toBe(mods.parentElement);
+  expect(firmware.querySelector('ul')).toBeNull();
+  expect(selectRow(change, 'BACK UP INTERNAL DATA')?.querySelector('ul')).toBeNull();
+  expect(
+    [...page.querySelectorAll(':scope > ul > li > .outline-row > .outline-title')].filter(
+      (label) =>
+        label.textContent === 'BACK UP INTERNAL DATA' || label.textContent === 'Appearance',
+    ),
+  ).toHaveLength(2);
 });
 
 test('feature deep links filter the catalog on entry and on repeated navigation', () => {
