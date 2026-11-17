@@ -9,6 +9,7 @@ mod png_writer;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod output;
 mod first_start;
+mod host;
 use fujimod_emulator_board_graph as graph;
 mod x70;
 pub mod xpp;
@@ -1389,30 +1390,24 @@ fn presented_instances(display: &Value) -> Vec<usize> {
 fn advance(
     session: &mut Session,
     spec: &Prepared,
-    end: u64,
+    limits: host::Limits,
     until: Option<u64>,
 ) -> Result<(), String> {
-    let now: u64 = session.board.instruction_counts().iter().sum();
-    if now >= end {
-        return Err("instruction limit reached during first-start input".into());
+    if limits.reached(session) {
+        return Err("run limit reached during first-start input".into());
     }
-    let tick = session.board.now();
-    session.run_with_limits(
-        end - now,
-        spec.quantum,
-        Some(now.saturating_add(1_000_000).min(end)),
-        until,
-    )?;
-    if session.board.now() == tick && session.board.instruction_counts().iter().sum::<u64>() == now
-    {
+    let now: u64 = session.board.instruction_counts().iter().sum();
+    let pause = now.saturating_add(1_000_000).min(limits.instructions);
+    if !limits.step(session, spec.quantum, Some(pause), until)? {
         return Err("board is quiescent without an input or device deadline".into());
     }
     Ok(())
 }
+
 fn advance_ticks(
     session: &mut Session,
     spec: &Prepared,
-    end: u64,
+    limits: host::Limits,
     ticks: u64,
 ) -> Result<(), String> {
     let until = session
@@ -1421,7 +1416,7 @@ fn advance_ticks(
         .checked_add(ticks)
         .ok_or("input deadline overflows")?;
     while session.board.now() < until {
-        advance(session, spec, end, Some(until))?;
+        advance(session, spec, limits, Some(until))?;
     }
     Ok(())
 }
@@ -1448,7 +1443,7 @@ fn press_setup_key(
     session: &mut Session,
     spec: &Prepared,
     s: &FirstStart,
-    end: u64,
+    limits: host::Limits,
 ) -> Result<(), String> {
     let base = if s.calibration_is_pointer {
         u64::from(word(session, s.calibration_pointer)?)
@@ -1471,11 +1466,11 @@ fn press_setup_key(
         .get_mut(s.channel)
         .ok_or("first-start key ADC channel is absent")? = (lower + upper) / 2;
     session.set_adc_samples(&s.adc, &pressed)?;
-    let held = advance_ticks(session, spec, end, s.hold_ticks);
+    let held = advance_ticks(session, spec, limits, s.hold_ticks);
     // Release even if the instruction budget or a modeled refusal stops the hold.
     session.set_adc_samples(&s.adc, &original)?;
     held?;
-    advance_ticks(session, spec, end, s.settle_ticks)
+    advance_ticks(session, spec, limits, s.settle_ticks)
 }
 
 fn setup_key(
@@ -1483,13 +1478,13 @@ fn setup_key(
     spec: &Prepared,
     inputs: &Exr2RunInputs,
     key: &str,
-    end: u64,
+    limits: host::Limits,
     presses: &mut usize,
 ) -> Result<(), String> {
     let key =
         first_start_key(&spec.resolved, inputs, key)?.ok_or("first-start policy is absent")?;
     *presses += 1;
-    press_setup_key(session, spec, &key, end)
+    press_setup_key(session, spec, &key, limits)
 }
 
 fn setup_calendar(
@@ -1497,7 +1492,7 @@ fn setup_calendar(
     spec: &Prepared,
     inputs: &Exr2RunInputs,
     menu: &fujimod_catalog::first_start::FirstStartMenu,
-    end: u64,
+    limits: host::Limits,
     presses: &mut usize,
 ) -> Result<(), String> {
     let seconds = session.definition["inputs"]["clock_seconds_2000"]
@@ -1526,7 +1521,7 @@ fn setup_calendar(
             if read(session)?.1 as usize == field {
                 break;
             }
-            setup_key(session, spec, inputs, "RIGHT", end, presses)?;
+            setup_key(session, spec, inputs, "RIGHT", limits, presses)?;
         }
         if read(session)?.1 as usize != field {
             return Err("date editor did not select the requested field".into());
@@ -1592,9 +1587,21 @@ fn setup_calendar(
 /// Run a named runtime to REC or an explicit stopped frontier. First-start menus
 /// use calibrated UP/DOWN and MENU/OK ADC presses, never RAM writes.
 pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
+    to_rec_with(session, instruction_limit, None, |_session, _status| Ok(()))
+}
+
+/// Run EXR II's first-start and REC workflow with a guest-time ceiling and
+/// an observational host callback between scheduler windows.
+pub fn to_rec_with(
+    session: &mut Session,
+    instruction_limit: u64,
+    duration: Option<std::time::Duration>,
+    mut observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
+) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
-    let result = to_rec_inner(session, instruction_limit);
+    let limits = host::Limits::new(session, Some(instruction_limit), duration, 12_000_000)?;
+    let result = to_rec_inner(session, limits, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
 }
@@ -1606,24 +1613,23 @@ fn boot_progress(session: &Session) -> fujimod_perf::GuestProgress {
     }
 }
 
-fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
-    if instruction_limit == 0 {
-        return Err("instruction limit must be positive".into());
-    }
+fn to_rec_inner(
+    session: &mut Session,
+    limits: host::Limits,
+    observe_window: &mut impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
+) -> Result<RecReport, String> {
     let spec = session_prepared(session)?;
-    let end = session
-        .board
-        .instruction_counts()
-        .iter()
-        .sum::<u64>()
-        .checked_add(instruction_limit)
-        .ok_or("instruction limit overflows")?;
     let mut presses = 0;
     let mut confirmations = 0;
     loop {
         let mut report = observe(session, &spec, presses)?;
-        if report.instructions >= end {
-            report.status = "instruction-limit".into();
+        observe_window(session, &report)?;
+        if limits.reached(session) {
+            report.status = if report.instructions >= limits.instructions {
+                "instruction-limit"
+            } else {
+                "time-limit"
+            }.into();
             return Ok(report);
         }
         let presented = report.scanout_instance.is_some();
@@ -1694,7 +1700,7 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
                     let key = if current > selected { "UP" } else { "DOWN" };
                     let key = first_start_key(&spec.resolved, inputs, key)?
                         .ok_or("first-start policy is absent")?;
-                    press_setup_key(session, &spec, &key, end).and_then(|()| {
+                    press_setup_key(session, &spec, &key, limits).and_then(|()| {
                         let after = word(session, menu.cursor)? as usize;
                         let expected = if current > selected { current - 1 } else { current + 1 };
                         if after != expected { return Err(format!("START MENU cursor did not move from {current} to {expected}: {after}")); }
@@ -1703,23 +1709,25 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
                 } else {
                     presses += 1;
                     confirmations += 1;
-                    press_setup_key(session, &spec, start, end)
+                    press_setup_key(session, &spec, start, limits)
                 }
             } else {
                 if word(session, u64::from(report.menu_node))? == menu.date_kind {
-                    setup_calendar(session, &spec, inputs, menu, end, &mut presses)?;
+                    setup_calendar(session, &spec, inputs, menu, limits, &mut presses)?;
                 }
                 presses += 1;
                 confirmations += 1;
-                press_setup_key(session, &spec, start, end)
+                press_setup_key(session, &spec, start, limits)
             }
         } else {
-            advance(session, &spec, end, None)
+            advance(session, &spec, limits, None)
         };
         if let Err(error) = result {
             let mut report = observe(session, &spec, presses)?;
-            report.status = if report.instructions >= end {
+            report.status = if report.instructions >= limits.instructions {
                 "instruction-limit"
+            } else if limits.reached(session) {
+                "time-limit"
             } else {
                 "stopped"
             }

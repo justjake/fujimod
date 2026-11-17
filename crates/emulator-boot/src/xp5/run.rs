@@ -354,16 +354,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let signal = interrupted.clone();
     ctrlc::set_handler(move || signal.store(true, Ordering::Release))
         .map_err(|error| error.to_string())?;
-    let stop_at = limit.map(|duration| {
-        start.saturating_add((duration.as_secs_f64() * ticks_per_second as f64) as u64)
-    });
-    let instruction_end = match instruction_limit {
-        Some(limit) if limit > 0 => session.board.instruction_counts().into_iter()
-            .try_fold(limit, u64::checked_add)
-            .ok_or("instruction limit overflows")?,
-        Some(_) => return Err("instruction limit must be positive".into()),
-        None => u64::MAX,
-    };
+    let limits = crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?;
     let slice = ((ticks_per_second / 1_000).max(1)).min(100_000_000);
     let mut next_status =
         start.saturating_add((status_every.as_secs_f64() * ticks_per_second as f64) as u64);
@@ -379,9 +370,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                 break;
             }
             let now = session.board.now();
-            if stop_at.is_some_and(|deadline| now >= deadline)
-                || session.board.instruction_counts().into_iter().sum::<u64>() >= instruction_end
-            {
+            if limits.reached(&session) {
                 break;
             }
             while patches
@@ -394,11 +383,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }
-            let mut until = now.saturating_add(slice);
-            if let Some(deadline) = stop_at {
-                until = until.min(deadline);
-            }
-            let result = session.run_window(instruction_end, quantum, None, Some(until));
+            let until = now.saturating_add(slice);
+            let result = limits.step(&mut session, quantum, None, Some(until));
             if let Some(storage) = &flash_shadow {
                 session_open::sync_flash_aperture(storage, &mut session)?;
             }
@@ -407,6 +393,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             }
             for frame in session.board.take_frames() {
                 outputs.frame(frame)?;
+            }
+            if result == Ok(false) {
+                return Err("board is quiescent without an input or device deadline".into());
             }
             if let Err(error) = result {
                 let state = session.board.state();
