@@ -1,6 +1,7 @@
 //! Input-buffer write-select enables, frame causes and statistics DMA.
 //! Processor wiring supplies the CSR layout, supported outputs and frame clock.
 use super::statistics::{Planes, Statistics};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -240,6 +241,21 @@ impl Device for InputBuffer {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         let s = self.state.lock().unwrap();
         s.deadline.into_iter().chain(s.reset_deadline).min()
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &*self.state.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode(self.name())?;
+        if state.deadline.is_some() && (!state.armed || self.wiring.period_ticks.is_none()) {
+            return Err("input-buffer clock/deadline disagree".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        *self.state.lock().unwrap() = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::json!({"state":*self.state.lock().unwrap()})
