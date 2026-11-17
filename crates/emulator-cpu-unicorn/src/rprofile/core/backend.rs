@@ -704,6 +704,11 @@ impl Cpu for Core {
             "loop_proofs_failed_cpsr_e_or_j",
             l.proofs_failed_cpsr_e_or_j.get(),
         );
+        counters.insert("loop_proofs_failed_it_block", l.proofs_failed_it_block.get());
+        counters.insert(
+            "loop_proofs_failed_inputs_changed",
+            l.proofs_failed_inputs_changed.get(),
+        );
         counters.insert(
             "loop_proofs_failed_loop_condition_not_taken",
             l.proofs_failed_loop_condition_not_taken.get(),

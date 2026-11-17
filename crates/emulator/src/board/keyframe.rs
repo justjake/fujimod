@@ -140,6 +140,9 @@ impl State {
             decoders: _,
             memory_access: _,
             continuation: _,
+            // Host loop fast-forward configuration, wiring and counters; the
+            // proof leaves no architectural trace to restore.
+            mprofile_loops: _,
         } = self;
         Saved {
             execution_policy: *execution_policy,

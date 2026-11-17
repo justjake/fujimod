@@ -198,6 +198,7 @@ struct State {
     parallel: Option<interactive::Epoch>,
     decoders: decoder::Decoders,
     memory_access: bool,
+    mprofile_loops: loops::MProfileLoops,
 }
 struct Binding {
     state: Rc<RefCell<State>>,
@@ -450,6 +451,7 @@ impl Board {
             parallel: None,
             decoders: decoder::Decoders::default(),
             memory_access: false,
+            mprofile_loops: loops::MProfileLoops::new(n),
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
@@ -856,7 +858,11 @@ impl Board {
                     fujimod_emulator_cpu::FastMmioRead::consuming_u32(offset, read)
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+        self.state
+            .borrow_mut()
+            .mprofile_loops
+            .add_reads(core, address, &fast_reads);
         unsafe {
             cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
         }
@@ -1144,6 +1150,7 @@ impl Board {
             s.code_run = Some(core);
             s.active_slice = Some(slice);
             let entered = s.instructions[core];
+            s.mprofile_loops.begin_run(core, entered + budget as u64);
             drop(s);
             let cpu = &self.cpus[core];
             // The exact budget ends at the first device/DMA/processor event
@@ -1174,6 +1181,7 @@ impl Board {
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
             let mut s = self.state.borrow_mut();
             s.active_slice = None;
+            s.mprofile_loops.end_run();
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {
                 return Err(error);
@@ -2131,6 +2139,9 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
                 mprofile::Entry::Execute => (),
             }
             s.refresh_processors()?;
+            if matches!(entry, mprofile::Entry::Execute) && s.mprofile_loop(cpu, b.core, pc)? {
+                return Ok(());
+            }
         }
         if !cpu.features().instruction_progress {
             s.account(b.core, 1)?;
