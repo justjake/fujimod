@@ -6,7 +6,7 @@
 //! caller names. Nothing here builds or writes an update file, a real card or a card image on
 //! disk: the FAT volume is formatted in memory by FujiMod's SD model.
 
-use crate::manifest::RamRegion;
+use super::manifest::RamRegion;
 use fujimod_emulator_devices::graph::DeviceWindow;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -64,7 +64,7 @@ pub(crate) struct WindowOptions {
 
 impl Fragment {
     pub fn bundled() -> Result<Self, String> {
-        toml::from_str(include_str!("../data/rom-start.toml"))
+        toml::from_str(include_str!("../../xp5-data/rom-start.toml"))
             .map_err(|error| format!("data/rom-start.toml: {error}"))
     }
 }
@@ -76,7 +76,7 @@ pub(crate) struct RomStart {
     pub card_files: Vec<(String, Vec<u8>)>,
     pub card_present: bool,
     /// A raw card image () in place of the in-memory FAT32 volume.
-    pub card_image: Option<crate::card_image::CardImage>,
+    pub card_image: Option<super::card_image::CardImage>,
 }
 
 impl RomStart {
@@ -151,7 +151,7 @@ impl RomStart {
         if !self.card_files.is_empty() {
             return Err("--sd-image and --sd-file are alternatives: the image is the whole card".into());
         }
-        self.card_image = Some(crate::card_image::CardImage::load(path)?);
+        self.card_image = Some(super::card_image::CardImage::load(path)?);
         Ok(self)
     }
 

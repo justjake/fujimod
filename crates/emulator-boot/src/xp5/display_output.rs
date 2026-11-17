@@ -1,6 +1,6 @@
 //! Host transport for captured scanout. Files, PNG workers and viewers never
 //! participate in modeled display state or guest timing.
-use crate::frontend::{KeyHandler, Viewer};
+use super::frontend::{KeyHandler, Viewer};
 use fujimod_framebuffer::raster::PixelOrder;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_xp5_display::display::Config;
@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 pub struct Outputs(Arc<Mutex<BTreeMap<usize, Output>>>);
 struct Output {
     directory: PathBuf,
-    writer: crate::png_writer::Writer,
+    writer: super::png_writer::Writer,
     next_archive: u64,
     status: String,
     _viewer: Option<Viewer>,
@@ -112,7 +112,7 @@ impl Outputs {
         outputs.insert(
             bank,
             Output {
-                writer: crate::png_writer::Writer::new(directory.clone(), bank)?,
+                writer: super::png_writer::Writer::new(directory.clone(), bank)?,
                 directory,
                 next_archive: 0,
                 status: String::new(),
@@ -149,7 +149,7 @@ impl Outputs {
                 break;
             }
         }
-        output.writer.submit(crate::png_writer::Frame {
+        output.writer.submit(super::png_writer::Frame {
             number: output.next_archive,
             sequence: frame.sequence,
             width: frame.width,
@@ -217,7 +217,7 @@ mod tests {
             std::fs::read(directory.join("bank0-000001.png")).unwrap(),
             b"preserved"
         );
-        let expected = crate::frontend::rgba_png(130, 130, &rgba).unwrap();
+        let expected = super::frontend::rgba_png(130, 130, &rgba).unwrap();
         let publication: Value = serde_json::from_slice(
             &std::fs::read(directory.join("bank0-publication.json")).unwrap(),
         )

@@ -1,6 +1,6 @@
 //! The XP5 bring-up run: open a session from explicit inputs, drive it in slices and record
 //! the outcome in the run directory.
-use crate::{
+use super::{
     emulator_patch,
     firmware::Firmware,
     manifest::BootState,

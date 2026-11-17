@@ -28,8 +28,7 @@ fujimod-emulator-parts-controls = { path = "../../crates/emulator-parts-controls
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
 fujimod-emulator-graphics = { path = "../../crates/emulator-graphics" }
 fujimod-emulator = { path = "../emulator" }
-fujimod-emulator-boot.workspace = true
-fujimod-emulator-xp5-bringup.workspace = true
+fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-emulator-cpu = { path = "../emulator-cpu" }

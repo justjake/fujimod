@@ -2,8 +2,13 @@
 use std::{env, fmt::Write, fs, path::Path};
 
 fn main() {
-    let data = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("data");
-    println!("cargo:rerun-if-changed=data");
+    if env::var_os("CARGO_FEATURE_XP5_STARTUP").is_none()
+        || env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32")
+    {
+        return;
+    }
+    let data = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("xp5-data");
+    println!("cargo:rerun-if-changed=xp5-data");
     let mut ids: Vec<_> = fs::read_dir(&data)
         .unwrap()
         .flatten()

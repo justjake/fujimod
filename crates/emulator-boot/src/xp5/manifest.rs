@@ -219,7 +219,7 @@ impl BootState {
 }
 
 impl Preload {
-    pub fn load_bytes(&self, firmware: &crate::firmware::Firmware) -> Result<Vec<u8>, String> {
+    pub fn load_bytes(&self, firmware: &super::firmware::Firmware) -> Result<Vec<u8>, String> {
         let count = usize::from(self.bytes.is_some())
             + usize::from(self.value.is_some())
             + usize::from(self.dat_offset.is_some());
@@ -255,7 +255,7 @@ impl Preload {
             value.to_le_bytes()[..size as usize].to_vec()
         };
         if let Some(hash) = &self.sha256 {
-            if crate::firmware::sha256_hex(&bytes) != *hash {
+            if super::firmware::sha256_hex(&bytes) != *hash {
                 return Err("preload hash mismatch".into());
             }
         }

@@ -6,8 +6,8 @@
 //! bytes exist only in the guest RAM of one run.
 //!
 //! The plan and checks run against a `Machine` so the preflight can be tested without an engine.
-use crate::manifest::Preload;
-use crate::firmware::{Firmware, sha256_hex};
+use super::manifest::Preload;
+use super::firmware::{Firmware, sha256_hex};
 use fujimod_emulator::board::Board;
 use fujimod_emulator_cpu::{Access, Register, arm64};
 use serde_json::{Value, json};

@@ -1760,6 +1760,7 @@ dependencies = [
 name = "fujimod-emulator-boot"
 version = "0.1.0"
 dependencies = [
+ "ctrlc",
  "fujimod-catalog",
  "fujimod-catalog-assets",
  "fujimod-catalog-configuration",
@@ -1776,19 +1777,29 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
  "fujimod-emulator-models",
+ "fujimod-emulator-parts-controls",
  "fujimod-emulator-preparation",
  "fujimod-emulator-session",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
  "fujimod-emulator-xpp",
+ "fujimod-firmware",
+ "fujimod-framebuffer",
  "fujimod-perf",
  "fujimod-recording",
  "fujimod-settings",
  "fujimod-workspace-hack",
+ "regex",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "sha2 0.10.9",
+ "toml",
  "tsify",
  "wasm-bindgen",
+ "zstd",
 ]
 
 [[package]]
@@ -1809,7 +1820,6 @@ dependencies = [
  "fujimod-emulator-models",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-xp5-board",
- "fujimod-emulator-xp5-bringup",
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-io",
  "fujimod-emulator-xp5-storage",
@@ -2646,35 +2656,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
-]
-
-[[package]]
-name = "fujimod-emulator-xp5-bringup"
-version = "0.1.0"
-dependencies = [
- "ctrlc",
- "fujimod-catalog",
- "fujimod-catalog-configuration",
- "fujimod-catalog-resolution",
- "fujimod-emulator",
- "fujimod-emulator-board-graph",
- "fujimod-emulator-cpu",
- "fujimod-emulator-devices",
- "fujimod-emulator-parts-controls",
- "fujimod-emulator-session",
- "fujimod-emulator-xp5-board",
- "fujimod-emulator-xp5-display",
- "fujimod-emulator-xp5-io",
- "fujimod-emulator-xp5-storage",
- "fujimod-firmware",
- "fujimod-framebuffer",
- "fujimod-workspace-hack",
- "regex",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "toml",
- "zstd",
 ]
 
 [[package]]

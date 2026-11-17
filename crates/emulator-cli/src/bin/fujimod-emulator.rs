@@ -1,9 +1,8 @@
 //! Native boot command; every binary input is selected by path, for every processor generation.
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_boot::{self as boot, Options};
+use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_xp5_bringup as xp5;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode, time::Duration};
 
 const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\

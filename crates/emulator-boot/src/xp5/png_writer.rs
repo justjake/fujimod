@@ -1,5 +1,5 @@
 //! Host-only frame publication. No guest RAM access occurs on this worker.
-use crate::frontend::rgba_png;
+use super::frontend::rgba_png;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

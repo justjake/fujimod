@@ -4,7 +4,7 @@
 //! inputs owned by this application. CPU execution and device scheduling are
 //! delegated to FujiMod's catalog-resolved XP5 session.
 
-use crate::{
+use super::{
     manifest::BootState,
     firmware::Firmware,
     rom_start::{self, RomStart},
@@ -37,7 +37,7 @@ pub(crate) struct Opened {
     pub flash_shadow: Option<flash_storage::Medium>,
     pub session: Session,
     pub inputs: Inputs,
-    pub outputs: crate::display_output::Outputs,
+    pub outputs: super::display_output::Outputs,
     pub ticks_per_second: u64,
     /// Instructions per scheduler turn: the run configuration's
     /// `execution.quantum` unless the caller overrides it for this run.
@@ -116,7 +116,7 @@ fn devices_and_resources(
     firmware: &Firmware,
     controls: Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
     run_directory: &Path,
-    outputs: &crate::display_output::Outputs,
+    outputs: &super::display_output::Outputs,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_image: Option<&fujimod_emulator_devices::parts::sd_card::Card>,
@@ -788,7 +788,7 @@ pub(crate) fn open_from(
     };
     let mut windows = state.device.clone();
     xp5_boot::apply_run_scene(&resolved, &mut windows, run_scene, ticks_per_second)?;
-    let outputs = crate::display_output::Outputs::default();
+    let outputs = super::display_output::Outputs::default();
     let (windows, resources, controls) = devices_and_resources(
         state,
         firmware,

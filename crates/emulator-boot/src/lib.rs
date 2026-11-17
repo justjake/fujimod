@@ -6,6 +6,8 @@ mod first_start;
 use fujimod_emulator_board_graph as graph;
 mod x70;
 pub mod xpp;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod xp5;
 
 use fujimod_emulator::board::{
         bus::{Bus, Mode},
