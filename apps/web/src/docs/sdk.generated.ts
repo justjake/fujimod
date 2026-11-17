@@ -5581,6 +5581,11 @@ export const focalComponents: readonly FocalComponent[] = [
             "comment": "One field's text (\"2026\", \"+\", \"09\")."
           },
           {
+            "name": "value_vector",
+            "type": "unsigned int (*)(unsigned int, int)",
+            "comment": "Optional owned vector shown instead of formatted field text."
+          },
+          {
             "name": "apply",
             "type": "void (*)(const int *)",
             "comment": "Commit all fields to stock."
