@@ -79,6 +79,32 @@ impl Default for KernelShape {
     }
 }
 
+/// Weighting of frames by local sharpness relative to the reference.
+///
+/// Sharpness is the energy of the block-luma Laplacian averaged over a
+/// square of `2 * radius + 1` blocks, each frame measured in its own
+/// coordinates and mapped into the reference's. A frame's samples are
+/// weighted by `min(1, E_frame / E_reference) ^ (power * confidence)`:
+/// where a frame is softer than the reference (defocus, motion blur) it
+/// counts less. The confidence `S / (S + 4 N)` compares the reference's
+/// energy above noise `S` with the energy noise alone gives, `N` (from the
+/// alignment's noise model), so in flat areas, where the energy ratio is
+/// noise against noise, every frame keeps contributing to noise reduction.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SharpnessParams {
+    pub radius: usize,
+    pub power: f32,
+}
+
+impl Default for SharpnessParams {
+    fn default() -> Self {
+        Self {
+            radius: 4,
+            power: 8.0,
+        }
+    }
+}
+
 /// How red and blue are merged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -113,6 +139,9 @@ pub struct ResolutionParams {
     /// exposure's white level.
     #[serde(default)]
     pub bracket: bool,
+    /// Local sharpness weighting; `None` weights every frame alike.
+    #[serde(default)]
+    pub sharpness: Option<SharpnessParams>,
     /// Per-tile residual alignment on top of each frame's global transform;
     /// `None` uses the global transforms only.
     #[serde(default)]
@@ -132,6 +161,7 @@ impl Default for ResolutionParams {
             robustness: Some(RobustParams::default()),
             color: ColorMerge::default(),
             bracket: false,
+            sharpness: None,
             local: None,
             strip_rows: 48,
             region: None,
@@ -339,6 +369,160 @@ impl BlockBand<f32> {
         let bottom =
             d[y1 * self.width + x0] + (d[y1 * self.width + x1] - d[y1 * self.width + x0]) * fx;
         top + (bottom - top) * fy
+    }
+}
+
+/// Laplacian energy of block luma, averaged over a square of
+/// `2 * radius + 1` blocks (clamped to the band).
+fn local_energy(band: &BlockBand<[f32; 3]>, wb: [f32; 3], radius: usize) -> BlockBand<f32> {
+    let (w, rows) = (band.width, band.rows);
+    let l: Vec<f32> = band.data.iter().map(|p| block_luma(*p, wb)).collect();
+    let at = |r: i64, i: i64| {
+        l[(r.clamp(0, rows as i64 - 1) as usize) * w + i.clamp(0, w as i64 - 1) as usize]
+    };
+    let mut lap2 = vec![0f32; rows * w];
+    for r in 0..rows {
+        for i in 0..w {
+            let (ri, ii) = (r as i64, i as i64);
+            let lap = 4.0 * at(ri, ii)
+                - at(ri, ii - 1)
+                - at(ri, ii + 1)
+                - at(ri - 1, ii)
+                - at(ri + 1, ii);
+            lap2[r * w + i] = lap * lap;
+        }
+    }
+    box_mean(band.jlo, w, rows, &lap2, radius)
+}
+
+/// Laplacian energy that noise alone gives block luma, averaged like
+/// [`local_energy`]: the Laplacian's taps (4, -1, -1, -1, -1) sum to 20
+/// times the variance of independent blocks.
+fn noise_energy(
+    band: &BlockBand<[f32; 3]>,
+    wb: [f32; 3],
+    noise: &NoiseModel,
+    radius: usize,
+) -> BlockBand<f32> {
+    // Coefficients of block_luma.
+    let k = [2.0 / 9.0, 5.0 / 9.0, 2.0 / 9.0];
+    let var: Vec<f32> = band
+        .data
+        .iter()
+        .map(|p| {
+            if p[0] < 0.0 {
+                return 0.0;
+            }
+            20.0 * (0..3)
+                .map(|c| (k[c] * wb[c]).powi(2) * noise.variance(c, p[c]))
+                .sum::<f32>()
+        })
+        .collect();
+    box_mean(band.jlo, band.width, band.rows, &var, radius)
+}
+
+/// Sharpness of the reference band: local energy and the confidence
+/// `S / (S + NOISE_MARGIN * N)` that a frame's lower energy is lost detail
+/// rather than noise, where `N` is the noise energy and `S` the energy
+/// above it. Without a noise model the confidence is 1.
+struct ReferenceSharpness {
+    energy: BlockBand<f32>,
+    confidence: Option<Vec<f32>>,
+}
+
+const NOISE_MARGIN: f32 = 4.0;
+
+impl ReferenceSharpness {
+    fn new(
+        band: &BlockBand<[f32; 3]>,
+        wb: [f32; 3],
+        noise: Option<&NoiseModel>,
+        radius: usize,
+    ) -> Self {
+        let energy = local_energy(band, wb, radius);
+        let confidence = noise.map(|n| {
+            let ne = noise_energy(band, wb, n, radius);
+            energy
+                .data
+                .iter()
+                .zip(&ne.data)
+                .map(|(&e, &n)| {
+                    let s = (e - n).max(0.0);
+                    if s > 0.0 {
+                        s / (s + NOISE_MARGIN * n)
+                    } else {
+                        0.0
+                    }
+                })
+                .collect()
+        });
+        Self { energy, confidence }
+    }
+}
+
+/// Mean of `values` (a `width` x `rows` band) over a square of
+/// `2 * radius + 1` cells, clamped to the band.
+fn box_mean(jlo: usize, w: usize, rows: usize, values: &[f32], radius: usize) -> BlockBand<f32> {
+    // Integral image, one row and column of zeros in front.
+    let mut sum = vec![0f64; (rows + 1) * (w + 1)];
+    for r in 0..rows {
+        let mut row = 0f64;
+        for i in 0..w {
+            row += values[r * w + i] as f64;
+            sum[(r + 1) * (w + 1) + i + 1] = sum[r * (w + 1) + i + 1] + row;
+        }
+    }
+    let mut data = vec![0f32; rows * w];
+    for r in 0..rows {
+        let (r0, r1) = (r.saturating_sub(radius), (r + radius + 1).min(rows));
+        for i in 0..w {
+            let (i0, i1) = (i.saturating_sub(radius), (i + radius + 1).min(w));
+            let total = sum[r1 * (w + 1) + i1] - sum[r0 * (w + 1) + i1] - sum[r1 * (w + 1) + i0]
+                + sum[r0 * (w + 1) + i0];
+            data[r * w + i] = (total / ((r1 - r0) * (i1 - i0)) as f64) as f32;
+        }
+    }
+    BlockBand {
+        jlo,
+        rows,
+        width: w,
+        data,
+    }
+}
+
+/// Sharpness weights of one frame for the reference block band:
+/// `min(1, E_frame / E_reference) ^ (power * confidence)`, with the frame's
+/// energy in reference units (`gain` scales frame values to the reference).
+fn sharpness_weights(
+    reference: &ReferenceSharpness,
+    frame: &BlockBand<[f32; 3]>,
+    to_frame_blocks: &Affine,
+    wb: [f32; 3],
+    params: &SharpnessParams,
+    gain: f32,
+) -> BlockBand<f32> {
+    let energy = local_energy(frame, wb, params.radius);
+    let re = &reference.energy;
+    let (w, rows) = (re.width, re.rows);
+    let mut data = vec![1f32; w * rows];
+    for r in 0..rows {
+        for i in 0..w {
+            let k = r * w + i;
+            let er = re.data[k];
+            let confidence = reference.confidence.as_ref().map_or(1.0, |c| c[k]);
+            if er <= 0.0 || confidence <= 0.0 {
+                continue;
+            }
+            let (u, v) = to_frame_blocks.apply(i as f64, (re.jlo + r) as f64);
+            let ek = energy.bilinear(u, v) * gain * gain;
+            data[k] = (ek / er).clamp(0.0, 1.0).powf(params.power * confidence);
+        }
+    }
+    BlockBand {
+        jlo: re.jlo,
+        rows,
+        width: w,
+        data,
     }
 }
 
@@ -798,6 +982,8 @@ pub fn merge_resolution(
         (Some(n), true) => Some((n.a, n.b)),
         _ => None,
     };
+    // Block rows the sharpness average reaches beyond a band.
+    let sharp_margin = params.sharpness.as_ref().map_or(0, |p| p.radius as i64);
     let nthreads = threads().min(used.len()).max(1);
     let wb = reference.calibration().wb;
     // The prior scales with the frame count so that a burst of identical
@@ -833,8 +1019,10 @@ pub fn merge_resolution(
         let (ey_lo, ey_hi) = site_rows(ej0, ej1);
         // Reference block band with a margin for neighborhoods and bilinear
         // lookups.
-        let jb_lo = ((grid.to_block(0.0, ey_lo).1).floor() as i64 - 2).max(0) as usize;
-        let jb_hi = (((grid.to_block(0.0, ey_hi).1).ceil() as i64 + 2).max(0) as usize)
+        let jb_lo =
+            ((grid.to_block(0.0, ey_lo).1).floor() as i64 - 2 - sharp_margin).max(0) as usize;
+        let jb_hi = (((grid.to_block(0.0, ey_hi).1).ceil() as i64 + 2 + sharp_margin).max(0)
+            as usize)
             .min(grid.height - 1);
         let mut ref_blocks = Vec::new();
         read_block_band(
@@ -851,6 +1039,10 @@ pub fn merge_resolution(
             width: grid.width,
             data: ref_blocks,
         };
+        let ref_energy = params
+            .sharpness
+            .as_ref()
+            .map(|sp| ReferenceSharpness::new(&ref_band, wb, alignment.noise.as_ref(), sp.radius));
         let kernels = strip_kernels(
             params,
             &out,
@@ -919,8 +1111,14 @@ pub fn merge_resolution(
             let handles: Vec<_> = shares
                 .iter()
                 .map(|share| {
-                    let (ref_band, grid, splatter, fields, gains) =
-                        (&ref_band, &grid, &splatter, &fields, &gains);
+                    let (ref_band, grid, splatter, fields, gains, ref_energy) = (
+                        &ref_band,
+                        &grid,
+                        &splatter,
+                        &fields,
+                        &gains,
+                        ref_energy.as_ref(),
+                    );
                     scope.spawn(move || -> PrepareResult {
                         let mut acc = vec![0f32; len1 * stride1];
                         let mut frame_stats = Vec::new();
@@ -953,13 +1151,17 @@ pub fn merge_resolution(
                             let mut raw = vec![0u16; (fy1 - fy0) * w];
                             frame.read_rows(fy0, &mut raw)?;
                             // Robustness against the reference.
-                            let weights = match robust {
-                                Some((p, noise)) if k != alignment.reference => {
+                            let weights = match (robust, &params.sharpness) {
+                                (r, s)
+                                    if k != alignment.reference && (r.is_some() || s.is_some()) =>
+                                {
                                     let to_blocks = block_scale(&to_frame);
                                     let (_, bv0) = grid.to_block(0.0, vmin);
                                     let (_, bv1) = grid.to_block(0.0, vmax);
-                                    let fj0 = (bv0.floor() as i64 - 2).max(0) as usize;
-                                    let fj1 = ((bv1.ceil() as i64 + 2).max(0) as usize)
+                                    let fj0 =
+                                        (bv0.floor() as i64 - 2 - sharp_margin).max(0) as usize;
+                                    let fj1 = ((bv1.ceil() as i64 + 2 + sharp_margin).max(0)
+                                        as usize)
                                         .min(grid.height - 1);
                                     read_block_band(
                                         frame,
@@ -975,14 +1177,38 @@ pub fn merge_resolution(
                                         width: grid.width,
                                         data: std::mem::take(&mut fb),
                                     };
-                                    let (map, mean, rejected) = robustness(
-                                        ref_band, &fband, &to_blocks, noise, wb, p, gains[k],
-                                    );
+                                    let mut map = match r {
+                                        Some((p, noise)) => {
+                                            let (map, mean, rejected) = robustness(
+                                                ref_band, &fband, &to_blocks, noise, wb, p,
+                                                gains[k],
+                                            );
+                                            frame_stats.push((k, mean, rejected));
+                                            Some(map)
+                                        }
+                                        None => {
+                                            frame_stats.push((k, 1.0, 0.0));
+                                            None
+                                        }
+                                    };
+                                    if let (Some(sp), Some(re)) = (s, ref_energy) {
+                                        let sw = sharpness_weights(
+                                            re, &fband, &to_blocks, wb, sp, gains[k],
+                                        );
+                                        map = Some(match map {
+                                            Some(mut m) => {
+                                                for (a, b) in m.data.iter_mut().zip(&sw.data) {
+                                                    *a *= b;
+                                                }
+                                                m
+                                            }
+                                            None => sw,
+                                        });
+                                    }
                                     worker_peak =
-                                        worker_peak.max(fb_raw.len() * 2 + fband.data.len() * 12);
+                                        worker_peak.max(fb_raw.len() * 2 + fband.data.len() * 16);
                                     fb = fband.data;
-                                    frame_stats.push((k, mean, rejected));
-                                    Some(map)
+                                    map
                                 }
                                 _ => {
                                     frame_stats.push((k, 1.0, 0.0));
