@@ -79,6 +79,30 @@ impl Wire for Unconnected {
     }
 }
 
+/// A wire whose one part is always selected: the link has no chip select.
+pub struct Dedicated(pub Box<dyn Endpoint>);
+impl Wire for Dedicated {
+    fn begin(&mut self, frame: Frame) -> Result<u64, String> {
+        self.0.validate(frame)?;
+        Ok(0)
+    }
+    fn finish(&mut self, token: u64, frame: Frame, now: u64) -> Result<u16, String> {
+        if token != 0 {
+            return Err("invalid dedicated serial token".into());
+        }
+        Ok(self.0.transfer(frame, now))
+    }
+    fn save(&self) -> Value {
+        serde_json::json!({"kind": "dedicated", "part": self.0.name(), "state": self.0.save()})
+    }
+    fn restore(&mut self, state: &Value) -> Result<(), String> {
+        if state["kind"] != "dedicated" || state["part"] != self.0.name() {
+            return Err("dedicated serial wire differs from checkpoint".into());
+        }
+        self.0.restore(&state["state"])
+    }
+}
+
 /// An explicitly fixed electrical input for a serial-wire scenario. This is
 /// neither a peripheral protocol nor a response chosen from transmitted data.
 pub struct InputLevel(pub bool);

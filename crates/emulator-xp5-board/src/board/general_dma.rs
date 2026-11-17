@@ -36,6 +36,9 @@ enum WireInput {
     GpioSelected {
         endpoints: Vec<super::serial::Connection>,
     },
+    Dedicated {
+        part: super::serial::Part,
+    },
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -89,6 +92,7 @@ pub fn register_all(
             WireInput::GpioSelected { endpoints } => {
                 super::serial::gpio_wire(pins.clone(), endpoints)?
             }
+            WireInput::Dedicated { part } => super::serial::dedicated_wire(part)?,
         };
         let serial = Controller::new(
             w.base,
