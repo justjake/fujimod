@@ -18,9 +18,9 @@ Settings accepts a sixteen-byte MCU persistent packet.\n\
 First-start menus are accepted through MENU/OK ADC input.\n\
 EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --clock-seconds-2000 N.\n\
 Run output and limits: --output DIR, --seconds N, --status-every N, --viewer-port PORT.\n\
-XP5 inputs: --quantum N, --keys SCRIPT,\n\
+Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
---card-image IMAGE, --card-file NAME=PATH (ROM or SD card startup).\n\
+--card-image IMAGE, --card-file NAME=PATH.\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 Application-profile startup: --application-plan FILE.\n\
@@ -189,6 +189,15 @@ impl Boot {
             .transpose()
     }
 
+    fn sd_files(&self) -> Result<Vec<(String, PathBuf)>, String> {
+        self.card_files.iter().map(|specification| {
+            specification.split_once('=')
+                .filter(|(name, path)| !name.is_empty() && !path.is_empty())
+                .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
+                .ok_or("--card-file needs NAME=PATH".into())
+        }).collect()
+    }
+
     fn pc_trace(&mut self) -> Result<Option<boot::TraceOutput>, String> {
         let path = self.path("--pc-trace");
         let limit = self.text("--pc-trace-limit")?
@@ -226,10 +235,10 @@ struct Outcome {
 fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--application-plan", "--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
+        &["--application-plan", "--quantum", "--keys", "--patch", "--scene", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
     )?;
-    if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.card_files.is_empty() || !boot_options.pokes.is_empty() {
-        return Err("--discovery, --stub, --mod, --card-file and --poke do not apply to EXR II runs".into());
+    if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.pokes.is_empty() {
+        return Err("--discovery, --stub, --mod and --poke do not apply to EXR II runs".into());
     }
     let clock_seconds_2000 = boot_options
         .text("--clock-seconds-2000")?
@@ -257,6 +266,7 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     if let Some(path) = boot_options.path("--load-snapshot") {
         boot::load_snapshot(&mut session, &path)?;
     }
+    boot::media::attach(&mut session, boot_options.path("--card-image").as_deref(), &boot_options.sd_files()?)?;
     session.board.set_execution_policy(execution_policy)?;
     let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     let duration = boot_options.duration("--seconds")?;
@@ -321,17 +331,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
     if !boot_options.preferred_languages.is_empty() {
         return Err("--language does not apply to XP5 runs".into());
     }
-    let card_files = boot_options
-        .card_files
-        .iter()
-        .map(|specification| {
-            specification
-                .split_once('=')
-                .filter(|(name, path)| !name.is_empty() && !path.is_empty())
-                .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
-                .ok_or("--card-file needs NAME=PATH")
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let card_files = boot_options.sd_files()?;
     let pc_trace = boot_options.pc_trace()?;
     let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
     let run = xp5::Run {
@@ -387,6 +387,8 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let request = boot::application::Startup {
         update: options.required("--update")?.into(),
         plan: options.required("--application-plan")?.into(),
+        card_image: options.path("--card-image"),
+        card_files: options.sd_files()?,
         discovery: options.discovery,
         quantum: options.text("--quantum")?.as_deref().map(xp5::parse_quantum).transpose()?,
     };
@@ -394,7 +396,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let duration = options.duration("--seconds")?;
     let output = options.path("--output");
     if !options.values.is_empty() || !options.stubs.is_empty() || !options.mods.is_empty()
-        || !options.card_files.is_empty() || !options.preferred_languages.is_empty() || !options.pokes.is_empty()
+        || !options.preferred_languages.is_empty() || !options.pokes.is_empty()
     {
         return Err("application-profile runtime needs supported options and media in its startup plan".into());
     }

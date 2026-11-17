@@ -9,6 +9,8 @@ mod png_writer;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod output;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod media;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
 mod host;

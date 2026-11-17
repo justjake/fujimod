@@ -13,15 +13,12 @@
 //! system: it follows one cluster chain and reads names, nothing else. Deleted entries are not
 //! listed (a deleted name has lost its first character).
 
-use fujimod_emulator_devices::parts::sd_card::{Card, Options, SECTOR};
-use std::{fs::File, io::Read, path::Path};
+use fujimod_emulator_devices::parts::sd_card::Card;
+use std::path::Path;
 
-/// The sparse model's bound: 2^21 nonzero sectors (1 GiB). A boot card holds a few hundred.
-const MAX_NONZERO_SECTORS: usize = 1 << 21;
 /// A root directory is read whole; refuse one larger than this.
 const MAX_DIRECTORY_BYTES: usize = 16 << 20;
 const MAX_DIRECTORY_CLUSTERS: usize = 1 << 16;
-const SCAN_CHUNK: usize = 4 << 20;
 
 pub(crate) struct CardImage {
     pub card: Card,
@@ -33,32 +30,7 @@ pub(crate) struct CardImage {
 
 impl CardImage {
     pub fn load(path: &Path) -> Result<Self, String> {
-        let mut file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let length = file.metadata().map_err(|e| format!("{}: {e}", path.display()))?.len();
-        if length == 0 || length % SECTOR as u64 != 0 {
-            return Err(format!("{}: {length} bytes is not a whole number of 512-byte sectors", path.display()));
-        }
-        let sectors = u32::try_from(length / SECTOR as u64)
-            .map_err(|_| format!("{}: {length} bytes is over the 2 TiB card limit", path.display()))?;
-        let mut card = Card::new(Options { sectors, max_dirty_sectors: MAX_NONZERO_SECTORS })
-            .map_err(|e| format!("{}: card of {length} bytes refused: {e}", path.display()))?;
-        let mut buffer = vec![0u8; SCAN_CHUNK];
-        let mut offset = 0u64;
-        let mut kept = 0usize;
-        while offset < length {
-            let size = ((length - offset) as usize).min(SCAN_CHUNK);
-            file.read_exact(&mut buffer[..size]).map_err(|e| format!("{}: {e}", path.display()))?;
-            for (index, sector) in buffer[..size].chunks(SECTOR).enumerate() {
-                if sector.iter().any(|byte| *byte != 0) {
-                    kept += 1;
-                    if kept > MAX_NONZERO_SECTORS {
-                        return Err(format!("{}: more than {MAX_NONZERO_SECTORS} nonzero sectors", path.display()));
-                    }
-                    card.write_bytes(offset + (index * SECTOR) as u64, sector)?;
-                }
-            }
-            offset += size as u64;
-        }
+        let card = crate::media::read_image(path)?;
         let listing = list_roots(&card).map_err(|e| format!("{}: {e}", path.display()))?;
         if let Some(name) = listing.names.iter().find(|name| forbidden(name)) {
             return Err(format!(
@@ -304,7 +276,8 @@ fn exfat(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Seek, SeekFrom, Write};
+    use fujimod_emulator_devices::parts::sd_card::Options;
+    use std::{fs::File, io::{Seek, SeekFrom, Write}};
 
     const SECTORS: u32 = 0x40_0000; // 2 GiB, the smallest card the model takes
 

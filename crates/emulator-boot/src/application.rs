@@ -17,6 +17,8 @@ pub struct Startup {
     pub plan: PathBuf,
     pub discovery: bool,
     pub quantum: Option<usize>,
+    pub card_image: Option<PathBuf>,
+    pub card_files: Vec<(String, PathBuf)>,
 }
 
 /// Application startup facts. File references are relative to the plan's directory.
@@ -117,7 +119,13 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
     }
     let directory = startup.plan.parent().unwrap_or_else(|| Path::new(""));
     let flash = document.flash.as_deref().map(|path| bytes(directory, path)).transpose()?;
-    let files = named(directory, document.card_files)?;
+    let mut files = named(directory, document.card_files)?;
+    for (name, bytes) in crate::media::read_files(&startup.card_files)? {
+        if files.insert(name.clone(), bytes).is_some() {
+            return Err(format!("SD card file {name} supplied twice"));
+        }
+    }
+    let card_image = startup.card_image.as_deref().map(crate::media::read_image).transpose()?;
     let execution = resolved.configuration.execution.as_ref();
     let engine = execution.map_or(RunEngine::Unicorn, |execution| execution.engine);
     let quantum = startup.quantum.or_else(|| execution.map(|run| run.quantum)).unwrap_or(1000);
@@ -137,7 +145,12 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
                 return Err("XP4 startup plan core count differs from the selected SoC".into());
             }
             definition.discovery = startup.discovery;
-            let board = xp4::Session::new(definition, flash, files.into_iter().collect())?;
+            let files = files.into_iter().collect::<Vec<_>>();
+            let board = match card_image {
+                Some(medium) => xp4::Session::new_with_media(definition, flash, Vec::new(),
+                    vec![(0, fujimod_emulator_session::card::merge_files(medium, &files)?)])?,
+                None => xp4::Session::new(definition, flash, files)?,
+            };
             Board::Xp4(Box::new(board))
         }
         ("xpp", Plan::Xpp { registers, sub_cpu_registers, assets }) => {
@@ -153,7 +166,10 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
             })?;
             assets.insert(assembly.flash_asset.into(), flash.ok_or("X-Processor Pro requires flash backing")?);
             let mut devices = assembly.devices;
-            install_card_files(&mut devices, &mut assets, files)?;
+            let mut files = files.into_iter().collect::<Vec<_>>();
+            if card_image.is_none() {
+                install_card_files(&mut devices, &mut assets, std::mem::take(&mut files))?;
+            }
             let definition = json!({
                 "configuration_id": resolved.configuration.id,
                 "firmware_id": resolved.configuration.firmware_id,
@@ -170,8 +186,12 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
                 "devices": &devices,
             });
             let spec = serde_json::from_value(devices).map_err(|error| error.to_string())?;
-            let board = fujimod_emulator_xpp::board::build(assembly.execution, spec, &assets, mode, engine)?
+            let mut board = fujimod_emulator_xpp::board::build(assembly.execution, spec, &assets, mode, engine)?
                 .into_session(definition)?;
+            if let Some(medium) = card_image {
+                let slot = board.contacts.keys().next().cloned().ok_or("board has no modeled SD card slot")?;
+                board.install_card_files(&slot, Some(medium), &files)?;
+            }
             Board::Xpp(Box::new(board))
         }
         _ => return Err("application startup plan does not match the selected processor".into()),
@@ -194,7 +214,7 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
 }
 
 fn install_card_files(
-    devices: &mut Value, assets: &mut BTreeMap<String, Vec<u8>>, files: BTreeMap<String, Vec<u8>>,
+    devices: &mut Value, assets: &mut BTreeMap<String, Vec<u8>>, files: Vec<(String, Vec<u8>)>,
 ) -> Result<(), String> {
     if files.is_empty() {
         return Ok(());

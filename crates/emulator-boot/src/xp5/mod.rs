@@ -91,6 +91,7 @@ pub(super) fn open_startup(
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
+    let mut runtime_files = Vec::new();
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard) {
         let start = rom_start::RomStart::load(
             rom_path.as_deref().ok_or("--start rom needs --rom FILE")?,
@@ -111,15 +112,14 @@ pub(super) fn open_startup(
             }
             None => start,
         })
-    } else if rom_path.is_some()
-        || sd_image.is_some()
-        || !card_files.is_empty()
-    {
-        return Err("a boot ROM and SD card media require a ROM or SD card startup".into());
     } else {
+        if rom_path.is_some() {
+            return Err("a boot ROM requires a ROM or SD card startup".into());
+        }
+        runtime_files = card_files;
         None
     };
-    let opened = open::open_from(
+    let mut opened = open::open_from(
         &firmware,
         &state,
         configuration,
@@ -129,5 +129,8 @@ pub(super) fn open_startup(
         quantum_override,
         rom.as_ref(),
     )?;
+    if rom.is_none() {
+        crate::media::attach(&mut opened.session, sd_image.as_deref(), &runtime_files)?;
+    }
     Ok(Started { firmware, state, opened })
 }

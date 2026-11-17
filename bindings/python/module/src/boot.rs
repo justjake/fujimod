@@ -39,6 +39,8 @@ impl Boot for CatalogBoot {
             let boot::Opened::Application(started) = boot::open(resolved, boot::StartupInputs::Application(
                 boot::application::Startup {
                     update: inputs.update, plan, discovery: inputs.discovery, quantum: inputs.quantum,
+                    card_image: None,
+                    card_files: Vec::new(),
                 },
             ))? else {
                 return Err("application startup returned another processor generation".into());
