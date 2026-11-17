@@ -272,7 +272,7 @@ impl Loaded {
                 return Err(format!("mod reservation {base:#x}+{size:#x} intersects firmware"));
             }
             for preload in preloads {
-                let length = preload.length.or(preload.size.map(u64::from)).unwrap_or(1);
+                let length = super::manifest::preload_length(preload)?;
                 if overlaps(region, (preload.address, length)) {
                     return Err(format!("mod reservation {base:#x}+{size:#x} intersects a boot preload"));
                 }

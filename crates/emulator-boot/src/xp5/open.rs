@@ -105,7 +105,7 @@ fn initial_images(
             &mut images,
             MemoryImage {
                 address: preload.address,
-                bytes: preload.load_bytes(firmware)?,
+                bytes: super::manifest::preload_bytes(preload, firmware)?,
             },
         )?;
     }
@@ -121,6 +121,7 @@ fn devices_and_resources(
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_image: Option<&fujimod_emulator_devices::parts::sd_card::Card>,
+    companion_core: Option<usize>,
 ) -> Result<
     (
         Vec<DeviceWindow>,
@@ -130,13 +131,10 @@ fn devices_and_resources(
     String,
 > {
     let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
-    let companion = state
-        .device
-        .iter()
-        .any(|window| window.kind == "interprocessor-mailbox")
-        .then(|| xp5_board::Companion {
+    let companion = if state.device.iter().any(|window| window.kind == "interprocessor-mailbox") {
+        Some(xp5_board::Companion {
             pins: mailbox::Pins {
-                companion: state.cpu.len(),
+                companion: companion_core.ok_or("mailbox requires a Cortex-M4 core")?,
                 request: 55,
                 control: 58,
                 reply: 141,
@@ -144,7 +142,10 @@ fn devices_and_resources(
                 fault: 143,
             },
             channel: mailbox::Channel::default(),
-        });
+        })
+    } else {
+        None
+    };
     let mut resources = xp5_board::Resources {
         sd: xp5_board::sd::resolve(state.sd.clone(), assets)?,
         // Replaced by the declared key model when the devices are assembled.
@@ -799,6 +800,8 @@ pub(crate) fn open_from(
         windows,
         &rom.map(RomStart::assets).unwrap_or_default(),
         rom.and_then(|rom| rom.card_image.as_ref()).map(|image| &image.card),
+        reference.soc.processors.iter()
+            .position(|processor| processor.model == ProcessorModel::CortexM4),
     )?;
     if windows.is_empty() {
         return Err("X100VI caller boot manifest has no device windows".into());

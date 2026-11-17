@@ -1,0 +1,62 @@
+{
+ "update_sha256": "0982ffa51332e148134df378ecd3e485e798eeb4ce91738509bfa0b6629e1e52",
+ "sections": [
+  {
+   "name": "loader",
+   "address": 528384,
+   "size": 123584,
+   "dat_offset": 787132,
+   "encoding": "raw",
+   "sha256": "f6fd863952976e96a6ffa4cb90663164e41a79bbe00806a5fbf9fee32c9e0ef5"
+  },
+  {
+   "name": "unit-0",
+   "address": 8916992,
+   "size": 2121808,
+   "sha256": "04537ca068bde0e863c8828e4b3272e3b6eeee9385c2dc02088632914d9cdfa9",
+   "dat_offset": 1311420,
+   "encoding": "method4"
+  },
+  {
+   "name": "camera-app",
+   "address": 18616320,
+   "size": 29141040,
+   "sha256": "eb627807dbca12cb156a5cbcb049277e1a93632f120a930a6a549a5ba7e331e2",
+   "dat_offset": 10224316,
+   "encoding": "method4"
+  },
+  {
+   "name": "recording-app",
+   "address": 47710208,
+   "size": 23044096,
+   "sha256": "367659ef25e14edd8d8abd2cdd96ad458093765d030953be5bece8dbbf5f913f",
+   "dat_offset": 18481852,
+   "encoding": "method4"
+  },
+  {
+   "name": "ui-overlays",
+   "address": 101257216,
+   "size": 15835136,
+   "sha256": "730dfeaa6aa0ed54d10f52bb424c8abce3f0d26594ccff04c0d94b370e9dfd21",
+   "dat_offset": 28312252,
+   "encoding": "method4"
+  },
+  {
+   "name": "attribute-table-f",
+   "address": 6819840,
+   "size": 9091032,
+   "sha256": "47e73ae58661b8d76a5978f98529143ac006ac131ed1d8124c76688643dd66de",
+   "dat_offset": 45482684,
+   "encoding": "method4"
+  },
+  {
+   "name": "attribute-table-g",
+   "address": 1029701632,
+   "size": 2073600,
+   "sha256": "c1d24530880f3ce12bf3c8f11dec51d347a858ec48a1fb16ca5c51d1cc4a8fca",
+   "dat_offset": 107610812,
+   "encoding": "method4"
+  }
+ ],
+ "verification": []
+}

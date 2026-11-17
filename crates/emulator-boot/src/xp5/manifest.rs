@@ -2,7 +2,6 @@
 //! (0x hexadecimal is accepted).
 use serde::{Deserialize, Serialize};
 use fujimod_emulator_devices::graph::DeviceWindow;
-use std::collections::BTreeMap;
 use std::path::Path;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -28,20 +27,12 @@ pub struct BootState {
     /// write protection are run inputs; the card is formatted blank.
     #[serde(default)]
     pub sd: Vec<fujimod_emulator_xp5_board::board::sd::MediaInputs>,
-    pub cpu: Vec<CpuState>,
-    pub gic: Option<Gic>,
 }
 fn version() -> u32 {
     1
 }
 fn yes() -> bool {
     true
-}
-fn cpsr() -> u64 {
-    0x3c5
-}
-fn stride() -> u64 {
-    0x20000
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -87,60 +78,12 @@ pub struct RamRegion {
     pub base: u64,
     pub size: u64,
 }
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Preload {
-    pub address: u64,
-    /// XOR offset in the update file; length and sha256 are mandatory.
-    pub dat_offset: Option<u64>,
-    pub length: Option<u64>,
-    pub sha256: Option<String>,
-    /// Hex byte string, spaces accepted. Exactly one of bytes/value/dat_offset.
-    pub bytes: Option<String>,
-    pub value: Option<u64>,
-    /// Little-endian value width (1,2,4,8), required with value.
-    pub size: Option<u8>,
-}
+pub use fujimod_catalog::firmware::Preload;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DeviceFragment {
     device: Vec<DeviceWindow>,
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct CpuState {
-    pub id: usize,
-    pub mpidr: u64,
-    pub pc: u64,
-    pub sp: u64,
-    #[serde(default = "cpsr")]
-    pub cpsr: u64,
-    #[serde(default)]
-    pub running: bool,
-    /// Start a parked reset core when stock primary writes its shared-RAM flag.
-    pub release_when: Option<ReleaseWord>,
-    #[serde(default)]
-    pub regs: BTreeMap<String, u64>,
-    #[serde(default)]
-    pub sysregs: BTreeMap<String, u64>,
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ReleaseWord {
-    pub address: u64,
-    pub value: u32,
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Gic {
-    pub distributor: u64,
-    pub redistributor: u64,
-    #[serde(default = "stride")]
-    pub redistributor_stride: u64,
-    pub spi_max: Option<u32>,
-    /// Distributor register offsets and values left by the skipped boot stage.
-    #[serde(default)]
-    pub registers: BTreeMap<String, u64>,
 }
 /// A firmware's boot manifest and stream layout, compiled into the crate.
 pub(crate) struct Bundled {
@@ -207,59 +150,57 @@ impl BootState {
         if s.version != 1 {
             return Err(format!("unsupported boot state version {}", s.version));
         }
-        if s.cpu.is_empty() || s.cpu.iter().enumerate().any(|(i, c)| c.id != i) {
-            return Err("CPU ids must be contiguous from zero".into());
-        }
-        if s.cpu.iter().filter(|c| c.running).count() != 1 {
-            return Err("exactly one boot CPU must have running=true".into());
-        }
         Ok(s)
     }
 }
 
-impl Preload {
-    pub fn load_bytes(&self, firmware: &super::firmware::Firmware) -> Result<Vec<u8>, String> {
-        let count = usize::from(self.bytes.is_some())
-            + usize::from(self.value.is_some())
-            + usize::from(self.dat_offset.is_some());
-        if count != 1 {
-            return Err("preload requires exactly one of bytes/value/dat_offset".into());
-        }
-        let bytes = if let Some(offset) = self.dat_offset {
-            return firmware.xor_dat_range(
-                offset,
-                self.length.ok_or("DAT preload requires length")?,
-                self.sha256
-                    .as_deref()
-                    .ok_or("DAT preload requires sha256")?,
-            );
-        } else if let Some(hex) = &self.bytes {
-            let hex: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
-            if !hex.is_ascii() || hex.len() % 2 != 0 {
-                return Err("invalid preload hex bytes".into());
-            }
-            (0..hex.len())
-                .step_by(2)
-                .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| e.to_string()))
-                .collect::<Result<Vec<_>, _>>()?
-        } else {
-            let size = self.size.ok_or("value preload requires size")?;
-            if ![1, 2, 4, 8].contains(&size) {
-                return Err("invalid value preload width".into());
-            }
-            let value = self.value.unwrap();
-            if size < 8 && value >= 1 << (size * 8) {
-                return Err("value does not fit preload width".into());
-            }
-            value.to_le_bytes()[..size as usize].to_vec()
-        };
-        if let Some(hash) = &self.sha256 {
-            if super::firmware::sha256_hex(&bytes) != *hash {
-                return Err("preload hash mismatch".into());
-            }
-        }
-        Ok(bytes)
+pub(crate) fn preload_bytes(
+    preload: &Preload,
+    firmware: &super::firmware::Firmware,
+) -> Result<Vec<u8>, String> {
+    let count = usize::from(preload.words.is_some())
+        + usize::from(preload.value.is_some())
+        + usize::from(preload.dat_offset.is_some());
+    if count != 1 {
+        return Err("preload requires exactly one of words, value or DAT offset".into());
     }
+    if let Some(offset) = preload.dat_offset {
+        return firmware.xor_dat_range(
+            offset,
+            preload.length.ok_or("DAT preload requires length")?,
+            preload.sha256.as_deref().ok_or("DAT preload requires SHA-256")?,
+        );
+    }
+    let (words, width) = match &preload.words {
+        Some(words) => (words.as_slice(), preload.word_size.ok_or("word preload requires word_size")?),
+        None => (std::slice::from_ref(preload.value.as_ref().unwrap()),
+                 preload.size.ok_or("value preload requires size")?),
+    };
+    if ![1, 2, 4, 8].contains(&width) {
+        return Err("invalid preload word width".into());
+    }
+    let mut bytes = Vec::with_capacity(words.len() * width as usize);
+    for &word in words {
+        if width < 8 && word >= 1 << (width * 8) {
+            return Err("word does not fit preload width".into());
+        }
+        bytes.extend_from_slice(&word.to_le_bytes()[..width as usize]);
+    }
+    if let Some(hash) = &preload.sha256 {
+        if super::firmware::sha256_hex(&bytes) != *hash {
+            return Err("preload hash mismatch".into());
+        }
+    }
+    Ok(bytes)
+}
+
+pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
+    if let Some(words) = &preload.words {
+        return (words.len() as u64)
+            .checked_mul(preload.word_size.ok_or("word preload requires word_size")?)
+            .ok_or_else(|| "preload length overflows".into());
+    }
+    preload.length.or(preload.size).ok_or_else(|| "preload has no length".into())
 }
 
 #[cfg(test)]

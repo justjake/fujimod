@@ -71,7 +71,13 @@ pub(super) fn open_startup(
         RunStart::SdCard => return Err("XP5 SD card startup is unavailable".into()),
     };
     let firmware_id = configuration.configuration.firmware_id.clone();
-    let state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
+    let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
+    let preloads = configuration.configuration.preset.as_ref()
+        .and_then(|preset| preset.firmware_profile_id.as_ref())
+        .and_then(|id| configuration.reference.firmware.layouts.as_ref()?.profiles.get(id))
+        .and_then(|profile| profile.preload.as_deref())
+        .unwrap_or_default();
+    state.preload.splice(..0, preloads.iter().cloned());
     let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
     let firmware = firmware::Firmware::from_update(&firmware_id, update_bytes, true)?;
     if let Some(directory) = &run_directory {

@@ -1,0 +1,42 @@
+# XP5 receiver and image-processing windows for the catalog run scene.
+[[device]]
+base = 0xff940000
+size = 0x1000
+kind = "imaging-receiver"
+
+[[device]]
+base = 0xff941000
+size = 0x1000
+kind = "imaging-receiver"
+
+[[device]]
+base = 0xff970000
+size = 0x1000
+kind = "movdc"
+
+[[device]]
+base = 0xff971000
+size = 0x1000
+kind = "movdc"
+
+[[device]]
+base = 0xff972000
+size = 0x1000
+kind = "movdc"
+
+[[device]]
+base = 0xff974000
+size = 0x1000
+kind = "imaging-preview"
+
+[[device]]
+base = 0xffd01000
+size = 0x1000
+kind = "imaging-rifp-io"
+
+[[device]]
+base = 0xffd02000
+size = 0x1000
+kind = "imaging-rifp"
+[device.options]
+completion_us = 1000

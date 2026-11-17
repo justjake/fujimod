@@ -18,6 +18,111 @@
           "dat_origin": 628,
           "xor": 255
         },
+        "preload": [
+          {
+            "address": 17563648,
+            "dat_offset": 1704564,
+            "length": 2048,
+            "sha256": "8fbd84f3dbe3ab4ad5a468f40611827e1bab7030827f610c6929bdb96a4933c2"
+          },
+          {
+            "address": 99920,
+            "words": [
+              65534,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535
+            ],
+            "word_size": 4
+          },
+          {
+            "address": 100000,
+            "value": 1398031684,
+            "size": 4
+          },
+          {
+            "address": 100128,
+            "value": 1398031684,
+            "size": 4
+          },
+          {
+            "address": 100256,
+            "value": 4,
+            "size": 4
+          },
+          {
+            "address": 100260,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 100264,
+            "value": 0,
+            "size": 8
+          },
+          {
+            "address": 100372,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 100376,
+            "words": [
+              0,
+              0,
+              0,
+              98304,
+              0
+            ],
+            "word_size": 4
+          },
+          {
+            "address": 101404,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 101408,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 101412,
+            "value": 0,
+            "size": 4
+          },
+          {
+            "address": 101416,
+            "value": 267,
+            "size": 4
+          },
+          {
+            "address": 101420,
+            "value": 2145056,
+            "size": 4
+          },
+          {
+            "address": 101424,
+            "value": 0,
+            "size": 4
+          }
+        ],
         "cpu": [
           {
             "id": 0,
