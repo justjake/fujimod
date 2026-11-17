@@ -17,11 +17,12 @@ if (!receipts.includes(join(client, filename))) throw Error('Missing client bund
 const packages = receipts.flatMap((path) => JSON.parse(readFileSync(path, 'utf8')) as string[]);
 const runtime = process.env.FUJIMOD_RUNTIME ?? resolve('public/runtime');
 const receipt = join(runtime, 'sbom-components.json');
-const assets: Component[] = existsSync(receipt)
+const hasReceipt = existsSync(receipt);
+if (!hasReceipt && (process.env.FUJIMOD_RUNTIME || existsSync(join(runtime, 'catalog.json'))))
+  throw Error(`Missing SBOM provenance from runtime build: ${receipt}`);
+const assets: Component[] = hasReceipt
   ? (JSON.parse(readFileSync(receipt, 'utf8')) as Component[])
   : [];
-if (process.env.FUJIMOD_RUNTIME && !existsSync(receipt))
-  throw Error(`Missing SBOM provenance from runtime build: ${receipt}`);
 const bom = cycloneDx([
   ...npmComponents(root, packages),
   ...cargoComponents(root, [
