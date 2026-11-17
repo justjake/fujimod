@@ -1017,11 +1017,19 @@ impl Board {
                 })
                 .transpose()?
                 .unwrap_or(u64::MAX);
-            if until.is_some_and(|until| s.timeline.now() >= until) || remaining == 0 {
+            // A run a loop window stopped continues to its counted end, as
+            // ordinary execution would have, before the clock limit applies.
+            let resume = s.mprofile_loops.take_resume().filter(|&(core, end)| {
+                end > s.instructions[core] && s.released[core] && !s.waiting[core]
+            });
+            if (resume.is_none() && until.is_some_and(|until| s.timeline.now() >= until))
+                || remaining == 0
+            {
                 return Ok(());
             }
             let n = self.cpus.len();
-            if pause_after.is_some_and(|pause| s.total_instructions().is_ok_and(|n| n >= pause))
+            if resume.is_none()
+                && pause_after.is_some_and(|pause| s.total_instructions().is_ok_and(|n| n >= pause))
                 && (s.execution_policy == ExecutionPolicy::Interactive
                     || completed_slice
                         .is_some_and(|core| (core + 1..n).all(|c| !s.released[c] || s.waiting[c])))
@@ -1063,9 +1071,11 @@ impl Board {
                 }
             }
             let start = self.next_core.get();
-            let core = (0..n)
-                .map(|i| (start + i) % n)
-                .find(|&c| s.released[c] && !s.waiting[c]);
+            let core = resume.map(|(core, _)| core).or_else(|| {
+                (0..n)
+                    .map(|i| (start + i) % n)
+                    .find(|&c| s.released[c] && !s.waiting[c])
+            });
             let Some(core) = core else {
                 if until.is_none() && s.timeline.next_event().is_none() {
                     self.idle_stopped.set(true);
@@ -1122,7 +1132,13 @@ impl Board {
                 .copied()
                 .ok_or_else(|| format!("timeline has no processor {core}"))?;
             let boundary = engine_run_boundary(&s.timeline, instruction_limit, until, lag)?;
-            let budget = s.timeline.processor_budget(core, instruction_limit, until)? as usize;
+            let budget = match resume {
+                Some((_, end)) => (end - s.instructions[core]).min(remaining) as usize,
+                None => s
+                    .timeline
+                    .processor_budget(core, instruction_limit, until)?
+                    as usize,
+            };
             if budget == 0 {
                 return Err("scheduler made no progress at a device deadline".into());
             }
