@@ -1793,6 +1793,7 @@ dependencies = [
  "fujimod-emulator-exr2-system",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-models",
+ "fujimod-emulator-parts-io",
  "fujimod-perf",
  "fujimod-workspace-hack",
  "libc",
