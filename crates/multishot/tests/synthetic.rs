@@ -14,7 +14,9 @@ use fujimod_multishot::merge::{
 };
 use fujimod_multishot::noise::NoiseModel;
 use fujimod_multishot::source::{FrameSource, MemoryFrame};
-use fujimod_multishot::synthetic::{MovingDisc, NoiseSpec, Scene, WB, handheld_transforms, render};
+use fujimod_multishot::synthetic::{
+    MovingDisc, NoiseSpec, Scene, WB, handheld_transforms, render, render_exposed,
+};
 use fujimod_multishot::tiff::{Tiff, find};
 
 const W: usize = 600;
@@ -361,6 +363,7 @@ fn noise_model_from_manual_alignment_is_used() {
         refine: None,
         fine: None,
         rejected: None,
+        gain: 1.0,
     };
     let mut a = Alignment {
         reference: 0,
@@ -458,4 +461,115 @@ fn local_alignment_corrects_residual_shift() {
         "the shifted alignment {mo} should lose sharpness against {mg}"
     );
     assert!(mf > 0.97 * mg, "local alignment {mf} should recover {mg}");
+}
+
+#[test]
+fn bracket_merge_extends_range() {
+    // Exposures 1, 2.2 and 3.5 of the chart; the shortest is the reference.
+    // The long frames clip the edge panel's bright side, and their shadows
+    // are cleaner, so the merge must take highlights from the short frame
+    // and shadows mostly from the long ones.
+    let scene = Scene::chart(W, H);
+    let truth = handheld_transforms(3, W, H, 21);
+    let exposures = [1.0f32, 2.2, 3.5];
+    let frames: Vec<MemoryFrame> = std::thread::scope(|s| {
+        let handles: Vec<_> = truth
+            .iter()
+            .zip(exposures)
+            .enumerate()
+            .map(|(k, (t, e))| {
+                let scene = &scene;
+                s.spawn(move || render_exposed(scene, W, H, t, k, Some(NOISE), 7, e))
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let fr = refs(&frames);
+    let a = align(&fr, 0, &test_align_params()).unwrap();
+    assert_eq!(a.accepted(), 3);
+    for (f, e) in a.frames.iter().zip(exposures) {
+        assert!(
+            (f.gain * e as f64 - 1.0).abs() < 0.02,
+            "{}: gain {} for exposure {e}",
+            f.label,
+            f.gain
+        );
+    }
+    let bracket = ResolutionParams {
+        bracket: true,
+        scale: 1.0,
+        ..ResolutionParams::default()
+    };
+    // Without exposure scaling robustness would reject the brighter frames
+    // as motion; with it off they are averaged in unscaled.
+    let plain = ResolutionParams {
+        bracket: false,
+        robustness: None,
+        ..bracket.clone()
+    };
+    let green = |rgb: &[f32], grid: &OutputGrid| {
+        let c = crop(rgb, grid.width, 3, 4, 4, grid.width - 8, grid.height - 8);
+        patch_noise(&c, grid.width - 8, WB)
+    };
+    let mean_truth = |grid: &OutputGrid| {
+        let t = scene.truth(grid, 0);
+        t.chunks_exact(3).map(|p| p[1] as f64).sum::<f64>() / (t.len() / 3) as f64
+    };
+
+    // Shadows: the merge against the inverse-variance combination of the
+    // frames merged alone (each in its own units; times its gain in the
+    // reference's).
+    let dark = region((10, 60, 40, 300));
+    let (grid, merged) = merge(&fr, &a, &bracket, dark);
+    let m = green(&merged, &grid);
+    let mut inverse = 0.0;
+    let mut alone_std = Vec::new();
+    for k in 0..3 {
+        let mut alone = a.clone();
+        for (j, f) in alone.frames.iter_mut().enumerate() {
+            if j != k {
+                f.to_frame = None;
+            }
+        }
+        let (_, rgb) = merge(&fr, &alone, &bracket, dark);
+        let s = green(&rgb, &grid).std[1] * a.frames[k].gain;
+        inverse += 1.0 / (s * s);
+        alone_std.push(s);
+    }
+    let ideal = inverse.sqrt().recip();
+    let t = mean_truth(&grid);
+    println!(
+        "bracket shadows: merge std {:.6} (ideal {ideal:.6}; alone {alone_std:.6?}), mean {:.5} vs truth {t:.5}",
+        m.std[1], m.mean[1]
+    );
+    assert!(
+        m.std[1] < 1.15 * ideal,
+        "merge noise {} vs ideal {ideal}",
+        m.std[1]
+    );
+    assert!(m.std[1] < 0.6 * alone_std[0]);
+    assert!((m.mean[1] / t - 1.0).abs() < 0.02);
+    // Control: without exposure scaling the shadows come out too bright.
+    let (_, unscaled) = merge(&fr, &a, &plain, dark);
+    let u = green(&unscaled, &grid);
+    assert!(
+        u.mean[1] / t > 1.3,
+        "unscaled shadows {} vs truth {t}",
+        u.mean[1]
+    );
+
+    // Highlights clipped in both long frames come from the short one.
+    let bright = region((100, 60, 40, 300));
+    let (bgrid, bmerged) = merge(&fr, &a, &bracket, bright);
+    let b = green(&bmerged, &bgrid);
+    let bt = mean_truth(&bgrid);
+    println!(
+        "bracket highlights: merge mean {:.5} vs truth {bt:.5}",
+        b.mean[1]
+    );
+    assert!(
+        bt * 2.2 > 1.0,
+        "the bright side must clip in the long frames"
+    );
+    assert!((b.mean[1] / bt - 1.0).abs() < 0.02);
 }

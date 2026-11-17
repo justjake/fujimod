@@ -19,8 +19,11 @@
 //! strips to a [`crate::merge::StripSink`]. Image stages will read strips of
 //! their inputs and write strips the same way, so the whole pipeline runs with
 //! bounded memory. This crate implements the resolution stage; the noise
-//! stage is the resolution stage at scale 1. Exposure and focus stages are
-//! declared so plans can be validated, and are refused at run time.
+//! stage is the resolution stage at scale 1. The exposure stage runs on CFA
+//! frames when each exposure step is a single frame (an exposure bracket):
+//! the same merge with [`ResolutionParams::bracket`] set. Exposure after a
+//! burst stage (an image stage) and the focus stage are declared so plans
+//! can be validated, and are refused.
 
 use crate::merge::ResolutionParams;
 use serde::{Deserialize, Serialize};
@@ -87,7 +90,8 @@ pub enum Stage {
     Resolution(ResolutionParams),
     /// Robust average at sensor resolution.
     Noise(ResolutionParams),
-    Exposure,
+    /// Exposure bracket merge on CFA frames (`bracket` set).
+    Exposure(ResolutionParams),
     Focus,
 }
 
@@ -102,7 +106,7 @@ impl Stage {
     pub fn axis(&self) -> Axis {
         match self {
             Stage::Resolution(_) | Stage::Noise(_) => Axis::Burst,
-            Stage::Exposure => Axis::Exposure,
+            Stage::Exposure(_) => Axis::Exposure,
             Stage::Focus => Axis::Focus,
         }
     }
@@ -113,6 +117,17 @@ impl Stage {
             sigma: 0.6,
             radius: 1.8,
             ..ResolutionParams::default()
+        })
+    }
+
+    /// Exposure bracket merge at sensor resolution.
+    pub fn exposure() -> Self {
+        Stage::Exposure(ResolutionParams {
+            bracket: true,
+            ..match Stage::noise() {
+                Stage::Noise(p) => p,
+                _ => unreachable!(),
+            }
         })
     }
 }
@@ -139,9 +154,19 @@ pub fn validate(plan: &CapturePlan, stages: &[Stage]) -> Result<(), String> {
             "stages reduce {axes:?}; the plan needs {expected:?}"
         ));
     }
-    for s in stages {
-        if matches!(s, Stage::Exposure | Stage::Focus) {
-            return Err(format!("the {:?} stage is not implemented yet", s.axis()));
+    for (k, s) in stages.iter().enumerate() {
+        match s {
+            Stage::Exposure(p) if k > 0 || !p.bracket => {
+                return Err(
+                    "the exposure stage runs only on CFA brackets: one frame per exposure \
+                     step, first in the plan, with `bracket` set"
+                        .into(),
+                );
+            }
+            Stage::Focus => {
+                return Err("the focus stage is not implemented yet".into());
+            }
+            _ => {}
         }
     }
     Ok(())
@@ -183,7 +208,19 @@ mod tests {
             )
             .is_ok()
         );
-        assert!(validate(&plan, &[Stage::noise(), Stage::Exposure, Stage::Focus]).is_err());
+        assert!(validate(&plan, &[Stage::noise(), Stage::exposure(), Stage::Focus]).is_err());
         assert!(validate(&plan, &[Stage::noise()]).is_err());
+        let bracket = CapturePlan {
+            burst_frames: 1,
+            exposure_steps_ev: vec![0.0, 1.0, 2.0],
+            focus_steps: 1,
+        };
+        assert!(validate(&bracket, &[Stage::exposure()]).is_ok());
+        assert!(validate(&bracket, &[Stage::Exposure(ResolutionParams::default())]).is_err());
+        let bursts = CapturePlan {
+            burst_frames: 4,
+            ..bracket
+        };
+        assert!(validate(&bursts, &[Stage::noise(), Stage::exposure()]).is_err());
     }
 }
