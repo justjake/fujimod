@@ -1071,3 +1071,24 @@ fn exr2_image_transfer_maps_cpu_pages_and_keeps_device_register_bounds() {
         .unwrap();
     assert_eq!(window["size"], 0x20);
 }
+
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+#[test]
+fn common_open_checks_generation_before_loading_startup_files() {
+    let resolved = ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap();
+    let inputs = StartupInputs::Xp5(xp5::Startup {
+        update: "unavailable.dat".into(),
+        manifest: None,
+        boot_rom: None,
+        card_image: None,
+        card_files: vec![],
+        scene: None,
+        output: "unused-output".into(),
+        mode: Mode::Strict,
+        quantum: None,
+    });
+    assert_eq!(
+        open(resolved, inputs).err().unwrap(),
+        "startup inputs do not match configuration x70-110-rec"
+    );
+}
