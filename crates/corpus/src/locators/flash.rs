@@ -269,17 +269,7 @@ pub fn flash<L: Lookup>(
         unnamed_reader(&locator, is_reader)?
     };
     let request = one(locator.calls(&reader)?, "read request")?;
-    let is_window = |r: &Routine| {
-        r.code.len() == 3
-            && r.has("mov", "x1, #0xf0000000")
-            && r.has("add", "x0, x0, x1")
-            && r.has("ret", "")
-    };
-    if firmware_names_flash_read(index, firmware)? {
-        locator.named("flash_window_address", is_window)?;
-    } else {
-        locator.small_routine(0xc, is_window, "flash_window_address")?;
-    }
+    flash_window_address(&locator)?;
     if !request.has("mov", "x0, #0xf8000000")
         || !request.has("mov", "w0, #0x7ffffff")
         || !request.has("movk", "w0, #0x7766, lsl #16")
@@ -1455,6 +1445,18 @@ fn firmware_names_flash_read<L: Lookup>(index: &L, firmware: &str) -> Result<boo
         .is_empty())
 }
 
+/// The helper that maps a flash offset into the 128 MiB read window. A symbol
+/// ledger that names `flash_read` need not also name this helper, so an
+/// absent name falls back to the unique routine with this shape.
+fn flash_window_address<L: Lookup>(locator: &Locator<'_, L>) -> Result<Routine> {
+    locator.named_or_small("flash_window_address", 0xc, |r| {
+        r.code.len() == 3
+            && r.has("mov", "x1, #0xf0000000")
+            && r.has("add", "x0, x0, x1")
+            && r.has("ret", "")
+    })
+}
+
 /// Find the reader in a firmware whose symbols are not recovered: a small
 /// routine that stores the four request arguments and returns, whose callee
 /// is the read request (bounded flash window and the initialized marker
@@ -1711,6 +1713,56 @@ mod tests {
                 .named_or_small("selector", 8, |r| r.has("mov", "x0, #3"))
                 .is_err()
         );
+    }
+
+    #[test]
+    fn a_named_reader_does_not_require_a_named_window_helper() {
+        // Self-authored words: a RET named flash_read at 0x1000 and an
+        // unnamed MOVZ x1, #0xf000, lsl #16; ADD x0, x0, x1; RET at 0x1010.
+        let words = [0xd65f03c0u32, 0, 0, 0, 0xd2be0001, 0x8b010000, 0xd65f03c0];
+        let function = |address: u64, size: u64, names: &[&str]| Boundary {
+            address,
+            ranges: vec![(address, address + size)],
+            names: names.iter().map(|name| (*name).into()).collect(),
+            annotations: vec![],
+            references: vec![],
+        };
+        let index = |window_names: &[&str]| {
+            let mut index = Index::new();
+            index
+                .add_unit(
+                    UnitInput {
+                        layout: UnitLayout {
+                            firmware: "test".into(),
+                            unit: "main".into(),
+                            architecture: Architecture::Aarch64,
+                            address_ranges: vec![(0x1000, 0x2000)],
+                            address_aliases: vec![],
+                        },
+                        functions: vec![
+                            function(0x1000, 4, &["flash_read"]),
+                            function(0x1010, 12, window_names),
+                        ],
+                    },
+                    vec![Region {
+                        address: 0x1000,
+                        bytes: words.iter().flat_map(|word| word.to_le_bytes()).collect(),
+                    }],
+                )
+                .unwrap();
+            index
+        };
+        for window_names in [&[][..], &["flash_window_address"][..]] {
+            let index = index(window_names);
+            assert!(firmware_names_flash_read(&index, "test").unwrap());
+            let locator = Locator {
+                index: &index,
+                firmware: "test",
+                unit: "main".into(),
+            };
+            let window = flash_window_address(&locator).unwrap();
+            assert_eq!(window.header.key.address, 0x1010, "names {window_names:?}");
+        }
     }
 
     #[test]

@@ -5,8 +5,8 @@
   "model": "X-H2S",
   "version": "7.30",
   "facts": {
-    "located": 22,
-    "total": 24
+    "located": 23,
+    "total": 25
   },
   "boot_rom": null,
   "tracks": [
@@ -40,17 +40,17 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "restart-facts",
@@ -60,7 +60,7 @@
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "controls",
@@ -125,25 +125,25 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "restart-facts",
@@ -157,7 +157,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -556,12 +556,12 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "mod-build",
@@ -594,17 +594,17 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "mod-build",
