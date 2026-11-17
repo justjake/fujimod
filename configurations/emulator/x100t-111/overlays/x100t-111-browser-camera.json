@@ -18,7 +18,11 @@
         "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
         "producer_data_ticks": 1024
       },
-      "firmware_profile_id": "x100t-111"
+      "firmware_profile_id": "x100t-111",
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "x100t-rec"
+      }
     }
   }
 }
