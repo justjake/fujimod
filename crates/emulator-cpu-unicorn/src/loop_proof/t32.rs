@@ -202,6 +202,14 @@ fn decode16(word: u16, in_it: bool, address: u64, end: u64) -> Option<Op> {
         0b01111 => load(r(0), r(3), (word32 >> 6) & 31, None, 1),
         0b10001 => load(r(0), r(3), ((word32 >> 6) & 31) * 2, None, 2),
         0b10011 => load(r(8), 13, (word32 & 255) * 4, None, 4),
+        // UXTH and UXTB: an AND that sets no flags.
+        0b10110 if word & 0xff80 == 0xb280 => data(
+            0,
+            false,
+            r(0),
+            r(3),
+            Operand::Immediate(if word & 0x40 == 0 { 0xffff } else { 0xff }, None),
+        ),
         // CBZ/CBNZ, which must leave the loop and may not sit in an IT block.
         0b10110 | 0b10111 if word & 0xf500 == 0xb100 => {
             let target =
@@ -237,6 +245,21 @@ fn decode32(first: u16, second: u16) -> Option<Op> {
             rn,
             Operand::Register(rm, (second >> 4) & 3, shift),
         );
+    }
+    // UXTH.W and UXTB.W without rotation: an AND that sets no flags.
+    if matches!(first, 0xfa1f | 0xfa5f) && second & 0xf0f0 == 0xf080 {
+        let (dst, rm) = (((second >> 8) & 15) as usize, (second & 15) as usize);
+        if dst >= 13 || rm >= 13 {
+            return None;
+        }
+        let mask = if first == 0xfa1f { 0xffff } else { 0xff };
+        return Some(Op::Data {
+            opcode: 0,
+            flags: false,
+            dst,
+            lhs: rm,
+            rhs: Operand::Immediate(mask, None),
+        });
     }
     // Unsigned LDR/LDRH/LDRB without writeback; no literal, LDRT or hints.
     if first & 0xfe10 == 0xf810 && first & 0x100 == 0 {
