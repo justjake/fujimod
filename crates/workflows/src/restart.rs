@@ -14,8 +14,9 @@ use crate::{
     Limits,
     bulk::{Access, BulkError, Result, check_camera, hex},
 };
-use fujimod_catalog_restart::{ConfigurationCheck, 
-    BootFlag, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
+use fujimod_catalog_restart::{
+    BootFlag, ConfigurationCheck, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport,
+    WordValue,
 };
 use fujimod_usb::{
     ff80::{
@@ -222,21 +223,31 @@ async fn require_words(access: &mut Access<'_>, words: &[WordValue], message: &s
 
 /// Configuration mismatches stop before callback/output/boot-flag mutation.
 /// Recovery changes the idle-state rule, never these prerequisites.
-async fn require_configuration(access: &mut Access<'_>, checks: &[ConfigurationCheck]) -> Result<()> {
+async fn require_configuration(
+    access: &mut Access<'_>,
+    checks: &[ConfigurationCheck],
+) -> Result<()> {
     for check in checks {
         let length = NonZeroU32::new(check.expected.len() as u32)
             .ok_or_else(|| BulkError::Check("Empty restart configuration prerequisite".into()))?;
         for view in [ConfigurationView::Ram, ConfigurationView::Storage] {
             let command = ReadConfiguration::new(
-                ConfigurationLocation { view, page: 0, offset: check.offset },
+                ConfigurationLocation {
+                    view,
+                    page: 0,
+                    offset: check.offset,
+                },
                 length,
                 access.limits.configuration,
             )?;
             let actual = access.session.read_configuration(command).await?;
-            require(actual == check.expected, &format!(
-                "Restart configuration prerequisite differs: {} ({view:?}, offset {:#x})",
-                check.name, check.offset,
-            ))?;
+            require(
+                actual == check.expected,
+                &format!(
+                    "Restart configuration prerequisite differs: {} ({view:?}, offset {:#x})",
+                    check.name, check.offset,
+                ),
+            )?;
         }
     }
     Ok(())
@@ -441,12 +452,18 @@ mod tests {
     }
 
     fn configuration_check() -> ConfigurationCheck {
-        ConfigurationCheck { name: "wake policy".into(), offset: 8, expected: vec![1, 1] }
+        ConfigurationCheck {
+            name: "wake policy".into(),
+            offset: 8,
+            expected: vec![1, 1],
+        }
     }
 
     fn configuration_read(view: u32, bytes: &[u8]) -> Vec<fujimod_usb::testing::Exchange> {
         let request: Vec<u8> = [0x1a0002, 0, 0, 0, 2, view, 0, 8, bytes.len() as u32]
-            .into_iter().flat_map(u32::to_le_bytes).collect();
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
         let mut reply = request.clone();
         reply.extend_from_slice(bytes);
         crate::bulk::tests::exchange(request, reply)
@@ -461,7 +478,10 @@ mod tests {
                 steps.extend(configuration_read(0, &[1, 1]));
             }
             let (mut session, script) = opened(steps);
-            let mut access = Access { session: &mut session, limits: limits() };
+            let mut access = Access {
+                session: &mut session,
+                limits: limits(),
+            };
             block_on(require_configuration(&mut access, &checks)).unwrap();
             assert_eq!(script.remaining(), 0);
         }
@@ -471,12 +491,19 @@ mod tests {
     fn configuration_mismatch_stops_at_the_first_bad_view() {
         for storage in [false, true] {
             let mut steps = Vec::new();
-            if storage { steps.extend(configuration_read(1, &[1, 1])); }
+            if storage {
+                steps.extend(configuration_read(1, &[1, 1]));
+            }
             steps.extend(configuration_read(if storage { 0 } else { 1 }, &[1, 0]));
             let (mut session, script) = opened(steps);
-            let mut access = Access { session: &mut session, limits: limits() };
+            let mut access = Access {
+                session: &mut session,
+                limits: limits(),
+            };
             let error = block_on(require_configuration(&mut access, &[configuration_check()]));
-            assert!(matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy")));
+            assert!(
+                matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy"))
+            );
             assert_eq!(script.remaining(), 0);
         }
     }
@@ -484,7 +511,8 @@ mod tests {
     fn configuration_restart() -> FirmwareRestart {
         let mut restart: FirmwareRestart = serde_json::from_str(include_str!(
             "../../../catalog/firmware/x70/1.10/restart.generated.json"
-        )).unwrap();
+        ))
+        .unwrap();
         restart.mechanism.deferred_timer = None;
         restart.mechanism.early_boot = None;
         restart.mechanism.configuration_checks = vec![configuration_check()];
@@ -497,7 +525,9 @@ mod tests {
             let mut restart = configuration_restart();
             let code = [1, 2, 3, 4];
             restart.code_checks = vec![fujimod_catalog_bulk::CodeCheck {
-                name: "request code".into(), address: 0x8000, size: 4,
+                name: "request code".into(),
+                address: 0x8000,
+                size: 4,
                 sha256: hex(&checks::sha256_bytes(&code)),
             }];
             let mut steps = crate::bulk::tests::info(3, &restart.product);
@@ -507,7 +537,9 @@ mod tests {
             steps.extend(configuration_read(0, &[0, 0]));
             let (mut session, script) = opened(steps);
             let error = block_on(request(&mut session, &restart, limits(), recover));
-            assert!(matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy")));
+            assert!(
+                matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy"))
+            );
             assert_eq!(script.remaining(), 0);
         }
     }
@@ -517,22 +549,58 @@ mod tests {
         let valid = configuration_restart();
         valid.validate().unwrap();
         let mut invalid = Vec::new();
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks[0].expected.clear(); invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks[0].expected = vec![0; 65]; invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks[0].offset = u32::MAX; invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks[0].name.clear(); invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks.push(configuration_check()); invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks.push(ConfigurationCheck {
-            name: "overlap".into(), offset: 9, expected: vec![1],
-        }); invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks = (0..17).map(|n| ConfigurationCheck {
-            name: format!("check {n}"), offset: n, expected: vec![0],
-        }).collect(); invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.configuration_checks = (0..3).map(|n| ConfigurationCheck {
-            name: format!("check {n}"), offset: n * 64, expected: vec![0; 64],
-        }).collect(); invalid.push(changed);
-        let mut changed = valid.clone(); changed.mechanism.transport = None; invalid.push(changed);
-        for restart in invalid { assert!(restart.validate().is_err()); }
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].expected.clear();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].expected = vec![0; 65];
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].offset = u32::MAX;
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].name.clear();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed
+            .mechanism
+            .configuration_checks
+            .push(configuration_check());
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed
+            .mechanism
+            .configuration_checks
+            .push(ConfigurationCheck {
+                name: "overlap".into(),
+                offset: 9,
+                expected: vec![1],
+            });
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks = (0..17)
+            .map(|n| ConfigurationCheck {
+                name: format!("check {n}"),
+                offset: n,
+                expected: vec![0],
+            })
+            .collect();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks = (0..3)
+            .map(|n| ConfigurationCheck {
+                name: format!("check {n}"),
+                offset: n * 64,
+                expected: vec![0; 64],
+            })
+            .collect();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.transport = None;
+        invalid.push(changed);
+        for restart in invalid {
+            assert!(restart.validate().is_err());
+        }
     }
 
     #[test]

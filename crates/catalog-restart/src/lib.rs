@@ -444,7 +444,9 @@ impl FirmwareRestart {
         let m = &self.mechanism;
         if !m.configuration_checks.is_empty() {
             if m.transport.is_none() || m.deferred_timer.is_some() || m.early_boot.is_some() {
-                return fail("configuration prerequisites require an immediate request without deferred or early-boot mechanisms");
+                return fail(
+                    "configuration prerequisites require an immediate request without deferred or early-boot mechanisms",
+                );
             }
             if m.configuration_checks.len() > 16 {
                 return fail("at most 16 configuration prerequisites are supported");
@@ -486,9 +488,7 @@ impl FirmwareRestart {
                 return fail("a fixed-interval wake takes no request");
             }
             (None, None) => {
-                return fail(
-                    "a restart needs either a request transport or a fixed-interval wake",
-                );
+                return fail("a restart needs either a request transport or a fixed-interval wake");
             }
             (None, Some(interval)) => {
                 if request != (None, None, None, None, None)
@@ -572,9 +572,9 @@ impl FirmwareRestart {
                 return fail("invalid deferred callback timer");
             }
             let covered = |routine: &TimerRoutine| {
-                self.code_checks.iter().any(|check| {
-                    check.address == routine.address && check.size == routine.size
-                })
+                self.code_checks
+                    .iter()
+                    .any(|check| check.address == routine.address && check.size == routine.size)
             };
             if !covered(&timer.start) || !covered(&timer.cancel) {
                 return fail("deferred timer routines need matching code checks");
