@@ -1511,7 +1511,7 @@ mod tests {
             "nodes": nodes
         }))
         .map_err(|e| e.to_string())?;
-        build(graph(), spec, &BTreeMap::new(), Mode::Strict)
+        build(graph(), spec, &BTreeMap::new(), Mode::Strict, RunEngine::Unicorn)
     }
 
     #[test]
