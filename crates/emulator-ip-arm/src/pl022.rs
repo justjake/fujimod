@@ -8,7 +8,7 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 const DEPTH: usize = 8;
@@ -50,6 +50,9 @@ struct Engine {
     /// Register values as of the last access, advance or restore. They change
     /// only at those points or at a deadline this device declares.
     published: [Arc<AtomicU32>; PUBLISHED.len()],
+    /// The same values for halfword reads; every register fits 16 bits
+    /// and a read returns the same value at either width.
+    published16: [Arc<AtomicU16>; PUBLISHED.len()],
 }
 impl Engine {
     fn frame(&self, word: u16) -> Result<Frame, String> {
@@ -232,8 +235,10 @@ impl Engine {
         })
     }
     fn publish_registers(&self) {
-        for (offset, value) in PUBLISHED.into_iter().zip(&self.published) {
-            value.store(self.register(offset).unwrap() as u32, Ordering::Release);
+        for (i, offset) in PUBLISHED.into_iter().enumerate() {
+            let value = self.register(offset).unwrap();
+            self.published[i].store(value as u32, Ordering::Release);
+            self.published16[i].store(value as u16, Ordering::Release);
         }
     }
     fn write(&mut self, offset: u64, value: u64, now: u64) -> Result<(), String> {
@@ -386,6 +391,7 @@ impl Controller {
             state: State::default(),
             wire,
             published: Default::default(),
+            published16: Default::default(),
         };
         engine.publish_registers();
         Ok(Self {
@@ -478,18 +484,26 @@ impl Device for Controller {
         window_size: u64,
     ) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
         let e = self.engine.lock().unwrap();
+        use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
         PUBLISHED
             .into_iter()
-            .zip(&e.published)
+            .enumerate()
+            .flat_map(|(i, offset)| {
+                [
+                    FastReadValue::AtomicU32(e.published[i].clone()),
+                    FastReadValue::AtomicU16(e.published16[i].clone()),
+                ]
+                .map(|value| (offset, value))
+            })
             .filter_map(|(offset, value)| {
                 let address = self.base.checked_add(offset)?;
-                (address >= window_base && address + 4 <= window_base.checked_add(window_size)?)
-                    .then(|| fujimod_emulator_devices::bus::FastReadWord {
+                let end = address.checked_add(value.width())?;
+                (address >= window_base && end <= window_base.checked_add(window_size)?).then(
+                    || FastReadWord {
                         offset: address - window_base,
-                        value: fujimod_emulator_devices::bus::FastReadValue::AtomicU32(
-                            value.clone(),
-                        ),
-                    })
+                        value,
+                    },
+                )
             })
             .collect()
     }
