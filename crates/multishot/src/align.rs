@@ -888,6 +888,25 @@ pub fn align(
     reference: usize,
     params: &AlignParams,
 ) -> io::Result<Alignment> {
+    align_with_priors(frames, reference, params, None)
+}
+
+/// [`align`] with an expected transform per frame (reference to frame, site
+/// coordinates), such as a commanded sensor shift, as the starting point of
+/// each frame's registration. Without priors each frame starts from the
+/// previous frame's result.
+pub fn align_with_priors(
+    frames: &[&dyn FrameSource],
+    reference: usize,
+    params: &AlignParams,
+    priors: Option<&[Affine]>,
+) -> io::Result<Alignment> {
+    if priors.is_some_and(|p| p.len() != frames.len()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "one prior per frame is required",
+        ));
+    }
     let rf = frames[reference];
     let ref_planes = read_block_planes(rf, true)?;
     let grid = ref_planes.grid;
@@ -925,6 +944,14 @@ pub fn align(
             ));
         }
         let planes = read_block_planes(*f, noise.is_none())?;
+        if let Some(p) = priors {
+            // Site transform to block-plane transform.
+            prior = p[k].rescaled(
+                1.0 / 3.0,
+                -(grid.ox as f64 + 1.0) / 3.0,
+                -(grid.oy as f64 + 1.0) / 3.0,
+            );
+        }
         let reg = register(&ref_pyr, &planes.luma, &prior, params);
         let mut entry = FrameAlignment {
             label: f.label(),

@@ -22,6 +22,102 @@ pub struct EdgeMtf {
     pub line: [(f64, f64); 2],
 }
 
+/// RMS distance, in pixels, of an edge's crossings from their best-fit
+/// straight line, one crossing per row (or column, for an edge nearer
+/// horizontal). `line` is the edge found by [`slanted_edge`]; on each row the
+/// crossing nearest to it within 4 pixels is taken, at the level halfway
+/// between the image 6 pixels to either side, interpolated linearly.
+/// Demosaic aliasing makes a straight edge ragged; more samples per site
+/// straighten it. Crossings more than 4 median absolute deviations from the
+/// refitted line are dropped once.
+pub fn edge_raggedness(
+    image: &[f32],
+    width: usize,
+    height: usize,
+    line: [(f64, f64); 2],
+) -> Option<f64> {
+    let [(x0, y0), (x1, y1)] = line;
+    // Lines run across the edge.
+    let vertical_edge = (x1 - x0).abs() <= (y1 - y0).abs();
+    let (lines, len) = if vertical_edge {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    let at = |line: usize, pos: i64| {
+        let pos = pos.clamp(0, len as i64 - 1) as usize;
+        if vertical_edge {
+            image[line * width + pos]
+        } else {
+            image[pos * width + line]
+        }
+    };
+    let predict = |line: f64| {
+        if vertical_edge {
+            x0 + (line - y0) * (x1 - x0) / (y1 - y0)
+        } else {
+            y0 + (line - x0) * (y1 - y0) / (x1 - x0)
+        }
+    };
+    let mut points = Vec::new();
+    for line in 0..lines {
+        let p = predict(line as f64);
+        let c = p.round() as i64;
+        if c < 6 || c + 6 >= len as i64 {
+            continue;
+        }
+        let level = 0.5 * (at(line, c - 6) + at(line, c + 6));
+        let mut best: Option<f64> = None;
+        for pos in c - 4..c + 4 {
+            let (a, b) = (at(line, pos) - level, at(line, pos + 1) - level);
+            if (a <= 0.0) != (b <= 0.0) {
+                let x = pos as f64 + (a / (a - b)) as f64;
+                if best.is_none_or(|q| (x - p).abs() < (q - p).abs()) {
+                    best = Some(x);
+                }
+            }
+        }
+        if let Some(x) = best {
+            points.push((line as f64, x));
+        }
+    }
+    let fit = |pts: &[(f64, f64)]| {
+        let n = pts.len() as f64;
+        let mx = pts.iter().map(|p| p.0).sum::<f64>() / n;
+        let my = pts.iter().map(|p| p.1).sum::<f64>() / n;
+        let sxx: f64 = pts.iter().map(|p| (p.0 - mx).powi(2)).sum();
+        let slope = pts.iter().map(|p| (p.0 - mx) * (p.1 - my)).sum::<f64>() / sxx.max(1e-12);
+        (slope, my - slope * mx)
+    };
+    if points.len() < 8 {
+        return None;
+    }
+    let (s, c) = fit(&points);
+    let mut dev: Vec<f64> = points.iter().map(|p| (p.1 - s * p.0 - c).abs()).collect();
+    dev.sort_by(f64::total_cmp);
+    let mad = dev[dev.len() / 2].max(1e-6);
+    let kept: Vec<(f64, f64)> = points
+        .iter()
+        .copied()
+        .filter(|p| (p.1 - s * p.0 - c).abs() <= 4.0 * 1.4826 * mad)
+        .collect();
+    if kept.len() < 8 {
+        return None;
+    }
+    let (s, c) = fit(&kept);
+    // Distance across the edge: residual times the cosine of its angle.
+    let cos = 1.0 / (1.0 + s * s).sqrt();
+    Some(
+        (kept
+            .iter()
+            .map(|p| (p.1 - s * p.0 - c).powi(2))
+            .sum::<f64>()
+            / kept.len() as f64)
+            .sqrt()
+            * cos,
+    )
+}
+
 /// White-balanced luma of an interleaved RGB image.
 pub fn luma(rgb: &[f32], wb: [f32; 3]) -> Vec<f32> {
     rgb.chunks_exact(3)

@@ -99,6 +99,7 @@ cargo run --release -p fujimod-multishot -- look FRAME.RAF --out look.png [--reg
 cargo run --release -p fujimod-multishot -- merge --out OUT [--scale 1.5] [--region X,Y,W,H] FRAMES/*.RAF
 cargo run --release -p fujimod-multishot -- measure --out OUT --edge X,Y,W,H --flat X,Y,W,H FRAMES/*.RAF
 cargo run --release -p fujimod-multishot -- merge --out OUT --bracket --scale 1 BRACKET/*.RAF
+cargo run --release -p fujimod-multishot -- pixelshift --out OUT --commanded "0,0 56,0 0,56" [--sites-per-count -0.0179,0.0179] SEQUENCE/*.RAF
 cargo run --release -p fujimod-multishot -- measure-hdr --out OUT --scale 1 --dark X,Y,W,H --bright X,Y,W,H BRACKET/*.RAF
 cargo run --release -p fujimod-multishot -- align-jpeg --out OUT FRAMES/*.JPG
 cargo run --release -p fujimod-multishot -- synth --out OUT [--width W --height H --frames N]
@@ -295,6 +296,79 @@ of the ISO 12800 bracket takes 65 s with a peak strip memory of 92 MiB
 frame, are readable in the merge, with no visible ghosting. The 16-bit DNG
 quantizes the merged shadows finely enough: the dark patch's noise is 14
 counts.
+
+### Pixel shift
+
+`pixelshift` registers frames taken with the sensor moved by commanded
+stabilizer offsets. `--commanded` gives each file's offset in counts, in the
+order the files are given; `--sites-per-count` converts counts to image
+displacement (default -1/56 and +1/56 site per count, the X-H2S polarity:
++X counts move the image toward -X). Each frame's commanded displacement is
+its alignment prior; tile matching and Gauss-Newton refinement then measure
+where it really is. It writes `alignment.json`, for `merge` and `measure`,
+and `pixelshift.json`: commanded, measured and their difference per frame,
+the spread of frames commanded to the reference position, and a
+least-squares counts-to-sites line per axis.
+
+`measure` also reports **edge raggedness**: the RMS distance, in sites, of
+the edge's crossing on each row from a straight line, near the line the
+slanted-edge fit found. Demosaic aliasing makes a straight edge ragged;
+samples at more positions straighten it, and noise roughens it.
+
+Synthetic (`pixel_shift_refines_commanded_offsets`): offsets of 0, one site
+in X, one in Y and half a site on both, each with an unknown drift of 0.3 to
+0.45 sites. The measured drift is within 0.03 sites of the truth. Merged at
+the measured positions the edge MTF50 is 0.309 (0.310 at the true
+positions); at the commanded positions it falls to 0.274. A pair one site
+apart, merged at sensor resolution, has 22% lower detail error and 8% less
+edge raggedness than one frame.
+
+X-H2S sweep (11 frames on a tripod, tape blade on a dark shirt, uncompressed;
+commanded Z, X+14, X+28, X+56, X+112, Z, Y+14, Y+28, Y+56, Y+112, Z counts;
+aligned on the blade with `--align-region 1500,0,2300,4160`, all 11 register):
+
+| Frame | Commanded (sites) | Measured | Measured - commanded |
+| --- | --- | --- | --- |
+| Z | 0, 0 | 0, 0 | reference |
+| X+14 | -0.25, 0 | +0.14, -0.16 | +0.39, -0.16 |
+| X+28 | -0.50, 0 | -0.09, +0.02 | +0.42, +0.02 |
+| X+56 | -1.00, 0 | -0.97, +0.05 | +0.03, +0.05 |
+| X+112 | -2.00, 0 | -1.81, -0.45 | +0.19, -0.45 |
+| Z | 0, 0 | +0.45, -0.36 | +0.45, -0.36 |
+| Y+14 | 0, +0.25 | +0.13, +0.12 | +0.13, -0.13 |
+| Y+28 | 0, +0.50 | +0.57, +0.56 | +0.57, +0.06 |
+| Y+56 | 0, +1.00 | -0.28, +0.84 | -0.28, -0.17 |
+| Y+112 | 0, +2.00 | +0.19, +2.19 | +0.19, +0.19 |
+| Z | 0, 0 | +0.15, +0.46 | +0.15, +0.46 |
+
+The three frames commanded to zero spread over 0.45 x 0.82 sites, and
+commanded and measured positions differ by up to 0.57 sites. Fitted to the
+measurements, X moves -0.0187 site per count (one site per 54 counts, rms
+residual 0.17) and Y +0.0189 (one per 53, rms 0.24): the commanded scale is
+right on average, but the drift between frames is as large as the steps
+smaller than X+56, so the commands alone cannot place the samples.
+
+At two blade edges (2120,1950 and 2500,1950; 200x100 sites, 17° slant), merge
+scale 1.5, MTF50 in cycles per site and edge raggedness in sites:
+
+| Frames | Edge 2120 MTF50 | Edge 2500 MTF50 | Raggedness 2120 | Raggedness 2500 |
+| --- | --- | --- | --- | --- |
+| Z alone, same merge | 0.203 | 0.199 | 0.266 | 0.480 |
+| Z + X+56 (-0.97, +0.05) | 0.211 | 0.203 | 0.205 | 0.313 |
+| Z + Z, measured positions (+0.45, -0.36) | 0.215 | 0.201 | 0.227 | 0.277 |
+| Z + Z, commanded positions | 0.192 | 0.190 | 0.261 | 0.366 |
+| Z, X+56, Z, Y+28 (measured) | 0.215 | 0.205 | 0.188 | 0.234 |
+| Markesteijn-3 of Z | 0.216 | 0.211 | 0.239 | 0.307 |
+
+At sensor resolution (scale 1) the Z + X+56 pair measures 0.219 and 0.212
+(Markesteijn 0.223 and 0.213) with raggedness 0.220 and 0.227 against
+0.283 and 0.585 for Z alone. Merged where the commands say, the second Z
+frame blurs the edge below a single frame's; merged where it was measured,
+it does not. Four frames at measured offsets straighten the edges by 21% to
+24% against Markesteijn's demosaic, at the same MTF50 within 3%: on this
+sweep pixel shift reduces aliasing, but the edges are no sharper than the
+best single-frame demosaic. Part of the raggedness gain is noise averaging;
+the synthetic pair isolates the sampling gain (8%).
 
 ## Lossless compressed RAFs
 
