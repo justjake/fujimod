@@ -13,7 +13,7 @@ use fujimod_multishot::merge::{
     ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, SharpnessParams, merge_resolution,
 };
 use fujimod_multishot::noise::NoiseModel;
-use fujimod_multishot::pixelshift::{ShiftPlan, report as shift_report};
+use fujimod_multishot::pixelshift::{ShiftPlan, predicted_alignment, report as shift_report};
 use fujimod_multishot::source::{FrameSource, MemoryFrame};
 use fujimod_multishot::synthetic::{
     BLACK, MovingDisc, NoiseSpec, Scene, WB, WHITE, handheld_transforms, render, render_exposed,
@@ -807,4 +807,90 @@ fn pixel_shift_refines_commanded_offsets() {
     );
     assert!(rp < ra, "pair raggedness {rp} vs single {ra}");
     assert!(ep < 0.9 * ea, "pair detail RMSE {ep} vs single {ea}");
+}
+
+#[test]
+fn sixteen_shot_merges_at_predicted_positions() {
+    // 16 positions (whole-site and half-site offsets), each after the first
+    // followed by a frame back at home, with the sensor drifting in a random
+    // walk the commands do not know about.
+    let scene = Scene::chart(W, H);
+    let plan = ShiftPlan::sixteen_shot(ShiftPlan::XH2S_SITES_PER_COUNT);
+    let n = plan.counts.len();
+    assert_eq!(n, 31);
+    let mut state = 0x2545_f491_4f6c_dd1du64;
+    let mut step = move || {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((state >> 11) as f64 / (1u64 << 53) as f64 - 0.5) * 0.2
+    };
+    let mut drift = vec![[0.0f64, 0.0]];
+    for _ in 1..n {
+        let [x, y] = drift[drift.len() - 1];
+        drift.push([x + step(), y + step()]);
+    }
+    let truth: Vec<Affine> = (0..n)
+        .map(|k| {
+            let [cx, cy] = plan.commanded(k, 0);
+            Affine::translation(cx + drift[k][0], cy + drift[k][1])
+        })
+        .collect();
+    let frames = burst(&scene, &truth, Some(NOISE));
+    let fr = refs(&frames);
+    let priors = plan.priors(0);
+    let a = align_with_priors(&fr, 0, &test_align_params(), Some(&priors)).unwrap();
+    assert_eq!(a.accepted(), n);
+    let r = shift_report(&plan, &a);
+    let rms = |err: &dyn Fn(usize) -> [f64; 2]| {
+        let s: f64 = (0..n).map(|k| err(k)[0].powi(2) + err(k)[1].powi(2)).sum();
+        (s / n as f64).sqrt()
+    };
+    let truth_at = |k: usize| {
+        let c = r.frames[k].commanded;
+        [c[0] + drift[k][0], c[1] + drift[k][1]]
+    };
+    let off = |p: [f64; 2], k: usize| [p[0] - truth_at(k)[0], p[1] - truth_at(k)[1]];
+    let (em, ep, ec) = (
+        rms(&|k| off(r.frames[k].measured.unwrap(), k)),
+        rms(&|k| off(r.frames[k].predicted.unwrap(), k)),
+        rms(&|k| off(r.frames[k].commanded, k)),
+    );
+    println!(
+        "16-shot position error RMS (sites): measured {em:.4}  predicted {ep:.4}  commanded {ec:.4}"
+    );
+    assert!(em < 0.05, "measured position error {em}");
+    assert!(ep < 0.5 * ec, "predicted error {ep} vs commanded {ec}");
+
+    let params = ResolutionParams {
+        scale: 2.0,
+        ..ResolutionParams::default()
+    };
+    let edge = region(scene.edge_region());
+    let commanded_only = {
+        let mut al = a.clone();
+        for (f, t) in al.frames.iter_mut().zip(&priors) {
+            f.to_frame = Some(*t);
+        }
+        al
+    };
+    let (grid, measured) = merge(&fr, &a, &params, edge);
+    let (_, predicted) = merge(&fr, &predicted_alignment(&r, &a), &params, edge);
+    let (_, commanded) = merge(&fr, &commanded_only, &params, edge);
+    let (_, single) = merge(&fr, &reference_only(&a), &params, edge);
+    let mk = demosaic::baseline(fr[0], &grid, Demosaic::Markesteijn { passes: 3 }).unwrap();
+    let (mm, mp, mc, ms, mk) = (
+        mtf50(&measured, &grid),
+        mtf50(&predicted, &grid),
+        mtf50(&commanded, &grid),
+        mtf50(&single, &grid),
+        mtf50(&mk, &grid),
+    );
+    println!(
+        "16-shot MTF50 at scale 2: measured {mm:.4}  predicted {mp:.4}  commanded {mc:.4}  single frame {ms:.4}  Markesteijn-3 {mk:.4}"
+    );
+    assert!(mm > 1.05 * ms, "measured {mm} vs single frame {ms}");
+    assert!(mm > mk, "measured {mm} vs Markesteijn-3 {mk}");
+    assert!(mp > mk, "predicted {mp} vs Markesteijn-3 {mk}");
+    assert!(mp > mc, "predicted {mp} vs commanded {mc}");
 }

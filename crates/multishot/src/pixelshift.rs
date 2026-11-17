@@ -38,6 +38,29 @@ impl ShiftPlan {
         ]
     }
 
+    /// A 16-position plan: four whole-site offsets (0,0), (1,0), (0,1), (1,1)
+    /// times four half-site phases (0,0), (1/2,0), (0,1/2), (1/2,1/2). The
+    /// first position is home; every other position is followed by a frame
+    /// back at home, 31 frames in all. The home frames sample the sensor's
+    /// drift for [`ShiftFrame::predicted`].
+    pub fn sixteen_shot(sites_per_count: [f64; 2]) -> Self {
+        let mut counts = vec![[0.0, 0.0]];
+        for whole in [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]] {
+            for half in [[0.0, 0.0], [0.5, 0.0], [0.0, 0.5], [0.5, 0.5]] {
+                let site = [whole[0] + half[0], whole[1] + half[1]];
+                if site == [0.0, 0.0] {
+                    continue;
+                }
+                counts.push([site[0] / sites_per_count[0], site[1] / sites_per_count[1]]);
+                counts.push([0.0, 0.0]);
+            }
+        }
+        Self {
+            counts,
+            sites_per_count,
+        }
+    }
+
     /// Alignment priors (reference to frame, site coordinates).
     pub fn priors(&self, reference: usize) -> Vec<Affine> {
         (0..self.counts.len())
@@ -59,6 +82,12 @@ pub struct ShiftFrame {
     pub measured: Option<[f64; 2]>,
     /// Measured minus commanded.
     pub difference: Option<[f64; 2]>,
+    /// Commanded plus the drift measured at the nearest frames at the
+    /// reference's position before and after this one, interpolated
+    /// linearly in frame order (the nearer one alone at either end). Those
+    /// frames themselves are predicted at their measured position. `None`
+    /// without a measured frame at the reference's position.
+    pub predicted: Option<[f64; 2]>,
 }
 
 /// Least-squares line `measured = slope * counts + intercept` for one axis,
@@ -109,6 +138,19 @@ fn line_fit(points: &[(f64, f64)]) -> Option<AxisFit> {
     })
 }
 
+/// `alignment` with every accepted frame placed at its predicted
+/// displacement (a translation). Rejected frames stay rejected; frames
+/// without a prediction keep their measured transform.
+pub fn predicted_alignment(report: &ShiftReport, alignment: &Alignment) -> Alignment {
+    let mut a = alignment.clone();
+    for (f, s) in a.frames.iter_mut().zip(&report.frames) {
+        if let (Some(_), Some([dx, dy])) = (f.to_frame, s.predicted) {
+            f.to_frame = Some(Affine::translation(dx, dy));
+        }
+    }
+    a
+}
+
 /// Commanded against measured displacement for every frame.
 pub fn report(plan: &ShiftPlan, alignment: &Alignment) -> ShiftReport {
     let (cx, cy) = (alignment.width as f64 / 2.0, alignment.height as f64 / 2.0);
@@ -129,10 +171,32 @@ pub fn report(plan: &ShiftPlan, alignment: &Alignment) -> ShiftReport {
                 commanded,
                 measured,
                 difference: measured.map(|m| [m[0] - commanded[0], m[1] - commanded[1]]),
+                predicted: None,
             }
         })
         .collect();
     let at_reference = |k: usize| plan.counts[k] == plan.counts[r];
+    // Drift samples: measured minus commanded at the reference's position.
+    let samples: Vec<(usize, [f64; 2])> = frames
+        .iter()
+        .enumerate()
+        .filter(|(k, _)| at_reference(*k))
+        .filter_map(|(k, f)| f.difference.map(|d| (k, d)))
+        .collect();
+    let mut frames = frames;
+    for (k, f) in frames.iter_mut().enumerate() {
+        let before = samples.iter().rev().find(|s| s.0 <= k);
+        let after = samples.iter().find(|s| s.0 >= k);
+        let drift = match (before, after) {
+            (Some(&(i, a)), Some(&(j, b))) if j > i => {
+                let t = (k - i) as f64 / (j - i) as f64;
+                Some([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+            }
+            (Some(&(_, a)), _) | (None, Some(&(_, a))) => Some(a),
+            (None, None) => None,
+        };
+        f.predicted = drift.map(|d| [f.commanded[0] + d[0], f.commanded[1] + d[1]]);
+    }
     let zeros: Vec<[f64; 2]> = frames
         .iter()
         .enumerate()

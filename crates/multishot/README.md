@@ -384,6 +384,19 @@ sweep pixel shift reduces aliasing, but the edges are no sharper than the
 best single-frame demosaic. Part of the raggedness gain is noise averaging;
 the synthetic pair isolates the sampling gain (8%).
 
+**16 positions.** `ShiftPlan::sixteen_shot` is four whole-site offsets
+(0,0), (1,0), (0,1), (1,1) times four half-site phases (0,0), (1/2,0),
+(0,1/2), (1/2,1/2): home first, then each other position followed by a
+frame back at home, 31 frames. Each frame's `predicted` position in
+`pixelshift.json` is its commanded offset plus the drift measured at the
+home frames before and after it, interpolated in frame order;
+`alignment-predicted.json` places every accepted frame there, for
+`merge --alignment`. Synthetic (`sixteen_shot_merges_at_predicted_positions`,
+drift a random walk of up to 0.1 site per axis per frame): position error
+RMS 0.040 sites measured, 0.057 predicted, 0.437 commanded. Merged at scale
+2 the edge MTF50 is 0.314 at the measured positions, 0.313 predicted, 0.296
+commanded, 0.291 for the home frame alone and 0.302 for Markesteijn-3.
+
 ## Lossless compressed RAFs
 
 `raf_lossless.rs` decodes the planes the camera writes with RAW RECORDING set
