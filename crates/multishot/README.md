@@ -17,9 +17,10 @@ are refused.
    balance 0x2ff0) and the raw section's Fuji directory (plane size 0xf001/2,
    bit depth 0xf003, data offset and length 0xf007/8, black levels 0xf00a).
    Exposure time, f-number, ISO, bias, focal length and capture time come
-   from the embedded JPEG's EXIF. Compressed planes (lossless or lossy) are
-   refused with a message naming the setting to change. Rows are read on
-   demand, so no frame is held whole.
+   from the embedded JPEG's EXIF. Lossless compressed planes are decoded
+   (`raf_lossless.rs`, below) on first use into a temporary uncompressed
+   copy; lossy compressed planes are refused with a message naming the
+   setting to change. Rows are read on demand, so no frame is held whole.
 2. **Alignment** (`align.rs`, `fit.rs`): every 3x3 block of the X-Trans grid
    holds 2R 5G 2B sites, so block means form a CFA-phase-free luma plane at
    one third resolution. A global translation search on the coarsest pyramid
@@ -295,9 +296,54 @@ frame, are readable in the merge, with no visible ghosting. The 16-bit DNG
 quantizes the merged shadows finely enough: the dark patch's noise is 14
 counts.
 
+## Lossless compressed RAFs
+
+`raf_lossless.rs` decodes the planes the camera writes with RAW RECORDING set
+to LOSSLESS COMPRESSED. The plane is split into vertical strips (768 sites
+wide on the X-H2S, nine per frame) that decode independently and in
+parallel. Each six-row group of a strip is rearranged into color lines, and
+every line position is predicted from already decoded neighbors and coded as
+an adaptive Rice residual with gradient contexts; the module documentation
+describes the layout and the coding order. Positions that carry no CFA site
+are interpolated rather than coded.
+
+A stream is refused when a code leaves the sample range, when a strip ends
+inside a code, or when a strip does not end within the zero padding its
+recorded length leaves. The format has no checksum: a flipped bit inside a
+residual's low bits keeps the code in step and decodes with changed values.
+Lossy compressed streams (format version 0), non-X-Trans streams and sample
+depths other than 14 bits are refused as unsupported.
+
+The format is not publicly specified. The public sources for it are the
+open-source decoders in LibRaw (based on the reverse engineering of the
+X-Pro2 format by Alexey Danilchenko et al.; LGPL-2.1 or CDDL) and
+rawspeed's FujiDecompressor (LGPL-2.1-or-later). This implementation is
+written fresh for this crate, which is GPL-2.0-only like the rest of
+FujiMod; no code was copied. Every structural rule was
+checked against camera files: each strip must end inside its padding, and
+the decoded planes must agree with the camera's own JPEGs.
+
+**Checks on X-H2S files** (19 lossless compressed frames, 14-bit, plane
+6336x4188 in nine strips):
+
+- every strip of every frame decodes and ends within its padding (0 to 127
+  unused bits of a 16-byte block); decoding takes 0.4 to 1.1 s per frame;
+- per-color means over the 36 CFA tile positions agree within 1% (red
+  829.5 +-7.6, green 1846.9 +-14.5, blue 832.4 +-7.9 on one frame), so the
+  CFA phase is right;
+- per 6x6 tile and channel, white-balanced decoded values correlate with the
+  camera's JPEG at r = 0.83 to 0.88 (an uncompressed frame from the same
+  camera scores 0.80 to 0.82 on the same measure, and shifting the JPEG by
+  37x23 tiles drops it to about 0.52);
+- a 10-frame burst merges end to end: 6 frames align (the other 4 fail the
+  coverage gate on a shallow depth-of-field scene), merge 57 s, peak strip
+  memory 100.7 MiB, RSS 581 MB;
+- on one frame, 52 of 60 random single-bit flips in the stream were
+  refused; the 8 that decoded changed 1 to 4 sites.
+
 ## Limits and next steps
 
-- Compressed RAFs (lossless and lossy) are refused.
+- Lossy compressed RAFs are refused.
 - Frames focused at different depths, or blurred by motion, are merged as if
   equally sharp; a per-frame or per-region sharpness weight (shared with the
   focus stage) would keep the sharpest frames' detail. On the real

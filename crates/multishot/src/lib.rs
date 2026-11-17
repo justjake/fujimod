@@ -6,7 +6,8 @@
 //! Wronski et al., "Handheld Multi-Frame Super-Resolution" (2019), on X-Trans
 //! CFA data.
 //!
-//! - [`raf`] reads uncompressed X-Trans RAFs.
+//! - [`raf`] reads X-Trans RAFs; [`raf_lossless`] decodes lossless compressed
+//!   planes.
 //! - [`align`] registers each frame to a reference on block-luma pyramids.
 //! - [`merge`] accumulates every frame's CFA samples onto a finer output grid
 //!   with robustness weights, strip by strip.
@@ -27,6 +28,7 @@ pub mod plan;
 pub mod plane;
 pub mod preview;
 pub mod raf;
+pub mod raf_lossless;
 pub mod source;
 pub mod synthetic;
 pub mod tiff;
