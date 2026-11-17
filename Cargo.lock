@@ -1822,6 +1822,7 @@ name = "fujimod-emulator-cpu-hvf"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "fujimod-catalog-configuration",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
