@@ -451,6 +451,12 @@ mod tests {
         (step, script.remaining())
     }
 
+    fn configuration_limits() -> Limits {
+        let mut value = limits();
+        value.configuration = NonZeroU32::new(64).unwrap();
+        value
+    }
+
     fn configuration_check() -> ConfigurationCheck {
         ConfigurationCheck {
             name: "wake policy".into(),
@@ -480,7 +486,7 @@ mod tests {
             let (mut session, script) = opened(steps);
             let mut access = Access {
                 session: &mut session,
-                limits: limits(),
+                limits: configuration_limits(),
             };
             block_on(require_configuration(&mut access, &checks)).unwrap();
             assert_eq!(script.remaining(), 0);
@@ -498,7 +504,7 @@ mod tests {
             let (mut session, script) = opened(steps);
             let mut access = Access {
                 session: &mut session,
-                limits: limits(),
+                limits: configuration_limits(),
             };
             let error = block_on(require_configuration(&mut access, &[configuration_check()]));
             assert!(
@@ -536,7 +542,12 @@ mod tests {
             steps.extend(configuration_read(1, &[1, 1]));
             steps.extend(configuration_read(0, &[0, 0]));
             let (mut session, script) = opened(steps);
-            let error = block_on(request(&mut session, &restart, limits(), recover));
+            let error = block_on(request(
+                &mut session,
+                &restart,
+                configuration_limits(),
+                recover,
+            ));
             assert!(
                 matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy"))
             );
