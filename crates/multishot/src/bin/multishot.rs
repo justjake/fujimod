@@ -1,17 +1,18 @@
 //! `fujimod-multishot`: align, merge and measure X-Trans RAF bursts.
 
 use fujimod_multishot::align::{
-    AlignParams, Alignment, Pyramid, align, register, sharpest, shortest_exposure,
+    AlignParams, Alignment, Pyramid, align_with_priors, register, sharpest, shortest_exposure,
 };
 use fujimod_multishot::demosaic::{self, Demosaic};
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::Affine;
 use fujimod_multishot::local::{LocalParams, residual_fields};
-use fujimod_multishot::measure::{crop, luma, patch_noise, slanted_edge};
+use fujimod_multishot::measure::{crop, edge_raggedness, luma, patch_noise, slanted_edge};
 use fujimod_multishot::merge::{
     ColorMerge, ImageSink, MergeReport, OutputGrid, Region, ResolutionParams, StripSink, Tee,
     merge_resolution,
 };
+use fujimod_multishot::pixelshift::{ShiftPlan, report as shift_report};
 use fujimod_multishot::plane::read_block_planes;
 use fujimod_multishot::preview::{PreviewSink, auto_gain, write_png};
 use fujimod_multishot::raf::Raf;
@@ -29,6 +30,7 @@ usage:
   fujimod-multishot merge --out DIR [options] RAF...
   fujimod-multishot synth --out DIR [--width W] [--height H] [--frames N]
   fujimod-multishot measure --out DIR --edge X,Y,W,H [--flat X,Y,W,H] [options] RAF...
+  fujimod-multishot pixelshift --out DIR --commanded <X,Y X,Y ...> [--sites-per-count SX,SY] RAF...
   fujimod-multishot measure-hdr --out DIR --dark X,Y,W,H --bright X,Y,W,H [options] RAF...
 
 options:
@@ -255,6 +257,7 @@ fn get_alignment(
     args: &Args,
     frames: &[&dyn FrameSource],
     out: &Path,
+    shift: Option<&ShiftPlan>,
 ) -> Result<Alignment, String> {
     if let Some(path) = args.opts.get("alignment") {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
@@ -282,9 +285,16 @@ fn get_alignment(
         Some(v) => v
             .parse()
             .map_err(|_| "--reference: expected a frame index".to_string())?,
-        None => match shortest_exposure(frames) {
-            Some(k) => k,
-            None => sharpest(frames).map_err(|e| e.to_string())?,
+        // A pixel-shift sequence is registered to its first frame at the
+        // starting position.
+        None => match (shift, shortest_exposure(frames)) {
+            (Some(plan), _) => plan
+                .counts
+                .iter()
+                .position(|c| *c == [0.0, 0.0])
+                .unwrap_or(0),
+            (None, Some(k)) => k,
+            (None, None) => sharpest(frames).map_err(|e| e.to_string())?,
         },
     };
     if reference >= frames.len() {
@@ -302,7 +312,9 @@ fn get_alignment(
         ]);
         params.fit.min_grid_cells = 1;
     }
-    let a = align(frames, reference, &params).map_err(|e| e.to_string())?;
+    let priors = shift.map(|plan| plan.priors(reference));
+    let a = align_with_priors(frames, reference, &params, priors.as_deref())
+        .map_err(|e| e.to_string())?;
     eprintln!(
         "aligned {} frames in {:.1} s (reference {}: {})",
         frames.len(),
@@ -382,7 +394,7 @@ fn merge_cmd(args: &Args) -> Result<(), String> {
         .transpose()?;
     let rafs = open_all(&args.files, limit)?;
     let frames: Vec<&dyn FrameSource> = rafs.iter().map(|r| r as &dyn FrameSource).collect();
-    let alignment = get_alignment(args, &frames, &out)?;
+    let alignment = get_alignment(args, &frames, &out, None)?;
     let params = resolution_params(args)?;
     let reference = &rafs[alignment.reference];
     let region = params.region.unwrap_or(Region {
@@ -517,7 +529,7 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
         .transpose()?;
     let rafs = open_all(&args.files, limit)?;
     let frames: Vec<&dyn FrameSource> = rafs.iter().map(|r| r as &dyn FrameSource).collect();
-    let alignment = get_alignment(args, &frames, &out)?;
+    let alignment = get_alignment(args, &frames, &out, None)?;
     let params = resolution_params(args)?;
     let wb = rafs[alignment.reference].calibration().wb;
     let edge = args.region("edge")?.ok_or("--edge X,Y,W,H is required")?;
@@ -556,6 +568,16 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
                     m.mtf_at_quarter
                 );
                 mtf.insert(v.name.into(), json!({ "mtf50_cycles_per_site": m.mtf50 * params.scale, "mtf50_cycles_per_output_pixel": m.mtf50, "angle_deg": m.angle_deg, "curve": m.curve }));
+                if let Some(r) = edge_raggedness(&l, grid.width, grid.height, m.line) {
+                    let r = r / params.scale;
+                    println!(
+                        "  {:<20} {:>12} {:>14.4}  (edge raggedness, sites)",
+                        "", "", r
+                    );
+                    if let Some(e) = mtf.get_mut(v.name) {
+                        e["raggedness_sites"] = json!(r);
+                    }
+                }
             }
             Err(e) => println!("  {:<20} {e}", v.name),
         }
@@ -881,7 +903,7 @@ fn measure_hdr_cmd(args: &Args) -> Result<(), String> {
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let rafs = open_all(&args.files, None)?;
     let frames: Vec<&dyn FrameSource> = rafs.iter().map(|r| r as &dyn FrameSource).collect();
-    let alignment = get_alignment(args, &frames, &out)?;
+    let alignment = get_alignment(args, &frames, &out, None)?;
     let params = ResolutionParams {
         bracket: true,
         ..resolution_params(args)?
@@ -1002,6 +1024,95 @@ fn measure_hdr_cmd(args: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// Registers a pixel-shift sequence with the commanded offsets as priors and
+/// reports commanded against measured displacement per frame. `--commanded`
+/// lists one offset per file, in the order the files are given.
+fn pixelshift_cmd(args: &Args) -> Result<(), String> {
+    let out = args.out()?;
+    std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let rafs = open_all(&args.files, None)?;
+    let frames: Vec<&dyn FrameSource> = rafs.iter().map(|r| r as &dyn FrameSource).collect();
+    let pair = |s: &str, what: &str| -> Result<[f64; 2], String> {
+        let v: Vec<f64> = s
+            .split(',')
+            .map(|p| p.trim().parse::<f64>())
+            .collect::<Result<_, _>>()
+            .map_err(|_| format!("{what}: expected X,Y, got {s:?}"))?;
+        match v[..] {
+            [x, y] => Ok([x, y]),
+            _ => Err(format!("{what}: expected X,Y, got {s:?}")),
+        }
+    };
+    let counts: Vec<[f64; 2]> = args
+        .opts
+        .get("commanded")
+        .ok_or("--commanded \"X,Y X,Y ...\" (counts per frame) is required")?
+        .split_whitespace()
+        .map(|p| pair(p, "--commanded"))
+        .collect::<Result<_, _>>()?;
+    if counts.len() != frames.len() {
+        return Err(format!(
+            "--commanded gives {} offsets for {} frames",
+            counts.len(),
+            frames.len()
+        ));
+    }
+    // Offsets follow the files as given; frames are opened in path order.
+    let mut given: Vec<(&PathBuf, [f64; 2])> = args.files.iter().zip(counts).collect();
+    given.sort_by(|a, b| a.0.cmp(b.0));
+    let counts: Vec<[f64; 2]> = given.into_iter().map(|g| g.1).collect();
+    let plan = ShiftPlan {
+        counts,
+        sites_per_count: match args.opts.get("sites-per-count") {
+            Some(s) => pair(s, "--sites-per-count")?,
+            None => ShiftPlan::XH2S_SITES_PER_COUNT,
+        },
+    };
+    let alignment = get_alignment(args, &frames, &out, Some(&plan))?;
+    let r = shift_report(&plan, &alignment);
+    println!(
+        "  {:<14} {:>14} {:>18} {:>18} {:>18}",
+        "frame", "counts", "commanded (sites)", "measured", "measured-commanded"
+    );
+    for f in &r.frames {
+        let fmt = |v: Option<[f64; 2]>| match v {
+            Some([x, y]) => format!("{x:+7.3} {y:+7.3}"),
+            None => "rejected".into(),
+        };
+        println!(
+            "  {:<14} {:>6} {:>6}   {}   {}   {}",
+            f.label,
+            f.counts[0],
+            f.counts[1],
+            fmt(Some(f.commanded)),
+            fmt(f.measured),
+            fmt(f.difference)
+        );
+    }
+    if let Some([x, y]) = r.zero_spread {
+        println!("  frames at the reference position spread {x:.3} x {y:.3} sites");
+    }
+    for (axis, fit) in ["X", "Y"].iter().zip(&r.fit) {
+        if let Some(f) = fit {
+            println!(
+                "  {axis}: {:+.5} sites per count (1 site per {:+.1} counts), intercept {:+.3}, rms residual {:.3} over {} frames",
+                f.sites_per_count,
+                1.0 / f.sites_per_count,
+                f.intercept,
+                f.rms_residual,
+                f.frames
+            );
+        }
+    }
+    std::fs::write(
+        out.join("pixelshift.json"),
+        serde_json::to_string_pretty(&r).unwrap(),
+    )
+    .map_err(|e| e.to_string())?;
+    println!("wrote {}", out.display());
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let result = parse_args().and_then(|args| match args.command.as_str() {
         "info" => info(&args),
@@ -1011,13 +1122,14 @@ fn main() -> ExitCode {
             let rafs = open_all(&args.files, None)?;
             let frames: Vec<&dyn FrameSource> =
                 rafs.iter().map(|r| r as &dyn FrameSource).collect();
-            get_alignment(&args, &frames, &out).map(|_| ())
+            get_alignment(&args, &frames, &out, None).map(|_| ())
         }
         "align-jpeg" => align_jpeg(&args),
         "merge" => merge_cmd(&args),
         "synth" => synth(&args),
         "measure" => measure_cmd(&args),
         "measure-hdr" => measure_hdr_cmd(&args),
+        "pixelshift" => pixelshift_cmd(&args),
         _ => Err(USAGE.into()),
     });
     match result {

@@ -2,17 +2,18 @@
 //! Run with `--release`; the scenes are rendered with 16 samples per site.
 
 use fujimod_multishot::align::{
-    AlignParams, Alignment, FrameAlignment, MatchParams, MatchStats, align,
+    AlignParams, Alignment, FrameAlignment, MatchParams, MatchStats, align, align_with_priors,
 };
 use fujimod_multishot::demosaic::{self, Demosaic};
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::{Affine, FitParams};
 use fujimod_multishot::local::{LocalParams, residual_fields};
-use fujimod_multishot::measure::{crop, luma, patch_noise, rmse, slanted_edge};
+use fujimod_multishot::measure::{crop, edge_raggedness, luma, patch_noise, rmse, slanted_edge};
 use fujimod_multishot::merge::{
     ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, merge_resolution,
 };
 use fujimod_multishot::noise::NoiseModel;
+use fujimod_multishot::pixelshift::{ShiftPlan, report as shift_report};
 use fujimod_multishot::source::{FrameSource, MemoryFrame};
 use fujimod_multishot::synthetic::{
     MovingDisc, NoiseSpec, Scene, WB, handheld_transforms, render, render_exposed,
@@ -586,4 +587,102 @@ fn bracket_merge_extends_range() {
         "the bright side must clip in the long frames"
     );
     assert!((b.mean[1] / bt - 1.0).abs() < 0.02);
+}
+
+#[test]
+fn pixel_shift_refines_commanded_offsets() {
+    // Commanded offsets of 0, 1 site in X, 1 site in Y and half a site on
+    // both axes, each with a drift of 0.3 to 0.45 sites that the commands do
+    // not know about. The alignment starts from the commands, must measure
+    // the true positions, and the merge must keep the sharpness that merging
+    // at the commanded positions loses.
+    let scene = Scene::chart(W, H);
+    let plan = ShiftPlan {
+        counts: vec![[0.0, 0.0], [56.0, 0.0], [0.0, 56.0], [28.0, 28.0]],
+        sites_per_count: ShiftPlan::XH2S_SITES_PER_COUNT,
+    };
+    let drift = [[0.0, 0.0], [0.35, -0.25], [-0.3, 0.4], [0.45, 0.3]];
+    let truth: Vec<Affine> = (0..4)
+        .map(|k| {
+            let [cx, cy] = plan.commanded(k, 0);
+            Affine::translation(cx + drift[k][0], cy + drift[k][1])
+        })
+        .collect();
+    let frames = burst(&scene, &truth, Some(NOISE));
+    let fr = refs(&frames);
+    let priors = plan.priors(0);
+    let a = align_with_priors(&fr, 0, &test_align_params(), Some(&priors)).unwrap();
+    assert_eq!(a.accepted(), 4);
+    let r = shift_report(&plan, &a);
+    for (k, f) in r.frames.iter().enumerate() {
+        let d = f.difference.unwrap();
+        println!(
+            "frame {k}: commanded {:+.3} {:+.3}, measured-commanded {:+.3} {:+.3} (drift {:+.2} {:+.2})",
+            f.commanded[0], f.commanded[1], d[0], d[1], drift[k][0], drift[k][1]
+        );
+        assert!(
+            (d[0] - drift[k][0]).abs() < 0.05 && (d[1] - drift[k][1]).abs() < 0.05,
+            "frame {k}: drift measured {d:?}, true {:?}",
+            drift[k]
+        );
+    }
+
+    let params = ResolutionParams::default();
+    let edge = region(scene.edge_region());
+    let with = |transforms: &[Affine]| {
+        let mut al = a.clone();
+        for (f, t) in al.frames.iter_mut().zip(transforms) {
+            f.to_frame = Some(*t);
+        }
+        al
+    };
+    let (grid, refined) = merge(&fr, &a, &params, edge);
+    let (_, exact) = merge(&fr, &with(&truth), &params, edge);
+    let (_, commanded) = merge(&fr, &with(&priors), &params, edge);
+    let (mr, mt, mc) = (
+        mtf50(&refined, &grid),
+        mtf50(&exact, &grid),
+        mtf50(&commanded, &grid),
+    );
+    println!("pixel shift MTF50: refined {mr:.4}  true positions {mt:.4}  commanded only {mc:.4}");
+    assert!(mr > 0.97 * mt, "refined {mr} vs true positions {mt}");
+    assert!(
+        mc < 0.93 * mt,
+        "commanded-only {mc} should lose sharpness against {mt}"
+    );
+
+    // A whole-site shift gives every position a second CFA color: the pair
+    // merged at sensor resolution has a straighter edge and lower color
+    // error than either frame alone.
+    let pair = {
+        let mut al = a.clone();
+        for (k, f) in al.frames.iter_mut().enumerate() {
+            if k > 1 {
+                f.to_frame = None;
+            }
+        }
+        al
+    };
+    let one = ResolutionParams {
+        scale: 1.0,
+        ..params.clone()
+    };
+    let (g1, merged_pair) = merge(&fr, &pair, &one, edge);
+    let (_, alone) = merge(&fr, &reference_only(&a), &one, edge);
+    let rag = |rgb: &[f32]| {
+        let l = luma(rgb, WB);
+        let m = slanted_edge(&l, g1.width, g1.height).unwrap();
+        edge_raggedness(&l, g1.width, g1.height, m.line).unwrap()
+    };
+    let detail = region(scene.detail_region());
+    let (dg, dpair) = merge(&fr, &pair, &one, detail);
+    let (_, dalone) = merge(&fr, &reference_only(&a), &one, detail);
+    let ideal = scene.truth(&dg, 0);
+    let (rp, ra) = (rag(&merged_pair), rag(&alone));
+    let (ep, ea) = (rmse(&dpair, &ideal), rmse(&dalone, &ideal));
+    println!(
+        "one-site pair: edge raggedness {rp:.4} vs {ra:.4} sites, detail RMSE {ep:.5} vs {ea:.5}"
+    );
+    assert!(rp < ra, "pair raggedness {rp} vs single {ra}");
+    assert!(ep < 0.9 * ea, "pair detail RMSE {ep} vs single {ea}");
 }
