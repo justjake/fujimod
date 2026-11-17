@@ -186,6 +186,17 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
     )
       throw new Error('Invalid observation declaration.');
   }
+  if (
+    manifest.displays !== undefined &&
+    (!Array.isArray(manifest.displays) ||
+      manifest.displays.length < 2 ||
+      new Set(manifest.displays).size !== manifest.displays.length ||
+      manifest.displays.some(
+        (output: unknown) =>
+          !Number.isSafeInteger(output) || (output as number) < 0 || (output as number) > 0xffffffff,
+      ))
+  )
+    throw new Error('Invalid emulator displays.');
   if (manifest.inputs !== undefined && !Array.isArray(manifest.inputs))
     throw new Error('Invalid emulator inputs.');
   if (
@@ -215,6 +226,12 @@ export interface EmulatorManifest {
   /** Prepared boots: the guest tick at which this bundle first reaches REC, for progress. */
   recTicks?: number;
   output: number;
+  /**
+   * Scanout outputs of a body with several displays (rear LCD, EVF): the one
+   * that presented most recently is shown, the first before any presents.
+   * Without it, `output` is shown.
+   */
+  displays?: number[];
   inputs?: ControlInput[];
   /** Optional external endpoint and boot inputs configured by the caller. */
   usb?: {
