@@ -1744,6 +1744,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-board-graph"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-emulator",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-unicorn",
+ "fujimod-workspace-hack",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator-boot"
 version = "0.1.0"
 dependencies = [
@@ -1756,8 +1769,8 @@ dependencies = [
  "fujimod-catalog-resolution",
  "fujimod-catalog-run-inputs",
  "fujimod-emulator",
+ "fujimod-emulator-board-graph",
  "fujimod-emulator-cpu",
- "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-exr2-plan",
@@ -2612,7 +2625,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-resolution",
  "fujimod-emulator",
- "fujimod-emulator-boot",
+ "fujimod-emulator-board-graph",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-graphics",
@@ -2644,7 +2657,7 @@ dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-catalog-resolution",
  "fujimod-emulator",
- "fujimod-emulator-boot",
+ "fujimod-emulator-board-graph",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-parts-controls",

@@ -15,7 +15,7 @@ use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::{self, bus::Mode};
 use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_session::Session;
-use fujimod_emulator_boot::graph;
+use fujimod_emulator_board_graph as graph;
 use fujimod_emulator_devices::{graph::DeviceWindow, xp5::panel_clocks};
 use fujimod_emulator_xp5_board::{
     board as xp5_board,

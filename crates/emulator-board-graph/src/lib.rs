@@ -225,7 +225,7 @@ fn decoder_selection(
 }
 
 /// Construct and validate the processor/address graph for one resolved body.
-pub(super) fn assemble(
+pub fn assemble(
     selection: &ResolvedSelection,
     dram_address_space_limit_bytes: u64,
     rate: RunInstructionRate,
@@ -573,7 +573,7 @@ fn dma_map(map: &BusMapping) -> Value {
 
 /// Serialize the validated processor graph in the same closed shape accepted
 /// by `factory::Graph` deserialization for native callers.
-pub(super) fn value(
+pub fn value(
     selection: &ResolvedSelection,
     graph: &factory::Graph,
     rate: RunInstructionRate,
@@ -651,35 +651,6 @@ mod tests {
         AddressDecoder, Body, DecoderChoice, Firmware, MemoryKind, ProcessorCore, RProfileState,
         SocReset, TcmState,
     };
-
-    #[test]
-    fn exr2_image_transfer_maps_cpu_pages_and_keeps_device_register_bounds() {
-        // The image-transfer block occupies 32 bytes, smaller than a CPU page.
-        let prepared = crate::prepare("x70-110-rec", &[]).unwrap();
-        for core in 0..2 {
-            let aperture = prepared
-                .execution
-                .peripherals
-                .iter()
-                .find(|p| {
-                    p.core == core
-                        && p.address <= 0xfff64000
-                        && p.address + p.size as u64 >= 0xfff65000
-                })
-                .expect("both CPUs must map the image-transfer page");
-            assert_eq!(aperture.address % 0x1000, 0);
-            assert_eq!(aperture.physical % 0x1000, 0);
-            assert_eq!(aperture.size % 0x1000, 0);
-        }
-        let window = prepared.devices_value["nodes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .flat_map(|node| node["windows"].as_array().unwrap())
-            .find(|window| window["base"] == 0xfff64000u64)
-            .unwrap();
-        assert_eq!(window["size"], 0x20);
-    }
 
     #[test]
     fn peripheral_pages_merge_shared_pages_and_preserve_aliases() {

@@ -3,7 +3,7 @@
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
 mod first_start;
-pub mod graph;
+use fujimod_emulator_board_graph as graph;
 mod x70;
 pub mod xpp;
 

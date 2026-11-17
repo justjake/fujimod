@@ -1042,3 +1042,32 @@ fn statistics_dma_uses_its_selected_latency_instead_of_the_scene_frame_period() 
 
 #[path = "tests/output_timing.rs"]
 mod output_timing;
+
+#[test]
+fn exr2_image_transfer_maps_cpu_pages_and_keeps_device_register_bounds() {
+    // The image-transfer block occupies 32 bytes, smaller than a CPU page.
+    let prepared = crate::prepare("x70-110-rec", &[]).unwrap();
+    for core in 0..2 {
+        let aperture = prepared
+            .execution
+            .peripherals
+            .iter()
+            .find(|p| {
+                p.core == core
+                    && p.address <= 0xfff64000
+                    && p.address + p.size as u64 >= 0xfff65000
+            })
+            .expect("both CPUs must map the image-transfer page");
+        assert_eq!(aperture.address % 0x1000, 0);
+        assert_eq!(aperture.physical % 0x1000, 0);
+        assert_eq!(aperture.size % 0x1000, 0);
+    }
+    let window = prepared.devices_value["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|node| node["windows"].as_array().unwrap())
+        .find(|window| window["base"] == 0xfff64000u64)
+        .unwrap();
+    assert_eq!(window["size"], 0x20);
+}
