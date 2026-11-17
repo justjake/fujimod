@@ -106,13 +106,7 @@ const PROGRAM: &[(u32, &[u32])] = &[
     ),
 ];
 
-fn session(counted: bool) -> Session {
-    let definition: Definition = serde_json::from_value(json!({
-        "ram_size": 65536, "cores": 2, "discovery": false, "cbar": CBAR,
-        "labels": [BUMP],
-        "initial_registers": [[["Pc", CORE0]], [["Pc", CORE1]]]
-    }))
-    .unwrap();
+fn open(definition: Definition, nor: Option<Vec<u8>>, counted: bool) -> Session {
     let session = {
         let _environment = ENVIRONMENT.lock().unwrap();
         // SAFETY: sessions in this binary are opened under the lock above.
@@ -123,11 +117,22 @@ fn session(counted: bool) -> Session {
                 std::env::remove_var("FUJIMOD_XP4_COUNTED");
             }
         }
-        let session = Session::new(definition, None, vec![]).unwrap();
+        let session = Session::new(definition, nor, vec![]).unwrap();
         unsafe { std::env::remove_var("FUJIMOD_XP4_COUNTED") };
         session
     };
     assert_eq!(session.counted_execution(), counted);
+    session
+}
+
+fn session(counted: bool) -> Session {
+    let definition: Definition = serde_json::from_value(json!({
+        "ram_size": 65536, "cores": 2, "discovery": false, "cbar": CBAR,
+        "labels": [BUMP],
+        "initial_registers": [[["Pc", CORE0]], [["Pc", CORE1]]]
+    }))
+    .unwrap();
+    let session = open(definition, None, counted);
     for (address, words) in PROGRAM {
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         session.write(*address as usize, &bytes).unwrap();
@@ -212,4 +217,154 @@ fn counted_sessions_refuse_observers_that_need_every_instruction() {
     );
     assert!(session.run_to(0, 16, u64::from(CORE0) + 8).is_err());
     assert!(session.instruction_points(0, vec![]).is_ok());
+}
+
+/// One core that calls code in the serial-flash aperture, executed in place,
+/// then changes what the aperture reads (a controller read state, or a sector
+/// erase that completes on a device deadline) and calls the same page again.
+/// The scenarios of `nor_execute_in_place.rs`.
+mod execute_in_place {
+    use super::*;
+
+    const CONTROLLER: u32 = 0xfffd_8000;
+    const PAD: u32 = 0xfff4_108c;
+    const FLASH_CODE: u32 = 0xf000_1100;
+    const MARKERS: usize = 0x8000;
+    const CONFIGURE: [u32; 5] = [
+        0xe581_4000, // str r4, [r1]          control
+        0xe582_5000, // str r5, [r2]          pad function
+        0xe581_6004, // str r6, [r1, #4]      clock
+        0xe581_7014, // str r7, [r1, #0x14]   mode
+        0xe581_8010, // str r8, [r1, #0x10]   sample point
+    ];
+    const CALL: u32 = 0xe12f_ff33; // blx r3: into the aperture
+    const WFI: u32 = 0xe320_f003;
+
+    fn definition() -> Definition {
+        let registers = [
+            (1, CONTROLLER),
+            (2, PAD),
+            (3, FLASH_CODE),
+            (4, 0x80041),
+            (5, 0xffff_5545),
+            (6, 0x13),
+            (7, 0x10_1003),
+            (8, 9),
+            (9, 5),
+            (11, MARKERS as u32),
+            (15, 0),
+        ];
+        serde_json::from_value(json!({
+            "ram_size": 65536, "cores": 1, "discovery": false, "cbar": 0xffff_0000u32,
+            "storage_jedec": 0x20_2018, "storage_dma_routes": (32..48).collect::<Vec<_>>(),
+            "storage_geometry": [4096, 256, 10, 2], "storage_irq": 48,
+            "gpio": vec![0u16; 16],
+            "storage_mapped_read": {
+                "states": [{"control": [0x78_0071, 0x80041], "clock": 0x13, "mode": 0x10_1003,
+                    "samples": [9, 11], "pad": true}],
+                "miss_byte": 0xa5, "pad": [PAD, 0xffff, 0x5545]},
+            "storage_write_protect": false,
+            "initial_registers": [registers.iter()
+                .map(|&(r, v)| json!([{"Arm32": {"R": r}}, v])).collect::<Vec<_>>()]
+        }))
+        .unwrap()
+    }
+
+    /// The array: `bx lr` after setting both markers, at the aperture's code page.
+    fn nor() -> Vec<u8> {
+        let mut nor = vec![0xff; 8192];
+        let code = [0xe3a0_0055u32, 0xe58b_0000, 0xe58b_0004, 0xe12f_ff1e];
+        for (i, word) in code.iter().enumerate() {
+            nor[0x1100 + 4 * i..0x1100 + 4 * i + 4].copy_from_slice(&word.to_le_bytes());
+        }
+        nor
+    }
+
+    /// `ldr r0, [pc, #offset]` at word `at`, reading the literal word at `literal`.
+    fn ldr_r0(at: usize, literal: usize) -> u32 {
+        0xe59f_0000 | ((literal - at) as u32 * 4 - 8)
+    }
+
+    fn controller_change() -> Vec<u32> {
+        let mut program = CONFIGURE.to_vec();
+        program.extend([
+            CALL,
+            0xe581_9010, // str r9, [r1, #0x10]  a sample point outside the window
+            0xe3a0_0000, // mov r0, #0
+            0xe58b_0000, // str r0, [r11]        clear the first marker
+            CALL,        // the page reads again, now as the miss pattern
+            WFI,
+        ]);
+        program
+    }
+
+    fn erase() -> Vec<u32> {
+        let wait = [0xe3a0_20c8u32, 0xe282_2b01, 0xe252_2001, 0x1aff_fffd];
+        let literals = 100;
+        let mut program = CONFIGURE.to_vec();
+        program.push(CALL);
+        program.push(0xe58b_0008); // str r0, [r11, #8]
+        program.push(ldr_r0(program.len(), literals)); // write enable
+        program.push(0xe581_0090); // str r0, [r1, #0x90]
+        program.extend(wait);
+        program.push(ldr_r0(program.len(), literals + 1)); // erase address
+        program.push(0xe581_0094); // str r0, [r1, #0x94]
+        program.push(ldr_r0(program.len(), literals + 2)); // four-kib erase
+        program.push(0xe581_0090); // str r0, [r1, #0x90]
+        program.extend(wait);
+        program.extend([0xe3a0_0000, 0xe58b_0000, 0xe58b_0004, CALL, WFI]);
+        program.resize(literals, WFI);
+        program.extend([0x0600_0001, 0xf000_1000, 0x210b_0001]);
+        program
+    }
+
+    /// Runs core 0 in calls of `chunk` instructions until one yields (enters
+    /// fewer), as the single call of `nor_execute_in_place.rs` ends there.
+    /// A chunk of one could not tell that yield from a full call.
+    fn run(program: &[u32], counted: bool, chunk: usize) -> (Value, String, Vec<u8>) {
+        let session = open(definition(), Some(nor()), counted);
+        let bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
+        session.write(0, &bytes).unwrap();
+        let entered = |s: &Session| {
+            serde_json::to_value(s.state(false)).unwrap()["instructions"]
+                .as_u64()
+                .unwrap()
+        };
+        let mut total = 0;
+        while total < 200_000 {
+            let before = entered(&session);
+            let result = session.run(0, chunk);
+            let now = entered(&session);
+            total = now;
+            if result.is_err() || now - before < chunk as u64 {
+                break;
+            }
+        }
+        outcome(&session)
+    }
+
+    #[test]
+    fn counted_runs_drop_execute_in_place_copies_where_the_hook_does() {
+        // Markers [first, second, proof of the first call]. After the erase
+        // the second call fetches 0xffffffff and fails as invalid: both
+        // modes must fail there alike.
+        for (name, program, markers) in [
+            ("controller read state", controller_change(), [0, 0x55, 0]),
+            ("completed erase", erase(), [0, 0, 0x55]),
+        ] {
+            for chunk in [7, 64, 1000, 200_000] {
+                let exact = run(&program, false, chunk);
+                let counted = run(&program, true, chunk);
+                let word = |at: usize| u32::from_le_bytes(exact.2[at..at + 4].try_into().unwrap());
+                assert_eq!(
+                    [word(MARKERS), word(MARKERS + 4), word(MARKERS + 8)],
+                    markers,
+                    "{name}, chunk {chunk}"
+                );
+                assert_eq!(exact.0, counted.0, "{name}: state, chunk {chunk}");
+                assert_eq!(exact.1, counted.1, "{name}: maintenance, chunk {chunk}");
+                assert!(exact.2 == counted.2, "{name}: RAM, chunk {chunk}");
+            }
+        }
+    }
 }
