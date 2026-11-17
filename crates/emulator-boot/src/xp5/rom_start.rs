@@ -75,7 +75,7 @@ pub(crate) struct RomStart {
     /// `(file name on the card, bytes)`; the card is formatted in memory.
     pub card_files: Vec<(String, Vec<u8>)>,
     pub card_present: bool,
-    /// A raw card image () in place of the in-memory FAT32 volume.
+    /// A raw SD card image in place of the in-memory FAT32 volume.
     pub card_image: Option<super::card_image::CardImage>,
 }
 
@@ -146,7 +146,7 @@ impl RomStart {
         })
     }
 
-    /// Use a raw card image instead of the formatted volume. Not combinable with .
+    /// Use a raw SD card image instead of the formatted volume.
     pub fn with_card_image(mut self, path: &Path) -> Result<Self, String> {
         if !self.card_files.is_empty() {
             return Err("--sd-image and --sd-file are alternatives: the image is the whole card".into());

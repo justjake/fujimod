@@ -65,11 +65,12 @@ pub(super) fn open_startup(
 ) -> Result<Started, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
         scene, output: run_directory, mode, quantum: quantum_override } = startup;
-    let start_rom = match configuration.configuration.start {
-        RunStart::Rom => true,
-        RunStart::Loader => false,
-        RunStart::SdCard => return Err("XP5 SD card startup is unavailable".into()),
-    };
+    let start = configuration.configuration.start;
+    if start == RunStart::SdCard && sd_image.is_none()
+        && !card_files.iter().any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
+    {
+        return Err("XP5 SD card startup requires marble_init.bin or an SD card image".into());
+    }
     let firmware_id = configuration.configuration.firmware_id.clone();
     let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
     let preloads = configuration.configuration.preset.as_ref()
@@ -83,7 +84,7 @@ pub(super) fn open_startup(
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
-    let rom = if start_rom {
+    let rom = if matches!(start, RunStart::Rom | RunStart::SdCard) {
         let start = rom_start::RomStart::load(
             rom_path.as_deref().ok_or("--start rom needs --rom FILE")?,
             true,
@@ -107,7 +108,7 @@ pub(super) fn open_startup(
         || sd_image.is_some()
         || !card_files.is_empty()
     {
-        return Err("--rom, --sd-file, --sd-image, --sd-absent and --dials apply to --start rom only".into());
+        return Err("a boot ROM and SD card media require a ROM or SD card startup".into());
     } else {
         None
     };

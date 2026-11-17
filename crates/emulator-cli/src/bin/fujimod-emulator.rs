@@ -19,7 +19,7 @@ First-start menus are accepted through MENU/OK ADC input.\n\
 EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --clock-seconds-2000 N.\n\
 XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
---card-image IMAGE, --card-file NAME=PATH (ROM start only).\n\
+--card-image IMAGE, --card-file NAME=PATH (ROM or SD card startup).\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
