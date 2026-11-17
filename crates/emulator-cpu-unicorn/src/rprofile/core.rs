@@ -883,7 +883,7 @@ impl Execution {
         let word = u32::from_le_bytes(bytes);
         let cpsr = self.scalar(arm::CPSR)?;
         let thumb = self.thumb.get();
-        if !thumb && self.execute_loop(address, word)? {
+        if self.execute_loop(address, word)? {
             return Ok(());
         }
         let condition = if thumb {
