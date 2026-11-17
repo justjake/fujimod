@@ -1329,7 +1329,7 @@ mod tests {
         let assembly = xt20(&assets).unwrap();
         let spec: Spec = serde_json::from_value(assembly.devices).unwrap();
         let flash = BTreeMap::from([(assembly.flash_asset.to_string(), vec![0xff; 0x1000])]);
-        let built = build(assembly.execution, spec, &flash, Mode::Strict).unwrap();
+        let built = build(assembly.execution, spec, &flash, Mode::Strict, fujimod_catalog_configuration::RunEngine::Unicorn).unwrap();
         for name in [
             "gpio",
             "resets",

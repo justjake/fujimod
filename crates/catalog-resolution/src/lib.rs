@@ -48,6 +48,14 @@ impl ResolvedConfiguration {
 
     /// Apply an explicit engine choice after catalog overlays have resolved.
     pub fn override_engine(&mut self, engine: RunEngine) -> Result<(), String> {
+        if self.configuration.execution.is_none() && matches!(self.reference.soc.id.as_str(), "xp4" | "xpp") {
+            self.configuration.execution = Some(RunExecution {
+                mode: RunExecutionMode::Strict,
+                engine,
+                quantum: 1000,
+                instructions_per_tick: RunInstructionRate { numerator: 1, denominator: 1 },
+            });
+        }
         self.configuration.execution.as_mut()
             .ok_or_else(|| format!("configuration {} declares no execution policy", self.configuration.id))?
             .engine = engine;

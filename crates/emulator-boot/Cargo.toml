@@ -15,6 +15,8 @@ doctest = false
 xp5-startup = [
     "dep:fujimod-emulator-parts-controls",
     "dep:fujimod-emulator-xp5-board",
+    "dep:fujimod-emulator-xp4-board",
+    "dep:fujimod-emulator-xpp",
     "dep:fujimod-emulator-xp5-display",
     "dep:fujimod-emulator-xp5-io",
     "dep:fujimod-emulator-xp5-storage",
@@ -60,6 +62,8 @@ sha2 = { workspace = true, features = ["asm-aarch64"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fujimod-emulator-parts-controls = { workspace = true, optional = true }
 fujimod-emulator-xp5-board = { workspace = true, optional = true }
+fujimod-emulator-xp4-board = { path = "../emulator-xp4-board", optional = true }
+fujimod-emulator-xpp = { workspace = true, optional = true }
 fujimod-emulator-xp5-display = { workspace = true, optional = true }
 fujimod-emulator-xp5-io = { workspace = true, optional = true }
 fujimod-emulator-xp5-storage = { workspace = true, optional = true }

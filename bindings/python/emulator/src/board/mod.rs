@@ -582,8 +582,7 @@ impl Board {
             .and_then(serde_json::Value::as_str)
             == Some("xpp")
         {
-            if !matches!(engine, RunEngine::Unicorn)
-                || !models.is_empty()
+            if !models.is_empty()
                 || json::<serde_json::Value>(scene)? != serde_json::json!({})
             {
                 return Err(PyValueError::new_err(
@@ -596,6 +595,7 @@ impl Board {
                 assets,
                 read_limit,
                 mode,
+                engine,
                 continue_refusals,
                 serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}),
             );

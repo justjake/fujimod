@@ -8,6 +8,8 @@ mod frame_viewer;
 mod png_writer;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod output;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod application;
 mod first_start;
 mod host;
 use fujimod_emulator_board_graph as graph;
@@ -844,6 +846,8 @@ pub enum StartupInputs {
     Exr2(Options),
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
     Xp5(xp5::Startup),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Application(application::Startup),
 }
 
 /// An unexecuted session and the generation-specific state needed to drive it.
@@ -851,6 +855,8 @@ pub enum Opened {
     Exr2(Box<Session>),
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
     Xp5(Box<xp5::Started>),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Application(application::Started),
 }
 
 impl Opened {
@@ -859,7 +865,7 @@ impl Opened {
         match self {
             Self::Exr2(session) => Ok(*session),
             #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-            Self::Xp5(_) => Err("EXR II startup returned an XP5 session".into()),
+            Self::Xp5(_) | Self::Application(_) => Err("EXR II startup returned an application-profile session".into()),
         }
     }
 }
@@ -873,6 +879,12 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Op
         #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
         (Some(RunInputs::Xp5(_)), StartupInputs::Xp5(inputs)) => {
             Ok(Opened::Xp5(Box::new(xp5::open_startup(&resolved, inputs)?)))
+        }
+        #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+        (Some(RunInputs::Xp4(_)) | None, StartupInputs::Application(inputs))
+            if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") =>
+        {
+            Ok(Opened::Application(application::open(&resolved, inputs)?))
         }
         _ => Err(format!(
             "startup inputs do not match configuration {}",

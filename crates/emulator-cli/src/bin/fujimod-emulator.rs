@@ -23,11 +23,12 @@ XP5 inputs: --quantum N, --keys SCRIPT,\n\
 --card-image IMAGE, --card-file NAME=PATH (ROM or SD card startup).\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
+Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 36] = [
+const VALUED: [&str; 37] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -54,6 +55,7 @@ const VALUED: [&str; 36] = [
     "--card-image",
     "--card-file",
     "--manifest",
+    "--application-plan",
     "--watch-pcs",
     "--pc-trace",
     "--pc-trace-limit",
@@ -224,7 +226,7 @@ struct Outcome {
 fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
+        &["--application-plan", "--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
     )?;
     if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.card_files.is_empty() || !boot_options.pokes.is_empty() {
         return Err("--discovery, --stub, --mod, --card-file and --poke do not apply to EXR II runs".into());
@@ -314,7 +316,7 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
 fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "XP5",
-        &["--nand", "--settings", "--camera", "--clock-seconds-2000"],
+        &["--application-plan", "--nand", "--settings", "--camera", "--clock-seconds-2000"],
     )?;
     if !boot_options.preferred_languages.is_empty() {
         return Err("--language does not apply to XP5 runs".into());
@@ -381,6 +383,35 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
     Ok(Outcome { success: true })
 }
 
+fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
+    let request = boot::application::Startup {
+        update: options.required("--update")?.into(),
+        plan: options.required("--application-plan")?.into(),
+        discovery: options.discovery,
+        quantum: options.text("--quantum")?.as_deref().map(xp5::parse_quantum).transpose()?,
+    };
+    let instructions = options.instruction_limit()?.ok_or("application startup requires --instruction-limit")?;
+    let duration = options.duration("--seconds")?;
+    let output = options.path("--output");
+    if !options.values.is_empty() || !options.stubs.is_empty() || !options.mods.is_empty()
+        || !options.card_files.is_empty() || !options.preferred_languages.is_empty() || !options.pokes.is_empty()
+    {
+        return Err("application-profile runtime needs supported options and media in its startup plan".into());
+    }
+    let boot::Opened::Application(mut started) = boot::open(resolved, boot::StartupInputs::Application(request))?
+    else {
+        return Err("application startup returned another processor generation".into());
+    };
+    let state = started.run(instructions, duration)?;
+    let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
+    if let Some(output) = output {
+        std::fs::create_dir_all(&output).map_err(|error| error.to_string())?;
+        std::fs::write(output.join("board-state.json"), &report).map_err(|error| error.to_string())?;
+    }
+    println!("{report}");
+    Ok(Outcome { success: true })
+}
+
 fn run() -> Result<Outcome, String> {
     let Some(mut boot_options) = parse(std::env::args_os().skip(1))? else {
         print!("{HELP}");
@@ -390,10 +421,13 @@ fn run() -> Result<Outcome, String> {
         .text("--configuration")?
         .ok_or("required option: --configuration")?;
     let resolved = boot_options.resolve(&configuration_id)?;
+    if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") {
+        return run_application(boot_options, resolved);
+    }
     match resolved.configuration.inputs.as_ref() {
         Some(RunInputs::Exr2(_)) => run_exr2(boot_options, resolved),
         Some(RunInputs::Xp5(_)) => run_xp5(boot_options, resolved),
-        Some(RunInputs::Xp4(_)) => Err("boot does not support XP4 configurations yet".into()),
+        Some(RunInputs::Xp4(_)) => Err("XP4 inputs declared for another SoC".into()),
         None => Err(format!("configuration {configuration_id} declares no startup inputs")),
     }
 }
