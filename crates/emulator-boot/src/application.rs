@@ -158,7 +158,13 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
                 "engine": engine,
                 "quantum": quantum,
                 "mode": mode.name(),
-                "execution": &assembly.execution,
+                "execution": crate::graph::value(
+                    &resolved.reference, &assembly.execution,
+                    fujimod_catalog_configuration::RunInstructionRate {
+                        numerator: assembly.rate.0,
+                        denominator: assembly.rate.1,
+                    },
+                ),
                 "devices": &devices,
             });
             let spec = serde_json::from_value(devices).map_err(|error| error.to_string())?;
