@@ -4655,6 +4655,7 @@ class RunFactoryOptions(TypedDict, total=False):
     auxiliary_control_ticks: NotRequired[int | None]
     backdrop_profile: NotRequired[RunBackdropProfile | None]
     camera_settings: NotRequired[dict[str, str] | None]
+    capability_reply: NotRequired[list[int] | None]
     clear_profile: NotRequired[RunClearProfile | None]
     clock_seconds_2000: NotRequired[int | None]
     control_bus_profile: NotRequired[RunControlBusProfile | None]

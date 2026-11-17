@@ -15,6 +15,7 @@
         "sd_card_present": true,
         "wifi_sdio_profile": "mt5931-no-peers",
         "wifi_sdio_transfer_ticks": 100,
+        "capability_reply": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
         "producer_data_ticks": 1024
       },
