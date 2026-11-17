@@ -1,6 +1,7 @@
 //! The XP4 RECC engine's opt-in development (X-T3 5.11: page 0xfff82000,
 //! interrupt 129): the `raw` wiring is admitted on RECC alone and checked,
-//! and so is `firmware_color`, on a RECC with `raw`.
+//! and so is `firmware_color`, on a RECC with `raw`, and
+//! `firmware_white_balance`, on a RECC with `firmware_color`.
 use fujimod_emulator_xp4_board::{Definition, Session};
 use serde_json::{Value, json};
 
@@ -59,4 +60,29 @@ fn the_firmware_color_is_admitted_on_a_developing_recc_alone() {
         .err()
         .unwrap();
     assert!(error.contains("needs a declared RAW"), "{error}");
+}
+
+#[test]
+fn the_firmware_white_balance_needs_the_firmware_color_and_a_nonzero_reference() {
+    let raw = json!({"address": 0x473d_8fd0_u32, "pitch": 0x31e0, "site": [5, 1]});
+    let reference = json!([9149, 4822, 9309]);
+    session(input(
+        "recc",
+        json!({"raw": raw, "firmware_color": true, "firmware_white_balance": reference}),
+    ))
+    .unwrap();
+    let error = session(input(
+        "recc",
+        json!({"raw": raw, "firmware_white_balance": reference}),
+    ))
+    .err()
+    .unwrap();
+    assert!(error.contains("needs the firmware color"), "{error}");
+    let error = session(input(
+        "recc",
+        json!({"raw": raw, "firmware_color": true, "firmware_white_balance": [9149, 0, 9309]}),
+    ))
+    .err()
+    .unwrap();
+    assert!(error.contains("is zero"), "{error}");
 }

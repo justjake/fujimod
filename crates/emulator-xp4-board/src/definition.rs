@@ -355,6 +355,12 @@ pub struct StillEngine {
     /// `crate::still`). Absent, they develop with the declared sRGB law.
     #[serde(default)]
     pub firmware_color: bool,
+    /// RECC with `firmware_color` only: its still bands also apply the white
+    /// balance of the tone page's channel gains, relative to these declared
+    /// reference (R, G, B) gains at which the declared scene renders neutral
+    /// (opt-in, see `crate::still`). Absent, no white balance.
+    #[serde(default)]
+    pub firmware_white_balance: Option<[u32; 3]>,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the

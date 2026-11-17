@@ -770,6 +770,9 @@ impl Devices {
         if wiring.firmware_color {
             model = model.firmware_color()?;
         }
+        if let Some(reference) = wiring.firmware_white_balance {
+            model = model.firmware_white_balance(reference)?;
+        }
         let windows = model.windows();
         for &(lo, hi) in &windows {
             if let Some(&(base, end, owner)) = self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi) {
