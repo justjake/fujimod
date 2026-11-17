@@ -8,9 +8,19 @@ const DevTools = lazy(() => import('./dev-tools/Page'));
 const BugReport = lazy(() => import('./bug/Page'));
 const Recovery = lazy(() => import('./recovery/Page'));
 const Device = lazy(() => import('./device/Page'));
+const ReleasePersonalNotePreview = import.meta.env.DEV
+  ? lazy(() => import('./development/release-personal-note'))
+  : undefined;
 const SdkDocs = lazy(() => import('./docs/Page'));
 export default function App() {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
+  if (ReleasePersonalNotePreview && path === '/__dev/release-personal-note') {
+    return (
+      <Loading>
+        <ReleasePersonalNotePreview />
+      </Loading>
+    );
+  }
   const Page = isDevToolsPath(path)
     ? DevTools
     : path === '/bug/' || path === '/bug'

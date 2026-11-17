@@ -38,6 +38,15 @@ back to its current promotion. Media and recording outputs are served directly
 at workspace-relative URLs. `FUJIMOD_MEDIA` selects a standalone media directory
 at `/artifacts/docs/`; production builds read this explicit directory.
 
+The production build reads the published release history from GitHub. Set
+`GH_TOKEN` to authenticate those requests. Set `FUJIMOD_CONTRIBUTORS` to the
+directory of contributor JSON files, each with an `attributionName`, to supply
+the contributor roster. Development and `local-preview` builds use versioned
+Markdown in `FUJIMOD_RELEASE_NOTES` without contacting GitHub. Local dates come
+from when the notes were added to Git, or their modification times if Git
+history is unavailable. To see the personal note in development, open
+`/__dev/release-personal-note`.
+
 The command validates and stages these assets, runs application checks and tests,
 builds the website, and deploys `dist/client` using `wrangler.jsonc`. Staging fails
 before replacing installed assets if a required file or qualification is missing.

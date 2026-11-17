@@ -1,0 +1,81 @@
+.release-personal-note {
+  position: relative;
+  width: min(600px, calc(100% - 28px));
+  margin: 24px auto 96px;
+  color: #d1d1d6;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.release-personal-note > time,
+.release-personal-note .note-socials {
+  display: block;
+  color: var(--dim);
+  font-size: 13px;
+}
+.release-personal-note > time {
+  margin-bottom: 20px;
+}
+.release-personal-note p {
+  margin: 0 0 1em;
+}
+.release-personal-note b {
+  color: #eee;
+}
+.release-personal-note .note-signature {
+  margin-top: 28px;
+}
+.release-personal-note .note-socials {
+  margin-top: 4px;
+}
+.release-personal-note .note-feature {
+  font-size: 0.86em;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  text-decoration-style: dotted;
+}
+.release-personal-note .note-hover {
+  position: relative;
+}
+.release-personal-note .note-popover {
+  display: none;
+  position: absolute;
+  inset-inline-start: 0;
+  z-index: 5;
+  width: 260px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--key);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px #000c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.release-personal-note .note-hover:is(:hover, :focus-within) .note-popover {
+  display: grid;
+  gap: 4px;
+}
+.release-personal-note .note-names {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+  max-height: min(280px, 50vh);
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.release-personal-note .note-popover video {
+  width: 100%;
+  border-radius: 6px;
+}
+.release-personal-note .note-popover em {
+  font-style: normal;
+  color: var(--dim);
+  font-size: 10px;
+}
+@media (max-width: 1050px) {
+  .release-personal-note .note-hover {
+    position: static;
+  }
+  .release-personal-note .note-popover {
+    width: min(260px, 100%);
+  }
+}

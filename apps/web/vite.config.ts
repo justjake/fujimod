@@ -8,6 +8,7 @@ import solid from '@solidjs/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { sbomInputs } from './scripts/sbom/vite';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
+import { loadReleaseData } from './scripts/release-data.ts';
 import { localReleases } from './scripts/local-releases.ts';
 import { localMedia, previewMedia } from './scripts/local-media.ts';
 import { localReviewFiles } from './scripts/local-review-files.ts';
@@ -212,6 +213,21 @@ function simulatedUsbAvailable(env: Record<string, string>): boolean {
     }),
   );
 }
+function siteReleaseData(): Plugin {
+  return {
+    name: 'site-release-data',
+    async config(_config, { mode, command }) {
+      const env = loadEnv(mode, process.cwd(), 'FUJIMOD_');
+      const data = await loadReleaseData({
+        preview: command === 'serve' || mode === 'local-preview',
+        notesDirectory: env.FUJIMOD_RELEASE_NOTES,
+        contributorsDirectory: env.FUJIMOD_CONTRIBUTORS,
+        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
+      });
+      return { define: { __FUJIMOD_RELEASE_DATA__: JSON.stringify(data) } };
+    },
+  };
+}
 export default defineConfig(({ mode, command }) => ({
   base: '/',
   resolve: { dedupe: ['solid-js', '@solidjs/web', '@solidjs/signals'] },
@@ -248,6 +264,7 @@ export default defineConfig(({ mode, command }) => ({
     ),
   },
   plugins: [
+    siteReleaseData(),
     sbomInputs(),
     isolationHeaders(),
     localMedia(
