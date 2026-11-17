@@ -21,10 +21,11 @@ XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH (ROM start only).\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
+--gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 28] = [
+const VALUED: [&str; 31] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -53,6 +54,9 @@ const VALUED: [&str; 28] = [
     "--watch-pcs",
     "--dump",
     "--hash",
+    "--gpio",
+    "--poke",
+    "--press",
 ];
 
 /// The options of one `boot` command, before the processor generation is known.
@@ -63,6 +67,7 @@ struct Boot {
     stubs: Vec<String>,
     mods: Vec<String>,
     card_files: Vec<String>,
+    pokes: Vec<String>,
     discovery: bool,
 }
 
@@ -84,6 +89,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
         stubs: Vec::new(),
         mods: Vec::new(),
         card_files: Vec::new(),
+        pokes: Vec::new(),
         discovery: false,
     };
     while let Some(key) = args.next() {
@@ -108,6 +114,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
             "--stub" => boot.stubs.push(text(value, "stub")?),
             "--mod" => boot.mods.push(text(value, "mod manifest")?),
             "--card-file" => boot.card_files.push(text(value, "card file")?),
+            "--poke" => boot.pokes.push(text(value, "memory write")?),
             "--overlay" => {
                 let id = text(value, "overlay ID")?;
                 if boot.overlays.contains(&id) {
@@ -192,10 +199,10 @@ struct Outcome {
 fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--output", "--seconds", "--status-every", "--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash"],
+        &["--output", "--seconds", "--status-every", "--quantum", "--keys", "--patch", "--scene", "--card-image", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
     )?;
-    if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.card_files.is_empty() {
-        return Err("--discovery, --stub, --mod and --card-file do not apply to EXR II runs".into());
+    if boot_options.discovery || !boot_options.stubs.is_empty() || !boot_options.mods.is_empty() || !boot_options.card_files.is_empty() || !boot_options.pokes.is_empty() {
+        return Err("--discovery, --stub, --mod, --card-file and --poke do not apply to EXR II runs".into());
     }
     let clock_seconds_2000 = boot_options
         .text("--clock-seconds-2000")?
@@ -262,6 +269,9 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         card_image: boot_options.path("--card-image"),
         card_files,
         keys: boot_options.text("--keys")?,
+        gpio: boot_options.text("--gpio")?,
+        pokes: std::mem::take(&mut boot_options.pokes),
+        press: boot_options.text("--press")?,
         discovery: boot_options.discovery,
         stubs: std::mem::take(&mut boot_options.stubs),
         patch_file: boot_options.path("--patch"),

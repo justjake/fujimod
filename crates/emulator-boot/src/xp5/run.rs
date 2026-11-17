@@ -113,6 +113,9 @@ pub struct Run {
     pub card_files: Vec<(String, PathBuf)>,
     /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
     pub keys: Option<String>,
+    pub gpio: Option<String>,
+    pub pokes: Vec<String>,
+    pub press: Option<String>,
     /// Route unmodeled register accesses to the bus instead of stopping.
     pub discovery: bool,
     /// Discovery callee stubs: `NAME@ADDRESS=VALUE`.
@@ -159,6 +162,44 @@ pub fn parse_seconds(text: &str) -> Result<Duration, String> {
     seconds(text)
 }
 
+fn parse_gpio(spec: &str) -> Result<(usize, usize, bool), String> {
+    let (pin, level) = spec.split_once('=').ok_or("--gpio needs PORT:PIN=0|1")?;
+    let (port, pin) = pin.split_once(':').ok_or("--gpio needs PORT:PIN=0|1")?;
+    let port = port.parse().map_err(|_| "invalid GPIO port")?;
+    let pin = pin.parse().map_err(|_| "invalid GPIO pin")?;
+    let high = match level {
+        "0" => false,
+        "1" => true,
+        _ => return Err("GPIO level must be 0 or 1".into()),
+    };
+    if port >= 20 || pin >= 16 {
+        return Err("XP5 GPIO input is outside the declared pin range".into());
+    }
+    Ok((port, pin, high))
+}
+
+fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
+    let (address, value) = spec.split_once('=').ok_or("--poke needs ADDR=U32")?;
+    let value = u32::try_from(parse_number(value)?).map_err(|_| "--poke value exceeds 32 bits")?;
+    Ok((parse_number(address)?, value))
+}
+
+type Key = fujimod_emulator_xp5_board::session::Key;
+
+fn parse_press(spec: &str) -> Result<[(Duration, Key, bool); 2], String> {
+    let (start, rest) = spec.split_once(':').ok_or("--press needs TIME_MS:KEY[:HOLD_MS]")?;
+    let (key, hold) = match rest.split_once(':') {
+        Some((name, duration)) => (Key::parse(name)?, parse_number(duration)?),
+        None => (Key::parse(rest)?, 150),
+    };
+    if hold == 0 {
+        return Err("--press hold must be positive".into());
+    }
+    let start = parse_number(start)?;
+    let end = start.checked_add(hold).ok_or("--press time overflows")?;
+    Ok([(Duration::from_millis(start), key, true), (Duration::from_millis(end), key, false)])
+}
+
 /// Run the boot described by `run`.
 pub fn run_boot(run: Run) -> Result<Value, String> {
     use std::sync::{
@@ -176,6 +217,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         card_image: sd_image,
         card_files,
         keys: key_script,
+        gpio,
+        pokes,
+        press,
         discovery,
         stubs,
         patch_file,
@@ -232,6 +276,15 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             keys.push((delay, key, pressed));
         }
     }
+    let gpio = gpio.as_deref().map(|spec| spec.split(',').map(parse_gpio).collect::<Result<Vec<_>, _>>())
+        .transpose()?.unwrap_or_default();
+    let pokes = pokes.iter().map(|spec| parse_poke(spec)).collect::<Result<Vec<_>, _>>()?;
+    if let Some(press) = press {
+        for spec in press.split(',') {
+            keys.extend(parse_press(spec)?);
+        }
+    }
+    keys.sort_by_key(|(delay, _, _)| *delay);
     let request = Startup {
         update,
         manifest,
@@ -272,6 +325,15 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         loaded.place(&mod_loader::BoardMachine(&session.board), &firmware, &state.preload, &stubbed)?;
         Some(loaded)
     };
+    for (port, pin, high) in gpio {
+        inputs.gpio(&mut session, port, pin, high)?;
+    }
+    for (address, value) in pokes {
+        let bytes = value.to_le_bytes();
+        session.board.write_physical(address, &bytes)
+            .or_else(|_| session.board.write_memory(0, address, &bytes))
+            .map_err(|error| format!("poke {address:#x}: {error}"))?;
+    }
     let start = session.board.now();
     for (delay, key, pressed) in keys {
         let delay_ticks = (delay.as_secs_f64() * ticks_per_second as f64) as u64;
