@@ -257,7 +257,7 @@ mod tests {
 
     fn bridge(travel_limits: Option<[i64; 2]>, initial_position: i64) -> Result<Bridge, String> {
         let gpio = gpio::Gpio::new(
-            gpio::Options { input_levels: [0; 16], output_levels: vec![] },
+            gpio::Options { input_levels: [0; 16], output_levels: vec![], high_port_input_levels: None },
             gpio::Wiring { irqs: vec![] },
         )
         .unwrap();
@@ -267,6 +267,7 @@ mod tests {
                 timer_channels: Vec::new(),
                 one_shot_channels: Vec::new(),
                 counter_readback_channels: vec![],
+                free_running_channels: vec![],
                 mirrored_irqs: vec![],
                 quadrature: false,
                 initial_phase: 0,
