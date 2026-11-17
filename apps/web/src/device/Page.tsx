@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, onSettled } from 'solid-js';
-import { SiteHeader } from '../ui/site-header';
+import { SiteFrame } from '../ui/SiteFrame';
 import { devicePolicy } from '../devices/policy.ts';
 import {
   deviceRequest,
@@ -10,8 +10,6 @@ import {
   type DeviceStatus,
   type SessionUser,
 } from '../auth/client';
-import '../home/site.css';
-import '../navigation.css';
 import './device.css';
 
 const STATUS: Record<DeviceStatus, string> = {
@@ -106,8 +104,7 @@ export default function Device() {
   });
 
   return (
-    <div class="shell device">
-      <SiteHeader root="../" />
+    <SiteFrame class="device">
       <main>
         <h1>Camera sign-in</h1>
         <form class="device-code" onSubmit={submit}>
@@ -174,6 +171,6 @@ export default function Device() {
           </section>
         </Show>
       </main>
-    </div>
+    </SiteFrame>
   );
 }

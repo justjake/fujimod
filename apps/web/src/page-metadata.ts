@@ -1,4 +1,6 @@
 import { focalComponents } from './docs/sdk.generated';
+import { isManualPath, manualPageTitle } from './docs/manual-routes';
+import { textPagePath, textPages } from './text/routes';
 
 const pages = {
   '/': {
@@ -48,7 +50,22 @@ const pages = {
 export const siteOrigin = 'https://fujimod.com';
 
 export function pageMetadata(path: string) {
+  const textRoute = textPagePath(path);
+  if (textRoute) {
+    const page = textPages[textRoute];
+    return {
+      title: `${page.heading} · FujiMod`,
+      description: page.description,
+      canonical: siteOrigin + textRoute,
+    };
+  }
   const normalized = path.endsWith('/') ? path : path + '/';
+  if (isManualPath(normalized))
+    return {
+      title: `${manualPageTitle(normalized)} · FujiMod`,
+      description: 'The FujiMod camera manual.',
+      canonical: siteOrigin + normalized,
+    };
   const componentSlug = /^\/docs\/sdk\/focal\/components\/([^/]+)\/$/.exec(normalized)?.[1];
   const component = componentSlug
     ? focalComponents.find((entry) => entry.slug === componentSlug)

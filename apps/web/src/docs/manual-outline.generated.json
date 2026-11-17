@@ -1,0 +1,185 @@
+[
+  {
+    "title": "Getting Started",
+    "pages": [
+      {
+        "title": "Starting Fujimod",
+        "slug": "starting-fujimod"
+      },
+      {
+        "title": "About This Version",
+        "slug": "about-this-version"
+      }
+    ]
+  },
+  {
+    "title": "Taking Photographs",
+    "pages": [
+      {
+        "title": "Metering",
+        "slug": "metering"
+      },
+      {
+        "title": "Focus",
+        "slug": "focus"
+      },
+      {
+        "title": "Focus/Exposure Lock",
+        "slug": "focus-exposure-lock"
+      },
+      {
+        "title": "SHAPE & ASPECT",
+        "slug": "shape-aspect"
+      },
+      {
+        "title": "The Digital Teleconverter",
+        "slug": "the-digital-teleconverter"
+      },
+      {
+        "title": "SOFTWARE ND",
+        "slug": "software-nd"
+      },
+      {
+        "title": "INTERVAL TIMER SHOOTING",
+        "slug": "interval-timer-shooting"
+      }
+    ]
+  },
+  {
+    "title": "Image Quality",
+    "pages": [
+      {
+        "title": "FILM SIMULATION",
+        "slug": "film-simulation"
+      },
+      {
+        "title": "FILM EDITOR",
+        "slug": "film-editor"
+      },
+      {
+        "title": "Color",
+        "slug": "color"
+      },
+      {
+        "title": "Tone",
+        "slug": "tone"
+      },
+      {
+        "title": "GRAIN EFFECT and CLARITY",
+        "slug": "grain-effect-and-clarity"
+      },
+      {
+        "title": "FILM EFFECTS",
+        "slug": "film-effects"
+      },
+      {
+        "title": "NOISE REDUCTION",
+        "slug": "noise-reduction"
+      },
+      {
+        "title": "IMAGE SIZE and IMAGE QUALITY",
+        "slug": "image-size-and-image-quality"
+      },
+      {
+        "title": "PIXEL MAPPING",
+        "slug": "pixel-mapping"
+      },
+      {
+        "title": "RAW CONVERSION",
+        "slug": "raw-conversion"
+      }
+    ]
+  },
+  {
+    "title": "Custom Settings",
+    "pages": [
+      {
+        "title": "EDIT/SAVE CUSTOM SETTING",
+        "slug": "edit-save-custom-setting"
+      },
+      {
+        "title": "RECIPE IN EXIF",
+        "slug": "recipe-in-exif"
+      },
+      {
+        "title": "CUSTOM SETTINGS BKT",
+        "slug": "custom-settings-bkt"
+      },
+      {
+        "title": "DISPOSABLE",
+        "slug": "disposable"
+      }
+    ]
+  },
+  {
+    "title": "Movies",
+    "pages": [
+      {
+        "title": "Movie Recording",
+        "slug": "movie-recording"
+      },
+      {
+        "title": "HDMI OUTPUT",
+        "slug": "hdmi-output"
+      }
+    ]
+  },
+  {
+    "title": "Controls and Display",
+    "pages": [
+      {
+        "title": "BUTTON/DIAL SETTING",
+        "slug": "button-dial-setting"
+      },
+      {
+        "title": "HUD LAYOUT",
+        "slug": "hud-layout"
+      },
+      {
+        "title": "MENU STYLE",
+        "slug": "menu-style"
+      },
+      {
+        "title": "TOUCH SCREEN SETTING",
+        "slug": "touch-screen-setting"
+      },
+      {
+        "title": "HIDE FEATURES",
+        "slug": "hide-features"
+      }
+    ]
+  },
+  {
+    "title": "System & Storage",
+    "pages": [
+      {
+        "title": "CHECK FOR UPDATES",
+        "slug": "check-for-updates"
+      },
+      {
+        "title": "BOOT SETUP",
+        "slug": "boot-setup"
+      },
+      {
+        "title": "BACK UP INTERNAL DATA",
+        "slug": "back-up-internal-data"
+      },
+      {
+        "title": "SD Card Folders and Names",
+        "slug": "sd-card-folders-and-names"
+      },
+      {
+        "title": "POWER MANAGEMENT",
+        "slug": "power-management"
+      },
+      {
+        "title": "Performance",
+        "slug": "performance"
+      },
+      {
+        "title": "DEVTOOLS and Bug Reports",
+        "slug": "devtools-and-bug-reports"
+      }
+    ]
+  }
+]

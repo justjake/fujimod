@@ -16,7 +16,7 @@ interface LocalReleaseOptions {
 export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.NextHandleFunction {
   return async (request, response, next) => {
     const path = new URL(request.url || '/', 'http://localhost').pathname;
-    if (!path.startsWith('/releases/')) return next();
+    if (path === '/releases/' || !path.startsWith('/releases/')) return next();
     response.setHeader('Cache-Control', 'no-store');
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       response.statusCode = 405;

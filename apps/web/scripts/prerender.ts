@@ -3,10 +3,24 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Wizard, toolPath } from '../src/dev-tools/routes.ts';
 import { focalComponents } from '../src/docs/sdk.generated.ts';
+import { isManualPath, manualRoutes } from '../src/docs/manual-routes.ts';
+import { textPagePath, textPages } from '../src/text/routes.ts';
 const tools = Object.values(Wizard).map(toolPath);
-const docs = ['/docs/sdk/focal/', ...focalComponents.map(
-  (component) => `/docs/sdk/focal/components/${component.slug}/`)];
-export const routes = ['/', '/dev-tools/', ...tools, '/bug/', '/recovery/', '/device/', ...docs];
+const docs = [
+  '/docs/sdk/focal/',
+  ...focalComponents.map((component) => `/docs/sdk/focal/components/${component.slug}/`),
+];
+export const routes = [
+  '/',
+  '/dev-tools/',
+  ...tools,
+  '/bug/',
+  '/recovery/',
+  '/device/',
+  ...Object.keys(textPages),
+  ...manualRoutes,
+  ...docs,
+];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
 export async function prerender(output = 'dist') {
   const { handleRequest } = await import(pathToFileURL(resolve(output, 'server/server.js')).href);
@@ -17,18 +31,26 @@ export async function prerender(output = 'dist') {
     );
     if (!response.ok) throw Error(`Prerender ${route}: HTTP ${response.status}`);
     const html = await response.text();
-    const expected = route.startsWith('/docs/sdk/focal/')
-      ? 'class="shell sdk-docs"'
-      : tools.includes(route)
-      ? 'Dev Tools'
-      : {
-          '/': 'id="workspace"',
-          '/dev-tools/': 'Dev Tools',
-          '/bug/': 'class="shell bug-report"',
-          '/recovery/': 'class="shell recovery"',
-          '/device/': 'class="shell device"',
-        }[route];
-    if (!html.includes(expected) || !/<script[^>]+type="module"/.test(html))
+    const expected = textPagePath(route)
+      ? 'class="text-page"'
+      : isManualPath(route)
+        ? 'class="shell manual"'
+        : route.startsWith('/docs/sdk/focal/')
+          ? 'class="shell sdk-docs"'
+          : tools.includes(route)
+            ? 'Dev Tools'
+            : {
+                '/': 'id="workspace"',
+                '/dev-tools/': 'Dev Tools',
+                '/bug/': 'class="shell bug-report"',
+                '/recovery/': 'class="shell recovery"',
+                '/device/': 'class="shell device"',
+              }[route];
+    if (
+      !html.includes('class="site-header"') ||
+      !html.includes(expected) ||
+      !/<script[^>]+type="module"/.test(html)
+    )
       throw Error(`Prerender ${route}: missing content or hydration entry`);
     for (const [, asset] of html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)) {
       try {
@@ -38,10 +60,10 @@ export async function prerender(output = 'dist') {
         throw Error(`Prerender ${route}: missing client asset ${asset}`);
       }
     }
-    const directory = resolve(output, 'client', route.slice(1));
+    const directory = resolve(output, 'client', route.endsWith('/') ? route.slice(1) : '');
     await mkdir(directory, { recursive: true });
     await writeFile(
-      resolve(directory, 'index.html'),
+      resolve(directory, route.endsWith('/') ? 'index.html' : route.slice(1) + '.html'),
       '<!doctype html>' + html.replace(/^<!doctype html>/i, ''),
     );
     console.log(`Prerendered ${route}`);

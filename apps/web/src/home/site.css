@@ -1,36 +1,3 @@
-@import '@fujimod/emulator-ui/style.css';
-
-.shell {
-  /* Width of a single column of content, such as the camera launcher. */
-  --content-width: 820px;
-  max-width: 1240px;
-  margin: auto;
-  padding: 0 28px 48px;
-}
-header {
-  display: flex;
-  align-items: center;
-  min-height: 88px;
-}
-header img {
-  width: 110px;
-  height: 28px;
-  image-rendering: pixelated;
-}
-header .meta {
-  margin-left: auto;
-  text-align: right;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--dim);
-}
-header .meta a {
-  text-decoration: none;
-  display: block;
-}
-header .meta a:first-child {
-  color: #c7c7cc;
-}
 .personal-note {
   width: 34%;
   margin: 8px auto 36px;
@@ -93,28 +60,10 @@ footer {
   .personal-note {
     width: min(100%, 400px);
   }
-  .shell {
-    padding: 0 14px 36px;
-  }
-}
-@media (max-width: 520px) {
-  header .meta {
-    display: none;
-  }
 }
 #idle-cameras {
   z-index: 2;
 }
-.build-info a {
-  white-space: nowrap;
-}
-.build-info .build-date {
-  display: block;
-}
 footer a {
   text-decoration: none;
-}
-header > a {
-  display: flex;
-  align-items: center;
 }

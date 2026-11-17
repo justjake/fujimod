@@ -3,6 +3,8 @@ import './error-log';
 import { lazy, Loading } from 'solid-js';
 import { getRequestEvent } from '@solidjs/web';
 import { isDevToolsPath } from './dev-tools/routes';
+import { isManualPath } from './docs/manual-routes';
+import { textPagePath, textPages } from './text/routes';
 const Home = lazy(() => import('./home/Page'));
 const DevTools = lazy(() => import('./dev-tools/Page'));
 const BugReport = lazy(() => import('./bug/Page'));
@@ -12,8 +14,19 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
   ? lazy(() => import('./development/release-personal-note'))
   : undefined;
 const SdkDocs = lazy(() => import('./docs/Page'));
+const Manual = lazy(() => import('./docs/Manual'));
+const Safety = lazy(() => import('./text/Safety'));
+const TextPage = lazy(() => import('./text/TextPage'));
 export default function App() {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
+  const textRoute = textPagePath(path);
+  if (textRoute) {
+    return (
+      <Loading>
+        {textRoute === '/safety' ? <Safety /> : <TextPage title={textPages[textRoute].heading} />}
+      </Loading>
+    );
+  }
   if (ReleasePersonalNotePreview && path === '/__dev/release-personal-note') {
     return (
       <Loading>
@@ -31,7 +44,9 @@ export default function App() {
           ? Device
           : path.startsWith('/docs/sdk/')
             ? SdkDocs
-            : Home;
+            : isManualPath(path)
+              ? Manual
+              : Home;
   return (
     <Loading>
       <Page />

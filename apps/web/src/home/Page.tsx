@@ -6,7 +6,7 @@ import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
 import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
 import { PersonalNote } from '../ui/personal-note';
-import { SiteHeader } from '../ui/site-header';
+import { SiteFrame } from '../ui/SiteFrame';
 import { FeatureCatalog } from './Features';
 import { FeatureOutline } from './Outline';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
@@ -18,7 +18,6 @@ import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
 import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import '../home/site.css';
-import '../navigation.css';
 
 export default function Home() {
   const [state, setState] = createHomeState();
@@ -62,8 +61,7 @@ export default function Home() {
   });
   return (
     <>
-      <div class="shell">
-        <SiteHeader root="" />
+      <SiteFrame>
         <main>
           <PersonalNote />
           <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
@@ -174,7 +172,7 @@ export default function Home() {
             )}
           </Show>
         </footer>
-      </div>
+      </SiteFrame>
       <FaultPanel
         fault={state.fault}
         context={state.faultContext}
