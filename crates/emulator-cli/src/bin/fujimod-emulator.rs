@@ -165,6 +165,16 @@ impl Boot {
         }
         Ok(resolved)
     }
+    fn instruction_limit(&mut self) -> Result<Option<u64>, String> {
+        self.text("--instruction-limit")?
+            .map(|value| match value.parse::<u64>() {
+                Ok(0) => Err("instruction limit must be positive".into()),
+                Ok(limit) => Ok(limit),
+                Err(_) => Err("instruction limit must be an unsigned integer".into()),
+            })
+            .transpose()
+    }
+
     fn execution_policy(&mut self) -> Result<ExecutionPolicy, String> {
         Ok(self
             .text("--execution-policy")?
@@ -206,17 +216,7 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
         capability_reply: None,
     };
     let screenshot = boot_options.path("--screenshot");
-    let limit = boot_options
-        .text("--instruction-limit")?
-        .map(|v| {
-            v.parse::<u64>()
-                .map_err(|_| "instruction limit must be an unsigned integer".to_owned())
-        })
-        .transpose()?
-        .unwrap_or(2_000_000_000);
-    if limit == 0 {
-        return Err("instruction limit must be positive".into());
-    }
+    let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
     let execution_policy = boot_options.execution_policy()?;
     let mut session = boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2()?;
     session.board.set_execution_policy(execution_policy)?;
@@ -235,7 +235,7 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
 fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "XP5",
-        &["--nand", "--settings", "--camera", "--clock-seconds-2000", "--instruction-limit", "--screenshot"],
+        &["--nand", "--settings", "--camera", "--clock-seconds-2000", "--screenshot"],
     )?;
     if !boot_options.preferred_languages.is_empty() {
         return Err("--language does not apply to XP5 runs".into());
@@ -275,6 +275,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
             .text("--seconds")?
             .map(|value| xp5::parse_seconds(&value))
             .transpose()?,
+        instruction_limit: boot_options.instruction_limit()?,
         status_every: boot_options
             .text("--status-every")?
             .map(|value| xp5::parse_seconds(&value))
