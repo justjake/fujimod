@@ -109,7 +109,7 @@ impl Firmware {
 
     /// Decode `firmware`'s bundled stream layout from `update`.
     pub fn from_update(firmware: &str, update: Vec<u8>, load_sections: bool) -> Result<Self, String> {
-        let layout: Layout = serde_json::from_str(super::manifest::bundled(firmware)?.streams)
+        let layout: Layout = toml::from_str(super::manifest::bundled(firmware)?.streams)
             .map_err(|error| format!("{firmware} stream layout: {error}"))?;
         let source_sha256 = sha256_hex(&update);
         if source_sha256 != layout.update_sha256 {

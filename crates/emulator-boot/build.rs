@@ -46,7 +46,7 @@ fn main() {
                 source,
                 "    Bundled {{ firmware: {id:?}, manifest: include_str!({:?}), fragments: &[{list}], streams: include_str!({:?}) }},",
                 manifest.display().to_string(),
-                directory.join("streams.json").display().to_string(),
+                directory.join("streams.toml").display().to_string(),
             )
             .unwrap();
         }
