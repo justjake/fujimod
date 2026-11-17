@@ -33,6 +33,7 @@ mod alignment_tests;
 #[cfg(test)]
 mod code_store_tests;
 pub mod jit;
+pub mod loop_proof;
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::BTreeMap;
 use std::ffi::CStr;

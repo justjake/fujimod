@@ -436,3 +436,157 @@ fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
     assert_eq!(words.position(), 12);
     assert_eq!(calls.load(Ordering::Acquire), 1);
 }
+
+/// A Cortex-M4 with the M-profile controller and the flag device at
+/// 0x8000000. Thumb code at 0x2000: a counted SUBS/BNE delay (40 instructions,
+/// about 17 ticks), then a poll of
+/// bit 0 of the RAM flag (0x3000) or the device register, then `B .`.
+/// `poll` is the instruction between the load and the branch.
+fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
+    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![Processor {
+            model: Model::CortexM4,
+            registers: vec![],
+            released: true,
+            rprofile: None,
+            mprofile: Some(crate::board::mprofile::Config {
+                clock_hz: 1_000_000_000,
+                board_ticks_per_second: 1_000_000_000,
+                vector_base: 0,
+            }),
+        }],
+        dma_mappings: vec![memory::BusMapping::ram(0, 0x4000)],
+        ram: vec![Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        mappings: vec![MemoryMap {
+            core: 0,
+            address: 0,
+            physical: 0,
+            size: 0x4000,
+            permissions: 7,
+        }],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(7, 3).unwrap(),
+    };
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(
+        0x8000000,
+        4,
+        Box::new(Flag {
+            value: Arc::new(AtomicU32::new(0)),
+            due: Some(53),
+            declared,
+            irq: false,
+        }),
+    )
+    .unwrap();
+    let mut board = graph
+        .build(
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    let vectors = [0x3f00u32, 0x2001];
+    board
+        .write_memory(
+            0,
+            0,
+            &vectors
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    let (base, shift) = if mmio { (0x2201, 0x06d2) } else { (0x2203, 0x0312) };
+    let code: [u16; 10] = [
+        0x2014, // MOVS R0,#20
+        0x3801, // SUBS R0,#1
+        0xd1fd, // BNE  0x2002
+        base,   // MOVS R2,#1 or #3
+        shift,  // LSLS R2,R2,#27 or #12
+        0x6811, // LDR  R1,[R2]
+        poll,
+        0xd5fc, // BPL  0x200a
+        0x2777, // MOVS R7,#0x77
+        0xe7fe, // B    .
+    ];
+    board
+        .write_memory(
+            0,
+            0x2000,
+            &code.into_iter().flat_map(u16::to_le_bytes).collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.set_loop_mode(mode).unwrap();
+    board
+}
+const LSLS_31: u16 = 0x07c9;
+/// Board state (virtual time, instruction counts, NVIC and devices), every
+/// core register and the polled RAM. Durable CPU state is not available for
+/// the M-profile backend.
+fn m4_state(board: &Board) -> (Value, Vec<u32>, Vec<u8>) {
+    let registers = arm::CORE
+        .iter()
+        .chain([arm::CPSR, Register::Pc].iter())
+        .map(|&r| board.read_register(0, r).unwrap() as u32)
+        .collect();
+    let mut ram = vec![0; 0x10];
+    board.cpu(0).unwrap().read_memory(0x3000, &mut ram).unwrap();
+    (board.state(), registers, ram)
+}
+fn m4_statistic(board: &Board, name: &str) -> u64 {
+    board.loop_statistics().unwrap()[0][name].as_u64().unwrap_or(0)
+}
+#[test]
+fn m4_polls_and_delays_stop_at_device_deadlines_with_rational_time() {
+    for mmio in [false, true] {
+        for quantum in [1, 7, 1000] {
+            let mut off = m4_board(mmio, true, LoopMode::Disabled, LSLS_31);
+            let mut measured = m4_board(mmio, true, LoopMode::Measure, LSLS_31);
+            let mut on = m4_board(mmio, true, LoopMode::Accelerate, LSLS_31);
+            for tick in [9, 28, 52, 53, 54, 100] {
+                for board in [&mut off, &mut measured, &mut on] {
+                    board.run_until(tick, quantum).unwrap();
+                }
+                let right = m4_state(&off);
+                for (name, left) in [("measure", &measured), ("accelerate", &on)] {
+                    assert_eq!(
+                        m4_state(left),
+                        right,
+                        "{name} mmio={mmio} quantum={quantum} tick={tick}"
+                    );
+                }
+            }
+            assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
+            assert_eq!(m4_statistic(&measured, "loop_accelerated_instructions"), 0);
+            assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0);
+            assert!(m4_statistic(&on, "loop_counted_instructions") > 0);
+            assert!(m4_statistic(&on, "loop_poll_instructions") > 0);
+        }
+    }
+}
+#[test]
+fn m4_undeclared_device_reads_and_stores_never_accelerate_the_poll() {
+    // An undeclared register, and a poll that stores (STR R1,[R2,#4]).
+    for (mmio, declared, poll, failure) in [
+        (true, false, LSLS_31, "loop_proofs_failed_loop_read_unavailable"),
+        (false, true, 0x6051, "loop_proofs_failed_structural"),
+    ] {
+        let mut off = m4_board(mmio, declared, LoopMode::Disabled, poll);
+        let mut on = m4_board(mmio, declared, LoopMode::Accelerate, poll);
+        for board in [&mut off, &mut on] {
+            board.run_until(50, 1000).unwrap();
+        }
+        assert_eq!(m4_state(&on), m4_state(&off), "mmio={mmio} declared={declared}");
+        assert_eq!(m4_statistic(&on, "loop_poll_instructions"), 0, "{failure}");
+        assert!(m4_statistic(&on, failure) > 0, "{failure}");
+        // The counted delay before the poll still accelerates.
+        assert!(m4_statistic(&on, "loop_counted_instructions") > 0);
+    }
+}
