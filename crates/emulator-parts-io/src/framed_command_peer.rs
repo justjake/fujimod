@@ -7,8 +7,11 @@
 //! An acknowledgment sets bit 27, carries a 3-bit sequence number in bits
 //! 24..26 and the acknowledged frame's bits 6..14 plus 0x200 in bits 6..15.
 //!
-//! This peer sends its declared idle frame as its own frame and acknowledges
-//! every valid frame. Its sequence number counts its acknowledgments modulo 8
+//! This peer's own frame repeats the last nonempty frame it received (a
+//! command), starting from a declared initial frame, and it acknowledges every
+//! valid frame. The master's second frame after a command therefore reads the
+//! command back. A reply carrying data is not modeled (UNVERIFIED: the
+//! camera's peer held the polled command's frame in idle REC). Its sequence number counts its acknowledgments modulo 8
 //! (UNVERIFIED: the camera's acknowledgments carried 2 and then 1 in idle REC).
 //! The link's resynchronization words, a frame with a failing check, a second
 //! word that is not an acknowledgment, payload transfers and any other word
@@ -58,20 +61,23 @@ struct State {
     sending: u32,
     sequence: u8,
     frames: u64,
+    /// The frame sent after the current pair: the last nonempty frame received.
+    own: u32,
 }
 pub struct Peer {
-    idle_frame: u32,
+    initial_frame: u32,
     state: State,
 }
 impl Peer {
-    pub fn new(idle_frame: u32) -> Result<Self, String> {
-        if !checked(idle_frame) || idle_frame & 1 << 27 != 0 || RESYNC.contains(&idle_frame) {
-            return Err(format!("framed command peer idle frame {idle_frame:#010x} is not a valid frame"));
+    pub fn new(initial_frame: u32) -> Result<Self, String> {
+        if !checked(initial_frame) || initial_frame & 1 << 27 != 0 || RESYNC.contains(&initial_frame) {
+            return Err(format!("framed command peer initial frame {initial_frame:#010x} is not a valid frame"));
         }
         Ok(Self {
-            idle_frame,
+            initial_frame,
             state: State {
-                sending: idle_frame,
+                sending: initial_frame,
+                own: initial_frame,
                 ..State::default()
             },
         })
@@ -117,13 +123,16 @@ impl Endpoint for Peer {
             s.shifted = 0;
             match s.half {
                 Half::Frame => {
+                    if s.received != 0 {
+                        s.own = s.received;
+                    }
                     s.sending = acknowledgment(s.received, s.sequence);
                     s.half = Half::Acknowledgment;
                 }
                 Half::Acknowledgment => {
                     s.sequence = (s.sequence + 1) & 7;
                     s.frames += 1;
-                    s.sending = self.idle_frame;
+                    s.sending = s.own;
                     s.half = Half::Frame;
                 }
             }
@@ -132,14 +141,19 @@ impl Endpoint for Peer {
         reply as u16
     }
     fn save(&self) -> Value {
-        json!({"idle_frame": self.idle_frame, "state": self.state})
+        json!({"initial_frame": self.initial_frame, "state": self.state})
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
-        if v["idle_frame"] != json!(self.idle_frame) {
-            return Err("framed command peer idle frame differs".into());
+        if v["initial_frame"] != json!(self.initial_frame) {
+            return Err("framed command peer initial frame differs".into());
         }
         let state: State = serde_json::from_value(v["state"].clone()).map_err(|e| e.to_string())?;
-        if state.shifted > 3 || state.sequence > 7 || state.received >> (8 * u32::from(state.shifted)) != 0 {
+        if state.shifted > 3
+            || state.sequence > 7
+            || state.received >> (8 * u32::from(state.shifted)) != 0
+            || !checked(state.own)
+            || state.own & 1 << 27 != 0
+        {
             return Err("invalid framed command peer checkpoint state".into());
         }
         self.state = state;
@@ -173,16 +187,40 @@ mod tests {
     }
 
     #[test]
-    fn frames_are_answered_by_the_idle_frame_then_acknowledged() {
+    fn empty_frames_are_answered_by_the_initial_frame_then_acknowledged() {
         let mut part = Peer::new(IDLE).unwrap();
         let ours = acknowledgment(IDLE, 0);
         for sequence in 0..9u8 {
             assert_eq!(word(&mut part, 0).unwrap(), IDLE);
             assert_eq!(word(&mut part, ours).unwrap(), acknowledgment(0, sequence & 7));
         }
-        let command = 0x0000_0a6a;
+    }
+
+    /// X-H2S 7.30 in normal REC (camera reads 2026-11-17):
+    /// the main core polls requests 0xa40, 0xa80 and 0xac0 through the M-core,
+    /// whose forwarded-reply and receive words held 0x0a6a, request 0xa40 with
+    /// its check. At REC entry the main core sends request 0x500 and requires
+    /// the reply's bits 6..14 to be 0x14 (0x1717cec).
+    #[test]
+    fn the_second_frame_after_a_command_reads_the_command_back() {
+        let mut part = Peer::new(IDLE).unwrap();
+        let ours = |frame| acknowledgment(frame, 0);
+        let command = 0x500 | check(0x500) << 1;
+        assert_eq!(command, 0x0000_0514);
         assert_eq!(word(&mut part, command).unwrap(), IDLE);
-        assert_eq!(word(&mut part, ours).unwrap(), acknowledgment(command, 1));
+        assert_eq!(word(&mut part, ours(IDLE)).unwrap(), acknowledgment(command, 0));
+        let reply = word(&mut part, 0).unwrap();
+        assert_eq!(reply >> 6 & 0x1ff, 0x14);
+        assert_eq!(reply, command);
+        assert_eq!(word(&mut part, ours(reply)).unwrap(), acknowledgment(0, 1));
+        // The peer keeps the last command until another arrives.
+        assert_eq!(word(&mut part, 0).unwrap(), command);
+        word(&mut part, ours(command)).unwrap();
+        let poll = 0xa40 | check(0xa40) << 1;
+        assert_eq!(poll, IDLE);
+        word(&mut part, poll).unwrap();
+        word(&mut part, ours(command)).unwrap();
+        assert_eq!(word(&mut part, 0).unwrap(), IDLE);
     }
 
     #[test]
