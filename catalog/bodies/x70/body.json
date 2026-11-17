@@ -12,7 +12,13 @@
   },
   "sensor": {
     "part_id": "x70-image-sensor",
-    "connection_id": "sensor-input"
+    "connection_id": "sensor-bus",
+    "control_bus": {
+      "controller_id": "control-bus0",
+      "channel": 0,
+      "address": 28,
+      "polarity_selector": 1
+    }
   },
   "lens": {
     "part_id": "banked-programmed-lens",
@@ -226,13 +232,6 @@
       "channel": 0,
       "address": 85,
       "polarity_selector": 1
-    },
-    {
-      "controller_id": "control-bus0",
-      "channel": 0,
-      "address": 28,
-      "polarity_selector": 1,
-      "id": "orientation-sensor"
     }
   ],
   "connections": [
@@ -568,13 +567,14 @@
       "signals": []
     },
     {
-      "id": "sensor-input",
+      "id": "sensor-bus",
       "kind": "sensor",
       "signals": [
         {
-          "kind": "block",
-          "block_id": "image-input",
-          "signal": "data_ready"
+          "kind": "serial",
+          "block_id": "control-bus0",
+          "channel": 0,
+          "address": 28
         }
       ]
     },
@@ -698,9 +698,9 @@
   ],
   "wiring": [
     {
-      "source_id": "sensor-input",
+      "source_id": "sensor-bus",
       "target_id": "x70-image-sensor",
-      "signal": "image_data"
+      "signal": "serial_data"
     },
     {
       "source_id": "lens-bus",
@@ -1673,7 +1673,7 @@
           "secondary-sink",
           "primary-device-3",
           "primary-device-4",
-          "orientation-sensor",
+          "sensor",
           "secondary-register-endpoint",
           "control-bus-device-9"
         ]
@@ -2605,7 +2605,7 @@
           "secondary-sink",
           "primary-device-3",
           "primary-device-4",
-          "orientation-sensor",
+          "sensor",
           "secondary-register-endpoint",
           "control-bus-device-9"
         ],
@@ -5701,7 +5701,7 @@
           "secondary-sink",
           "primary-device-3",
           "primary-device-4",
-          "orientation-sensor",
+          "sensor",
           "secondary-register-endpoint",
           "control-bus-device-9"
         ]
