@@ -240,6 +240,20 @@ the whole frame the fields find 0.3 to 0.9 sites RMS of residual motion
 against 102 s for 13 frames; peak strip memory 130 MiB either way), so
 local alignment is off by default.
 
+`--sharpness P` weights each frame's samples by `min(1, E_frame /
+E_reference) ^ (P * c)`, where `E` is the block-luma Laplacian energy
+averaged over 9x9 blocks (`--sharpness-radius 4`) and `c = S / (S + 4 N)`
+is the confidence that a lower energy is lost detail: `S` is the
+reference's energy above `N`, the energy noise alone gives. On a synthetic
+12-frame burst with 5 frames motion-blurred by 3 sites, MTF50 rises from
+0.225 unweighted to 0.299 at `P = 8` (0.313 with the blurred frames
+dropped); flat-patch luma noise is 0.00173 against 0.00167 unweighted.
+Without the confidence term the same flat patch measured 0.00210, because
+a high power amplifies noise-against-noise ratios. On the stopped-down
+blade burst MTF50 changes by at most 0.0007 at any power from 1 to 16:
+no frame there is softer at the block scale, so the remaining gap to
+Markesteijn's demosaic is not per-frame blur this measure sees.
+
 **Camera JPEGs** of earlier brackets and bursts registered with `align-jpeg`
 show:
 
@@ -418,11 +432,11 @@ the decoded planes must agree with the camera's own JPEGs.
 ## Limits and next steps
 
 - Lossy compressed RAFs are refused.
-- Frames focused at different depths, or blurred by motion, are merged as if
-  equally sharp; a per-frame or per-region sharpness weight (shared with the
-  focus stage) would keep the sharpest frames' detail. On the real
-  stopped-down burst the merge is 3% to 9% softer than Markesteijn's
-  demosaic of the best frame; this is the leading lever.
+- Sharpness weighting (`--sharpness`) is opt-in and measures block-scale
+  energy only; it discounts motion blur of a few sites, not sub-site
+  softness. On the real stopped-down burst the merge is 3% to 9% softer
+  than Markesteijn's demosaic of the best frame, and neither local
+  alignment nor sharpness weighting closes that gap.
 - The DNG color matrix is a placeholder.
 - Local alignment is optional and translation-only per tile; robustness
   still compares frames through their global transforms.

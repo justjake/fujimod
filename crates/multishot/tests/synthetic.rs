@@ -10,13 +10,13 @@ use fujimod_multishot::fit::{Affine, FitParams};
 use fujimod_multishot::local::{LocalParams, residual_fields};
 use fujimod_multishot::measure::{crop, edge_raggedness, luma, patch_noise, rmse, slanted_edge};
 use fujimod_multishot::merge::{
-    ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, merge_resolution,
+    ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, SharpnessParams, merge_resolution,
 };
 use fujimod_multishot::noise::NoiseModel;
 use fujimod_multishot::pixelshift::{ShiftPlan, report as shift_report};
 use fujimod_multishot::source::{FrameSource, MemoryFrame};
 use fujimod_multishot::synthetic::{
-    MovingDisc, NoiseSpec, Scene, WB, handheld_transforms, render, render_exposed,
+    BLACK, MovingDisc, NoiseSpec, Scene, WB, WHITE, handheld_transforms, render, render_exposed,
 };
 use fujimod_multishot::tiff::{Tiff, find};
 
@@ -270,6 +270,128 @@ fn identical_frames_give_no_gain() {
     println!("identical frames: MTF50 merge {m:.4} single {s:.4}, max pixel difference {diff:e}");
     assert!(diff < 1e-5, "max difference {diff}");
     assert!((m - s).abs() < 1e-3 * s);
+
+    // Identical frames are equally sharp: sharpness weights are all 1.
+    let sharp = ResolutionParams {
+        sharpness: Some(SharpnessParams::default()),
+        ..params.clone()
+    };
+    let (_, weighted) = merge(&fr, &exact, &sharp, edge);
+    let wdiff = weighted
+        .iter()
+        .zip(&merged)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0f32, f32::max);
+    println!("identical frames: sharpness-weighted max pixel difference {wdiff:e}");
+    assert!(wdiff < 1e-5, "sharpness-weighted max difference {wdiff}");
+}
+
+/// Frame `index` with linear motion blur of `length` sites along x: the
+/// mean of `steps` noiseless renders spread over the motion, then sensor
+/// noise at the same level as a sharp frame.
+fn motion_blurred(
+    scene: &Scene,
+    to_frame: &Affine,
+    index: usize,
+    length: f64,
+    steps: usize,
+) -> MemoryFrame {
+    let mut sum = vec![0f64; W * H];
+    let mut first = None;
+    for s in 0..steps {
+        let d = length * (s as f64 / (steps - 1) as f64 - 0.5);
+        let t = Affine::translation(d, 0.0).compose(to_frame);
+        let f = render(scene, W, H, &t, index, None, 7);
+        for (a, &v) in sum.iter_mut().zip(&f.data) {
+            *a += v as f64;
+        }
+        first.get_or_insert(f);
+    }
+    let mut state = 0x9e37_79b9_7f4a_7c15u64 ^ index as u64;
+    let mut uniform = move || {
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        ((state >> 11) as f64 + 0.5) / (1u64 << 53) as f64
+    };
+    let range = (WHITE - BLACK) as f64;
+    let mut f = first.unwrap();
+    f.data = sum
+        .iter()
+        .map(|&s| {
+            let v = (s / steps as f64 - BLACK as f64) / range;
+            let sigma = (NOISE.shot as f64 * v.max(0.0) + (NOISE.read as f64).powi(2)).sqrt();
+            let g = (-2.0 * uniform().ln()).sqrt() * (std::f64::consts::TAU * uniform()).cos();
+            (BLACK as f64 + (v + sigma * g) * range)
+                .round()
+                .clamp(0.0, WHITE as f64) as u16
+        })
+        .collect();
+    f
+}
+
+#[test]
+fn sharpness_weighting_discounts_blurred_frames() {
+    let scene = Scene::chart(W, H);
+    let truth = handheld_transforms(12, W, H, 5);
+    let blurred = [2usize, 4, 6, 8, 10];
+    let frames: Vec<MemoryFrame> = std::thread::scope(|s| {
+        let handles: Vec<_> = truth
+            .iter()
+            .enumerate()
+            .map(|(k, t)| {
+                let scene = &scene;
+                s.spawn(move || {
+                    if blurred.contains(&k) {
+                        motion_blurred(scene, t, k, 3.0, 7)
+                    } else {
+                        render(scene, W, H, t, k, Some(NOISE), 7)
+                    }
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let fr = refs(&frames);
+    // Exact transforms isolate the weighting from registration of blur.
+    let mut a = align(&fr, 0, &test_align_params()).unwrap();
+    for (f, t) in a.frames.iter_mut().zip(&truth) {
+        f.to_frame = Some(*t);
+    }
+    let edge = region(scene.edge_region());
+    let plain = ResolutionParams::default();
+    let weighted = ResolutionParams {
+        sharpness: Some(SharpnessParams::default()),
+        ..plain.clone()
+    };
+    let (grid, pm) = merge(&fr, &a, &plain, edge);
+    let (_, wm) = merge(&fr, &a, &weighted, edge);
+    let mut sharp_only = a.clone();
+    for &k in &blurred {
+        sharp_only.frames[k].to_frame = None;
+    }
+    let (_, sm) = merge(&fr, &sharp_only, &plain, edge);
+    let (p, w, s) = (mtf50(&pm, &grid), mtf50(&wm, &grid), mtf50(&sm, &grid));
+    println!(
+        "5 of 12 frames motion-blurred 3 sites: MTF50 unweighted {p:.4}  sharpness-weighted {w:.4}  sharp frames only {s:.4}"
+    );
+    assert!(w > 1.2 * p, "weighted MTF50 {w} vs unweighted {p}");
+    assert!(w > 0.93 * s, "weighted MTF50 {w} vs sharp frames only {s}");
+
+    // In flat areas blur removes nothing, so every frame keeps averaging noise.
+    let flat = region(scene.flat_region());
+    let (fgrid, fp) = merge(&fr, &a, &plain, flat);
+    let (_, fw) = merge(&fr, &a, &weighted, flat);
+    let inset = |v: &[f32]| crop(v, fgrid.width, 3, 4, 4, fgrid.width - 8, fgrid.height - 8);
+    let (np, nw) = (
+        patch_noise(&inset(&fp), fgrid.width - 8, WB).luma_relative_std,
+        patch_noise(&inset(&fw), fgrid.width - 8, WB).luma_relative_std,
+    );
+    println!("flat patch luma relative std: unweighted {np:.5}  sharpness-weighted {nw:.5}");
+    assert!(
+        nw < 1.15 * np,
+        "weighted flat noise {nw} vs unweighted {np}"
+    );
 }
 
 #[test]
