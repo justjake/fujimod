@@ -149,6 +149,7 @@ impl State {
                 .count(core, "loop_proofs_failed_window_inactive", 1);
             return Ok(false);
         };
+        let slice = self.scheduler_room(core);
         let l = &mut self.mprofile_loops;
         if l.bypass.take() == Some((core, pc)) {
             return Ok(false);
@@ -177,11 +178,13 @@ impl State {
             *value = register(arm::CORE[r])?;
         }
         // The run's remaining instructions, including this branch, ending at
-        // the next timeline event: an access during the run may have
-        // scheduled a deadline before the run's own end.
+        // the next timeline event and at this core's slice. An access during
+        // the run may have scheduled an earlier deadline or made a peer
+        // runnable, which bounds the slice the run began without.
         let room = end
             .saturating_sub(self.instructions[core])
-            .min(self.timeline.processor_budget(core, u64::MAX, self.clock_limit)?);
+            .min(self.timeline.processor_budget(core, u64::MAX, self.clock_limit)?)
+            .min(slice);
         let reads = &l.reads[core];
         let advanced = proof.advance(state, (room / proof.length()).max(1), |address, width| {
             loop_read(cpu, reads, address, width)

@@ -658,3 +658,156 @@ fn m4_windows_end_at_a_deadline_the_core_schedules_during_its_run() {
         assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0);
     }
 }
+
+/// Raises NVIC line 0 of core 1 on any write.
+struct Doorbell;
+impl Device for Doorbell {
+    fn name(&self) -> &'static str {
+        "test-doorbell"
+    }
+    fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        cx.unmodeled();
+        0
+    }
+    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+        cx.set_core_irq(1, 0, true).unwrap();
+    }
+    fn save(&self) -> Value {
+        json!({})
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.save())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("test-doorbell", &self.save())
+    }
+}
+/// Two Cortex-M4 cores. Core 1 enables NVIC line 0 with interrupts masked and
+/// waits in WFI. Core 0 rings the doorbell, which wakes core 1 during core 0's
+/// run, then polls the RAM flag core 1 sets after a counted delay.
+fn m4_pair(mode: LoopMode) -> Board {
+    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    let processor = |vector_base| Processor {
+        model: Model::CortexM4,
+        registers: vec![],
+        released: true,
+        rprofile: None,
+        mprofile: Some(crate::board::mprofile::Config {
+            clock_hz: 1_000_000_000,
+            board_ticks_per_second: 1_000_000_000,
+            vector_base,
+        }),
+    };
+    let ram = |core| MemoryMap {
+        core,
+        address: 0,
+        physical: 0,
+        size: 0x4000,
+        permissions: 7,
+    };
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![processor(0), processor(0x1000)],
+        dma_mappings: vec![memory::BusMapping::ram(0, 0x4000)],
+        ram: vec![Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        mappings: vec![ram(0), ram(1)],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(7, 3).unwrap(),
+    };
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(0x8000000, 4, Box::new(Doorbell)).unwrap();
+    let mut board = graph
+        .build(
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    let words = |board: &mut Board, address, values: &[u32]| {
+        board
+            .write_memory(0, address, &values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>())
+            .unwrap();
+    };
+    words(&mut board, 0, &[0x3f00, 0x2001]);
+    words(&mut board, 0x1000, &[0x3e00, 0x2101]);
+    let halfwords = |board: &mut Board, address, code: &[u16]| {
+        board
+            .write_memory(0, address, &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>())
+            .unwrap();
+    };
+    halfwords(
+        &mut board,
+        0x2000,
+        &[
+            0x201e, // MOVS R0,#30
+            0x3801, // SUBS R0,#1
+            0xd1fd, // BNE  0x2002
+            0x2201, // MOVS R2,#1
+            0x06d2, // LSLS R2,R2,#27
+            0x6011, // STR  R1,[R2]   (doorbell)
+            0x2303, // MOVS R3,#3
+            0x031b, // LSLS R3,R3,#12
+            0x6819, // LDR  R1,[R3]
+            0x07c9, // LSLS R1,R1,#31
+            0xd5fc, // BPL  0x2010
+            0x2777, // MOVS R7,#0x77
+            0xbf30, // WFI
+        ],
+    );
+    halfwords(
+        &mut board,
+        0x2100,
+        &[
+            0xb672, // CPSID I
+            0x20e0, // MOVS R0,#0xe0
+            0x0600, // LSLS R0,R0,#24
+            0x21e1, // MOVS R1,#0xe1
+            0x0209, // LSLS R1,R1,#8
+            0x1840, // ADDS R0,R0,R1  (NVIC ISER0)
+            0x2101, // MOVS R1,#1
+            0x6001, // STR  R1,[R0]
+            0xbf30, // WFI
+            0x2032, // MOVS R0,#50
+            0x3801, // SUBS R0,#1
+            0xd1fd, // BNE  0x2114
+            0x2203, // MOVS R2,#3
+            0x0312, // LSLS R2,R2,#12
+            0x2101, // MOVS R1,#1
+            0x6011, // STR  R1,[R2]
+            0xe7fe, // B    .
+        ],
+    );
+    board.set_loop_mode(mode).unwrap();
+    board
+}
+fn m4_pair_state(board: &Board) -> (Value, Vec<u32>, Vec<u8>) {
+    let registers = (0..2)
+        .flat_map(|core| {
+            arm::CORE
+                .iter()
+                .chain([arm::CPSR, Register::Pc].iter())
+                .map(move |&r| board.read_register(core, r).unwrap() as u32)
+        })
+        .collect();
+    let mut ram = vec![0; 0x10];
+    board.cpu(0).unwrap().read_memory(0x3000, &mut ram).unwrap();
+    (board.state(), registers, ram)
+}
+#[test]
+fn m4_windows_end_at_the_slice_of_a_peer_woken_during_the_run() {
+    for quantum in [1, 7, 64, 1000] {
+        let mut off = m4_pair(LoopMode::Disabled);
+        let mut on = m4_pair(LoopMode::Accelerate);
+        for tick in [20, 60, 120, 200, 1200] {
+            off.run_until(tick, quantum).unwrap();
+            on.run_until(tick, quantum).unwrap();
+            assert_eq!(m4_pair_state(&on), m4_pair_state(&off), "quantum={quantum} tick={tick}");
+        }
+        assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77, "quantum={quantum}");
+        assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0, "quantum={quantum}");
+    }
+}
