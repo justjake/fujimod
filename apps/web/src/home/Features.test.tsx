@@ -182,6 +182,6 @@ test.each(['no-such-card', '__proto__', 'constructor'])(
     mountMedia(`#features?search=film&card=${card}`);
     expect(document.querySelector('.catalog-card.on')).toBeNull();
     expect(document.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('film');
-    expect(document.querySelector('.catalog-grid')?.textContent).toContain('Film Grain');
+    expect(document.querySelector('.catalog')?.textContent).toContain('Film Grain');
   },
 );
