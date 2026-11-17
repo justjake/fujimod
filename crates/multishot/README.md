@@ -33,8 +33,12 @@ declared in `plan.rs` so plans can be validated; they are refused at run time.
    reference's real green sites. The previous frame's transform is the prior
    for the next.
 3. **Resolution merge** (`merge.rs`): every unclipped CFA site of every
-   accepted frame is mapped into reference coordinates and splatted, per
-   color, onto an output grid 1.5x (default) or 2x finer than the sensor. The
+   accepted frame is mapped into reference coordinates and splatted onto an
+   output grid 1.5x (default) or 2x finer than the sensor. Green (5 of 9
+   X-Trans sites) is merged first; red and blue (2 of 9 each) are merged as
+   white-balanced differences to the merged green at their own sample
+   positions, so they inherit green's resolution (`--color independent`
+   splats each color from its own samples instead). The
    kernel follows the reference's local structure tensor: narrow across
    edges, long along them, wide in flat areas. A robustness weight per frame
    and reference block compares the frame with the reference against a noise
@@ -90,15 +94,20 @@ reference position would record, on the output grid. Twelve frames, scale
 
 | Measure | Merge | Single frame, same merge | Demosaic + bicubic | Truth |
 | --- | --- | --- | --- | --- |
-| Slanted-edge MTF50 (cycles per site) | **0.298** | 0.238 | 0.273 | 0.329 |
-| Fine-detail RMSE against truth | **0.0142** | | 0.0352 | 0 |
-| Flat-patch luma noise (relative std) | **0.0015** | | 0.0073 | |
+| Slanted-edge MTF50 (cycles per site) | **0.314** | 0.271 | 0.276 | 0.329 |
+| Fine-detail RMSE against truth | **0.0152** | | 0.0352 | 0 |
+| Flat-patch luma noise (relative std) | **0.0017** | | 0.0073 | |
 
-The merge resolves a neutral edge 9% better than demosaicing and upscaling
-the best single frame (25% better than the single frame through the same
-kernels), recovers fine color detail with 2.5x lower error and has 4.8x lower
+The merge resolves a neutral edge 14% better than demosaicing and upscaling
+the best single frame (16% better than the single frame through the same
+kernels), recovers fine color detail with 2.3x lower error and has 4.3x lower
 noise. Demosaicing a neutral edge is the single frame's best case; the gain
 on colored and aliasing-prone detail is the RMSE column.
+
+Merging red and blue independently instead gives edge MTF50 0.298 and Siemens
+star RMSE 0.0083 (green-guided 0.0069). On the chart's random color cells,
+whose channels are uncorrelated (the worst case for color differences), the
+independent merge is better: RMSE 0.0182 against 0.0204.
 
 - **Negative control:** eight identical frames merge to the single-frame
   result (largest pixel difference 1.8e-7; equal MTF50). Registration of
@@ -161,15 +170,17 @@ demosaiced and upscaled measures MTF50 0.14 to 0.18 cycles per site:
 
 | | Merge (13 frames) | Single frame, same merge | Demosaic + bicubic |
 | --- | --- | --- | --- |
-| Edge MTF50 (cycles per site) | 0.148 | 0.136 | 0.165 |
+| Edge MTF50 (cycles per site) | 0.152 | 0.149 | 0.165 |
 | Shirt noise, R G B std (plane removed) | 0.00047 0.00091 0.00072 | | 0.00098 0.00118 0.00113 |
 
-On this real edge the merge is 9% sharper than the same kernels on one frame
-but 10% softer than demosaicing and bicubic upscaling, while lowering noise
-1.3 to 2.1x (the shirt's weave counts as noise in these figures). The
-synthetic gain does not yet carry over; residual sub-pixel misalignment on
-real frames is the leading suspect (the scale ticks look slightly wider in
-the merge).
+On this real edge the merge is 2% sharper than the same kernels on one frame
+but 8% softer than demosaicing and bicubic upscaling, while lowering noise
+1.3 to 2.1x (the shirt's weave counts as noise in these figures; noise was
+measured before the green-guided color merge). Merging red and blue
+independently measures 0.148 here; the green-guided luma now matches the
+merged green (0.153), so the remaining gap is in green itself. Per-frame edge
+positions after warping scatter by 0.1 to 0.45 sites and differ across the
+frame, which one global transform per frame cannot correct.
 
 **Camera JPEGs** of earlier brackets and bursts registered with `align-jpeg`
 show:
