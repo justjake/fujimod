@@ -162,7 +162,7 @@ fn selected_sensor_reset_readback_and_config_writes_execute_over_the_same_dma_po
         assert_eq!(f.graph.nodes[serial].device.save(), before);
     }
     let wire = &before["wire"];
-    assert_eq!(wire["parts"][1]["state"]["registers"][0x12], 0x44);
+    assert_eq!(wire["parts"][1]["state"]["state"]["registers"][0x12], 0x44);
 }
 
 #[test]
