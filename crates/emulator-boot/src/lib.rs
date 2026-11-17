@@ -874,6 +874,29 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Op
     }
 }
 
+/// Optional instruction-entry trace shared by native boot workflows.
+pub struct TraceOutput {
+    pub path: PathBuf,
+    pub limit: usize,
+}
+
+impl TraceOutput {
+    pub fn begin(
+        &self, session: &Session,
+    ) -> Result<fujimod_emulator::board::observation::PcTrace, String> {
+        session.board.trace_pcs(self.limit)
+    }
+
+    pub fn write(
+        &self, trace: fujimod_emulator::board::observation::PcTrace,
+    ) -> Result<(), String> {
+        let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
+        let mut writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(&mut writer, &trace.take()).map_err(|error| error.to_string())?;
+        std::io::Write::flush(&mut writer).map_err(|error| error.to_string())
+    }
+}
+
 /// Restore a portable snapshot into a session built from the same inputs.
 pub fn load_snapshot(session: &mut Session, path: &Path) -> Result<(), String> {
     let mut restore = || -> Result<(), String> {

@@ -533,6 +533,96 @@ impl Board {
     }
 }
 
+/// One architectural instruction entry in scheduler order.
+#[derive(serde::Serialize)]
+pub struct PcEntry {
+    pub core: usize,
+    pub pc: u64,
+    pub size: u32,
+}
+
+#[derive(serde::Serialize)]
+pub struct PcEntries {
+    pub entries: Vec<PcEntry>,
+    pub omitted: u64,
+}
+
+struct TraceHook {
+    cpu: Weak<dyn Cpu>,
+    hook: HookId,
+    context: Box<TraceContext>,
+}
+struct TraceContext {
+    core: usize,
+    limit: usize,
+    records: Rc<RefCell<PcEntries>>,
+}
+
+/// Collect a bounded prefix of consecutive instruction entries. Hook ownership
+/// is tied to this value. Dropping it releases the instrumentation.
+pub struct PcTrace {
+    records: Rc<RefCell<PcEntries>>,
+    hooks: Vec<TraceHook>,
+}
+
+unsafe fn trace_pc(pc: u64, size: u32, context: *mut c_void) {
+    let context = unsafe { &*context.cast::<TraceContext>() };
+    let mut records = context.records.borrow_mut();
+    if records.entries.len() < context.limit {
+        records.entries.push(PcEntry { core: context.core, pc, size });
+    } else {
+        records.omitted = records.omitted.saturating_add(1);
+    }
+}
+
+impl PcTrace {
+    pub fn take(mut self) -> PcEntries {
+        self.detach();
+        std::mem::replace(
+            &mut *self.records.borrow_mut(),
+            PcEntries { entries: Vec::new(), omitted: 0 },
+        )
+    }
+
+    fn detach(&mut self) {
+        for TraceHook { cpu, hook, context } in self.hooks.drain(..) {
+            if cpu.upgrade().is_some_and(|cpu| cpu.remove_hook(hook).is_err()) {
+                // The CPU still owns a callback pointing at this context.
+                Box::leak(context);
+            }
+        }
+    }
+}
+
+impl Drop for PcTrace {
+    fn drop(&mut self) {
+        self.detach();
+    }
+}
+
+impl Board {
+    pub fn trace_pcs(&self, limit: usize) -> Result<PcTrace, String> {
+        if limit == 0 || limit > 10_000_000 {
+            return Err("PC trace needs a bound between 1 and 10000000 entries".into());
+        }
+        if self.execution_policy() != fujimod_emulator_cpu::ExecutionPolicy::Exact {
+            return Err("PC tracing requires exact execution policy".into());
+        }
+        let records = Rc::new(RefCell::new(PcEntries { entries: Vec::new(), omitted: 0 }));
+        let mut trace = PcTrace { records, hooks: Vec::new() };
+        for (core, cpu) in self.cpus.iter().enumerate() {
+            let mut context = Box::new(TraceContext { core, limit, records: trace.records.clone() });
+            let hook = unsafe { cpu.install_hook(Hook::Instruction {
+                callback: trace_pc,
+                data: (&mut *context as *mut TraceContext).cast(),
+                range: HookRange::All,
+            }) }?;
+            trace.hooks.push(TraceHook { cpu: Rc::downgrade(cpu), hook, context });
+        }
+        Ok(trace)
+    }
+}
+
 /// Repeated entry observations stop before the selected instruction. Resume
 /// executes that instruction once, even when it is itself a loop target.
 pub(super) struct EntryPoints {

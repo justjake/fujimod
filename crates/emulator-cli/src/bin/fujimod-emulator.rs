@@ -22,11 +22,11 @@ XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N
 --card-image IMAGE, --card-file NAME=PATH (ROM start only).\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
-Session snapshots: --load-snapshot FILE, --save-snapshot FILE.\n\
+Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 33] = [
+const VALUED: [&str; 35] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -53,6 +53,8 @@ const VALUED: [&str; 33] = [
     "--card-file",
     "--manifest",
     "--watch-pcs",
+    "--pc-trace",
+    "--pc-trace-limit",
     "--dump",
     "--hash",
     "--gpio",
@@ -185,12 +187,23 @@ impl Boot {
             .transpose()
     }
 
-    fn execution_policy(&mut self) -> Result<ExecutionPolicy, String> {
+    fn pc_trace(&mut self) -> Result<Option<boot::TraceOutput>, String> {
+        let path = self.path("--pc-trace");
+        let limit = self.text("--pc-trace-limit")?
+            .map(|value| value.parse::<usize>().map_err(|_| "--pc-trace-limit needs a positive integer"))
+            .transpose()?;
+        match (path, limit) {
+            (Some(path), limit) => Ok(Some(boot::TraceOutput { path, limit: limit.unwrap_or(200_000) })),
+            (None, Some(_)) => Err("--pc-trace-limit requires --pc-trace".into()),
+            (None, None) => Ok(None),
+        }
+    }
+    fn execution_policy(&mut self, tracing: bool) -> Result<ExecutionPolicy, String> {
         Ok(self
             .text("--execution-policy")?
             .map(|value| ExecutionPolicy::parse(&value))
             .transpose()?
-            .unwrap_or(ExecutionPolicy::Interactive))
+            .unwrap_or(if tracing { ExecutionPolicy::Exact } else { ExecutionPolicy::Interactive }))
     }
 }
 
@@ -227,13 +240,19 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     };
     let screenshot = boot_options.path("--screenshot");
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
-    let execution_policy = boot_options.execution_policy()?;
+    let pc_trace = boot_options.pc_trace()?;
+    let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
     let mut session = boot::open(resolved, boot::StartupInputs::Exr2(options))?.into_exr2()?;
     if let Some(path) = boot_options.path("--load-snapshot") {
         boot::load_snapshot(&mut session, &path)?;
     }
     session.board.set_execution_policy(execution_policy)?;
-    let report = boot::to_rec(&mut session, limit)?;
+    let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
+    let report = boot::to_rec(&mut session, limit);
+    if let Some((output, trace)) = pc_trace.zip(trace) {
+        output.write(trace)?;
+    }
+    let report = report?;
     if let Some(path) = boot_options.path("--save-snapshot") {
         boot::save_snapshot(&session, &path)?;
     }
@@ -267,12 +286,15 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
                 .ok_or("--card-file needs NAME=PATH")
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let pc_trace = boot_options.pc_trace()?;
+    let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
     let run = xp5::Run {
         configuration: resolved,
         load_snapshot: boot_options.path("--load-snapshot"),
         save_snapshot: boot_options.path("--save-snapshot"),
         manifest: boot_options.path("--manifest"),
         watch_pcs: boot_options.text("--watch-pcs")?,
+        pc_trace,
         dump: boot_options.text("--dump")?,
         hash: boot_options.text("--hash")?,
         update: boot_options.required("--update")?.into(),
@@ -302,7 +324,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
             .map(|value| xp5::parse_seconds(&value))
             .transpose()?
             .unwrap_or(Duration::from_secs(5)),
-        execution_policy: boot_options.execution_policy()?,
+        execution_policy,
         output: boot_options.path("--output").ok_or("required option: --output")?,
     };
     let report = xp5::run_boot(run)?;

@@ -105,6 +105,7 @@ pub struct Run {
     pub update: PathBuf,
     pub manifest: Option<PathBuf>,
     pub watch_pcs: Option<String>,
+    pub pc_trace: Option<crate::TraceOutput>,
     pub dump: Option<String>,
     pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
@@ -215,6 +216,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         update,
         manifest,
         watch_pcs,
+        pc_trace,
         dump,
         hash,
         boot_rom: rom_path,
@@ -323,6 +325,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .install_discovery_callee_stubs(&callee_stubs)?;
     session.board.set_execution_policy(policy)?;
     session.board.watch_pcs(&watch_pcs)?;
+    let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     // Emulator-only FujiMod (--mod): built and placed before the run, hook words attached between
     // run slices once the stock UILIB-ready flag holds. See mod_loader.rs.
     let mut fujimod = if mod_specs.is_empty() {
@@ -461,6 +464,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     // execution policy, watch hooks, key scheduling, the Ctrl-C handler) return before anything
     // has run and leave no board state; a panic would also bypass this path.
     let outcome = drive();
+    let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
     let output_finish = outputs.finish();
@@ -481,6 +485,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     }
     let cleanup = [
         ("snapshot", snapshot_write),
+        ("PC trace", trace_write),
         ("board", board_finish),
         ("outputs", output_finish),
         ("board state", state_write),
