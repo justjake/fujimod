@@ -205,6 +205,17 @@ fn channel(o: u64) -> Option<u64> {
         .contains(&o)
         .then(|| (o - CHANNEL_BASE) / CHANNEL_STRIDE * CHANNEL_STRIDE + CHANNEL_BASE)
 }
+/// Sensor unit configuration words (XP5). X-H2S 7.30 programs a config block
+/// at 0x400..0x42c (writer 0x1678a00), two table blocks at 0x440..0x45c and
+/// 0x460..0x47c (set 0x1675eac, reset 0x1676370) and one control word per
+/// unit at 0x480 (unit 2) and 0x4c0 (unit 3): bit 0 enable, bits 16..26 a
+/// count of at most 0x400, read-modify-written by 0x167538c and read back by
+/// 0x16754a0. They are latched: a read returns the last write. What they drive
+/// on the sensor is unknown, and the unit status words (0x484, 0x4c4) stay
+/// unmodeled.
+fn unit_latch(o: u64) -> bool {
+    matches!(o, 0x400..=0x42c | 0x440..=0x47c | 0x480 | 0x4c0)
+}
 pub struct Command {
     base: u64,
     state: State,
@@ -315,6 +326,7 @@ impl Device for Command {
                     u64::from(self.reg(o))
                 }
             }
+            _ if unit_latch(o) => u64::from(self.reg(o)),
             _ if self.retain_unmodeled && o < 0x244 => u64::from(self.reg(o)),
             _ => {
                 cx.unmodeled();
@@ -391,6 +403,9 @@ impl Device for Command {
                 } else {
                     self.state.registers.insert(o, value);
                 }
+            }
+            _ if unit_latch(o) => {
+                self.state.registers.insert(o, value);
             }
             _ if self.retain_unmodeled && o < 0x244 => {
                 self.state.registers.insert(o, value);
@@ -728,7 +743,27 @@ mod tests {
         );
         // Offsets past the six channel blocks stay unmodeled.
         let mut cx = Cx::new(&mut host, 1, 0, 0);
-        command.read(&mut cx, 0xfff6c000 + 0x400, 4);
+        command.read(&mut cx, 0xfff6c000 + 0x430, 4);
         assert!(cx.is_unmodeled());
+    }
+    #[test]
+    fn unit_configuration_words_latch_and_unit_status_refuses() {
+        let sensor = Sensor::new(None, (0x51, 8));
+        let mut command = Command::new(0xff948000, sensor, 17).unwrap();
+        let mut host = RecordingHost::default();
+        for (o, v) in [(0x400, 0x11), (0x42c, 0x22), (0x440, 0x33), (0x47c, 0x44), (0x480, 0x0400_0001), (0x4c0, 0x0010_0001)] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert!(cx.refusal().is_none() && !cx.is_unmodeled());
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), v);
+        }
+        for o in [0x430, 0x484, 0x4c4, 0x4c8] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.read(&mut cx, 0xff948000 + o, 4);
+            assert!(cx.is_unmodeled(), "{o:#x} read");
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, 1);
+            assert!(cx.is_unmodeled(), "{o:#x} write");
+        }
     }
 }
