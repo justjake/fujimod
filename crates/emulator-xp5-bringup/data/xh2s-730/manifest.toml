@@ -1,0 +1,208 @@
+# Cold OS boot: EL3 -> EL1t handoff at 0x5847c, after stock 0x58420..0x58478.
+# The X-H2S loader entry, stacks and hand-off are instruction for instruction the X-T5's
+# (xt5-431 manifest).
+version = 1
+firmware = "xh2s-730"
+load_firmware = true
+
+# Device windows: xh2s-730.d/*.toml, merged in filename order.
+
+# The stock bus-drain helper 0x17f1794 splits memory at 0x80000000, the body's
+# dram_bytes (catalog/bodies/xh2s/body.json). Installed capacity is unmeasured.
+[[ram]]
+base = 0
+size = 0x80000000
+
+# M-core SRAM (same XP5 SoC window as xt5-431.toml).
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+# Cold component descriptor table. Header +0 points to the rows at 0x13e0050 and +8 to
+# the lazy-image descriptor at 0x13e02f8; rows give kernel 0x40000/0x1e340 (flash
+# 0x60000), OS 0x1421000/0xb76000 (flash 0x300000), app 0x2cca000/0xe28000 (flash
+# 0x840000) and the lazy app (flash 0xf20000), the layout of streams.json.
+[[preload]]
+address = 0x13e0000
+dat_offset = 0x1a0274
+length = 0x800
+sha256 = "03f64f1c5afa8cfb1471097bfdc7d269987675a8a4be70398e174e992810b059"
+
+# Reset hardware-info buffer: reset 0x2318..0x232c passes x1 = 0x18350 ([0x2470]);
+# loader 0x5b308 copies 0x5e0 bytes to 0xa4598. Values come from the loader's copy
+# read on the camera after a service-mode
+# start (0xa4598 + 0x5e0, SHA-256 dfb74a1e...7686), except where noted.
+# +0x00..0x4f: pad input words of GPIO ports 0..19, as measured on that start (UP and
+# the shutter were held). Read when +0x150 bit 2 is clear (0x1801a78) or by pin queries
+# (0x16a066c, 0x16a06cc).
+[[preload]]
+address = 0x18350
+bytes = """
+54 6b 00 00 9c 27 00 00 04 00 00 00 02 3c 00 00
+0f 02 00 00 00 01 00 00 10 00 00 00 00 00 00 00
+01 00 00 00 b8 0f 00 00 95 01 00 00 40 00 00 00
+a6 05 00 00 0e 00 00 00 fc 00 00 00 80 41 00 00
+00 00 00 00 00 00 00 00 ff 03 00 00 ff 03 00 00
+"""
+# +0x50 and +0xd0: boot-trace lists, empty (the "DETS" tag at their first record); the
+# reader 0x17fdcb8 stops on the tag. The camera's records are boot timings.
+[[preload]]
+address = 0x183a0
+value = 0x53544544
+size = 4
+[[preload]]
+address = 0x18420
+value = 0x53544544
+size = 4
+# +0x150: startup cause. Virtual input: bit 2 only, the power-switch start (0x1801ac0).
+# The camera copy holds 2, the service-mode start.
+[[preload]]
+address = 0x184a0
+value = 4
+size = 4
+# +0x154..0x15f: timed-start valid flag and packet. Reset fills the packet from
+# power-controller registers 0x1f..0x22, which the shared model returns as 0, so all
+# zero (not preloaded). The camera's bytes are post-boot (the application writes +0x15f).
+# +0x198..0x1bf: five doublewords filled by reset 0x3974(0x184e8); no application
+# reader found. Camera values.
+[[preload]]
+address = 0x184e8
+bytes = """
+5e 09 00 00 00 00 00 00 e6 0d 00 00 00 00 00 00
+fc 0d 00 00 00 00 00 00 e0 04 00 00 00 00 00 00
+f6 0f 00 00 00 00 00 00
+"""
+# +0x1c8..0x1db: message header; halfwords +0xc = 0x8000 and +0xe = 1, as on the camera.
+[[preload]]
+address = 0x18518
+bytes = "00 00 00 00 00 00 00 00 00 00 00 00 00 80 01 00 00 00 00 00"
+# +0x5cc..0x5dc: flash setup and ID. The camera holds the trained setup (1, 0x1a, 0,
+# 0x101) and its NOR ID 0x2c5b1b. The FujiMod flash controller accepts JEDEC 0x20bb20
+# only, so this run declares the untrained setup and that ID, as xt5-431.toml does:
+# +0x5cc = 0 (untrained), +0x5d0 = 0, +0x5d4 = 0, +0x5d8 = 0x10b, +0x5dc = 0x20bb20.
+[[preload]]
+address = 0x18928
+value = 0x10b
+size = 4
+[[preload]]
+address = 0x1892c
+value = 0x20bb20
+size = 4
+
+# Stock 5847c replaces SP_EL1/SP_EL0 from 0xa6000/0xb6000 plus [0x5e310]/[0x5e318]
+# (0x2000, 0x4000) before use.
+
+[[cpu]]
+id = 0
+mpidr = 0
+pc = 0x5847c
+sp = 0xaa000
+cpsr = 0x3c4
+running = true
+[cpu.regs]
+x19 = 0
+x20 = 0x18017f4
+x21 = 0x18350
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[[cpu]]
+id = 1
+mpidr = 1
+pc = 0x5847c
+sp = 0xae000
+cpsr = 0x3c4
+running = false
+[cpu.regs]
+x19 = 1
+x20 = 0x18017f4
+x21 = 0x18350
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[[cpu]]
+id = 2
+mpidr = 2
+pc = 0x5847c
+sp = 0xb2000
+cpsr = 0x3c4
+running = false
+[cpu.regs]
+x19 = 2
+x20 = 0x18017f4
+x21 = 0x18350
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[[cpu]]
+id = 3
+mpidr = 3
+pc = 0x5847c
+sp = 0xb6000
+cpsr = 0x3c4
+running = false
+[cpu.regs]
+x19 = 3
+x20 = 0x18017f4
+x21 = 0x18350
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[gic]
+distributor = 0xfa000000
+redistributor = 0xfa080000
+redistributor_stride = 0x20000
+spi_max = 511
+
+[gic.registers]
+"0x0" = 0x7
+
+# Run input: no card in either SD host instance. Each declares the blank FAT32 card
+# (32 GB geometry) that an insertion would present; its contents are not read.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
