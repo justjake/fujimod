@@ -443,8 +443,7 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
 pub(crate) fn open_from(
     firmware: &Firmware,
     state: &BootState,
-    configuration_id: &str,
-    overlay_ids: &[String],
+    resolved: &ResolvedConfiguration,
     scene_override: Option<&Path>,
     run_directory: &Path,
     mode: Mode,
@@ -459,7 +458,6 @@ pub(crate) fn open_from(
         }
         None => state,
     };
-    let resolved = ResolvedConfiguration::with_overlays(configuration_id, overlay_ids)?;
     if resolved.configuration.firmware_id != firmware.id || state.firmware != firmware.id {
         return Err("run configuration, firmware input and boot manifest differ".into());
     }
@@ -824,7 +822,7 @@ pub(crate) fn open_from(
     };
     let mut definition = json!({
         "schema": 1,
-        "configuration_id": configuration_id,
+        "configuration_id": resolved.configuration.id,
         "body_id": resolved.configuration.body_id,
         "firmware_id": resolved.configuration.firmware_id,
         "firmware_profile_id": firmware_profile_id,

@@ -6,6 +6,7 @@ use crate::{
     manifest::BootState,
     mod_loader, open as session_open, rom_start,
 };
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -99,8 +100,7 @@ fn shared_boot_summary(
 
 /// One XP5 boot: the run configuration plus the caller's input files.
 pub struct Run {
-    pub configuration: String,
-    pub overlays: Vec<String>,
+    pub configuration: ResolvedConfiguration,
     /// The original update file.
     pub update: PathBuf,
     /// The boot ROM, for a configuration that starts from it.
@@ -163,7 +163,6 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     };
     let Run {
         configuration,
-        overlays,
         update,
         boot_rom: rom_path,
         card_image: sd_image,
@@ -189,9 +188,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .iter()
         .map(|stub| parse_stub(stub))
         .collect::<Result<Vec<_>, _>>()?;
-    let resolved_start = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(&configuration, &overlays)?;
+    let configuration_id = &configuration.configuration.id;
     let start_rom = matches!(
-        resolved_start.configuration.start,
+        configuration.configuration.start,
         fujimod_catalog_configuration::RunStart::Rom
     );
     let dials_held = true;
@@ -240,7 +239,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             keys.push((delay, key, pressed));
         }
     }
-    let firmware_id = resolved_start.configuration.firmware_id.clone();
+    let firmware_id = configuration.configuration.firmware_id.clone();
     let state = BootState::for_firmware(&firmware_id)?;
     let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
     let firmware = Firmware::from_update(&firmware_id, update_bytes, true)?;
@@ -279,7 +278,6 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         &firmware,
         &state,
         &configuration,
-        &overlays,
         scene.as_deref(),
         &run_directory,
         mode,
@@ -325,7 +323,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let mut next_status =
         start.saturating_add((status_every.as_secs_f64() * ticks_per_second as f64) as u64);
     eprintln!(
-        "FUJIMOD XP5 session configuration={configuration} firmware={} policy={} quantum={quantum} run={}",
+        "FUJIMOD XP5 session configuration={configuration_id} firmware={} policy={} quantum={quantum} run={}",
         firmware.id,
         policy.name(),
         run_directory.display()
@@ -456,7 +454,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     }
     Ok(json!({
         "engine": session.definition["engine"],
-        "configuration": configuration,
+        "configuration": configuration_id,
         "firmware": firmware.id,
         "instructions": session.board.instruction_counts(),
         "now": session.board.now(),

@@ -2988,6 +2988,7 @@ dependencies = [
 name = "fujimod-python-module"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",

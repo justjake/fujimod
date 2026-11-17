@@ -1,12 +1,12 @@
 //! Native boot command; every binary input is selected by path, for every processor generation.
-use fujimod_catalog_configuration::RunInputs;
+use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_xp5_bringup as xp5;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode, time::Duration};
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] \\\n  [--overlay ID]... [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -24,9 +24,10 @@ XP5 options: --output DIR (required), --seconds N, --status-every N, --quantum N
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 23] = [
+const VALUED: [&str; 24] = [
     "--configuration",
     "--overlay",
+    "--engine",
     "--language",
     "--update",
     "--boot-rom",
@@ -144,6 +145,22 @@ impl Boot {
         }
         Ok(())
     }
+    fn resolve(&mut self, configuration_id: &str) -> Result<ResolvedConfiguration, String> {
+        let engine = self
+            .text("--engine")?
+            .map(|value| {
+                serde_json::from_value::<RunEngine>(serde_json::Value::String(value))
+                    .map_err(|error| format!("--engine: {error}"))
+            })
+            .transpose()?;
+        let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &self.overlays)?;
+        if let Some(engine) = engine {
+            resolved.configuration.execution.as_mut()
+                .ok_or_else(|| format!("configuration {configuration_id} declares no execution policy"))?
+                .engine = engine;
+        }
+        Ok(resolved)
+    }
     fn execution_policy(&mut self) -> Result<ExecutionPolicy, String> {
         Ok(self
             .text("--execution-policy")?
@@ -158,7 +175,7 @@ struct Outcome {
     success: bool,
 }
 
-fn run_exr2(mut boot_options: Boot, configuration_id: String) -> Result<Outcome, String> {
+fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
         &["--output", "--seconds", "--status-every", "--quantum", "--keys", "--patch", "--scene", "--card-image"],
@@ -174,8 +191,6 @@ fn run_exr2(mut boot_options: Boot, configuration_id: String) -> Result<Outcome,
         })
         .transpose()?;
     let options = Options {
-        configuration_id,
-        overlays: std::mem::take(&mut boot_options.overlays),
         update: boot_options.required("--update")?.into(),
         boot_rom: boot_options.required("--boot-rom")?.into(),
         nand: boot_options.path("--nand"),
@@ -199,7 +214,7 @@ fn run_exr2(mut boot_options: Boot, configuration_id: String) -> Result<Outcome,
         return Err("instruction limit must be positive".into());
     }
     let execution_policy = boot_options.execution_policy()?;
-    let mut session = boot::open(options)?;
+    let mut session = boot::open(resolved, options)?;
     session.board.set_execution_policy(execution_policy)?;
     let report = boot::to_rec(&mut session, limit)?;
     println!(
@@ -213,7 +228,7 @@ fn run_exr2(mut boot_options: Boot, configuration_id: String) -> Result<Outcome,
     Ok(Outcome { success: report.status == "rec" })
 }
 
-fn run_xp5(mut boot_options: Boot, configuration_id: String) -> Result<Outcome, String> {
+fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "XP5",
         &["--nand", "--settings", "--camera", "--clock-seconds-2000", "--instruction-limit", "--screenshot"],
@@ -233,8 +248,7 @@ fn run_xp5(mut boot_options: Boot, configuration_id: String) -> Result<Outcome, 
         })
         .collect::<Result<Vec<_>, _>>()?;
     let run = xp5::Run {
-        configuration: configuration_id,
-        overlays: std::mem::take(&mut boot_options.overlays),
+        configuration: resolved,
         update: boot_options.required("--update")?.into(),
         boot_rom: boot_options.path("--boot-rom"),
         card_image: boot_options.path("--card-image"),
@@ -277,10 +291,10 @@ fn run() -> Result<Outcome, String> {
     let configuration_id = boot_options
         .text("--configuration")?
         .ok_or("required option: --configuration")?;
-    let resolved = ResolvedConfiguration::with_overlays(&configuration_id, &boot_options.overlays)?;
+    let resolved = boot_options.resolve(&configuration_id)?;
     match resolved.configuration.inputs.as_ref() {
-        Some(RunInputs::Exr2(_)) => run_exr2(boot_options, configuration_id),
-        Some(RunInputs::Xp5(_)) => run_xp5(boot_options, configuration_id),
+        Some(RunInputs::Exr2(_)) => run_exr2(boot_options, resolved),
+        Some(RunInputs::Xp5(_)) => run_xp5(boot_options, resolved),
         Some(RunInputs::Xp4(_)) => Err("boot does not support XP4 configurations yet".into()),
         None => Err(format!("configuration {configuration_id} declares no startup inputs")),
     }
@@ -321,6 +335,24 @@ mod tests {
         assert_eq!(boot.overlays, ["usb", "service"]);
         assert!(boot.discovery);
         assert!(parse(args(&["boot", "--overlay", "usb", "--overlay", "usb"])).is_err());
+    }
+
+    #[test]
+    fn explicit_engine_applies_after_overlays() {
+        let id = "x100vi-131";
+        let flags = ["boot", "--overlay", "x100vi-131-rom-start"];
+        let mut boot = parse(args(&flags)).unwrap().unwrap();
+        let original = boot.resolve(id).unwrap().configuration;
+        assert_eq!(original.execution.unwrap().engine, RunEngine::Hypervisor);
+        let mut boot = parse(args(&[&flags[..], &["--engine", "unicorn"]].concat()))
+            .unwrap().unwrap();
+        let overridden = boot.resolve(id).unwrap().configuration;
+        assert_eq!(overridden.start, original.start);
+        let mut expected = original.execution.unwrap();
+        expected.engine = RunEngine::Unicorn;
+        assert_eq!(overridden.execution, Some(expected));
+        let mut boot = parse(args(&["boot", "--engine", "hvf"])).unwrap().unwrap();
+        assert!(boot.resolve(id).err().unwrap().starts_with("--engine:"));
     }
 
     #[test]

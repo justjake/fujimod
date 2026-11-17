@@ -37,8 +37,6 @@ use std::{
 /// Every binary input location is supplied by the embedding program.
 #[derive(Clone, Debug)]
 pub struct Options {
-    pub configuration_id: String,
-    pub overlays: Vec<String>,
     pub update: PathBuf,
     pub boot_rom: PathBuf,
     /// Committed NAND image, or a main-area image: exactly the geometry's main bytes,
@@ -834,8 +832,8 @@ impl Prepared {
 
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
-pub fn open(options: Options) -> Result<Session, String> {
-    let mut prepared = prepare(&options.configuration_id, &options.overlays)?;
+pub fn open(resolved: ResolvedConfiguration, options: Options) -> Result<Session, String> {
+    let mut prepared = prepared(resolved)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
     }

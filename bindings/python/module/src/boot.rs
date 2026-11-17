@@ -23,9 +23,10 @@ impl Boot for CatalogBoot {
             .as_deref()
             .map(|bytes| <[u8; 20]>::try_from(bytes).map_err(|_| "MT5931 capability fixture must be 20 bytes"))
             .transpose()?;
-        boot::open(boot::Options {
-            configuration_id: inputs.configuration_id,
-            overlays: inputs.overlays,
+        let resolved = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(
+            &inputs.configuration_id, &inputs.overlays,
+        )?;
+        boot::open(resolved, boot::Options {
             update: inputs.update,
             boot_rom: inputs.boot_rom,
             nand: inputs.nand,
