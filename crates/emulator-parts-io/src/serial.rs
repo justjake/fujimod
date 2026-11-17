@@ -68,13 +68,19 @@ pub trait Wire: Send {
     /// Validate before changing state; restoration does not perform transfers.
     fn restore(&mut self, state: &Value) -> Result<(), String>;
 }
+fn unconnected(frame: Frame) -> String {
+    format!(
+        "serial wire input is unconnected ({}-bit mode {} word {:#x})",
+        frame.bits, frame.mode, frame.word
+    )
+}
 pub struct Unconnected;
 impl Wire for Unconnected {
-    fn begin(&mut self, _: Frame) -> Result<u64, String> {
-        Err("serial wire input is unconnected".into())
+    fn begin(&mut self, frame: Frame) -> Result<u64, String> {
+        Err(unconnected(frame))
     }
-    fn finish(&mut self, _: u64, _: Frame, _: u64) -> Result<u16, String> {
-        Err("serial wire input is unconnected".into())
+    fn finish(&mut self, _: u64, frame: Frame, _: u64) -> Result<u16, String> {
+        Err(unconnected(frame))
     }
     fn save(&self) -> Value {
         Value::Null
