@@ -922,8 +922,12 @@ pub struct WalkthroughMetadata {
     pub canvas: Option<CanvasLayout>,
     /// Shared choice storage identities.
     pub choice_sets: BTreeMap<String, String>,
+    /// Choice-owner addresses keyed by declared action identity.
+    pub action_choice_owners: BTreeMap<u32, u64>,
     /// Exact binding picker enrollment.
     pub binding_choices: BTreeMap<u64, BindingChoices>,
+    /// Declared picker and quick action bindings with their menu owners.
+    pub qfn_action_bindings: Vec<QfnActionBinding>,
     /// Enrolled host screen identities.
     pub canvas_hosts: BTreeMap<u64, CanvasHost>,
     /// Required surface observations.
@@ -932,6 +936,27 @@ pub struct WalkthroughMetadata {
     pub option_requirements: Vec<(String, u32)>,
     /// Required screen observations.
     pub screen_requirements: Vec<(String, String, u32)>,
+}
+
+/// A compiled action binding and the menu items that project its action.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct QfnActionBinding {
+    /// Generic menu owner.
+    pub owner: u64,
+    /// Native Q/Fn binding object.
+    pub binding: u64,
+    /// Registry identity of the action.
+    pub action_id: u32,
+    /// Saved action name.
+    pub name: String,
+    /// Destinations supported by this binding.
+    pub assignments: u32,
+    /// Maximum compiled choice capacity.
+    pub choice_capacity: u32,
+    /// Menu item identities that project this action.
+    pub menu_owners: Vec<u64>,
 }
 
 /// Compiler-produced DeclarationLayout offsets.
@@ -1075,6 +1100,8 @@ pub struct BindingChoices {
     pub native_owners: Vec<u64>,
     /// Curated mod owners.
     pub mod_owners: Vec<u64>,
+    /// Action identities in their selectable order.
+    pub mod_actions: Vec<BindingActionChoice>,
     /// Accepted writer and control owners for compiled function choices.
     #[serde(default)]
     pub accepted_apply: Option<BindingApply>,
@@ -1109,6 +1136,17 @@ pub struct BindingApplyControl {
     /// High 16-bit item handle carried by the composite function action ID;
     /// zero when absent.
     pub function_item: u32,
+}
+
+/// An action offered in a binding picker.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BindingActionChoice {
+    /// A declared action with its registry identity.
+    Declared { action_id: u32, name: String },
+    /// A legacy action identified by its saved binding identity.
+    Legacy { binding_id: u32, name: String },
 }
 
 /// Declared canvas screen identities.

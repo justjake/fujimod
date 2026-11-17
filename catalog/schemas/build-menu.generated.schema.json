@@ -1,5 +1,58 @@
 {
   "$defs": {
+    "BindingActionChoice": {
+      "description": "An action offered in a binding picker.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A declared action with its registry identity.",
+          "properties": {
+            "action_id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "declared",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A legacy action identified by its saved binding identity.",
+          "properties": {
+            "binding_id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "legacy",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "binding_id",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "BindingApply": {
       "additionalProperties": false,
       "description": "Accepted binding-choice writer and its compiled menu owners.",
@@ -55,7 +108,7 @@
           "type": "integer"
         },
         "function_item": {
-          "description": "High 16-bit item handle encoded in the composite function action ID; zero when absent.",
+          "description": "High 16-bit item handle carried by the composite function action ID;\nzero when absent.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -97,6 +150,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "mod_actions": {
+          "description": "Action identities in their selectable order.",
+          "items": {
+            "$ref": "#/$defs/BindingActionChoice"
+          },
+          "type": "array"
+        },
         "mod_owners": {
           "description": "Curated mod owners.",
           "items": {
@@ -119,7 +179,8 @@
       "required": [
         "count",
         "native_owners",
-        "mod_owners"
+        "mod_owners",
+        "mod_actions"
       ],
       "type": "object"
     },
@@ -1149,6 +1210,65 @@
       ],
       "type": "object"
     },
+    "QfnActionBinding": {
+      "additionalProperties": false,
+      "description": "A compiled action binding and the menu items that project its action.",
+      "properties": {
+        "action_id": {
+          "description": "Registry identity of the action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "assignments": {
+          "description": "Destinations supported by this binding.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding": {
+          "description": "Native Q/Fn binding object.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choice_capacity": {
+          "description": "Maximum compiled choice capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_owners": {
+          "description": "Menu item identities that project this action.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Saved action name.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Generic menu owner.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "owner",
+        "binding",
+        "action_id",
+        "name",
+        "assignments",
+        "choice_capacity",
+        "menu_owners"
+      ],
+      "type": "object"
+    },
     "QfnLayout": {
       "additionalProperties": false,
       "description": "Compiler-produced QfnLayout offsets.",
@@ -1304,6 +1424,18 @@
       "additionalProperties": false,
       "description": "Build-time validated observation layouts and coverage.",
       "properties": {
+        "action_choice_owners": {
+          "additionalProperties": false,
+          "description": "Choice-owner addresses keyed by declared action identity.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
         "binding": {
           "anyOf": [
             {
@@ -1394,6 +1526,13 @@
           ],
           "description": "Qfn layout."
         },
+        "qfn_action_bindings": {
+          "description": "Declared picker and quick action bindings with their menu owners.",
+          "items": {
+            "$ref": "#/$defs/QfnActionBinding"
+          },
+          "type": "array"
+        },
         "requirements": {
           "description": "Required surface observations.",
           "items": {
@@ -1436,7 +1575,9 @@
       },
       "required": [
         "choice_sets",
+        "action_choice_owners",
         "binding_choices",
+        "qfn_action_bindings",
         "canvas_hosts",
         "requirements",
         "option_requirements",
