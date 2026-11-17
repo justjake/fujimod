@@ -11,8 +11,11 @@ pub struct Feedback {
     pub input_pin: usize,
     /// Virtual ticks between the drive bit rising and the pad reading high.
     /// A fall reaches the pad at once and cancels a pending rise.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "no_delay")]
     pub rise_delay: u64,
+}
+fn no_delay(ticks: &u64) -> bool {
+    *ticks == 0
 }
 impl Feedback {
     pub fn validate(&self, ports: usize) -> Result<(), String> {
