@@ -6,6 +6,7 @@
 //!
 //! This models causal transfers, with no bus-arbitration timing claim: a ready
 //! beat runs at `now`. No timer is invented while waiting for a peripheral.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::{Direction, SharedPort};
 use fujimod_emulator_devices::{Cx, Device};
@@ -102,6 +103,34 @@ pub struct Pair {
     interrupts: [Vec<InterruptLine>; 2],
 }
 impl Pair {
+    fn validate_state(&self, state: &State, routing: &Routing) -> Result<(), String> {
+        if state.control & !ENABLE != 0 || routing.requests.iter().any(|&r| r >= 64) {
+            return Err("XDMAC checkpoint global state differs".into());
+        }
+        let candidate = Self::new(
+            self.base,
+            Arc::new(Mutex::new(routing.clone())),
+            self.connections.clone(),
+            self.interrupts.clone(),
+        )?;
+        for (lane, c) in state.channels.iter().enumerate() {
+            if !matches!(c.status, 0 | 2 | 8)
+                || c.remaining > 1 << 32
+                || c.started && (!c.enabled() || state.control & ENABLE == 0)
+                || c.counter_exhausted && (c.remaining != 0 || c.enabled())
+            {
+                return Err("invalid XDMAC checkpoint state".into());
+            }
+            if c.enabled() {
+                candidate.validate(lane, c)?;
+                if c.remaining == 0 || c.remaining != c.count as u64 + 1 {
+                    return Err("invalid XDMAC checkpoint progress".into());
+                }
+            }
+        }
+        Ok(())
+    }
+
     pub fn new(
         base: u64,
         routing: SharedRouting,
@@ -434,6 +463,21 @@ impl Device for Pair {
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.offset(address, size).is_some()
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &(&self.state, &*self.routing.lock().unwrap()))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (state, routing): (State, Routing) = saved.decode(self.name())?;
+        self.validate_state(&state, &routing)
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        let (state, mut routing): (State, Routing) = saved.decode(self.name())?;
+        self.validate_state(&state, &routing)?;
+        routing.enabled = state.channels.each_ref().map(|channel| channel.enabled());
+        *self.routing.lock().unwrap() = routing;
+        self.state = state;
+        Ok(())
+    }
     fn save(&self) -> Value {
         let ports: Vec<_> = self
             .connections
@@ -463,27 +507,7 @@ impl Device for Pair {
         {
             return Err("XDMAC checkpoint wiring or global state differs".into());
         }
-        let candidate = Self::new(
-            self.base,
-            Arc::new(Mutex::new(routing.clone())),
-            self.connections.clone(),
-            interrupts,
-        )?;
-        for (lane, c) in state.channels.iter().enumerate() {
-            if !matches!(c.status, 0 | 2 | 8)
-                || c.remaining > 1 << 32
-                || c.started && (!c.enabled() || state.control & ENABLE == 0)
-                || c.counter_exhausted && (c.remaining != 0 || c.enabled())
-            {
-                return Err("invalid XDMAC checkpoint state".into());
-            }
-            if c.enabled() {
-                candidate.validate(lane, c)?;
-                if c.remaining == 0 || c.remaining != c.count as u64 + 1 {
-                    return Err("invalid XDMAC checkpoint progress".into());
-                }
-            }
-        }
+        self.validate_state(&state, &routing)?;
         routing.enabled = state.channels.each_ref().map(|c| c.enabled());
         *self.routing.lock().unwrap() = routing;
         self.state = state;

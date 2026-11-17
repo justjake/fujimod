@@ -64,14 +64,15 @@ impl Device for AddressHigh {
             .map_err(|e| format!("DMA address-high checkpoint: {e}"))?;
         self.apply(words)
     }
+    // XDMAC channel pairs own the routing state seen through this view.
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Checkpoint::encode(self.name(), &self.words())
+        Checkpoint::encode(self.name(), &())
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        self.candidates(saved.decode(self.name())?).map(|_| ())
+        saved.decode(self.name())
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
-        self.apply(saved.decode(self.name())?)
+        self.validate_checkpoint(saved)
     }
 }
 impl AddressHigh {
@@ -153,14 +154,15 @@ impl Device for RequestRouting {
             .map_err(|e| format!("DMA routing checkpoint: {e}"))?;
         self.apply(words)
     }
+    // XDMAC channel pairs own the routing state seen through this view.
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Checkpoint::encode(self.name(), &self.words())
+        Checkpoint::encode(self.name(), &())
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        self.candidates(saved.decode(self.name())?).map(|_| ())
+        saved.decode(self.name())
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
-        self.apply(saved.decode(self.name())?)
+        self.validate_checkpoint(saved)
     }
 }
 impl RequestRouting {
