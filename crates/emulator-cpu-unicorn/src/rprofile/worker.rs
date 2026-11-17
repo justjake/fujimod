@@ -2745,10 +2745,9 @@ mod tests {
                 begin: 0x1100,
                 until: None,
                 watchdog_us: 0,
-                instructions: None,
+                instructions: Some(1),
             })
             .unwrap();
-        second.request_pause(second_run).unwrap();
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
         loop {
@@ -2779,7 +2778,7 @@ mod tests {
             .instruction_progress()
             .expect("completed peer progress");
         assert!(first_progress >= 1);
-        assert!(second_progress <= 1);
+        assert_eq!(second_progress, 1);
         assert_eq!(first.rpc_calls.get(), first_rpcs);
         assert_eq!(second.rpc_calls.get(), second_rpcs);
 
