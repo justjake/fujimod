@@ -3,8 +3,11 @@
 //! and reads low revision nibbles at21/22. Commands a8 and c8 each return a
 //! two-byte conversion word, most significant byte first (copied-image
 //! a388..a418 of a later body reads them as a left-aligned 12-bit value).
-//! Physical identity and analog effects are unproved. Revision, conversion
-//! words and idle MISO are explicit external scenario inputs.
+//! Command 8a reads six bytes from 0a..0f in one transaction (X-H2S companion
+//! sampler table 0x22ba0: 8a, length 7); the bytes answer only when the
+//! scenario declares them. Physical identity and analog effects are unproved.
+//! Revision, conversion words, the 0a block and idle MISO are explicit
+//! external scenario inputs.
 use super::serial::{Endpoint, Frame};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -16,6 +19,7 @@ enum Phase {
     Write(u8),
     Read(u8),
     Sample { channel: u8, byte: u8 },
+    Block(u8),
     Finished,
 }
 #[derive(Default, Serialize, Deserialize)]
@@ -30,9 +34,19 @@ pub struct Registers {
     revision: [u8; 2],
     samples: [u16; 2],
     idle_high: bool,
+    block: Option<[u8; 6]>,
 }
 impl Registers {
     pub fn new(revision: [u8; 2], samples: [u16; 2], idle_high: bool) -> Result<Self, String> {
+        Self::with_block(revision, samples, idle_high, None)
+    }
+    /// `block` answers the six-byte read of 0a..0f (command 8a), in wire order.
+    pub fn with_block(
+        revision: [u8; 2],
+        samples: [u16; 2],
+        idle_high: bool,
+        block: Option<[u8; 6]>,
+    ) -> Result<Self, String> {
         if revision.iter().any(|&v| v > 15) {
             return Err("BIS revision inputs must be nibbles".into());
         }
@@ -41,6 +55,7 @@ impl Registers {
             revision,
             samples,
             idle_high,
+            block,
         })
     }
     fn slot(address: u8) -> Option<usize> {
@@ -60,11 +75,11 @@ impl Endpoint for Registers {
                 if matches!(
                     frame.word,
                     1 | 2 | 5 | 9 | 0xb | 0x1c | 0xa1 | 0xa2 | 0xa8 | 0xc8
-                ) =>
+                ) || frame.word == 0x8a && self.block.is_some() =>
             {
                 Ok(())
             }
-            Phase::Write(_) | Phase::Read(_) | Phase::Sample { .. } => Ok(()),
+            Phase::Write(_) | Phase::Read(_) | Phase::Sample { .. } | Phase::Block(_) => Ok(()),
             Phase::Command => Err(format!(
                 "BIS configuration command {:#04x} is unmodeled",
                 frame.word
@@ -89,6 +104,7 @@ impl Endpoint for Registers {
                     0xa1 | 0xa2 => Phase::Read(command & 127),
                     0xa8 => Phase::Sample { channel: 0, byte: 0 },
                     0xc8 => Phase::Sample { channel: 1, byte: 0 },
+                    0x8a => Phase::Block(0),
                     _ => Phase::Write(command),
                 };
                 idle
@@ -111,18 +127,24 @@ impl Endpoint for Registers {
                 };
                 if byte == 0 { word >> 8 } else { word & 255 }
             }
+            Phase::Block(index) => {
+                let block = self.block.expect("command 8a is accepted only with a block");
+                self.state.phase = if index == 5 { Phase::Finished } else { Phase::Block(index + 1) };
+                block[index as usize] as u16
+            }
             Phase::Finished => unreachable!("wire validates before accepting a frame"),
         };
         self.state.transfers += 1;
         response
     }
     fn save(&self) -> Value {
-        json!({"revision":self.revision,"samples":self.samples,"idle_high":self.idle_high,"state":self.state})
+        json!({"revision":self.revision,"samples":self.samples,"idle_high":self.idle_high,"block":self.block,"state":self.state})
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         if v["revision"] != json!(self.revision)
             || v["samples"] != json!(self.samples)
             || v["idle_high"] != json!(self.idle_high)
+            || v["block"] != json!(self.block)
         {
             return Err("BIS configuration inputs differ".into());
         }
@@ -136,6 +158,9 @@ impl Endpoint for Registers {
             }
             Phase::Sample { channel, byte } if channel > 1 || byte > 1 => {
                 return Err("invalid BIS conversion checkpoint".into());
+            }
+            Phase::Block(index) if index > 5 || self.block.is_none() => {
+                return Err("invalid BIS block checkpoint".into());
             }
             _ => {}
         }
@@ -189,5 +214,18 @@ mod tests {
         assert_eq!(copy.transfer(frame(0), 0), 2);
         let mut other = Registers::new([0, 0], [0x0103, 0], false).unwrap();
         assert!(other.restore(&saved).is_err());
+    }
+
+    #[test]
+    fn command_8a_reads_the_declared_block_and_refuses_without_it() {
+        let block = [1, 2, 3, 4, 5, 6];
+        let mut part = Registers::with_block([0, 0], [0, 0], false, Some(block)).unwrap();
+        assert_eq!(exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0]).unwrap(), [0, 1, 2, 3, 4, 5, 6]);
+        let error = exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0, 0]).unwrap_err();
+        assert!(error.contains("past its last byte"), "{error}");
+        let mut bare = Registers::new([0, 0], [0, 0], false).unwrap();
+        let error = exchange(&mut bare, &[0x8a]).unwrap_err();
+        assert!(error.contains("0x8a"), "{error}");
+        assert!(bare.restore(&part.save()).is_err());
     }
 }
