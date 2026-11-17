@@ -66,6 +66,20 @@ fn mismatched_build_and_invalid_scanout_fail_before_use() {
         "$schema": MENU_MANIFEST_SCHEMA_URI, "schema": 1,
         "firmware_id": "different-100", "firmware_sha256": "a".repeat(64),
         "elf_sha256": "b".repeat(64), "artifacts": [], "items": [],
+        "menu_tree": {
+            "schema": 1,
+            "nodes": [
+                {"name": "setup", "identity": "lib-setup/setup", "owner": "lib-setup",
+                 "id": 12288, "kind": "PAGE", "label_text": "SET-UP", "parent": null,
+                 "order": 0, "action": "", "target": ""},
+                {"name": "setup.bug_report_shortcut",
+                 "identity": "bug-report/setup.bug_report_shortcut", "owner": "bug-report",
+                 "id": 12289, "kind": "VALUE", "label_text": "BUG REPORT SHORTCUT",
+                 "parent": "setup", "order": 0, "action": "bug_report_shortcut", "target": ""}
+            ],
+            "attachments": [{"root": "setup", "anchor": "setup", "place": "in",
+                             "order": 0, "record": ""}]
+        },
         "symbols": {}, "memory": [], "owner_constants": {},
         "walkthrough": { "menu": null, "qfn": null, "binding": null, "canvas": null,
             "choice_sets": {}, "binding_choices": {}, "canvas_hosts": {},

@@ -594,6 +594,90 @@ pub struct BuildMenuManifest {
     pub owner_constants: BTreeMap<String, u32>,
     /// Compiler-derived coverage and observation metadata.
     pub walkthrough: WalkthroughMetadata,
+    /// Static declarations served by the unified menu-tree provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub menu_tree: Option<MenuTreeCatalog>,
+}
+
+/// Static FM_MENU declarations used by the compiled menu-tree provider.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MenuTreeCatalog {
+    /// Format version.
+    pub schema: u32,
+    /// Declared tree nodes in provider order.
+    pub nodes: Vec<MenuTreeNode>,
+    /// Declared roots attached at stock menu anchors.
+    pub attachments: Vec<MenuTreeAttachment>,
+}
+
+/// One declared node and its stable owner/path identity.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MenuTreeNode {
+    /// Name within its declaring tree, including its path from that tree's root.
+    pub name: String,
+    /// Stable owner/name identity.
+    pub identity: String,
+    /// Owning mod or library.
+    pub owner: String,
+    /// Number assigned by the menu declaration generator.
+    pub id: u32,
+    /// Declared menu-node kind.
+    pub kind: MenuTreeNodeKind,
+    /// Static label literal, or empty when the provider supplies it at runtime.
+    pub label_text: String,
+    /// Declared parent node path; none for roots attached to a stock anchor.
+    pub parent: Option<String>,
+    /// Position among the node's siblings or attached roots.
+    pub order: u32,
+    /// Action named by a VALUE or COMMAND node, when present.
+    pub action: String,
+    /// Node path named by a LINK node, when present.
+    pub target: String,
+}
+
+/// FM_MENU node kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MenuTreeNodeKind {
+    Page,
+    Group,
+    Value,
+    Command,
+    Info,
+    Link,
+    Rows,
+}
+
+/// A declared root's placement in a stock menu.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MenuTreeAttachment {
+    /// Declared root path.
+    pub root: String,
+    /// Stock menu anchor.
+    pub anchor: String,
+    /// How the root is placed at the anchor.
+    pub place: MenuTreePlace,
+    /// Order among roots at this anchor and placement.
+    pub order: u32,
+    /// Existing record symbol when the mod supplies one.
+    pub record: String,
+}
+
+/// Placement of a declared tree at a stock menu anchor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum MenuTreePlace {
+    In,
+    After,
+    Replace,
 }
 
 /// A build output bound to this manifest.
