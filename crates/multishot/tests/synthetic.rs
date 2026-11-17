@@ -8,7 +8,9 @@ use fujimod_multishot::demosaic;
 use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::{Affine, FitParams};
 use fujimod_multishot::measure::{crop, luma, patch_noise, rmse, slanted_edge};
-use fujimod_multishot::merge::{ImageSink, OutputGrid, Region, ResolutionParams, merge_resolution};
+use fujimod_multishot::merge::{
+    ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, merge_resolution,
+};
 use fujimod_multishot::noise::NoiseModel;
 use fujimod_multishot::source::{FrameSource, MemoryFrame};
 use fujimod_multishot::synthetic::{MovingDisc, NoiseSpec, Scene, WB, handheld_transforms, render};
@@ -174,6 +176,38 @@ fn merge_beats_single_frame() {
     assert!(m > 1.05 * b, "merge MTF50 {m} vs baseline {b}");
     assert!(m > 1.15 * s, "merge MTF50 {m} vs single-frame merge {s}");
     assert!(em < 0.75 * eb, "merge RMSE {em} vs baseline {eb}");
+
+    // Red and blue merged on their own are sparser than green and blur luma
+    // on gray detail. Uncorrelated color texture is the worst case for
+    // merging color differences, so there it must only stay close.
+    let independent = ResolutionParams {
+        color: ColorMerge::Independent,
+        ..params.clone()
+    };
+    let (_, imerged) = merge(&fr, &a, &independent, edge);
+    let mi = mtf50(&imerged, &grid);
+    let (dx, dy, dw, dh) = scene.detail_region();
+    let half = dw / 2;
+    let (star, texture) = (
+        region((dx, dy, half - 4, dh)),
+        region((dx + half + 4, dy, dw - half - 4, dh)),
+    );
+    let part_rmse = |r: Region| {
+        let (g, guided) = merge(&fr, &a, &params, r);
+        let (_, indep) = merge(&fr, &a, &independent, r);
+        let ideal = scene.truth(&g, 0);
+        (rmse(&guided, &ideal), rmse(&indep, &ideal))
+    };
+    let ((sg, si), (tg, ti)) = (part_rmse(star), part_rmse(texture));
+    println!(
+        "green-guided vs independent: MTF50 {m:.4} vs {mi:.4}, star RMSE {sg:.5} vs {si:.5}, color texture RMSE {tg:.5} vs {ti:.5}"
+    );
+    assert!(m > 1.02 * mi, "green-guided MTF50 {m} vs independent {mi}");
+    assert!(sg < 0.95 * si, "star RMSE {sg} vs independent {si}");
+    assert!(
+        tg < 1.25 * ti,
+        "color texture RMSE {tg} vs independent {ti}"
+    );
 }
 
 #[test]

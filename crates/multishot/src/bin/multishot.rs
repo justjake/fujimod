@@ -6,7 +6,7 @@ use fujimod_multishot::dng::{DngInfo, DngWriter, XYZ_TO_SRGB};
 use fujimod_multishot::fit::Affine;
 use fujimod_multishot::measure::{crop, luma, patch_noise, slanted_edge};
 use fujimod_multishot::merge::{
-    ImageSink, OutputGrid, Region, ResolutionParams, StripSink, Tee, merge_resolution,
+    ColorMerge, ImageSink, OutputGrid, Region, ResolutionParams, StripSink, Tee, merge_resolution,
 };
 use fujimod_multishot::plane::read_block_planes;
 use fujimod_multishot::preview::{PreviewSink, auto_gain, write_png};
@@ -28,8 +28,9 @@ usage:
 
 options:
   --scale S            output pixels per sensor site (default 1.5)
-  --sigma S            kernel standard deviation in sites (default 0.45)
-  --radius R           kernel radius in sites (default 1.25)
+  --sigma S            kernel standard deviation in sites (default 0.38)
+  --radius R           kernel radius in sites (default 1.5)
+  --color MODE         green-guided (default) or independent
   --reference N        reference frame index (default: sharpest)
   --alignment FILE     reuse an alignment.json
   --region X,Y,W,H     merge only this reference region (sites)
@@ -334,6 +335,12 @@ fn resolution_params(args: &Args) -> Result<ResolutionParams, String> {
             None
         } else {
             d.robustness.clone()
+        },
+        color: match args.opts.get("color").map(String::as_str) {
+            None => d.color,
+            Some("green-guided") => ColorMerge::GreenGuided,
+            Some("independent") => ColorMerge::Independent,
+            Some(v) => return Err(format!("--color: unknown mode {v:?}")),
         },
         region: args.region("region")?,
         ..d
