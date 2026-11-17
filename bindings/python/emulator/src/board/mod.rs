@@ -1,4 +1,5 @@
 //! Python client and transitional devices on the shared runtime.
+use fujimod_catalog_configuration::RunEngine;
 mod boot;
 mod checkpoint;
 mod context;
@@ -522,15 +523,8 @@ impl Board {
         continue_refusals: bool,
         engine: &str,
     ) -> PyResult<Self> {
-        let engine = match engine {
-            "unicorn" => factory::Engine::Unicorn,
-            "hypervisor" => factory::Engine::Hypervisor,
-            _ => {
-                return Err(PyValueError::new_err(
-                    "engine must be unicorn or hypervisor",
-                ));
-            }
-        };
+        let engine: RunEngine = serde_json::from_value(serde_json::Value::String(engine.into()))
+            .map_err(|e| PyValueError::new_err(format!("invalid engine: {e}")))?;
         let mode = match execution_mode {
             "strict" => Mode::Strict,
             "discovery" => Mode::Discovery,
@@ -588,7 +582,7 @@ impl Board {
             .and_then(serde_json::Value::as_str)
             == Some("xpp")
         {
-            if !matches!(engine, factory::Engine::Unicorn)
+            if !matches!(engine, RunEngine::Unicorn)
                 || !models.is_empty()
                 || json::<serde_json::Value>(scene)? != serde_json::json!({})
             {

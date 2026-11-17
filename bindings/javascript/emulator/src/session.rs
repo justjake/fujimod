@@ -1,6 +1,7 @@
 //! Transport-owned lifetime and typed resolved inputs for the common runtime.
 //! This is not a second processor/body graph resolver. The EXR II resolver will
 //! supply construction here when it lands; unsupported kinds refuse meanwhile.
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{
     InterruptMap,
     bus::{Bus, Mode},
@@ -303,7 +304,7 @@ impl Session {
             )?,
         };
         let mut board = graph.build(
-            factory::Options::new(factory::Engine::Unicorn),
+            factory::Options::new(RunEngine::Unicorn),
             Bus::from_graph(Mode::Strict, devices)?,
             interrupts,
         )?;

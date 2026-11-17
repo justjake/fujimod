@@ -12,6 +12,7 @@ license.workspace = true
 doctest = false
 
 [dependencies]
+fujimod-catalog-configuration.workspace = true
 fujimod-framebuffer-xpp.workspace = true
 fujimod-framebuffer.workspace = true
 fujimod-emulator.workspace = true

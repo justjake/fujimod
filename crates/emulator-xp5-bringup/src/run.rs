@@ -455,7 +455,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         return Err(format!("cleanup: {}", cleanup.join(", ")));
     }
     Ok(json!({
-        "engine": "fujimod-xp5-session",
+        "engine": session.definition["engine"],
         "configuration": configuration,
         "firmware": firmware.id,
         "instructions": session.board.instruction_counts(),

@@ -1723,6 +1723,7 @@ dependencies = [
 name = "fujimod-emulator"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-configuration",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
@@ -2320,6 +2321,7 @@ name = "fujimod-emulator-javascript"
 version = "0.1.0"
 dependencies = [
  "ciborium",
+ "fujimod-catalog-configuration",
  "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
@@ -2479,6 +2481,7 @@ name = "fujimod-emulator-session"
 version = "0.1.0"
 dependencies = [
  "ciborium",
+ "fujimod-catalog-configuration",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
@@ -2715,6 +2718,7 @@ dependencies = [
 name = "fujimod-emulator-xpp"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-configuration",
  "fujimod-emulator",
  "fujimod-emulator-devices",
  "fujimod-emulator-graphics",
@@ -2923,6 +2927,7 @@ name = "fujimod-python-emulator"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-assets",
+ "fujimod-catalog-configuration",
  "fujimod-catalog-settings",
  "fujimod-emulator",
  "fujimod-emulator-cpu",

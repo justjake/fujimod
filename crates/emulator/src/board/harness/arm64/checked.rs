@@ -1,5 +1,6 @@
 //! Fail-closed, flat-address AArch64 routine policy. All memory transfers are
 //! checked before execution; write callbacks are observations, never vetoes.
+use fujimod_catalog_configuration::RunEngine;
 use super::{Options, initialize};
 use crate::board::{Board, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookRange, Model, Register, arm64};
@@ -836,7 +837,7 @@ mod tests {
         })).unwrap();
         let b = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,

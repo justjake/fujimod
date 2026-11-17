@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_cpu::Model;
@@ -710,7 +711,7 @@ fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>
     } else {
         graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1024 * 1024),
                 bus,
                 None,

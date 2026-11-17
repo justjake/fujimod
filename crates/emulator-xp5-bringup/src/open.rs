@@ -10,9 +10,9 @@ use crate::{
     rom_start::{self, RomStart},
 };
 use fujimod_catalog::reference::{ProcessorModel, RegionSize};
-use fujimod_catalog_configuration::{RunEngine, RunInputs, RunScene};
+use fujimod_catalog_configuration::{RunInputs, RunScene};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator::board::{self, bus::Mode, factory};
+use fujimod_emulator::board::{self, bus::Mode};
 use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_session::Session;
 use fujimod_emulator_boot::graph;
@@ -828,10 +828,7 @@ pub(crate) fn open_from(
         "body_id": resolved.configuration.body_id,
         "firmware_id": resolved.configuration.firmware_id,
         "firmware_profile_id": firmware_profile_id,
-        "engine": match run.engine {
-            RunEngine::Hypervisor => "hypervisor",
-            RunEngine::Unicorn => "unicorn",
-        },
+        "engine": run.engine,
         "mode": mode.name(),
         "quantum": quantum,
         "execution": {"kind":"xp5"},
@@ -844,10 +841,6 @@ pub(crate) fn open_from(
             json!({"limit": dram.limit, "bus_drain": dram.bus_drain}),
         );
     }
-    let engine = match run.engine {
-        RunEngine::Hypervisor => factory::Engine::Hypervisor,
-        RunEngine::Unicorn => factory::Engine::Unicorn,
-    };
     let storage = resources.storage.clone();
     let (mut session, inputs) = xp5_boot::open(xp5_boot::OpenOptions {
         definition,
@@ -856,7 +849,7 @@ pub(crate) fn open_from(
         windows,
         controls,
         resources,
-        engine,
+        engine: run.engine,
         interrupts,
         aprofile,
         images,

@@ -4,6 +4,7 @@
 //! values supplied to those devices; neither the caller nor a board runner
 //! needs a second copy of the register-window map.
 
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{
     InterruptMap, aprofile,
     bus::{Bus, Mode},
@@ -649,7 +650,7 @@ pub struct OpenOptions {
     /// `None` when the body has no key model; key edges are then refused.
     pub controls: Option<ControlsOptions>,
     pub resources: xp5_board::Resources,
-    pub engine: factory::Engine,
+    pub engine: RunEngine,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
     pub images: Vec<MemoryImage>,

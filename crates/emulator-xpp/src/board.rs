@@ -1,5 +1,6 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
+use fujimod_catalog_configuration::RunEngine;
 use crate::{
     adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, keys,
     lens, power, resets, sd, serial, shutter, statistics, sync, timer, touch_xt20,
@@ -1444,7 +1445,7 @@ pub fn build(
         },
     };
     let mut board = graph.build(
-        factory::Options::new(factory::Engine::Unicorn),
+        factory::Options::new(RunEngine::Unicorn),
         Bus::from_graph(mode, devices)?,
         Some(interrupts),
     )?;

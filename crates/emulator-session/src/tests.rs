@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 mod portable;
 mod ram_option;
@@ -94,7 +95,7 @@ fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sy
     if resources.clocks.contains_key("clocks") {
         graph.peripherals.push(factory::Peripheral { core: 0, address: 0xfff88000, physical: 0xfff88000, size: 0x100 });
     }
-    let mut options = factory::Options::new(factory::Engine::Unicorn)
+    let mut options = factory::Options::new(RunEngine::Unicorn)
         .with_translation_cache_size_bytes(1 << 20);
     if let Some((tick, counts)) = epoch {
         options = options.with_epoch(tick, counts);

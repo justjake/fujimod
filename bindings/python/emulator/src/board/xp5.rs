@@ -1,4 +1,5 @@
 //! XP5 ownership on the common native board, with its declared physical inputs.
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 
 pub(super) struct Opened {
@@ -14,7 +15,7 @@ impl Board {
         read_limit: usize,
         mode: Mode,
         continue_refusals: bool,
-        engine: factory::Engine,
+        engine: RunEngine,
         definition: serde_json::Value,
     ) -> PyResult<Self> {
         if continue_refusals {

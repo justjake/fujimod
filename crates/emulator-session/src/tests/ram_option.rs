@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use crate::power_cycle::{ColdBoot, PowerCycle};
 use fujimod_emulator_cpu::arm;
@@ -12,7 +13,7 @@ fn physical_ram_fill_is_applied_before_execution() {
         "mappings": [{"core":0,"address":0,"physical":0,"size":4096,"permissions":7}],
         "peripherals": [], "instructions_per_tick": [1,1]
     })).unwrap();
-    let board = graph.build(factory::Options::new(factory::Engine::Unicorn)
+    let board = graph.build(factory::Options::new(RunEngine::Unicorn)
         .with_translation_cache_size_bytes(1 << 20).with_ram_fill(0xff),
         Bus::new(Mode::Strict), None).unwrap();
     let mut bytes = [0; 16];

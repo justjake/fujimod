@@ -1,4 +1,5 @@
 //! Architectural boundaries for instruction-observed AArch64 backends.
+use fujimod_catalog_configuration::RunEngine;
 use crate::board::{State, scalar, set};
 use fujimod_emulator_cpu::{Access, Cpu, Hint, Register, arm};
 
@@ -125,7 +126,7 @@ mod tests {
         };
         let mut board = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn),
+                factory::Options::new(RunEngine::Unicorn),
                 Bus::new(Mode::Strict),
                 Some(interrupts),
             )
@@ -255,7 +256,7 @@ mod tests {
             }
             let mut board = graph
                 .build(
-                    factory::Options::new(factory::Engine::Unicorn),
+                    factory::Options::new(RunEngine::Unicorn),
                     Bus::new(Mode::Strict),
                     Some(InterruptMap {
                         gic: Box::new(Gic::new(vec![0, 1, 2, 3], 128).unwrap()),

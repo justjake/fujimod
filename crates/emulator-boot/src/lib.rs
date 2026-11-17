@@ -15,7 +15,7 @@ use fujimod_emulator_session::Session;
 use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunEngine, RunExecution, RunExecutionMode, RunInputs, RunPurpose, RunScene,
+    Exr2RunInputs, RunExecution, RunExecutionMode, RunInputs, RunPurpose, RunScene,
     RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -1165,12 +1165,8 @@ fn open_prepared_epoch(
     let bus_mode = match prepared.execution_policy.mode {
         RunExecutionMode::Strict => Mode::Strict,
     };
-    let engine = match prepared.execution_policy.engine {
-        RunEngine::Unicorn => factory::Engine::Unicorn,
-        RunEngine::Hypervisor => factory::Engine::Hypervisor,
-    };
     let bus = Bus::from_graph(bus_mode, built.graph)?;
-    let mut options = factory::Options::new(engine);
+    let mut options = factory::Options::new(prepared.execution_policy.engine);
     if epoch.is_none()
         && let Some(byte) = ram_fill
     {

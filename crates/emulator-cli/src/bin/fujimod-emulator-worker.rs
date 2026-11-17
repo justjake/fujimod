@@ -1,5 +1,6 @@
 //! Signed native owner for the common board factory. JSON-lines transport and
 //! raw-frame publication are outside guest execution and never supply its time.
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_catalog_assets::Asset;
 use fujimod_emulator::board::{self, Board, InterruptMap, aprofile, bus::Bus, factory, mprofile};
 use fujimod_catalog_assets::files::{Files, Location};
@@ -20,12 +21,6 @@ use std::{
     time::Duration,
 };
 
-#[derive(Deserialize)]
-#[serde(rename_all = "kebab-case")]
-enum Engine {
-    Unicorn,
-    Hypervisor,
-}
 #[derive(Deserialize)]
 #[serde(rename_all = "lowercase")]
 enum Mode {
@@ -275,7 +270,7 @@ enum Devices {
 #[serde(deny_unknown_fields)]
 struct Config {
     schema: u32,
-    engine: Engine,
+    engine: RunEngine,
     mode: Mode,
     instructions_per_tick: [u64; 2],
     quantum: usize,
@@ -604,10 +599,7 @@ impl Worker {
             )?,
         };
         let mut board = graph.build(
-            factory::Options::new(match config.engine {
-                Engine::Unicorn => factory::Engine::Unicorn,
-                Engine::Hypervisor => factory::Engine::Hypervisor,
-            }),
+            factory::Options::new(config.engine),
             bus,
             config.interrupts.map(Gic::runtime).transpose()?,
         )?;
