@@ -80,11 +80,17 @@ pub fn white_balance(words: &BTreeMap<u64, u32>, reference: [u32; 3]) -> Result<
     if gains.contains(&0) || reference.contains(&0) {
         return Err("Still development before the white balance was programmed".into());
     }
-    Ok(std::array::from_fn(|c| {
+    Ok(relative(gains, reference))
+}
+
+/// Q12 factors that move each of `gains`' ratios to green from `reference`'s
+/// to their own; neither holds a zero.
+fn relative(gains: [u32; 3], reference: [u32; 3]) -> [u32; 3] {
+    std::array::from_fn(|c| {
         let factor = ((u64::from(gains[c]) * u64::from(reference[1])) << 12)
             / (u64::from(gains[1]) * u64::from(reference[c]));
         factor.min(u64::from(u32::MAX)) as u32
-    }))
+    })
 }
 
 /// Color-unit word of each X70 film-stage word the film law reads.
@@ -249,21 +255,28 @@ fn byte(v: i32) -> u8 {
 ///   at +0x204 (nine packed signed 13-bit halves, rows Y, Cb, Cr).
 ///
 /// Declared, not read: the black and white levels ([`crate::imaging::BLACK`],
-/// [`crate::imaging::WHITE`]), no white balance, the points joined linearly,
-/// a curve's output taken as its top 8 bits and the chroma offset 128. The
-/// pages' other units (brightness gain, chroma modes and matrix, luma bands,
-/// channel gains, 3D lookup table) are not applied.
+/// [`crate::imaging::WHITE`]), the points joined linearly, a curve's output
+/// taken as its top 8 bits and the chroma offset 128. White balance is off
+/// unless [`FirmwareColor::with_white_balance`] reads the tone page's
+/// channel gains. The pages' other units (brightness gain, chroma modes and
+/// matrix, luma bands, 3D lookup table) are not applied.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FirmwareColor {
     matrix: [[i32; 3]; 3],
     /// One 14-bit input to byte lookup per output channel.
     curves: [Vec<u8>; 3],
     ycbcr: [[i32; 3]; 3],
+    /// Q12 factors of the tone page's channel gains relative to a declared
+    /// reference, when [`Self::with_white_balance`] reads programmed gains.
+    white_balance: Option<[u32; 3]>,
 }
 
 const TONE_MATRIX: u64 = 0x204;
 const TONE_WIDTHS: u64 = 0x21c;
 const TONE_CURVES: [u64; 3] = [0x224, 0x264, 0x2a4];
+/// The tone page's channel gains, R, G, B: the low and high halves of +0x088
+/// and the low half of +0x08c.
+const TONE_GAINS: [(u64, u32); 3] = [(0x088, 0), (0x088, 16), (0x08c, 0)];
 const YCBCR_MATRIX: u64 = 0x204;
 
 fn signed13(v: u32) -> i32 {
@@ -320,12 +333,44 @@ impl FirmwareColor {
             matrix,
             curves,
             ycbcr,
+            white_balance: None,
         })
     }
-    /// Y, Cb, Cr of a 14-bit linear (R, G, B) level: the matrix, each
-    /// output's curve, then the YCbCr matrix.
+    /// The same law with the white balance of the tone page's channel gains
+    /// (opt-in): each 14-bit linear level is first scaled by the Q12 factor
+    /// that moves its gain's ratio to green from the declared `reference`
+    /// gains to the programmed ones, the same relative law as [`white_balance`]
+    /// for the color unit.
+    ///
+    /// Read: the gains, R and G in the low and high halves of +0x088, B in the
+    /// low half of +0x08c. In X-T3 5.11 they are the camera's white-balance
+    /// gains times one common scale (an auto white-balance shot programs
+    /// 9149, 4822, 9309 for 573, 302, 583). Declared: the stage's place
+    /// before the matrix, the 16-bit field width and the relative law itself
+    /// (the declared scene renders neutral at the `reference` gains, so a shot
+    /// that programs them develops exactly as without this stage). Gains not
+    /// all programmed leave the stage out; a zero reference gain refuses.
+    pub fn with_white_balance(
+        mut self,
+        tone: &BTreeMap<u64, u32>,
+        reference: [u32; 3],
+    ) -> Result<Self, String> {
+        if reference.contains(&0) {
+            return Err("a declared reference white-balance gain is zero".into());
+        }
+        let gains =
+            TONE_GAINS.map(|(o, shift)| tone.get(&o).copied().unwrap_or(0) >> shift & 0xffff);
+        self.white_balance = (!gains.contains(&0)).then(|| relative(gains, reference));
+        Ok(self)
+    }
+    /// Y, Cb, Cr of a 14-bit linear (R, G, B) level: the white balance when
+    /// read, the matrix, each output's curve, then the YCbCr matrix.
     pub fn pixel(&self, linear: [u16; 3]) -> [i32; 3] {
-        let l = linear.map(|v| i32::from(v.min(16383)));
+        let mut linear = linear.map(|v| v.min(16383));
+        if let Some(factors) = self.white_balance {
+            linear = std::array::from_fn(|c| balanced(linear[c], factors[c]));
+        }
+        let l = linear.map(i32::from);
         let toned: [i32; 3] = std::array::from_fn(|c| {
             let m = self.matrix[c];
             (m[0] * l[0] + m[1] * l[1] + m[2] * l[2] + 512) >> 10
@@ -717,6 +762,73 @@ pub(crate) mod tests {
         assert!(darker[2] < red[2], "{darker:?} {red:?}");
         assert!(FirmwareColor::from_words(&BTreeMap::new(), &ycbcr).is_err());
         assert!(FirmwareColor::from_words(&tone, &BTreeMap::new()).is_err());
+    }
+
+    #[test]
+    fn the_white_balance_is_off_by_default_exact_at_its_reference_and_relative_otherwise() {
+        let (tone, ycbcr) = firmware_units();
+        let plain = FirmwareColor::from_words(&tone, &ycbcr).unwrap();
+        assert_eq!(plain.white_balance, None);
+        let samples = [
+            [0, 0, 0],
+            [16383; 3],
+            [4096; 3],
+            [8192, 2048, 2048],
+            [123, 4567, 8910],
+        ];
+        // The gains (R, G, B) an auto white-balance shot programs.
+        let gains = |r: u32, g: u32, b: u32| {
+            let mut words = tone.clone();
+            words.insert(0x088, g << 16 | r);
+            words.insert(0x08c, b);
+            words
+        };
+        let reference = [9149, 4822, 9309];
+        let shot = gains(9149, 4822, 9309);
+        let same = plain.clone().with_white_balance(&shot, reference).unwrap();
+        assert_eq!(same.white_balance, Some([4096; 3]));
+        for s in samples {
+            assert_eq!(same.pixel(s), plain.pixel(s));
+        }
+        // Gains not all programmed: the stage is left out.
+        assert_eq!(
+            plain.clone().with_white_balance(&tone, reference).unwrap(),
+            plain
+        );
+        let partial = gains(9149, 4822, 0);
+        assert_eq!(
+            plain
+                .clone()
+                .with_white_balance(&partial, reference)
+                .unwrap(),
+            plain
+        );
+        assert!(
+            plain
+                .clone()
+                .with_white_balance(&shot, [9149, 0, 9309])
+                .is_err()
+        );
+        // Red gain doubled at the same green, blue gain halved: factors 2 and
+        // 1/2 on the linear levels, before the matrix.
+        let warm = gains(2 * 9149, 4822, 9309 / 2 + 1);
+        let tinted = plain.clone().with_white_balance(&warm, reference).unwrap();
+        // 9309 / 2 + 1 = 4655: 4655 x 4096 / 9309 = 2048 (rounded down).
+        assert_eq!(tinted.white_balance, Some([8192, 4096, 2048]));
+        assert_eq!(tinted.pixel([2048, 4096, 8192]), plain.pixel([4096; 3]));
+        assert_ne!(tinted.pixel([4096; 3]), plain.pixel([4096; 3]));
+        // A common scale of all three gains changes nothing.
+        let scaled = gains(2 * 9149, 2 * 4822, 2 * 9309);
+        let scaled = plain.clone().with_white_balance(&scaled, reference);
+        assert_eq!(scaled.unwrap().white_balance, Some([4096; 3]));
+        // Levels clip at full scale: a doubled red saturates like full red.
+        assert_eq!(tinted.pixel([16383, 0, 0]), tinted.pixel([8192, 0, 0]));
+        // The incandescent preset's gains (R lower, B higher) cool a grey:
+        // Cb above, Cr below the neutral 128.
+        let bulb = gains(5652, 4822, 13013);
+        let bulb = plain.clone().with_white_balance(&bulb, reference).unwrap();
+        let [_, cb, cr] = bulb.pixel([4096; 3]);
+        assert!(cb > 128 && cr < 128, "{cb} {cr}");
     }
 
     #[test]

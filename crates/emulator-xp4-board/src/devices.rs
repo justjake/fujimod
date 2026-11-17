@@ -677,6 +677,9 @@ impl Devices {
         if wiring.firmware_color {
             model = model.firmware_color()?;
         }
+        if let Some(reference) = wiring.firmware_white_balance {
+            model = model.firmware_white_balance(reference)?;
+        }
         let windows = model.windows();
         if windows
             .iter()

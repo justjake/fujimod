@@ -149,7 +149,10 @@
 //! page's matrix and three curves, then the YCbCr page's matrix. A band
 //! pass whose pages hold no matrix refuses, and so does a movie band (mode
 //! 0x422000): which color the firmware programs for the movie is not
-//! modeled.
+//! modeled. [`Engine::firmware_white_balance`] (opt-in, on top) first scales
+//! each channel by the tone page's channel gains (+0x088, +0x08c) relative
+//! to declared reference gains, read when the pass ends
+//! ([`FirmwareColor::with_white_balance`]).
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_xpp::development::{
     FirmwareColor, YcLayout, develop, develop_firmware, scaled_line, size, step, y0l2_sample,
@@ -709,6 +712,9 @@ pub struct Engine {
     contract: Contract,
     /// RECC develops its still bands with the color its pages hold.
     firmware_color: bool,
+    /// ... and with the tone page's white balance relative to these declared
+    /// reference (R, G, B) gains.
+    firmware_white_balance: Option<[u32; 3]>,
     state: State,
 }
 
@@ -726,6 +732,7 @@ impl Engine {
             ticks,
             contract,
             firmware_color: false,
+            firmware_white_balance: None,
             state: State::default(),
         })
     }
@@ -766,6 +773,21 @@ impl Engine {
             ));
         }
         self.firmware_color = true;
+        Ok(self)
+    }
+    /// A firmware-color RECC also applies the white balance of its tone
+    /// page's channel gains, relative to the declared `reference` (R, G, B)
+    /// gains at which the declared scene renders neutral (opt-in, see the
+    /// module notes).
+    pub fn firmware_white_balance(mut self, reference: [u32; 3]) -> Result<Self, String> {
+        let name = self.contract.name;
+        if !self.firmware_color {
+            return Err(format!("{name} white balance needs the firmware color"));
+        }
+        if reference.contains(&0) {
+            return Err(format!("{name} reference white-balance gain is zero"));
+        }
+        self.firmware_white_balance = Some(reference);
         Ok(self)
     }
     /// The words of the parameter page at `page`, by their offset in it.
@@ -864,11 +886,14 @@ impl Engine {
                 let bytes = cx.ram_bytes(source, length as usize)?;
                 let (pitch, lines, width) = (pitch as usize, lines as usize, width as usize);
                 let rows = if self.firmware_color {
-                    let color = FirmwareColor::from_words(
-                        &self.page_words(0x4000),
-                        &self.page_words(0x5000),
-                    )
-                    .map_err(|e| format!("{name}: {e}"))?;
+                    let tone = self.page_words(0x4000);
+                    let mut color = FirmwareColor::from_words(&tone, &self.page_words(0x5000))
+                        .map_err(|e| format!("{name}: {e}"))?;
+                    if let Some(reference) = self.firmware_white_balance {
+                        color = color
+                            .with_white_balance(&tone, reference)
+                            .map_err(|e| format!("{name}: {e}"))?;
+                    }
                     develop_firmware(&bytes, pitch, lines, width, phase, &color)?
                 } else {
                     develop(&bytes, pitch, lines, width, phase, None)?
@@ -2107,6 +2132,62 @@ mod tests {
                 .is_some_and(|r| r.contains("not programmed")),
             "{refusal:?}"
         );
+    }
+
+    /// With the white balance, a band develops with the channel gains its
+    /// tone page holds when the pass ends, relative to the declared ones.
+    #[test]
+    fn a_white_balanced_recc_develops_its_bands_with_its_programmed_gains() {
+        let raw = raw_samples();
+        let (tone, ycbcr) = color_pages();
+        let reference = [9149, 4822, 9309];
+        // An incandescent preset's gains: red lower, blue higher.
+        let gains = [(0x088, 4822 << 16 | 5652), (0x08c, 13013)];
+        let mut programmed: BTreeMap<u64, u32> = tone.iter().copied().collect();
+        programmed.extend(gains);
+        let color =
+            FirmwareColor::from_words(&programmed, &ycbcr.iter().copied().collect()).unwrap();
+        let plain = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        let color = color.with_white_balance(&programmed, reference).unwrap();
+        let balanced = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        assert_ne!(balanced, plain);
+        let balancing = || {
+            firmware_color_recc()
+                .firmware_white_balance(reference)
+                .unwrap()
+        };
+        // Gains programmed: the balanced band. Gains absent, or the option
+        // absent: the plain firmware color.
+        for (mut e, written, rows) in [
+            (balancing(), true, &balanced),
+            (balancing(), false, &plain),
+            (firmware_color_recc(), true, &plain),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            h.ram[..16 * 64].copy_from_slice(&raw);
+            program_color_pages(&mut e, &mut h);
+            if written {
+                for (o, v) in gains {
+                    let mut cx = Cx::new(&mut h, 0, 0, 0);
+                    e.write(&mut cx, RECC + 0x4000 + o, 4, v.into());
+                }
+            }
+            assert_eq!(recc_pass(&mut e, &mut h, &band(0)), None);
+            for (y, row) in rows.iter().enumerate() {
+                let at = 0x1000 + (2 + y) * 48 + 8;
+                assert_eq!(h.ram[at..at + 24], row[..], "band line {y}");
+            }
+        }
+        // The option needs the firmware color and a nonzero reference.
+        let error = developing_recc().firmware_white_balance(reference).err();
+        assert!(error.is_some_and(|e| e.contains("needs the firmware color")));
+        let error = firmware_color_recc()
+            .firmware_white_balance([9149, 0, 9309])
+            .err();
+        assert!(error.is_some_and(|e| e.contains("is zero")));
     }
 
     #[test]
