@@ -443,6 +443,30 @@ fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
 /// bit 0 of the RAM flag (0x3000) or the device register, then `B .`.
 /// `poll` is the instruction between the load and the branch.
 fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
+    let (base, shift) = if mmio { (0x2201, 0x06d2) } else { (0x2203, 0x0312) };
+    let code = [
+        0x2014, // MOVS R0,#20
+        0x3801, // SUBS R0,#1
+        0xd1fd, // BNE  0x2002
+        base,   // MOVS R2,#1 or #3
+        shift,  // LSLS R2,R2,#27 or #12
+        0x6811, // LDR  R1,[R2]
+        poll,
+        0xd5fc, // BPL  0x200a
+        0x2777, // MOVS R7,#0x77
+        0xe7fe, // B    .
+    ];
+    let flag = Flag {
+        value: Arc::new(AtomicU32::new(0)),
+        due: Some(53),
+        declared,
+        irq: false,
+    };
+    m4_board_with(Box::new(flag), &code, mode)
+}
+/// A Cortex-M4 with the M-profile controller, `device` at 0x8000000 and
+/// Thumb `code` at 0x2000.
+fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board {
     use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
     let graph = Graph {
         decoders: vec![],
@@ -473,17 +497,7 @@ fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
         instructions_per_tick: Ratio::new(7, 3).unwrap(),
     };
     let mut bus = Bus::new(bus::Mode::Strict);
-    bus.register(
-        0x8000000,
-        4,
-        Box::new(Flag {
-            value: Arc::new(AtomicU32::new(0)),
-            due: Some(53),
-            declared,
-            irq: false,
-        }),
-    )
-    .unwrap();
+    bus.register(0x8000000, 4, device).unwrap();
     let mut board = graph
         .build(
             Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
@@ -503,24 +517,11 @@ fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
                 .collect::<Vec<_>>(),
         )
         .unwrap();
-    let (base, shift) = if mmio { (0x2201, 0x06d2) } else { (0x2203, 0x0312) };
-    let code: [u16; 10] = [
-        0x2014, // MOVS R0,#20
-        0x3801, // SUBS R0,#1
-        0xd1fd, // BNE  0x2002
-        base,   // MOVS R2,#1 or #3
-        shift,  // LSLS R2,R2,#27 or #12
-        0x6811, // LDR  R1,[R2]
-        poll,
-        0xd5fc, // BPL  0x200a
-        0x2777, // MOVS R7,#0x77
-        0xe7fe, // B    .
-    ];
     board
         .write_memory(
             0,
             0x2000,
-            &code.into_iter().flat_map(u16::to_le_bytes).collect::<Vec<_>>(),
+            &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>(),
         )
         .unwrap();
     board.set_loop_mode(mode).unwrap();
@@ -588,5 +589,72 @@ fn m4_undeclared_device_reads_and_stores_never_accelerate_the_poll() {
         assert!(m4_statistic(&on, failure) > 0, "{failure}");
         // The counted delay before the poll still accelerates.
         assert!(m4_statistic(&on, "loop_counted_instructions") > 0);
+    }
+}
+
+/// A one-shot alarm: a write arms a deadline that many ticks ahead; at the
+/// deadline it sets the RAM flag at 0x3000.
+struct Alarm {
+    due: Option<u64>,
+}
+impl Device for Alarm {
+    fn name(&self) -> &'static str {
+        "test-alarm"
+    }
+    fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        cx.unmodeled();
+        0
+    }
+    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, value: u64) {
+        self.due = Some(cx.now() + value);
+    }
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.due
+    }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.due.is_some_and(|due| due <= cx.now()) {
+            self.due = None;
+            cx.ram_write(0x3000, &1u32.to_le_bytes()).unwrap();
+        }
+    }
+    fn save(&self) -> Value {
+        json!({"due":self.due})
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.save())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("test-alarm", &self.save())
+    }
+}
+#[test]
+fn m4_windows_end_at_a_deadline_the_core_schedules_during_its_run() {
+    // Arm the alarm 9 ticks ahead, then poll the RAM flag it sets. The run
+    // began with no deadline pending, so only the alarm, scheduled by the
+    // core's own store during the run, bounds the window.
+    let code = [
+        0x2201, // MOVS R2,#1
+        0x06d2, // LSLS R2,R2,#27
+        0x2109, // MOVS R1,#9
+        0x6011, // STR  R1,[R2]
+        0x2303, // MOVS R3,#3
+        0x031b, // LSLS R3,R3,#12
+        0x6819, // LDR  R1,[R3]
+        0x07c9, // LSLS R1,R1,#31
+        0xd5fc, // BPL  0x200c
+        0x2777, // MOVS R7,#0x77
+        0xbf30, // WFI
+    ];
+    for quantum in [1, 7, 1000] {
+        let mut off = m4_board_with(Box::new(Alarm { due: None }), &code, LoopMode::Disabled);
+        let mut on = m4_board_with(Box::new(Alarm { due: None }), &code, LoopMode::Accelerate);
+        // One run spans the arming store and the alarm's deadline.
+        for tick in [40, 60] {
+            off.run_until(tick, quantum).unwrap();
+            on.run_until(tick, quantum).unwrap();
+            assert_eq!(m4_state(&on), m4_state(&off), "quantum={quantum} tick={tick}");
+        }
+        assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
+        assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0);
     }
 }
