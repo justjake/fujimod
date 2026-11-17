@@ -53,6 +53,7 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 [build-dependencies]
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
+cc = { version = "1", default-features = false, features = ["parallel"] }
 concurrent-queue = { version = "2" }
 digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
 fastrand = { version = "2" }
@@ -103,6 +104,7 @@ indexmap = { version = "2" }
 libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
+nix = { version = "0.31", features = ["fs", "net", "signal"] }
 prost-types = { version = "0.14" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
@@ -117,7 +119,6 @@ tokio = { version = "1", features = ["full"] }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
-cc = { version = "1", default-features = false, features = ["parallel"] }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
@@ -135,6 +136,7 @@ indexmap = { version = "2" }
 libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
+nix = { version = "0.31", features = ["fs", "net", "signal"] }
 prost-types = { version = "0.14" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
@@ -166,6 +168,7 @@ libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
+nix = { version = "0.31", features = ["fs", "net", "signal"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -176,7 +179,6 @@ subtle = { version = "2" }
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
-cc = { version = "1", default-features = false, features = ["parallel"] }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
 crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
@@ -193,6 +195,7 @@ libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
+nix = { version = "0.31", features = ["fs", "net", "signal"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -225,7 +228,8 @@ web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType"
 bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
-libc = { version = "0.2" }
+libc = { version = "0.2", features = ["extra_traits"] }
+nix = { version = "0.31", features = ["fs", "signal"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
@@ -234,7 +238,8 @@ web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType"
 bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
-libc = { version = "0.2" }
+libc = { version = "0.2", features = ["extra_traits"] }
+nix = { version = "0.31", features = ["fs", "signal"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }

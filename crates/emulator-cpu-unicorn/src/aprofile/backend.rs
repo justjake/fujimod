@@ -279,7 +279,14 @@ impl Cpu for Core {
             if flush {
                 e.memory.flush()?;
             }
+            // Accepted shared translation maintenance must reach the owner
+            // before this engine runs again.
+            let maintenance = e
+                .cpu
+                .translation_maintenance_status()
+                .is_ok_and(|s| s.pending != 0 || s.poison != 0);
             if !e.stopped.get()
+                && !maintenance
                 && (flush || e.restart.get().is_some())
                 && e.count.get() < e.cap.get()
             {
@@ -397,6 +404,8 @@ impl Cpu for Core {
                 e.cpu.invalidate_code(None)?;
                 None
             }
+            // Owner aborts: the abort settles first, then its observers run.
+            Hook::Exception { .. } if e.owner_aborts.get() => None,
             _ => Some(unsafe { e.cpu.install_hook(hook)? }),
         };
         e.index.borrow_mut().insert(key, hook);

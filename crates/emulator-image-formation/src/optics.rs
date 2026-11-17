@@ -974,7 +974,7 @@ mod tests {
     }
     #[test]
     fn full_readout_reuses_its_projection_beyond_the_preview_cache_budget() {
-        let (width, height) = (2048, 2050);
+        let (width, height) = (4096, 4098);
         let mut spec = projection().spec.clone();
         spec.relative_illumination = Illumination::CosineFourth;
         let p = Projection::new(spec, Default::default()).unwrap();

@@ -1,0 +1,96 @@
+# X-T5 physical keys are ladders on ADC channels 1, 2 and 14 and on SPI8
+# "Physical controls"). The key model is built from the body's catalog ladders
+# (fujimod/catalog/bodies/xt5/controls.json) and the run configuration's
+# key-free values (fujimod/configurations/emulator/xt5-431/run.json: the ADC
+# block samples and `inputs.ladders`, registers released at 1023), not from
+# this manifest. Keys without a rung are refused.
+[[device]]
+base = 0xff904000
+size = 0x1000
+kind = "pin-control"
+
+[[device]]
+base = 0xff905000
+size = 0x1000
+kind = "soc-temperature"
+
+[[device]]
+base = 0xff906000
+size = 0x1000
+kind = "adc"
+[device.options]
+# Channel 0 is the thermistor: 2713 reads 24.9 C through 0x14a8240
+# full scale. Under the default-configuration bands, 4095 holds no key
+# on channels 1, 2 and 14, puts the focus-mode switch on channel 11 at C
+# (0x1406a98, 3751..4095), and is one position of the position switches on
+# channels 3, 7, 12 and 13 (hvf-board.md, "Physical controls").
+samples = [2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
+
+[[device]]
+base = 0xff907000
+size = 0x1000
+kind = "gpio"
+[device.options]
+# EL1 handoff assumption: the two active-low panel selects on SSP5, GPIO 12.8 (LCD,
+# descriptor 4) and 12.10 (EVF, descriptors 8 and 9), start inactive (output latch 1).
+# The application drives 12.8 before each LCD transfer (0x1438cbc) but no code before
+# the first one drives 12.10, so with a zero latch both panels would be selected
+# (hvf-board.md, "Panel serial"). Whether the reset image or a pull-up sets this is
+# NOT established (camera-needs.md, 1.16).
+initial_outputs = [{ port = 12, levels = 0x500 }]
+# Run input: nothing in the hot shoe. 0x1416ba4 samples GPIO 11.4 (0x1381388(0xb0004))
+# and, after 17 equal samples, sets the accessory flag 0x24e61ac to (level == 1) and
+# posts 0x2f (attached) or 0x82f (removed); with the flag set, 0x140e5f4/0x140eab8
+# open SSP3 client 14 (descriptor 0x18e7e80: instance 3, select 11.4) for the external
+# flash ("flashext", 0x140cc80). So 11.4 reads 0 without an accessory. The default
+# pad level is 1, which would attach a flash nobody modeled (hvf-board.md, "Hot shoe").
+initial_inputs = [{ port = 11, pin = 4, high = false }]
+
+[[device]]
+base = 0xff90b000
+size = 0x1000
+kind = "gpio-port3"
+
+[[device]]
+base = 0xff918000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+# Power controller on SPI8, chip select GPIO 15.15 active-high (descriptor 19
+# virtual input (seconds since 2000-01-01), not a captured value, and source_hz
+# is the X100VI value, UNVERIFIED (hvf-board.md, "Values that are inherited or
+# unverified").
+[[device.options.endpoints]]
+select = { port = 15, pin = 15, active_high = true }
+[device.options.endpoints.part]
+kind = "power-controller"
+rtc_seconds = 0x325ffea2
+rtc_valid = true
+
+# I2C instance 1 at ff925000 (four controllers at ff924000 + n*0x1000,
+# 0x18e9248 and descriptors 0x18ea918, hvf-board.md "I2C controllers"). The
+# targets are the ones the former battery-i2c kind answered, inherited from
+# the X100VI board: fuel gauge 0x36, retained power registers 0x66/0x68 and
+# the TMD2772-class eye sensor 0x39. Every other client of bus 1 in the
+# driver's table 0x18e9258 (0x60 from 0x13d8168, 0x6a from 0x13e34a4, ...) is
+# not acknowledged. byte_ns is a functional latency, not a bus rate.
+[[device]]
+kind = "i2c-controller"
+base = 0xff925000
+size = 0x1000
+[device.options]
+interrupt = 289
+byte_ns = 1000000
+[[device.options.targets]]
+address = 0x36
+part = { kind = "fuel-gauge" }
+[[device.options.targets]]
+address = 0x39
+part = { kind = "tmd2772-proximity" }
+[[device.options.targets]]
+address = 0x66
+part = { kind = "retained-registers" }
+[[device.options.targets]]
+address = 0x68
+part = { kind = "retained-registers" }

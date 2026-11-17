@@ -22,6 +22,10 @@ enum Pending {
 struct NorState {
     #[serde(default)]
     immutable_prefix: Option<usize>,
+    #[serde(default)]
+    write_protect: bool,
+    #[serde(default)]
+    read_backing: Option<ReadBacking>,
     jedec: u32,
     write_enable: bool,
     pending: Option<Pending>,
@@ -41,6 +45,8 @@ impl Nor {
     fn restore_state(&mut self, state: NorState) -> Result<(), String> {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
+            || state.write_protect != self.write_protect
+            || state.read_backing != self.read_backing
             || state.jedec != self.jedec
             || state.erase_bytes != g.erase_bytes
             || state.page_bytes != g.page_bytes
@@ -104,6 +110,12 @@ struct FlashState {
     program_fifo: Option<(u64, Vec<u8>)>,
     irq: u32,
     irq_level: bool,
+    #[serde(default)]
+    mapped_read_gate: Option<MappedReadGate>,
+    #[serde(default)]
+    pad: u32,
+    #[serde(default)]
+    mapped_misses: u64,
 }
 impl SerialFlashController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
@@ -114,6 +126,8 @@ impl SerialFlashController {
             .map_err(|_| "Invalid XP4 flash register count")?;
         let geometry = self.port.lock().unwrap().nor.geometry;
         if state.irq != self.irq
+            || state.mapped_read_gate != self.gate
+            || self.gate.is_none() && (state.pad != 0 || state.mapped_misses != 0)
             || state.jedec != state.nor.jedec
             || state
                 .next
@@ -152,10 +166,14 @@ impl SerialFlashController {
             port.nor
                 .check_command(registers[0x90 / 4], registers[0x94 / 4])?;
         }
-        if let Some(request) = &state.stream
-            && request.write
-        {
-            port.nor.check_mutation(request.address, request.size)?;
+        if let Some(request) = &state.stream {
+            if request.write {
+                port.nor.check_mutation(request.address, request.size)?;
+            } else {
+                // Validate against factory coverage before any restored state
+                // is committed, including streams already accepted by DMA.
+                port.nor.check_read_backing(request.address, request.size)?;
+            }
         }
         port.nor.restore_state(state.nor)?;
         port.request = state.stream;
@@ -164,6 +182,8 @@ impl SerialFlashController {
         self.due = state.next;
         self.operations = state.operations;
         self.irq_level = state.irq_level;
+        self.pad = state.pad;
+        self.mapped_misses = state.mapped_misses;
         Ok(())
     }
 }
@@ -184,6 +204,10 @@ struct DmaState {
     request_mux_changed: [u64; 16],
     #[serde(default)]
     request: BTreeMap<u64, u32>,
+    #[serde(default)]
+    audio: Option<AudioPacing>,
+    #[serde(default)]
+    microphone_frames: Option<u64>,
 }
 impl DmaController {
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
@@ -202,10 +226,15 @@ impl DmaController {
                 && state.timing_profile.is_none() && state.assumptions_recorded.is_none()
         };
         if !mode_matches || state.irq_routes != self.routes
+            || state.audio != self.audio
+            || state.microphone_frames.is_some() != self.microphone().is_some()
             || state.channels.len() != 16
-            || state.channels.iter().any(|c| {
+            || state.channels.iter().enumerate().any(|(n, c)| {
                 c.due.is_some_and(|at| !c.submitted || at < c.submitted_at)
                     || c.submitted && u64::from(c.regs[4]) + 1 > FLASH_SIZE
+                    // Only a declared audio channel runs a linked list.
+                    || c.submitted && c.regs[0x24 / 4] != 0
+                        && (self.audio(n).is_none() || c.regs[0x24 / 4] & 0xe != 0)
                     || standalone && c.submitted && (Self::needs_flash(c) || c.regs[0x24 / 4] != 0
                         || c.regs[0x28 / 4] & 0x10000001 != 0x10000001
                         || Self::standalone_deadline(c).is_none()
@@ -228,6 +257,7 @@ impl DmaController {
             }
         }
         self.standalone_admitted = state.assumptions_recorded.unwrap_or(false);
+        self.microphone_frames = state.microphone_frames.unwrap_or(0);
         self.channels = state
             .channels
             .try_into()

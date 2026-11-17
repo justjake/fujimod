@@ -1,0 +1,26 @@
+# Eight banks spaced 0x1000 at ff930000..ff937000, initialized by 0x138ee74..0x138ef5c
+# DMA register contract matches X-T5 reset 0x139b998 and descriptor 0x18eafd8.
+# companion_irq_base = 83 is the X100VI-derived M-core NVIC line for bank 0, NOT
+# separately observed on the X-T5 (the companion's vector table is installed at
+# run time). It only matters once the guest releases the M-core. The X-T5 M-core
+# image binds IRQ stubs for slots 93..103 and slot 94 serves the serial DMA pair
+# (channels 10/11), consistent with 83 + 11; the base itself is UNVERIFIED
+[[device]]
+base = 0xff930000
+size = 0x8000
+kind = "general-dma"
+
+[device.options]
+companion_irq_base = 83
+
+# Global words at ff90e564..578 and the bank high-address and request-routing
+# views (0x13905d8..0x1390644 clear/acknowledge them; application-boot.md).
+[[device]]
+base = 0xff90e748
+size = 0x40
+kind = "dma-address-high"
+
+[[device]]
+base = 0xff90e500
+size = 0x20
+kind = "dma-request-routing"

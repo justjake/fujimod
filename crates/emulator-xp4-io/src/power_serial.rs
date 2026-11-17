@@ -87,7 +87,8 @@ impl PowerSerial {
             || pin >= 16
             || inputs
                 .keys()
-                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35))
+                // 48..=55: initial contents of the retained profile registers
+                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35 | 48..=55))
             || [0, 1, 2, 3, 32, 34, 35]
                 .iter()
                 .any(|n| !inputs.contains_key(n))

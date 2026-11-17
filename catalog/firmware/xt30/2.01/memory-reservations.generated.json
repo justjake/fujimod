@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xt30-201-memory-reservations",
+  "firmware_id": "xt30-201",
+  "dram_size": null,
+  "reservations": [
+    {
+      "name": "language_fonts",
+      "address": 8257536,
+      "size": 1441792
+    },
+    {
+      "name": "font_resources",
+      "address": 9043968,
+      "size": 1441792
+    },
+    {
+      "name": "language_data",
+      "address": 7995392,
+      "size": 262144
+    }
+  ],
+  "locator_failures": []
+}

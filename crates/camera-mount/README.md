@@ -137,6 +137,14 @@ An uncertain completion is terminal for the mount: the worker sets a fatal
 flag, the host unmounts and exits, and it never reuses or reclaims that session.
 Flash reads yield the file helper allocation first, then recreate it on the next
 SD operation. Other tools can acquire ff80 between bursts and while idle.
+`fujimod-card` instead keeps its first session, helper qualification and bulk
+mapping for the whole command and closes it at the end; a request that changes
+the SD card first restores the mapping.
+`fujimod-card batch` reads one command per stdin line (a JSON array) and runs
+them all in that session, so a job installs and releases the helper once; the
+camera is held until stdin closes, so run no other camera tool meanwhile.
+With `FUJIMOD_MOUNT_TRACE`, each request reports its steps (`phases`), and the
+command reports `connect` and `shutdown` seconds.
 
 The installed-service descriptor address is cached as a discovery hint. Each
 transaction revalidates its descriptor, pointers and ownership; a missing hint

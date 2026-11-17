@@ -6,11 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [[bin]]
 name = "fujimod-emulator"
 path = "src/bin/fujimod-emulator.rs"
-test = false
 
 [[bin]]
 name = "fujimod-emulator-worker"
@@ -29,6 +29,9 @@ fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }
 fujimod-emulator-graphics = { path = "../../crates/emulator-graphics" }
 fujimod-emulator = { path = "../emulator" }
 fujimod-emulator-boot.workspace = true
+fujimod-emulator-xp5-bringup.workspace = true
+fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-cpu-unicorn = { path = "../emulator-cpu-unicorn" }
 fujimod-emulator-devices = { path = "../emulator-devices" }

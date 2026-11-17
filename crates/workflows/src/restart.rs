@@ -7,12 +7,16 @@
 //! wake deadline, either through a borrowed diagnostic query or through the
 //! debug console's command callback and a short stub. The stock power-off arms
 //! the power controller's alarm and cuts power; the alarm boots the camera
-//! again. The host observes the camera return.
+//! again. Where the firmware publishes a boot flag, its bit is set and read
+//! back just before the request, so the alarm boot takes its normal path. The
+//! host observes the camera return.
 use crate::{
     Limits,
     bulk::{Access, BulkError, Result, check_camera, hex},
 };
-use fujimod_catalog_restart::{DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue};
+use fujimod_catalog_restart::{
+    BootFlag, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
+};
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
@@ -72,17 +76,24 @@ fn address(value: u64) -> Result<Address> {
 }
 
 /// Request parameters: the power-off request and the wake deadline.
-pub fn parameters(restart: &FirmwareRestart) -> Vec<u8> {
+pub fn parameters(restart: &FirmwareRestart) -> Result<Vec<u8>> {
     let m = &restart.mechanism;
-    let mut parameters = vec![0; m.parameter_bytes as usize];
-    for (offset, value) in [
-        (m.request_offset, m.request),
-        (m.deadline_offset, WAKE_DEADLINE),
-    ] {
+    let (Some(request), Some(request_offset), Some(deadline_offset), Some(bytes)) = (
+        m.request,
+        m.request_offset,
+        m.deadline_offset,
+        m.parameter_bytes,
+    ) else {
+        return Err(BulkError::Check(
+            "This firmware's power-off arms a fixed alarm interval and takes no request".into(),
+        ));
+    };
+    let mut parameters = vec![0; bytes as usize];
+    for (offset, value) in [(request_offset, request), (deadline_offset, WAKE_DEADLINE)] {
         let at = offset as usize;
         parameters[at..at + 4].copy_from_slice(&value.to_le_bytes());
     }
-    parameters
+    Ok(parameters)
 }
 
 /// Bytes for `queue_auto_restart_contract` in the portable ARM32 guard.
@@ -99,10 +110,14 @@ pub fn deferred_guard_contract(restart: &FirmwareRestart, milliseconds: u32) -> 
         .ok_or_else(|| BulkError::Check("No deferred callback timer is published".into()))?;
     validate_deferred_timer(timer)?;
     require(milliseconds != 0, "Deferred restart delay must be nonzero")?;
-    let mut request = parameters(restart);
+    let sender = restart
+        .mechanism
+        .sender
+        .ok_or_else(|| BulkError::Check("This firmware publishes no restart sender".into()))?;
+    let mut request = parameters(restart)?;
     request.resize(12, 0);
     let mut contract = Vec::with_capacity(28);
-    for word in [timer.start.address, timer.cancel.address, restart.mechanism.sender] {
+    for word in [timer.start.address, timer.cancel.address, sender] {
         contract.extend_from_slice(&address(word)?.0.to_le_bytes());
     }
     contract.extend_from_slice(&request);
@@ -159,6 +174,41 @@ async fn require_idle(access: &mut Access<'_>, ui: &RecIdle, alias: u64) -> Resu
     )
 }
 
+/// What was done to the published boot flag before the request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BootFlagStep {
+    /// The firmware publishes no boot flag; nothing was read or written.
+    NotPublished,
+    /// The bit was already set; nothing was written.
+    AlreadySet { value: u8 },
+    /// The bit was set and read back.
+    Set { before: u8, after: u8 },
+}
+
+/// Set the boot flag's bit, leaving the byte's other bits as they are, and
+/// require it to read back. The power-off publishes the header with the bit
+/// set, so the alarm boot takes its normal path.
+async fn set_boot_flag(access: &mut Access<'_>, flag: Option<&BootFlag>) -> Result<BootFlagStep> {
+    let Some(flag) = flag else {
+        return Ok(BootFlagStep::NotPublished);
+    };
+    let before = access.raw(flag.address, 1).await?[0];
+    if before & flag.mask != 0 {
+        return Ok(BootFlagStep::AlreadySet { value: before });
+    }
+    let value = before | flag.mask;
+    access.write(flag.address, &[value]).await?;
+    let after = access.raw(flag.address, 1).await?[0];
+    require(
+        after == value,
+        &format!(
+            "Boot flag {:#x} reads {after:#04x} after writing {value:#04x}",
+            flag.address
+        ),
+    )?;
+    Ok(BootFlagStep::Set { before, after })
+}
+
 async fn require_words(access: &mut Access<'_>, words: &[WordValue], message: &str) -> Result<()> {
     for w in words {
         require(
@@ -190,13 +240,16 @@ pub async fn request(
         )?;
     }
     match &m.transport {
-        RequestTransport::BorrowedQuery {
+        None => Err(BulkError::Check(
+            "This firmware's power-off arms a fixed alarm interval and takes no request".into(),
+        )),
+        Some(RequestTransport::BorrowedQuery {
             callback_table,
             callback_offset,
             stock_callback,
             output_fields,
             output_bytes,
-        } => {
+        }) => {
             // The table pointer may hold the cached or the uncached alias.
             let table = word(&access.raw(callback_table + alias, 4).await?);
             let physical = if table >= alias { table - alias } else { table };
@@ -209,7 +262,7 @@ pub async fn request(
                 require_idle(&mut access, &m.ui, alias).await?;
             }
             let original = access.raw(*output_fields, u64::from(*output_bytes)).await?;
-            let mut fields = parameters(restart);
+            let mut fields = parameters(restart)?;
             fields.resize(*output_bytes as usize, 0);
             let tag = u32::try_from(*output_fields).map_err(|_| {
                 BulkError::Check("Query output fields beyond 32-bit addressing".into())
@@ -220,12 +273,16 @@ pub async fn request(
                 address(*output_fields)?,
                 original,
             )?;
+            let sender = m
+                .sender
+                .ok_or_else(|| BulkError::Check("No restart sender is published".into()))?;
             borrowed.call(
-                address(m.sender)?,
+                address(sender)?,
                 DiagnosticTag::Research(tag),
                 vec![(0, 0)],
                 fields,
             )?;
+            set_boot_flag(&mut access, m.power_off.boot_flag.as_ref()).await?;
             match borrowed.invoke(access.session, limits.memory).await {
                 Ok(_) => Ok(Requested::Accepted),
                 // The whole sequence ran and restored both words; the send was refused.
@@ -233,7 +290,7 @@ pub async fn request(
                 Err(_) => Ok(Requested::SessionEnded),
             }
         }
-        RequestTransport::ConsoleCallback {
+        Some(RequestTransport::ConsoleCallback {
             slot,
             stock_callback,
             stub_area,
@@ -242,7 +299,7 @@ pub async fn request(
             ready_words,
             data_cache_clean,
             instruction_cache_sync,
-        } => {
+        }) => {
             require_words(
                 &mut access,
                 translation,
@@ -263,7 +320,10 @@ pub async fn request(
             if !recover {
                 require_idle(&mut access, &m.ui, alias).await?;
             }
-            let stub = console_stub(*stub_area, m.sender, &parameters(restart))?;
+            let sender = m
+                .sender
+                .ok_or_else(|| BulkError::Check("No restart sender is published".into()))?;
+            let stub = console_stub(*stub_area, sender, &parameters(restart)?)?;
             require(
                 stub.len() <= *stub_bytes as usize,
                 "Stub exceeds the stub area",
@@ -304,6 +364,7 @@ pub async fn request(
                 u32::try_from(*slot).is_ok(),
                 "Console callback slot beyond 32-bit addressing",
             )?;
+            set_boot_flag(&mut access, m.power_off.boot_flag.as_ref()).await?;
             // Write the stub, clean it out to memory on every core, then drop
             // stale instructions.
             let mut clean = call(*data_cache_clean, true);
@@ -334,6 +395,88 @@ pub async fn request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bulk::tests::{limits, opened, read, write};
+    use futures_lite::future::block_on;
+
+    const FLAG: BootFlag = BootFlag {
+        address: 0x2882c9c,
+        mask: 0x20,
+    };
+
+    fn boot_flag(
+        steps: Vec<fujimod_usb::testing::Exchange>,
+        flag: Option<&BootFlag>,
+    ) -> (Result<BootFlagStep>, usize) {
+        let (mut session, script) = opened(steps);
+        let mut access = Access {
+            session: &mut session,
+            limits: limits(),
+        };
+        let step = block_on(set_boot_flag(&mut access, flag));
+        (step, script.remaining())
+    }
+
+    #[test]
+    fn absent_boot_flag_touches_nothing() {
+        let (step, remaining) = boot_flag(vec![], None);
+        assert_eq!(step.unwrap(), BootFlagStep::NotPublished);
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn clear_boot_flag_is_set_with_one_write_and_read_back() {
+        let mut steps = read(0x2882c9c, &[0x0f]);
+        steps.extend(write(0x2882c9c, &[0x2f]));
+        steps.extend(read(0x2882c9c, &[0x2f]));
+        let (step, remaining) = boot_flag(steps, Some(&FLAG));
+        assert_eq!(
+            step.unwrap(),
+            BootFlagStep::Set {
+                before: 0x0f,
+                after: 0x2f,
+            }
+        );
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn set_boot_flag_is_not_written_again() {
+        let (step, remaining) = boot_flag(read(0x2882c9c, &[0x2f]), Some(&FLAG));
+        assert_eq!(step.unwrap(), BootFlagStep::AlreadySet { value: 0x2f });
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn boot_flag_that_does_not_read_back_stops_before_the_request() {
+        let mut steps = read(0x2882c9c, &[0x0f]);
+        steps.extend(write(0x2882c9c, &[0x2f]));
+        steps.extend(read(0x2882c9c, &[0x0f]));
+        let (step, remaining) = boot_flag(steps, Some(&FLAG));
+        assert!(matches!(step, Err(BulkError::Check(message)) if message.contains("Boot flag")));
+        // Nothing past the readback was sent: the caller's `?` returns before the request.
+        assert_eq!(remaining, 0);
+    }
+
+    #[test]
+    fn boot_flag_validates_as_one_bit_on_a_request_restart() {
+        let mut restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x70/1.10/restart.generated.json"
+        ))
+        .unwrap();
+        assert!(restart.mechanism.power_off.boot_flag.is_none());
+        restart.mechanism.power_off.boot_flag = Some(FLAG);
+        restart.validate().unwrap();
+        for mask in [0, 0x21] {
+            restart.mechanism.power_off.boot_flag = Some(BootFlag { mask, ..FLAG });
+            assert!(restart.validate().is_err());
+        }
+        let mut fixed: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x100s/1.21/restart.generated.json"
+        ))
+        .unwrap();
+        fixed.mechanism.power_off.boot_flag = Some(FLAG);
+        assert!(fixed.validate().is_err());
+    }
 
     #[test]
     fn stub_loads_its_parameters_and_branches_to_the_sender() {
@@ -356,6 +499,28 @@ mod tests {
     }
 
     #[test]
+    fn fixed_interval_document_validates_without_a_request() {
+        let restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x100s/1.21/restart.generated.json"
+        ))
+        .unwrap();
+        restart.validate().unwrap();
+        assert!(restart.mechanism.transport.is_none());
+        assert_eq!(restart.mechanism.power_off.entry, 0x692944);
+        assert_eq!(
+            restart
+                .mechanism
+                .power_off
+                .fixed_interval
+                .as_ref()
+                .unwrap()
+                .seconds,
+            [60, 0]
+        );
+        assert!(parameters(&restart).is_err());
+    }
+
+    #[test]
     fn deferred_guard_contract_uses_the_published_timer_and_wake_abi() {
         let restart: FirmwareRestart = serde_json::from_str(include_str!(
             "../../../catalog/firmware/x70/1.10/restart.generated.json"
@@ -371,8 +536,8 @@ mod tests {
         assert_eq!(words.len(), 7);
         assert_eq!(words[0], 0x93d4bc);
         assert_eq!(words[1], 0x93d6b4);
-        assert_eq!(words[2], restart.mechanism.sender as u32);
-        assert_eq!(words[3], restart.mechanism.request);
+        assert_eq!(words[2], restart.mechanism.sender.unwrap() as u32);
+        assert_eq!(words[3], restart.mechanism.request.unwrap());
         assert_eq!(words[4], WAKE_DEADLINE);
         assert_eq!(words[5..], [0, 0]);
     }

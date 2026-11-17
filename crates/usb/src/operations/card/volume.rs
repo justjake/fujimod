@@ -105,6 +105,14 @@ impl<'a> Volume<'a> {
         }
     }
 
+    /// Time spent waiting for the camera to complete owned-helper operations.
+    pub fn helper_wait(&self) -> std::time::Duration {
+        match &self.backend {
+            Backend::Sdk(_) => std::time::Duration::ZERO,
+            Backend::Mailbox(s) => s.waited,
+        }
+    }
+
     fn host(&mut self) -> &mut Host<'a> {
         match &mut self.backend {
             Backend::Sdk(s) => &mut s.host,

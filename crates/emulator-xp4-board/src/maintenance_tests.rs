@@ -70,7 +70,7 @@ fn assert_failed_session_is_frozen(session: &Session, error: &str) {
     assert_eq!(session.driver_guard_begin(
         vec![(ENTRY, ENTRY + 4)], vec![], vec![], 0x2000, 8, 0, None,
     ).unwrap_err(), error);
-    assert_eq!(session.memory_watch_begin(vec![(0, 65536)], 8).unwrap_err(), error);
+    assert_eq!(session.memory_watch_begin(vec![(0, 65536)], 8, false).unwrap_err(), error);
     assert_eq!(session.memory_watch_end().unwrap_err(), error);
     assert_eq!(session.function_watch_begin(vec![ENTRY], 1, 8, 8, None, false)
         .unwrap_err(), error);

@@ -1,0 +1,15 @@
+.format-guide .segmented {
+  max-width: 340px;
+}
+.format-guide ol {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding-left: 1.3em;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.format-guide li::marker {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}

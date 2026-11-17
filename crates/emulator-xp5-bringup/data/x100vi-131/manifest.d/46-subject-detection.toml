@@ -1,0 +1,9 @@
+# high-address value (address bits 32..34) to the six words 0xff90e720..0xff90e734 before the
+# task programs the DV720 accelerator at 0xffe00000. No traced path reads them back, so they
+# are write-only here; their meaning is inferred from the bfxil of those address bits.
+# The six words carry address bits 32..34 next to dma-address-high at 0xff90e748 (60-mcore.toml),
+# so a future DV720 DMA model may need them.
+[[device]]
+base = 0xff90e720
+size = 0x18
+kind = "write-only-registers"

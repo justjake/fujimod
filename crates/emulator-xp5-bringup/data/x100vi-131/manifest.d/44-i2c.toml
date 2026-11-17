@@ -1,0 +1,16 @@
+# I2C instance 2 at ff926000 (controllers at ff924000 + n*0x1000; the stock open
+# 0x1472f14 writes FSR, 0xff924018 + (n << 12), through 0x14726f0). Its interrupt
+# is selector 5 of the driver's table 0x19e6030, descriptor 0x19e7780 + 5*0x10 =
+# The bus-2 clients of the driver's table 0x19e6040 (lookup 0x14736e8) are 0x55,
+# 0x1d, 0x0e (fast mode), 0x6a and 0x68. 0x14ce904 opens 0x6a (index 0x15) with
+# the same code as the X-T5 orientation opener 0x13e3680; 0x14ce5c4 and 0x14ceb00
+# open 0x1d and 0x68. No part on this bus is identified, so none is declared and
+# every address is not acknowledged. byte_ns is the functional latency of
+# instance 1, not a bus rate.
+[[device]]
+kind = "i2c-controller"
+base = 0xff926000
+size = 0x1000
+[device.options]
+interrupt = 290
+byte_ns = 90000

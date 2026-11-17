@@ -5,11 +5,7 @@ use super::ice;
 use super::native::{IceConfig, PeerSocket};
 use crate::{Error, Result};
 use async_channel::{Receiver, Sender};
-use async_tungstenite::{
-    WebSocketStream,
-    smol::{ConnectStream, connect_async},
-    tungstenite::Message,
-};
+use async_tungstenite::tungstenite::Message;
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use std::{
@@ -18,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-type Socket = WebSocketStream<ConnectStream>;
+type Socket = crate::dial::Signal;
 
 fn error(value: impl std::fmt::Display) -> Error {
     Error(value.to_string())
@@ -87,7 +83,7 @@ impl HostRoom {
         signal_url
             .query_pairs_mut()
             .append_pair("room", &ticket.room);
-        let (mut socket, _) = connect_async(signal_url.as_str()).await.map_err(error)?;
+        let mut socket = crate::dial::connect_signaling(signal_url.as_str()).await?;
         write(
             &mut socket,
             json!({

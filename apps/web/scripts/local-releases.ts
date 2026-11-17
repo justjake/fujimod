@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import type { Plugin, Connect } from 'vite';
 import { validateIndex, type SdCardFile } from '../src/patch/catalog.ts';
 import { releaseRoute } from '../src/patch/releases.ts';
+import { sdBootV2Firmware, storeName, validateOtaRelease } from '../src/ota/release.ts';
 
 interface LocalReleaseOptions {
   artifacts?: string;
@@ -51,15 +52,29 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
         );
         response.setHeader('Content-Type', 'application/json');
       } else {
-        if (
-          route.tag !== index.release ||
-          !new Set([
-            'patches.json',
-            ...Object.values(index.patches),
-            ...cardAssets,
-            ...(index.notes ? [index.notes.name] : []),
-          ]).has(route.file)
-        ) {
+        const assets = new Set([
+          'patches.json',
+          ...Object.values(index.patches),
+          ...(index.sd_card_files ?? []).map((file) => file.asset),
+          ...(index.notes ? [index.notes.name] : []),
+        ]);
+        // Only serve manifests and store files named by this release's camera entries.
+        if (route.tag === index.release && !assets.has(route.file))
+          for (const camera of index.firmwares) {
+            const firmware = sdBootV2Firmware(camera.id);
+            const name = `${firmware}-latest.json`;
+            let manifest: unknown;
+            try {
+              manifest = JSON.parse(await readFile(resolve(options.artifacts, name), 'utf8'));
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+              throw error;
+            }
+            const release = validateOtaRelease(manifest, firmware);
+            assets.add(name);
+            for (const file of Object.values(release.fs)) assets.add(storeName(file.sha256));
+          }
+        if (route.tag !== index.release || !assets.has(route.file)) {
           response.statusCode = 404;
           response.end();
           return;

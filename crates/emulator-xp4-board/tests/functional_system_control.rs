@@ -35,8 +35,8 @@ fn exact_bank_definition_connects_and_rejects_each_duplicate_owner() {
     let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
     let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
     assert_eq!(state["retained_banks"]["a"].as_array().unwrap().len(), 15);
-    for (address, _) in fujimod_emulator_xp4_io::system_control::A_WORDS.into_iter()
-        .chain(fujimod_emulator_xp4_io::system_control::B_WORDS)
+    for (address, _) in fujimod_emulator_xp4_system::system_control::A_WORDS.into_iter()
+        .chain(fujimod_emulator_xp4_system::system_control::B_WORDS)
     {
         let mut conflict = v.clone(); conflict["control_requests"] = json!([[address, 2], [address, 2]]);
         let error = Session::new(serde_json::from_value(conflict).unwrap(), None, vec![]).err().unwrap();
@@ -57,8 +57,8 @@ fn configuration_family_has_one_owner_and_preserves_absent_graphics_semantics() 
     let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
     let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
     assert!(state["configuration_state"].is_object());
-    for address in fujimod_emulator_xp4_io::configuration_request::DESCRIPTORS.iter().map(|&(_, word)| word)
-        .chain(fujimod_emulator_xp4_io::configuration_request::GROUP_BASES.iter().map(|base| base + 0x80))
+    for address in fujimod_emulator_xp4_system::configuration_request::DESCRIPTORS.iter().map(|&(_, word)| word)
+        .chain(fujimod_emulator_xp4_system::configuration_request::GROUP_BASES.iter().map(|base| base + 0x80))
     {
         let mut conflict = v.clone(); conflict["control_requests"] = json!([[address, 8]]);
         let error = Session::new(serde_json::from_value(conflict).unwrap(), None, vec![]).err().unwrap();
@@ -100,7 +100,7 @@ fn base_parameter_family_reuses_request_ownership_and_rejects_all_added_window_o
     let session = Session::new(serde_json::from_value(v.clone()).unwrap(), None, vec![]).unwrap();
     let state: Value = serde_json::from_str(&session.device_state_json()["xp4-functional-system-control"]).unwrap();
     assert!(state["configuration_state"]["base_state"].is_object());
-    for base in fujimod_emulator_xp4_io::base_parameter::BASES {
+    for base in fujimod_emulator_xp4_system::base_parameter::BASES {
         for address in [base, base + 8, base + 0x80, base + 0xf0] {
             let mut bad = v.clone(); bad["control_requests"] = json!([[address, 8]]);
             let error = Session::new(serde_json::from_value(bad).unwrap(), None, vec![]).err().unwrap();

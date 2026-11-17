@@ -944,6 +944,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctrlc"
+version = "3.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0b1fab2ae45819af2d0731d60f2afe17227ebb1a1538a236da84c93e9a60162"
+dependencies = [
+ "dispatch2",
+ "nix",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "ctutils"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1062,6 +1073,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
 dependencies = [
  "bitflags 2.13.2",
+ "block2",
+ "libc",
  "objc2",
 ]
 
@@ -1549,6 +1562,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "tsify",
  "wasm-bindgen",
 ]
@@ -1768,6 +1782,8 @@ name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-assets",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
  "fujimod-emulator",
  "fujimod-emulator-boot",
  "fujimod-emulator-cpu",
@@ -1779,6 +1795,7 @@ dependencies = [
  "fujimod-emulator-models",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-bringup",
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-io",
  "fujimod-emulator-xp5-storage",
@@ -1987,6 +2004,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-exr2-image-transfer"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-emulator-image-processing",
+ "fujimod-emulator-imaging",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-emulator-exr2-images"
 version = "0.1.0"
 dependencies = [
@@ -2050,6 +2079,7 @@ dependencies = [
  "fujimod-catalog-construction",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-codecs",
+ "fujimod-emulator-exr2-image-transfer",
  "fujimod-emulator-exr2-images",
  "fujimod-emulator-exr2-isp-input",
  "fujimod-emulator-exr2-isp-statistics",
@@ -2135,7 +2165,7 @@ dependencies = [
  "fujimod-emulator-exr2-plan",
  "fujimod-emulator-exr2-resources",
  "fujimod-emulator-ip",
- "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-wifi",
  "fujimod-emulator-storage",
  "fujimod-workspace-hack",
  "serde",
@@ -2232,6 +2262,7 @@ name = "fujimod-emulator-ip"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-io",
  "fujimod-workspace-hack",
@@ -2364,18 +2395,12 @@ dependencies = [
 name = "fujimod-emulator-parts-io"
 version = "0.1.0"
 dependencies = [
- "aes 0.9.2",
- "aes-kw",
  "ciborium",
  "fujimod-emulator-devices",
  "fujimod-workspace-hack",
- "hmac 0.13.0",
- "pbkdf2",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
- "sha1 0.11.0",
- "smoltcp",
  "tsify",
  "wasm-bindgen",
 ]
@@ -2404,6 +2429,22 @@ dependencies = [
  "libm",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-parts-wifi"
+version = "0.1.0"
+dependencies = [
+ "aes-kw",
+ "ciborium",
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "hmac 0.13.0",
+ "pbkdf2",
+ "serde",
+ "serde_json",
+ "sha1 0.11.0",
+ "smoltcp",
 ]
 
 [[package]]
@@ -2481,6 +2522,7 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
+ "fujimod-emulator-image-codecs",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
@@ -2489,6 +2531,8 @@ dependencies = [
  "fujimod-emulator-xp4-display",
  "fujimod-emulator-xp4-io",
  "fujimod-emulator-xp4-storage",
+ "fujimod-emulator-xp4-system",
+ "fujimod-emulator-xp4-video",
  "fujimod-emulator-xpp",
  "fujimod-framebuffer-xp4",
  "fujimod-workspace-hack",
@@ -2519,12 +2563,34 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
  "fujimod-workspace-hack",
+ "parking_lot",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "fujimod-emulator-xp4-storage"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-system"
+version = "0.1.0"
+dependencies = [
+ "fujimod-emulator-devices",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-xp4-video"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
@@ -2563,6 +2629,35 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+]
+
+[[package]]
+name = "fujimod-emulator-xp5-bringup"
+version = "0.1.0"
+dependencies = [
+ "ctrlc",
+ "fujimod-catalog",
+ "fujimod-catalog-configuration",
+ "fujimod-catalog-resolution",
+ "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-parts-controls",
+ "fujimod-emulator-session",
+ "fujimod-emulator-xp5-board",
+ "fujimod-emulator-xp5-display",
+ "fujimod-emulator-xp5-io",
+ "fujimod-emulator-xp5-storage",
+ "fujimod-firmware",
+ "fujimod-framebuffer",
+ "fujimod-workspace-hack",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml",
+ "zstd",
 ]
 
 [[package]]
@@ -2649,7 +2744,9 @@ dependencies = [
  "fujimod-webrtc",
  "fujimod-workspace-hack",
  "futures-lite",
+ "nix",
  "sha2 0.10.9",
+ "walkdir",
 ]
 
 [[package]]
@@ -3264,6 +3361,7 @@ dependencies = [
  "memchr",
  "naga",
  "naga-types",
+ "nix",
  "num-traits",
  "once_cell",
  "percent-encoding",
@@ -7263,32 +7361,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "xt5-bringup"
-version = "0.1.0"
-dependencies = [
- "fujimod-catalog",
- "fujimod-catalog-configuration",
- "fujimod-catalog-resolution",
- "fujimod-emulator",
- "fujimod-emulator-boot",
- "fujimod-emulator-cpu",
- "fujimod-emulator-devices",
- "fujimod-emulator-parts-controls",
- "fujimod-emulator-session",
- "fujimod-emulator-storage",
- "fujimod-emulator-xp5-board",
- "fujimod-emulator-xp5-display",
- "fujimod-emulator-xp5-io",
- "fujimod-emulator-xp5-storage",
- "fujimod-firmware",
- "fujimod-recording",
- "fujimod-workspace-hack",
- "serde_json",
- "sha2 0.10.9",
- "toml",
-]
-
-[[package]]
 name = "yasna"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7412,6 +7484,34 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zstd"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50adf04cf3ec914b0b9905c9dde90c80fe74bfd701e331fc80a39c512c525278"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498d94ad68720c89b4fbe41b9090850651e68cb2dd9210ce7ffbff3a94653819"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.3+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f729a06d0257428fd9d997ac8db7e1407bd0262ab016b085b36bc52957c0052d"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
 
 [[package]]
 name = "zune-core"

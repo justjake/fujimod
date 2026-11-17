@@ -84,11 +84,12 @@ try {
           canonical,
         );
         if (route.startsWith('/dev-tools/')) assert.ok(title.startsWith('Dev Tools: '));
+        const hasPreview = (await page.locator('meta[property="og:image"]').count()) > 0;
         assert.equal(
           await page.locator('meta[name="twitter:card"]').getAttribute('content'),
-          route === '/' ? 'summary_large_image' : 'summary',
+          hasPreview ? 'summary_large_image' : 'summary',
         );
-        if (route === '/') {
+        if (route === '/' && hasPreview) {
           const image = await page.locator('meta[property="og:image"]').getAttribute('content');
           assert.ok(image);
           assert.equal(new URL(image).origin, 'https://fujimod.com');
@@ -107,7 +108,7 @@ try {
       }
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'You can try the first release by dual-booting from an SD card'],
+        ['/', 'I’m making FujiMod to unlock your camera’s full potential.'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -132,7 +133,17 @@ try {
             await page.getByRole('button', { name: 'New camera', exact: true }).count(),
             0,
           );
-          assert.ok((await page.locator('#camera-table .gen').count()) > 0);
+          assert.equal(await page.locator('#camera-table').count(), 0);
+          assert.equal(await page.locator('header .site-nav').count(), 1);
+          assert.equal(await page.locator('.personal-note').count(), 1);
+          assert.equal(await page.locator('#features').count(), 1);
+          assert.equal(await page.locator('.sd-download').count(), 1);
+          assert.equal(
+            await page
+              .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
+              .count(),
+            0,
+          );
         }
         await page.close();
       }
@@ -250,12 +261,16 @@ try {
         await page.evaluate(() => window.__hydrationDOM === document.querySelector('#workspace')),
         'hydrate existing homepage nodes',
       );
-      const note = page.locator('.personal-note');
-      assert.match(await note.innerText(), /without flashing your camera/);
-      assert.equal(await note.locator('mark, em, strong, b, svg').count(), 0);
-      assert.equal(await note.locator('a').count(), 1);
-      await note.getByRole('link', { name: 'Get started below', exact: true }).click();
-      assert.equal(new URL(page.url()).hash, '#software');
+      assert.equal(await page.locator('header .site-nav').count(), 1);
+      assert.equal(await page.locator('.personal-note').count(), 1);
+      assert.equal(await page.locator('h1').count(), 0);
+      assert.equal(await page.locator('.sd-download').count(), 1);
+      assert.equal(
+        await page
+          .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
+          .count(),
+        0,
+      );
       await page.locator('#features .catalog-ref').first().focus();
       assert.equal(await page.locator('.catalog-card.on').count(), 1);
       await page.keyboard.press('Escape');

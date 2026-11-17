@@ -66,9 +66,7 @@ fn opened(mut commands: Vec<E>, close: bool) -> Script {
     }
     Script::new(steps)
 }
-fn memory_script(value: u8, malformed: bool) -> Script {
-    let mut steps = info(4, "Model");
-    steps.extend(info(8, "1"));
+fn memory_read(value: u8, malformed: bool) -> Vec<E> {
     let request: Vec<u8> = [0x200001u32, 0, 0, 0, 2, 0, 0, 0x1000, 4]
         .into_iter()
         .flat_map(u32::to_le_bytes)
@@ -78,7 +76,12 @@ fn memory_script(value: u8, malformed: bool) -> Script {
     if malformed {
         response[0] ^= 1;
     }
-    steps.extend(exchange(request, response, 40));
+    exchange(request, response, 40)
+}
+fn memory_script(value: u8, malformed: bool) -> Script {
+    let mut steps = info(4, "Model");
+    steps.extend(info(8, "1"));
+    steps.extend(memory_read(value, malformed));
     opened(steps, !malformed)
 }
 struct TestSessions {
@@ -129,6 +132,7 @@ fn client(scripts: Vec<Script>) -> Client<TestSessions> {
         fenced: false,
         fatal: Arc::new(AtomicBool::new(false)),
         lease: None,
+        hold: false,
     }
 }
 #[test]
@@ -152,6 +156,33 @@ fn bounded_reads_release_ff80_before_reply_and_sync_or_idle_never_acquires() {
         }
         client.transaction(Operation::Close).await.unwrap();
         assert_eq!(client.sessions.opens.load(Ordering::SeqCst), 2);
+    });
+}
+#[test]
+fn a_held_session_serves_every_operation_until_close() {
+    block_on(async {
+        let mut steps = info(4, "Model");
+        steps.extend(info(8, "1"));
+        steps.extend(memory_read(1, false));
+        steps.extend(memory_read(2, false));
+        let script = opened(steps, true);
+        let mut client = client(vec![script.clone()]);
+        client.hold = true;
+        for value in [1, 2] {
+            let Answer::Bytes(data) = client
+                .transaction(Operation::Memory(0x1000, 4))
+                .await
+                .unwrap()
+            else {
+                panic!()
+            };
+            assert_eq!(data, vec![value; 4]);
+        }
+        // Identity once, no close between operations.
+        assert_eq!(script.remaining(), 2);
+        client.transaction(Operation::Close).await.unwrap();
+        assert_eq!(script.remaining(), 0);
+        assert_eq!(client.sessions.opens.load(Ordering::SeqCst), 1);
     });
 }
 #[test]
@@ -342,6 +373,7 @@ fn large_read_bursts_reuse_a_session_but_idle_sync_and_deadlines_release_it() {
             fenced: false,
             fatal: Arc::new(AtomicBool::new(false)),
             lease: None,
+            hold: false,
         };
         for _ in 0..2 {
             assert!(matches!(
@@ -427,16 +459,17 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
             fenced: false,
             fatal: Arc::new(AtomicBool::new(false)),
             lease: None,
+            hold: false,
         };
         for _ in 0..2 {
             assert!(matches!(
                 client
-                    .transaction(Operation::Card(Request::ReadDirectory {
+                    .transaction(Operation::Card(vec![Request::ReadDirectory {
                         path: "A:\\".into()
-                    }))
+                    }]))
                     .await
                     .unwrap(),
-                Answer::Card(Response::Directory(_))
+                Answer::Card(r) if matches!(r[..], [Response::Directory(_)])
             ));
             assert!(
                 !state.lock().unwrap().live,
@@ -448,8 +481,21 @@ fn sd_transactions_yield_to_another_ff80_client_and_revalidate_the_descriptor_hi
                     .unwrap();
             outside.close().await.unwrap();
         }
+        let batch = (0..3)
+            .map(|_| Request::ReadDirectory {
+                path: "A:\\".into(),
+            })
+            .collect();
+        assert!(matches!(
+            client.transaction(Operation::Card(batch)).await.unwrap(),
+            Answer::Card(r) if r.len() == 3
+        ));
         let state = state.lock().unwrap();
-        assert_eq!((state.opens, state.closes), (4, 4));
+        assert_eq!(
+            (state.opens, state.closes),
+            (5, 5),
+            "a batch shares one session and one attached service"
+        );
         assert_eq!(
             state.searches, 1,
             "the next transaction verifies the hint instead of rescanning"

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "x20-103-restart",
+  "firmware_id": "x20-103",
+  "product": "X20",
+  "internal_version": "2.19",
+  "code_alias": 1073741824,
+  "code_checks": [
+    {
+      "name": "power_off",
+      "address": 6904456,
+      "size": 340,
+      "sha256": "1b10402293e6a11a91e29d5d6658f4dcae397473879d2f4fcb7b21ddd9f3f95e"
+    },
+    {
+      "name": "alarm_setter",
+      "address": 6941016,
+      "size": 244,
+      "sha256": "d7d35ad84709985957824df59928e23be816637bdb7e6d9311295d3db098bebc"
+    },
+    {
+      "name": "power_cut",
+      "address": 6614852,
+      "size": 328,
+      "sha256": "35a4b5d76d88c72253e11161281946a732fa5a0a9268ebbdcbdd230ca615de32"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 6897168,
+      "size": 1148,
+      "sha256": "b893a698bd52366b55f7c366158bb9256ad69ea9f2d2f67b555f6814c6c475e3"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 6898316,
+      "size": 200,
+      "sha256": "e153aaec8ef937065f2c328375202c168ac164d29a306b99b82a84a979ce042a"
+    }
+  ],
+  "mechanism": {
+    "transport": null,
+    "sender": null,
+    "request": null,
+    "request_offset": null,
+    "deadline_offset": null,
+    "parameter_bytes": null,
+    "ui": {
+      "mode_address": 9541536,
+      "mode_size": 4,
+      "rec_mode": 2,
+      "pending_mode_address": 9541544,
+      "menu_active_address": 9569088
+    },
+    "power_off": {
+      "entry": 6904456,
+      "halt": 6904736,
+      "power_cut": 6614852,
+      "request_deadline_offset": null,
+      "alarm": {
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": null,
+      "fixed_interval": {
+        "seconds": [
+          60,
+          0
+        ]
+      }
+    },
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 6897168,
+        "size": 1148
+      },
+      "cancel": {
+        "address": 6898316,
+        "size": 200
+      }
+    }
+  }
+}

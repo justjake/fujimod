@@ -18,8 +18,9 @@ fn main() {
         "xcrun could not locate the macOS SDK"
     );
     let sdk = String::from_utf8(output.stdout).expect("SDK path must be UTF-8");
-    println!(
-        "cargo:rustc-link-search=native={}/usr/lib/swift",
-        sdk.trim()
-    );
+    let sdk = sdk.trim();
+    // The resolved SDK path changes with the installed Xcode; a path that no longer exists makes
+    // Cargo rerun this script instead of linking against a stale search directory.
+    println!("cargo:rerun-if-changed={sdk}/SDKSettings.plist");
+    println!("cargo:rustc-link-search=native={sdk}/usr/lib/swift");
 }

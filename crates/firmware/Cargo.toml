@@ -5,10 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Body-independent Fujifilm update-file decoding"
 
 [lib]
 doctest = false
+
+[[bin]]
+name = "fujimod-decompress"
+path = "src/bin/decompress.rs"
 
 [dependencies]
 sha2 = "0.11"

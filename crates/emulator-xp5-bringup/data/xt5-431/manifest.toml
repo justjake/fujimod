@@ -1,0 +1,256 @@
+# Cold OS boot: EL3 -> EL1t handoff at 0x5847c, after stock 0x58420..0x58478.
+version = 1
+firmware = "xt5-431"
+load_firmware = true
+
+# Device windows: xt5-431.d/*.toml, merged in filename order.
+
+[[ram]]
+base = 0
+size = 0x40000000
+
+# Linux 256 MiB, then the shared arenas, through 0x60000000: the application's
+# memory map (0x2df35d8) maps 0x40000000+0x10000000, 0x50000000+0xff00000 and
+# 0x5ff00000+0x100000, and the supplied Linux DTB declares memory@40000000 size
+# body's dram_bytes ends at the same address. Installed capacity is unmeasured
+# (camera-needs.md 1.19).
+[[ram]]
+base = 0x40000000
+size = 0x20000000
+
+# M-core SRAM: stock 13f7b58 copies flash f01c0000 here before reset release.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+# Cold component descriptor table read through reset 0x2fa4.
+[[preload]]
+address = 0x10c0000
+dat_offset = 0x1a0274
+length = 0x800
+sha256 = "8fbd84f3dbe3ab4ad5a468f40611827e1bab7030827f610c6929bdb96a4933c2"
+
+# Reset hardware-info buffer (x1 = 0x18650, kernel 5b308 copies 0x5e4 bytes to a4348).
+# Every field below is decoded from the X-T5 reset image (writers) and the X-T5 kernel/app
+# virtual inputs for a camera state the reset would have sampled; none is a capture.
+# +0x00..0x4f: pad input levels of GPIO ports 0..19, one word per port, sampled by reset
+# 0x3388..0x3398 (helper 0x6a5c, register +0x14 of each bank) and tested by 0x1380b18.
+# UNVERIFIED for the X-T5: port 0 pin 0 low, all others high; read only when +0x150
+# bit 2 is clear (0x14d9e74) or by the control table (0x1408948).
+[[preload]]
+address = 0x18650
+bytes = """
+fe ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+ff ff 00 00 ff ff 00 00 ff ff 00 00 ff ff 00 00
+"""
+# +0x50: boot-trace list 0 (16 records of {id, ~timer15}, reset 0x3170..0x31b4); an empty
+# list is the "DETS" sentinel at its first record, which 0x14d5f7c (0x14d6048) stops on.
+[[preload]]
+address = 0x186a0
+value = 0x53544544
+size = 4
+# +0xd0: boot-trace list 1, same layout (0x14d60c0 loop), empty.
+[[preload]]
+address = 0x18720
+value = 0x53544544
+size = 4
+# +0x150: startup-cause bits (reset 0x28a4/0x2930: value of 0x37d0, bit 2 cleared when
+# [0x11a00] is zero). 0x14d9da8 reads it: bit 2 = physical power switch (0x14da664 path),
+# bits 1/3/4 select the other startup paths. Virtual input: only bit 2.
+[[preload]]
+address = 0x187a0
+value = 4
+size = 4
+# +0x154: timed-startup packet valid (reset 0x3ae8: 1 only when packet byte +0x15e is 0xaa
+# and +0x15f equals minus the byte sum of +0x158..+0x15e). 0x14da808 tests it for 1.
+[[preload]]
+address = 0x187a4
+value = 0
+size = 4
+# +0x158..15f: eight bytes read by reset 0x3a50..0x3a80 from SPI8 power-controller
+# registers 0x1f..0x22 (0x3754). The shared power-controller model returns 0 for them, so
+# the packet is all zero: byte +0x15c & 0x60 != 0x20 (no timed startup, 0x14da664), tag
+# 0 != 0xaa. Kernel 0x149d8cc copies the 8 bytes to 0x2593110.
+[[preload]]
+address = 0x187a8
+bytes = "00 00 00 00 00 00 00 00"
+# +0x1c0: one-shot flag, 0 on the reset path that stores +0x150 (reset 0x2930/0x2ac4);
+# 0x13f1998 copies it to 0x2029810 and clears it. Left zero (not preloaded).
+# +0x1c4: result of reset 0x41c4 (message header construction), which returns 0;
+# 0x14f6cf8 passes it to 0x13135bc.
+[[preload]]
+address = 0x18814
+value = 0
+size = 4
+# +0x1c8..1db: message header written by reset 0x41c4 with size 0x400: words 0, 0, 0,
+# halfword +0xc = 0x8000 (status), halfword +0xe = 1 (kind), word +0x10 = 0. 0x14f62a0
+# copies it out of 0xa4510.
+[[preload]]
+address = 0x18818
+bytes = "00 00 00 00 00 00 00 00 00 00 00 00 00 80 01 00 00 00 00 00"
+# +0x5cc..0x5e0: reset 0x2628..0x2664 copies six words from 0xfa209150..0xfa209164, a block
+# an earlier stage writes (not modeled). Readers: 0x138478c (+0x5cc flag, +0x5d0 phase,
+# +0x5d4 edge, +0x5d8 control, +0x5dc ID), 0x13851d8 (+0x5e0 byte). Values are the
+# conservative untrained setup, UNVERIFIED against a camera.
+# +0x5cc: untrained flash timings; 0x138478c passes (+0x5cc == 1) = false to 0x13858f4.
+[[preload]]
+address = 0x18c1c
+value = 0
+size = 4
+# +0x5d0 phase0 from reset0xa2e4's conservative no-training path.
+[[preload]]
+address = 0x18c20
+value = 0
+size = 4
+# +0x5d4 edge0 from the same conservative0xaa94(0,0,0,0x10b) setup.
+[[preload]]
+address = 0x18c24
+value = 0
+size = 4
+# +0x5d8 flash-clock control0x10b is the reset0xa3b4 fallback, not guessed timing.
+[[preload]]
+address = 0x18c28
+value = 0x10b
+size = 4
+# +0x5dc: virtual 20bb20 flash ID, supported row0x1cb7460.
+[[preload]]
+address = 0x18c2c
+value = 0x20bb20
+size = 4
+# +0x5e0: no training status persisted to flash;0x147073c copies this byte only.
+[[preload]]
+address = 0x18c30
+value = 0
+size = 4
+
+# Run input: no card in either SD slot. Each slot still declares the blank FAT32
+# card (32 GB geometry) that an insertion would present; its contents are not read.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+# Stock 5847c replaces SP_EL1/SP_EL0 from 0xa6000/0xb6000 before use.
+
+[[cpu]]
+id = 0
+mpidr = 0
+pc = 0x5847c
+sp = 0xaa000
+cpsr = 0x3c4
+running = true
+[cpu.regs]
+x19 = 0
+x20 = 0x14d9b54
+x21 = 0x18650
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[[cpu]]
+id = 1
+mpidr = 1
+pc = 0x5847c
+sp = 0xae000
+cpsr = 0x3c4
+running = false
+[cpu.release_when]
+address = 0x5eaec # 45678 writes f0f0f0f0; 45728 waits on it
+value = 0xf0f0f0f0
+[cpu.regs]
+x19 = 1
+x20 = 0x14d9b54
+x21 = 0x18650
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[[cpu]]
+id = 2
+mpidr = 2
+pc = 0x5847c
+sp = 0xb2000
+cpsr = 0x3c4
+running = false
+[cpu.release_when]
+address = 0x5eaf0 # 45678 writes f0f0f0f0; 45728 waits on it
+value = 0xf0f0f0f0
+[cpu.regs]
+x19 = 2
+x20 = 0x14d9b54
+x21 = 0x18650
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[[cpu]]
+id = 3
+mpidr = 3
+pc = 0x5847c
+sp = 0xb6000
+cpsr = 0x3c4
+running = false
+[cpu.release_when]
+address = 0x5eaf4 # 45678 writes f0f0f0f0; 45728 waits on it
+value = 0xf0f0f0f0
+[cpu.regs]
+x19 = 3
+x20 = 0x14d9b54
+x21 = 0x18650
+[cpu.sysregs]
+ICC_PMR_EL1 = 0xff
+ICC_IGRPEN0_EL1 = 1
+ICC_IGRPEN1_EL1 = 1
+MIDR_EL1 = 0x410fd034
+VBAR_EL1 = 0x59800
+SCTLR_EL1 = 0x30d00800
+CPACR_EL1 = 0x300000
+
+[gic]
+distributor = 0xfa000000
+redistributor = 0xfa080000
+redistributor_stride = 0x20000
+# Driver classifier0x9e380 accepts INTIDs0..511. Initialization writes
+# full1024-bit arrays, including architecturally reserved trailing IDs.
+spi_max = 511
+
+# Loader9bf84 preserves CTLR and enables all groups before EL1 handoff.
+[gic.registers]
+"0x0" = 0x7
