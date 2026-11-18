@@ -10,10 +10,46 @@ use smoltcp::wire::{
     DhcpMessageType, DhcpPacket, DhcpRepr, EthernetAddress, EthernetFrame, IpAddress, IpProtocol,
     Ipv4Address, Ipv4Packet, TcpPacket, UdpPacket,
 };
-use std::io::{ErrorKind, Read, Write};
+use std::io::ErrorKind;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::{Read, Write};
 #[cfg(not(target_arch = "wasm32"))]
 use std::net::SocketAddr;
-use std::net::TcpStream;
+
+/// The host side of the TCP relay. Browser Wasm cannot open host sockets, so
+/// this type has no values there and the relay never connects.
+#[cfg(not(target_arch = "wasm32"))]
+type HostStream = std::net::TcpStream;
+
+#[cfg(target_arch = "wasm32")]
+enum HostStream {}
+
+#[cfg(target_arch = "wasm32")]
+impl HostStream {
+    fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+        match *self {}
+    }
+
+    fn write_all(&mut self, _buffer: &[u8]) -> std::io::Result<()> {
+        match *self {}
+    }
+
+    fn shutdown_write(&mut self) {
+        match *self {}
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+trait ShutdownWrite {
+    fn shutdown_write(&mut self);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ShutdownWrite for std::net::TcpStream {
+    fn shutdown_write(&mut self) {
+        let _ = self.shutdown(std::net::Shutdown::Write);
+    }
+}
 
 const DHCP_CLIENT_PORT: u16 = 68;
 const DHCP_SERVER_PORT: u16 = 67;
@@ -201,7 +237,7 @@ struct Connection {
     host_fin_sent: bool,
     guest_fin: bool,
     #[serde(skip)]
-    stream: Option<TcpStream>,
+    stream: Option<HostStream>,
 }
 
 impl Connection {
@@ -238,9 +274,9 @@ impl Connection {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn connect_host(port: u16) -> Option<TcpStream> {
+fn connect_host(port: u16) -> Option<HostStream> {
     let address: SocketAddr = ([127, 0, 0, 1], port).into();
-    let stream = TcpStream::connect_timeout(
+    let stream = HostStream::connect_timeout(
         &address,
         std::time::Duration::from_millis(HOST_CONNECT_TIMEOUT_MS),
     )
@@ -250,7 +286,7 @@ fn connect_host(port: u16) -> Option<TcpStream> {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn connect_host(_port: u16) -> Option<TcpStream> {
+fn connect_host(_port: u16) -> Option<HostStream> {
     None
 }
 
@@ -773,7 +809,7 @@ impl Network {
                     connection.guest_fin = true;
                     connection.guest_next = connection.guest_next.wrapping_add(1);
                     if let Some(stream) = connection.stream.as_mut() {
-                        let _ = stream.shutdown(std::net::Shutdown::Write);
+                        stream.shutdown_write();
                     }
                     connection.state = if connection.pending.is_empty() && connection.host_eof {
                         TcpState::Closed
