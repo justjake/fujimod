@@ -262,7 +262,7 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
     let edges = boot::host::parse_keys(boot_options.text("--keys")?.as_deref(),
         boot_options.text("--press")?.as_deref())?;
     let automatic_setup = edges.is_empty();
-    let mut keys = fujimod_emulator_contacts::Keys::new(
+    let mut keys = fujimod_emulator_controls::Keys::new(
         &resolved.reference,
         edges.into_iter().map(|edge| {
             (boot::host::duration_ticks(edge.delay, boot::EXR2_TICKS_PER_SECOND), edge.name, edge.pressed)
@@ -303,7 +303,7 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
     if let Some(levels) = boot_options.text("--gpio")? {
         for level in levels.split(',') {
             let (port, pin, high) = boot::host::parse_gpio(level)?;
-            fujimod_emulator_contacts::set_gpio(&mut session, port, pin, high)?;
+            fujimod_emulator_controls::set_gpio(&mut session, port, pin, high)?;
         }
     }
     for poke in &boot_options.pokes {
@@ -464,7 +464,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let gpio = options.text("--gpio")?;
     let mut keys = boot::host::parse_keys(options.text("--keys")?.as_deref(),
         options.text("--press")?.as_deref())?.into_iter().map(|edge| {
-        let wire = fujimod_catalog_contacts::digital_key(&resolved.reference, &edge.name)?
+        let wire = fujimod_catalog_wiring::digital_key(&resolved.reference, &edge.name)?
             .ok_or_else(|| format!("{} has no declared digital input", edge.name))?;
         Ok((edge.delay, wire, edge.pressed))
     }).collect::<Result<std::collections::VecDeque<_>, String>>()?;

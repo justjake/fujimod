@@ -1,14 +1,14 @@
-//! The physical contact network: which electrical levels each control pose
+//! The control wiring: which electrical levels each control position
 //! presents, including controls that share a wire.
 //!
-//! Each input's predicate becomes a set of allowed levels per contact target.
+//! Each input's predicate becomes a set of allowed levels per electrical target.
 //! A control pose is the intersection of its inputs' sets (asserted inputs
 //! inside their bands, others outside), and controls sharing a target are
 //! composed so every combination of their poses has one concrete realization.
 use std::collections::{BTreeMap, BTreeSet};
 
-use fujimod_catalog_contacts::{LocatedControl, ScannerRecord, WireKind};
 use fujimod_catalog_controls::AdcInterval;
+use fujimod_catalog_wiring::{LocatedControl, ScannerRecord, WireKind};
 use fujimod_emulator_devices::parts::{
     pins::Pin,
     switch_panel::{Case, Circuit, Control, Signal},

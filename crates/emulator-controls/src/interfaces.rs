@@ -1,6 +1,6 @@
 //! Controls the firmware reads outside the key scanner: rotary encoders, the
 //! touch panel and the power switch.
-use fujimod_catalog_contacts::{Interface, LocatedControl, Wire, WireKind};
+use fujimod_catalog_wiring::{Interface, LocatedControl, Wire, WireKind};
 use fujimod_emulator_devices::parts::{
     pins::Pin,
     switch_panel::{Case, Circuit, Control, Signal},

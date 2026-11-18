@@ -1,9 +1,9 @@
-//! Named keys on a session: control poses through the contact panel, or raw
+//! Named keys on a session: control positions through the wiring, or raw
 //! body connections.
 use std::collections::VecDeque;
 
 use fujimod_catalog::reference::{ConnectionSignal, ResolvedSelection};
-use fujimod_catalog_contacts::{Located, LocatedControl};
+use fujimod_catalog_wiring::{Located, LocatedControl};
 use fujimod_emulator_session::Session;
 
 use crate::{Nodes, connect};
@@ -11,7 +11,7 @@ use crate::{Nodes, connect};
 /// What a key name operates.
 #[derive(Clone, Debug)]
 enum Target {
-    /// A control action or position, through the contact panel.
+    /// A control action or position, through the wiring.
     Control { control: String, choice: Choice },
     /// A body connection's GPIO contact, driven directly.
     Gpio { port: u8, pin: u8, active: bool },
@@ -132,7 +132,7 @@ pub fn check_key(
 }
 
 /// Press or release a named key now. Control keys connect the session's
-/// contact panel on first use, which needs the firmware's loaded configuration.
+/// control wiring on first use, which needs the firmware's loaded configuration.
 pub fn set_key(
     session: &mut Session,
     selection: &ResolvedSelection,
@@ -192,7 +192,7 @@ impl Keys {
         let pending = if edges.is_empty() {
             VecDeque::new()
         } else {
-            let located = fujimod_catalog_contacts::locate(selection)?;
+            let located = fujimod_catalog_wiring::locate(selection)?;
             edges.sort_by_key(|(delay, _, pressed)| (*delay, *pressed));
             edges
                 .into_iter()

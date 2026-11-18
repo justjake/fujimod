@@ -126,7 +126,7 @@ struct Readiness {
 struct FirstStart {
     /// Debug key name pressed to accept a first-start page.
     key: String,
-    located: fujimod_catalog_contacts::Located,
+    located: fujimod_catalog_wiring::Located,
     hold_ticks: u64,
     settle_ticks: u64,
     max_presses: usize,
@@ -176,8 +176,8 @@ fn first_start_key(
     let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
-    let located = fujimod_catalog_contacts::locate(&resolved.reference)?;
-    fujimod_emulator_contacts::check_key(&located, &resolved.reference, key_id)
+    let located = fujimod_catalog_wiring::locate(&resolved.reference)?;
+    fujimod_emulator_controls::check_key(&located, &resolved.reference, key_id)
         .map_err(|error| format!("first-start key {key_id}: {error}"))?;
     Ok(Some(FirstStart {
         key: key_id.to_owned(),
@@ -1396,7 +1396,7 @@ fn press_setup_key(
 ) -> Result<(), String> {
     let selection = &spec.resolved.reference;
     let key = |session: &mut Session, pressed| {
-        fujimod_emulator_contacts::set_key(session, selection, &s.located, &s.key, pressed, EXR2_TICKS_PER_SECOND)
+        fujimod_emulator_controls::set_key(session, selection, &s.located, &s.key, pressed, EXR2_TICKS_PER_SECOND)
     };
     key(session, true)?;
     let held = driver.advance_ticks(session, spec, s.hold_ticks);

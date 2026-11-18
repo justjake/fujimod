@@ -67,9 +67,9 @@ parallel. Open cameras with `execution_policy` `exact` when their runs will
 be compared, so a restored checkpoint replays the same way.
 
 Controls connect when first used, once the firmware has loaded its
-configuration: `fujimod-emulator-contacts` compiles the camera's contact
-panel and contact driver from the catalog and installs them. A camera
-opened from a checkpoint file adopts the contacts saved with it.
+configuration: `fujimod-emulator-controls` builds the camera's control
+wiring and input confirmation from the catalog and installs them. A camera
+opened from a checkpoint file adopts the ones saved with it.
 
 To find the code that handles a key: checkpoint, profile an idle run of the
 same length as the press, restore, profile the press, and diff the two.
