@@ -69,6 +69,17 @@ impl Epoch {
     pub(super) fn room(&self, core: usize) -> u64 {
         self.limit.saturating_sub(self.progress[core])
     }
+    /// Whether the cohort runs another segment. It ends when its first core
+    /// reaches the limit: a peer that executed less does not run on alone,
+    /// because shared memory shows it every store the exhausted cores made
+    /// while those cores cannot answer. A core that leaves a flag rendezvous
+    /// and clears the flags for its next round would then strand a peer that
+    /// set its flag but had not yet read the others, as firmware cross-core
+    /// cache maintenance does. The shortfall is forfeited, as by a slower
+    /// core; the next epoch starts every core together at the frontier.
+    pub(super) fn open(&self, cores: &[usize]) -> bool {
+        cores.iter().all(|&core| self.room(core) > 0)
+    }
     fn clock(&self, core: usize) -> Result<Clock, String> {
         self.clock.after(self.progress[core])
     }
@@ -163,12 +174,12 @@ impl Board {
                 {
                     return Ok(());
                 }
+                if !state.parallel.as_ref().unwrap().open(cores) {
+                    return Ok(());
+                }
                 for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
                     let room = epoch.room(core);
-                    if room == 0 {
-                        continue;
-                    }
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
                         cpu.set_guest_clock(epoch.clock(core)?)?;
