@@ -6,7 +6,8 @@ type DocLink = { title: string; href: string };
 type DocChapter = { title: string; pages: readonly DocLink[] };
 
 export function DocsLayout(props: {
-  home: DocLink;
+  title: string;
+  home?: DocLink;
   chapters: readonly DocChapter[];
   path: string;
   index?: DocLink;
@@ -31,10 +32,14 @@ export function DocsLayout(props: {
 
   return (
     <div class="docs-layout">
-      <nav class="docs-sidebar" aria-label={props.home.title}>
-        <a class="docs-home" href={props.home.href} aria-current={current(props.home.href)}>
-          {props.home.title}
-        </a>
+      <nav class="docs-sidebar" aria-label={props.title}>
+        <Show when={props.home}>
+          {(home) => (
+            <a class="docs-home" href={home().href} aria-current={current(home().href)}>
+              {home().title}
+            </a>
+          )}
+        </Show>
         <Show when={props.searchLabel}>
           <input
             type="search"

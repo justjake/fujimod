@@ -111,7 +111,7 @@ export default function Docs() {
   const component = componentAt(path);
   return (
     <SiteFrame class="sdk-docs">
-      <DocsLayout home={{ title: 'FocalUI', href: sdkRoot }} chapters={chapters} path={path}>
+      <DocsLayout title="FocalUI" home={{ title: 'FocalUI', href: sdkRoot }} chapters={chapters} path={path}>
         <Show when={component} fallback={<Index />}>
           {(found) => <ComponentPage component={found()} />}
         </Show>

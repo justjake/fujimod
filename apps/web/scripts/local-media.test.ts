@@ -68,6 +68,10 @@ await test('frontier, current, promoted and output media use filesystem paths an
       await (await fetch(`${url}/artifacts/docs/media.json`)).text(),
       '{"cards":{"old":{}}}',
     );
+    await writeFile(join(root, 'media/builds/one/site/media.json'), '{"cards":{}}');
+    assert.equal(previewMedia(root, undefined), undefined);
+    const staged = join(root, 'staged');
+    assert.equal(previewMedia(root, staged), staged);
   } finally {
     await new Promise<void>((done) => server.close(() => done()));
     await rm(root, { recursive: true, force: true });

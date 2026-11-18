@@ -10,11 +10,12 @@ import { resolve, sep, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { routes } from './prerender.ts';
-import { manualChapters } from '../src/docs/manual-data.ts';
-import { manualMenus, manualRoot } from '../src/docs/manual-routes.ts';
+import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual-data.ts';
+import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
 import { textPagePath } from '../src/text/routes.ts';
 const root = resolve(process.argv[2] || 'dist/client');
-const manualPage = manualChapters()[0]?.pages[0];
+const chapters = manualChapters();
+const manualPage = chapters[0]?.pages[0];
 assert.ok(manualPage, 'Expected a generated manual page');
 const hoverProof = resolve('build/hover-cards');
 await mkdir(hoverProof, { recursive: true });
@@ -69,6 +70,16 @@ try {
         assert.equal((await page.goto(base + route))?.status(), 200);
         const header = page.locator('.site-header');
         assert.equal(await header.count(), 1);
+        const manual = manualPageAt(route);
+        if (manual) {
+          const anchors = await page
+            .locator('.manual-entry')
+            .evaluateAll((entries) => entries.map((entry) => entry.id));
+          assert.deepEqual(
+            anchors,
+            manual.sections.map((section) => section.anchor),
+          );
+        }
         assert.deepEqual(await header.locator('nav a').allTextContents(), [
           'Manual',
           'Emulator',
@@ -141,12 +152,51 @@ try {
       const docs = await noJs.newPage();
       await docs.goto(base + manualRoot);
       const sidebar = docs.getByRole('navigation', { name: 'Manual' });
+      const outlinePages = docs.locator('.manual-chapters li');
+      assert.deepEqual(
+        await outlinePages.evaluateAll((items) =>
+          items.map((item) => [
+            item.querySelector('a')?.getAttribute('href'),
+            item.querySelector('span')?.textContent,
+          ]),
+        ),
+        chapters.flatMap((chapter) => chapter.pages.map((link) => [link.href, link.summary])),
+      );
+      assert.equal(await docs.locator('main video').count(), 0);
+      assert.equal(await sidebar.locator('.docs-home').count(), 0);
       await sidebar.locator(`a[href="${manualPage.href}"]`).click();
       await docs.waitForURL(base + manualPage.href);
       assert.equal(await sidebar.locator('[aria-current="page"]').innerText(), manualPage.title);
+      assert.equal(await sidebar.locator('.docs-home').count(), 0);
+      assert.equal(await docs.locator('.manual-introduction ol').count(), 1);
       await sidebar.getByRole('link', { name: 'Menu index' }).click();
       await docs.waitForURL(base + manualMenus);
-      assert.equal(await docs.locator('main').innerText(), 'Menu index');
+      assert.equal(await docs.locator('main h1').innerText(), 'Menu index');
+      const menuLinks = docs.locator('.manual-menu-tree a');
+      assert.deepEqual(
+        await menuLinks.evaluateAll((links) =>
+          links.map((link) => [link.textContent, link.getAttribute('href')]),
+        ),
+        manualMenuRows.map((row) => [row.title, `${manualPagePath(row.page)}#${row.anchor}`]),
+      );
+      const alias = manualMenuRows.find((row) => {
+        const section = manualPageAt(manualPagePath(row.page))?.sections.find(
+          (entry) => entry.anchor === row.anchor,
+        );
+        return section?.paths
+          ?.slice(1)
+          .some((path) => path.join(' › ') === [...row.path, row.title].join(' › '));
+      });
+      assert.ok(alias, 'Expected a menu row with an alternate path');
+      const destination = `${manualPagePath(alias.page)}#${alias.anchor}`;
+      await menuLinks
+        .and(docs.locator(`a[href="${destination}"]`))
+        .last()
+        .click();
+      await docs.waitForURL(base + destination);
+      const paths = await docs.locator(`#${alias.anchor} .manual-paths li`).allTextContents();
+      assert.ok(paths.length > 1);
+      assert.ok(paths.includes([...alias.path, alias.title].join(' › ')));
       await docs.goto(base + '/docs/sdk/focal/');
       assert.equal(await docs.getByRole('navigation', { name: 'FocalUI' }).count(), 1);
       await docs.close();

@@ -13,11 +13,6 @@
   max-width: 760px;
 }
 
-.docs-layout .manual-title {
-  margin: 8px 0 6px;
-  font-size: 32px;
-}
-
 .docs-sidebar {
   position: sticky;
   top: 16px;
@@ -43,10 +38,6 @@
 
 .docs-home {
   margin-bottom: 8px;
-}
-
-.manual .docs-home[aria-current] {
-  display: none;
 }
 
 .docs-index {
