@@ -62,7 +62,11 @@ impl Exr2Keys {
             };
             Ok((host::duration_ticks(edge.delay, crate::EXR2_TICKS_PER_SECOND), wire, edge.pressed))
         }).collect::<Result<_, String>>()?;
-        Ok(Self { gpio: inputs.gpio.block_id.clone(), pending, held: BTreeMap::new() })
+        Ok(Self { gpio: crate::x70::node_for_block(&inputs.gpio.block_id)?, pending, held: BTreeMap::new() })
+    }
+
+    pub fn gpio_input(&self, session: &mut Session, port: u8, pin: u8, high: bool) -> Result<(), String> {
+        session.gpio(&self.gpio, port, pin, high)
     }
 
     pub fn advance(&mut self, session: &mut Session, start: u64) -> Result<Option<u64>, String> {
@@ -72,7 +76,7 @@ impl Exr2Keys {
                 return Ok(Some(at));
             }
             match wire {
-                Input::Digital(wire) => session.gpio(&self.gpio, wire.port, wire.pin, wire.active == *press)?,
+                Input::Digital(wire) => self.gpio_input(session, wire.port, wire.pin, wire.active == *press)?,
                 Input::Analog(key) => {
                     let mut samples = session.adc_samples(&key.adc)?;
                     let sample = samples.get_mut(key.channel).ok_or("absent key ADC channel")?;

@@ -263,10 +263,6 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
         boot_options.text("--press")?.as_deref())?;
     let automatic_setup = edges.is_empty();
     let mut keys = boot::keys::Exr2Keys::new(&resolved, edges)?;
-    let gpio = match &resolved.configuration.inputs {
-        Some(RunInputs::Exr2(inputs)) => inputs.gpio.block_id.clone(),
-        _ => return Err("EXR II configuration has no GPIO plan".into()),
-    };
     let clock_seconds_2000 = boot_options
         .text("--clock-seconds-2000")?
         .map(|v| {
@@ -301,7 +297,7 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
     if let Some(levels) = boot_options.text("--gpio")? {
         for level in levels.split(',') {
             let (port, pin, high) = boot::host::parse_gpio(level)?;
-            session.gpio(&gpio, port, pin, high)?;
+            keys.gpio_input(&mut session, port, pin, high)?;
         }
     }
     for poke in &boot_options.pokes {
