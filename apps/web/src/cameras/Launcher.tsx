@@ -231,12 +231,10 @@ export function CameraLauncher(props: {
         </div>
       </section>
       <div class="launcher-firmware">
-        <FirmwarePicker
-          library={props.library}
-          inputId="firmware-file"
-          disabled={props.busy}
-          heading="Base firmware"
-        />
+        <details>
+          <summary>Import firmware</summary>
+          <FirmwarePicker library={props.library} inputId="firmware-file" disabled={busy()} />
+        </details>
         <span
           class={{ 'camera-storage-status': true, error: props.error || !!fetchError() }}
           role="status"
