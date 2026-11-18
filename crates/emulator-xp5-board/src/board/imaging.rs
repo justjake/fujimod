@@ -289,7 +289,7 @@ pub fn register_all(
     for w in windows.iter().filter(|w| {
         matches!(
             w.kind.as_str(),
-            "imaging-reset" | "movdc" | "imaging-resize"
+            "imaging-reset" | "movdc" | "imaging-resize" | "imaging-ibuf"
         )
     }) {
         if w.size != 0x1000 {
@@ -309,6 +309,7 @@ pub fn register_all(
                 number("frame_period_us")?,
                 u8::try_from(number("source_luma")?).map_err(|e| e.to_string())?,
             )?,
+            "imaging-ibuf" => work::Work::ibuf(w.base, number("completion_us")?)?,
             _ => work::Work::resize(w.base, number("completion_us")?)?,
         };
         let work = if retain_words(&w.options)? {

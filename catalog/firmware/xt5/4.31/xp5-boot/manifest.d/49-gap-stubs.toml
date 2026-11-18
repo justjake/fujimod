@@ -18,12 +18,17 @@
 # (0x138a970(0)) and then waits in 0x138a8f0 for bit 0 of +0x00 to read 1, with no timeout: the
 # same reset handshake as the display and LZ blocks. +0x00 therefore reads 1 here (inferred).
 # The X100VI discovery run 1794510140489 touched this page too (25 writes, 1 read).
+# 2026-11-19: now the `imaging-ibuf` model (crates/emulator-xp5-imaging, imaging_work.rs), no longer
+# a stub. Movie live view re-arms IBUF once a frame (start = +0x40 bit 0) and waits for its
+# completion (INTID 169, clear +0x6c) before saclac reports the movie job done; the stub never
+# completed, so movie live view stayed black (run52). +0x00 still reads 1 outside a reset.
+# completion_us is a guess shorter than one 33.3 ms frame, not a measured transfer time.
 [[device]]
 base = 0xff945000
 size = 0x1000
-kind = "bringup-stub"
+kind = "imaging-ibuf"
 [device.options]
-registers = [{ offset = 0x00, mode = "constant", value = 1 }]
+completion_us = 8000
 
 # Four table pages of the sensor/IBUF driver (0x1353fe4, 0x135425c, 0x1354628; bases 0xff94c000,
 # 0xff94d000, 0xff94e000, 0xff94f000 plus a computed index). The register-dump table 0x378db0c
