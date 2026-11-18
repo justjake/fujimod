@@ -2487,7 +2487,7 @@
     "build_overlay_item": {
       "title": "BUILD OVERLAY",
       "path": ["SET-UP", "DEVTOOLS"],
-      "summary": "Shows the body, version and build date in the corner of menus and option popups, and the FujiMod mark with its version in live view. Playback hides it so photo information stays clear. The choice is saved on the SD card.",
+      "summary": "Shows the body, version and build date in the corner of menus and option popups, and the Fujimod mark with its version in live view. Playback hides it so photo information stays clear. The choice is saved on the SD card.",
       "choices": {
         "ON": "Draw the build overlay.",
         "OFF": "Hide the build overlay."
@@ -2505,7 +2505,7 @@
     "fujimod_setup_item": {
       "title": "FUJIMOD SET-UP",
       "path": ["SET-UP"],
-      "summary": "Updates FujiMod over Wi-Fi, backs up the camera’s internal data to the SD card, installs the bootloader for automatic boot and lists the build’s mods.",
+      "summary": "Updates Fujimod over Wi-Fi, backs up the camera’s internal data to the SD card, installs the bootloader for automatic boot and lists the build’s mods.",
       "choices": {},
       "related": [],
       "changes": null,
@@ -3518,7 +3518,7 @@
       "summary": null,
       "choices": {},
       "related": [],
-      "changes": "Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+      "changes": "Adds EXPOSURE COMP. and the Fujimod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
       "drive_mode": null,
       "credits": {
         "premiere": false,
@@ -3719,7 +3719,7 @@
       "path": ["SHOOTING MENU", "FUJIMOD"],
       "summary": "Choose whether each JPEG records the active recipe and its settings in its EXIF User Comment.",
       "choices": {
-        "ON": "Each photo records the recipe name, film simulation, tone and color settings, and the FujiMod effects that are on.",
+        "ON": "Each photo records the recipe name, film simulation, tone and color settings, and the Fujimod effects that are on.",
         "OFF": "Photos are saved as on an unmodified camera."
       },
       "related": [],
@@ -4131,10 +4131,10 @@
       },
       "choice_credits": {}
     },
-    "row:SET-UP/FUJIMOD SET-UP/[build]/MODS": {
+    "row:SET-UP/FUJIMOD SET-UP/MODS": {
       "title": "MODS",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
-      "summary": "Lists the mods in this FujiMod version. Mods this camera cannot run are listed apart.",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "summary": "Lists the mods in this Fujimod version. Mods this camera cannot run are listed apart.",
       "choices": {},
       "related": [],
       "changes": null,
@@ -4191,12 +4191,12 @@
       },
       "choice_credits": {}
     },
-    "row:SET-UP/FUJIMOD SET-UP/[boot]/BOOT SETUP": {
+    "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP": {
       "title": "BOOT SETUP",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Optionally modify the internal firmware to boot FM_EXR2.BIN if present on the SD card. If there is a problem during start-up, the camera boots its original internal firmware instead.",
       "choices": {
-        "MANUAL": "Hold Fn + dial while switching power on to start FujiMod.",
+        "MANUAL": "Hold the SD boot buttons while turning the camera on to start Fujimod.",
         "AUTOMATIC": "Boot FM_EXR2.BIN if present on the SD card. Backs up internal data first."
       },
       "related": [],
@@ -4209,9 +4209,9 @@
       },
       "choice_credits": {}
     },
-    "row:SET-UP/FUJIMOD SET-UP/[build]/CHECK FOR UPDATES": {
+    "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES": {
       "title": "CHECK FOR UPDATES",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "summary": "Connect to fujimod.com over Wi-Fi to update FUJIMOD on your SD card. Keeps your current version installed, and automatically reverts to it if new version crashes during start-up.",
       "choices": {},
       "related": [],
@@ -4224,9 +4224,9 @@
       },
       "choice_credits": {}
     },
-    "row:SET-UP/FUJIMOD SET-UP/[build]/CHECK FOR UPDATES/CONNECT WI-FI": {
+    "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI": {
       "title": "CONNECT WI-FI",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "summary": "Join a Wi-Fi network. Connection details are kept on internal storage shared with PC AUTO SAVE.",
       "choices": {},
       "related": [],
@@ -4599,7 +4599,7 @@
     {
       "title": "APPEARANCE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "order": 4,
+      "order": 9,
       "kind": "group",
       "stock": false,
       "card": "row:SET-UP/FUJIMOD SET-UP/APPEARANCE",
@@ -4609,11 +4609,71 @@
     {
       "title": "BACK UP INTERNAL DATA",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "order": 2,
+      "order": 7,
       "kind": "page",
       "stock": false,
       "card": "row:SET-UP/FUJIMOD SET-UP/BACK UP INTERNAL DATA",
       "feature": "internal_data_backup",
+      "icon": null
+    },
+    {
+      "title": "BOOT SETUP",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 5,
+      "kind": "info",
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/BOOT SETUP",
+      "feature": "bootloader_install",
+      "icon": null
+    },
+    {
+      "title": "BUILT",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 2,
+      "kind": "info",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CHANGE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 6,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "CHECK FOR UPDATES",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 4,
+      "kind": "page",
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES",
+      "feature": "updates",
+      "icon": null
+    },
+    {
+      "title": "COMMIT",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 3,
+      "kind": "info",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
+      "title": "FIRMWARE",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 0,
+      "kind": "info",
+      "stock": false,
+      "card": null,
+      "feature": null,
       "icon": null
     },
     {
@@ -4627,36 +4687,24 @@
       "icon": "mod-fm-features-setup-row"
     },
     {
+      "title": "MODS",
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
+      "order": 1,
+      "kind": "page",
+      "stock": false,
+      "card": "row:SET-UP/FUJIMOD SET-UP/MODS",
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "SHOW WELCOME MESSAGE",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "order": 3,
+      "order": 8,
       "kind": "command",
       "stock": false,
       "card": "row:SET-UP/FUJIMOD SET-UP/SHOW WELCOME MESSAGE",
       "feature": null,
       "icon": null
-    },
-    {
-      "title": "[boot]",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "order": 1,
-      "kind": "group",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null,
-      "anonymous": true
-    },
-    {
-      "title": "[build]",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "order": 0,
-      "kind": "group",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null,
-      "anonymous": true
     },
     {
       "title": "BACKGROUND COLOR",
@@ -4709,28 +4757,8 @@
       "icon": null
     },
     {
-      "title": "BOOT SETUP",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
-      "order": 0,
-      "kind": "info",
-      "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/[boot]/BOOT SETUP",
-      "feature": "bootloader_install",
-      "icon": null
-    },
-    {
-      "title": "CHANGE",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
-      "order": 1,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
       "title": "AUTOMATIC",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
       "order": 1,
       "kind": "command",
       "stock": false,
@@ -4740,7 +4768,7 @@
     },
     {
       "title": "BACK UP INTERNAL DATA",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
       "order": 2,
       "kind": "link",
       "stock": false,
@@ -4750,7 +4778,7 @@
     },
     {
       "title": "MANUAL",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
       "order": 0,
       "kind": "command",
       "stock": false,
@@ -4759,58 +4787,8 @@
       "icon": null
     },
     {
-      "title": "BUILT",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
-      "order": 2,
-      "kind": "info",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "CHECK FOR UPDATES",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
-      "order": 4,
-      "kind": "page",
-      "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/[build]/CHECK FOR UPDATES",
-      "feature": "updates",
-      "icon": null
-    },
-    {
-      "title": "COMMIT",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
-      "order": 3,
-      "kind": "info",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "FIRMWARE",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
-      "order": 0,
-      "kind": "info",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": null
-    },
-    {
-      "title": "MODS",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
-      "order": 1,
-      "kind": "page",
-      "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/[build]/MODS",
-      "feature": null,
-      "icon": null
-    },
-    {
       "title": "CHECK AGAIN",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "order": 0,
       "kind": "command",
       "stock": false,
@@ -4820,17 +4798,17 @@
     },
     {
       "title": "CONNECT WI-FI",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "order": 1,
       "kind": "page",
       "stock": false,
-      "card": "row:SET-UP/FUJIMOD SET-UP/[build]/CHECK FOR UPDATES/CONNECT WI-FI",
+      "card": "row:SET-UP/FUJIMOD SET-UP/CHECK FOR UPDATES/CONNECT WI-FI",
       "feature": null,
       "icon": null
     },
     {
       "title": "DOWNLOAD",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "order": 2,
       "kind": "command",
       "stock": false,
@@ -4840,7 +4818,7 @@
     },
     {
       "title": "RESTART TO UPDATE",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "order": 3,
       "kind": "command",
       "stock": false,
@@ -4850,7 +4828,7 @@
     },
     {
       "title": "SEARCH AGAIN",
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CONNECT WI-FI"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CONNECT WI-FI"],
       "order": 0,
       "kind": "command",
       "stock": false,

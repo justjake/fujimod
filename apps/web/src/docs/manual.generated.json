@@ -72,7 +72,7 @@
           "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "SHOW WELCOME MESSAGE",
           "kind": "command",
-          "order": 3,
+          "order": 8,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--show-welcome-message",
           "cameras": ["X70"],
@@ -97,13 +97,13 @@
           "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "BACK UP INTERNAL DATA",
           "kind": "page",
-          "order": 2,
+          "order": 7,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--back-up-internal-data",
           "cameras": ["X-E2", "X-E2S", "X70"],
           "paths": [
             ["SET-UP", "FUJIMOD SET-UP", "BACK UP INTERNAL DATA"],
-            ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE", "BACK UP INTERNAL DATA"]
+            ["SET-UP", "FUJIMOD SET-UP", "CHANGE", "BACK UP INTERNAL DATA"]
           ],
           "summary": "Saves a copy of internal storage to /BACKUP on the SD card. Includes camera settings, custom settings, and unique factory calibration data.",
           "options": [],
@@ -177,32 +177,13 @@
         },
         {
           "path": ["SET-UP", "FUJIMOD SET-UP"],
-          "title": "[build]",
-          "kind": "group",
-          "order": 0,
-          "stock": false,
-          "anonymous": true,
-          "anchor": "set-up--fujimod-set-up--build",
-          "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]"]],
-          "summary": "View details of the installed firmware.",
-          "options": [],
-          "credits": {
-            "premiere": false,
-            "inspired": [],
-            "thanks": []
-          },
-          "media": null
-        },
-        {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
           "title": "FIRMWARE",
           "kind": "info",
           "order": 0,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--firmware",
+          "anchor": "set-up--fujimod-set-up--firmware",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "FIRMWARE"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "FIRMWARE"]],
           "summary": "Shows the installed firmware version.",
           "options": [],
           "credits": {
@@ -213,14 +194,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+          "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "MODS",
           "kind": "page",
           "order": 1,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--mods",
+          "anchor": "set-up--fujimod-set-up--mods",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "MODS"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "MODS"]],
           "summary": "Lists the mods in this Fujimod version. Mods this camera cannot run are listed apart.",
           "options": [],
           "credits": {
@@ -231,14 +212,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+          "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "BUILT",
           "kind": "info",
           "order": 2,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--built",
+          "anchor": "set-up--fujimod-set-up--built",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "BUILT"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "BUILT"]],
           "summary": "Shows when the running firmware was built.",
           "options": [],
           "credits": {
@@ -249,14 +230,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+          "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "COMMIT",
           "kind": "info",
           "order": 3,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--commit",
+          "anchor": "set-up--fujimod-set-up--commit",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "COMMIT"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "COMMIT"]],
           "summary": "Shows the revision of the running build.",
           "options": [],
           "credits": {
@@ -4371,7 +4352,7 @@
           "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "APPEARANCE",
           "kind": "group",
-          "order": 4,
+          "order": 9,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--appearance",
           "cameras": ["X-E2S", "X70"],
@@ -4547,14 +4528,14 @@
       "introduction": "Open **CHECK FOR UPDATES**, then choose **CONNECT WI-FI** if the camera is offline. When an update is ready, choose **DOWNLOAD** and then **RESTART TO UPDATE**.",
       "sections": [
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+          "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "CHECK FOR UPDATES",
           "kind": "page",
           "order": 4,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--check-for-updates",
+          "anchor": "set-up--fujimod-set-up--check-for-updates",
           "cameras": ["X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"]],
           "summary": "Connect to fujimod.com over Wi-Fi to update FUJIMOD on your SD card. Keeps your current version installed, and automatically reverts to it if new version crashes during start-up.",
           "options": [],
           "credits": {
@@ -4565,14 +4546,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
           "title": "CHECK AGAIN",
           "kind": "command",
           "order": 0,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--check-for-updates--check-again",
+          "anchor": "set-up--fujimod-set-up--check-for-updates--check-again",
           "cameras": ["X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CHECK AGAIN"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CHECK AGAIN"]],
           "summary": "Check whether an update is available.",
           "options": [],
           "credits": {
@@ -4583,14 +4564,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
           "title": "CONNECT WI-FI",
           "kind": "page",
           "order": 1,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--check-for-updates--connect-wi-fi",
+          "anchor": "set-up--fujimod-set-up--check-for-updates--connect-wi-fi",
           "cameras": ["X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CONNECT WI-FI"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CONNECT WI-FI"]],
           "summary": "Join a Wi-Fi network. Connection details are kept on internal storage shared with PC AUTO SAVE.",
           "options": [],
           "credits": {
@@ -4601,22 +4582,15 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CONNECT WI-FI"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CONNECT WI-FI"],
           "title": "SEARCH AGAIN",
           "kind": "command",
           "order": 0,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--check-for-updates--connect-wi-fi--search-again",
+          "anchor": "set-up--fujimod-set-up--check-for-updates--connect-wi-fi--search-again",
           "cameras": ["X70"],
           "paths": [
-            [
-              "SET-UP",
-              "FUJIMOD SET-UP",
-              "[build]",
-              "CHECK FOR UPDATES",
-              "CONNECT WI-FI",
-              "SEARCH AGAIN"
-            ]
+            ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CONNECT WI-FI", "SEARCH AGAIN"]
           ],
           "summary": "Scan again for Wi-Fi networks.",
           "options": [],
@@ -4628,14 +4602,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
           "title": "DOWNLOAD",
           "kind": "command",
           "order": 2,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--check-for-updates--download",
+          "anchor": "set-up--fujimod-set-up--check-for-updates--download",
           "cameras": ["X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "DOWNLOAD"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "DOWNLOAD"]],
           "summary": "Download the available update to the SD card.",
           "options": [],
           "credits": {
@@ -4646,16 +4620,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
           "title": "RESTART TO UPDATE",
           "kind": "command",
           "order": 3,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--build--check-for-updates--restart-to-update",
+          "anchor": "set-up--fujimod-set-up--check-for-updates--restart-to-update",
           "cameras": ["X70"],
-          "paths": [
-            ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "RESTART TO UPDATE"]
-          ],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "RESTART TO UPDATE"]],
           "summary": "Restart the camera to load the downloaded update.",
           "options": [],
           "credits": {
@@ -4674,32 +4646,13 @@
       "sections": [
         {
           "path": ["SET-UP", "FUJIMOD SET-UP"],
-          "title": "[boot]",
-          "kind": "group",
-          "order": 1,
-          "stock": false,
-          "anonymous": true,
-          "anchor": "set-up--fujimod-set-up--boot",
-          "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]"]],
-          "summary": "View and change the way Fujimod starts.",
-          "options": [],
-          "credits": {
-            "premiere": false,
-            "inspired": [],
-            "thanks": []
-          },
-          "media": null
-        },
-        {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
           "title": "BOOT SETUP",
           "kind": "info",
-          "order": 0,
+          "order": 5,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--boot--boot-setup",
+          "anchor": "set-up--fujimod-set-up--boot-setup",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "BOOT SETUP"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "BOOT SETUP"]],
           "summary": "Optionally modify the internal firmware to boot FM_EXR2.BIN if present on the SD card. If there is a problem during start-up, the camera boots its original internal firmware instead.",
           "options": [
             {
@@ -4721,14 +4674,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
+          "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "CHANGE",
           "kind": "page",
-          "order": 1,
+          "order": 6,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--boot--change",
+          "anchor": "set-up--fujimod-set-up--change",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHANGE"]],
           "summary": "Choose how to start Fujimod.",
           "options": [],
           "credits": {
@@ -4739,14 +4692,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
           "title": "MANUAL",
           "kind": "command",
           "order": 0,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--boot--change--manual",
+          "anchor": "set-up--fujimod-set-up--change--manual",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE", "MANUAL"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHANGE", "MANUAL"]],
           "summary": "Start Fujimod using the button combination.",
           "options": [],
           "credits": {
@@ -4757,14 +4710,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+          "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
           "title": "AUTOMATIC",
           "kind": "command",
           "order": 1,
           "stock": false,
-          "anchor": "set-up--fujimod-set-up--boot--change--automatic",
+          "anchor": "set-up--fujimod-set-up--change--automatic",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE", "AUTOMATIC"]],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "CHANGE", "AUTOMATIC"]],
           "summary": "Start Fujimod from the SD card at power-on.",
           "options": [],
           "credits": {
@@ -6505,168 +6458,146 @@
     },
     {
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "title": "[build]",
-      "kind": "group",
-      "order": 0,
-      "stock": false,
-      "anonymous": true,
-      "anchor": "set-up--fujimod-set-up--build",
-      "cameras": ["X-E2", "X-E2S", "X70"],
-      "page": "about-this-version"
-    },
-    {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
       "title": "FIRMWARE",
       "kind": "info",
       "order": 0,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--firmware",
+      "anchor": "set-up--fujimod-set-up--firmware",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "MODS",
       "kind": "page",
       "order": 1,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--mods",
+      "anchor": "set-up--fujimod-set-up--mods",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "BUILT",
       "kind": "info",
       "order": 2,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--built",
+      "anchor": "set-up--fujimod-set-up--built",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "COMMIT",
       "kind": "info",
       "order": 3,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--commit",
+      "anchor": "set-up--fujimod-set-up--commit",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "CHECK FOR UPDATES",
       "kind": "page",
       "order": 4,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--check-for-updates",
+      "anchor": "set-up--fujimod-set-up--check-for-updates",
       "cameras": ["X70"],
       "page": "check-for-updates"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "title": "CHECK AGAIN",
       "kind": "command",
       "order": 0,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--check-for-updates--check-again",
+      "anchor": "set-up--fujimod-set-up--check-for-updates--check-again",
       "cameras": ["X70"],
       "page": "check-for-updates"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "title": "CONNECT WI-FI",
       "kind": "page",
       "order": 1,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--check-for-updates--connect-wi-fi",
+      "anchor": "set-up--fujimod-set-up--check-for-updates--connect-wi-fi",
       "cameras": ["X70"],
       "page": "check-for-updates"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CONNECT WI-FI"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES", "CONNECT WI-FI"],
       "title": "SEARCH AGAIN",
       "kind": "command",
       "order": 0,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--check-for-updates--connect-wi-fi--search-again",
+      "anchor": "set-up--fujimod-set-up--check-for-updates--connect-wi-fi--search-again",
       "cameras": ["X70"],
       "page": "check-for-updates"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "title": "DOWNLOAD",
       "kind": "command",
       "order": 2,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--check-for-updates--download",
+      "anchor": "set-up--fujimod-set-up--check-for-updates--download",
       "cameras": ["X70"],
       "page": "check-for-updates"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHECK FOR UPDATES"],
       "title": "RESTART TO UPDATE",
       "kind": "command",
       "order": 3,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--build--check-for-updates--restart-to-update",
+      "anchor": "set-up--fujimod-set-up--check-for-updates--restart-to-update",
       "cameras": ["X70"],
       "page": "check-for-updates"
     },
     {
       "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "title": "[boot]",
-      "kind": "group",
-      "order": 1,
-      "stock": false,
-      "anonymous": true,
-      "anchor": "set-up--fujimod-set-up--boot",
-      "cameras": ["X-E2", "X-E2S", "X70"],
-      "page": "boot-setup"
-    },
-    {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
       "title": "BOOT SETUP",
       "kind": "info",
-      "order": 0,
+      "order": 5,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--boot--boot-setup",
+      "anchor": "set-up--fujimod-set-up--boot-setup",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "boot-setup"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]"],
+      "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "CHANGE",
       "kind": "page",
-      "order": 1,
+      "order": 6,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--boot--change",
+      "anchor": "set-up--fujimod-set-up--change",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "boot-setup"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
       "title": "MANUAL",
       "kind": "command",
       "order": 0,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--boot--change--manual",
+      "anchor": "set-up--fujimod-set-up--change--manual",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "boot-setup"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
       "title": "AUTOMATIC",
       "kind": "command",
       "order": 1,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--boot--change--automatic",
+      "anchor": "set-up--fujimod-set-up--change--automatic",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "boot-setup"
     },
     {
-      "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
+      "path": ["SET-UP", "FUJIMOD SET-UP", "CHANGE"],
       "title": "BACK UP INTERNAL DATA",
       "kind": "link",
       "order": 2,
@@ -6679,7 +6610,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "BACK UP INTERNAL DATA",
       "kind": "page",
-      "order": 2,
+      "order": 7,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--back-up-internal-data",
       "cameras": ["X-E2", "X-E2S", "X70"],
@@ -6699,7 +6630,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "SHOW WELCOME MESSAGE",
       "kind": "command",
-      "order": 3,
+      "order": 8,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--show-welcome-message",
       "cameras": ["X70"],
@@ -6709,7 +6640,7 @@
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "title": "APPEARANCE",
       "kind": "group",
-      "order": 4,
+      "order": 9,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--appearance",
       "cameras": ["X-E2S", "X70"],
