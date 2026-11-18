@@ -4450,6 +4450,43 @@ mod executable_nor_tests {
             erase_bytes: 4096, page_bytes: 256, erase_ticks: 2, page_ticks: 2,
         }).unwrap().with_executable_range(ExecutableRange::new(4096, 4096).unwrap()).unwrap().with_strict_backing()
     }
+    fn ranged(executable: Option<ExecutableRange>) -> Shared {
+        let nor = Nor::new(vec![0x7f; 0x3000], 0x123456, Geometry {
+            erase_bytes: 4096, page_bytes: 256, erase_ticks: 2, page_ticks: 2,
+        }).unwrap().with_strict_backing()
+            .with_write_ranges(vec![WriteRange { offset: 0x1000, length: 0x100 }]).unwrap();
+        port_from_nor(match executable {
+            Some(range) => nor.with_executable_range(range).unwrap(),
+            None => nor,
+        })
+    }
+    #[test]
+    fn write_ranges_admit_executable_mutations_and_portable_checkpoints_carry_the_range() {
+        let range = ExecutableRange::new(4096, 4096).unwrap();
+        let port = ranged(Some(range));
+        let view = port.lock().unwrap().nor.executable_view().unwrap();
+        let flash = SerialFlashController::new(port.clone(), 37);
+        let mut host = fujimod_emulator_devices::test_host::TestHost::new();
+        {
+            let mut p = port.lock().unwrap();
+            p.nor.write_enable = true;
+            assert!(p.nor.begin(0, Mutation::Program { address: FLASH + 0x1800, bytes: vec![0] }).is_err());
+            p.nor.begin(0, Mutation::Program { address: FLASH + 0x1010, bytes: vec![0x12, 0x34] }).unwrap();
+        }
+        host.now = 2;
+        port.lock().unwrap().nor.complete(&mut host.cx());
+        assert_eq!(unsafe { std::slice::from_raw_parts(view.as_ptr().add(0x10), 2) }, &[0x12, 0x34]);
+        let saved = flash.checkpoint().unwrap();
+        let fresh = ranged(Some(range));
+        let fresh_view = fresh.lock().unwrap().nor.executable_view().unwrap();
+        let mut restored = SerialFlashController::new(fresh, 37);
+        restored.restore_checkpoint(&saved).unwrap();
+        assert_eq!(unsafe { std::slice::from_raw_parts(fresh_view.as_ptr().add(0x10), 2) }, &[0x12, 0x34]);
+        assert_eq!(restored.save(), flash.save());
+        for other in [None, Some(ExecutableRange::new(4096, 8192).unwrap())] {
+            assert!(SerialFlashController::new(ranged(other), 37).validate_checkpoint(&saved).is_err());
+        }
+    }
     #[test]
     fn executable_view_and_export_follow_completed_overlay_and_restore() {
         let mut nor = nor();
