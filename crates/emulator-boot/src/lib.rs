@@ -329,6 +329,9 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         RunStart::SdCard => {
             return Err("native X70 boot does not support SD-card-start configurations".into());
         }
+        RunStart::Setup => {
+            return Err("native X70 boot does not support setup-start configurations".into());
+        }
     }
     let inputs = match configuration.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => inputs,

@@ -5356,7 +5356,9 @@ type RunSettings = Literal["default", "owner"]
 type RunSpi0InputProfile = Literal["absent-hot-shoe-flash-fixed-low-miso"]
 
 
-type RunStart = RunStartVariant0 | RunStartVariant1 | RunStartVariant2
+type RunStart = (
+    RunStartVariant0 | RunStartVariant1 | RunStartVariant2 | RunStartVariant3
+)
 
 
 class RunStartVariant0(TypedDict, total=False):
@@ -5369,6 +5371,10 @@ class RunStartVariant1(TypedDict, total=False):
 
 class RunStartVariant2(TypedDict, total=False):
     kind: Required[Literal["sd_card"]]
+
+
+class RunStartVariant3(TypedDict, total=False):
+    kind: Required[Literal["setup"]]
 
 
 class RunStatistics(TypedDict, total=False):

@@ -1,0 +1,13 @@
+# The boot-setup stage as the boot ROM leaves it. The ROM copies the stage from internal flash
+# into boot SRAM and branches to its base; the mask ROM is not captured, so this start does the
+# same copy from the update image. The extent is the boot-setup stage (update-file offset 0xabc,
+# size 0x2c000, base 0xff800000); its SHA-256 is checked on load. The stage sets its own stack
+# (SP_EL0 = 0xff830d00 at 0xff800004..0xff800020); sp is only the entry value.
+# source_straps = 1 selects the direct-flash path: setup samples 0xff90e000 bit 0 and
+# initializes the serial-flash controller.
+pc = 0xff800000
+sp = 0xff830d00
+dat_offset = 0xabc
+length = 0x2c000
+sha256 = "d65899f242562666e9986e5fc5b7b23136c1b06fc224e7db6511b5ebe8d36426"
+source_straps = 1

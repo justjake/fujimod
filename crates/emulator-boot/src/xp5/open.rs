@@ -388,10 +388,17 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     });
     let mut fragment = rom_start::Fragment::bundled()?;
     let slot_base = match &rom.entry {
-        Entry::MaskRom(_) => 0xff9b_0000,
+        Entry::MaskRom(_) => Some(0xff9b_0000),
         Entry::CardHandoff(handoff) => {
             fragment.power_controller_registers.clone_from(&handoff.power_controller_registers);
-            handoff.slot
+            Some(handoff.slot)
+        }
+        Entry::SetupHandoff(_) => {
+            // The setup start runs from internal flash: no SD host options, no card, and the
+            // power controller's registers are the camera's own.
+            fragment.power_controller_registers.clear();
+            fragment.window_options.clear();
+            None
         }
     };
     state.ram.extend(fragment.ram);
@@ -430,6 +437,9 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             return Err("ROM start found no power-controller endpoint to set registers on".into());
         }
     }
+    let Some(slot_base) = slot_base else {
+        return Ok(state);
+    };
     let slot = state
         .sd
         .iter_mut()
@@ -535,6 +545,15 @@ pub(crate) fn open_from(
                     start.released = true;
                 }
                 Entry::CardHandoff(handoff) => {
+                    start.registers = vec![
+                        (Register::Pc, handoff.pc),
+                        (Register::Pstate, rom_start::ROM_PSTATE),
+                        (Register::Sp, handoff.sp),
+                    ];
+                    start.released = primary;
+                    primary = false;
+                }
+                Entry::SetupHandoff(handoff) => {
                     start.registers = vec![
                         (Register::Pc, handoff.pc),
                         (Register::Pstate, rom_start::ROM_PSTATE),
@@ -903,7 +922,15 @@ pub(crate) fn open_from(
         }
         session.board.write_physical(handoff.pc, &stage)?;
     }
-    if rom.is_some() {
+    if let Some(Entry::SetupHandoff(handoff)) = rom.map(|rom| &rom.entry) {
+        let stage = firmware.xor_dat_range(handoff.dat_offset, handoff.length, &handoff.sha256)?;
+        session.board.write_physical(handoff.pc, &stage)?;
+    }
+    // The setup start has no flash backing until the board declares the serial-NAND medium;
+    // every other early start needs it.
+    let setup_without_flash = storage.is_none()
+        && rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
+    if rom.is_some() && !setup_without_flash {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.ok_or("early startup flash backing is absent")?;
         session.window_action = Some(fujimod_emulator_session::WindowAction {
