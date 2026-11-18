@@ -493,9 +493,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             trace_output.as_ref().map(|output| output.begin(session)).transpose()?
         }
         boot::application::Board::Xp4(board) => {
-            if !stubs.is_empty() {
-                return Err("XP4 CLI substitutions require the shared board backend".into());
-            }
+            board.install_discovery_callee_stubs(&stubs)?;
             if let Some(trace) = &trace_output {
                 board.begin_pc_trace(trace.limit)?;
             }

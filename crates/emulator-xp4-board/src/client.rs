@@ -99,6 +99,37 @@ impl Session {
         }
     }
 
+    /// Attach explicit ARM32 routine substitutions to a discovery session.
+    pub fn install_discovery_callee_stubs(&self, stubs: &[CalleeStub]) -> Result<(), String> {
+        if stubs.is_empty() {
+            return Ok(());
+        }
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        if self.inner.counted || !state.discovery.enabled || !state.callee_stubs.is_empty() || stubs.len() > 4096 {
+            return Err("XP4 callee substitutions require a fresh exact discovery hook set".into());
+        }
+        let mut entries = BTreeMap::new();
+        for stub in stubs {
+            if stub.core >= self.inner.cpus.len() || stub.address & 1 != 0
+                || u32::try_from(stub.address).is_err() || u32::try_from(stub.value).is_err()
+                || entries.insert((stub.core, stub.address), (stub.clone(), 0)).is_some()
+            {
+                return Err("invalid or duplicate XP4 discovery callee substitution".into());
+            }
+        }
+        state.callee_stubs = entries;
+        Ok(())
+    }
+
+    pub fn discovery_callee_stubs(&self) -> serde_json::Value {
+        let state = unsafe { &*self.inner.state.get() };
+        serde_json::json!(state.callee_stubs.values().map(|(stub, hits)| serde_json::json!({
+            "kind":"callee_stub", "name":stub.name, "core":stub.core, "address":format!("{:#x}", stub.address),
+            "value":stub.value, "hits":hits,
+        })).collect::<Vec<_>>())
+    }
+
     pub fn set_scene(&self, scene: &serde_json::Value) -> Result<(), String> {
         self.inner.external_devices(|devices, _| devices.set_scene(scene))
     }

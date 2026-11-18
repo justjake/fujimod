@@ -209,7 +209,11 @@ impl Started {
             Board::Xp4(board) => serde_json::to_value(board.state(false)).map_err(|error| error.to_string())?,
             Board::Xpp(session) => session.board.state(),
         };
-        Ok(json!({"engine":self.engine,"instructions":instructions,"now":now,"state":state}))
+        let stubs = match &self.board {
+            Board::Xp4(board) => board.discovery_callee_stubs(),
+            Board::Xpp(session) => session.board.discovery_callee_stubs(),
+        };
+        Ok(json!({"engine":self.engine,"instructions":instructions,"now":now,"state":state,"discovery_callee_stubs":stubs}))
     }
 }
 
@@ -272,9 +276,7 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
             )));
             let mut definition: xp4::Definition = serde_json::from_value(definition)
                 .map_err(|error| format!("XP4 board definition: {error}"))?;
-            if engine != RunEngine::Unicorn {
-                return Err("XP4 application processors require Unicorn".into());
-            }
+            fujimod_emulator::board::factory::validate_engine(engine, [fujimod_emulator_cpu::Model::CortexA7])?;
             if definition.cores != body.soc.processors.len() {
                 return Err("XP4 startup plan core count differs from the selected SoC".into());
             }

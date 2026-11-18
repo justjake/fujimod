@@ -17,7 +17,7 @@ mod jpeg;
 mod dsp;
 mod still;
 mod timer;
-use fujimod_emulator::board::discovery::Discovery;
+use fujimod_emulator::board::discovery::{CalleeStub, Discovery};
 use fujimod_emulator::board::harness::arm32 as driver_guard;
 use fujimod_emulator::board::observation::calls as observe;
 use fujimod_emulator_cpu::{
@@ -119,6 +119,7 @@ struct RunState {
     memory_watch: Option<observation::MemoryWatch>,
     pc_observers: Vec<BTreeSet<u64>>,
     pc_trace: Option<fujimod_emulator::board::observation::PcRecorder>,
+    callee_stubs: BTreeMap<(usize, u64), (CalleeStub, u64)>,
     devices: Option<devices::Devices>,
     cache_dirty: bool,
     pmu: Vec<Option<fujimod_emulator::board::armv7a::Profile>>,
@@ -351,6 +352,21 @@ impl Cluster {
         self.write_reg(core, arm::PC, pc)?;
         self.cpus[core].stop()
     }
+    fn substitute_callee(&self, core: usize, address: u64) -> Result<bool, String> {
+        let result = unsafe { &mut *self.state.get() }.callee_stubs.get_mut(&(core, address))
+            .map(|(stub, hits)| {
+                *hits = hits.saturating_add(1);
+                stub.value as u32
+            });
+        if let Some(value) = result {
+            let link = self.reg(core, arm::CORE[14])?;
+            self.write_reg(core, arm::CORE[0], value)?;
+            self.redirect(core, link)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn word(&self, core: usize, address: u64) -> Result<u32, String> {
         // The engine is about to execute this word, so its fetch permission
         // already holds: when it translates into plain DRAM, read the backing
@@ -641,6 +657,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         state.tick_phase = phase;
         state.per_core[core] += 1;
         state.waiting[core] = 0;
+        c.substitute_callee(core, address)?;
         return Ok(());
     }
     c.due();
@@ -702,6 +719,9 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
     }
     trace.push_back((address as u32, word));
     observe(c, core, address)?;
+    if c.substitute_callee(core, address)? {
+        return Ok(());
+    }
     special(c, core, address, word)
 }
 /// Passive observations at an entered instruction: labels (milestones and
@@ -2152,6 +2172,7 @@ impl Session {
                 memory_watch: None,
                 pc_observers: vec![BTreeSet::new(); cores],
                 pc_trace: None,
+                callee_stubs: BTreeMap::new(),
                 devices,
                 cache_dirty: false,
                 pmu: (0..cores)
