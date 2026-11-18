@@ -132,6 +132,13 @@ pub struct Shared {
     /// The owner's guest-clock anchor for the next run. Interactive runs
     /// evaluate clocked device reads at anchor + executed time.
     pub guest_clock: Mutex<Option<Clock>>,
+    /// PC and PSTATE as the worker hands control to its owner: before each
+    /// event, run completion and command reply. They stay exact until the
+    /// owner lets the vCPU execute again, so the owner reads them without a
+    /// worker round trip. `parked_valid` is false when publishing failed.
+    pub parked_pc: AtomicU64,
+    pub parked_pstate: AtomicU64,
+    pub parked_valid: AtomicBool,
     run_wakeup: Mutex<Option<RunWakeup>>,
 }
 impl Default for Shared {
@@ -151,6 +158,9 @@ impl Default for Shared {
             budget_timer_kqueue: AtomicI32::new(-1),
             budget_lock: Mutex::new(()),
             guest_clock: Mutex::new(None),
+            parked_pc: AtomicU64::new(0),
+            parked_pstate: AtomicU64::new(0),
+            parked_valid: AtomicBool::new(false),
             run_wakeup: Mutex::new(None),
         }
     }
@@ -623,6 +633,20 @@ impl Processor {
             || id == 0xc230
             || (r.op0 == 3 && r.op1 == 0 && r.crn == 12 && (8..=15).contains(&r.crm))
     }
+    /// Publish the PC and PSTATE the owner may read while this vCPU waits.
+    fn publish_parked(&self) {
+        let pc = self.reg(ffi::PC);
+        let pstate = self.reg(ffi::PSTATE);
+        if let (Ok(pc), Ok(pstate)) = (pc, pstate) {
+            self.shared.parked_pc.store(pc, Ordering::Relaxed);
+            self.shared
+                .parked_pstate
+                .store(pstate & !(1 << 21), Ordering::Relaxed);
+            self.shared.parked_valid.store(true, Ordering::Release);
+        } else {
+            self.shared.parked_valid.store(false, Ordering::Release);
+        }
+    }
     fn read(&self, r: Register) -> Result<Vec<u8>, String> {
         if let Some(id) = Self::id(r) {
             let value = self.reg(id)?
@@ -913,6 +937,7 @@ impl Processor {
                     .send(Err("cannot run/destroy a CPU inside its callback".into()));
             } else {
                 let result = self.execute(c.op);
+                self.publish_parked();
                 let _ = c.reply.send(result);
             }
         }
@@ -1060,6 +1085,7 @@ impl Processor {
         event: Event,
         disconnected: &'static str,
     ) -> Result<(), ExecutionError> {
+        self.publish_parked();
         events
             .send(event)
             .map_err(|_| ExecutionError::Backend(disconnected.into()))?;
@@ -1479,12 +1505,14 @@ pub fn serve(
             }
             Op::Run(request, policy, observe, events) => {
                 let result = p.run(request, policy, observe, &events, &commands);
+                p.publish_parked();
                 let _ = c.reply.send(Ok(Value::Exit(result)));
                 let _ = events.send(Event::Done);
                 p.shared.notify_run_wakeup();
             }
             op => {
                 let result = p.execute(op);
+                p.publish_parked();
                 let _ = c.reply.send(result);
             }
         }
