@@ -129,6 +129,23 @@ pub struct Started {
     snapshot_identity: Option<String>,
 }
 
+impl crate::host::Execution for Started {
+    fn progress(&self) -> (Vec<u64>, u64) {
+        Started::progress(self)
+    }
+
+    fn run_window(&mut self, end: u64, quantum: usize, pause_after: Option<u64>, until: Option<u64>) -> Result<(), String> {
+        match &mut self.board {
+            Board::Xp4(board) => {
+                let total: u64 = board.instructions().into_iter().sum();
+                let remaining = end.min(pause_after.unwrap_or(u64::MAX)).saturating_sub(total);
+                board.run_board_window(remaining.min(quantum as u64), quantum, until)
+            }
+            Board::Xpp(session) => session.run_window(end, quantum, pause_after, until),
+        }
+    }
+}
+
 impl Started {
     pub fn progress(&self) -> (Vec<u64>, u64) {
         match &self.board {
@@ -182,28 +199,11 @@ impl Started {
         if instruction_limit.is_none() && duration.is_none() {
             return Err("application startup requires an instruction or time limit".into());
         }
-        let (counts, now) = self.progress();
-        let limits = crate::host::Limits::from_boundary(now, &counts, instruction_limit, duration, self.ticks_per_second)?;
-        loop {
-            let until = observe(self)?;
-            let (before_counts, before_tick) = self.progress();
-            let total = before_counts.iter().copied().sum();
-            if limits.reached_at(before_tick, total) {
-                break;
-            }
-            let advanced = match &mut self.board {
-                Board::Xp4(board) => {
-                    let remaining = limits.instructions - total;
-                    let until = limits.tick.into_iter().chain(until).min();
-                    board.run_board_window(remaining.min(self.quantum as u64), self.quantum, until)?;
-                    board.now() != before_tick || board.instructions() != before_counts
-                }
-                Board::Xpp(session) => limits.step(session, self.quantum, None, until)?,
-            };
-            if !advanced {
-                break;
-            }
-        }
+        let limits = crate::host::Limits::new(self, instruction_limit, duration, self.ticks_per_second)?;
+        limits.drive(self, self.quantum,
+            |board| observe(board).map(std::ops::ControlFlow::Continue),
+            |_, _| Ok(()),
+        )?;
         let (instructions, now) = self.progress();
         let state = match &self.board {
             Board::Xp4(board) => serde_json::to_value(board.state(false)).map_err(|error| error.to_string())?,

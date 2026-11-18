@@ -43,6 +43,22 @@ pub fn duration_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
         .min(u128::from(u64::MAX)) as u64
 }
 
+/// The scheduler boundary used by native host workflows.
+pub(crate) trait Execution {
+    fn progress(&self) -> (Vec<u64>, u64);
+    fn run_window(&mut self, end: u64, quantum: usize, pause_after: Option<u64>, until: Option<u64>) -> Result<(), String>;
+}
+
+impl Execution for Session {
+    fn progress(&self) -> (Vec<u64>, u64) {
+        (self.board.instruction_counts(), self.board.now())
+    }
+
+    fn run_window(&mut self, end: u64, quantum: usize, pause_after: Option<u64>, until: Option<u64>) -> Result<(), String> {
+        Session::run_window(self, end, quantum, pause_after, until)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct Limits {
     pub instructions: u64,
@@ -51,13 +67,13 @@ pub(crate) struct Limits {
 
 impl Limits {
     pub fn new(
-        session: &Session,
+        session: &impl Execution,
         instructions: Option<u64>,
         duration: Option<Duration>,
         ticks_per_second: u64,
     ) -> Result<Self, String> {
-        Self::from_boundary(session.board.now(), &session.board.instruction_counts(),
-            instructions, duration, ticks_per_second)
+        let (counts, now) = session.progress();
+        Self::from_boundary(now, &counts, instructions, duration, ticks_per_second)
     }
 
     pub fn from_boundary(
@@ -77,27 +93,42 @@ impl Limits {
         Ok(Self { instructions, tick })
     }
 
-    pub fn reached(&self, session: &Session) -> bool {
-        self.reached_at(session.board.now(), session.board.instruction_counts().into_iter().sum())
-    }
-
-    pub fn reached_at(&self, now: u64, instructions: u64) -> bool {
-        self.tick.is_some_and(|tick| now >= tick) || instructions >= self.instructions
+    pub fn reached(&self, session: &impl Execution) -> bool {
+        let (counts, now) = session.progress();
+        self.tick.is_some_and(|tick| now >= tick) || counts.into_iter().sum::<u64>() >= self.instructions
     }
 
     pub fn step(
         self,
-        session: &mut Session,
+        session: &mut impl Execution,
         quantum: usize,
         pause_after: Option<u64>,
         until: Option<u64>,
     ) -> Result<bool, String> {
         let until = self.tick.into_iter().chain(until).min();
-        let before_tick = session.board.now();
-        let before_instructions = session.board.instruction_counts();
+        let before = session.progress();
         session.run_window(self.instructions, quantum, pause_after, until)?;
-        Ok(before_tick != session.board.now()
-            || before_instructions != session.board.instruction_counts())
+        Ok(before != session.progress())
+    }
+
+    /// Run until a budget, a caller stop, or quiescence. Before and after
+    /// callbacks always see the same stopped machine boundary.
+    pub fn drive<E: Execution>(
+        self,
+        session: &mut E,
+        quantum: usize,
+        mut before: impl FnMut(&mut E) -> Result<std::ops::ControlFlow<(), Option<u64>>, String>,
+        mut after: impl FnMut(&mut E, &Result<bool, String>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        while !self.reached(session) {
+            let std::ops::ControlFlow::Continue(until) = before(session)? else { break; };
+            let result = self.step(session, quantum, None, until);
+            after(session, &result)?;
+            if !result? {
+                break;
+            }
+        }
+        Ok(())
     }
 }
 

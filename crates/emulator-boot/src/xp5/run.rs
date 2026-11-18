@@ -256,7 +256,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     }
     let start = session.board.now();
     for (delay, key, pressed) in keys {
-        let delay_ticks = (delay.as_secs_f64() * ticks_per_second as f64) as u64;
+        let delay_ticks = crate::host::duration_ticks(delay, ticks_per_second);
         inputs.key(&mut session, start.saturating_add(delay_ticks), key, pressed)?;
     }
     let interrupted = Arc::new(AtomicBool::new(false));
@@ -266,35 +266,34 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let limits = crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?;
     let slice = ((ticks_per_second / 1_000).max(1)).min(100_000_000);
     let mut next_status =
-        start.saturating_add((status_every.as_secs_f64() * ticks_per_second as f64) as u64);
+        start.saturating_add(crate::host::duration_ticks(status_every, ticks_per_second));
     eprintln!(
         "FUJIMOD XP5 session configuration={configuration_id} firmware={} policy={} quantum={quantum} run={}",
         firmware.id,
         policy.name(),
         run_directory.display()
     );
-    let mut drive = || -> Result<(), String> {
-        loop {
+    let outcome = limits.drive(&mut session, quantum,
+        |session| {
             if interrupted.load(Ordering::Acquire) {
-                break;
+                return Ok(std::ops::ControlFlow::Break(()));
             }
             let now = session.board.now();
-            if limits.reached(&session) {
-                break;
-            }
             let next_patch = patches.advance(&session.board, now, start, ticks_per_second)?;
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }
             let until = next_patch.map_or(now.saturating_add(slice), |at| at.min(now.saturating_add(slice)));
-            let result = limits.step(&mut session, quantum, None, Some(until));
+            Ok(std::ops::ControlFlow::Continue(Some(until)))
+        },
+        |session, result| {
             for line in session.board.take_console() {
                 println!("{line}");
             }
             for frame in session.board.take_frames() {
                 outputs.frame(frame)?;
             }
-            if result == Ok(false) {
+            if result == &Ok(false) {
                 return Err("board is quiescent without an input or device deadline".into());
             }
             if let Err(error) = result {
@@ -310,7 +309,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                 let stop_core = stop_site
                     .and_then(|site| site["cpu"].as_u64())
                     .and_then(|core| usize::try_from(core).ok());
-                let mut error = error;
+                let mut error = error.clone();
                 if let Some(site) = stop_site {
                     if let (Some(tick), Some(pc)) = (site["tick"].as_u64(), site["pc"].as_u64()) {
                         error = format!("{error}; tick={tick} PC={pc:#x}");
@@ -342,17 +341,16 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                     shared_boot_summary(&state, &session.board, policy)
                 );
                 next_status =
-                    now.saturating_add((status_every.as_secs_f64() * ticks_per_second as f64) as u64);
+                    now.saturating_add(crate::host::duration_ticks(status_every, ticks_per_second));
             }
-        }
-        Ok(())
-    };
+            Ok(())
+        },
+    );
     // One exit path for the run loop: a stop, a refused patch, an interrupt and a normal end all
     // finish the board and the outputs, record the board state, then dump and trace, so a run
     // that dies still leaves them. Setup errors above (opening the board, discovery stubs, the
     // execution policy, watch hooks, key scheduling, the Ctrl-C handler) return before anything
     // has run and leave no board state; a panic would also bypass this path.
-    let outcome = drive();
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
