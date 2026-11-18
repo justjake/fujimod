@@ -446,7 +446,9 @@ impl SdHost {
             || !inside(0, self.options.ram_bytes)
                 && (alias || !self.options.ram_banks.iter().any(|&(b, n)| inside(b, n)))
         {
-            return Err("SD DMA exceeds aligned DRAM".into());
+            return Err(format!(
+                "SD DMA exceeds aligned DRAM: address {address:#x} (physical {physical:#x}) length {len:#x}"
+            ));
         }
         Ok(if keep_alias && alias { a } else { physical })
     }
