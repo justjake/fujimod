@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Lucide",
+    "version": "1.58.0",
+    "source": "https://github.com/lucide-icons/lucide/tree/1.58.0",
+    "license": "ISC AND MIT",
+    "files": ["third_party/lucide-LICENSE"]
+  }
+]

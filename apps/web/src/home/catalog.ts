@@ -56,7 +56,7 @@ export type MenuRow = {
   kind: 'group' | 'info' | 'page' | 'value' | 'command' | 'link';
   /** An unlabeled group serves as the parent of its rows. */
   anonymous?: true;
-  /** A stock row whose options FujiMod changes. */
+  /** A stock row FujiMod documents or a stock page it passes through. */
   stock: boolean;
   card: string | null;
   feature: string | null;

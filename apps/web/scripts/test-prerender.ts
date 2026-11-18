@@ -1,7 +1,6 @@
 declare global {
   interface Window {
     __hydrationDOM: Element | null;
-    __hoverCardStates: boolean[];
   }
 }
 import { createServer } from 'node:http';
@@ -10,7 +9,13 @@ import { resolve, sep, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { routes } from './prerender.ts';
+import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual-data.ts';
+import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
+import { textPagePath } from '../src/text/routes.ts';
 const root = resolve(process.argv[2] || 'dist/client');
+const chapters = manualChapters();
+const manualPage = chapters[0]?.pages[0];
+assert.ok(manualPage, 'Expected a generated manual page');
 const hoverProof = resolve('build/hover-cards');
 await mkdir(hoverProof, { recursive: true });
 for (const file of await readdir(root, { recursive: true })) {
@@ -22,10 +27,11 @@ for (const file of await readdir(root, { recursive: true })) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://test');
+  const textRoute = textPagePath(url.pathname);
   const path = resolve(
     root,
-    '.' + decodeURIComponent(url.pathname),
-    url.pathname.endsWith('/') ? 'index.html' : '',
+    textRoute ? `.${textRoute}.html` : '.' + decodeURIComponent(url.pathname),
+    !textRoute && url.pathname.endsWith('/') ? 'index.html' : '',
   );
   if (!path.startsWith(root + sep)) {
     res.writeHead(403).end();
@@ -61,6 +67,29 @@ try {
       for (const route of routes) {
         const page = await noJs.newPage();
         assert.equal((await page.goto(base + route))?.status(), 200);
+        const header = page.locator('.site-header');
+        assert.equal(await header.count(), 1);
+        const manual = manualPageAt(route);
+        if (manual) {
+          const anchors = await page
+            .locator('.manual-entry')
+            .evaluateAll((entries) => entries.map((entry) => entry.id));
+          assert.deepEqual(
+            anchors,
+            manual.sections.map((section) => section.anchor),
+          );
+        }
+        assert.deepEqual(await header.locator('nav a').allTextContents(), [
+          'Manual',
+          'Emulator',
+          'Safety',
+          'Dev Tools',
+          'Recovery',
+        ]);
+        assert.equal(
+          await header.getByRole('link', { name: 'Discord' }).getAttribute('href'),
+          'https://discord.gg/jWvFPakw7X',
+        );
         const title = await page.title();
         const description = await page.locator('meta[name="description"]').getAttribute('content');
         assert.ok(description);
@@ -106,9 +135,73 @@ try {
         }
         await page.close();
       }
+      const safety = await noJs.newPage();
+      await safety.goto(base + '/safety');
+      const outline = safety.getByRole('navigation', { name: 'On this page' });
+      assert.equal(await outline.evaluate((nav) => getComputedStyle(nav).position), 'sticky');
+      assert.deepEqual(
+        await outline.getByRole('link').allTextContents(),
+        await safety.locator('main h2, main h3').allTextContents(),
+      );
+      const atomicUpdates = outline.getByRole('link', { name: 'Atomic updates' });
+      await atomicUpdates.click();
+      await safety.waitForURL(base + '/safety#atomic-updates');
+      await safety.close();
+
+      const docs = await noJs.newPage();
+      await docs.goto(base + manualRoot);
+      const sidebar = docs.getByRole('navigation', { name: 'Manual' });
+      const outlinePages = docs.locator('.manual-chapters li');
+      assert.deepEqual(
+        await outlinePages.evaluateAll((items) =>
+          items.map((item) => [
+            item.querySelector('a')?.getAttribute('href'),
+            item.querySelector('span')?.textContent,
+          ]),
+        ),
+        chapters.flatMap((chapter) => chapter.pages.map((link) => [link.href, link.summary])),
+      );
+      assert.equal(await docs.locator('main video').count(), 0);
+      assert.equal(await sidebar.locator('.docs-home').count(), 0);
+      await sidebar.locator(`a[href="${manualPage.href}"]`).click();
+      await docs.waitForURL(base + manualPage.href);
+      assert.equal(await sidebar.locator('[aria-current="page"]').innerText(), manualPage.title);
+      assert.equal(await sidebar.locator('.docs-home').count(), 0);
+      assert.equal(await docs.locator('.manual-introduction ol').count(), 1);
+      await sidebar.getByRole('link', { name: 'Menu index' }).click();
+      await docs.waitForURL(base + manualMenus);
+      assert.equal(await docs.locator('main h1').innerText(), 'Menu index');
+      const menuLinks = docs.locator('.manual-menu-tree a');
+      assert.deepEqual(
+        await menuLinks.evaluateAll((links) =>
+          links.map((link) => [link.textContent, link.getAttribute('href')]),
+        ),
+        manualMenuRows.map((row) => [row.title, `${manualPagePath(row.page)}#${row.anchor}`]),
+      );
+      const alias = manualMenuRows.find((row) => {
+        const section = manualPageAt(manualPagePath(row.page))?.sections.find(
+          (entry) => entry.anchor === row.anchor,
+        );
+        return section?.paths
+          ?.slice(1)
+          .some((path) => path.join(' › ') === [...row.path, row.title].join(' › '));
+      });
+      assert.ok(alias, 'Expected a menu row with an alternate path');
+      const destination = `${manualPagePath(alias.page)}#${alias.anchor}`;
+      await menuLinks
+        .and(docs.locator(`a[href="${destination}"]`))
+        .last()
+        .click();
+      await docs.waitForURL(base + destination);
+      const paths = await docs.locator(`#${alias.anchor} .manual-paths li`).allTextContents();
+      assert.ok(paths.length > 1);
+      assert.ok(paths.includes([...alias.path, alias.title].join(' › ')));
+      await docs.goto(base + '/docs/sdk/focal/');
+      assert.equal(await docs.getByRole('navigation', { name: 'FocalUI' }).count(), 1);
+      await docs.close();
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'I’m making FujiMod to unlock your camera’s full potential.'],
+        ['/', 'Today we’re releasing the second version of Fujimod'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -133,11 +226,11 @@ try {
             await page.getByRole('button', { name: 'New camera', exact: true }).count(),
             0,
           );
-          assert.equal(await page.locator('#camera-table').count(), 0);
+          assert.equal(await page.locator('#camera-table').count(), 1);
           assert.equal(await page.locator('header .site-nav').count(), 1);
-          assert.equal(await page.locator('.personal-note').count(), 1);
-          assert.equal(await page.locator('#features').count(), 1);
-          assert.equal(await page.locator('.sd-download').count(), 1);
+          assert.equal(await page.locator('.release-personal-note').count(), 1);
+          assert.equal(await page.locator('.home-reel').count(), 3);
+          assert.equal(await page.locator('.home-download').count(), 1);
           assert.equal(
             await page
               .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
@@ -158,54 +251,12 @@ try {
       await touchPage.waitForFunction(
         () => performance.getEntriesByName('camera-catalog-ready').length > 0,
       );
-      const trigger = touchPage.locator('#features .catalog-ref').first();
-      await touchPage.evaluate(() => {
-        window.__hoverCardStates = [];
-        const card = document.querySelector('.catalog-card')!;
-        new MutationObserver(() => {
-          window.__hoverCardStates.push(card.classList.contains('on'));
-        }).observe(card, { attributes: true, attributeFilter: ['class'] });
-      });
+      const trigger = touchPage.locator('.home-reels .manual-feature-link').first();
       await trigger.tap();
-      await touchPage.waitForTimeout(600);
-      const states = await touchPage.evaluate(() => window.__hoverCardStates);
-      assert.ok(states.includes(true), `${type.name()}: the tap must open its card`);
-      assert.ok(
-        states.slice(states.indexOf(true)).every(Boolean),
-        `${type.name()}: focus and compatibility mouse events must not close the tapped card: ${JSON.stringify(states)}`,
-      );
-      assert.equal(
-        await touchPage.locator('.catalog-card.on').count(),
-        1,
-        `${type.name()}: the first tap must keep its card open`,
-      );
+      await touchPage.locator('.catalog-card.on').waitFor();
       await touchPage.screenshot({ path: resolve(hoverProof, `${type.name()}-touch.png`) });
-      await trigger.tap();
-      await touchPage.waitForTimeout(600);
-      assert.equal(
-        await touchPage.locator('.catalog-card.on').count(),
-        0,
-        `${type.name()}: the second tap must dismiss its card`,
-      );
-      await trigger.tap();
-      await touchPage.waitForTimeout(600);
-      assert.equal(await touchPage.locator('.catalog-card.on').count(), 1);
       await touchPage.touchscreen.tap(4, 4);
-      assert.equal(
-        await touchPage.locator('.catalog-card.on').count(),
-        0,
-        `${type.name()}: an outside tap must dismiss the card`,
-      );
-      const option = touchPage.locator('#features .catalog-chip.catalog-ref').first();
-      const optionLabel = await option.innerText();
-      await option.tap();
-      await touchPage.waitForTimeout(600);
-      assert.equal(
-        await touchPage.locator('.catalog-card.on .catalog-card-title').innerText(),
-        optionLabel,
-      );
-      await touchPage.touchscreen.tap(4, 4);
-      assert.equal(await touchPage.locator('.catalog-card.on').count(), 0);
+      await touchPage.locator('.catalog-card.on').waitFor({ state: 'detached' });
       await touch.close();
       const context = await browser.newContext();
       const page = await context.newPage();
@@ -262,34 +313,24 @@ try {
         'hydrate existing homepage nodes',
       );
       assert.equal(await page.locator('header .site-nav').count(), 1);
-      assert.equal(await page.locator('.personal-note').count(), 1);
+      assert.equal(await page.locator('.release-personal-note').count(), 1);
       assert.equal(await page.locator('h1').count(), 0);
-      assert.equal(await page.locator('.sd-download').count(), 1);
+      assert.equal(await page.locator('.home-download').count(), 1);
       assert.equal(
         await page
           .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
           .count(),
         0,
       );
-      await page.locator('#features .catalog-ref').first().focus();
-      assert.equal(await page.locator('.catalog-card.on').count(), 1);
+      await page.locator('.home-reels .manual-feature-link').first().focus();
+      await page.locator('.catalog-card.on').waitFor();
       await page.keyboard.press('Escape');
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
-      const desktopTrigger = page.locator('#features .catalog-ref').first();
+      await page.locator('.catalog-card.on').waitFor({ state: 'detached' });
+      const desktopTrigger = page.locator('.home-reels .manual-feature-link').first();
       await desktopTrigger.hover();
       await page.locator('.catalog-card.on').waitFor();
       await page.mouse.move(0, 0);
       await page.waitForTimeout(300);
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
-      await desktopTrigger.click();
-      await page.mouse.move(0, 0);
-      await page.waitForTimeout(300);
-      assert.equal(await page.locator('.catalog-card.on').count(), 1);
-      await page.keyboard.press('Escape');
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
-      await desktopTrigger.press('Enter');
-      assert.equal(await page.locator('.catalog-card.on').count(), 1);
-      await desktopTrigger.press(' ');
       assert.equal(await page.locator('.catalog-card.on').count(), 0);
       // The idle homepage has no camera bar; feedback opens from its URL.
       await page.goto(base + '/?feedback');
@@ -316,6 +357,14 @@ try {
         .filter({ hasText: 'This link has no valid camera report.' })
         .waitFor();
       assert.equal(await page.locator('meta[name="fujimod-local-reports"]').count(), 0);
+      await page.goto(base + manualRoot);
+      const search = page.getByRole('searchbox', { name: 'Search the manual' });
+      const chapterLink = page.locator(`.docs-sidebar a[href="${manualPage.href}"]`);
+      await search.fill('zzzzzzzz');
+      await chapterLink.waitFor({ state: 'detached' });
+      await search.clear();
+      await chapterLink.click();
+      await page.waitForURL(base + manualPage.href);
       assert.deepEqual(errors, [], `${type.name()} page errors`);
       assert.deepEqual(diagnostics, [], `${type.name()} hydration/reactivity diagnostics`);
       await context.close();

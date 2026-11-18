@@ -1,270 +1,106 @@
-.sd-download {
-  max-width: var(--content-width);
-  margin: 0 auto 56px;
-  scroll-margin-top: 24px;
-}
-.sd-download > .section-heading {
-  margin-bottom: 12px;
-}
-.sd-release-version {
-  margin: 0 0 22px;
-  color: var(--dim);
-  font-size: 12px;
-}
-.sd-tree .sd-twist {
-  display: grid;
-  place-items: center;
-  flex: none;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: inherit;
-  cursor: pointer;
-}
-
-/* Round selection marks, as in iOS lists. */
-.sd-check {
-  appearance: none;
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  border-radius: 50%;
-  border: 1.5px solid rgb(235 235 245 / 35%);
-  background: transparent;
-  cursor: pointer;
-}
-.sd-check:checked,
-.sd-check:indeterminate {
-  border-color: #0a84ff;
-  background: #0a84ff;
-}
-.sd-check:checked::after {
-  content: '';
-  width: 5px;
-  height: 9px;
-  margin-top: -2px;
-  border: solid #fff;
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-.sd-check:indeterminate::after {
-  content: '';
-  width: 8px;
-  height: 2px;
-  border-radius: 1px;
-  background: #fff;
-}
-.sd-check:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-.sd-check:focus-visible {
-  outline: 2px solid #0a84ff;
-  outline-offset: 2px;
-}
-
-/* The camera checklist floats over the card's top edge. */
-.sd-cameras {
-  position: relative;
-  z-index: 1;
-  width: min(100% - 32px, 440px);
-  margin: 0 auto -44px;
-  border-radius: 14px;
-  background: rgb(44 44 46 / 92%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow:
-    0 0 0 0.5px rgb(255 255 255 / 12%),
-    0 18px 48px rgb(0 0 0 / 60%);
-  overflow: hidden;
-}
-.sd-camera {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 52px;
-  padding: 6px 16px 6px 14px;
-  cursor: pointer;
-}
-.sd-camera + .sd-camera {
-  box-shadow: inset 0 0.5px rgb(84 84 88 / 65%);
-}
-.sd-camera.blocked {
-  cursor: default;
-  color: rgb(235 235 245 / 35%);
-}
-.sd-camera-name {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+.home-download {
+  grid-area: download;
+  position: sticky;
+  top: 24px;
   min-width: 0;
-  font-size: 15px;
 }
-.sd-camera-name b {
-  font-weight: 600;
-}
-.sd-camera-name span,
-.sd-camera-version,
-.sd-camera-mods {
-  font-size: 12px;
-  color: rgb(235 235 245 / 55%);
-  white-space: nowrap;
-}
-.sd-camera-version,
-.sd-camera-mods {
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.sd-camera-mods {
-  min-width: 4.5em;
-  text-align: right;
-  color: rgb(235 235 245 / 80%);
-}
-
-.sd-card {
+.home-sd-card {
   position: relative;
-  isolation: isolate;
-  display: flex;
-  flex-direction: column;
-  /* A full-size SD card is 24 by 32 mm. */
-  aspect-ratio: 3 / 4;
-  padding: 64px 20px 40px 24px;
+  padding: 22px 20px 18px;
+  border: 1px solid #3a3a3c;
+  border-radius: 14px 0 14px 14px;
+  background: linear-gradient(#232325, #19191b);
 }
-.sd-card > .sd-tree {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 6px 10px 6px 4px;
-  border: 1px solid rgb(255 255 255 / 12%);
-  border-radius: 12px;
-  background: rgb(0 0 0 / 18%);
-}
-.sd-shape {
+.home-sd-card::after {
+  content: '';
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  overflow: visible;
-  filter: drop-shadow(0 24px 60px rgb(0 0 0 / 70%));
+  top: -1px;
+  right: -1px;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(225deg, #000 50%, #3a3a3c 50% 52%, transparent 52%);
 }
-.sd-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  /* Clear of the chamfered top-right corner. */
-  margin: 0 min(12%, 96px) 14px 0;
-  padding: 0 0 16px;
-  border-bottom: 1px solid rgb(255 255 255 / 8%);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  color: rgb(235 235 245 / 45%);
-}
-.sd-lead {
-  margin: 0 0 14px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: rgb(235 235 245 / 70%);
-}
-.sd-label img {
+.home-sd-card img {
+  display: block;
   image-rendering: pixelated;
 }
-
-.sd-tree {
-  --file-dim: rgb(235 235 245 / 45%);
-  --file-line: rgb(255 255 255 / 9%);
-  font-size: 13.5px;
+.home-sd-card p {
+  margin: 10px 0 16px;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.5;
 }
-.sd-tree .sd-row {
-  gap: 7px;
-  height: auto;
-  min-height: 28px;
-  padding-block: 4px;
-  align-items: flex-start;
-  line-height: 20px;
+.home-sd-card fieldset {
+  min-inline-size: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 0;
+  padding: 10px 0 4px;
 }
-.sd-tree .sd-row > *,
-.sd-tree .sd-row .fold > * {
-  min-height: 20px;
+.home-sd-card legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
 }
-.sd-tree .sd-row .fold {
-  align-items: flex-start;
-}
-.sd-tree .sd-row .n,
-.sd-tree .folder .fold .n {
-  flex: none;
-  min-width: 13ch;
-}
-.sd-count {
-  color: var(--file-dim);
-}
-.sd-tree .sd-row.dim > :not(.sd-slot, .sd-twist),
-.sd-tree .sd-row.dim .fold > *,
-.sd-tree .sd-row.dim .sd-twist > * {
-  opacity: 0.38;
-}
-.sd-tree .sd-slot {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 20px;
-}
-.sd-tree .sd-row .n {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 12.5px;
-}
-.sd-tree .folder .n {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-}
-.sd-detail {
-  flex: 1;
-  min-width: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-  font-size: 12.5px;
-  line-height: 20px;
-  color: var(--file-dim);
-}
-
-.sd-actions {
-  /* The button straddles the card's bottom edge. */
-  position: absolute;
-  inset: auto 0 -22px;
+.home-sd-card label {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  clear: both;
+  padding: 5px 0;
+  font-size: 14px;
 }
-.sd-scroll {
-  max-height: 300px;
+.home-sd-card small {
+  margin-inline-start: auto;
+  color: var(--dim);
+}
+.home-sd-card input {
+  accent-color: var(--blue);
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.home-sd-card details {
+  margin-inline-start: 26px;
+  font-size: 13px;
+  color: var(--dim);
+}
+.home-sd-card summary {
+  cursor: pointer;
+}
+.home-recipe-list {
+  max-height: min(220px, 32vh);
   overflow-y: auto;
-  overscroll-behavior: contain;
 }
-.sd-source {
-  color: inherit;
-  text-decoration: underline;
-  text-decoration-color: rgb(235 235 245 / 30%);
-  text-underline-offset: 3px;
+.home-recipe-list label {
+  font-size: 13px;
+  color: #c7c7cc;
 }
-.sd-source:hover {
-  color: #64d2ff;
-  text-decoration: underline;
+.home-download-button {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #0065d1;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
 }
-@media (max-width: 560px) {
-  .sd-card {
-    padding: 56px 12px 36px 16px;
-  }
-  .sd-tree .sd-row,
-  .sd-tree .sd-row .fold {
-    flex-wrap: wrap;
-  }
-  .sd-tree .sd-row > .sd-detail {
-    order: 1;
-    flex-basis: 100%;
-    padding-left: 61px;
-  }
-  .sd-tree .sd-row .fold > .sd-detail {
-    flex-basis: 100%;
-    padding-left: 20px;
+.home-download-button:disabled {
+  background: var(--key);
+  color: var(--dim);
+  cursor: default;
+}
+@media (max-width: 900px) {
+  .home-download {
+    position: static;
   }
 }

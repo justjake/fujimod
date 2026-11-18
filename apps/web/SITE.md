@@ -43,6 +43,10 @@ organizing them:
 6. Controls and Display
 7. System & Storage (updates, BOOT SETUP, backups, SD card, system changes)
 
+Everything under `/docs/` is rendered from generated data files; the website
+code holds no manual text, page lists, chapter order or menu structure. Each
+feature page opens with a short introduction, then a section per menu row.
+
 The menu index (`/docs/manual/menus/`) lists every menu row Fujimod adds or
 changes, in camera menu order, using the same rows and order as the home
 page outline. Each row is a link to its place on the manual page that covers
@@ -52,8 +56,14 @@ the chapters, and every shown row maps to a page.
 ## Other pages
 
 - `/safety`: the risks of custom firmware and how Fujimod mitigates them.
-- `/credits`: everyone in `contributors/`.
-- `/releases`: all release notes.
+- `/credits`: GitHub Contributors (from `contributors/`), Testing & Feedback,
+  Recipe Authors (each author with their recipes, linked to each recipe's
+  source) and Open Source (generated from a CycloneDX SBOM of everything the
+  camera image, website and emulator ship, with each license's full text and
+  a link to the source at the shipped version).
+- `/releases`: all release notes, read from the GitHub releases at build time.
+
+The personal note and the safety text are written in the website itself.
 
 Text pages (`/safety`, `/credits`, release notes) share one layout with an
 outline of their headings beside the text. The manual and the SDK docs share

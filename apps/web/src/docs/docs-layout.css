@@ -1,0 +1,95 @@
+.docs-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #f2f2f7;
+  --docs-line: #2c2c2e;
+}
+
+.docs-layout main {
+  max-width: 760px;
+}
+
+.docs-sidebar {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding-bottom: 24px;
+  font-size: 12px;
+}
+
+.docs-sidebar ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.docs-home,
+.docs-index,
+.docs-chapter > span {
+  display: block;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.docs-home {
+  margin-bottom: 8px;
+}
+
+.docs-index {
+  border-top: 1px solid var(--docs-line);
+  padding-top: 12px;
+}
+
+.docs-sidebar input {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--docs-line);
+  border-radius: 8px;
+  background: #1c1c1e;
+  color: inherit;
+  font: inherit;
+}
+
+.docs-chapter {
+  margin-bottom: 14px;
+}
+
+.docs-chapter > span {
+  margin-bottom: 4px;
+}
+
+.docs-chapter a {
+  display: block;
+  padding: 2px 0 2px 10px;
+  border-left: 1px solid var(--docs-line);
+  color: var(--dim);
+  text-decoration: none;
+}
+
+.docs-chapter a:hover,
+.docs-chapter a[aria-current] {
+  color: inherit;
+  border-color: currentColor;
+}
+
+.docs-chapter a[aria-current] {
+  border-color: var(--blue);
+}
+
+@media (width <= 900px) {
+  .docs-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .docs-sidebar {
+    position: static;
+    max-height: 40dvh;
+  }
+}

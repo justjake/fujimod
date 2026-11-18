@@ -1,11 +1,10 @@
 import { For, Show } from 'solid-js';
 import { getRequestEvent } from '@solidjs/web';
-import { SiteHeader } from '../ui/site-header';
+import { SiteFrame } from '../ui/SiteFrame';
+import { DocsLayout } from './DocsLayout';
 import { focalComponents, type FocalApiDeclaration, type FocalComponent } from './sdk.generated';
 import FocalUIPreview from './FocalUIPreview';
 import { Markdown, highlightC } from './Markdown';
-import '../home/site.css';
-import '../navigation.css';
 import './docs.css';
 
 function currentPath(): string {
@@ -25,29 +24,14 @@ function declarationSignature(declaration: FocalApiDeclaration): string {
   return declaration.signature;
 }
 
-function Sidebar(props: { current?: string }) {
-  return (
-    <nav class="sdk-sidebar" aria-label="FocalUI components">
-      <a class="sdk-home" href="/docs/sdk/focal/">
-        FocalUI
-      </a>
-      <ul>
-        <For each={focalComponents}>
-          {(component) => (
-            <li>
-              <a
-                href={`/docs/sdk/focal/components/${component.slug}/`}
-                aria-current={props.current === component.slug ? 'page' : undefined}
-              >
-                {component.title}
-              </a>
-            </li>
-          )}
-        </For>
-      </ul>
-    </nav>
-  );
-}
+const sdkRoot = '/docs/sdk/focal/';
+const chapters = [{
+  title: 'Components',
+  pages: focalComponents.map((component) => ({
+    title: component.title,
+    href: `${sdkRoot}components/${component.slug}/`,
+  })),
+}];
 
 function Members(props: { declaration: FocalApiDeclaration }) {
   return (
@@ -123,18 +107,15 @@ function Index() {
 }
 
 export default function Docs() {
-  const component = () => componentAt(currentPath());
+  const path = currentPath();
+  const component = componentAt(path);
   return (
-    <div class="shell sdk-docs">
-      <SiteHeader root="/" />
-      <div class="sdk-layout">
-        <Sidebar current={component()?.slug} />
-        <main>
-          <Show when={component()} fallback={<Index />}>
-            {(found) => <ComponentPage component={found()} />}
-          </Show>
-        </main>
-      </div>
-    </div>
+    <SiteFrame class="sdk-docs">
+      <DocsLayout title="FocalUI" home={{ title: 'FocalUI', href: sdkRoot }} chapters={chapters} path={path}>
+        <Show when={component} fallback={<Index />}>
+          {(found) => <ComponentPage component={found()} />}
+        </Show>
+      </DocsLayout>
+    </SiteFrame>
   );
 }

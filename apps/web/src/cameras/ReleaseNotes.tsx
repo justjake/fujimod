@@ -23,6 +23,8 @@ function Inline(props: { text: string; depth?: number }) {
             </em>
           );
         const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+        if (link?.[2].startsWith('feature:'))
+          return <Inline text={link[1]} depth={(props.depth ?? 0) + 1} />;
         if (link && /^(https?:\/\/|\/[^/]|#)/i.test(link[2]))
           return (
             <a href={link[2]} target="_blank" rel="noopener noreferrer">

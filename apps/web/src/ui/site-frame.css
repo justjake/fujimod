@@ -1,0 +1,70 @@
+@import '@fujimod/emulator-ui/style.css';
+
+.shell {
+  /* Width of a single column of content, such as the camera launcher. */
+  --content-width: 820px;
+  max-width: 1240px;
+  margin: auto;
+  padding: 0 28px 48px;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  width: 100%;
+  max-width: 1184px;
+  min-height: 88px;
+  margin-inline: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.site-brand img {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+}
+
+.site-nav a,
+.site-discord {
+  color: var(--dim);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-nav a[aria-current],
+.site-nav a:hover,
+.site-discord:hover {
+  color: #f2f2f7;
+}
+
+.site-discord {
+  margin-left: auto;
+}
+
+@media (width <= 820px) {
+  .shell {
+    padding: 0 14px 36px;
+  }
+}
+
+@media (width <= 620px) {
+  .site-header {
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    min-height: 0;
+    padding-block: 12px;
+  }
+
+  .site-nav {
+    order: 1;
+    width: 100%;
+    gap: 4px 16px;
+  }
+}
