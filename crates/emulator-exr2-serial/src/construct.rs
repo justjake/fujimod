@@ -173,13 +173,14 @@ fn i2c_motor_bridge(builder: Builder<'_>, model: Model) -> Result<Built, String>
         pulses,
         gpio,
         clock_irq,
+        optics,
     } = model
     else {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device({
         let options: fujimod_emulator_parts_lens::lens::bridge::Options = decode(options)?;
-        Box::new(Bridge::new(
+        let mut bridge = Bridge::new(
             options,
             fujimod_emulator_parts_lens::lens::bridge::Wiring {
                 registers: wire!(resources, id, registers, BridgeRegisters),
@@ -187,7 +188,11 @@ fn i2c_motor_bridge(builder: Builder<'_>, model: Model) -> Result<Built, String>
                 gpio: resources.pads(&gpio)?,
                 clock_irq: line(clock_irq)?,
             },
-        )?)
+        )?;
+        if let Some(optics) = optics {
+            bridge.attach_aperture(wire!(resources, id, optics.output, Aperture), optics.positions)?;
+        }
+        Box::new(bridge)
     }))
 }
 

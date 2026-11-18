@@ -347,6 +347,9 @@ pub enum Model {
         pulses: String,
         gpio: String,
         clock_irq: InterruptLine,
+        /// Iris driven by this bridge: physical position to f-number.
+        #[serde(default)]
+        optics: Option<Iris>,
     },
     Block86000 {
         options: pulse::block86000::Options,

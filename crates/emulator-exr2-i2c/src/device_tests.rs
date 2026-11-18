@@ -528,3 +528,58 @@ fn touch_reports_use_wire_reads_irq_masks_and_exact_deadlines_and_restore_in_fli
         }
     }
 }
+
+#[test]
+fn extra_register_targets_swap_in_on_addressing_and_keep_the_bridge_registers() {
+    // Bus1 with two register chips: 114 (the lens bridge, declared target) and
+    // 10 (an extra target). Addressing one swaps it in; each keeps its values.
+    let mut host = Services::default();
+    let (_, controllers) = controllers(&mut host, 102);
+    let options = serde_json::from_value(json!({
+        "base":0xfff85040u32,"irq":102,"modes":[9],"transfer_ticks":4,
+        "profile":"declared-bus1-register-replies-unmeasured","parts":{"kind":"secondary",
+        "register_address":114,"pwic_address":null,"register_modes":[9],"pwic_modes":[1],
+        "register_values":[[0,0],[2,0]],"register_masks":[[0,0xff],[2,0xff]],"pwic_values":[],
+        "pwic_masks":[],"pwic_read_prefixes":[],"topology":[114,10],"connected":false,
+        "extra_registers":[{"address":10,"modes":[9],"values":[[1,0],[3,0]],
+            "masks":[[1,0xff],[3,0xff]]}]}
+    }))
+    .unwrap();
+    let bridge = fujimod_emulator_devices::parts::lens_bridge::Registers::default();
+    let mut bus = I2cController::new(
+        options,
+        Wiring {
+            controllers,
+            cable: Some(fujimod_emulator_devices::signals::Level::new(false)),
+            bridge: Some(bridge.clone()),
+        },
+    )
+    .unwrap();
+    write(&mut bus, &mut host, 0xfff85050, 9).unwrap();
+    write(&mut bus, &mut host, 0xfff85040, 1).unwrap();
+    let transaction = |bus: &mut I2cController, host: &mut Services, address: u64, bytes: &[u64]| {
+        write(bus, host, 0xfff85048, 0x19).unwrap();
+        finish(bus, host);
+        write(bus, host, 0xfff85048, 0xa).unwrap();
+        write(bus, host, 0xfff85044, address).unwrap();
+        finish(bus, host);
+        for &b in bytes {
+            write(bus, host, 0xfff85044, b).unwrap();
+            finish(bus, host);
+        }
+        write(bus, host, 0xfff85048, 0xb).unwrap();
+        finish(bus, host);
+    };
+    transaction(&mut bus, &mut host, 10 << 1, &[1, 0x55]);
+    transaction(&mut bus, &mut host, 114 << 1, &[2, 0x30]);
+    transaction(&mut bus, &mut host, 10 << 1, &[3, 0x66]);
+    let saved = bus.save();
+    let parts = &saved["engine"]["parts"];
+    assert_eq!(parts["target_registers"], json!([[1, 0x55], [3, 0x66]]));
+    let banks = &saved["engine"]["secondary"]["banks"];
+    assert_eq!(banks[0]["address"], json!(114));
+    assert_eq!(banks[0]["registers"], json!([[0, 0], [2, 0x30]]));
+    // The bridge follows chip 114 even while chip 10 is the active target.
+    assert_eq!(bridge.snapshot()[2], 0x30);
+    assert_eq!(bridge.snapshot()[1], 0);
+}

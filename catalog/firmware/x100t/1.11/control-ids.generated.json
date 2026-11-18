@@ -3842,7 +3842,15 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_contacts",
+        "connection_id": "controls-contacts-3-6-3-7",
+        "expected_levels": [
+          true,
+          true
+        ],
+        "callback": 9706012
+      }
     },
     {
       "id": "row-17",
@@ -3862,7 +3870,15 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_contacts",
+        "connection_id": "controls-contacts-3-6-3-7",
+        "expected_levels": [
+          false,
+          true
+        ],
+        "callback": 9706080
+      }
     },
     {
       "id": "row-18",
@@ -3882,7 +3898,15 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_contacts",
+        "connection_id": "controls-contacts-3-6-3-7",
+        "expected_levels": [
+          true,
+          false
+        ],
+        "callback": 9706148
+      }
     },
     {
       "id": "row-19",
@@ -4437,7 +4461,7 @@
     {
       "id": "row-37",
       "event": 830,
-      "debug_key": "E-D-3.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4469,9 +4493,10 @@
     {
       "id": "row-38",
       "event": 829,
-      "debug_key": "E-D-2.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 38,
@@ -4500,9 +4525,10 @@
     {
       "id": "row-39",
       "event": 828,
-      "debug_key": "E-D-2.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 39,
@@ -4531,7 +4557,7 @@
     {
       "id": "row-40",
       "event": 827,
-      "debug_key": "E-D-2.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4565,7 +4591,8 @@
       "event": 826,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 41,
@@ -4596,7 +4623,8 @@
       "event": 825,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 42,
@@ -4625,7 +4653,7 @@
     {
       "id": "row-43",
       "event": 824,
-      "debug_key": "E-D-1.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4657,9 +4685,10 @@
     {
       "id": "row-44",
       "event": 823,
-      "debug_key": "E-D-0.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 44,
@@ -4688,9 +4717,10 @@
     {
       "id": "row-45",
       "event": 822,
-      "debug_key": "E-D-0.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 45,
@@ -4719,7 +4749,7 @@
     {
       "id": "row-46",
       "event": 821,
-      "debug_key": "E-D=0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4751,9 +4781,10 @@
     {
       "id": "row-47",
       "event": 820,
-      "debug_key": "E-D+0.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 47,
@@ -4782,9 +4813,10 @@
     {
       "id": "row-48",
       "event": 819,
-      "debug_key": "E-D+0.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 48,
@@ -4813,7 +4845,7 @@
     {
       "id": "row-49",
       "event": 818,
-      "debug_key": "E-D+1.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4847,7 +4879,8 @@
       "event": 817,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 50,
@@ -4878,7 +4911,8 @@
       "event": 816,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 51,
@@ -4907,7 +4941,7 @@
     {
       "id": "row-52",
       "event": 815,
-      "debug_key": "E-D+2.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -4939,9 +4973,10 @@
     {
       "id": "row-53",
       "event": 814,
-      "debug_key": "E-D+2.3",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 53,
@@ -4970,9 +5005,10 @@
     {
       "id": "row-54",
       "event": 813,
-      "debug_key": "E-D+2.7",
+      "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "exposure_compensation_dial"
       },
       "scanner": {
         "index": 54,
@@ -5001,7 +5037,7 @@
     {
       "id": "row-55",
       "event": 812,
-      "debug_key": "E-D+3.0",
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "exposure_compensation_dial"
@@ -5109,7 +5145,8 @@
       "event": 548,
       "debug_key": "VIEW",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "view_mode_button"
       },
       "scanner": {
         "index": 59,
@@ -5162,7 +5199,8 @@
       "event": 39,
       "debug_key": "FUNCTION",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "wifi_button"
       },
       "scanner": {
         "index": 61,
@@ -5332,7 +5370,8 @@
       "event": 1281,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 67,
@@ -5363,7 +5402,8 @@
       "event": 1282,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 68,
@@ -5426,7 +5466,8 @@
       "event": 1284,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 70,
@@ -5457,7 +5498,8 @@
       "event": 1285,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 71,
@@ -5520,7 +5562,8 @@
       "event": 1287,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 73,
@@ -5551,7 +5594,8 @@
       "event": 1288,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 74,
@@ -5614,7 +5658,8 @@
       "event": 1290,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 76,
@@ -5645,7 +5690,8 @@
       "event": 1291,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 77,
@@ -5708,7 +5754,8 @@
       "event": 1293,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 79,
@@ -5739,7 +5786,8 @@
       "event": 1294,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 80,
@@ -5802,7 +5850,8 @@
       "event": 1296,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 82,
@@ -5833,7 +5882,8 @@
       "event": 1297,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "aperture_ring"
       },
       "scanner": {
         "index": 83,
@@ -5892,50 +5942,197 @@
       }
     },
     {
-      "id": "debug-37",
-      "event": 37,
-      "debug_key": "EVF_LCD",
+      "id": "encoder-43",
+      "event": 43,
+      "debug_key": "CMD_LEFT",
       "target": {
         "kind": "control",
-        "control_id": "view_mode_button"
+        "control_id": "command_dial"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_transition",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          1,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          1,
+          0
+        ],
+        "decoder_event": 1,
+        "guard": 9723168,
+        "threshold": 1
+      }
     },
     {
-      "id": "debug-54",
-      "event": 54,
-      "debug_key": "WLAN",
+      "id": "encoder-44",
+      "event": 44,
+      "debug_key": "CMD_RIGHT",
       "target": {
         "kind": "control",
-        "control_id": "wifi_button"
+        "control_id": "command_dial"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "gpio_transition",
+        "connection_id": "controls-encoder-3-8-3-9",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          1,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          1,
+          0
+        ],
+        "decoder_event": 2,
+        "guard": 9723168,
+        "threshold": 1
+      }
     },
     {
-      "id": "debug-521",
-      "event": 521,
-      "debug_key": "F_RING+",
+      "id": "encoder-524",
+      "event": 524,
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "focus_ring"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "adc_transition",
+        "connection_id": "controls-encoder-adc-6-7",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          1,
+          2,
+          3,
+          2,
+          0,
+          3,
+          1,
+          1,
+          3,
+          0,
+          2,
+          3,
+          2,
+          1,
+          0
+        ],
+        "decoder_event": 2,
+        "calibration_offsets": {
+          "centers": [
+            15968,
+            15970
+          ],
+          "offset": 15972,
+          "hysteresis": 15974,
+          "edges_per_step": 15977,
+          "direction": 15978
+        }
+      }
     },
     {
-      "id": "debug-522",
-      "event": 522,
-      "debug_key": "F_RING-",
+      "id": "encoder-525",
+      "event": 525,
+      "debug_key": null,
       "target": {
         "kind": "control",
         "control_id": "focus_ring"
       },
       "scanner": null,
-      "electrical": null
+      "electrical": {
+        "kind": "adc_transition",
+        "connection_id": "controls-encoder-adc-6-7",
+        "phase_map": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "transitions": [
+          0,
+          1,
+          2,
+          3,
+          2,
+          0,
+          3,
+          1,
+          1,
+          3,
+          0,
+          2,
+          3,
+          2,
+          1,
+          0
+        ],
+        "decoder_event": 1,
+        "calibration_offsets": {
+          "centers": [
+            15968,
+            15970
+          ],
+          "offset": 15972,
+          "hysteresis": 15974,
+          "edges_per_step": 15977,
+          "direction": 15978
+        }
+      }
     }
   ],
   "undelivered_rows": [],
-  "interfaces": {}
+  "interfaces": {
+    "power": {
+      "kind": "power_switch",
+      "connection_id": "power",
+      "saved_inputs": 1074397184,
+      "endpoint": 9,
+      "register": 96,
+      "mask": 1,
+      "on_value": 0,
+      "off_value": 1
+    }
+  }
 }

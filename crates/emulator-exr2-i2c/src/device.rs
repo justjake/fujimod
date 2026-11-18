@@ -133,7 +133,7 @@ impl I2cController {
             for register in 0..4 {
                 bridge.write_register(
                     register as u8,
-                    engine.parts.target_registers.get_or_zero(register) as u8,
+                    engine.bridge_registers().get_or_zero(register) as u8,
                 )?;
             }
         }
@@ -258,7 +258,7 @@ impl I2cController {
                 for register in 0..4 {
                     bridge.write_register(
                         register as u8,
-                        self.engine.parts.target_registers.get_or_zero(register) as u8,
+                        self.engine.bridge_registers().get_or_zero(register) as u8,
                     )?;
                 }
             }

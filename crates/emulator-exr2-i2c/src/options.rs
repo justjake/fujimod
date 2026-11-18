@@ -54,6 +54,17 @@ pub struct Secondary {
     pub pwic_read_prefixes: Vec<(u32, Vec<u8>)>,
     pub topology: Option<Vec<u8>>,
     pub connected: Option<bool>,
+    /// Further register targets; see secondary::Bank.
+    #[serde(default)]
+    pub extra_registers: Vec<ExtraRegister>,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExtraRegister {
+    pub address: u8,
+    pub modes: Vec<u32>,
+    pub values: WordMap,
+    pub masks: WordMap,
 }
 fn topology_valid(rows: &Option<Vec<u8>>) -> bool {
     rows.as_ref().is_none_or(|r| {
@@ -192,7 +203,30 @@ impl Options {
                     pwic_read_prefixes,
                     topology,
                     connected,
+                    extra_registers,
                 } = *options;
+                let mut extra_addresses = BTreeSet::new();
+                if extra_registers.iter().any(|e| {
+                    e.address >= 128
+                        || Some(e.address) == register_address
+                        || Some(e.address) == pwic_address
+                        || !extra_addresses.insert(e.address)
+                        || !byte_map(&e.values)
+                        || !byte_map(&e.masks)
+                        || e.masks.items().any(|(r, _)| e.values.get(r).is_none())
+                }) {
+                    return Err("invalid secondary I2C extra register target".into());
+                }
+                let banks = extra_registers
+                    .into_iter()
+                    .map(|e| secondary::Bank {
+                        address: e.address,
+                        modes: e.modes,
+                        read_registers: e.values.items().map(|(r, _)| r).collect(),
+                        masks: e.masks,
+                        registers: e.values,
+                    })
+                    .collect();
                 let mut prefixes = BTreeSet::new();
                 if !topology_valid(&topology)
                     || register_address.is_some_and(|a| a >= 128)
@@ -228,6 +262,8 @@ impl Options {
                     register_masks,
                     pwic_masks,
                     pwic_read_prefixes,
+                    banks,
+                    bridge_address: register_address,
                 };
                 i2c::BusParts {
                     topology,

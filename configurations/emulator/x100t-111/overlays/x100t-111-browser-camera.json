@@ -1,0 +1,24 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x100t-111-browser-camera",
+  "configuration_id": "x100t-111",
+  "change": {
+    "kind": "preset",
+    "preset": {
+      "factory_options": {
+        "video_encoder_backend": "software",
+        "audio_input_profile": "declared-silent-stereo-pcm48000",
+        "jpeg_decode_profile": "declared-channel9-libjpeg-yycbcr-playback-unmeasured",
+        "raw_readback_ticks": 150000,
+        "sensor_frame_clock": "sensor",
+        "sd_card_present": true,
+        "wifi_sdio_profile": "mt5931-no-peers",
+        "wifi_sdio_transfer_ticks": 100,
+        "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+        "producer_data_ticks": 1024
+      },
+      "firmware_profile_id": "x100t-111"
+    }
+  }
+}

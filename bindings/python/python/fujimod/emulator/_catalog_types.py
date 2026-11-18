@@ -2872,6 +2872,7 @@ class HardwareIrisMechanics(TypedDict, total=False):
 
 
 class HardwareIrisOptics(TypedDict, total=False):
+    actuator: NotRequired[str | None]
     output: Required[str]
     positions: Required[list[list[int]]]
 
@@ -2979,8 +2980,14 @@ class HardwareProjection(TypedDict, total=False):
     subject_distance_mm: Required[int]
 
 
+class HardwareRadiometricCalibration(TypedDict, total=False):
+    reference_white: Required[list[int]]
+    saturation_lux_seconds: Required[int]
+
+
 class HardwareRadiometry(TypedDict, total=False):
     curtains: NotRequired[HardwareCurtains | None]
+    live_view: NotRequired[HardwareRadiometricCalibration | None]
     mode_change_frames: Required[int]
     pixel_clock_hz: Required[int]
     projection: NotRequired[HardwareProjection | None]
@@ -3146,7 +3153,16 @@ class HardwareSdHostClocks(TypedDict, total=False):
     words: Required[list[int]]
 
 
+class HardwareSecondaryBusRegisterChip(TypedDict, total=False):
+    address: Required[int]
+    basis: Required[str]
+    modes: Required[list[int]]
+    values: Required[list[list[int]]]
+    write_masks: Required[list[list[int]]]
+
+
 class HardwareSecondaryBusRegisters(TypedDict, total=False):
+    extra_registers: NotRequired[list[HardwareSecondaryBusRegisterChip] | None]
     pwic_address: Required[int]
     pwic_modes: Required[list[int]]
     pwic_read_prefixes: Required[list[tuple[int, str]]]

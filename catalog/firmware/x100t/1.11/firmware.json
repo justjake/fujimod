@@ -71,5 +71,24 @@
       }
     ]
   },
+  "layouts": {
+    "profiles": {
+      "x100t-111": {
+        "sdio_inputs": {
+          "firmware_bytes": 136640,
+          "mac_address": [
+            176,
+            184,
+            200,
+            0,
+            202,
+            254
+          ],
+          "ssid": "FUJIFILM-X100T-CAFE"
+        }
+      }
+    },
+    "views": {}
+  },
   "generated_facts": null
 }

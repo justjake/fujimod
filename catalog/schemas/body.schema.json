@@ -5766,8 +5766,7 @@
         "travel_limits": {
           "description": "Declared travel limits.",
           "items": {
-            "format": "uint64",
-            "minimum": 0,
+            "format": "int64",
             "type": "integer"
           },
           "type": "array"
@@ -5783,6 +5782,13 @@
       "additionalProperties": false,
       "description": "Declared iris optics facts.",
       "properties": {
+        "actuator": {
+          "description": "What moves the iris: `lens` (the lens unit's second motor, the default)\nor `bridge` (the stepper behind the bus1 motor bridge).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "output": {
           "description": "Declared output.",
           "type": "string"
@@ -6304,6 +6310,31 @@
       ],
       "type": "object"
     },
+    "HardwareRadiometricCalibration": {
+      "additionalProperties": false,
+      "description": "Declared calibration of one radiometric path.",
+      "properties": {
+        "reference_white": {
+          "description": "Raw response to the reference white, per colour.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "saturation_lux_seconds": {
+          "description": "Exposure that saturates the reference white.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "reference_white",
+        "saturation_lux_seconds"
+      ],
+      "type": "object"
+    },
     "HardwareRadiometry": {
       "additionalProperties": false,
       "description": "Declared radiometry facts.",
@@ -6318,6 +6349,17 @@
             }
           ],
           "description": "Declared focal-plane curtains; absent for a leaf-shutter body."
+        },
+        "live_view": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRadiometricCalibration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Live-view calibration declared separately from the still readout."
         },
         "mode_change_frames": {
           "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
@@ -7348,10 +7390,77 @@
       ],
       "type": "object"
     },
+    "HardwareSecondaryBusRegisterChip": {
+      "additionalProperties": false,
+      "description": "One further register chip on the secondary bus.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit chip address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Why this chip and its registers are believed.",
+          "type": "string"
+        },
+        "modes": {
+          "description": "Bus modes in which the chip answers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "values": {
+          "description": "Initial register values, each `[register, value]`.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "write_masks": {
+          "description": "Writable bits, each `[register, mask]`.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "modes",
+        "values",
+        "write_masks"
+      ],
+      "type": "object"
+    },
     "HardwareSecondaryBusRegisters": {
       "additionalProperties": false,
       "description": "Declared control bus1 replies facts.",
       "properties": {
+        "extra_registers": {
+          "description": "Further register chips on the bus, each with its own register map.",
+          "items": {
+            "$ref": "#/$defs/HardwareSecondaryBusRegisterChip"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "pwic_address": {
           "description": "Declared pwic address.",
           "format": "uint64",

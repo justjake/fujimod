@@ -2,13 +2,15 @@
 //! and coefficients.
 //! All image loops use slices; 4096-entry Bezier LUTs rebuild only on change.
 use serde::{Deserialize, Serialize};
-const GROUPS: [(usize, usize); 6] = [
+const GROUPS: [(usize, usize); 8] = [
     (0x304, 11),
     (0x400, 6),
     (0x500, 16),
     (0x604, 2),
     (0x640, 1),
     (0x644, 5),
+    (0x628, 2),
+    (0x63c, 1),
 ];
 
 fn signed(v: u32, bits: u32) -> i32 {
@@ -46,6 +48,17 @@ pub struct Film {
     /// The still hue stage, when its enable bit is set.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hue: Option<HueStage>,
+    /// Constant chroma toning (Cb, Cr) in chroma units, added before the luma band
+    /// gain (so shadows stay neutral where the bands fade chroma). SEPIA programs a signed
+    /// 13-bit pair at 0x62C (low: Cr, high: Cb) and its scale at 0x628 (1024 = 1);
+    /// the other film simulations leave both zero (X100T 1.11 captures).
+    #[serde(default)]
+    tone: [i32; 2],
+    /// Luma ramps (shadow, highlight) over which the toning fades in from neutral
+    /// black/white: 0x63C (SEPIA: 16, 16). Inferred from the X100T's SEPIA program
+    /// (the only film that sets it), not measured.
+    #[serde(default)]
+    tone_fade: [i32; 2],
 }
 impl Default for Film {
     fn default() -> Self {
@@ -58,6 +71,8 @@ impl Default for Film {
             bounds: [0; 4],
             bands: [(0, 0); 5],
             hue: None,
+            tone: [0; 2],
+            tone_fade: [0; 2],
         }
     }
 }
@@ -107,6 +122,12 @@ impl Film {
             signed(r(0x608), 13),
             signed(r(0x608) >> 16, 13),
         ];
+        let scale = (r(0x628) & 0xffff) as i32;
+        self.tone = [
+            (signed(r(0x62c) >> 16, 13) * scale) >> 10,
+            (signed(r(0x62c), 13) * scale) >> 10,
+        ];
+        self.tone_fade = [(r(0x63c) & 255) as i32, (r(0x63c) >> 16 & 255) as i32];
         self.bands = std::array::from_fn(|i| {
             (
                 signed(r(0x644 + i * 4), 11),
@@ -193,10 +214,14 @@ impl Film {
             f = (f * hue.gain(cb, cr)) >> 10;
             tint = hue.tint;
         }
+        let fade = |n: i32, d: i32| if d > 0 { n.clamp(0, d) } else { 1 };
+        let [lo, hi] = self.tone_fade;
+        let (wn, wd) = (fade(y, lo) * fade(255 - y, hi), lo.max(1) * hi.max(1));
+        let tone = [self.tone[0] * wn / wd, self.tone[1] * wn / wd];
         [
             y as u8,
-            (128 + ((cb * f + 512) >> 10) + tint[0]).clamp(0, 255) as u8,
-            (128 + ((cr * f + 512) >> 10) + tint[1]).clamp(0, 255) as u8,
+            (128 + (((cb + tone[0]).clamp(-512, 511) * f + 512) >> 10) + tint[0]).clamp(0, 255) as u8,
+            (128 + (((cr + tone[1]).clamp(-512, 511) * f + 512) >> 10) + tint[1]).clamp(0, 255) as u8,
         ]
     }
     #[inline(always)]
@@ -359,8 +384,17 @@ mod tests {
         let band = f.bounds.iter().filter(|&&b| i64::from(b) <= luma).count();
         let (shift, gain) = f.bands[band];
         let factor = i64::from(gain) + ((i64::from(shift) * luma) >> 8);
+        // Constant toning, faded in over the shadow and highlight ramps.
+        let ramp = |n: i64, d: i64| if d > 0 { n.clamp(0, d) } else { 1 };
+        let [lo, hi] = f.tone_fade.map(i64::from);
+        let weight = ramp(luma, lo) * ramp(255 - luma, hi);
+        let span = lo.max(1) * hi.max(1);
+        let tone = f.tone.map(|t| i64::from(t) * weight / span);
+        let mut index = 0;
         let chroma = chroma.map(|v| {
-            (128 + ((((v >> 10).clamp(-512, 511)) * factor + 512) >> 10)).clamp(0, 255) as u8
+            let toned = ((v >> 10).clamp(-512, 511) + tone[index]).clamp(-512, 511);
+            index += 1;
+            (128 + ((toned * factor + 512) >> 10)).clamp(0, 255) as u8
         });
         [luma as u8, chroma[0], chroma[1]]
     }
@@ -574,6 +608,27 @@ mod tests {
         let toned = film.develop([6000, 6000, 6000]);
         assert_eq!((gray[1], gray[2]), (128, 128));
         assert_eq!((toned[0], toned[1], toned[2]), (gray[0], 113, 145));
+    }
+    #[test]
+    fn sepia_toning_registers_decode_and_fade_to_neutral_black() {
+        // X100T SEPIA: scale 0x628 (1024 = 1), signed 13-bit pair at 0x62C (high: Cb,
+        // low: Cr) and fade ramps at 0x63C (shadow 16, highlight 16).
+        let regs = |o: usize| match o {
+            0x628 => 512,
+            0x62c => (0x1fc0u32 << 16) | 0x0060, // Cb -64, Cr +96
+            0x63c => (16 << 16) | 16,
+            _ => 0,
+        };
+        let mut f = Film::default();
+        f.update(regs).unwrap();
+        assert_eq!(f.tone, [-32, 48]); // scaled by 512/1024
+        assert_eq!(f.tone_fade, [16, 16]);
+        // Black has zero shadow weight: the toning fades out, chroma stays neutral.
+        assert_eq!(f.develop([16383; 3]), [0, 128, 128]);
+        // Without toning programmed, the other film simulations are unchanged.
+        let mut plain = Film::default();
+        plain.update(|_| 0).unwrap();
+        assert_eq!((plain.tone, plain.tone_fade), ([0, 0], [0, 0]));
     }
     #[test]
     fn zero_and_signed_matrix_law() {

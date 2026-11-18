@@ -197,6 +197,12 @@ impl SdioHost {
                     } else {
                         address_dma
                     };
+                    // The SDMA buffer boundary (block size bits 12-14) pauses a
+                    // transfer with a DMA interrupt; the driver resumes it at the
+                    // next boundary. X100T 1.11 stages up to 2560 bytes across a
+                    // 4 KiB boundary (0x18e5e40) with that interrupt enabled. The
+                    // buffer is contiguous, so it is moved in one transfer: the
+                    // same memory effect, without the pause interrupt (declared).
                     if address_dma & 31 != 0
                         || quantity > 2560
                         || physical + quantity as u64 > self.options.ram_bytes

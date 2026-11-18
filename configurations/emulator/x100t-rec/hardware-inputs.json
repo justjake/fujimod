@@ -54,6 +54,12 @@
             null
           ],
           1
+        ],
+        "spi_status_registers": [
+          [
+            9,
+            96
+          ]
         ]
       },
       "mcu_packet_hex": "00000000d00700ff008000040000aafc",

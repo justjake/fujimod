@@ -9,7 +9,7 @@
       "factory_options": {},
       "hardware_selection": {
         "soc_profile_id": "exr2-service-transports",
-        "body_profile_id": "x100t-rec"
+        "body_profile_id": "x100t-rec-walkthrough"
       },
       "hardware_inputs_id": "x100t-rec"
     }
