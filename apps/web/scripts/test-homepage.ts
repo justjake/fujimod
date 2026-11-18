@@ -69,6 +69,12 @@ for (const engine of [chromium, webkit]) {
         await page.locator('.release-personal-note time').getAttribute('datetime'),
         await page.locator('.home-release-notes time').getAttribute('datetime'),
       );
+      assert.ok(
+        await page
+          .locator('.home-release-notes .release-notes')
+          .evaluate((notes) => notes.scrollHeight <= notes.clientHeight),
+        'Release notes use the page scroll',
+      );
       assert.match(await page.locator('.home-sd-card').innerText(), /lives on your SD card/);
       assert.equal(await page.locator('.home-release-notes a[href="/releases"]').count(), 1);
       for (const href of await page
@@ -123,6 +129,19 @@ for (const engine of [chromium, webkit]) {
       await recipeGroup.getByText('Choose recipes', { exact: true }).click();
 
       if (engine === chromium) {
+        await reelVideos.evaluateAll((videos: HTMLVideoElement[]) =>
+          Promise.all(
+            videos.map(async (video) => {
+              if (!Number.isFinite(video.duration)) return;
+              video.pause();
+              const sought = new Promise<void>((resolve) =>
+                video.addEventListener('seeked', () => resolve(), { once: true }),
+              );
+              video.currentTime = Math.min(1.8, video.duration * 0.4);
+              await sought;
+            }),
+          ),
+        );
         await page.evaluate(() => scrollTo(0, 0));
         await page.screenshot({
           fullPage: true,
