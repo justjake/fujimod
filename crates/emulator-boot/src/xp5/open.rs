@@ -116,6 +116,7 @@ fn devices_and_resources(
     controls: Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
     run_directory: Option<&Path>,
     outputs: &crate::output::Outputs,
+    viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_image: Option<&fujimod_emulator_devices::parts::sd_card::Card>,
@@ -163,6 +164,11 @@ fn devices_and_resources(
             .ok_or("a card image needs the SD slot at 0xff9b0000")?;
         slot.card = Some(card.clone());
     }
+    // With the viewer on, every display bank publishes into the primary display's directory,
+    // which is the one directory the viewer serves (latest-bank0.png and latest-bank1.png).
+    let viewer_directory = windows.iter()
+        .find(|window| window.kind == "display" && window.options.contains_key("viewer_port"))
+        .map(|window| window.base);
     for window in &mut windows {
         match window.kind.as_str() {
             "adc" => {
@@ -192,13 +198,14 @@ fn devices_and_resources(
                 let mut options = window.options.clone();
                 if let Some(directory) = run_directory {
                     options.entry("frame_dir").or_insert_with(|| {
-                        toml::Value::String(directory.join(format!("display-{:x}", window.base))
+                        let base = viewer_directory.unwrap_or(window.base);
+                        toml::Value::String(directory.join(format!("display-{base:x}"))
                             .to_string_lossy().into_owned())
                     });
                 } else {
                     options.remove("frame_dir");
                 }
-                let display = super::display_output::configure(outputs, window.base, &options, None)?;
+                let display = super::display_output::configure(outputs, window.base, &options, viewer_keys.clone())?;
                 resources.displays.insert(window.base, display);
                 window.options.clear();
             }
@@ -495,6 +502,7 @@ pub(crate) fn open_from(
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
     loader_card: Option<&super::loader_card::LoaderCard>,
+    viewer_keys: Option<crate::frame_viewer::KeyHandler>,
 ) -> Result<Opened, String> {
     let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
     let rom_state;
@@ -878,6 +886,7 @@ pub(crate) fn open_from(
         controls,
         run_directory,
         &outputs,
+        viewer_keys,
         windows,
         &rom.map(RomStart::assets)
             .or_else(|| loader_card.map(|card| card.assets.clone()))

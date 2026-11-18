@@ -31,6 +31,8 @@ pub struct Startup {
     pub scene: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub viewer_port: Option<u16>,
+    /// Physical key requests from the frame viewer (POST /key); None disables them.
+    pub viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     pub mode: Mode,
     pub quantum: Option<usize>,
 }
@@ -61,7 +63,7 @@ pub(super) fn open_startup(
     startup: Startup,
 ) -> Result<Started, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        scene, output: run_directory, viewer_port, mode, quantum: quantum_override } = startup;
+        scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override } = startup;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard && sd_image.is_none()
         && !card_files.iter().any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
@@ -139,6 +141,7 @@ pub(super) fn open_startup(
         quantum_override,
         rom.as_ref(),
         loader.as_ref(),
+        viewer_keys,
     )?;
     let card_write_back = loader.and_then(|card| card.write_back);
     Ok(Started { firmware, state, opened, card_write_back })
