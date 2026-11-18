@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { SiteRelease, SiteReleaseData } from '../src/release-data.ts';
 
 const releasesUrl = 'https://api.github.com/repos/justjake/fujimod/releases';
+const personalNoteStartVersion = '0.0.1';
 
 interface GitHubRelease {
   tag_name: string;
@@ -107,14 +108,16 @@ export async function loadReleaseData(
     options.contributorsDirectory ? contributorNames(options.contributorsDirectory) : [],
   ]);
   const [current = null, ...past] = releases;
-  const first = releases.at(-1);
+  const start = releases.find(
+    ({ version }) => version.replace(/^v/, '') === personalNoteStartVersion,
+  );
   const utcDay = (date: string) => Math.floor(Date.parse(date) / 86_400_000);
   return {
     current,
     past,
     personalNote: {
       daysSinceFirstRelease:
-        current && first ? Math.max(0, utcDay(current.publishedAt) - utcDay(first.publishedAt)) : 0,
+        current && start ? Math.max(0, utcDay(current.publishedAt) - utcDay(start.publishedAt)) : 0,
       contributorCount: names.length,
       contributorNames: names,
     },

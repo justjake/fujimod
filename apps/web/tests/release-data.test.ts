@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { expect, test, vi } from 'vite-plus/test';
 import { loadReleaseData } from '../scripts/release-data';
 
-test('reads every page and uses publication dates, including published prereleases', async () => {
+test('reads every page and counts from 0.0.1, including published prereleases', async () => {
   const newest = {
     tag_name: 'v2.0.0',
     published_at: '2026-04-02T00:05:00Z',
@@ -12,12 +12,13 @@ test('reads every page and uses publication dates, including published prereleas
     draft: false,
     prerelease: true,
   };
-  const oldest = {
-    tag_name: 'v1.0.0',
+  const start = {
+    tag_name: 'v0.0.1',
     published_at: '2026-03-31T23:55:00Z',
     body: null,
     draft: false,
   };
+  const oldest = { ...start, tag_name: '0.0.0', published_at: '2026-03-01T00:00:00Z' };
   const request = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(
@@ -27,7 +28,7 @@ test('reads every page and uses publication dates, including published prereleas
         },
       }),
     )
-    .mockResolvedValueOnce(Response.json([newest]));
+    .mockResolvedValueOnce(Response.json([newest, start]));
   const data = await loadReleaseData({ preview: false }, request);
   expect(request.mock.calls.map(([url]) => url)).toEqual([
     'https://api.github.com/repos/justjake/fujimod/releases?per_page=100',
@@ -39,7 +40,8 @@ test('reads every page and uses publication dates, including published prereleas
     notes: '## New features',
   });
   expect(data.past).toEqual([
-    { version: 'v1.0.0', publishedAt: '2026-03-31T23:55:00.000Z', notes: '' },
+    { version: 'v0.0.1', publishedAt: '2026-03-31T23:55:00.000Z', notes: '' },
+    { version: '0.0.0', publishedAt: '2026-03-01T00:00:00.000Z', notes: '' },
   ]);
   expect(data.personalNote.daysSinceFirstRelease).toBe(2);
 });
@@ -50,9 +52,11 @@ test('chooses the newest local version and reads the contributor roster offline'
     const notesDirectory = join(root, 'release-notes');
     const contributorsDirectory = join(root, 'contributors');
     await Promise.all([mkdir(notesDirectory), mkdir(contributorsDirectory)]);
+    const start = join(notesDirectory, '0.0.1.md');
     const old = join(notesDirectory, '0.9.0.md');
     const current = join(notesDirectory, '0.10.0.md');
     await Promise.all([
+      writeFile(start, '# First'),
       writeFile(old, '# Earlier'),
       writeFile(current, '# Latest'),
       writeFile(join(notesDirectory, 'README.md'), 'Ignored'),
@@ -61,7 +65,8 @@ test('chooses the newest local version and reads the contributor roster offline'
       writeFile(join(contributorsDirectory, 'README.md'), 'Ignored'),
     ]);
     await Promise.all([
-      utimes(old, new Date('2026-03-01'), new Date('2026-03-01')),
+      utimes(start, new Date('2026-03-01'), new Date('2026-03-01')),
+      utimes(old, new Date('2026-03-03'), new Date('2026-03-03')),
       utimes(current, new Date('2026-03-07'), new Date('2026-03-07')),
     ]);
     const request = vi.fn<typeof fetch>().mockRejectedValue(new Error('Offline'));
@@ -75,7 +80,7 @@ test('chooses the newest local version and reads the contributor roster offline'
       publishedAt: '2026-03-07T00:00:00.000Z',
       notes: '# Latest',
     });
-    expect(data.past.map(({ version }) => version)).toEqual(['0.9.0']);
+    expect(data.past.map(({ version }) => version)).toEqual(['0.9.0', '0.0.1']);
     expect(data.personalNote).toEqual({
       daysSinceFirstRelease: 6,
       contributorCount: 2,
