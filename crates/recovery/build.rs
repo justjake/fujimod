@@ -82,6 +82,16 @@ fn main() {
         &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_exif"],
     );
     flat_image(&root, &out, "sd-boot-v1-xp5-exif-stub", "xp5_exif_stub.rs");
+    // The hook build: the copy-stub build plus a binding for a hook at the entry of one OS function and a small program
+    // in the OS's code padding, and the stub's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-hook-loader",
+        "xp5_hook_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_hook"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-hook-stub", "xp5_hook_stub.rs");
 }
 
 /// A position-independent program's image (code, then a zero parameter block) and the offsets of its

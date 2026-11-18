@@ -82,6 +82,20 @@ mod exif_stub_template {
     include!(concat!(env!("OUT_DIR"), "/xp5_exif_stub.rs"));
 }
 
+/// The hook build: the copy-stub build plus a binding for a hook at the entry of one OS function and a small program
+/// in the OS's code padding.
+#[allow(dead_code)]
+mod hook_loader_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_hook_loader.rs"));
+}
+
+/// The hook stub's own image (position independent code and a zero parameter block) and the offsets of
+/// the parameters in it.
+#[allow(dead_code)]
+mod hook_stub_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_hook_stub.rs"));
+}
+
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
 /// loader (`template`); `INTERNAL_FLASH` is the same sources built for a startup that keeps the
 /// installed flash attached (`flash_template`); `READ_ONLY` only reads the RAM image into spare
@@ -115,6 +129,8 @@ struct Loader {
     os_binding: Option<usize>,
     /// Offset of the Exif binding; only the Exif build has one.
     exif_binding: Option<usize>,
+    /// Offset of the hook binding; only the hook build has one.
+    hook_binding: Option<usize>,
 }
 /// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
 /// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
@@ -150,6 +166,7 @@ const CARD: Loader = Loader {
     marker_binding: None,
     os_binding: None,
     exif_binding: None,
+    hook_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -173,6 +190,7 @@ const INTERNAL_FLASH: Loader = Loader {
     marker_binding: None,
     os_binding: None,
     exif_binding: None,
+    hook_binding: None,
 };
 const READ_ONLY: Loader = Loader {
     image: read_only_template::IMAGE,
@@ -196,6 +214,7 @@ const READ_ONLY: Loader = Loader {
     marker_binding: None,
     os_binding: None,
     exif_binding: None,
+    hook_binding: None,
 };
 const CHECKED_REDIRECT: Loader = Loader {
     image: checked_redirect_template::IMAGE,
@@ -219,6 +238,7 @@ const CHECKED_REDIRECT: Loader = Loader {
     marker_binding: None,
     os_binding: None,
     exif_binding: None,
+    hook_binding: None,
 };
 const COPY_STUB: Loader = Loader {
     image: copy_stub_template::IMAGE,
@@ -242,6 +262,7 @@ const COPY_STUB: Loader = Loader {
     marker_binding: None,
     os_binding: None,
     exif_binding: None,
+    hook_binding: None,
 };
 const MARKER: Loader = Loader {
     image: marker_loader_template::IMAGE,
@@ -265,6 +286,7 @@ const MARKER: Loader = Loader {
     marker_binding: Some(marker_loader_template::SETUP_SD_MARKER),
     os_binding: None,
     exif_binding: None,
+    hook_binding: None,
 };
 const OS: Loader = Loader {
     image: os_loader_template::IMAGE,
@@ -288,6 +310,7 @@ const OS: Loader = Loader {
     marker_binding: None,
     os_binding: Some(os_loader_template::SETUP_SD_OS),
     exif_binding: None,
+    hook_binding: None,
 };
 const EXIF: Loader = Loader {
     image: exif_loader_template::IMAGE,
@@ -311,6 +334,31 @@ const EXIF: Loader = Loader {
     marker_binding: None,
     os_binding: None,
     exif_binding: Some(exif_loader_template::SETUP_SD_EXIF),
+    hook_binding: None,
+};
+const HOOK: Loader = Loader {
+    image: hook_loader_template::IMAGE,
+    prelude_stack_max: hook_loader_template::PRELUDE_STACK_MAX,
+    setup_entry: hook_loader_template::XP5_SETUP_ENTRY,
+    setup_configuration: hook_loader_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: hook_loader_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: hook_loader_template::XP5_SETUP_STACK,
+    setup_stack_top: hook_loader_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: hook_loader_template::SETUP_SD_INITIALIZE,
+    sd_request: hook_loader_template::SETUP_SD_REQUEST,
+    sd_progress: hook_loader_template::SETUP_SD_PROGRESS,
+    sd_board: hook_loader_template::SETUP_SD_BOARD,
+    boot_ready: hook_loader_template::A64_BOOT_READY,
+    boot_zero_gate: hook_loader_template::A64_BOOT_ZERO_GATE,
+    externals: hook_loader_template::EXTERNALS,
+    internal_flash_binding: None,
+    read_only_binding: Some(hook_loader_template::SETUP_SD_READ_ONLY),
+    redirect_binding: Some(hook_loader_template::SETUP_SD_REDIRECT),
+    copy_stub_binding: Some(hook_loader_template::SETUP_SD_COPY_STUB),
+    marker_binding: None,
+    os_binding: None,
+    exif_binding: None,
+    hook_binding: Some(hook_loader_template::SETUP_SD_HOOK),
 };
 /// The DRAM a read-only startup may fill: the same two numbers as `READ_ONLY_FLOOR` and
 /// `READ_ONLY_CEILING` in the loader source `read_only.h`, which refuses anything else. It is the
@@ -581,7 +629,7 @@ pub(crate) fn package_read_only(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, exif: None, file: None }),
+        Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, exif: None, hook: None, file: None }),
     )
 }
 
@@ -649,6 +697,7 @@ pub(crate) fn package_marker(
             marker: Some(marker),
             os: None,
             exif: None,
+            hook: None,
             file: None,
         }),
     )
@@ -728,7 +777,7 @@ pub(crate) fn package_checked_redirect(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, exif: None, file: None }),
+        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, exif: None, hook: None, file: None }),
     )
 }
 
@@ -778,7 +827,7 @@ pub(crate) fn package_copy_stub(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, exif: None, file: None }),
+        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, exif: None, hook: None, file: None }),
     )
 }
 
@@ -845,6 +894,66 @@ pub(crate) fn package_exif(
             marker: None,
             os: None,
             exif: Some(exif),
+            hook: None,
+            file: Some(file),
+        }),
+    )
+}
+
+/// A hook at the entry of one OS function and a small program in the OS's code padding, written after the stage's
+/// own decode of the OS section: the stage decodes the section with its hardware engine as it always does, and a
+/// stub (`hook_stub.S`) that the loader writes into dead padding checks the thirteen named words of the fresh
+/// decode against their bound stock values and, only if all of them match, writes the new values with the CPU
+/// and reads them back (`redirect.rs`). `ffboot.bin` is the same 4 KiB placeholder as the Exif startup's.
+pub(crate) fn package_hook(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    mode: CheckedRedirect,
+) -> Result<Vec<File>> {
+    let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
+    let bias = setup
+        .reset_dat
+        .checked_sub(redirect::RESET_FLASH)
+        .ok_or_else(|| image::Error::Invalid("The reset image precedes its flash offset".into()))?;
+    let reset = extent(&ram, 0, setup.reset_copy_size)?.to_vec();
+    let plan = redirect::locate_hook(&reset, inverted, bias, &ram)?;
+    let end = plan.os.dst as usize + plan.os.head_bytes;
+    require(end <= ram.len(), "The OS section lies outside the RAM image")?;
+    ram.truncate((end + 0xfff) & !0xfff);
+    let file = exif_placeholder();
+    let lamp = &setup.lamp;
+    let redirect::HookBinding { stub, hook } = redirect::hook_binding(
+        &plan,
+        &file,
+        &reset,
+        inverted,
+        bias,
+        setup.flash.aperture,
+        destination,
+        setup.reset_copy_size,
+        mode == CheckedRedirect::Apply,
+        &redirect::StubLamp {
+            pio_base: lamp.pio_base,
+            green_port: lamp.green_port,
+            red_port: lamp.red_port,
+            pin: lamp.pin,
+        },
+        hook_stub_template::IMAGE,
+    )?;
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_seconds,
+        None,
+        None,
+        Some(ReadOnly {
+            destination,
+            redirect: Some(redirect::Binding(stub.redirect.0)),
+            stub: Some(stub),
+            marker: None,
+            os: None,
+            exif: None,
+            hook: Some(hook),
             file: Some(file),
         }),
     )
@@ -905,6 +1014,7 @@ pub(crate) fn package_os(
             marker: None,
             os: Some(os),
             exif: None,
+            hook: None,
             file: Some(head),
         }),
     )
@@ -925,6 +1035,8 @@ struct ReadOnly {
     os: Option<[u64; 8]>,
     /// The Exif build's words of the loader's Exif binding.
     exif: Option<Vec<u64>>,
+    /// The hook build's words of the loader's hook binding.
+    hook: Option<Vec<u64>>,
     /// The file the loader reads, when it is not the RAM image (the OS build's file is the decoded
     /// section alone, which the loader streams to `destination`).
     file: Option<Vec<u8>>,
@@ -1074,7 +1186,9 @@ fn package_inner(
     )?;
     let prefix = setup.verify(inverted)?;
     let loader = if let Some(read_only) = &read_only {
-        if read_only.exif.is_some() {
+        if read_only.hook.is_some() {
+            &HOOK
+        } else if read_only.exif.is_some() {
             &EXIF
         } else if read_only.os.is_some() {
             &OS
@@ -1241,7 +1355,8 @@ fn package_inner(
             let at = loader.copy_stub_binding.ok_or_else(|| {
                 image::Error::Invalid("This XP5 loader build has no copy-stub binding".into())
             })?;
-            redirect::bind_stub(&mut program, at, stub)?;
+            let max = if read_only.hook.is_some() { redirect::HOOK_STUB_MAX } else { redirect::STUB_MAX };
+            redirect::bind_stub_within(&mut program, at, stub, max)?;
         }
         if let Some(marker) = &read_only.marker {
             let at = loader.marker_binding.ok_or_else(|| {
@@ -1254,6 +1369,12 @@ fn package_inner(
                 image::Error::Invalid("This XP5 loader build has no Exif binding".into())
             })?;
             redirect::bind_exif(&mut program, at, exif)?;
+        }
+        if let Some(hook) = &read_only.hook {
+            let at = loader.hook_binding.ok_or_else(|| {
+                image::Error::Invalid("This XP5 loader build has no hook binding".into())
+            })?;
+            redirect::bind_hook(&mut program, at, hook)?;
         }
         if let Some(os) = &read_only.os {
             let at = loader.os_binding.ok_or_else(|| {
@@ -2669,6 +2790,124 @@ mod tests {
         assert_eq!(t::XP5_SETUP_RETURN_BRANCH, os_loader_template::XP5_SETUP_RETURN_BRANCH);
         // the stub fits the copy stub's binding array
         assert!(exif_stub_template::IMAGE.len() <= 1024 && exif_stub_template::XP5_EXIF_PARAMS + redirect::EXIF_STUB_PARAMS == exif_stub_template::IMAGE.len());
+    }
+
+    /// `os_fixture` for the hook: the OS stage with the hooked function, its calls, the code map and the padding.
+    fn hook_fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+        let (fixture_data, mut s, _) = fixture();
+        let (reset, mut update, ram_stage) = redirect::tests::hook_stage(0);
+        update[..0x40000].copy_from_slice(&fixture_data[..0x40000]);
+        let mut stock = reset.clone();
+        put64(&mut stock, s.selector, 1).unwrap();
+        update[0x40000..0x40000 + stock.len()].copy_from_slice(&stock);
+        s.reset_copy_size = 0x1_4000;
+        let mut ram = ram_stage.clone();
+        ram[..0x1_4000].copy_from_slice(&stock);
+        put64(&mut ram, s.selector, 0).unwrap();
+        (update, s, ram)
+    }
+
+    #[test]
+    fn the_hook_startup_packages_a_placeholder_file_and_binds_the_crcs_the_table_the_stub_and_the_call() {
+        let (data, s, ram) = hook_fixture();
+        let at = 0xc000 + hook_loader_template::SETUP_SD_REDIRECT;
+        let hook_at = 0xc000 + hook_loader_template::SETUP_SD_HOOK;
+        let stub_at = 0xc000 + hook_loader_template::SETUP_SD_COPY_STUB;
+        for (mode, apply) in [(CheckedRedirect::Apply, 1u64), (CheckedRedirect::VerifyOnly, 0)] {
+            let files = package_hook(&data, &s, ram.clone(), 0, 0x3000_0000, mode).unwrap();
+            assert_eq!(files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["marble_init.bin", "ffboot.bin"]);
+            let file = &files[1].bytes;
+            assert_eq!(file.len(), EXIF_PLACEHOLDER_BYTES);
+            assert!(file.starts_with(b"XP5 startup placeholder"));
+            let marble = &files[0].bytes;
+            let q = |at: usize, n: usize| u64::from_le_bytes(marble[at + 8 * n..at + 8 * n + 8].try_into().unwrap());
+            assert_eq!((q(at, 0), q(at, 1), q(at, 2)), (1, apply, 0x28ac));
+            assert_eq!((q(at, 7), q(at, 8), q(at, 10)), (0, 4096, u64::from(crate::xp4::crc32(file))));
+            assert_eq!(q(at, 9), 0xf000_0000 + 0x20_0000);
+            let comp = &data[0x20_0000..0x20_0000 + q(hook_at, 2) as usize];
+            assert_eq!(
+                (q(hook_at, 0), q(hook_at, 1), q(hook_at, 3), q(hook_at, 4), q(hook_at, 5), q(hook_at, 6), q(hook_at, 7)),
+                (1, 0xf000_0000, u64::from(crate::xp4::crc32(comp)), 0x4_0000, 6, redirect::tests::OS_DST, redirect::tests::OS_HEAD as u64)
+            );
+            let hook = redirect::tests::OS_DST + redirect::tests::HOOK_AT as u64;
+            // the hook is the function, the program starts at the next 8-aligned word of the padding after its first word
+            assert_eq!(q(hook_at, 8), hook);
+            let cave = q(hook_at, 9);
+            assert_eq!((cave % 8, cave > hook, q(hook_at, 10)), (0, true, 13));
+            assert_eq!(q(hook_at, 13), hook);
+            assert_eq!(q(hook_at, 14), u64::from(0xa9bf_7bfdu32) | (u64::from(0x1400_0000u32 | (((cave + 16 - hook) >> 2) as u32 & 0x03ff_ffff)) << 32));
+            assert!(marble[hook_at + 8 * 13 + 16 * 13..hook_at + 424].iter().all(|b| *b == 0));
+            assert_eq!(q(stub_at, 1), 0x200);
+            // the stub is larger than the older builds' and the binding array is too
+            assert_eq!(q(stub_at, 2) as usize, hook_stub_template::IMAGE.len());
+            let request = 0xc000 + hook_loader_template::SETUP_SD_REQUEST;
+            assert_eq!((q(request, 1), q(request, 2)), (4096, u64::from(crate::xp4::crc32(file))));
+        }
+        let apply = package_hook(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        let verify = package_hook(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::VerifyOnly).unwrap();
+        assert_eq!(apply[1].bytes, verify[1].bytes);
+        let differing: Vec<usize> = (0..apply[0].bytes.len()).filter(|&n| apply[0].bytes[n] != verify[0].bytes[n]).collect();
+        assert_eq!(differing, [at + 8]);
+        // the hook loader is a build of its own
+        let os = package_os(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply);
+        assert!(os.is_err() || os.unwrap()[0].bytes != apply[0].bytes);
+    }
+
+    #[test]
+    fn the_hook_startup_refuses_what_it_cannot_prove_or_place() {
+        let (data, s, ram) = hook_fixture();
+        let go = |data: &[u8], s: &Setup, ram: Vec<u8>, destination: u64| {
+            package_hook(data, s, ram, 0, destination, CheckedRedirect::Apply)
+        };
+        assert!(go(&data, &s, ram.clone(), 0x3000_0000).is_ok());
+        assert!(go(&data, &s, ram.clone(), 0x3000_0010).is_err());
+        assert!(go(&data, &s, ram.clone(), 0x1000_0000).is_err());
+        assert!(go(&data, &s, ram.clone(), READ_ONLY_CEILING).is_err());
+        // the stage's OS call is not where the load function's callers are
+        let mut changed = data.clone();
+        changed[0x40000 + 0x28a8..0x40000 + 0x28ac].copy_from_slice(&0x5280_0020u32.to_le_bytes());
+        assert!(go(&changed, &s, ram.clone(), 0x3000_0000).is_err());
+        // a decode without the hooked function (the plain OS fixture, or the Exif one) cannot be hooked
+        let (plain, plain_setup, plain_ram) = os_fixture();
+        assert!(go(&plain, &plain_setup, plain_ram, 0x3000_0000).is_err());
+        let (exif, exif_setup, exif_ram) = exif_fixture();
+        assert!(go(&exif, &exif_setup, exif_ram, 0x3000_0000).is_err());
+        // and a decode whose padding was used up
+        let mut spent = ram.clone();
+        let pad = redirect::tests::OS_DST as usize + 0xc00 + 0x20;
+        spent[pad..pad + 4].copy_from_slice(&0x1234_5678u32.to_le_bytes());
+        assert!(go(&data, &s, spent, 0x3000_0000).is_err());
+    }
+
+    #[test]
+    fn the_hook_loader_asset_keeps_its_four_binding_templates_a_larger_stub_room_and_no_other_build_has_the_hook_one() {
+        use hook_loader_template as t;
+        assert_eq!((t::SETUP_SD_REDIRECT % 8, t::SETUP_SD_READ_ONLY % 8, t::SETUP_SD_COPY_STUB % 8, t::SETUP_SD_HOOK % 8), (0, 0, 0, 0));
+        let mut template = vec![0u8; redirect::HOOK_BINDING];
+        template[..8].copy_from_slice(&1u64.to_le_bytes());
+        assert_eq!(&t::IMAGE[t::SETUP_SD_HOOK..t::SETUP_SD_HOOK + template.len()], template);
+        assert_eq!(HOOK.hook_binding, Some(t::SETUP_SD_HOOK));
+        assert_eq!(
+            (CARD.hook_binding, INTERNAL_FLASH.hook_binding, READ_ONLY.hook_binding, CHECKED_REDIRECT.hook_binding, COPY_STUB.hook_binding, MARKER.hook_binding, OS.hook_binding, EXIF.hook_binding),
+            (None, None, None, None, None, None, None, None)
+        );
+        for other in [
+            include_str!("../assets/sd-boot-v1-xp5-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-internal-flash-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-read-only-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-checked-redirect-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-copy-stub-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-marker-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-os-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-exif-loader.generated.json"),
+        ] {
+            assert!(!other.contains("setup_sd_hook"));
+        }
+        assert_ne!(t::IMAGE, exif_loader_template::IMAGE);
+        assert_eq!(t::XP5_SETUP_RETURN_BRANCH, exif_loader_template::XP5_SETUP_RETURN_BRANCH);
+        // the stub's room is the hook build's own (1280); the older stub arrays are 1024, and the hook stub does not fit them
+        assert!(hook_stub_template::IMAGE.len() <= redirect::HOOK_STUB_MAX && hook_stub_template::IMAGE.len() > redirect::STUB_MAX);
+        assert_eq!(hook_stub_template::XP5_HOOK_PARAMS + redirect::HOOK_STUB_PARAMS, hook_stub_template::IMAGE.len());
     }
 
     #[test]

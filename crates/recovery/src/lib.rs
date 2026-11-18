@@ -64,6 +64,9 @@ pub struct StartupOptions {
     /// With `copy_stub` (and neither `marker` nor `os`): name a few words of the OS section's decode and write them
     /// after the stage's own load (`xp5::package_exif`).
     pub exif: bool,
+    /// With `copy_stub` (and none of `marker`, `os` and `exif`): put a hook and a small program into the OS's code
+    /// after the stage's own load (`xp5::package_hook`).
+    pub hook: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -481,6 +484,10 @@ impl Recipe {
             "The Exif stub requires the copy stub and excludes the marker and the OS stub",
         )?;
         require(
+            !options.hook || (options.copy_stub && !options.marker && !options.os && !options.exif),
+            "The hook stub requires the copy stub and excludes the marker, the OS stub and the Exif stub",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -575,7 +582,16 @@ impl Recipe {
                             contract.verify(&ram)?;
                         }
                         redirect_checked = true;
-                        if options.exif {
+                        if options.hook {
+                            xp5::package_hook(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.success_hold_seconds,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.exif {
                             xp5::package_exif(
                                 &inverted,
                                 setup,

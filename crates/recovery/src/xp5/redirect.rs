@@ -356,6 +356,8 @@ const SLED_MARGIN: usize = 0x40;
 const VECTOR_ALIGN: usize = 0x800;
 /// The loader's room for the stub bytes (`COPY_STUB_MAX` in `copy_stub.h`).
 pub(super) const STUB_MAX: usize = 1024;
+/// The hook build's room for the stub bytes (`COPY_STUB_MAX` under `XP5_HOOK`): its table has sixteen entries.
+pub(super) const HOOK_STUB_MAX: usize = 1280;
 /// Loop counts of one lamp pulse and one pause (two instructions per count): about a quarter of a
 /// second at the speed of the loader's own code, longer where the stage's code runs slower.
 pub(super) const STUB_PULSE_LOOPS: u64 = 8_000_000;
@@ -426,7 +428,12 @@ pub(super) fn references_into_at(
 /// directly after a `ret` and ends on a vector-table boundary, on a `SLED_ALIGN` boundary, with
 /// `SLED_MARGIN` bytes of nops left after it, and only if nothing in the image refers to the run.
 pub(super) fn sled(reset: &[u8], bytes: usize) -> Result<usize> {
-    require(bytes != 0 && bytes % 4 == 0 && bytes <= STUB_MAX, "The copy stub's size is not usable")?;
+    sled_within(reset, bytes, STUB_MAX)
+}
+
+/// `sled` for a loader build whose room for the stub is `max` bytes.
+pub(super) fn sled_within(reset: &[u8], bytes: usize, max: usize) -> Result<usize> {
+    require(bytes != 0 && bytes % 4 == 0 && bytes <= max, "The copy stub's size is not usable")?;
     let words = reset.len() / 4;
     let mut runs = Vec::new();
     let mut n = 0;
@@ -653,12 +660,17 @@ pub(super) fn stub_binding_with(
 /// Write the stub binding into the loader at `at` after checking that the template is untouched
 /// (`abi` 1, everything else zero: the struct is 48 + `STUB_MAX` + 32 bytes).
 pub(super) fn bind_stub(program: &mut [u8], at: usize, stub: &StubBinding) -> Result<()> {
-    let size = 48 + STUB_MAX + 32;
+    bind_stub_within(program, at, stub, STUB_MAX)
+}
+
+/// `bind_stub` for a loader build whose room for the stub is `max` bytes.
+pub(super) fn bind_stub_within(program: &mut [u8], at: usize, stub: &StubBinding, max: usize) -> Result<()> {
+    let size = 48 + max + 32;
     let mut template = vec![0u8; size];
     template[..8].copy_from_slice(&1u64.to_le_bytes());
     require(extent(program, at, size)? == template, "XP5 copy-stub binding template changed")?;
     require(
-        stub.image.len() % 4 == 0 && (16..=STUB_MAX).contains(&stub.image.len()),
+        stub.image.len() % 4 == 0 && (16..=max).contains(&stub.image.len()),
         "The copy stub's size is not usable",
     )?;
     put64(program, at + 8, stub.offset as u64)?;
@@ -1689,6 +1701,460 @@ pub(super) fn bind_exif(program: &mut [u8], at: usize, exif: &[u64]) -> Result<(
     Ok(())
 }
 
+// ---- E5b-6: a hook at the entry of one OS function, and a small program in alignment padding ----
+//
+// The same route as the Exif words above (the stage's load of the OS section is bound to a named-word stub: the
+// decode finishes, every named word is checked against its stock value, and only then are the new values
+// written), with thirteen other words. They make a branch of the first word of the one OS function that copies
+// the Exif identity record (the record's Software text is eight bytes `Digital ` followed by `Camera ` and the
+// model and version) into the OS's global, and a program of twelve words in alignment padding of the OS's code
+// (in a run of zero and nop words after a `ret`: nothing refers to it, and the code is mapped executable by the
+// OS's own memory map), which replaces `Digital ` by the new eight bytes in the record the function was given
+// and only if it says `Digital `, then runs the displaced first instruction and returns into the function.
+
+/// The stub's parameter block (`hook_stub.S`), the loader's binding of the named words (`hook.h`) and the
+/// stub's table capacity.
+pub(super) const HOOK_STUB_PARAMS: usize = 424;
+pub(super) const HOOK_BINDING: usize = 424;
+pub(super) const HOOK_TABLE: usize = 16;
+/// The hook word and the twelve cave words.
+pub(super) const HOOK_NAMED: usize = 13;
+pub(super) const HOOK_CAVE_WORDS: usize = 12;
+/// The function's first instruction, `stp x29, x30, [sp, #-16]!`, which the program runs in its place.
+pub(super) const HOOK_DISPLACED: u32 = 0xa9bf_7bfd;
+/// The text the program looks for at offset 0x30 of the record, and the text it writes there.
+pub(super) const HOOK_OLD_TEXT: &[u8; 8] = b"Digital ";
+pub(super) const HOOK_NEW_TEXT: &[u8; 8] = b"FUJIMOD ";
+/// The words the packager requires of the padding run: at least this many, directly after a `ret`.
+const HOOK_RUN_MIN_WORDS: usize = 14;
+/// The OS function that copies the 0xa8-byte record at x0 into a global: nine words.
+const HOOK_FUNCTION: [Pat; 9] = [
+    (0xa9bf_7bfd, !0),          // stp x29, x30, [sp, #-16]!
+    (0x9100_03fd, !0),          // mov x29, sp
+    (0x5280_1502, !0),          // mov w2, #0xa8
+    (0xaa00_03e1, !0),          // mov x1, x0
+    (0x9000_0000, 0x9f00_001f), // adrp x0, page
+    (0x9100_0000, 0xffc0_03ff), // add x0, x0, #lo
+    BL,                         // bl memcpy
+    (0xa8c1_7bfd, !0),          // ldp x29, x30, [sp], #16
+    (0xd65f_03c0, !0),          // ret
+];
+/// The OS's own memory map of its image: `mov w2, #7; adrp x1, end; add x1, x1, #0; adrp x0, start; add x0, x0, #0;
+/// bl map`. Flags 7 are read, write and execute: the code. The section's data after it is mapped without execute.
+const HOOK_TEXT_MAP: [Pat; 6] = [
+    (0x5280_00e2, !0),
+    (0x9000_0001, 0x9f00_001f),
+    (0x9100_0021, 0xffc0_03ff),
+    (0x9000_0000, 0x9f00_001f),
+    (0x9100_0000, 0xffc0_03ff),
+    BL,
+];
+
+/// `b target` placed at `from` (a 26-bit word offset), or an error.
+fn hook_branch(from: u64, to: u64) -> Result<u32> {
+    let d = to as i64 - from as i64;
+    require(d % 4 == 0 && (-(1i64 << 27)..(1i64 << 27)).contains(&d), "A branch of the hook program is out of range")?;
+    Ok(0x1400_0000 | (((d >> 2) as u32) & 0x03ff_ffff))
+}
+
+/// The 19-bit word offset field of a PC-relative load or conditional branch.
+fn hook_imm19(from: u64, to: u64) -> u32 {
+    ((((to as i64 - from as i64) >> 2) as u32) & 0x7_ffff) << 5
+}
+
+/// The thirteen new words of the hook: the first is the branch at `hook`, then twelve words from `cave`: the two
+/// eight-byte texts, and the program that is entered at `cave + 16`.
+pub(super) fn hook_program(hook: u64, cave: u64, new_text: &[u8; 8]) -> Result<[u32; HOOK_NAMED]> {
+    let old = u64::from_le_bytes(*HOOK_OLD_TEXT);
+    let new = u64::from_le_bytes(*new_text);
+    Ok([
+        hook_branch(hook, cave + 16)?,
+        old as u32,
+        (old >> 32) as u32,
+        new as u32,
+        (new >> 32) as u32,
+        0xf940_1810,                                      // ldr x16, [x0, #48]
+        0x5800_0011 | hook_imm19(cave + 20, cave),        // ldr x17, <old text>
+        0xeb11_021f,                                      // cmp x16, x17
+        0x5400_0001 | hook_imm19(cave + 28, cave + 40),   // b.ne the displaced instruction
+        0x5800_0011 | hook_imm19(cave + 32, cave + 8),    // ldr x17, <new text>
+        0xf900_1811,                                      // str x17, [x0, #48]
+        HOOK_DISPLACED,                                   // stp x29, x30, [sp, #-16]!
+        hook_branch(cave + 44, hook + 4)?,                // b hook + 4
+    ])
+}
+
+/// What the stock reset image and the update say about the OS section's load (`OsPlan`), where the hooked function
+/// and the padding are, and the table of the thirteen named words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct HookPlan {
+    pub os: OsPlan,
+    pub hook: u64,
+    pub cave: u64,
+    /// The end of the OS's executable range (the OS's own map of its image: start at the section, flags 7).
+    pub text_end: u64,
+    /// The calls of the hooked function (each preceded by `add x0, sp, #n`).
+    pub callers: Vec<u64>,
+    pub words: Vec<ExifWord>,
+}
+
+/// Count the `adrp` words in `head` (loaded at `dst`) that, with the `add` right after them, build an address in
+/// `[lo, hi)`.
+fn hook_adrp_add_into(head: &[u8], dst: u64, lo: u64, hi: u64) -> Result<usize> {
+    let mut found = 0;
+    for at in (0..head.len().saturating_sub(7)).step_by(4) {
+        let w = word(head, at)?;
+        if w & ADRP_MASK != ADRP {
+            continue;
+        }
+        let imm = (((w >> 5) & 0x7_ffff) << 2) | ((w >> 29) & 3);
+        let signed = (i64::from(imm) << 43) >> 43;
+        let page = ((((dst as i64) + at as i64) >> 12) + signed) << 12;
+        let add = word(head, at + 4)?;
+        let rd = w & 31;
+        if add & 0xffc0_0000 == 0x9100_0000 && (add >> 5) & 31 == rd && add & 31 == rd {
+            let target = page as u64 + u64::from((add >> 10) & 0xfff);
+            if (lo..hi).contains(&target) {
+                found += 1;
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// Find the hooked function, its callers, the OS's executable range and the padding in the OS section's decode,
+/// and plan the thirteen words.
+pub(super) fn locate_hook(reset: &[u8], inverted: &[u8], bias: usize, ram: &[u8]) -> Result<HookPlan> {
+    let os = locate_os(reset, inverted, bias, ram)?;
+    let head = extent(ram, os.dst as usize, os.head_bytes)?;
+    // The function: found once, by its nine words.
+    let found = find(head, &HOOK_FUNCTION);
+    require(found.len() == 1, "The OS function that copies the Exif identity record is not found exactly once")?;
+    let hook = os.dst + found[0] as u64;
+    // Every use of it is a call that passes a pointer into the caller's own stack frame (`add x0, sp, #n`, n a multiple
+    // of 8, so that the text at offset 0x30 is word aligned and writable): no tail jump, no address taken.
+    let hits = references_into_at(head, os.dst as usize, hook as usize, hook as usize + 4, true);
+    let mut callers = Vec::new();
+    for (at, kind) in hits {
+        if kind == "adrp page" {
+            continue;
+        }
+        require(kind == "branch", "The hooked OS function is reached by something other than a call")?;
+        let w = word(head, at)?;
+        require(w & BL.1 == BL.0, "The hooked OS function is reached by a jump")?;
+        let set = word(head, at.checked_sub(4).ok_or_else(|| image::Error::Invalid("A call of the hooked function has no predecessor".into()))?)?;
+        require(
+            set & 0xffc0_03ff == 0x9100_03e0 && ((set >> 10) & 0xfff) % 8 == 0,
+            "A call of the hooked OS function does not pass a stack address",
+        )?;
+        callers.push(os.dst + at as u64);
+    }
+    require(
+        hook_adrp_add_into(head, os.dst, hook, hook + 4)? == 0 && callers.len() >= 2,
+        "The hooked OS function is not only called, or has fewer than two callers",
+    )?;
+    // The OS's own map of its image: [section, text_end) read, write and execute.
+    let maps = find(head, &HOOK_TEXT_MAP);
+    require(maps.len() == 1, "The OS's map of its code is not found exactly once")?;
+    let page = |at: usize| -> Result<u64> {
+        let adrp = word(head, at)?;
+        let add = word(head, at + 4)?;
+        let imm = (((adrp >> 5) & 0x7_ffff) << 2) | ((adrp >> 29) & 3);
+        let signed = (i64::from(imm) << 43) >> 43;
+        let page = ((((os.dst as i64) + at as i64) >> 12) + signed) << 12;
+        Ok(page as u64 + u64::from((add >> 10) & 0xfff))
+    };
+    let end = page(maps[0] + 4)?;
+    let start = page(maps[0] + 12)?;
+    require(start == os.dst && end > start && end <= os.dst + os.head_bytes as u64, "The OS's code range is not what the plan needs")?;
+    // The padding: runs of zero and nop words directly after a `ret`, inside the code range; the shortest that is
+    // long enough (the first of equals) is the one.
+    let words = head.len() / 4;
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    let mut n = 1;
+    while n < words {
+        let w = word(head, 4 * n)?;
+        if (w == 0 || w == 0xd503_201f) && word(head, 4 * n - 4)? == 0xd65f_03c0 {
+            let start = n;
+            while n < words && matches!(word(head, 4 * n)?, 0 | 0xd503_201f) {
+                n += 1;
+            }
+            if n - start >= HOOK_RUN_MIN_WORDS && os.dst + 4 * n as u64 <= end {
+                runs.push((start, n));
+            }
+        } else {
+            n += 1;
+        }
+    }
+    runs.sort_by_key(|&(a, b)| (b - a, a));
+    require(!runs.is_empty(), "There is no run of padding in the OS's code for the program")?;
+    let (first, last) = runs[0];
+    let run_lo = os.dst + 4 * first as u64;
+    let run_hi = os.dst + 4 * last as u64;
+    let cave = (run_lo + 4 + 7) & !7;
+    require(cave + 4 * HOOK_CAVE_WORDS as u64 <= run_hi, "The padding run is too short for the program")?;
+    require(
+        references_into_at(head, os.dst as usize, run_lo as usize, run_hi as usize, true)
+            .iter()
+            .all(|&(_, kind)| kind == "adrp page")
+            && hook_adrp_add_into(head, os.dst, run_lo, run_hi)? == 0,
+        "Something refers to the padding the program would use",
+    )?;
+    require(hook < run_lo || hook >= run_hi, "The hooked function lies in the padding")?;
+    let new = hook_program(hook, cave, HOOK_NEW_TEXT)?;
+    let mut words_table = Vec::new();
+    let at = |address: u64| (address - os.dst) as usize;
+    words_table.push(ExifWord { address: hook, stock: word(head, at(hook))?, new: new[0] });
+    for k in 0..HOOK_CAVE_WORDS {
+        let address = cave + 4 * k as u64;
+        let stock = word(head, at(address))?;
+        require(stock == 0 || stock == 0xd503_201f, "A word of the program's padding is not zero or a nop")?;
+        words_table.push(ExifWord { address, stock, new: new[1 + k] });
+    }
+    require(words_table[0].stock == HOOK_DISPLACED, "The hooked function does not start with the displaced instruction")?;
+    Ok(HookPlan { os, hook, cave, text_end: end, callers, words: words_table })
+}
+
+/// The values of the hook stub's parameter block (`hook_stub.S` documents each).
+pub(super) struct HookStubValues {
+    pub own_address: u64,
+    pub ret: u64,
+    pub id: u64,
+    pub func: u64,
+    pub dst: u64,
+    pub bytes: u64,
+    pub green: u64,
+    pub red: u64,
+    pub pin: u64,
+    pub pulse: u64,
+    pub gap: u64,
+    pub enable: u64,
+    pub enable_green: u64,
+    pub enable_red: u64,
+    pub mux: u64,
+    pub restore: u64,
+    pub words: Vec<ExifWord>,
+}
+
+/// The stub image with its parameter block filled in. The template's block must be all zero and the
+/// parameters must be where the layout says.
+pub(super) fn fill_hook_stub(template: &[u8], values: &HookStubValues) -> Result<Vec<u8>> {
+    use super::hook_stub_template as t;
+    let params = t::XP5_HOOK_PARAMS;
+    require(
+        template.len() == t::XP5_HOOK_END
+            && params + HOOK_STUB_PARAMS == template.len()
+            && template[params..].iter().all(|b| *b == 0)
+            && t::XP5_HOOK_P_TABLE + 16 * HOOK_TABLE == t::XP5_HOOK_OUT_STATUS
+            && !values.words.is_empty()
+            && values.words.len() <= HOOK_TABLE,
+        "The hook stub template changed",
+    )?;
+    let mut image = template.to_vec();
+    for (offset, value) in [
+        (t::XP5_HOOK_P_SELF, values.own_address),
+        (t::XP5_HOOK_P_RETURN, values.ret),
+        (t::XP5_HOOK_P_ID, values.id),
+        (t::XP5_HOOK_P_FUNC, values.func),
+        (t::XP5_HOOK_P_DST, values.dst),
+        (t::XP5_HOOK_P_BYTES, values.bytes),
+        (t::XP5_HOOK_P_GREEN, values.green),
+        (t::XP5_HOOK_P_RED, values.red),
+        (t::XP5_HOOK_P_PIN, values.pin),
+        (t::XP5_HOOK_P_PULSE, values.pulse),
+        (t::XP5_HOOK_P_GAP, values.gap),
+        (t::XP5_HOOK_P_ENABLE, values.enable),
+        (t::XP5_HOOK_P_ENABLE_GREEN, values.enable_green),
+        (t::XP5_HOOK_P_ENABLE_RED, values.enable_red),
+        (t::XP5_HOOK_P_MUX, values.mux),
+        (t::XP5_HOOK_P_RESTORE, values.restore),
+        (t::XP5_HOOK_P_COUNT, values.words.len() as u64),
+    ] {
+        require(offset >= params && offset + 8 <= image.len(), "A hook stub parameter is outside its block")?;
+        put64(&mut image, offset, value)?;
+    }
+    for (n, w) in values.words.iter().enumerate() {
+        let at = t::XP5_HOOK_P_TABLE + 16 * n;
+        put64(&mut image, at, w.address)?;
+        put64(&mut image, at + 8, u64::from(w.stock) | (u64::from(w.new) << 32))?;
+    }
+    Ok(image)
+}
+
+/// The bindings of a hook loader: the redirect words (as the Exif build's), the named-word binding
+/// (`setup_sd_hook`, 53 words) and the stub.
+pub(super) struct HookBinding {
+    pub stub: StubBinding,
+    pub hook: Vec<u64>,
+}
+
+/// CRC-32 of the table's stock words and of its new words, little-endian in table order.
+fn hook_crcs(words: &[ExifWord]) -> (u32, u32) {
+    let stock: Vec<u8> = words.iter().flat_map(|w| w.stock.to_le_bytes()).collect();
+    let new: Vec<u8> = words.iter().flat_map(|w| w.new.to_le_bytes()).collect();
+    (crc32(&stock), crc32(&new))
+}
+
+/// Plan the hook loader's bindings (see `exif_binding`, which this follows).
+pub(super) fn hook_binding(
+    plan: &HookPlan, file: &[u8], reset: &[u8], inverted: &[u8], bias: usize, aperture: u64, destination: u64,
+    guard_bytes: usize, apply: bool, lamp: &StubLamp, template: &[u8],
+) -> Result<HookBinding> {
+    let os = &plan.os;
+    require(
+        !file.is_empty()
+            && file.len() <= 0x1_0000
+            && destination % 0x1000 == 0
+            && (READ_ONLY_FLOOR..READ_ONLY_CEILING).contains(&destination)
+            && destination + file.len() as u64 <= READ_ONLY_CEILING,
+        "The placeholder file does not fit the read-only destination",
+    )?;
+    require(
+        os.call_old & BL.1 == BL.0
+            && os.call_site % 4 == 0
+            && os.call_site >= 4
+            && os.call_site + 4 <= guard_bytes
+            && os.load_fn % 4 == 0
+            && os.load_fn + 4 <= guard_bytes,
+        "The reset stage's OS load call is not a bl inside the RAM-0 guard",
+    )?;
+    require(bl_target(reset, os.call_site)? == os.load_fn, "The OS load call does not call the load function")?;
+    require(
+        word(reset, os.call_site - 4)? == OS_SET_ID && word(reset, os.load_fn)? == OS_LOAD[0].0,
+        "The reset stage's OS call does not pass the OS id to a function that starts as the load does",
+    )?;
+    // The table is exactly the program: the words, their addresses and their order are recomputed here.
+    let program = hook_program(plan.hook, plan.cave, HOOK_NEW_TEXT)?;
+    require(
+        plan.words.len() == HOOK_NAMED
+            && plan.words.iter().enumerate().all(|(n, w)| {
+                w.new == program[n]
+                    && w.address == if n == 0 { plan.hook } else { plan.cave + 4 * (n as u64 - 1) }
+                    && (if n == 0 { w.stock == HOOK_DISPLACED } else { w.stock == 0 || w.stock == 0xd503_201f })
+            })
+            && plan.hook % 4 == 0
+            && plan.cave % 8 == 0
+            && plan.hook >= os.dst
+            && plan.hook + 4 <= os.dst + os.head_bytes as u64
+            && plan.cave >= os.dst
+            && plan.cave + 4 * HOOK_CAVE_WORDS as u64 <= plan.text_end
+            && plan.text_end <= os.dst + os.head_bytes as u64
+            && (plan.hook + 4 <= plan.cave || plan.cave + 4 * HOOK_CAVE_WORDS as u64 <= plan.hook),
+        "The named words are not the hook program in the OS's code",
+    )?;
+    let offset = sled_within(extent(reset, 0, guard_bytes)?, template.len(), HOOK_STUB_MAX)?;
+    require(
+        offset + template.len() + SLED_MARGIN <= guard_bytes && !(offset..offset + template.len()).contains(&os.call_site),
+        "The hook stub overlaps the call or leaves the RAM-0 guard",
+    )?;
+    let stock = extent(reset, 0, guard_bytes)?;
+    require(
+        lamp.pin < 8
+            && lamp.green_port < 16
+            && lamp.red_port < 16
+            && lamp.green_port != lamp.red_port
+            && lamp.green_port != 3
+            && lamp.red_port != 3,
+        "The hook stub's lamp is not a usable pair of ports",
+    )?;
+    let comp = extent(inverted, os.flash_offset as usize + bias, os.comp_bytes)?;
+    let image = fill_hook_stub(
+        template,
+        &HookStubValues {
+            own_address: offset as u64,
+            ret: os.call_site as u64 + 4,
+            id: u64::from(OS_SECTION_ID),
+            func: os.load_fn as u64,
+            dst: os.dst,
+            bytes: os.head_bytes as u64,
+            green: lamp.pio_base + 64 * u64::from(lamp.green_port),
+            red: lamp.pio_base + 64 * u64::from(lamp.red_port),
+            pin: 1u64 << lamp.pin,
+            pulse: OS_PULSE_LOOPS,
+            gap: OS_GAP_LOOPS,
+            enable: lamp.pio_base + 0x500,
+            enable_green: (1u64 << (lamp.green_port + 16)) | (1u64 << lamp.green_port),
+            enable_red: (1u64 << (lamp.red_port + 16)) | (1u64 << lamp.red_port),
+            mux: 3u64 << (2 * lamp.pin + 16),
+            restore: (1u64 << (lamp.pin + 16)) | (1u64 << lamp.pin),
+            words: plan.words.clone(),
+        },
+    )?;
+    let new = bl_word(os.call_site, offset)?;
+    require(new != os.call_old, "The OS call word is the stock word")?;
+    let mut patched = stock.to_vec();
+    patched[offset..offset + image.len()].copy_from_slice(&image);
+    patched[os.call_site..os.call_site + 4].copy_from_slice(&new.to_le_bytes());
+    let mut words = [0u64; 16];
+    words[0] = 1;
+    words[1] = u64::from(apply);
+    words[2] = os.call_site as u64;
+    words[3] = u64::from(os.call_old);
+    words[4] = u64::from(new);
+    words[5] = u64::from(crc32(stock));
+    words[6] = u64::from(crc32(&patched));
+    words[7] = 0; // the file is at offset 0 of the copy
+    words[8] = file.len() as u64;
+    words[9] = aperture + os.flash_offset;
+    words[10] = u64::from(crc32(file));
+    words[11] = os.table_bytes as u64;
+    for (n, &(_, flash)) in os.tables.iter().enumerate() {
+        let table = extent(inverted, flash as usize + bias, os.table_bytes)?;
+        words[12 + n] = aperture + flash;
+        words[14 + n] = u64::from(crc32(table));
+    }
+    let (stock_crc, new_crc) = hook_crcs(&plan.words);
+    let mut hook = vec![0u64; HOOK_BINDING / 8];
+    for (n, v) in [
+        1,
+        aperture,
+        os.comp_bytes as u64,
+        u64::from(crc32(comp)),
+        os.tables[0].0,
+        u64::from(OS_SECTION_ID),
+        os.dst,
+        os.head_bytes as u64,
+        plan.hook,
+        plan.cave,
+        plan.words.len() as u64,
+        u64::from(stock_crc),
+        u64::from(new_crc),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        hook[n] = v;
+    }
+    for (n, w) in plan.words.iter().enumerate() {
+        hook[13 + 2 * n] = w.address;
+        hook[14 + 2 * n] = u64::from(w.stock) | (u64::from(w.new) << 32);
+    }
+    Ok(HookBinding {
+        stub: StubBinding {
+            redirect: Binding(words),
+            offset,
+            params_offset: super::hook_stub_template::XP5_HOOK_PARAMS,
+            crc32: crc32(&image),
+            image,
+        },
+        hook,
+    })
+}
+
+/// Write the hook binding into the loader at `at` after checking that the template is untouched (`abi` 1,
+/// everything else zero: the struct is 424 bytes).
+pub(super) fn bind_hook(program: &mut [u8], at: usize, hook: &[u64]) -> Result<()> {
+    let mut template = vec![0u8; HOOK_BINDING];
+    template[..8].copy_from_slice(&1u64.to_le_bytes());
+    require(hook.len() * 8 == HOOK_BINDING, "The hook binding has the wrong size")?;
+    require(extent(program, at, HOOK_BINDING)? == template, "XP5 hook binding template changed")?;
+    for (n, value) in hook.iter().enumerate() {
+        put64(program, at + 8 * n, *value)?;
+    }
+    Ok(())
+}
+
+
 #[cfg(test)]
 pub(in crate::xp5) mod tests {
     use super::*;
@@ -2679,5 +3145,282 @@ pub(in crate::xp5) mod tests {
         let mut other = vec![0u8; 0x400];
         other[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
         assert!(bind_exif(&mut other, 0x100, &words[..36]).is_err());
+    }
+    // ---- the hook: a branch at one OS function and a program in padding ----
+
+    /// Where the test decode keeps the hooked function, its two calls, the OS's map of its code and the padding.
+    pub(in crate::xp5) const HOOK_AT: usize = 0x300;
+    const HOOK_CALL_AT: [usize; 2] = [0x500, 0x600];
+    const HOOK_MAP_AT: usize = 0x900;
+    const HOOK_PAD_AT: usize = 0xc00;
+    /// The end of the test OS's code, relative to the section.
+    pub(in crate::xp5) const HOOK_TEXT_END: u64 = 0x1800;
+
+    pub(in crate::xp5) fn hook_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        hook_stage_with(bias, &|_| {})
+    }
+    /// `os_stage` with the hooked function, two calls of it, the OS's code map and a run of padding in the decode.
+    pub(in crate::xp5) fn hook_stage_with(bias: usize, edit: &dyn Fn(&mut Vec<u8>)) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        os_stage_with(bias, &|head: &mut Vec<u8>| {
+            let base = OS_DST as usize;
+            let function = [
+                0xa9bf_7bfd,
+                0x9100_03fd,
+                0x5280_1502,
+                0xaa00_03e1,
+                adrp(base + HOOK_AT + 16, 0, 0x263_c000),
+                0x9100_0000 | (0xd48 << 10),
+                bl(base + HOOK_AT + 24, base + 0x1f00),
+                0xa8c1_7bfd,
+                0xd65f_03c0,
+            ];
+            for (n, w) in function.into_iter().enumerate() {
+                put(head, HOOK_AT + 4 * n, w).unwrap();
+            }
+            for (k, at) in HOOK_CALL_AT.into_iter().enumerate() {
+                put(head, at, 0x9100_03e0 | ((0x38 + 0x10 * k as u32) << 10)).unwrap(); // add x0, sp, #0x38 (or #0x48)
+                put(head, at + 4, bl(base + at + 4, base + HOOK_AT)).unwrap();
+            }
+            // mov w2, #7; adrp x1, end; add x1, x1, #lo; adrp x0, start; add x0, x0, #0; bl map
+            let end = OS_DST + HOOK_TEXT_END;
+            put(head, HOOK_MAP_AT, 0x5280_00e2).unwrap();
+            put(head, HOOK_MAP_AT + 4, adrp(base + HOOK_MAP_AT + 4, 1, end)).unwrap();
+            put(head, HOOK_MAP_AT + 8, 0x9100_0021 | (((end & 0xfff) as u32) << 10)).unwrap();
+            put(head, HOOK_MAP_AT + 12, adrp(base + HOOK_MAP_AT + 12, 0, OS_DST)).unwrap();
+            put(head, HOOK_MAP_AT + 16, 0x9100_0000).unwrap();
+            put(head, HOOK_MAP_AT + 20, bl(base + HOOK_MAP_AT + 20, base + 0x1f40)).unwrap();
+            // a ret, sixteen zero words, seven nops, then code
+            put(head, HOOK_PAD_AT - 4, 0xd65f_03c0).unwrap();
+            for n in 0..16 {
+                put(head, HOOK_PAD_AT + 4 * n, 0).unwrap();
+            }
+            for n in 16..23 {
+                put(head, HOOK_PAD_AT + 4 * n, 0xd503_201f).unwrap();
+            }
+            put(head, HOOK_PAD_AT + 4 * 23, 0xb400_0d82).unwrap();
+            edit(head);
+        })
+    }
+
+    /// The thirteen words as the packager's own assembler is not allowed to be the only author of them: the
+    /// program written out by hand for the test addresses.
+    fn hook_reference(hook: u64, cave: u64) -> [u32; 13] {
+        let b = |from: u64, to: u64| 0x1400_0000 | ((((to as i64 - from as i64) >> 2) as u32) & 0x03ff_ffff);
+        let lit = |from: u64, to: u64| 0x5800_0011 | ((((to as i64 - from as i64) >> 2) as u32 & 0x7_ffff) << 5);
+        [
+            b(hook, cave + 16),
+            0x6967_6944,
+            0x206c_6174,
+            0x494a_5546,
+            0x2044_4f4d,
+            0xf940_1810,
+            lit(cave + 20, cave),
+            0xeb11_021f,
+            0x5400_0001 | ((((cave + 40) as i64 - (cave + 28) as i64) >> 2) as u32) << 5,
+            lit(cave + 32, cave + 8),
+            0xf900_1811,
+            0xa9bf_7bfd,
+            b(cave + 44, hook + 4),
+        ]
+    }
+
+    #[test]
+    fn the_hook_program_is_the_one_written_out_by_hand_for_the_real_addresses() {
+        // the addresses of the real OS section: the function at 0x1425498, the padding at 0x16bea88
+        let words = hook_program(0x142_5498, 0x16b_ea88, HOOK_NEW_TEXT).unwrap();
+        assert_eq!(
+            words,
+            [
+                0x140a_6580, 0x6967_6944, 0x206c_6174, 0x494a_5546, 0x2044_4f4d, 0xf940_1810, 0x58ff_ff71, 0xeb11_021f,
+                0x5400_0061, 0x58ff_ff51, 0xf900_1811, 0xa9bf_7bfd, 0x17f5_9a7a,
+            ]
+        );
+        assert_eq!(words, hook_reference(0x142_5498, 0x16b_ea88));
+        // out of range: a branch of more than 128 MiB
+        assert!(hook_program(0x142_5498, 0x142_5498 + (1 << 27), HOOK_NEW_TEXT).is_err());
+    }
+
+    #[test]
+    fn the_hooked_function_its_calls_the_code_range_and_the_padding_are_found_in_the_decode() {
+        let (reset, update, ram) = hook_stage(BIAS);
+        let plan = locate_hook(&reset, &update, BIAS, &ram).unwrap();
+        assert_eq!(plan.hook, OS_DST + HOOK_AT as u64);
+        assert_eq!(plan.callers, [OS_DST + 0x504, OS_DST + 0x604]);
+        assert_eq!(plan.text_end, OS_DST + HOOK_TEXT_END);
+        // the padding starts at 0xc00; the program goes at the next 8-aligned address after its first word
+        assert_eq!(plan.cave, (OS_DST + HOOK_PAD_AT as u64 + 4 + 7) & !7);
+        assert_eq!(plan.words.len(), 13);
+        assert_eq!(plan.words[0].address, plan.hook);
+        assert_eq!(plan.words[0].stock, HOOK_DISPLACED);
+        for (n, w) in plan.words.iter().enumerate().skip(1) {
+            assert_eq!(w.address, plan.cave + 4 * (n as u64 - 1));
+            assert!(w.stock == 0 || w.stock == 0xd503_201f);
+        }
+        let reference = hook_reference(plan.hook, plan.cave);
+        assert_eq!(plan.words.iter().map(|w| w.new).collect::<Vec<_>>(), reference);
+        assert_eq!(plan.os, locate_os(&reset, &update, BIAS, &ram).unwrap());
+    }
+
+    #[test]
+    fn the_hook_is_refused_where_the_function_the_calls_the_code_range_or_the_padding_are_not_as_proven() {
+        let go = |edit: &dyn Fn(&mut Vec<u8>)| {
+            let (reset, update, ram) = hook_stage_with(BIAS, edit);
+            locate_hook(&reset, &update, BIAS, &ram).map(|_| ()).map_err(|e| e.to_string())
+        };
+        assert!(go(&|_| {}).is_ok());
+        // the function changed (its length, or not found twice)
+        assert!(go(&|h| put(h, HOOK_AT + 8, 0x5280_1502 + 0x20).unwrap()).unwrap_err().contains("exactly once"));
+        assert!(go(&|h| {
+            for n in 0..9 {
+                let w = word(h, HOOK_AT + 4 * n).unwrap();
+                put(h, 0x1000 + 4 * n, if n == 6 { 0x9400_0000 | 0x20 } else { w }).unwrap();
+            }
+        })
+        .unwrap_err()
+        .contains("exactly once"));
+        // a call that does not pass a stack address, one that passes an address that is not a multiple of eight
+        assert!(go(&|h| put(h, HOOK_CALL_AT[0], 0xd503_201f).unwrap()).unwrap_err().contains("stack address"));
+        assert!(go(&|h| put(h, HOOK_CALL_AT[1], 0x9100_03e0 | (0x3c << 10)).unwrap()).unwrap_err().contains("stack address"));
+        // only one call
+        assert!(go(&|h| put(h, HOOK_CALL_AT[1] + 4, 0xd503_201f).unwrap()).unwrap_err().contains("fewer than two"));
+        // a tail jump to the function, a pointer to it, a branch from elsewhere
+        assert!(go(&|h| put(h, 0xe00, 0x1400_0000 | (((HOOK_AT as u32).wrapping_sub(0xe00) >> 2) & 0x03ff_ffff)).unwrap())
+            .unwrap_err()
+            .contains("by a jump"));
+        assert!(go(&|h| h[0xe08..0xe10].copy_from_slice(&(OS_DST + HOOK_AT as u64).to_le_bytes()))
+            .unwrap_err()
+            .contains("something other than a call"));
+        // the code range is not mapped once, does not start at the section, or ends beyond it
+        assert!(go(&|h| put(h, HOOK_MAP_AT, 0xd503_201f).unwrap()).unwrap_err().contains("not found exactly once"));
+        assert!(go(&|h| put(h, HOOK_MAP_AT + 12, adrp(OS_DST as usize + HOOK_MAP_AT + 12, 0, OS_DST + 0x1000)).unwrap())
+            .unwrap_err()
+            .contains("code range"));
+        // the padding: too short, not after a ret, a non-zero word in the middle, referred to
+        assert!(go(&|h| put(h, HOOK_PAD_AT + 4 * 10, 0x1234_5678).unwrap()).unwrap_err().contains("no run of padding"));
+        assert!(go(&|h| put(h, HOOK_PAD_AT - 4, 0xd503_201f).unwrap()).unwrap_err().contains("no run of padding"));
+        assert!(go(&|h| {
+            put(h, 0xe00, 0x1400_0000 | (((HOOK_PAD_AT as u32 + 8).wrapping_sub(0xe00) >> 2) & 0x03ff_ffff)).unwrap();
+        })
+        .unwrap_err()
+        .contains("refers to the padding"));
+        assert!(go(&|h| put(h, 0xe00, 0x1800_0000 | ((((HOOK_PAD_AT as u32 + 8).wrapping_sub(0xe00) >> 2) & 0x7_ffff) << 5)).unwrap())
+            .unwrap_err()
+            .contains("refers to the padding"));
+        assert!(go(&|h| {
+            put(h, 0xe00, adrp(OS_DST as usize + 0xe00, 3, OS_DST + HOOK_PAD_AT as u64 + 8)).unwrap();
+            put(h, 0xe04, 0x9100_0063 | ((((HOOK_PAD_AT + 8) & 0xfff) as u32) << 10)).unwrap();
+        })
+        .unwrap_err()
+        .contains("refers to the padding"));
+    }
+
+    fn hook_template() -> Vec<u8> {
+        super::super::hook_stub_template::IMAGE.to_vec()
+    }
+
+    #[test]
+    fn the_hook_binding_carries_the_call_word_the_stub_bytes_the_table_and_every_crc() {
+        let (reset, update, ram) = hook_stage(BIAS);
+        let plan = locate_hook(&reset, &update, BIAS, &ram).unwrap();
+        let file = vec![0x5au8; 4096];
+        let guard = 0x1_4000;
+        let template = hook_template();
+        let make = |apply: bool, plan: &HookPlan, file: &[u8], destination: u64, lamp: &StubLamp, template: &[u8]| {
+            hook_binding(plan, file, &reset[..guard], &update, BIAS, 0xf000_0000, destination, guard, apply, lamp, template)
+        };
+        let binding = make(true, &plan, &file, 0x3000_0000, &os_lamp(), &template).unwrap();
+        let redirect = binding.stub.redirect.0;
+        let stub_at = binding.stub.offset;
+        let new = redirect[4] as u32;
+        assert_eq!(new, bl(0x28ac, stub_at));
+        assert_eq!((redirect[2], redirect[3]), (0x28ac, u64::from(plan.os.call_old)));
+        assert_eq!((redirect[7], redirect[8], redirect[10]), (0, 4096, u64::from(crc32(&file))));
+        assert_eq!(redirect[9], 0xf000_0000 + OS_FLASH as u64);
+        let mut patched = reset[..guard].to_vec();
+        patched[stub_at..stub_at + binding.stub.image.len()].copy_from_slice(&binding.stub.image);
+        patched[0x28ac..0x28b0].copy_from_slice(&new.to_le_bytes());
+        assert_eq!(redirect[6], u64::from(crc32(&patched)));
+        // the stub's parameter block: the bound facts and the table
+        let word64 = |offset: usize| u64::from_le_bytes(binding.stub.image[offset..offset + 8].try_into().unwrap());
+        use super::super::hook_stub_template as t;
+        assert_eq!(word64(t::XP5_HOOK_P_SELF), stub_at as u64);
+        assert_eq!((word64(t::XP5_HOOK_P_RETURN), word64(t::XP5_HOOK_P_ID), word64(t::XP5_HOOK_P_FUNC)), (0x28b0, 6, OS_FUNCTION as u64));
+        assert_eq!((word64(t::XP5_HOOK_P_DST), word64(t::XP5_HOOK_P_BYTES), word64(t::XP5_HOOK_P_COUNT)), (OS_DST, OS_HEAD as u64, 13));
+        for (n, w) in plan.words.iter().enumerate() {
+            assert_eq!(word64(t::XP5_HOOK_P_TABLE + 16 * n), w.address);
+            assert_eq!(word64(t::XP5_HOOK_P_TABLE + 16 * n + 8), u64::from(w.stock) | (u64::from(w.new) << 32));
+        }
+        assert!((13..16).all(|n| word64(t::XP5_HOOK_P_TABLE + 16 * n) == 0 && word64(t::XP5_HOOK_P_TABLE + 16 * n + 8) == 0));
+        assert_eq!(word64(t::XP5_HOOK_OUT_STATUS), 0);
+        // the loader's words
+        let comp = &update[OS_FLASH + BIAS..OS_FLASH + BIAS + plan.os.comp_bytes];
+        let stock: Vec<u8> = plan.words.iter().flat_map(|w| w.stock.to_le_bytes()).collect();
+        let newb: Vec<u8> = plan.words.iter().flat_map(|w| w.new.to_le_bytes()).collect();
+        let h = &binding.hook;
+        assert_eq!(h.len(), 53);
+        assert_eq!(
+            h[..13],
+            [1, 0xf000_0000, plan.os.comp_bytes as u64, u64::from(crc32(comp)), 0x4_0000, 6, OS_DST, OS_HEAD as u64, plan.hook, plan.cave, 13,
+             u64::from(crc32(&stock)), u64::from(crc32(&newb))]
+        );
+        assert_eq!(h[13], plan.words[0].address);
+        assert!(h[13 + 26..].iter().all(|v| *v == 0));
+        // verify-only binds the same words with `apply` clear
+        let verify = make(false, &plan, &file, 0x3000_0000, &os_lamp(), &template).unwrap();
+        assert_eq!(verify.stub.redirect.0[1], 0);
+        assert_eq!(verify.stub.redirect.0[2..], redirect[2..]);
+        assert_eq!(verify.hook, binding.hook);
+        // what it refuses
+        assert!(make(true, &plan, &file, 0x3000_0004, &os_lamp(), &template).is_err());
+        assert!(make(true, &plan, &file, 0x1000, &os_lamp(), &template).is_err());
+        assert!(make(true, &plan, &[], 0x3000_0000, &os_lamp(), &template).is_err());
+        assert!(make(true, &plan, &vec![0u8; 0x2_0000], 0x3000_0000, &os_lamp(), &template).is_err());
+        let mut lamp = os_lamp();
+        lamp.red_port = lamp.green_port;
+        assert!(make(true, &plan, &file, 0x3000_0000, &lamp, &template).is_err());
+        let mut dirty = template.clone();
+        let last = dirty.len() - 1;
+        dirty[last] = 1;
+        assert!(make(true, &plan, &file, 0x3000_0000, &os_lamp(), &dirty).is_err());
+        // a table that is not the program: one new word changed, one stock word, an address, the order, the count, the hook word's stock
+        for edit in [
+            (|p: &mut HookPlan| p.words[6].new ^= 1) as fn(&mut HookPlan),
+            |p| p.words[3].new ^= 0x20,
+            |p| p.words[5].stock = 0x1234_5678,
+            |p| p.words[1].stock = 0xdead_beef,
+            |p| p.words[0].stock ^= 1,
+            |p| p.words[2].address += 4,
+            |p| p.words.swap(5, 6),
+            |p| {
+                p.words.pop();
+            },
+            |p| p.words.push(ExifWord { address: p.cave + 48, stock: 0, new: 0 }),
+            |p| p.cave += 8,
+            |p| p.hook += 4,
+            |p| p.text_end = p.cave + 8,
+        ] {
+            let mut bad = plan.clone();
+            edit(&mut bad);
+            assert!(make(true, &bad, &file, 0x3000_0000, &os_lamp(), &template).is_err());
+        }
+        let mut call = plan.clone();
+        call.os.call_old = 0xd503_201f;
+        assert!(make(true, &call, &file, 0x3000_0000, &os_lamp(), &template).is_err());
+    }
+
+    #[test]
+    fn the_hook_binding_is_written_into_a_template_and_only_a_template() {
+        let mut program = vec![0u8; 0x400];
+        program[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        let mut words = vec![0u64; 53];
+        words[0] = 1;
+        words[1] = 0xf000_0000;
+        words[8] = 0x142_5498;
+        bind_hook(&mut program, 0x100, &words).unwrap();
+        assert_eq!(u64::from_le_bytes(program[0x108..0x110].try_into().unwrap()), 0xf000_0000);
+        assert!(bind_hook(&mut program, 0x100, &words).is_err(), "a bound template is refused");
+        let mut other = vec![0u8; 0x400];
+        other[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        assert!(bind_hook(&mut other, 0x100, &words[..52]).is_err());
     }
 }

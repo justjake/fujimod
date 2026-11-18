@@ -346,7 +346,26 @@ alternating. The lamp shows the path (orange, then three green pulses; red and g
 for ever); the armed loader shows seven green blinks (verified-only two). It writes nothing but its own block, the lamp pins, the
 stage's stack and the named words; it never writes the flash.
 
-`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup`, `sd-boot-v1-exif-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-hook-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5) uses the same
+route for **thirteen named words that are code** (`StartupOptions::hook`, loader
+`assets/sd-boot-v1-xp5-hook-loader.generated.{bin,json}`, stub `assets/sd-boot-v1-xp5-hook-stub.generated.{bin,json}`; the stub is
+the previous one with a table of sixteen words, and the loader's room for it is 1,280 bytes in this build only). They are the first
+instruction of the one OS function that copies the Exif identity record into the OS's global (it becomes a `b`), and a twelve-word
+program in a run of alignment padding of the OS's code (zero and nop words after a `ret`; the OS's own memory map of its image
+maps that range read, write and execute, and nothing refers to the padding). The program checks that the first eight bytes of the
+record's Software text, at offset 0x30 of the record the function was given, are `Digital `, and only then writes `FUJIMOD ` over
+them; it then runs the displaced instruction and branches back into the function. It touches no register but `x16`, `x17` and the
+flags, no memory but those eight bytes of the caller's own record, and calls nothing. The packager finds the function by its nine
+words (exactly once, every use a call that passes an address of the caller's stack frame), finds the OS's map of its code, picks
+the shortest run of padding that is long enough, and refuses the padding if anything refers to it. The loader assembles the thirteen
+stock and new words itself from the two addresses and the eight bytes of text and refuses any table that is not exactly them (one
+instruction wrong, a word moved, a stock word that is not zero or a nop, an unprintable character), on top of the Exif build's
+proofs of the flash range, the stage's call and the section's row, the bound CRC-32s of the stock and the new words and every word
+of the stub's block. The stub checks each of the thirteen against the fresh decode before it writes one. The armed loader shows
+eight green blinks (verified-only two). The OS bytes do not come from the card (`ffboot.bin` is the same 4 KiB placeholder) and the
+flash is never written.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup`, `sd-boot-v1-exif-startup`, `sd-boot-v1-hook-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
