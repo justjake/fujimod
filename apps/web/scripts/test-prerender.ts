@@ -170,6 +170,13 @@ try {
         await creditsPage.locator('#github-contributors + ul li').count(),
         credits.contributors.length,
       );
+      const contributors = creditsPage.locator('#github-contributors + ul');
+      for (const name of ['heytchap', 'chris-rudmin']) {
+        assert.equal(
+          await contributors.getByRole('link', { name, exact: true }).getAttribute('href'),
+          `https://github.com/${name}`,
+        );
+      }
       const testers = creditsPage.locator('#testing-feedback + ul');
       const jody = testers.getByRole('link', { name: 'jody' });
       assert.equal(await jody.getAttribute('href'), 'https://www.instagram.com/jody_hinterleitner');

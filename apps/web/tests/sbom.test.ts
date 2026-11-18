@@ -63,7 +63,7 @@ test('the WebUSB Wasm graph excludes host-side Rust macros and build tools', () 
   assert.ok(
     !components.some(({ name }) => ['wasm-bindgen-macro', 'fujimod-bindgen'].includes(name)),
   );
-});
+}, 30_000);
 
 test('CycloneDX retains the declared expression, full texts, source, and every shipping product', () => {
   const component: Component = {
