@@ -13460,6 +13460,17 @@
           ],
           "description": "Declared iris optics."
         },
+        "nd_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareNdFilter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared neutral-density filter."
+        },
         "sensor_capture": {
           "anyOf": [
             {
@@ -14068,6 +14079,52 @@
         "entry_labels",
         "images",
         "name"
+      ],
+      "type": "object"
+    },
+    "HardwareNdFilter": {
+      "additionalProperties": false,
+      "description": "A neutral-density filter swung in by a lens-unit output register.",
+      "properties": {
+        "basis": {
+          "description": "Why the actuator and its factor are believed.",
+          "type": "string"
+        },
+        "factor": {
+          "description": "Light reduction while the filter is in (8 = 3 EV).",
+          "format": "double",
+          "type": "number"
+        },
+        "insert_mask": {
+          "description": "Coil bit that swings the filter in.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output": {
+          "description": "Wire that publishes the current transmission factor.",
+          "type": "string"
+        },
+        "register": {
+          "description": "Lens-unit output register that drives the actuator.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "remove_mask": {
+          "description": "Coil bit that swings the filter out.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "factor",
+        "insert_mask",
+        "output",
+        "register",
+        "remove_mask"
       ],
       "type": "object"
     },
@@ -22809,6 +22866,21 @@
           "description": "Named camera settings written into the settings bank, with the\n`settings` storage profile. Absence preserves the base selection.",
           "type": [
             "object",
+            "null"
+          ]
+        },
+        "capability_reply": {
+          "description": "MT5931 boot capability body (EVENT_NIC_CAPABILITY, 20 bytes) answering\ncommand 0x80. Absence refuses that command.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 20,
+          "minItems": 20,
+          "type": [
+            "array",
             "null"
           ]
         },

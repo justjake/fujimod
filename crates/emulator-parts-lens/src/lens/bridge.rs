@@ -44,6 +44,7 @@ pub struct Bridge {
     position: i64,
     /// Iris output (f-number squared) and its position/f-number calibration.
     aperture: Option<(fujimod_emulator_devices::parts::optics::ApertureHandle, Vec<(i64, f64)>)>,
+    nd: Option<fujimod_emulator_devices::parts::optics::ApertureHandle>,
 }
 impl Bridge {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -69,7 +70,12 @@ impl Bridge {
             configuration: None,
             due: None,
             aperture: None,
+            nd: None,
         })
+    }
+    /// ND transmission wire: the published f-number squared is scaled by it.
+    pub fn attach_nd(&mut self, transmission: fujimod_emulator_devices::parts::optics::ApertureHandle) {
+        self.nd = Some(transmission);
     }
     /// Publish the iris f-number from this bridge's position.
     pub fn attach_aperture(
@@ -105,7 +111,11 @@ impl Bridge {
             let t = (x - pair[0].0) as f64 / (pair[1].0 - pair[0].0) as f64;
             libm::exp(libm::log(pair[0].1) * (1. - t) + libm::log(pair[1].1) * t)
         };
-        *output.lock().map_err(|_| "iris transmission poisoned")? = f * f;
+        let nd = match &self.nd {
+            Some(t) => *t.lock().map_err(|_| "ND transmission poisoned")?,
+            None => 1.,
+        };
+        *output.lock().map_err(|_| "iris transmission poisoned")? = f * f * nd;
         Ok(())
     }
     pub fn position(&self) -> i64 {
@@ -297,6 +307,19 @@ mod tests {
     const IRIS: [(i64, f64); 3] = [(-102, 2.0), (-54, 5.6568), (-11, 16.0)];
     fn moving(close: bool) -> Configuration {
         Configuration { control: 0xc0 | if close { 0x10 } else { 0 }, divider: 64, clock: None, manual: None }
+    }
+
+    #[test]
+    fn nd_transmission_scales_the_published_aperture() {
+        let mut b = bridge(Some([-109, 0]), -102).unwrap();
+        let aperture = Arc::new(Mutex::new(1.0));
+        let nd = Arc::new(Mutex::new(8.0)); // filter in
+        b.attach_nd(nd.clone());
+        b.attach_aperture(aperture.clone(), IRIS.to_vec()).unwrap();
+        assert_eq!(*aperture.lock().unwrap(), 32.0); // f/2 squared, times 8
+        *nd.lock().unwrap() = 1.0; // filter out
+        b.step(moving(false), 0).unwrap();
+        assert_eq!(*aperture.lock().unwrap(), 4.0);
     }
 
     #[test]

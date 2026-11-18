@@ -110,6 +110,8 @@ pub enum SerialEndpoint {
         position: Option<String>,
         optics: Option<Iris>,
         focus: Option<FocusAxis>,
+        #[serde(default)]
+        nd: Option<NdFilter>,
     },
     Stabilizer {
         options: serde_json::Value,
@@ -137,6 +139,22 @@ pub enum SerialEndpoint {
 pub struct Iris {
     pub output: String,
     pub positions: Vec<(i64, f64)>,
+    /// Optional ND transmission wire (factor on f-number squared, 1 = no filter).
+    #[serde(default)]
+    pub nd: Option<String>,
+}
+/// A built-in ND filter on a lens-unit output register: `insert_mask` / `remove_mask`
+/// coil pulses move it; while it is in, `transmission` holds `factor` and the
+/// `aperture` wire (f-number squared) is scaled by it.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NdFilter {
+    pub register: u16,
+    pub insert_mask: u16,
+    pub remove_mask: u16,
+    pub factor: f64,
+    pub aperture: String,
+    pub transmission: String,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

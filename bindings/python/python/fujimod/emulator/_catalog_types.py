@@ -2794,6 +2794,7 @@ class HardwareImaging(TypedDict, total=False):
     focus_imaging: NotRequired[HardwareFocusImaging | None]
     iris_mechanics: NotRequired[HardwareIrisMechanics | None]
     iris_optics: NotRequired[HardwareIrisOptics | None]
+    nd_filter: NotRequired[HardwareNdFilter | None]
     sensor_capture: NotRequired[HardwareSensorCapture | None]
 
 
@@ -2909,6 +2910,15 @@ class HardwareNandBootLayout(TypedDict, total=False):
     entry_labels: Required[dict[str, str]]
     images: Required[list[HardwareBootImage]]
     name: Required[str]
+
+
+class HardwareNdFilter(TypedDict, total=False):
+    basis: Required[str]
+    factor: Required[int]
+    insert_mask: Required[int]
+    output: Required[str]
+    register: Required[int]
+    remove_mask: Required[int]
 
 
 class HardwareOptics(TypedDict, total=False):
@@ -4645,6 +4655,7 @@ class RunFactoryOptions(TypedDict, total=False):
     auxiliary_control_ticks: NotRequired[int | None]
     backdrop_profile: NotRequired[RunBackdropProfile | None]
     camera_settings: NotRequired[dict[str, str] | None]
+    capability_reply: NotRequired[list[int] | None]
     clear_profile: NotRequired[RunClearProfile | None]
     clock_seconds_2000: NotRequired[int | None]
     control_bus_profile: NotRequired[RunControlBusProfile | None]

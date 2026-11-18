@@ -416,7 +416,99 @@
               "address": 28,
               "reply_model": "stationary-z-plus-1g",
               "basis": "Declared catalog input."
-            }
+            },
+            "command_targets": [
+              {
+                "address": 57,
+                "prefix_mask": 224,
+                "prefix_value": 160,
+                "register_mask": 31,
+                "write_masks": [
+                  [
+                    0,
+                    255
+                  ],
+                  [
+                    1,
+                    255
+                  ],
+                  [
+                    2,
+                    255
+                  ],
+                  [
+                    3,
+                    255
+                  ],
+                  [
+                    4,
+                    255
+                  ],
+                  [
+                    5,
+                    255
+                  ],
+                  [
+                    6,
+                    255
+                  ],
+                  [
+                    7,
+                    255
+                  ],
+                  [
+                    8,
+                    255
+                  ],
+                  [
+                    9,
+                    255
+                  ],
+                  [
+                    10,
+                    255
+                  ],
+                  [
+                    11,
+                    255
+                  ],
+                  [
+                    12,
+                    255
+                  ],
+                  [
+                    13,
+                    255
+                  ],
+                  [
+                    14,
+                    255
+                  ],
+                  [
+                    15,
+                    255
+                  ],
+                  [
+                    30,
+                    255
+                  ]
+                ],
+                "read_frames": [
+                  [
+                    19,
+                    "00"
+                  ],
+                  [
+                    24,
+                    "0000"
+                  ]
+                ],
+                "commands": [
+                  229
+                ],
+                "basis": "EVF eye sensor, a TAOS/AMS proximity sensor as on the X-E2S (register prefix 0xA0 = command + auto-increment, ID register 0x12 = 0x39). X100T 1.11 configures it through 0x95FE18/0x95FE84/0x95FEE8 (register table 0xAFF1C4) when the display path changes; its output is GPIO 12.1, polled by the eyesensor task. Replies are the X-E2S declaration, not measured."
+              }
+            ]
           },
           "fe80": {
             "basis": "Declared catalog input.",
@@ -1050,6 +1142,14 @@
             "output": "lens_focus",
             "infinity_position": -300,
             "steps_per_mm": 267.0
+          },
+          "nd_filter": {
+            "register": 54272,
+            "insert_mask": 128,
+            "remove_mask": 256,
+            "factor": 8.0,
+            "output": "lens_nd",
+            "basis": "Built-in 3 EV ND filter, a two-coil actuator on the lens unit output register 0xD400 (idle 0x054; insert coil bit 7 = 0xD4D4, remove coil bit 8 = 0xD554). X100T 1.11 parks it out at power-on and, with ND FILTER ON, swings it in for the exposure only; live view previews the ND digitally. Observed in the emulator; the 3 EV factor is the camera specification."
           }
         },
         "attachments": {

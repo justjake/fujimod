@@ -60,6 +60,22 @@
             9,
             96
           ]
+        ],
+        "additional_panels": [
+          {
+            "basis": "Hybrid viewfinder EVF panel: when VIEW MODE or the eye sensor selects the viewfinder, X100T 1.11 programs SPI1 control 0xe0 / configuration 0x30 with GPIO 11.1 low, as FujiMod's X100S session declares; its scanout is output 0 (1024x768). The second select line, if any, is not established.",
+            "selection": [
+              [
+                11,
+                1,
+                0
+              ]
+            ],
+            "transport": [
+              224,
+              48
+            ]
+          }
         ]
       },
       "mcu_packet_hex": "00000000d00700ff008000040000aafc",

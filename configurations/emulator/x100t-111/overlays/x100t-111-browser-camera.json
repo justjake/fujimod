@@ -7,6 +7,11 @@
     "kind": "preset",
     "preset": {
       "factory_options": {
+        "storage_profile": "profile",
+        "camera_settings": {
+          "setup": "done",
+          "language": "en"
+        },
         "video_encoder_backend": "software",
         "audio_input_profile": "declared-silent-stereo-pcm48000",
         "jpeg_decode_profile": "declared-channel9-libjpeg-yycbcr-playback-unmeasured",
@@ -15,10 +20,15 @@
         "sd_card_present": true,
         "wifi_sdio_profile": "mt5931-no-peers",
         "wifi_sdio_transfer_ticks": 100,
+        "capability_reply": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         "rectangle_profile": "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
         "producer_data_ticks": 1024
       },
-      "firmware_profile_id": "x100t-111"
+      "firmware_profile_id": "x100t-111",
+      "hardware_selection": {
+        "soc_profile_id": "exr2-service-transports",
+        "body_profile_id": "x100t-rec"
+      }
     }
   }
 }

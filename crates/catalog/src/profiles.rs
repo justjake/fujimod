@@ -820,6 +820,26 @@ pub struct IrisOptics {
     pub positions: Vec<Vec<f64>>,
 }
 
+/// A neutral-density filter swung in by a lens-unit output register.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareNdFilter"))]
+pub struct NdFilter {
+    /// Why the actuator and its factor are believed.
+    pub basis: String,
+    /// Light reduction while the filter is in (8 = 3 EV).
+    pub factor: f64,
+    /// Coil bit that swings the filter in.
+    pub insert_mask: u64,
+    /// Wire that publishes the current transmission factor.
+    pub output: String,
+    /// Lens-unit output register that drives the actuator.
+    pub register: u64,
+    /// Coil bit that swings the filter out.
+    pub remove_mask: u64,
+}
+
 /// Declared sensor capture facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -865,6 +885,9 @@ pub struct Imaging {
     /// Declared iris optics.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iris_optics: Option<IrisOptics>,
+    /// Declared neutral-density filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nd_filter: Option<NdFilter>,
     /// Declared sensor capture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensor_capture: Option<SensorCapture>,

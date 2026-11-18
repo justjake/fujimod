@@ -190,6 +190,9 @@ fn i2c_motor_bridge(builder: Builder<'_>, model: Model) -> Result<Built, String>
             },
         )?;
         if let Some(optics) = optics {
+            if let Some(nd) = &optics.nd {
+                bridge.attach_nd(wire!(resources, id, nd, Aperture));
+            }
             bridge.attach_aperture(wire!(resources, id, optics.output, Aperture), optics.positions)?;
         }
         Box::new(bridge)
@@ -259,6 +262,7 @@ fn spi_endpoint(
             position,
             optics,
             focus,
+            nd,
         } => {
             let options: Box<fujimod_emulator_parts_lens::lens::Options> = decode(options)?;
             let mut lens = LensUnit::new(
@@ -276,6 +280,18 @@ fn spi_endpoint(
                 lens.attach_aperture(
                     wire!(resources, id, optics.output, Aperture),
                     optics.positions,
+                )?;
+            }
+            if let Some(nd) = nd {
+                lens.attach_nd(
+                    fujimod_emulator_parts_lens::lens::NdOptions {
+                        register: nd.register,
+                        insert_mask: nd.insert_mask,
+                        remove_mask: nd.remove_mask,
+                        factor: nd.factor,
+                    },
+                    wire!(resources, id, nd.aperture, Aperture),
+                    wire!(resources, id, nd.transmission, Aperture),
                 )?;
             }
             if let Some(focus) = focus {

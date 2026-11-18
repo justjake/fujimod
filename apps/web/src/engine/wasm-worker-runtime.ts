@@ -9,6 +9,7 @@ import { loadPreparedBundle } from './prepared-bundle';
 import { CameraStore } from '../cameras/store';
 import { digest } from './identity';
 import { diagnosticReport } from './diagnostics';
+import { PresentedDisplay } from './presented-display';
 import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import {
   createCamera,
@@ -168,6 +169,7 @@ export class WasmWorkerRuntime {
   private module?: EmulatorModule;
   private camera?: Camera;
   private manifest?: EmulatorManifest;
+  private display?: PresentedDisplay;
   private dmpWebGpu?: DmpWebGpuModule;
   private config?: EngineConfig;
   private state?: SessionState;
@@ -519,6 +521,7 @@ export class WasmWorkerRuntime {
     const session = module.Camera.fromSnapshot(bytes);
     this.camera = session;
     this.manifest = manifest;
+    this.display = manifest.displays ? new PresentedDisplay(manifest.displays) : undefined;
     this.runtimeKey = await digest(
       new TextEncoder().encode(`${identity}:${await digest(new Uint8Array(bytes))}`),
     );
@@ -554,6 +557,7 @@ export class WasmWorkerRuntime {
     this.module = module;
     this.dmpWebGpu = dmpWebGpu;
     this.manifest = manifest;
+    this.display = manifest.displays ? new PresentedDisplay(manifest.displays) : undefined;
     this.runtimeKey = await this.timings.measureAsync('runtimeIdentity', async () =>
       digest(
         new TextEncoder().encode(
@@ -891,10 +895,19 @@ export class WasmWorkerRuntime {
     this.speedSamples.push({ wall, ticks: status.ticks });
     while (this.speedSamples.length > 2 && wall - this.speedSamples[1]!.wall >= 2000)
       this.speedSamples.shift();
-    const frame = this.timings.measure('frame', () => s.frame(this.manifest!.output));
+    const shown = this.display?.observe((output) => {
+      const presented = s.frame(output);
+      if (!presented) return undefined;
+      const sequence = presented.sequence;
+      presented.free();
+      return sequence;
+    });
+    const frame = this.timings.measure('frame', () =>
+      s.frame(shown?.output ?? this.manifest!.output),
+    );
     if (!frame) return;
     const { rgba, width, height } = frame,
-      sequence = Number(frame.sequence);
+      sequence = shown?.sequence ?? Number(frame.sequence);
     frame.free();
     if (typeof SharedArrayBuffer !== 'undefined' && rgba.buffer instanceof SharedArrayBuffer) {
       this.leased = new Promise<void>((resolve) => {
