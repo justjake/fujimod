@@ -56,6 +56,10 @@ pub(super) fn capture(cpu: &Core, context: &Context) -> Result<Architecture, Str
         Model::CortexM4 => Ok(Architecture::CortexM4(m4::State::capture(context)?)),
     }
 }
+pub(super) fn export_translation_owner(cpu: &Core) -> Result<Vec<u8>, String> {
+    export(&Architecture::CortexA7(a7::State::capture_owned(cpu)?))
+}
+
 pub(super) fn export(state: &Architecture) -> Result<Vec<u8>, String> {
     encode(&Document {
         schema: 1,

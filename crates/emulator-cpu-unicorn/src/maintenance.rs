@@ -93,7 +93,7 @@ impl Core {
     pub fn owned_snapshot(&self, owner: &Owner) -> Result<Vec<u8>, String> {
         self.check_translation_owner(owner)?;
         self.check_tlbi_ready()?;
-        self.capture_context()?.export()
+        durable::export_translation_owner(self)
     }
 
     /// Validate detached architectural state for the fresh processor owner.
