@@ -62,10 +62,7 @@ function localArtifacts(env: Record<string, string>): Plugin {
       throw Error('FUJIMOD_LOCAL_FIRMWARES must map firmware IDs to local DAT paths');
     const mounts = [
       ['/runtime/', env.FUJIMOD_RUNTIME],
-      [
-        '/artifacts/docs/',
-        env.FUJIMOD_MEDIA_ROOT ? undefined : previewMedia(undefined, env.FUJIMOD_MEDIA),
-      ],
+      ['/artifacts/docs/', env.FUJIMOD_MEDIA_ROOT ? undefined : env.FUJIMOD_MEDIA],
       ['/local/firmware.dat', env.FUJIMOD_DAT],
       ...firmwares.map(([id, path]) => [`/local/firmware/${id}.dat`, path as string]),
     ].filter((pair): pair is [string, string] => Boolean(pair[1]));
@@ -172,7 +169,9 @@ function localArtifacts(env: Record<string, string>): Plugin {
 }
 // Feature media by card: an opt-in local directory, else the staged site assets.
 function featureMedia(env: Record<string, string>, development: boolean) {
-  const media = previewMedia(development ? env.FUJIMOD_MEDIA_ROOT : undefined, env.FUJIMOD_MEDIA);
+  const media = development
+    ? previewMedia(env.FUJIMOD_MEDIA_ROOT, env.FUJIMOD_MEDIA)
+    : env.FUJIMOD_MEDIA;
   const path = media ? resolve(media, 'media.json') : 'public/artifacts/docs/media.json';
   return existsSync(path) ? readFileSync(path, 'utf8') : 'null';
 }

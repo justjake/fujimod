@@ -1,5 +1,5 @@
 /** Opt-in development media, served directly from a recording workspace. */
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import type { Connect, Plugin } from 'vite';
 import { staticFiles } from './local-review-files.ts';
@@ -8,18 +8,13 @@ export function previewMedia(
   root: string | undefined,
   fallback: string | undefined,
 ): string | undefined {
-  const candidates = root
-    ? [resolve(root, 'media/frontier/site'), resolve(root, 'media/current')]
-    : [];
-  if (fallback) candidates.push(fallback);
-  for (const path of candidates) {
-    try {
-      const { cards } = JSON.parse(readFileSync(resolve(path, 'media.json'), 'utf8'));
-      if (cards && Object.keys(cards).length) return path;
-    } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-    }
+  if (root) {
+    const frontier = resolve(root, 'media/frontier/site');
+    if (existsSync(resolve(frontier, 'media.json'))) return frontier;
+    const current = resolve(root, 'media/current');
+    if (existsSync(resolve(current, 'media.json'))) return current;
   }
+  return fallback;
 }
 
 export function recordingFiles(directory: string): Connect.NextHandleFunction {

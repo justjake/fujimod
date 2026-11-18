@@ -166,12 +166,6 @@
   object-fit: contain;
 }
 
-.manual-video-wide {
-  width: 100%;
-  margin: 8px 0 20px;
-  border-radius: 12px;
-}
-
 .manual .docs-layout main:has(.manual-index) {
   max-width: 900px;
 }

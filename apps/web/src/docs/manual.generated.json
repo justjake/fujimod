@@ -3160,43 +3160,23 @@
           "media": null
         },
         {
-          "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "FAVORITES"],
-          "title": "{favorite}",
-          "kind": "page",
-          "order": 0,
-          "stock": false,
-          "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite",
-          "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "FAVORITES", "{favorite}"]],
-          "summary": "Open the recipe in C1–C7. An empty slot offers CREATE NEW.",
-          "options": [],
-          "credits": {
-            "premiere": false,
-            "inspired": [],
-            "thanks": []
-          },
-          "media": null
-        },
-        {
           "path": [
             "SHOOTING MENU",
             "EDIT/SAVE CUSTOM SETTING",
             "FAVORITES",
-            "{favorite}",
             "COMPARE WITH CURRENT"
           ],
           "title": "SAVE ALL",
           "kind": "command",
           "order": 0,
           "stock": false,
-          "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite--compare-with-current--save-all",
+          "anchor": "shooting-menu--edit-save-custom-setting--favorites--compare-with-current--save-all",
           "cameras": ["X-E2", "X-E2S", "X70"],
           "paths": [
             [
               "SHOOTING MENU",
               "EDIT/SAVE CUSTOM SETTING",
               "FAVORITES",
-              "{favorite}",
               "COMPARE WITH CURRENT",
               "SAVE ALL"
             ]
@@ -3827,16 +3807,14 @@
           "media": null
         },
         {
-          "path": ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "{button}"],
+          "path": ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING"],
           "title": "RAW VIEW",
           "kind": "info",
           "order": 10060,
           "stock": false,
-          "anchor": "set-up--button-dial-setting--function-fn-setting--button--raw-view",
+          "anchor": "set-up--button-dial-setting--function-fn-setting--raw-view",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "paths": [
-            ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "{button}", "RAW VIEW"]
-          ],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "RAW VIEW"]],
           "summary": "Assign RAW VIEW to see how close the brightest areas are to losing RAW detail. Press the assigned button again to return to the normal live view.",
           "options": [],
           "credits": {
@@ -5331,28 +5309,12 @@
       "page": "edit-save-custom-setting"
     },
     {
-      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "FAVORITES"],
-      "title": "{favorite}",
-      "kind": "page",
-      "order": 0,
-      "stock": false,
-      "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite",
-      "cameras": ["X-E2", "X-E2S", "X70"],
-      "page": "edit-save-custom-setting"
-    },
-    {
-      "path": [
-        "SHOOTING MENU",
-        "EDIT/SAVE CUSTOM SETTING",
-        "FAVORITES",
-        "{favorite}",
-        "COMPARE WITH CURRENT"
-      ],
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "FAVORITES", "COMPARE WITH CURRENT"],
       "title": "SAVE ALL",
       "kind": "command",
       "order": 0,
       "stock": false,
-      "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite--compare-with-current--save-all",
+      "anchor": "shooting-menu--edit-save-custom-setting--favorites--compare-with-current--save-all",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
@@ -6177,12 +6139,12 @@
       "page": "button-dial-setting"
     },
     {
-      "path": ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "{button}"],
+      "path": ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING"],
       "title": "RAW VIEW",
       "kind": "info",
       "order": 10060,
       "stock": false,
-      "anchor": "set-up--button-dial-setting--function-fn-setting--button--raw-view",
+      "anchor": "set-up--button-dial-setting--function-fn-setting--raw-view",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },

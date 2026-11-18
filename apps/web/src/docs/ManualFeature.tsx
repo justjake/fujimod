@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { Credits } from '../home/catalog';
 import { Rich } from '../home/catalog-parts';
 import { featureMedia, type Media } from '../home/feature-media';
@@ -41,16 +41,11 @@ function ManualCredits(props: { credits: Credits }) {
   );
 }
 
-function WalkthroughClip(props: {
-  media: Media;
-  label: string;
-  wide?: boolean;
-  range?: [number, number];
-}) {
+function WalkthroughClip(props: { media: Media; label: string; range?: [number, number] }) {
   const fragment = () => (props.range ? `#t=${props.range.join(',')}` : '');
   return (
     <video
-      class={['manual-video', { 'manual-video-wide': props.wide }]}
+      class="manual-video"
       aria-label={props.label}
       src={mediaRoot + props.media.video + fragment()}
       poster={mediaRoot + props.media.still}
@@ -62,7 +57,7 @@ function WalkthroughClip(props: {
   );
 }
 
-function ManualEntry(props: { section: ManualSection; wideVideo: boolean }) {
+function ManualEntry(props: { section: ManualSection }) {
   const media = () => sectionMedia(props.section);
   return (
     <section class="manual-entry" id={props.section.anchor}>
@@ -77,9 +72,7 @@ function ManualEntry(props: { section: ManualSection; wideVideo: boolean }) {
       </Show>
       <Show when={props.section.markdown}>{(text) => <Markdown text={text()} />}</Show>
       <Show when={media()}>
-        {(recording) => (
-          <WalkthroughClip media={recording()} label={props.section.title} wide={props.wideVideo} />
-        )}
+        {(recording) => <WalkthroughClip media={recording()} label={props.section.title} />}
       </Show>
       <Show when={props.section.options?.length}>
         <dl class="manual-options">
@@ -120,7 +113,6 @@ function ManualEntry(props: { section: ManualSection; wideVideo: boolean }) {
 }
 
 export function ManualFeature(props: { page: ManualPage; path: string; chapter?: string }) {
-  const leadEntry = createMemo(() => props.page.sections.find(sectionMedia));
   return (
     <article class="manual-feature">
       <p class="manual-crumb">
@@ -143,9 +135,7 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
           </For>
         </nav>
       </Show>
-      <For each={props.page.sections}>
-        {(section) => <ManualEntry section={section} wideVideo={section === leadEntry()} />}
-      </For>
+      <For each={props.page.sections}>{(section) => <ManualEntry section={section} />}</For>
     </article>
   );
 }
