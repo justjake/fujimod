@@ -221,9 +221,15 @@ impl Sensor {
         // A programmed stride of exactly 1.5 bytes a sample is a packed 12-bit line (X-T5 4.31
         // movie live view: unit 3 at 7776 samples with pitch 11664). Writing 16-bit lines there
         // would overrun the guest buffer by a third, so such lines are packed instead.
-        let packed12 = routes.line_stride && width % 2 == 0 && stride * 2 == u64::from(width) * 3;
+        // Movie record readout uses the same packing with padded lines (6308 samples, pitch
+        // 0x2520 = 9504 >= 9462 bytes), so any stride from 1.5 up to (not including) 2 bytes a
+        // sample is a padded packed 12-bit line.
+        let packed12 = routes.line_stride
+            && width % 2 == 0
+            && stride * 2 >= u64::from(width) * 3
+            && stride < u64::from(width) * 2;
         let line = if packed12 {
-            stride
+            u64::from(width) * 3 / 2
         } else {
             u64::from(width) * 2
         };
