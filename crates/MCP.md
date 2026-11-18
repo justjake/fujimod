@@ -100,11 +100,24 @@ instruction counts per block.
 The module adds no second control path. Where a tool needs something these
 layers lack, the layer gains it.
 
-The first slice presses keys through the boot crate's key driver
-(`emulator-boot/src/keys.rs`, the CLI's `--keys` and `--press`), which works
-from the catalog alone. Presses move onto `fujimod-remote` once its contact
-panel and driver have a generator (open question 1), which is also what a
-USB camera needs.
+Presses and turns go through `fujimod-remote`, which waits until the
+firmware accepts input and confirms its key scanner registered each edge.
+On an emulated camera that needs the session's contact panel and contact
+driver, which two crates build from the catalog:
+
+- `fujimod-catalog-contacts` resolves every physical control against the
+  firmware's located inputs and the body's wiring: concrete pins, ADC
+  channels, threshold band offsets, scanner records and interfaces.
+- `fujimod-emulator-contacts` compiles that against the session's device
+  graph into the panel (the electrical levels of every control pose,
+  composed across controls sharing a wire) and the driver (the scanner
+  records each pose must read ready and report), reading thresholds from
+  the firmware's loaded configuration, and installs both. Its `Keys` and
+  `set_key` drive the same panel for timed key scripts, the CLI's `--keys`
+  and `--press`, and boot's first-start acceptance.
+
+On X70 1.10 every electronic control compiles, with thresholds read from
+the running firmware.
 
 ### Cameras and threads
 
@@ -130,9 +143,10 @@ used.
 | | `camera_restore` | Return to a named checkpoint or a checkpoint file | implemented | no |
 | | `camera_fork` | Open a second camera from a checkpoint | planned | no |
 | Time | `camera_run` | Advance guest seconds, or until REC | implemented | waits only |
-| Inputs | `camera_keys` | Key names `camera_press` accepts | implemented | yes |
-| | `camera_press` | Press and release a key, settle, return state and screen | implemented | yes |
-| | `camera_turn`, `camera_touch` | Turn an encoder or dial; touch the screen | planned | yes |
+| Inputs | `camera_controls` | Control ids, kinds and positions `camera_press` and `camera_turn` accept | implemented | yes |
+| | `camera_press` | Press and release a control, confirmed by the firmware, settle, return state and screen | implemented | yes |
+| | `camera_turn` | Turn a rotary control by detents | implemented | yes |
+| | `camera_touch`, positions | Touch the screen; move a dial or switch to a position | planned | yes |
 | | `camera_set_input` | Drive a hardware input level (GPIO, ADC, SD card) | planned | no |
 | Observe | `camera_screen` | The current screen and state | implemented | yes |
 | | `camera_state` | Boot and UI state words, guest time, instructions | implemented | yes |
@@ -259,17 +273,9 @@ adding `reqwest`.
 
 ## Open questions
 
-1. A generator for the contact panel and contact driver. Remote facts come
-   from the catalog selection (`Facts::from_selection`), and a press on a
-   restored X70 1.10 camera works with them alone. The press also needs
-   the panel and driver installed on the session (`configure_controls`,
-   `configure_contact_driver`), and nothing in this repository generates
-   them. The catalog describes every control, and the boot crate's key
-   path already reads ADC thresholds from the running firmware's
-   configuration (`emulator-boot/src/keys.rs`), so the generator can work
-   from the catalog and live configuration alone. The remote's optional
-   input task layout and parameter-independent inputs should come from
-   firmware locators, not written-down addresses.
+1. The remote's optional input task layout and parameter-independent
+   inputs. They should come from firmware locators, not written-down
+   addresses.
 2. How a build is made. The likely answer is that `camera_open` takes a
    built SD card directory and the agent runs the build itself.
 3. Opening a physical camera: whether an agent may hold an interactive USB
@@ -289,17 +295,19 @@ implemented tool against X70 1.10:
 - A stock camera opened to REC in about 2.6 s of wall time; restoring a
   named checkpoint took 0.3 s, and opening a second camera from its
   checkpoint file 1.2 s.
-- MENU/OK (`EXE_M`) opened the shooting menu.
-- Profiles of the same 0.65 guest seconds from one checkpoint, idle and
-  with the MENU/OK press, differed by 16.9 million instructions and 9,398
+- `menu_ok_button` opened the shooting menu, confirmed by the firmware's
+  key scanner; the control ring turned and pad directions pressed.
+- Profiles of the same guest time from one checkpoint, idle and with the
+  MENU/OK press, differed by about 15 million instructions and 9,723
   blocks that only ran with the press.
+- A camera opened from a checkpoint file adopted the saved camera's
+  contacts and accepted presses.
 - A FujiMod SD card booted to REC, showed its welcome sheet after eight
   guest seconds, and DISP/BACK dismissed it.
 
 ## Next
 
 1. Names for profile and memory addresses from a build's linked symbols.
-2. The contact panel and driver generator, then presses through
-   `fujimod-remote`, `camera_turn` and `camera_touch`.
+2. `camera_touch` and moving positional controls.
 3. Memory-access, call and PC-trace probes.
 4. `camera_run` stop conditions beyond time and REC.

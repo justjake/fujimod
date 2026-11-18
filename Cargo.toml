@@ -44,6 +44,8 @@ members = [
   "crates/emulator-board-graph",
   "crates/emulator-session",
   "crates/emulator-cli",
+  "crates/catalog-contacts",
+  "crates/emulator-contacts",
   "crates/mcp-core",
   "crates/mcp-camera",
   "crates/mcp",
@@ -239,6 +241,8 @@ fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }
 fujimod-settings = { path = "crates/settings", version = "0.1.0" }
 fujimod-emulator-cpu-hvf = { path = "crates/emulator-cpu-hvf", version = "0.1.0" }
 fujimod-workspace-hack = { path = "crates/workspace-hack", version = "0.1.0" }
+fujimod-catalog-contacts = { path = "crates/catalog-contacts", version = "0.1.0" }
+fujimod-emulator-contacts = { path = "crates/emulator-contacts", version = "0.1.0" }
 fujimod-mcp-core = { path = "crates/mcp-core", version = "0.1.0" }
 fujimod-mcp-camera = { path = "crates/mcp-camera", version = "0.1.0" }
 rmcp = "3.11"
