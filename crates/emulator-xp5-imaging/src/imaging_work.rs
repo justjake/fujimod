@@ -1,6 +1,26 @@
-//! XP5 MOVDC packed422 output DMA, MOVRSZ output and reset-only work gates.
-//! MOVDC registers: size+18, address+c0/c4, stride+d0, cause+e0/W1C+e4,
+//! XP5 MOVDC packed422 output DMA, MOVRSZ output, the IBUF input write DMA and reset-only work
+//! gates. MOVDC registers: size+18, address+c0/c4, stride+d0, cause+e0/W1C+e4,
 //! mask+e8. Static evidence: 144be74/144cacc/144d118; no software ring access.
+//!
+//! IBUF (X-T5 4.31 0xff945000, driver 0x138a8dc..0x138ba9c, DMA mask 0x40000 of 0x2c6af44 /
+//! 0x2c6ce5c). Static evidence:
+//! * +0x00 bit 0: ready. Close (0x138b604) and open (0x138b9e0) clear it through 0x138a970(0) and
+//!   then poll it (0x138a8dc) until it reads 1, with no timeout: the reset handshake of the other
+//!   work gates.
+//! * +0x40 bit 0: start. 0x138a970(1) sets it read-modify-write after the destination was
+//!   written (+0x4c bits 2..0 / +0x50 address 34..32 / 31..0); bit 31 is a mode bit (0x138b6a8).
+//!   Geometry +0x44 samples, +0x48 lines, +0x54/+0x58 pitch, +0x5c format, +0x60, +0x70 are kept
+//!   as written. Every start is one transfer: X-T5 4.31 movie live view re-arms it once a frame
+//!   (saclac 0x2e7a2e8 sets the RAW job count [0x4a0fff0] = 1, then 0x2c6ce5c).
+//! * +0x68 bit 0: completion interrupt enable (0x138a94c). +0x6c: write 1 clears the completion
+//!   (0x138a908; the ISR 0x138a928 does this before it calls the registered callback, it reads no
+//!   status). Logical interrupt 0x7a = INTID 169 (table 0x18ea918).
+//! * saclac needs that completion: callback 0x2e7fb34 sets [0x4a101f0] bit 1, which 0x2e7877c
+//!   turns into bit 1 of [0x4a101e8]; without it the movie job never calls MOVDC back
+//!   (0x3056164) and the movie live view stays black.
+//! The model completes a start after `completion_us`, clears +0x40 bit 0, latches the completion
+//! and raises INTID 169 while +0x68 enables it. It writes no pixels: the RAW destination is not
+//! read by anything the emulator models yet.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -11,6 +31,7 @@ enum Kind {
     Reset,
     Movdc,
     Resize,
+    Ibuf,
 }
 #[derive(Default, Serialize, Deserialize)]
 struct State {
@@ -57,9 +78,13 @@ impl Work {
     pub fn resize(base: u64, latency_us: u64) -> Result<Self, String> {
         Self::source(base, Kind::Resize, latency_us, None)
     }
+    pub fn ibuf(base: u64, completion_us: u64) -> Result<Self, String> {
+        Self::source(base, Kind::Ibuf, completion_us, None)
+    }
     fn source(base: u64, kind: Kind, interval_us: u64, luma: Option<u8>) -> Result<Self, String> {
         if (kind == Kind::Movdc && !matches!(base, 0xff970000 | 0xff971000 | 0xff972000))
             || (kind == Kind::Resize && base != 0xff982000)
+            || (kind == Kind::Ibuf && base != 0xff945000)
             || luma.is_some_and(|n| !(16..=235).contains(&n))
         {
             return Err("invalid imaging work block/source".into());
@@ -92,6 +117,7 @@ impl Work {
             Kind::Reset => return,
             Kind::Movdc => 171 + ((self.base - 0xff970000) / 0x1000) as u32,
             Kind::Resize => 200,
+            Kind::Ibuf => 169,
         };
         cx.set_irq(line, self.state.pending & self.state.irq_enable != 0);
     }
@@ -118,6 +144,13 @@ impl Work {
         Ok(())
     }
     fn produce(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        if self.kind == Kind::Ibuf {
+            self.state.regs.insert(0x40, self.state.r(0x40) & !1);
+            self.state.frames += 1;
+            self.state.pending |= 1;
+            self.irq(cx);
+            return Ok(());
+        }
         if self.kind == Kind::Movdc {
             let luma = self
                 .source_luma
@@ -225,6 +258,7 @@ impl Work {
                     || (self.base == 0xff950000 && PLAIN_RESET_WORDS.iter().any(|r| r.contains(&o)))
                     || (self.base == 0xff973000 && SECOND_GATE_PLAIN_WORDS.contains(&o))
             }
+            Kind::Ibuf => o <= 0x74,
             Kind::Resize => matches!(
                 o,
                 0 | 4
@@ -304,6 +338,7 @@ impl Device for Work {
             Kind::Reset => "imaging-reset",
             Kind::Movdc => "movdc",
             Kind::Resize => "imaging-resize",
+            Kind::Ibuf => "imaging-ibuf",
         }
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
@@ -326,7 +361,10 @@ impl Device for Work {
                 }
             }
             (Kind::Resize, 0x58) | (Kind::Movdc, 0xe0) => u64::from(self.state.pending),
-            (Kind::Resize, 0x60) | (Kind::Movdc, 0xe8) => u64::from(self.state.irq_enable),
+            (Kind::Resize, 0x60) | (Kind::Movdc, 0xe8) | (Kind::Ibuf, 0x68) => {
+                u64::from(self.state.irq_enable)
+            }
+            (Kind::Ibuf, 0x6c) => u64::from(self.state.pending),
             (Kind::Movdc, 0xdc) => {
                 if self.state.r(0xd4) & (1 << 28) == 0 {
                     0x100
@@ -355,7 +393,9 @@ impl Device for Work {
                 if v & 1 == 0 {
                     self.cancel_frame();
                     self.state.pending = 0;
-                    self.state.regs.insert(4, 0);
+                    if self.kind != Kind::Ibuf {
+                        self.state.regs.insert(4, 0);
+                    }
                     self.state.reset_generation = self.state.reset_generation.wrapping_add(1);
                     let Some(at) = cx.now().checked_add(100_000) else {
                         cx.fail("imaging reset deadline overflow");
@@ -370,7 +410,7 @@ impl Device for Work {
             }
             (_, 4) => {
                 self.state.regs.insert(4, v);
-                if self.kind != Kind::Reset {
+                if !matches!(self.kind, Kind::Reset | Kind::Ibuf) {
                     if v & 1 != 0 {
                         if let Err(e) = self.arm(cx) {
                             cx.fail(e);
@@ -380,11 +420,26 @@ impl Device for Work {
                     }
                 }
             }
-            (Kind::Movdc, 0xe4) | (Kind::Resize, 0x5c) => {
+            (Kind::Movdc, 0xe4) | (Kind::Resize, 0x5c) | (Kind::Ibuf, 0x6c) => {
                 self.state.pending &= !(v & if self.kind == Kind::Movdc { 7 } else { 1 });
                 self.irq(cx);
             }
-            (Kind::Movdc, 0xe8) | (Kind::Resize, 0x60) => {
+            (Kind::Ibuf, 0x40) => {
+                self.state.regs.insert(0x40, v);
+                if v & 1 != 0 && self.state.frame_deadline.is_none() {
+                    // The X-T5 movie job (0x138b538) can set +0x40 bit 0 while the +0x00 reset
+                    // handshake is still running; the completion then follows the end of reset.
+                    let from = self.state.reset_deadline.unwrap_or(0).max(cx.now());
+                    let Some(at) = from.checked_add(self.interval_ns) else {
+                        cx.fail("IBUF completion deadline overflow");
+                        return;
+                    };
+                    self.state.frame_generation = self.state.frame_generation.wrapping_add(1);
+                    self.state.frame_deadline = Some(at);
+                    cx.schedule(at, self.state.frame_generation | (1 << 63));
+                }
+            }
+            (Kind::Movdc, 0xe8) | (Kind::Resize, 0x60) | (Kind::Ibuf, 0x68) => {
                 self.state.irq_enable = v & if self.kind == Kind::Movdc { 7 } else { 1 };
                 self.irq(cx);
             }
@@ -417,7 +472,7 @@ impl Device for Work {
                 };
                 self.state.frame_deadline = Some(next);
                 cx.schedule(next, self.state.frame_generation | (1 << 63));
-            } else {
+            } else if self.kind != Kind::Ibuf {
                 self.state.regs.insert(4, 0);
             }
         }
@@ -445,6 +500,50 @@ mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
     const BASE: u64 = 0xff970000;
+    #[test]
+    fn ibuf_start_completes_once_with_a_level_interrupt_cleared_by_6c() {
+        const IBUF: u64 = 0xff945000;
+        assert!(Work::ibuf(BASE, 8000).is_err());
+        let mut work = Work::ibuf(IBUF, 8000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // Open (0x138b9e0): clear +0x6c, reset handshake on +0x00, destination, start.
+        work.write(&mut cx, IBUF + 0x6c, 4, 1);
+        work.write(&mut cx, IBUF + 0x04, 4, 0x1234);
+        work.write(&mut cx, IBUF + 0x00, 4, 0);
+        assert_eq!(work.read(&mut cx, IBUF, 4), 0);
+        assert!(cx.refusal().is_none());
+        host.now = 100_000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, IBUF, 4), 1);
+        assert_eq!(work.read(&mut cx, IBUF + 0x04, 4), 0x1234);
+        work.write(&mut cx, IBUF + 0x50, 4, 0x8e83_a350);
+        work.write(&mut cx, IBUF + 0x68, 4, 1);
+        let v = work.read(&mut cx, IBUF + 0x40, 4) as u32;
+        work.write(&mut cx, IBUF + 0x40, 4, u64::from(v | 1));
+        assert!(cx.refusal().is_none());
+        assert_eq!(work.next_deadline(host.now), Some(8_100_000));
+        assert!(!host.irqs.iter().any(|(i, on)| *i == 169 && *on));
+        host.now = 8_100_000;
+        work.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(host.irqs.last(), Some(&(169, true)));
+        assert_eq!(work.next_deadline(host.now), None);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, IBUF + 0x40, 4), 0);
+        // ISR 0x138a928: write 1 to +0x6c, then the next frame re-arms the transfer.
+        work.write(&mut cx, IBUF + 0x6c, 4, 1);
+        assert_eq!(host.irqs.last(), Some(&(169, false)));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        work.write(&mut cx, IBUF + 0x40, 4, 1);
+        // Without +0x68 the completion latches but the line stays low.
+        work.write(&mut cx, IBUF + 0x68, 4, 0);
+        assert_eq!(work.next_deadline(host.now), Some(16_100_000));
+        assert_eq!(work.save()["state"]["frames"], 1);
+        host.now = 16_100_000;
+        work.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(work.save()["state"]["pending"], 1);
+        assert_eq!(host.irqs.last(), Some(&(169, false)));
+    }
     fn setup(work: &mut Work, host: &mut RecordingHost, mode: u64) {
         let mut cx = Cx::new(host, 3, 0xdead, 0);
         for (o, v) in [
