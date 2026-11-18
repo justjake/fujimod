@@ -1,0 +1,635 @@
+//! The MCP camera module: boot emulated cameras, keep them running between
+//! tool calls, drive their controls, look at their screens and memory,
+//! checkpoint them and profile what their processors execute.
+//!
+//! A session is not `Send`, so each camera lives on its own thread. Tools send
+//! that thread a closure and await its reply.
+#![forbid(unsafe_code)]
+
+mod camera;
+mod profile;
+
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    sync::{Arc, Mutex, mpsc},
+};
+
+use base64::Engine as _;
+use fujimod_mcp_core::{Module, Routed};
+use rmcp::{
+    ErrorData,
+    handler::server::wrapper::Parameters,
+    model::{CallToolResult, ContentBlock},
+    tool, tool_router,
+};
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+use camera::{Camera, OpenRequest};
+use profile::Profile;
+
+const INSTRUCTIONS: &str = "Emulated cameras that stay running between calls. Open one with \
+camera_open (it boots to REC, or restores a checkpoint file), then press keys with camera_press \
+and read the reply's screen and state. Save named checkpoints with camera_checkpoint and return to \
+them with camera_restore instead of booting again. To find what code runs, call \
+camera_profile_start, act, then camera_profile_collect; compare two collections with \
+camera_profile_diff.";
+
+type Job = Box<dyn FnOnce(&mut Camera) + Send>;
+
+struct Handle {
+    jobs: mpsc::Sender<Job>,
+    opened: Value,
+}
+
+/// State shared by the camera tools.
+pub struct Cameras {
+    cameras: Mutex<BTreeMap<String, Handle>>,
+    profiles: Mutex<BTreeMap<String, Arc<Profile>>>,
+    output: PathBuf,
+    next_camera: Mutex<u64>,
+    next_profile: Mutex<u64>,
+}
+
+/// The camera module. `output` receives profiles and other large results.
+pub fn module(output: PathBuf) -> Arc<dyn Module> {
+    let state = Cameras {
+        cameras: Mutex::new(BTreeMap::new()),
+        profiles: Mutex::new(BTreeMap::new()),
+        output,
+        next_camera: Mutex::new(1),
+        next_profile: Mutex::new(1),
+    };
+    Arc::new(Routed::new(
+        "camera",
+        INSTRUCTIONS,
+        state,
+        Cameras::tool_router(),
+    ))
+}
+
+fn failed(message: impl Into<String>) -> Result<CallToolResult, ErrorData> {
+    Ok(CallToolResult::error(vec![ContentBlock::text(
+        message.into(),
+    )]))
+}
+
+fn reply(summary: Value, png: Option<Vec<u8>>) -> Result<CallToolResult, ErrorData> {
+    let mut content = vec![ContentBlock::text(
+        serde_json::to_string_pretty(&summary).unwrap_or_else(|error| error.to_string()),
+    )];
+    if let Some(png) = png {
+        content.push(ContentBlock::image(
+            base64::engine::general_purpose::STANDARD.encode(png),
+            "image/png",
+        ));
+    }
+    Ok(CallToolResult::success(content))
+}
+
+fn parse_address(text: &str) -> Result<u64, String> {
+    let text = text.trim();
+    match text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+        Some(hex) => u64::from_str_radix(hex, 16),
+        None => text.parse(),
+    }
+    .map_err(|_| format!("invalid address {text}"))
+}
+
+impl Cameras {
+    /// Run `work` on the camera's thread and wait for its result.
+    async fn on<T: Send + 'static>(
+        &self,
+        camera: &str,
+        work: impl FnOnce(&mut Camera) -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        let jobs = self
+            .cameras
+            .lock()
+            .map_err(|_| "camera table is poisoned")?
+            .get(camera)
+            .map(|handle| handle.jobs.clone())
+            .ok_or_else(|| format!("no camera named {camera}; see camera_list"))?;
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        jobs.send(Box::new(move |camera: &mut Camera| {
+            let _ = sender.send(work(camera));
+        }))
+        .map_err(|_| format!("camera {camera} has stopped"))?;
+        receiver
+            .await
+            .map_err(|_| format!("camera {camera} stopped while working"))?
+    }
+
+    fn next(counter: &Mutex<u64>, prefix: &str) -> String {
+        let mut next = counter
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let name = format!("{prefix}-{next}");
+        *next += 1;
+        name
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct OpenParams {
+    /// Name to address this camera by in later calls. Defaults to camera-N.
+    pub name: Option<String>,
+    /// Run configuration id, for example `x70-110-rec`.
+    pub configuration: String,
+    /// Run configuration overlays applied in order, for example
+    /// `x70-110-browser-camera` to add the SD card slot.
+    #[serde(default)]
+    pub overlays: Vec<String>,
+    /// Path of the firmware update file (FPUPDATE.DAT) the configuration names.
+    pub update: String,
+    /// Path of the 16 KiB boot ROM dump.
+    pub boot_rom: String,
+    /// Directory of the camera's `nand-<section>.bin.zst` files, when the
+    /// configuration's settings name a camera.
+    pub camera_sections: Option<String>,
+    /// Committed NAND image or main-area image.
+    pub nand: Option<String>,
+    /// Sixteen-byte MCU persistent settings packet.
+    pub settings: Option<String>,
+    /// Directory whose files are placed on the virtual SD card. Needs an
+    /// overlay that declares an SD card slot.
+    pub sd_card: Option<String>,
+    /// GPIO levels set at power-on, `PORT:PIN=0|1[,PORT:PIN=0|1...]`.
+    pub gpio: Option<String>,
+    /// Key edges during boot, `t=SECONDS:KEY` to press and `t=SECONDS:-KEY` to
+    /// release, separated by `;`. To SD boot an X70, hold its two SD boot
+    /// buttons with `gpio` `0:10=0,0:11=0` and release them with
+    /// `t=0.3:-controls-gpio-0-10;t=0.3:-controls-gpio-0-11`.
+    pub keys: Option<String>,
+    /// Checkpoint file to restore instead of booting. Give the same
+    /// configuration, overlays, files and SD card as the camera that saved it.
+    pub snapshot: Option<String>,
+    /// `exact` (deterministic; use when runs will be compared) or `interactive`.
+    pub execution_policy: Option<String>,
+    /// Guest instruction budget for the boot. Defaults to two billion.
+    pub instruction_limit: Option<u64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CameraParams {
+    /// Camera name from camera_open or camera_list.
+    pub camera: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct CheckpointParams {
+    /// Camera name.
+    pub camera: String,
+    /// Name to restore it by.
+    pub name: String,
+    /// Also write the checkpoint to this file, which camera_open can restore.
+    pub file: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct RestoreParams {
+    /// Camera name.
+    pub camera: String,
+    /// Checkpoint name from camera_checkpoint.
+    pub name: Option<String>,
+    /// Or a checkpoint file written by a camera built from the same inputs.
+    pub file: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct RunParams {
+    /// Camera name.
+    pub camera: String,
+    /// Guest seconds to run. Ignored with `until_rec`.
+    pub seconds: Option<f64>,
+    /// Run until the camera reports REC, within `instruction_limit`.
+    #[serde(default)]
+    pub until_rec: bool,
+    /// Guest instruction budget for `until_rec`. Defaults to two billion.
+    pub instruction_limit: Option<u64>,
+    /// Return the screen after running. Defaults to true.
+    pub screen: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct PressParams {
+    /// Camera name.
+    pub camera: String,
+    /// Key name from camera_keys (the firmware's debug key name, such as
+    /// `EXE_M` for MENU/OK) or a body connection id.
+    pub key: String,
+    /// Milliseconds the key stays down. Defaults to 150.
+    pub hold_ms: Option<u64>,
+    /// Guest milliseconds to keep running after release. Defaults to 500.
+    pub settle_ms: Option<u64>,
+    /// Return the screen afterwards. Defaults to true.
+    pub screen: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct MemoryParams {
+    /// Camera name.
+    pub camera: String,
+    /// Physical address, decimal or `0x` hexadecimal.
+    pub address: String,
+    /// Bytes to read, at most 16 MiB.
+    pub size: u64,
+    /// Write the bytes to this file. Without it at most 4096 bytes are returned
+    /// as a hex dump.
+    pub file: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct ProfileParams {
+    /// Profile id from camera_profile_collect.
+    pub profile: String,
+    /// Blocks to list. Defaults to 30.
+    pub limit: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct DiffParams {
+    /// Baseline profile id.
+    pub before: String,
+    /// Profile id to compare with the baseline.
+    pub after: String,
+    /// Blocks to list. Defaults to 30.
+    pub limit: Option<usize>,
+}
+
+#[tool_router]
+impl Cameras {
+    #[tool(
+        description = "Open an emulated camera from a run configuration and its firmware files. \
+It boots to REC (or restores `snapshot`) and stays running for later calls. Returns its name, \
+state and screen."
+    )]
+    async fn camera_open(
+        &self,
+        Parameters(params): Parameters<OpenParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let name = match &params.name {
+            Some(name) => name.clone(),
+            None => Self::next(&self.next_camera, "camera"),
+        };
+        if self
+            .cameras
+            .lock()
+            .map(|cameras| cameras.contains_key(&name))
+            .unwrap_or(true)
+        {
+            return failed(format!("a camera named {name} is already open"));
+        }
+        let request = OpenRequest::from(params);
+        let (jobs, receive) = mpsc::channel::<Job>();
+        let (opened, wait) = tokio::sync::oneshot::channel();
+        let thread_name = name.clone();
+        let spawned = std::thread::Builder::new()
+            .name(format!("camera {thread_name}"))
+            .spawn(move || {
+                let mut camera = match Camera::open(request) {
+                    Ok((camera, summary)) => {
+                        let _ = opened.send(Ok(summary));
+                        camera
+                    }
+                    Err(error) => {
+                        let _ = opened.send(Err(error));
+                        return;
+                    }
+                };
+                while let Ok(job) = receive.recv() {
+                    job(&mut camera);
+                }
+            });
+        if let Err(error) = spawned {
+            return failed(format!("cannot start the camera thread: {error}"));
+        }
+        let (summary, png) = match wait.await {
+            Ok(Ok(opened)) => opened,
+            Ok(Err(error)) => return failed(error),
+            Err(_) => return failed("the camera thread stopped while opening"),
+        };
+        let mut summary = summary;
+        summary["camera"] = json!(name);
+        if let Ok(mut cameras) = self.cameras.lock() {
+            cameras.insert(
+                name,
+                Handle {
+                    jobs,
+                    opened: summary.clone(),
+                },
+            );
+        }
+        reply(summary, png)
+    }
+
+    #[tool(description = "List open cameras and how each was opened.")]
+    async fn camera_list(&self) -> Result<CallToolResult, ErrorData> {
+        let cameras = match self.cameras.lock() {
+            Ok(cameras) => cameras
+                .iter()
+                .map(|(name, handle)| (name.clone(), handle.opened.clone()))
+                .collect::<BTreeMap<_, _>>(),
+            Err(_) => return failed("camera table is poisoned"),
+        };
+        reply(json!({ "cameras": cameras }), None)
+    }
+
+    #[tool(
+        description = "Close a camera and release its memory. Its in-memory checkpoints are lost; \
+checkpoint files remain."
+    )]
+    async fn camera_close(
+        &self,
+        Parameters(CameraParams { camera }): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self
+            .cameras
+            .lock()
+            .map(|mut cameras| cameras.remove(&camera))
+        {
+            Ok(Some(_)) => reply(json!({ "closed": camera }), None),
+            Ok(None) => failed(format!("no camera named {camera}")),
+            Err(_) => failed("camera table is poisoned"),
+        }
+    }
+
+    #[tool(
+        description = "List the key names camera_press accepts for this camera, with the \
+control each one operates."
+    )]
+    async fn camera_keys(
+        &self,
+        Parameters(CameraParams { camera }): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.on(&camera, |camera| Ok(camera.keys())).await {
+            Ok(keys) => reply(json!({ "keys": keys }), None),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Save the whole machine under a name, optionally also to a file, so \
+experiments can return to this exact point with camera_restore."
+    )]
+    async fn camera_checkpoint(
+        &self,
+        Parameters(params): Parameters<CheckpointParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let CheckpointParams { camera, name, file } = params;
+        let result = self
+            .on(&camera, move |camera| {
+                camera.checkpoint(&name, file.as_deref())
+            })
+            .await;
+        match result {
+            Ok(summary) => reply(summary, None),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Return a camera to a named checkpoint or a checkpoint file. Returns the \
+restored state and screen."
+    )]
+    async fn camera_restore(
+        &self,
+        Parameters(params): Parameters<RestoreParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let RestoreParams { camera, name, file } = params;
+        let result = self
+            .on(&camera, move |camera| {
+                camera.restore(name.as_deref(), file.as_deref())?;
+                camera.observe(true)
+            })
+            .await;
+        match result {
+            Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Advance guest time by `seconds`, or until the camera reaches REC. Returns \
+the state and screen."
+    )]
+    async fn camera_run(
+        &self,
+        Parameters(params): Parameters<RunParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let RunParams {
+            camera,
+            seconds,
+            until_rec,
+            instruction_limit,
+            screen,
+        } = params;
+        let result = self
+            .on(&camera, move |camera| {
+                if until_rec {
+                    camera.run_to_rec(instruction_limit.unwrap_or(2_000_000_000))?;
+                } else {
+                    let seconds = seconds.ok_or("give seconds or until_rec")?;
+                    camera.run_for(seconds, Vec::new())?;
+                }
+                camera.observe(screen.unwrap_or(true))
+            })
+            .await;
+        match result {
+            Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Press and release a key, keep running for `settle_ms`, and return the \
+new state and screen."
+    )]
+    async fn camera_press(
+        &self,
+        Parameters(params): Parameters<PressParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let PressParams {
+            camera,
+            key,
+            hold_ms,
+            settle_ms,
+            screen,
+        } = params;
+        let result = self
+            .on(&camera, move |camera| {
+                camera.press(&key, hold_ms.unwrap_or(150), settle_ms.unwrap_or(500))?;
+                camera.observe(screen.unwrap_or(true))
+            })
+            .await;
+        match result {
+            Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(description = "The camera's current screen and state, without advancing guest time.")]
+    async fn camera_screen(
+        &self,
+        Parameters(CameraParams { camera }): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.on(&camera, |camera| camera.observe(true)).await {
+            Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "The camera's UI and boot state words, guest time and instruction counts, \
+without a screen and without advancing guest time."
+    )]
+    async fn camera_state(
+        &self,
+        Parameters(CameraParams { camera }): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.on(&camera, |camera| camera.observe(false)).await {
+            Ok((summary, _)) => reply(summary, None),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(description = "Read physical memory without advancing guest time.")]
+    async fn camera_read_memory(
+        &self,
+        Parameters(params): Parameters<MemoryParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let MemoryParams {
+            camera,
+            address,
+            size,
+            file,
+        } = params;
+        let address = match parse_address(&address) {
+            Ok(address) => address,
+            Err(error) => return failed(error),
+        };
+        if size == 0 || size > 16 << 20 {
+            return failed("size must be 1 byte to 16 MiB");
+        }
+        if file.is_none() && size > 4096 {
+            return failed("reads over 4096 bytes need a file");
+        }
+        let result = self
+            .on(&camera, move |camera| {
+                camera.read_memory(address, size as usize)
+            })
+            .await;
+        let bytes = match result {
+            Ok(bytes) => bytes,
+            Err(error) => return failed(error),
+        };
+        if let Some(file) = file {
+            if let Err(error) = std::fs::write(&file, &bytes) {
+                return failed(format!("{file}: {error}"));
+            }
+            return reply(
+                json!({ "address": format!("{address:#x}"), "size": size, "file": file }),
+                None,
+            );
+        }
+        let dump = bytes
+            .chunks(16)
+            .enumerate()
+            .map(|(row, chunk)| {
+                let hex = chunk
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                format!("{:#010x}  {hex}", address + row as u64 * 16)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Ok(CallToolResult::success(vec![ContentBlock::text(dump)]))
+    }
+
+    #[tool(
+        description = "Start counting the instructions every processor executes, by basic block. \
+Act on the camera, then call camera_profile_collect."
+    )]
+    async fn camera_profile_start(
+        &self,
+        Parameters(CameraParams { camera }): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.on(&camera, |camera| camera.profile_start()).await {
+            Ok(()) => reply(json!({ "camera": camera, "profiling": true }), None),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Stop the camera's profile and summarize it: blocks ranked by instructions \
+executed. The full profile is written to a file; the returned id works with camera_profile_diff."
+    )]
+    async fn camera_profile_collect(
+        &self,
+        Parameters(CameraParams { camera }): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let raw = match self.on(&camera, |camera| camera.profile_collect()).await {
+            Ok(raw) => raw,
+            Err(error) => return failed(error),
+        };
+        let id = Self::next(&self.next_profile, "profile");
+        let path = self.output.join(format!("{id}.json"));
+        let profile = match Profile::new(&id, &camera, raw, &path) {
+            Ok(profile) => Arc::new(profile),
+            Err(error) => return failed(error),
+        };
+        let summary = profile.summary(30);
+        if let Ok(mut profiles) = self.profiles.lock() {
+            profiles.insert(id, profile);
+        }
+        reply(summary, None)
+    }
+
+    #[tool(description = "Summarize a collected profile again with a different number of blocks.")]
+    async fn camera_profile_show(
+        &self,
+        Parameters(ProfileParams { profile, limit }): Parameters<ProfileParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self
+            .profiles
+            .lock()
+            .ok()
+            .and_then(|profiles| profiles.get(&profile).cloned())
+        {
+            Some(found) => reply(found.summary(limit.unwrap_or(30)), None),
+            None => failed(format!("no profile {profile}")),
+        }
+    }
+
+    #[tool(
+        description = "Compare two profiles, for example the same run with and without a key \
+press, or stock firmware against a mod. Lists the blocks whose executed instructions changed most."
+    )]
+    async fn camera_profile_diff(
+        &self,
+        Parameters(DiffParams {
+            before,
+            after,
+            limit,
+        }): Parameters<DiffParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let (before, after) = {
+            let Ok(profiles) = self.profiles.lock() else {
+                return failed("profile table is poisoned");
+            };
+            match (
+                profiles.get(&before).cloned(),
+                profiles.get(&after).cloned(),
+            ) {
+                (Some(a), Some(b)) => (a, b),
+                (None, _) => return failed(format!("no profile {before}")),
+                (_, None) => return failed(format!("no profile {after}")),
+            }
+        };
+        reply(profile::diff(&before, &after, limit.unwrap_or(30)), None)
+    }
+}

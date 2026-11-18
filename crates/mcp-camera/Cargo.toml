@@ -1,0 +1,28 @@
+[package]
+name = "fujimod-mcp-camera"
+description = "MCP camera module: boot, drive, observe and profile emulated cameras"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-mcp-core.workspace = true
+fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-emulator-session.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-catalog-resolution.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rmcp.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+schemars.workspace = true
+base64.workspace = true

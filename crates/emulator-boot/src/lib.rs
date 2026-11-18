@@ -1828,6 +1828,30 @@ fn to_rec_inner(
 pub const EXR2_TICKS_PER_SECOND: u64 = 12_000_000;
 
 /// Capture the first active native scanout output without advancing guest time.
+/// Observe the boot progress words of a session built from a run configuration,
+/// without advancing guest time. `status` reports `running` until the run
+/// reaches REC.
+pub fn status(session: &Session) -> Result<RecReport, String> {
+    let spec = session_prepared(session)?;
+    let mut report = observe(session, &spec, 0)?;
+    let presented = report.scanout_instance.is_some();
+    report.status = if report.ui_mode == spec.observation.rec_mode
+        && matches!(report.system_mode, 1 | 3)
+        && report.menu_active == 0
+        && report.pending_mode == 0
+        && !report.pending
+        && presented
+    {
+        "rec"
+    } else if report.failure.is_some() {
+        "stopped"
+    } else {
+        "running"
+    }
+    .into();
+    Ok(report)
+}
+
 pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {
     let spec = session_prepared(session)?;
     let display = session.scanout_state(&spec.observation.scanout)?;
