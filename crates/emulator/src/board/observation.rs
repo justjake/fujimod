@@ -547,6 +547,33 @@ pub struct PcEntries {
     pub omitted: u64,
 }
 
+/// Bounded storage shared by instruction observers.
+pub struct PcRecorder {
+    limit: usize,
+    records: PcEntries,
+}
+
+impl PcRecorder {
+    pub fn new(limit: usize) -> Result<Self, String> {
+        if limit == 0 || limit > 10_000_000 {
+            return Err("PC trace needs a bound between 1 and 10000000 entries".into());
+        }
+        Ok(Self { limit, records: PcEntries { entries: Vec::new(), omitted: 0 } })
+    }
+
+    pub fn record(&mut self, core: usize, pc: u64, size: u32) {
+        if self.records.entries.len() < self.limit {
+            self.records.entries.push(PcEntry { core, pc, size });
+        } else {
+            self.records.omitted = self.records.omitted.saturating_add(1);
+        }
+    }
+
+    pub fn take(&mut self) -> PcEntries {
+        std::mem::replace(&mut self.records, PcEntries { entries: Vec::new(), omitted: 0 })
+    }
+}
+
 struct TraceHook {
     cpu: Weak<dyn Cpu>,
     hook: HookId,
@@ -554,34 +581,25 @@ struct TraceHook {
 }
 struct TraceContext {
     core: usize,
-    limit: usize,
-    records: Rc<RefCell<PcEntries>>,
+    records: Rc<RefCell<PcRecorder>>,
 }
 
 /// Collect a bounded prefix of consecutive instruction entries. Hook ownership
 /// is tied to this value. Dropping it releases the instrumentation.
 pub struct PcTrace {
-    records: Rc<RefCell<PcEntries>>,
+    records: Rc<RefCell<PcRecorder>>,
     hooks: Vec<TraceHook>,
 }
 
 unsafe fn trace_pc(pc: u64, size: u32, context: *mut c_void) {
     let context = unsafe { &*context.cast::<TraceContext>() };
-    let mut records = context.records.borrow_mut();
-    if records.entries.len() < context.limit {
-        records.entries.push(PcEntry { core: context.core, pc, size });
-    } else {
-        records.omitted = records.omitted.saturating_add(1);
-    }
+    context.records.borrow_mut().record(context.core, pc, size);
 }
 
 impl PcTrace {
     pub fn take(mut self) -> PcEntries {
         self.detach();
-        std::mem::replace(
-            &mut *self.records.borrow_mut(),
-            PcEntries { entries: Vec::new(), omitted: 0 },
-        )
+        self.records.borrow_mut().take()
     }
 
     fn detach(&mut self) {
@@ -602,16 +620,13 @@ impl Drop for PcTrace {
 
 impl Board {
     pub fn trace_pcs(&self, limit: usize) -> Result<PcTrace, String> {
-        if limit == 0 || limit > 10_000_000 {
-            return Err("PC trace needs a bound between 1 and 10000000 entries".into());
-        }
         if self.execution_policy() != fujimod_emulator_cpu::ExecutionPolicy::Exact {
             return Err("PC tracing requires exact execution policy".into());
         }
-        let records = Rc::new(RefCell::new(PcEntries { entries: Vec::new(), omitted: 0 }));
+        let records = Rc::new(RefCell::new(PcRecorder::new(limit)?));
         let mut trace = PcTrace { records, hooks: Vec::new() };
         for (core, cpu) in self.cpus.iter().enumerate() {
-            let mut context = Box::new(TraceContext { core, limit, records: trace.records.clone() });
+            let mut context = Box::new(TraceContext { core, records: trace.records.clone() });
             let hook = unsafe { cpu.install_hook(Hook::Instruction {
                 callback: trace_pc,
                 data: (&mut *context as *mut TraceContext).cast(),

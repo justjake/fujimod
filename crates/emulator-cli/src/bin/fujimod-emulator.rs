@@ -431,12 +431,15 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             session.board.install_discovery_callee_stubs(&stubs)?;
             trace_output.as_ref().map(|output| output.begin(session)).transpose()?
         }
-        boot::application::Board::Xp4(_) => {
+        boot::application::Board::Xp4(board) => {
             if !stubs.is_empty() {
                 return Err("XP4 CLI substitutions require the shared board backend".into());
             }
-            if load_snapshot.is_some() || save_snapshot.is_some() || trace_output.is_some() {
-                return Err("XP4 portable snapshots and PC traces require the shared board backend".into());
+            if load_snapshot.is_some() || save_snapshot.is_some() {
+                return Err("XP4 portable snapshots require the shared board backend".into());
+            }
+            if let Some(trace) = &trace_output {
+                board.begin_pc_trace(trace.limit)?;
             }
             None
         }
@@ -468,8 +471,12 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         frames.capture(directory, started.display_frames(), &mut sequences)?;
         frames.finish()?;
     }
-    if let Some((output, trace)) = trace_output.zip(trace) {
-        output.write(trace)?;
+    if let Some(output) = trace_output {
+        if let Some(trace) = trace {
+            output.write(trace)?;
+        } else if let boot::application::Board::Xp4(board) = &started.board {
+            output.write_entries(board.take_pc_trace()?)?;
+        }
     }
     if let boot::application::Board::Xpp(session) = &started.board {
         session.board.check_discovery_callee_stubs()?;

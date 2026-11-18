@@ -918,9 +918,15 @@ impl TraceOutput {
     pub fn write(
         &self, trace: fujimod_emulator::board::observation::PcTrace,
     ) -> Result<(), String> {
+        self.write_entries(trace.take())
+    }
+
+    pub fn write_entries(
+        &self, entries: fujimod_emulator::board::observation::PcEntries,
+    ) -> Result<(), String> {
         let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
         let mut writer = std::io::BufWriter::new(file);
-        serde_json::to_writer(&mut writer, &trace.take()).map_err(|error| error.to_string())?;
+        serde_json::to_writer(&mut writer, &entries).map_err(|error| error.to_string())?;
         std::io::Write::flush(&mut writer).map_err(|error| error.to_string())
     }
 }

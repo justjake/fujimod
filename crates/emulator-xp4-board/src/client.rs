@@ -51,6 +51,10 @@ impl Session {
         }
     }
     pub fn run_board(&self, limit: u64, quantum: usize) -> Result<(), String> {
+        self.run_board_window(limit, quantum, None)
+    }
+
+    pub fn run_board_window(&self, limit: u64, quantum: usize, until: Option<u64>) -> Result<(), String> {
         self.inner.host_mutation()?;
         if quantum == 0 {
             return Err("Board quantum must be positive".to_owned());
@@ -61,10 +65,13 @@ impl Session {
         loop {
             self.inner.healthy()?;
             let state = unsafe { &*self.inner.state.get() };
-            if state.instructions >= target {
+            if state.instructions >= target || until.is_some_and(|at| state.ticks >= at) {
                 return Ok(());
             }
-            let remaining = target - state.instructions;
+            let mut remaining = target - state.instructions;
+            if let Some(until) = until {
+                remaining = remaining.min(self.inner.instruction_rate.budget(state.ticks, state.tick_phase, until)?);
+            }
             let runnable: Vec<_> = state
                 .waiting
                 .iter()
@@ -72,7 +79,7 @@ impl Session {
                 .filter_map(|(core, waiting)| (*waiting == 0).then_some(core))
                 .collect();
             if runnable.is_empty() {
-                if self.idle() {
+                if self.idle_until(until) {
                     continue;
                 }
                 self.inner.healthy()?;
@@ -91,4 +98,24 @@ impl Session {
             )?;
         }
     }
+
+    pub fn begin_pc_trace(&self, limit: usize) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        if self.inner.counted {
+            return Err(counted::NEEDS_EXACT.into());
+        }
+        let state = unsafe { &mut *self.inner.state.get() };
+        if state.pc_trace.is_some() {
+            return Err("PC trace is already attached".into());
+        }
+        state.pc_trace = Some(fujimod_emulator::board::observation::PcRecorder::new(limit)?);
+        Ok(())
+    }
+
+    pub fn take_pc_trace(&self) -> Result<fujimod_emulator::board::observation::PcEntries, String> {
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        state.pc_trace.take().map(|mut trace| trace.take()).ok_or("no active PC trace".into())
+    }
+
 }

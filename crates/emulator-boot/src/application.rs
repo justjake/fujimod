@@ -99,9 +99,6 @@ impl Started {
         if instruction_limit.is_none() && duration.is_none() {
             return Err("application startup requires an instruction or time limit".into());
         }
-        if matches!(self.board, Board::Xp4(_)) && duration.is_some() {
-            return Err("XP4 currently requires an instruction limit".into());
-        }
         let (counts, now) = self.progress();
         let limits = crate::host::Limits::from_boundary(now, &counts, instruction_limit, duration, self.ticks_per_second)?;
         loop {
@@ -114,7 +111,8 @@ impl Started {
             let advanced = match &mut self.board {
                 Board::Xp4(board) => {
                     let remaining = limits.instructions - total;
-                    board.run_board(remaining.min(self.quantum as u64), self.quantum)?;
+                    let until = limits.tick.into_iter().chain(until).min();
+                    board.run_board_window(remaining.min(self.quantum as u64), self.quantum, until)?;
                     board.now() != before_tick || board.instructions() != before_counts
                 }
                 Board::Xpp(session) => limits.step(session, self.quantum, None, until)?,
