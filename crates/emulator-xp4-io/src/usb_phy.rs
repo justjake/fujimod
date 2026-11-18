@@ -138,7 +138,6 @@ impl Device for Phy {
     }
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
         let saved: SavedPhy = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let s = &saved.state;
         self.validate_savedphy(&saved)?;
         self.state = saved.state;
         Ok(())
