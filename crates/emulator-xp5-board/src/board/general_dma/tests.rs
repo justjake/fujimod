@@ -313,3 +313,40 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
     let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared());
     assert_eq!(error.err().as_deref(), Some("invalid XP5 PL022 window"));
 }
+
+#[test]
+fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_line() {
+    let wire = json!({"kind":"gpio-selected","endpoints":[
+        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"idle_high":false}}
+    ]});
+    let options = |extra: serde_json::Value| {
+        let mut options = json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()});
+        options.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        options
+    };
+    for (extra, refused) in [(json!({"companion_irq_unconnected":true}), false), (json!({}), true)] {
+        let pins = Pins::shared();
+        let mut graph = DeviceGraph::new();
+        graph
+            .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+            .unwrap();
+        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins).unwrap();
+        let mut f = Fixture {
+            graph,
+            host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
+        };
+        for (offset, value) in [(0, 0xc7), (0x10, 6), (0x24, 3), (4, 0xa)] {
+            f.write(0xff915000 + offset, value);
+        }
+        // The companion's SSP setup unmasks all four interrupts with the transmit FIFO
+        // empty, so the transmit interrupt goes high.
+        let id = f.graph.at(0xff915014).unwrap();
+        let mut cx = Cx::new(&mut f.host, 4, 0x20084, id);
+        f.graph.nodes[id].device.write(&mut cx, 0xff915014, 4, 0xf);
+        assert_eq!(cx.is_unmodeled(), refused);
+        assert!(f.host.core_irqs.is_empty() && f.host.irqs.is_empty());
+    }
+    let both = options(json!({"companion_irq_line":99,"companion_irq_unconnected":true}));
+    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared());
+    assert_eq!(error.err().as_deref(), Some("PL022 interrupt output is both connected and unconnected"));
+}

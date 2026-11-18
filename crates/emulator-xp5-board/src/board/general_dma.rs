@@ -19,7 +19,8 @@ pub fn owns(kind: &str) -> bool {
 /// A companion-side SSP instance. The DMA request pair and the companion interrupt line
 /// are board facts a declaration may lack: without the pair a DMA request for the
 /// instance has no connected peripheral and refuses, and without the line a raised
-/// interrupt refuses.
+/// interrupt refuses unless the declaration states that the interrupt output reaches no
+/// modeled input (`companion_irq_unconnected`).
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SerialWiring {
@@ -31,6 +32,8 @@ struct SerialWiring {
     transmit_request: Option<u8>,
     #[serde(default)]
     companion_irq_line: Option<u32>,
+    #[serde(default)]
+    companion_irq_unconnected: bool,
     wire: WireInput,
 }
 /// SSP instances 0..9 of the SoC (`spi0`..`spi9`), one 4 KiB window each.
@@ -114,6 +117,11 @@ pub fn register_all(
             interrupts,
             wire,
         )?;
+        let serial = if wiring.companion_irq_unconnected {
+            serial.with_unconnected_interrupt()?
+        } else {
+            serial
+        };
         let port = serial.port();
         for (request, direction) in requests {
             if connections

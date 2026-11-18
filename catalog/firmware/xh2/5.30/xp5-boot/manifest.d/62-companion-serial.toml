@@ -9,9 +9,24 @@
 # reads a1/a2 storing the reply's low nibble, from 0x12446); 0xc430 drives 0x000c0009
 # (port 12, pin 9) low and its 18 callers send the LSM6DS-class register writes. The parts
 # are the existing explicit models; revision nibbles and idle MISO are the X-T5's
-# inherited scenario inputs, not X-H2 measurements. The DMA request pair and the SSP
-# interrupt line of instance 5 are not known, so neither is declared: a DMA request or a
-# raised interrupt on this instance refuses. source_hz is the X-T5 value, UNVERIFIED.
+# inherited scenario inputs, not X-H2 measurements. source_hz is the X-T5 value,
+# UNVERIFIED.
+# Interrupt output: the SSP setup 0x20ce4 unmasks all four interrupts (+0x14 = 0xf at
+# 0x20da2), but the companion never enables an NVIC line for this instance. Its only
+# NVIC enable 0x2e90 is reached only through the handler attach 0x1e160 (via 0x24738),
+# whose eight callers take their line from the interrupt table 0x31180: the mailbox (55,
+# 0x38be), entries 1 (58, 0x3022), 0x43 (0, 0x1ec1e) and 0x45 (63, the input-capture
+# handler 0x31f9 at 0x324a and 0x3dda), the DMA channel lines (83 + channel, map 0x3162c;
+# 0x1e42c, 0x1e57c) and the channel lines of the 0xff908000 block (map 0x3185c; 0x21aae).
+# No pending-register (ISPR) read exists, so the raised output is not observable by this
+# firmware and is declared unconnected. Which NVIC line the silicon wires it to is
+# unknown, UNVERIFIED.
+# DMA requests: the companion's channel descriptors 0x3166c + 12 * i (lookup 0x1ff0c) are
+# [channel, request, ...]: 0a 0b (channel 10, transmit, request 11) and 0b 0a (channel 11,
+# receive, request 10); the DMA start 0x1f8a4 passes byte 1 to the routing writer 0x1f770,
+# which stores it at 0xff90e500 + 4 * (channel >> 1). The transmit channel writes this
+# instance's data register +8. The X-T5 companion's SSP1 descriptors 0x32060/0x3206c
+# hold requests 3/2 on the same channels, so instance n uses 2n (receive) and 2n + 1.
 [[device]]
 base = 0xff915000
 size = 0x1000
@@ -19,6 +34,9 @@ kind = "pl022"
 [device.options]
 source_hz = 48000000
 ticks_per_second = 1000000000
+receive_request = 10
+transmit_request = 11
+companion_irq_unconnected = true
 [device.options.wire]
 kind = "gpio-selected"
 [[device.options.wire.endpoints]]
