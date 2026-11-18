@@ -284,6 +284,61 @@ impl Pl330 {
         Err("PL330 paced program signals without moving data".into())
     }
 
+    /// Runs the instructions after a paced channel's DMASEV that take no
+    /// time: DMANOP, the barriers, DMAMOV, DMALP/DMALPEND and DMAADDH/DMAADNH.
+    /// It stops at the first instruction that moves data, waits, signals or
+    /// ends. The hardware executes these at once, before the CPU services the
+    /// interrupt, so a CPU that patches the program from its handler must not
+    /// redirect a thread that has already passed the patched bytes. The X-T5
+    /// audio-record ring (generators 0x1398168/0x1398aa4) rewrites a
+    /// "DMALP; DMALPEND to 0" stub right after the half-A DMASEV; read late,
+    /// the stub sent the thread back to half A, the ring ran one half out of
+    /// phase, and the stop's DMAEND landed on the thread's own pc.
+    /// These instructions touch only the thread's registers, so a preview
+    /// and an applied run produce the same result.
+    fn run_instant(&self, cx: &Cx<'_>, t: &mut Thread) -> Result<(), String> {
+        for _ in 0..STEP_LIMIT {
+            let pc = t.pc;
+            let op = cx.ram_bytes(u64::from(pc), 1)?[0];
+            let len = match op {
+                0x12 | 0x13 | 0x18 => 1,
+                0xbc => self.mov(cx, t, pc)?,
+                0x20 | 0x22 => {
+                    t.lc[usize::from(op >> 1 & 1)] =
+                        u32::from(cx.ram_bytes(u64::from(pc) + 1, 1)?[0]);
+                    2
+                }
+                0x38 | 0x3c => {
+                    let lc = usize::from(op >> 2 & 1);
+                    if t.lc[lc] != 0 {
+                        t.lc[lc] -= 1;
+                        t.pc = pc.wrapping_sub(u32::from(cx.ram_bytes(u64::from(pc) + 1, 1)?[0]));
+                        continue;
+                    }
+                    2
+                }
+                0x54 | 0x56 | 0x5c | 0x5e => {
+                    let b = cx.ram_bytes(u64::from(pc) + 1, 2)?;
+                    let raw = u16::from_le_bytes([b[0], b[1]]);
+                    let add = if op & 0x08 == 0 {
+                        u32::from(raw)
+                    } else {
+                        i32::from(raw as i16) as u32
+                    };
+                    if op & 2 == 0 {
+                        t.sar = t.sar.wrapping_add(add);
+                    } else {
+                        t.dar = t.dar.wrapping_add(add);
+                    }
+                    3
+                }
+                _ => return Ok(()),
+            };
+            t.pc = pc.wrapping_add(len);
+        }
+        Err("PL330 program exceeds step bound".into())
+    }
+
     /// Executes the DMAMOV at `pc` on `t` and returns its length. Preview,
     /// eager setup and the run share it so a register selector means the same
     /// thing everywhere: unknown selectors and data values that are not a CCR
@@ -445,6 +500,7 @@ impl Pl330 {
                     }
                     if self.paced(&t) {
                         t.pc = t.pc.wrapping_add(len);
+                        self.run_instant(cx, &mut t)?;
                         let transfer = Transfer {
                             bytes: t.bytes,
                             source: t.source.unwrap_or(0),
@@ -1650,5 +1706,84 @@ mod tests {
         // Running with neither a deadline nor a wait is still refused.
         threads[0].waiting = None;
         assert!(dma.validate_checkpoint(&snapshot(&threads)).is_err());
+    }
+
+    /// Firmware 24-bit audio-record ring (X-T5 0x1398168 generator, DARs moved into test RAM):
+    /// the CPU answers each event-0 interrupt like 0x1490fbc does (INTCLR, rewrite the completed
+    /// half, toggle the 0xec "jump to 0" patch, DMASEV 1); the stop writes DMAEND at the end of the
+    /// running half. One more interrupt must follow the stop before the channel ends.
+    #[test]
+    fn xt5_audio_ring_stop_raises_a_final_interrupt() {
+        struct Fifo;
+        impl Source for Fifo {
+            fn contains(&self, address: u64, len: usize) -> bool {
+                address >= 0xff91c000 && address + len as u64 <= 0xff91c004
+            }
+            fn read(&self, _: u64, len: usize) -> Result<Vec<u8>, String> {
+                Ok(vec![0; len])
+            }
+            fn transfer_ticks(&self, bytes: u64) -> Option<u64> {
+                Some(bytes * 10)
+            }
+        }
+        let hex = concat!(
+            "bc0000c091ffbc0200000100bc0104428c0030003000203b30002500085effff2500085effff2500085effff2500085e",
+            "ffff2500085effff2500085effff2500085effff2500085effff2500085effff2500085effff2500085effff2500085e",
+            "ffff2500085effff2500085effff2500085effff2500085effff13386318181818181818181818181818181818181818",
+            "181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818",
+            "181818181818181818181818181818181818181818181818181818181818181818181818181818360a34001818181818",
+            "bc0000c091ffbc0200100100bc0104428c00203b30002500085effff2500085effff2500085effff2500085effff2500",
+            "085effff2500085effff2500085effff2500085effff2500085effff2500085effff2500085effff2500085effff2500",
+            "085effff2500085effff2500085effff2500085effff1338631818181818181818181818181818181818181818181818",
+            "181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818181818",
+            "181818181818181818181818181818181818181818181818181818181818181818181818181818360a340018200138f2"
+        );
+        let program: Vec<u8> = (0..hex.len() / 2)
+            .map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap())
+            .collect();
+        let timing = Throughput { setup_ticks: 1000, bytes_per_tick: 1 };
+        let mut dma = Pl330::new(BASE, (253..261).collect(), vec![Arc::new(Fifo)], timing).unwrap();
+        let mut h = TestHost { now: 0, ram: vec![0; 0x20000], ..TestHost::default() };
+        const P: usize = 0x1000;
+        h.ram[P..P + program.len()].copy_from_slice(&program);
+        write(&mut dma, &mut h, 0x20, 0x11);
+        dmago(&mut dma, &mut h, 0, P as u32);
+        write(&mut dma, &mut h, 0x2c, 1);
+        write(&mut dma, &mut h, 0xd08, 0x340000 | 1 << 27);
+        write(&mut dma, &mut h, 0xd04, 0);
+        let mut half = 0u8; // firmware toggle byte (0x2007c20)
+        let mut interrupts = 0;
+        let mut stopping = None;
+        for _ in 0..200 {
+            let seen = h.irqs.iter().filter(|i| **i == (253, true)).count();
+            if seen > interrupts {
+                interrupts = seen;
+                if let Some(at) = stopping {
+                    assert!(interrupts > at, "final interrupt arrived");
+                    return;
+                }
+                write(&mut dma, &mut h, 0x2c, 1);
+                if interrupts == 6 {
+                    let end = if half != 0 { 0xeb } else { 0x1db };
+                    h.ram[P + end] = 0;
+                    stopping = Some(interrupts);
+                } else {
+                    let patch: [u8; 4] = if half == 0 { [0x20, 1, 0x38, 0xee] } else { [0x18; 4] };
+                    h.ram[P + 0xec..P + 0xf0].copy_from_slice(&patch);
+                    half ^= 1;
+                }
+                write(&mut dma, &mut h, 0xd08, 0x340000 | 1 << 27);
+                write(&mut dma, &mut h, 0xd04, 0);
+                continue;
+            }
+            let Some(i) = (0..h.events.len()).min_by_key(|&i| h.events[i].0) else { break };
+            let (at, token) = h.events.remove(i);
+            h.now = h.now.max(at);
+            complete(&mut dma, &mut h, token);
+        }
+        panic!(
+            "no final interrupt: {} interrupts, thread pc {:#x} events {:#x}",
+            interrupts, dma.threads[0].pc, dma.events
+        );
     }
 }
