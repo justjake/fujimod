@@ -716,6 +716,53 @@ mod tests {
         assert_eq!(sensor.0.lock().unwrap().reads, 1);
     }
     #[test]
+    fn asynchronous_single_command_start_bit_clears_on_virtual_time() {
+        // X-T5 4.31: 0x2eb7678 sets format bit 31 for an asynchronous list,
+        // programs the descriptor words through 0x1352510 (+0x21c first),
+        // starts with +0x204 = 1 (0x1356750) and polls +0x204 bit 0
+        // (0x1356788). The poll only ends when guest time passes the latency.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor.clone(), 1000).unwrap();
+        let mut host = RecordingHost {
+            ram_base: 0x1000,
+            ram: vec![0x81, 0x12, 0x34, 0x5a, 0, 0, 0, 0],
+            ..Default::default()
+        };
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        for (o, v) in [
+            (0x208, 0x8001_0401),
+            (0x21c, 0),
+            (0x20c, 0),
+            (0x210, 0x1000),
+            (0x214, 0),
+            (0x218, 8),
+            (0x204, 1),
+        ] {
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+        }
+        assert!(cx.refusal().is_none());
+        for _ in 0..3 {
+            assert_eq!(command.read(&mut cx, 0xff948204, 4) & 1, 1);
+        }
+        assert_eq!(command.next_deadline(0), Some(1000));
+        host.now = 999;
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), 0xff948204, 4),
+            1
+        );
+        host.now = 1000;
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), 0xff948204, 4),
+            0
+        );
+        assert_eq!(sensor.0.lock().unwrap().registers[&0x1234], 0x5a);
+        // +0x220 sits below the eight response words; 0x13568a4 reads it, but
+        // nothing establishes its meaning, so it stays unmodeled.
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        command.read(&mut cx, 0xff948220, 4);
+        assert!(cx.is_unmodeled());
+    }
+    #[test]
     fn trigger_channel_start_bit_clears_after_the_command_latency() {
         let sensor = Sensor::new(None, (0x51, 8));
         let mut command = Command::new(0xfff6c000, sensor, 17).unwrap();
