@@ -1,7 +1,10 @@
-# FujiMod MCP server: design (draft, 2026-11-18)
+# FujiMod MCP server: design (2026-11-18)
 
-Status: design only. Nothing here is implemented. Decisions marked "agreed"
-were settled with the owner in conversation; everything else is a proposal.
+Status: the hub and the first slice of the camera module are implemented in
+`crates/mcp-core`, `crates/mcp-camera` and `crates/mcp`; usage is in
+[mcp/README.md](mcp/README.md). The primitives table marks what exists.
+Decisions marked "agreed" were settled with the owner in conversation;
+everything else is a proposal.
 
 ## Goal
 
@@ -33,8 +36,8 @@ The same control and observation tools work on a physical camera over USB.
 
 | Crate | Directory | Purpose |
 |---|---|---|
-| `fujimod-mcp-core` | `crates/mcp-core` | The module trait, tool-name rules, result handles. No camera or protocol dependencies beyond `rmcp` types. |
-| `fujimod-mcp-camera` | `crates/mcp-camera` | The camera module: tools over `fujimod-remote` and the emulator. |
+| `fujimod-mcp-core` | `crates/mcp-core` | The module trait, the adapter for `rmcp` tool macros, tool-name rules and the hub. No camera dependencies. |
+| `fujimod-mcp-camera` | `crates/mcp-camera` | The camera module: tools over `fujimod-emulator-boot` and the emulator session. |
 | `fujimod-mcp` | `crates/mcp` | The hub binary: selects modules, serves stdio. |
 | `fujimod-mcp-ghidra` | `crates/mcp-ghidra` | Later: the GhidraMCP proxy module. |
 
@@ -97,6 +100,12 @@ instruction counts per block.
 The module adds no second control path. Where a tool needs something these
 layers lack, the layer gains it.
 
+The first slice presses keys through the boot crate's key driver
+(`emulator-boot/src/keys.rs`, the CLI's `--keys` and `--press`), which works
+from the catalog alone. Presses move onto `fujimod-remote` once its contact
+panel and driver have a generator (open question 1), which is also what a
+USB camera needs.
+
 ### Cameras and threads
 
 A camera is one opened target: an emulator session or a USB session. Every
@@ -110,34 +119,34 @@ used.
 
 ### Primitives
 
-Names are provisional. "USB" says whether the primitive works on a physical
-camera.
+"USB" says whether the primitive can work on a physical camera.
 
-| Group | Tool | Does | USB |
-|---|---|---|---|
-| Cameras | `camera_open` | Boot an SD card (stock or a build), open a checkpoint file, or attach to a USB camera | see open questions |
-| | `camera_list` | Open cameras, their kind, firmware and checkpoints | yes |
-| | `camera_checkpoint` | Save the whole machine under a name, optionally to a file | no |
-| | `camera_restore` | Return to a named checkpoint | no |
-| | `camera_fork` | Open a second camera from a checkpoint | no |
-| | `camera_close` | Release the camera | yes |
-| Time | `camera_run` | Advance until a condition or a deadline and report which stopped it | waits only |
-| Inputs | `camera_press`, `camera_turn`, `camera_touch` | Operate a physical control | yes |
-| | `camera_set_input` | Drive a hardware input level (GPIO, ADC, SD card) | no |
-| Observe | `camera_screen` | The current frame as an image | yes |
-| | `camera_state` | UI mode, menu node, cursor, a menu or control reference | yes |
-| | `camera_read_memory` | Bytes at an address or symbol | yes |
-| | `camera_read_registers` | CPU registers of a stopped core | no |
-| | `camera_devices` | Device state: GPIO, serial, HDMI, SD card, scanout | no |
-| Probes | `probe_arm` | Start a probe: memory access, calls, execution profile, PC trace, bus traffic | no |
-| | `probe_collect` | Stop it and return its records | no |
-| Mutate | `camera_write_memory` | Write bytes, including code, and invalidate translations | to be decided |
-| | `camera_write_registers` | Write CPU registers of a stopped core | no |
-| Helpers | `symbols_resolve` | Name to address and back, from the build's symbols | n/a |
-| | `result_diff` | Compare two results of the same kind | n/a |
+| Group | Tool | Does | Status | USB |
+|---|---|---|---|---|
+| Cameras | `camera_open` | Boot a run configuration (ROM or SD boot) or restore a checkpoint file | implemented | planned |
+| | `camera_list` | Open cameras and how each was opened | implemented | yes |
+| | `camera_close` | Release the camera | implemented | yes |
+| | `camera_checkpoint` | Save the whole machine under a name, optionally to a file | implemented | no |
+| | `camera_restore` | Return to a named checkpoint or a checkpoint file | implemented | no |
+| | `camera_fork` | Open a second camera from a checkpoint | planned | no |
+| Time | `camera_run` | Advance guest seconds, or until REC | implemented | waits only |
+| Inputs | `camera_keys` | Key names `camera_press` accepts | implemented | yes |
+| | `camera_press` | Press and release a key, settle, return state and screen | implemented | yes |
+| | `camera_turn`, `camera_touch` | Turn an encoder or dial; touch the screen | planned | yes |
+| | `camera_set_input` | Drive a hardware input level (GPIO, ADC, SD card) | planned | no |
+| Observe | `camera_screen` | The current screen and state | implemented | yes |
+| | `camera_state` | Boot and UI state words, guest time, instructions | implemented | yes |
+| | `camera_read_memory` | Physical memory as a hex dump or file | implemented | yes |
+| | `camera_read_registers` | CPU registers of a stopped core | planned | no |
+| | `camera_devices` | Device state: GPIO, serial, HDMI, SD card, scanout | planned | no |
+| Probes | `camera_profile_start`, `camera_profile_collect`, `camera_profile_show` | Instructions executed per basic block | implemented | no |
+| | `camera_profile_diff` | Blocks whose instructions changed most between two profiles | implemented | no |
+| | memory access, calls, PC trace, bus traffic | The board's other bounded observations | planned | no |
+| Mutate | `camera_write_memory`, `camera_write_registers` | Write bytes (including code) or registers | planned | to be decided |
+| Helpers | symbol names | Resolve addresses in results to names | planned | n/a |
 
-`camera_run` conditions: frame completed, memory range changed, address
-reached, input accepted, UI ready, guest deadline.
+Planned `camera_run` conditions beyond time and REC: frame completed, memory
+range changed, address reached, input accepted, UI ready.
 
 ### Checkpoint files
 
@@ -258,7 +267,9 @@ adding `reqwest`.
    them. The catalog describes every control, and the boot crate's key
    path already reads ADC thresholds from the running firmware's
    configuration (`emulator-boot/src/keys.rs`), so the generator can work
-   from the catalog and live configuration alone.
+   from the catalog and live configuration alone. The remote's optional
+   input task layout and parameter-independent inputs should come from
+   firmware locators, not written-down addresses.
 2. How a build is made. The likely answer is that `camera_open` takes a
    built SD card directory and the agent runs the build itself.
 3. Opening a physical camera: whether an agent may hold an interactive USB
@@ -270,14 +281,25 @@ adding `reqwest`.
    loader in `fujimod-emulator-boot` attaches hooks once during boot.
 6. Whether memory writes over USB belong in this module at all.
 
-## First slice
+## First slice (implemented)
 
-1. `fujimod-mcp-core` and the `fujimod-mcp` binary serving stdio with the
-   camera module.
-2. Cameras: open by SD boot, checkpoint, restore, close.
-3. Inputs and observation: press, turn, screen, UI state, memory read,
-   symbol lookup.
-4. One probe end to end, the execution profile, with `result_diff`.
+The hub serves the camera module over stdio. An MCP client drove every
+implemented tool against X70 1.10:
 
-That is enough to try one real "why did stock do A when we did B" question
-with two cameras and judge whether the loop is faster.
+- A stock camera opened to REC in about 2.6 s of wall time; restoring a
+  named checkpoint took 0.3 s, and opening a second camera from its
+  checkpoint file 1.2 s.
+- MENU/OK (`EXE_M`) opened the shooting menu.
+- Profiles of the same 0.65 guest seconds from one checkpoint, idle and
+  with the MENU/OK press, differed by 16.9 million instructions and 9,398
+  blocks that only ran with the press.
+- A FujiMod SD card booted to REC, showed its welcome sheet after eight
+  guest seconds, and DISP/BACK dismissed it.
+
+## Next
+
+1. Names for profile and memory addresses from a build's linked symbols.
+2. The contact panel and driver generator, then presses through
+   `fujimod-remote`, `camera_turn` and `camera_touch`.
+3. Memory-access, call and PC-trace probes.
+4. `camera_run` stop conditions beyond time and REC.
