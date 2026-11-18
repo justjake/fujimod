@@ -39,7 +39,11 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
           <a
             href={credits}
             onClick={(event) => {
-              if (event instanceof PointerEvent && event.pointerType === 'touch') {
+              const pointerType = event instanceof PointerEvent ? event.pointerType : '';
+              const touchClick =
+                pointerType === 'touch' ||
+                (event.detail > 0 && matchMedia('(hover: none)').matches);
+              if (touchClick) {
                 event.preventDefault();
                 event.currentTarget.focus();
               }
