@@ -1,0 +1,12 @@
+# The XP5 timer block (the SoC's `timer` and `extended-timer` blocks). The kernel's
+# counter helper 0x5d068 reads reload channel 15's current word 0xff908388 (channel n
+# at 0xff908310 + 8*n, enables at 0xff908300); 0x5b398 programs it for the RTOS tick.
+[[device]]
+base = 0xff908000
+size = 0x1000
+kind = "timer-focus-capture"
+
+[[device]]
+base = 0xff909000
+size = 0x1000
+kind = "timer-extended"

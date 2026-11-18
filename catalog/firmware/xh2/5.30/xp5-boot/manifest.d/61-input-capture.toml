@@ -1,0 +1,11 @@
+# Input-capture banks (the SoC's `capture0` and `capture1` blocks: five channels at
+# ff928000, three at ff929000, stride 0x20).
+[[device]]
+base = 0xff928000
+size = 0x1000
+kind = "input-capture"
+
+[[device]]
+base = 0xff929000
+size = 0x1000
+kind = "input-capture"

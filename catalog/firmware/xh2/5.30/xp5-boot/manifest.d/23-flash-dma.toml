@@ -1,0 +1,6 @@
+# Flash DMA (the SoC's `flash-dma` block): 0x139d8f0 clears +0x0 when it sets the
+# channel up. Functional 1 us completion, level INTID 225 until the masked ACK at +0x1c.
+[[device]]
+base = 0xff939000
+size = 0x1000
+kind = "flash-storage-dma"

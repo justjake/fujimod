@@ -3,7 +3,7 @@
   "schema": 1,
   "id": "xh2",
   "soc_id": "xp5",
-  "dram_bytes": null,
+  "dram_bytes": 2147483648,
   "nand": null,
   "sensor": null,
   "lens": null,
@@ -13,6 +13,38 @@
   "card_slot": null,
   "control_bus_chips": [],
   "connections": [],
-  "parts": [],
-  "wiring": []
+  "parts": [
+    "x100vi-serial-nor"
+  ],
+  "wiring": [
+    {
+      "source_id": "flash",
+      "target_id": "x100vi-serial-nor",
+      "signal": "storage"
+    }
+  ],
+  "hardware": {
+    "serial_attachments": [],
+    "gpio_feedback": [],
+    "keypad_samples": {},
+    "thermal_connection_ids": [],
+    "bus_drain": {
+      "address": 2147483648,
+      "processor_ids": [
+        "core0",
+        "core1",
+        "core2",
+        "core3"
+      ],
+      "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x14d1c00 (slot 1, 0x14d1c44) and classifier 0x14d1a1c read 0x80000000, as the X-H2S helpers do. PROVISIONAL: the address is the firmware's region boundary, not a measured bus port."
+    },
+    "profiles": {
+      "xh2": {
+        "limits": [
+          "UNVERIFIED: dram_bytes is the firmware's first memory region (0..0x80000000), not a measured installed capacity."
+        ],
+        "dram_basis": "The stock bus-drain classifier 0x14d1a1c splits memory at 0x80000000 and the kernel's initial identity maps (0x59324) request 0..0x40000000 and 0x40000000+0x40000000 below it. Memory above it (0x80000000 and 0x90000000, 128 MiB each) is mapped by the routine at 0x2d547e8, so installed capacity may be larger and is unmeasured."
+      }
+    }
+  }
 }

@@ -1,0 +1,10 @@
+# I2C instance 1 at ff925000 (the SoC's `i2c1` block): selector 0x18eb770[1] = 4,
+# descriptor line 0x121 (289), the SoC profile's line. No part on this bus is
+# identified for the X-H2, so none is declared and every address is not acknowledged.
+[[device]]
+kind = "i2c-controller"
+base = 0xff925000
+size = 0x1000
+[device.options]
+interrupt = 289
+byte_ns = 1000000

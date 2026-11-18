@@ -1,0 +1,10 @@
+# Clock-gate bank (the SoC's `clock-gates` block). The adapters 0x13ad514/0x13ad588
+# address its words through the pointer table 0x18f4688 (bank 10 = 0xff90c928, the
+# companion release bit 21) and the read wrapper 0x13d4990 reads +0x300 at startup.
+# Known gate/reset latches start zero; this is a session assumption.
+[[device]]
+base = 0xff90c000
+size = 0x1000
+kind = "clock-gates"
+[device.options]
+configuration_word = 0
