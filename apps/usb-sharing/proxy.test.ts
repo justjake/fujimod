@@ -10,6 +10,7 @@ const endpoint = (url = source) => `https://worker.example/proxy?url=${encodeURI
 await test('source policy accepts official paths and rejects host and path tricks', () => {
   for (const url of [
     source,
+    'https://fichiers.touslesdrivers.com/49630/FPUPDATE.DAT',
     'https://fujifilm-korea.co.kr/support/download/attachment/8250/0',
     'https://www.fujifilm-korea.co.kr/support/download/attachment/11311/0',
   ])

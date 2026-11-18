@@ -1,6 +1,10 @@
 /** Server-side URL allowlist. Add sources here without changing the proxy. */
 const sources: readonly { hosts: readonly string[]; path: RegExp }[] = [
   {
+    hosts: ['fichiers.touslesdrivers.com'],
+    path: /^\/\d+\/[A-Za-z0-9_-]+\.(dat|zip)$/i,
+  },
+  {
     hosts: ['dl.fujifilm-x.com'],
     path: /^\/support\/firmware\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\.(dat|zip)$/i,
   },
