@@ -17,13 +17,13 @@ fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, Level, TestHost) {
             irqs: vec![
                 gpio::InputIrq {
                     pin: P9,
-                    edge: gpio::Edge::Rising,
+                    edge: gpio::Edge::Both,
                     outputs: vec![InterruptLine::Core { core: 0, line: 17 }],
                 },
                 gpio::InputIrq {
                     pin: P6,
                     edge: gpio::Edge::Falling,
-                    outputs: vec![InterruptLine::Core { core: 0, line: 17 }],
+                    outputs: vec![InterruptLine::Core { core: 0, line: 14 }],
                 },
             ],
         },
@@ -42,6 +42,7 @@ fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, Level, TestHost) {
             contacts: [P9, P6],
             run_drive: 1,
             hold_drives: vec![0, 3],
+            release_drives: vec![0],
             positions: vec![
                 position(0., [false, false]),
                 position(27.5, [false, true]),
@@ -89,7 +90,9 @@ fn contacts(pads: &gpio::Pads) -> (bool, bool) {
 /// X-E2S camera, 1/15 single and continuous stills sampled every 2.5 ms:
 /// from charged, drive 1 opens pin 9 after 17.5-20 ms; pin 6 opens 5-7.5 ms
 /// after comparator 0's edge; from exposed, drive 1 closes pin 6 after 27.5 ms
-/// and pin 9 after 42.5-45 ms. Only pin 9 rising and pin 6 falling interrupt.
+/// and pin 9 after 42.5-45 ms. The firmware reacted within one sample to
+/// pin 9 opening and closing (line 17) and to pin 6 opening (line 14).
+/// Comparators 0 and 1 fired together under drive 3 left pin 6 closed.
 #[test]
 fn xe2s_card46_release_curtain_and_charge_cycle() {
     let (mut m, mut gpio, pads, release, mut h) = model();
@@ -100,9 +103,14 @@ fn xe2s_card46_release_curtain_and_charge_cycle() {
     assert_eq!(contacts(&pads), (true, true));
     run_to(&mut m, &mut h, 19 * MS);
     assert_eq!(contacts(&pads), (false, true));
-    assert!(h.irqs.is_empty());
+    assert_eq!(h.irqs.len(), 1);
     drive(&mut gpio, &mut h, 3);
+    // Comparators 0 and 1 fired together under drive 3 leave pin 6 closed.
+    release.drive(true);
     run_to(&mut m, &mut h, 40 * MS);
+    release.drive(false);
+    run_to(&mut m, &mut h, 41 * MS);
+    assert_eq!(contacts(&pads), (false, true));
     drive(&mut gpio, &mut h, 0);
     run_to(&mut m, &mut h, 100 * MS);
     assert_eq!(m.next_deadline(h.now), None);
@@ -111,7 +119,7 @@ fn xe2s_card46_release_curtain_and_charge_cycle() {
     assert_eq!(contacts(&pads), (false, true));
     run_to(&mut m, &mut h, 107 * MS);
     assert_eq!(contacts(&pads), (false, false));
-    assert_eq!(h.irqs, vec![(0, 17)]);
+    assert_eq!(h.irqs.len(), 2);
     release.drive(false);
     drive(&mut gpio, &mut h, 1);
     run_to(&mut m, &mut h, 134 * MS);
@@ -122,7 +130,7 @@ fn xe2s_card46_release_curtain_and_charge_cycle() {
     assert_eq!(contacts(&pads), (false, true));
     run_to(&mut m, &mut h, 151 * MS);
     assert_eq!(contacts(&pads), (true, true));
-    assert_eq!(h.irqs, vec![(0, 17), (0, 17)]);
+    assert_eq!(h.irqs.len(), 3);
     drive(&mut gpio, &mut h, 3);
     run_to(&mut m, &mut h, 166 * MS);
     drive(&mut gpio, &mut h, 1);
@@ -178,7 +186,9 @@ fn unobserved_motion_refuses() {
             .unwrap_err()
             .contains("past its release latch")
     );
-    let (mut m, _, _, release, mut h) = model();
+    let (mut m, mut gpio, _, release, mut h) = model();
+    drive(&mut gpio, &mut h, 0);
+    tick(&mut m, &mut h).unwrap();
     release.drive(true);
     assert!(
         tick(&mut m, &mut h)
