@@ -142,3 +142,19 @@ live Cloudflare account or cross-network NAT behavior.
 References: [TURN credentials](https://developers.cloudflare.com/realtime/turn/generate-credentials/),
 [WebSocket hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/),
 [TURN pricing](https://developers.cloudflare.com/realtime/sfu/platform/pricing/).
+
+## Official firmware relay
+
+`GET /firmware-fetch?url=<encoded official URL>` streams a user-requested download
+from `dl.fujifilm-x.com/support/firmware/` (DAT or ZIP files) or the attachment
+endpoint on `fujifilm-korea.co.kr` (including `www`). URL policy lives in
+`firmware-source.ts`; no firmware hash list is required. Korea's attachment
+endpoint also serves other support files.
+
+Only configured website origins may use the route. It rejects redirects, sends
+no browser credentials upstream, and returns only the file body, content type
+and length with CORS and `Cache-Control: no-store`. It uses the existing
+connection rate limiter with a separate firmware key. It does not store files
+or use the Worker cache. The browser remains responsible for identifying and
+validating firmware before use. This transport policy does not grant a firmware
+license or establish fair use.
