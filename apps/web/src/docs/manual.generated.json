@@ -69,6 +69,12 @@
       "introduction": "1. Download the SD card files for your camera. Unzip them to the top level of a FAT32 SD card.\n2. Switch the camera off and insert the SD card. Remove and reinsert the battery to make sure the camera is fully off.\n3. Hold the buttons for your camera while turning the power switch ON. Release them once the switch is in the ON position.\n\n- **X70** — center of the command control + Movie-record button / Function button (Fn1)\n- **X-E2S** — center of the command dial + Function button (Fn7)\n- **X-E2** — center of the command dial + Function button (Fn7)\n\nLook for the Fujimod name in the upper-left corner of the display.",
       "sections": [
         {
+          "title": "Recommended Settings",
+          "markdown": "For faster start-up and response, open **SET-UP > POWER MANAGEMENT** and set **HIGH PERFORMANCE** to **ON**. Set **QUICK START** to **10 MIN** or **23 MIN** to keep the camera ready for that long after you switch it off, so it is ready to shoot as soon as you switch it back on. Both use more battery. See [POWER MANAGEMENT](/docs/manual/power-management/).",
+          "anchor": "recommended-settings",
+          "cameras": ["X-E2", "X-E2S", "X70"]
+        },
+        {
           "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "SHOW WELCOME MESSAGE",
           "kind": "command",
