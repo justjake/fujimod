@@ -1,4 +1,4 @@
-import { firmwareFetch } from './firmware-fetch.ts';
+import { proxy } from './proxy.ts';
 import { contributions } from './contributions.ts';
 export { Contributions } from './contributions.ts';
 import type { Env, BudgetRecord, IceServer, Attachment } from './env.ts';
@@ -33,7 +33,7 @@ function attachment(socket: WebSocket): Attachment {
 export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url);
-    if (url.pathname === '/firmware-fetch') return firmwareFetch(request, env);
+    if (url.pathname === '/proxy') return proxy(request, env);
     if (url.pathname.startsWith('/contribution/')) return publishedUpload(request, env);
     if (/^\/(file|media|download)\//.test(url.pathname) || url.pathname === '/file-viewer.css')
       return sharedFiles(request, env);

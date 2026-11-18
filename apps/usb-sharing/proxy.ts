@@ -1,8 +1,8 @@
 import type { Env } from './env.ts';
-import { firmwareSource } from './firmware-source.ts';
+import { proxyTarget } from './proxy-policy.ts';
 
-/** User-requested, uncached transfer from an official firmware source. */
-export async function firmwareFetch(request: Request, env: Env): Promise<Response> {
+/** User-requested, uncached transfer from an allowed upstream URL. */
+export async function proxy(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get('Origin') ?? '';
   const allowed = (env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim());
   const headers = new Headers({ 'Cache-Control': 'no-store', Vary: 'Origin' });
@@ -11,10 +11,10 @@ export async function firmwareFetch(request: Request, env: Env): Promise<Respons
   headers.set('Access-Control-Allow-Origin', origin);
   const fail = (message: string, status: number) => new Response(message, { status, headers });
   if (request.method !== 'GET') return fail('GET required', 405);
-  const target = firmwareSource(new URL(request.url).searchParams.get('url') ?? '');
-  if (!target) return fail('Firmware URL not allowed', 400);
+  const target = proxyTarget(new URL(request.url).searchParams.get('url') ?? '');
+  if (!target) return fail('URL not allowed', 400);
   const ip = request.headers.get('CF-Connecting-IP') || 'local';
-  if (!(await env.CONNECTIONS.limit({ key: `firmware:${ip}` })).success)
+  if (!(await env.CONNECTIONS.limit({ key: `proxy:${ip}` })).success)
     return fail('Rate exceeded', 429);
   let upstream: Response;
   try {
@@ -24,11 +24,11 @@ export async function firmwareFetch(request: Request, env: Env): Promise<Respons
       signal: request.signal,
     });
   } catch {
-    return fail('Firmware source unavailable', 502);
+    return fail('Upstream unavailable', 502);
   }
   if (upstream.status !== 200) {
     await upstream.body?.cancel();
-    return fail('Firmware source did not return a file', 502);
+    return fail('Upstream did not return a successful response', 502);
   }
   for (const name of ['Content-Type', 'Content-Length']) {
     const value = upstream.headers.get(name);

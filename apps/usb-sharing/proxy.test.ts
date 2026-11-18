@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runtime } from './test-runtime.ts';
-import { firmwareSource } from './firmware-source.ts';
+import { proxyTarget } from './proxy-policy.ts';
 
 const origin = 'https://fujimod.com';
 const source = 'https://dl.fujifilm-x.com/support/firmware/x70mivua0pf/FPUPDATE.DAT';
-const endpoint = (url = source) =>
-  `https://worker.example/firmware-fetch?url=${encodeURIComponent(url)}`;
+const endpoint = (url = source) => `https://worker.example/proxy?url=${encodeURIComponent(url)}`;
 
 await test('source policy accepts official paths and rejects host and path tricks', () => {
   for (const url of [
@@ -14,7 +13,7 @@ await test('source policy accepts official paths and rejects host and path trick
     'https://fujifilm-korea.co.kr/support/download/attachment/8250/0',
     'https://www.fujifilm-korea.co.kr/support/download/attachment/11311/0',
   ])
-    assert.equal(firmwareSource(url)?.href, url);
+    assert.equal(proxyTarget(url)?.href, url);
   for (const url of [
     '',
     'not a URL',
@@ -28,7 +27,7 @@ await test('source policy accepts official paths and rejects host and path trick
     `${source}#fragment`,
     'https://fujifilm-korea.co.kr/support/download/attachment/8250/0/extra',
   ])
-    assert.equal(firmwareSource(url), undefined, url);
+    assert.equal(proxyTarget(url), undefined, url);
 });
 
 await test('Worker transfers bytes without forwarding browser credentials or upstream cookies', async () => {
