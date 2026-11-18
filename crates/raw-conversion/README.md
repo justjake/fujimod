@@ -173,6 +173,10 @@ Confirmed on an X100VI (firmware 1.31), from the output MakerNotes:
 
 Not yet confirmed on a camera:
 
+- SMOOTH SKIN EFFECT as word 23 with 1 OFF, 2 WEAK, 3 STRONG
+  (`smooth_skin`). The X100VI's as-shot profiles carry 1 in word 23 for
+  RAFs shot with it OFF; WEAK and STRONG follow word 24's encoding.
+
 - Adobe RGB code 2 ("Adobe sRGB", `ADOBE_RGB_CODE2`), marked unsure in
   libfuji. The manifest's Exif ColorSpace (`0xa001`) shows whether the camera
   honored it. A code it refuses is recorded as `unsupported` without

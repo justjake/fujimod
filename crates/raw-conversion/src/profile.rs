@@ -38,6 +38,8 @@ pub enum Field {
     /// MONOCHROMATIC COLOR warm/cool on monochrome films; a white-balance
     /// word on color films.
     MonochromeWarmCool = 22,
+    /// SMOOTH SKIN EFFECT, 1 OFF, 2 WEAK, 3 STRONG like word 24.
+    SmoothSkin = 23,
     ColorChromeBlue = 24,
     /// MONOCHROMATIC COLOR magenta/green on monochrome films; a white-balance
     /// word on color films.
@@ -156,6 +158,8 @@ pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color_chrome_blue: Option<Strength>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub smooth_skin: Option<Strength>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub white_balance: Option<WhiteBalance>,
     /// Kelvin, 2500 to 10000, with `white_balance: KELVIN`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -226,6 +230,7 @@ impl Settings {
             grain_size: other.grain_size.or(self.grain_size),
             color_chrome: other.color_chrome.or(self.color_chrome),
             color_chrome_blue: other.color_chrome_blue.or(self.color_chrome_blue),
+            smooth_skin: other.smooth_skin.or(self.smooth_skin),
             white_balance: other.white_balance.or(self.white_balance),
             color_temperature: other.color_temperature.or(self.color_temperature),
             white_balance_shift_red: other
@@ -418,6 +423,9 @@ impl Settings {
                 tenths(mg, -18, 18, "monochrome magenta/green")?,
             ));
         }
+        if let Some(v) = self.smooth_skin {
+            out.push((Field::SmoothSkin, strength(v)));
+        }
         if let Some(v) = self.color_chrome_blue {
             out.push((Field::ColorChromeBlue, strength(v)));
         }
@@ -506,7 +514,7 @@ mod tests {
         let s: Settings = serde_json::from_str(
             r#"{"film":"ACROS_R","grain":"STRONG","grain_size":"LARGE","noise_reduction":-4,
                 "monochrome_warm_cool":9,"monochrome_magenta_green":-9,"clarity":-5,
-                "color_chrome_blue":"WEAK","white_balance":"AS_SHOT","color_space":"SRGB",
+                "color_chrome_blue":"WEAK","smooth_skin":"STRONG","white_balance":"AS_SHOT","color_space":"SRGB",
                 "highlight":-1.5}"#,
         )
         .unwrap();
@@ -519,6 +527,7 @@ mod tests {
         assert_eq!(get(Field::MonochromeMagentaGreen), (-90i32) as u32);
         assert_eq!(get(Field::Clarity), (-50i32) as u32);
         assert_eq!(get(Field::ColorChromeBlue), 2);
+        assert_eq!(get(Field::SmoothSkin), 3);
         assert_eq!(get(Field::WhiteBalanceAsShot), 1);
         assert_eq!(get(Field::Highlight), (-15i32) as u32);
         assert!(!w.iter().any(|(f, _)| *f == Field::WhiteBalanceMode));
