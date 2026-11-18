@@ -56,8 +56,9 @@ pub struct Camera {
     quantum: usize,
     checkpoints: BTreeMap<String, Snapshot>,
     profiling: bool,
-    /// Firmware facts `fujimod-remote` reads to deliver and confirm inputs.
-    facts: Facts,
+    /// Firmware facts `fujimod-remote` reads to deliver and confirm inputs,
+    /// or why the catalog has none for this firmware.
+    facts: Result<Facts, String>,
 }
 
 /// The catalog facts `fujimod-remote` needs for a resolved selection.
@@ -156,7 +157,7 @@ impl Camera {
                 .board
                 .set_execution_policy(ExecutionPolicy::parse(policy)?)?;
         }
-        let facts = remote_facts(&resolved)?;
+        let facts = remote_facts(&resolved);
         let mut camera = Self {
             session,
             resolved,
@@ -201,7 +202,14 @@ impl Camera {
                 |_, _| Ok(()),
             )?;
         }
+        // Connect the controls now, so every checkpoint carries them and
+        // restores into this camera. A boot that stopped before the firmware
+        // loaded its configuration leaves them to connect on first use.
+        let controls = camera.connect().err();
         let (mut summary, png) = camera.observe(true)?;
+        if let Some(error) = controls {
+            summary["controls_error"] = json!(error);
+        }
         summary["opened"] = json!({
             "configuration": request.configuration,
             "overlays": request.overlays,
@@ -313,6 +321,7 @@ impl Camera {
             Box<dyn std::future::Future<Output = Result<(), String>> + 'r>,
         >,
     ) -> Result<(), String> {
+        let facts = self.facts.clone()?;
         self.connect()?;
         let options = RemoteOptions {
             quantum: self.quantum,
@@ -324,7 +333,7 @@ impl Camera {
             frame_counter_pointer: "/0/banks/1/frames".into(),
         };
         let deadline = self.session.board.now() + 5 * TICKS_PER_SECOND;
-        let mut remote = BoardRemote::new(&mut self.session, self.facts.clone(), options)?;
+        let mut remote = BoardRemote::new(&mut self.session, facts, options)?;
         futures_lite::future::block_on(operation(&mut remote, deadline))
     }
 

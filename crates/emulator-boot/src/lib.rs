@@ -1392,11 +1392,12 @@ fn press_setup_key(
     session: &mut Session,
     spec: &Prepared,
     s: &FirstStart,
+    name: &str,
     driver: &mut Driver<'_>,
 ) -> Result<(), String> {
     let selection = &spec.resolved.reference;
     let key = |session: &mut Session, pressed| {
-        fujimod_emulator_controls::set_key(session, selection, &s.located, &s.key, pressed, EXR2_TICKS_PER_SECOND)
+        fujimod_emulator_controls::set_key(session, selection, &s.located, name, pressed, EXR2_TICKS_PER_SECOND)
     };
     key(session, true)?;
     let held = driver.advance_ticks(session, spec, s.hold_ticks);
@@ -1409,21 +1410,18 @@ fn press_setup_key(
 fn setup_key(
     session: &mut Session,
     spec: &Prepared,
-    inputs: &Exr2RunInputs,
     key: &str,
     driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
-    let key =
-        first_start_key(&spec.resolved, inputs, key)?.ok_or("first-start policy is absent")?;
+    let start = spec.first_start.as_ref().ok_or("first-start policy is absent")?;
     *presses += 1;
-    press_setup_key(session, spec, &key, driver)
+    press_setup_key(session, spec, start, key, driver)
 }
 
 fn setup_calendar(
     session: &mut Session,
     spec: &Prepared,
-    inputs: &Exr2RunInputs,
     menu: &fujimod_catalog::first_start::FirstStartMenu,
     driver: &mut Driver<'_>,
     presses: &mut usize,
@@ -1454,7 +1452,7 @@ fn setup_calendar(
             if read(session)?.1 as usize == field {
                 break;
             }
-            setup_key(session, spec, inputs, "RIGHT", driver, presses)?;
+            setup_key(session, spec, "RIGHT", driver, presses)?;
         }
         if read(session)?.1 as usize != field {
             return Err("date editor did not select the requested field".into());
@@ -1494,7 +1492,6 @@ fn setup_calendar(
             setup_key(
                 session,
                 spec,
-                inputs,
                 if increase { "UP" } else { "DOWN" },
                 driver,
                 presses,
@@ -1645,9 +1642,7 @@ fn to_rec_inner(
                 if current != selected {
                     presses += 1;
                     let key = if current > selected { "UP" } else { "DOWN" };
-                    let key = first_start_key(&spec.resolved, inputs, key)?
-                        .ok_or("first-start policy is absent")?;
-                    press_setup_key(session, &spec, &key, driver).and_then(|()| {
+                    press_setup_key(session, &spec, start, key, driver).and_then(|()| {
                         let after = word(session, menu.cursor)? as usize;
                         let expected = if current > selected { current - 1 } else { current + 1 };
                         if after != expected { return Err(format!("START MENU cursor did not move from {current} to {expected}: {after}")); }
@@ -1656,15 +1651,15 @@ fn to_rec_inner(
                 } else {
                     presses += 1;
                     confirmations += 1;
-                    press_setup_key(session, &spec, start, driver)
+                    press_setup_key(session, &spec, start, &start.key, driver)
                 }
             } else {
                 if word(session, u64::from(report.menu_node))? == menu.date_kind {
-                    setup_calendar(session, &spec, inputs, menu, driver, &mut presses)?;
+                    setup_calendar(session, &spec, menu, driver, &mut presses)?;
                 }
                 presses += 1;
                 confirmations += 1;
-                press_setup_key(session, &spec, start, driver)
+                press_setup_key(session, &spec, start, &start.key, driver)
             }
         } else {
             driver.advance(session, &spec, None)

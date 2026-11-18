@@ -237,9 +237,15 @@ pub fn compile(
 ) -> Result<Controls, String> {
     let nodes = Nodes::new(definition)?;
     // Rotary steps go to the encoder, never to scanner buttons.
+    // Each control's rotary encoder, resolved once.
+    let encoders: Vec<Result<Option<contact_driver::Interface>, String>> = located
+        .controls
+        .iter()
+        .map(|row| interfaces::encoder(row, &nodes, calibration))
+        .collect();
     let mut controls: Vec<LocatedControl> = located.controls.clone();
-    for row in &mut controls {
-        if matches!(interfaces::encoder(row, &nodes, calibration), Ok(Some(_))) {
+    for (row, encoder) in controls.iter_mut().zip(&encoders) {
+        if matches!(encoder, Ok(Some(_))) {
             row.actions
                 .retain(|(action, _)| action != "decrease" && action != "increase");
         }
@@ -327,12 +333,11 @@ pub fn compile(
     let mut accepted = BTreeSet::new();
     let mut interface_errors = BTreeMap::new();
     let mut driver_interfaces = Vec::new();
-    for row in &located.controls {
-        let binding =
-            interfaces::encoder(row, &nodes, calibration).and_then(|binding| match binding {
-                Some(binding) => Ok(Some(binding)),
-                None => interfaces::touch(row, &nodes, calibration),
-            });
+    for (row, encoder) in located.controls.iter().zip(encoders) {
+        let binding = encoder.and_then(|binding| match binding {
+            Some(binding) => Ok(Some(binding)),
+            None => interfaces::touch(row, &nodes, calibration),
+        });
         let power = interfaces::power(row, &nodes);
         let (binding, power) = match (binding, power) {
             (Ok(binding), Ok(power)) => (binding, power),
@@ -454,7 +459,12 @@ pub fn connect(
         )?
     };
     session.configure_controls(controls.wiring)?;
-    session.configure_contact_driver(controls.confirmation)?;
+    if let Err(error) = session.configure_contact_driver(controls.confirmation) {
+        // Never leave wiring without its confirmation: a later connect would
+        // see controls and return early, and no press could be confirmed.
+        session.controls = None;
+        return Err(error);
+    }
     Ok(controls.problems)
 }
 

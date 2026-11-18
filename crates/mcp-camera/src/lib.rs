@@ -287,16 +287,28 @@ state and screen."
             Some(name) => name.clone(),
             None => Self::next(&self.next_camera, "camera"),
         };
-        if self
-            .cameras
-            .lock()
-            .map(|cameras| cameras.contains_key(&name))
-            .unwrap_or(true)
-        {
-            return failed(format!("a camera named {name} is already open"));
-        }
         let request = OpenRequest::from(params);
         let (jobs, receive) = mpsc::channel::<Job>();
+        // Reserve the name before booting, so a concurrent open of the same
+        // name refuses instead of replacing this camera.
+        match self.cameras.lock() {
+            Ok(mut cameras) if !cameras.contains_key(&name) => {
+                cameras.insert(
+                    name.clone(),
+                    Handle {
+                        jobs: jobs.clone(),
+                        opened: json!({ "camera": name, "opening": true }),
+                    },
+                );
+            }
+            Ok(_) => return failed(format!("a camera named {name} is already open")),
+            Err(_) => return failed("camera table is poisoned"),
+        }
+        let release = |cameras: &Mutex<BTreeMap<String, Handle>>| {
+            if let Ok(mut cameras) = cameras.lock() {
+                cameras.remove(&name);
+            }
+        };
         let (opened, wait) = tokio::sync::oneshot::channel();
         let thread_name = name.clone();
         let spawned = std::thread::Builder::new()
@@ -317,23 +329,26 @@ state and screen."
                 }
             });
         if let Err(error) = spawned {
+            release(&self.cameras);
             return failed(format!("cannot start the camera thread: {error}"));
         }
         let (summary, png) = match wait.await {
             Ok(Ok(opened)) => opened,
-            Ok(Err(error)) => return failed(error),
-            Err(_) => return failed("the camera thread stopped while opening"),
+            Ok(Err(error)) => {
+                release(&self.cameras);
+                return failed(error);
+            }
+            Err(_) => {
+                release(&self.cameras);
+                return failed("the camera thread stopped while opening");
+            }
         };
         let mut summary = summary;
         summary["camera"] = json!(name);
-        if let Ok(mut cameras) = self.cameras.lock() {
-            cameras.insert(
-                name,
-                Handle {
-                    jobs,
-                    opened: summary.clone(),
-                },
-            );
+        if let Ok(mut cameras) = self.cameras.lock()
+            && let Some(handle) = cameras.get_mut(&name)
+        {
+            handle.opened = summary.clone();
         }
         reply(summary, png)
     }
