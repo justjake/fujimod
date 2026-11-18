@@ -13,6 +13,10 @@ struct State {
     #[serde(default)]
     rx_fifo: std::collections::VecDeque<u8>,
     configuration_complete: bool,
+    /// Dummy cycles the part's volatile configuration register selects for its
+    /// fast reads, once the controller has written it.
+    #[serde(default)]
+    volatile_dummy_cycles: Option<u8>,
 }
 /// One installed serial NOR part: its identity and the opcodes, address bytes
 /// and dummy cycles the controller is allowed to issue to it.
@@ -59,12 +63,29 @@ impl Part {
             (Self::Quad20bb20, 0x20 | 0x21) => Some(Erase(0x1000)),
             (Self::Quad20bb20, 0xd8 | 0xdc) => Some(Erase(0x10000)),
             // MT35XU: 4-byte read, octal-output and octal-I/O 4-byte fast reads,
-            // 4-byte page program, 4 KiB and 128 KiB 4-byte erases.
-            (Self::MicronMt35xu01g, 0x13 | 0xcc | 0xfd) => Some(Read),
+            // 4-byte page program, 4 KiB and 128 KiB 4-byte erases, and the
+            // volatile configuration register write.
+            (Self::MicronMt35xu01g, 0x13) => Some(Read),
+            (Self::MicronMt35xu01g, 0xcc | 0xfd) => Some(FastRead),
+            (Self::MicronMt35xu01g, 0x81) => Some(WriteVolatile),
             (Self::MicronMt35xu01g, 0x12) => Some(Program),
             (Self::MicronMt35xu01g, 0x21) => Some(Erase(0x1000)),
             (Self::MicronMt35xu01g, 0xdc) => Some(Erase(0x20000)),
             _ => None,
+        }
+    }
+    /// The dummy cycles a fast read of this part runs with, as its volatile
+    /// configuration register selects them. Only the dummy-cycle register
+    /// (address 1) and the 20-cycle setting of its aperture reads are modeled.
+    fn volatile_dummy_cycles(self, address: u32, value: u8) -> Result<u8, String> {
+        let reads = self.aperture_reads().unwrap_or(&[]);
+        if address == 1 && reads.iter().any(|r| r.dummy_cycles == value) {
+            Ok(value)
+        } else {
+            Err(format!(
+                "serial NOR part {:#08x} volatile register {address:#x} write {value:#x} is not modeled",
+                self.jedec()
+            ))
         }
     }
     /// Aperture read setups the part answers, or None while unchecked.
@@ -86,8 +107,11 @@ enum Command {
     Status,
     Identity,
     Read,
+    /// A read whose dummy cycles come from the volatile configuration register.
+    FastRead,
     Program,
     Erase(usize),
+    WriteVolatile,
 }
 pub struct Controller {
     state: State,
@@ -107,6 +131,7 @@ impl Controller {
                 tx: Vec::new(),
                 rx_fifo: Default::default(),
                 configuration_complete: false,
+                volatile_dummy_cycles: None,
             },
             flash_storage,
             part,
@@ -120,6 +145,12 @@ impl Controller {
         };
         let opcode = self.state.regs[0x44 / 4] as u8;
         let dummy = self.state.regs[0x74 / 4];
+        if self.state.volatile_dummy_cycles.map(u32::from) != Some(dummy) {
+            return Err(format!(
+                "serial NOR part {:#08x} aperture read {opcode:#x} with {dummy} dummy cycles before its volatile dummy-cycle register selects them",
+                self.part.jedec()
+            ));
+        }
         if reads
             .iter()
             .any(|r| r.opcode == opcode && u32::from(r.dummy_cycles) == dummy)
@@ -201,7 +232,7 @@ impl Controller {
                 flash_storage.session.write_enable = false;
                 self.state.complete = true;
             }
-            Command::Status | Command::Identity | Command::Read => {
+            Command::Status | Command::Identity | Command::Read | Command::FastRead => {
                 let count = (self.state.regs[0xa0 / 4] & 0x7ff) as usize + 1;
                 self.state.rx_fifo = match command {
                     Command::Status => {
@@ -210,13 +241,31 @@ impl Controller {
                     Command::Identity => (0..count)
                         .map(|i| if i < 3 { (jedec >> (16 - i * 8)) as u8 } else { 0xff })
                         .collect(),
-                    _ => flash_storage
-                        .read_device(self.state.regs[0x50 / 4] as u64, count)?
-                        .into(),
+                    _ => {
+                        if command == Command::FastRead && self.state.volatile_dummy_cycles.is_none() {
+                            return Err(format!(
+                                "serial NOR fast read {cmd:#x} before the volatile dummy-cycle register is written"
+                            ));
+                        }
+                        flash_storage
+                            .read_device(self.state.regs[0x50 / 4] as u64, count)?
+                            .into()
+                    }
                 };
                 self.state.complete = true;
             }
             Command::Program => {}
+            Command::WriteVolatile => {
+                if !flash_storage.session.write_enable {
+                    return Err("serial NOR volatile register write without WREN".into());
+                }
+                let count = (self.state.regs[0xa0 / 4] & 0x7ff) as usize + 1;
+                if count != 1 {
+                    return Err(format!(
+                        "serial NOR volatile register write of {count} bytes is not modeled"
+                    ));
+                }
+            }
             Command::Erase(size) => {
                 flash_storage.erase(self.state.regs[0x50 / 4] as u64, size)?;
                 self.state.complete = true;
@@ -225,6 +274,12 @@ impl Controller {
         Ok(())
     }
     fn stop(&mut self) -> Result<(), String> {
+        if self.part.pio(self.cmd()) == Some(Command::WriteVolatile) && !self.state.tx.is_empty() {
+            let address = self.state.regs[0x50 / 4];
+            self.state.volatile_dummy_cycles =
+                Some(self.part.volatile_dummy_cycles(address, self.state.tx[0])?);
+            self.flash_storage.lock().unwrap().session.write_enable = false;
+        }
         if self.part.pio(self.cmd()) == Some(Command::Program) && !self.state.tx.is_empty() {
             self.flash_storage
                 .lock()
@@ -256,7 +311,7 @@ impl Controller {
                     0xff
                 }
             }
-            Some(Command::Read) => s.read_device(
+            Some(Command::Read | Command::FastRead) => s.read_device(
                 self.state.regs[0x50 / 4] as u64 + self.state.cursor as u64,
                 1,
             )?[0],
@@ -316,7 +371,12 @@ impl Device for Controller {
                     || (self.state.active
                         && matches!(
                             self.part.pio(self.cmd()),
-                            Some(Command::Status | Command::Identity | Command::Read)
+                            Some(
+                                Command::Status
+                                    | Command::Identity
+                                    | Command::Read
+                                    | Command::FastRead
+                            )
                         ));
                 let complete = self.state.complete
                     || self
@@ -340,7 +400,12 @@ impl Device for Controller {
         let v = v as u32;
         let result = match o {
             0x80 => {
-                if !self.state.active || self.part.pio(self.cmd()) != Some(Command::Program) {
+                if !self.state.active
+                    || !matches!(
+                        self.part.pio(self.cmd()),
+                        Some(Command::Program | Command::WriteVolatile)
+                    )
+                {
                     Err("unsupported flash storage FIFO write".into())
                 } else {
                     self.state.tx.push(v as u8);
@@ -480,12 +545,73 @@ mod tests {
         controller.begin().unwrap();
         let id: Vec<u8> = (0..3).map(|_| controller.rx().unwrap()).collect();
         assert_eq!(id, [0x2c, 0x5b, 0x1b]);
-        for opcode in [0x13, 0xcc, 0xfd] {
+        controller.state.regs[0x40 / 4] = 0x13;
+        controller.state.regs[0x50 / 4] = 16;
+        controller.begin().unwrap();
+        assert_eq!(controller.rx().unwrap(), 16);
+        write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
+        for opcode in [0xcc, 0xfd] {
             controller.state.regs[0x40 / 4] = opcode;
-            controller.state.regs[0x50 / 4] = 16;
             controller.begin().unwrap();
             assert_eq!(controller.rx().unwrap(), 16);
         }
+    }
+
+    /// WREN, then a one-byte volatile register write, as a device initializer
+    /// issues it: opcode in `+40`, register address in `+50`, count in `+a0`.
+    fn write_dummy_cycles(controller: &mut Controller, address: u32, value: u8) -> Result<(), String> {
+        controller.state.regs[0] = 1;
+        controller.state.regs[0x40 / 4] = 0x06;
+        controller.begin()?;
+        controller.state.regs[0x40 / 4] = 0x81;
+        controller.state.regs[0x50 / 4] = address;
+        controller.state.regs[0xa0 / 4] = 0;
+        controller.begin()?;
+        controller.state.tx.push(value);
+        controller.stop()
+    }
+
+    #[test]
+    fn octal_part_fast_reads_wait_for_its_dummy_cycle_register() {
+        let (_, mut controller) = mt35xu();
+        controller.state.regs[0] = 1;
+        controller.state.regs[0x40 / 4] = 0xfd;
+        assert!(controller.begin().unwrap_err().contains("volatile dummy-cycle register"));
+        write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
+        assert_eq!(controller.state.volatile_dummy_cycles, Some(20));
+        controller.state.regs[0x40 / 4] = 0xfd;
+        controller.begin().unwrap();
+    }
+
+    #[test]
+    fn volatile_register_write_is_limited_to_the_modeled_setting() {
+        let (storage, mut controller) = mt35xu();
+        controller.state.regs[0] = 1;
+        controller.state.regs[0x40 / 4] = 0x81;
+        controller.state.regs[0xa0 / 4] = 0;
+        assert!(controller.begin().unwrap_err().contains("without WREN"));
+        // The initializer's write: byte 0x14 at register address 1, consuming WREN.
+        write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
+        assert!(!storage.lock().unwrap().session.write_enable);
+        // Other registers and values, and multi-byte writes, are not modeled.
+        let err = write_dummy_cycles(&mut controller, 0, 0xe7).unwrap_err();
+        assert!(err.contains("register 0x0 write 0xe7 is not modeled"), "{err}");
+        let err = write_dummy_cycles(&mut controller, 1, 0x08).unwrap_err();
+        assert!(err.contains("register 0x1 write 0x8 is not modeled"), "{err}");
+        controller.state.regs[0x40 / 4] = 0x06;
+        controller.begin().unwrap();
+        controller.state.regs[0x40 / 4] = 0x81;
+        controller.state.regs[0xa0 / 4] = 1;
+        assert!(controller.begin().unwrap_err().contains("2 bytes"));
+    }
+
+    #[test]
+    fn quad_part_refuses_volatile_register_writes() {
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0; 16]).unwrap()));
+        let mut controller = Controller::new(storage, Part::Quad20bb20);
+        controller.state.regs[0] = 1;
+        controller.state.regs[0x40 / 4] = 0x81;
+        assert!(controller.begin().unwrap_err().contains("for part 0x20bb20"));
     }
 
     #[test]
@@ -516,6 +642,8 @@ mod tests {
         let (_, mut controller) = mt35xu();
         controller.state.regs[0x44 / 4] = 0xfd;
         controller.state.regs[0x74 / 4] = 20;
+        assert!(controller.check_aperture_read().unwrap_err().contains("before its volatile"));
+        write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
         assert!(controller.check_aperture_read().is_ok());
         controller.state.regs[0x74 / 4] = 10;
         assert!(controller.check_aperture_read().unwrap_err().contains("0xfd with 10"));
