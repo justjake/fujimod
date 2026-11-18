@@ -89,9 +89,10 @@ pub struct Input {
     /// completion. It does not gate the frame interrupt, so it is only latched.
     #[serde(default)]
     acknowledge: bool,
-    /// Configuration word at +0x144: a full 32-bit setter and getter pair, read back unchanged.
+    /// Configuration words at +0x140..=+0x17c: sixteen full 32-bit setter and getter pairs, each a
+    /// single register write and read, read back unchanged.
     #[serde(default)]
-    configuration: u32,
+    configuration: [u32; 16],
 }
 impl Device for Input {
     fn name(&self) -> &'static str {
@@ -108,7 +109,9 @@ impl Device for Input {
             0 => u64::from(self.ready || self.generation == 0),
             4 => u64::from(self.running),
             0x48 => u64::from(self.acknowledge),
-            0x144 => u64::from(self.configuration),
+            0x140..=0x17c if offset % 4 == 0 => {
+                u64::from(self.configuration[((offset - 0x140) / 4) as usize])
+            }
             0x10c => u64::from(self.pending),
             _ => {
                 cx.unmodeled();
@@ -139,8 +142,8 @@ impl Device for Input {
             }
         } else if size == 4 && offset == 0x48 {
             self.acknowledge = value & 1 != 0;
-        } else if size == 4 && offset == 0x144 {
-            self.configuration = value as u32;
+        } else if size == 4 && (0x140..=0x17c).contains(&offset) && offset % 4 == 0 {
+            self.configuration[((offset - 0x140) / 4) as usize] = value as u32;
         } else if size == 4 && offset == 0x10c {
             // 318bc5c clears every pending cause by writing sixteen zero flags.
             self.pending &= value as u32 & 0xffff;
@@ -173,7 +176,7 @@ impl Device for Input {
             self.ready = true;
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: u32);
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16]);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
@@ -214,6 +217,23 @@ mod tests {
             input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946144, 4),
             0x29d3e4
         );
+        assert!(!irq(&host, 229));
+    }
+    #[test]
+    fn input_configuration_range_latches_every_word() {
+        let mut input = Input::default();
+        let mut host = RecordingHost::default();
+        for slot in 0..16u64 {
+            let address = 0xff946140 + slot * 4;
+            input.write(&mut Cx::new(&mut host, 0, 0, 0), address, 4, 0x1000 + slot);
+        }
+        for slot in 0..16u64 {
+            let address = 0xff946140 + slot * 4;
+            assert_eq!(
+                input.read(&mut Cx::new(&mut host, 0, 0, 0), address, 4),
+                0x1000 + slot
+            );
+        }
         assert!(!irq(&host, 229));
     }
     #[test]
