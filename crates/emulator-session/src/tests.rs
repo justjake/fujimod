@@ -53,6 +53,8 @@ fn card_session_with_power_alias_and_fill(
             initialization_fault: sdhc::InitializationFault::None,
             high_speed: false,
             ram_banks: vec![],
+            dram_alias: true,
+            address_high: None,
         },
         sdhc::Wiring {
             card,

@@ -131,13 +131,19 @@ base = 0xfae62000
 size = 0x1000
 kind = "write-only-registers"
 
-# SD address-high words. 0x13a8ea0(slot, port, high), called from the block read 0x13a2340 and
-# the block write 0x13a2574, writes 0xff90e7d8 + slot*0xc (port 0) or 0xff90e7d0 and 0xff90e7d4
-# + slot*0xc (port 1). Six words for two slots, writes only. Reached on the first data transfer
-# of a present card; the default run has no card.
+# SD address-high words. 0x13a8ea0(slot, port, high), called through 0x13a1e4c and 0x13a3638
+# from the block read 0x13a2340 and the block write 0x13a2574, writes 0xff90e7d8 + slot*0xc
+# (port 0) or 0xff90e7d0 and 0xff90e7d4 + slot*0xc (port 1). The port 0 words 0xff90e7d8 and
+# 0xff90e7e4 belong to the slot hosts (address_high in 25-sd.toml). The UHS-II port 1 words
+# stay writes only: the UHS-II ports run no data transfers.
 [[device]]
 base = 0xff90e7d0
-size = 0x18
+size = 8
+kind = "write-only-registers"
+
+[[device]]
+base = 0xff90e7dc
+size = 8
 kind = "write-only-registers"
 
 # Audio serial instance 1 (0xff991000) moved to 62-audio.toml as an `audio-serial` window.
