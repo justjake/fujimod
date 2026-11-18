@@ -332,7 +332,10 @@ impl Graph {
                 .filter(|m| m.core == p.core)
                 .any(|m| p.address < m.address + m.size as u64 && end > m.address)
             {
-                return Err("peripheral mapping overlaps RAM".into());
+                return Err(format!(
+                    "peripheral mapping overlaps RAM: core {} address {:#x} size {:#x} (physical {:#x})",
+                    p.core, p.address, p.size, p.physical
+                ));
             }
             if self.peripherals[..i].iter().any(|q| {
                 q.core == p.core && q.address < end && p.address < q.address + q.size as u64

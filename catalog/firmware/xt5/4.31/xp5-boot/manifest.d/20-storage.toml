@@ -31,12 +31,7 @@ kind = "clock-gates"
 [device.options]
 configuration_word = 0
 
-[[device]]
-base = 0xff91c000
-size = 0x1000
-kind = "reset-handshake"
-[device.options]
-trigger_offset = 0x1c
+# 0xff91c000 (audio serial instance 0, reset at +0x1c) moved to 62-audio.toml as audio-serial.
 
 # "Table-driven controller apertures".
 [[device]]
@@ -86,12 +81,7 @@ kind = "power-gates"
 # 0x60000000 is DRAM now (manifest.toml maps RAM to 0x80000000, as the former X-T5 runner did),
 # so the drain read of that port lands in RAM instead of a discarded-read window.
 
-# 0x80000000 stays a discarded-read port (first 16 KiB granule; DRAM channel 2 RAM starts at 0x80004000).
-# The drain helper reads it again during the still develop (0x14c9984, 0.29 s after S2).
-[[device]]
-base = 0x80000000
-size = 4
-kind = "discarded-read"
+# 0x80000000 is DRAM channel 2 RAM now (manifest.toml); the drain read lands in RAM.
 
 # 0x1c0000000 stays a discarded-read port too (first 16 KiB granule; DRAM channel 3 RAM starts at
 # 0x1c0004000).
