@@ -16964,10 +16964,50 @@
         }
       ]
     },
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance"
-    ]
+    "updater": {
+      "public_version": [
+        4,
+        49
+      ],
+      "version_getter": {
+        "address": 21583908,
+        "size": 88,
+        "sha256": "12e0e611e6cc41393678b1212ce32d8c2a7c129e5697126c50c9123ac1ee764e"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 21581564
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 45000472,
+        "size": 568,
+        "sha256": "5b1b4a642cd0839ce175dd7939c3bb899df299b74040e7c379232782c1f911b2"
+      },
+      "target_major": 38502576,
+      "target_minor": 38502580,
+      "current_major": 38502584,
+      "current_minor": 38502588,
+      "version_producer": {
+        "address": 48018568,
+        "size": 164,
+        "sha256": "c085e432897964033267b57c725644a182d33410fdfb0572b8c94f2943ee50be"
+      },
+      "producer_stop": 48018604,
+      "version_context_pointer": 63642672,
+      "version_context": 38502048,
+      "current_major_setter": {
+        "address": 48022568,
+        "size": 56,
+        "sha256": "9c1a8d2596209bcc436b42dee08f6f582cfea6972cbc0a9abe17f1fb329315e1"
+      },
+      "current_minor_setter": {
+        "address": 48022624,
+        "size": 56,
+        "sha256": "0d218a5ef47a9e93a6aaacac29ba5a5969b37770e6ffa67ee738a1e0a620faa1"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt50-132",
