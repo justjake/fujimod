@@ -164,8 +164,7 @@ function ManualRowContent(props: { section: ManualSection }) {
       <Show when={props.section.credits}>{(credits) => <ManualCredits credits={credits()} />}</Show>
       <Show when={sectionMedia(props.section)}>
         {(recording) => (
-          <details class="manual-walkthrough">
-            <summary>Walkthrough</summary>
+          <>
             <WalkthroughClip media={recording()} label={props.section.title} />
             <For each={props.section.media?.options}>
               {(label) => (
@@ -179,7 +178,7 @@ function ManualRowContent(props: { section: ManualSection }) {
                 </Show>
               )}
             </For>
-          </details>
+          </>
         )}
       </Show>
     </>
