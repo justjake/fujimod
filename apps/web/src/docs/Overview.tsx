@@ -20,9 +20,7 @@ export default function DocsOverview() {
   return (
     <SiteFrame class="docs-overview">
       <article>
-        <h1>
-          Docs <span class="docs-overview-badge">Work in progress</span>
-        </h1>
+        <span class="docs-overview-badge">Work in progress</span>
         <section>
           <h2>
             <a href={manualRoot}>Manual</a>

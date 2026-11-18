@@ -6,14 +6,6 @@
 .docs-overview section + section {
   margin-top: 48px;
 }
-.docs-overview h1 {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0 0 40px;
-  font-size: 34px;
-  letter-spacing: -0.02em;
-}
 .docs-overview h2 {
   display: flex;
   align-items: center;
@@ -67,6 +59,8 @@
   margin-top: 4px;
 }
 .docs-overview-badge {
+  display: inline-block;
+  margin-bottom: 20px;
   padding: 3px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
