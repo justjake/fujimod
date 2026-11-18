@@ -60,6 +60,10 @@ pub fn register_all(
             // +0x18 of each RAW DMA unit is its pitch: still capture programs 0x3d80 for 7776
             // 16-bit samples, movie live view 11664 for 7776 packed 12-bit samples.
             line_stride: true,
+            // INTID 165: VD callback service id 2 (0x1530748, logical 0x77). Its X-T5 4.31
+            // users include the display module callback 0x2ffafa8, which arms the movie
+            // V_TIMING one-shot (0x3003c88 -> 0x15332b0(0x33)) once per frame.
+            frame_start_pulse: Some(165),
         }),
         (0x59, 4),
     );
