@@ -39,6 +39,12 @@ rca = 1
 # playback reads picture files into high DRAM ("SD DMA exceeds aligned DRAM" at 0x80000000).
 ram_bytes = 0xc0000000
 ram_banks = [[0x1c0000000, 0x40000000]]
+# XP5 DRAM channel 1 sits at 0x40000000: no XP4-style alias there.
+dram_alias = false
+# DMA address bits 34..32 (slot 0, port 0). 0x13a8ea0(slot, port, high) writes
+# (buffer >> 32) & 7 here before each block transfer (0x13a1f3c, 0x13a37c8), so the
+# SDMA system address holds only bits 31..0 (movie recording writes from 0x1d0ec6bc0).
+address_high = 0xff90e7d8
 
 [[device]]
 base = 0xff9b01e0
@@ -68,6 +74,12 @@ rca = 1
 # playback reads picture files into high DRAM ("SD DMA exceeds aligned DRAM" at 0x80000000).
 ram_bytes = 0xc0000000
 ram_banks = [[0x1c0000000, 0x40000000]]
+# XP5 DRAM channel 1 sits at 0x40000000: no XP4-style alias there.
+dram_alias = false
+# DMA address bits 34..32 (slot 1, port 0). 0x13a8ea0(slot, port, high) writes
+# (buffer >> 32) & 7 here before each block transfer (0x13a1f3c, 0x13a37c8), so the
+# SDMA system address holds only bits 31..0 (movie recording writes from 0x1d0ec6bc0).
+address_high = 0xff90e7e4
 
 [[device]]
 base = 0xff9b41e0
