@@ -76,6 +76,29 @@
   border: 0;
 }
 
+.sdk-preview-controls {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.sdk-preview-controls summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.sdk-preview-buttons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 4px;
+  touch-action: manipulation;
+  color: #f5f5f7;
+}
+
+.sdk-preview-buttons button {
+  color: inherit;
+}
+
 .sdk-preview figcaption {
   max-width: 66ch;
   margin-top: 12px;
