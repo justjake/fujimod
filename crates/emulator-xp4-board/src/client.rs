@@ -99,6 +99,18 @@ impl Session {
         }
     }
 
+    pub fn set_scene(&self, scene: &serde_json::Value) -> Result<(), String> {
+        self.inner.external_devices(|devices, _| devices.set_scene(scene))
+    }
+
+    pub fn write_patch(&self, address: usize, bytes: &[u8]) -> Result<(), String> {
+        self.write(address, bytes)?;
+        for cpu in &self.inner.cpus {
+            cpu.invalidate_code(None)?;
+        }
+        Ok(())
+    }
+
     pub fn begin_pc_trace(&self, limit: usize) -> Result<(), String> {
         self.inner.host_mutation()?;
         if self.inner.counted {

@@ -1869,6 +1869,17 @@ impl Devices {
         }
         Err("ARMv7-A device made no deadline progress".into())
     }
+    pub fn set_scene(&mut self, input: &serde_json::Value) -> Result<(), String> {
+        let mut consumed = false;
+        for device in self.models.iter_mut().flatten() {
+            consumed |= device.set_scene(input)?;
+        }
+        if !consumed {
+            return Err("no device consumes scene input".into());
+        }
+        Ok(())
+    }
+
     pub fn snapshots(&self) -> std::collections::BTreeMap<String, String> {
         let mut counts = BTreeMap::new();
         for model in self.models.iter().flatten() {

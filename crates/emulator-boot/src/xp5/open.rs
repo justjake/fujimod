@@ -849,16 +849,7 @@ pub(crate) fn open_from(
         });
     }
     let run_scene = serde_json::to_value(run_scene).map_err(|error| error.to_string())?;
-    let scene = if let Some(path) = scene_override {
-        Some(
-            serde_json::from_slice(
-                &std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?,
-            )
-            .map_err(|error| format!("{}: {error}", path.display()))?,
-        )
-    } else {
-        None
-    };
+    let scene = scene_override.map(crate::host::read_scene).transpose()?;
     let mut definition = json!({
         "schema": 1,
         "configuration_id": resolved.configuration.id,

@@ -2,6 +2,27 @@
 use fujimod_emulator_session::Session;
 use std::time::Duration;
 
+/// Host inspection and verified writes to modeled physical memory.
+pub trait Memory {
+    fn read(&self, address: u64, data: &mut [u8]) -> Result<(), String>;
+    fn write(&self, address: u64, data: &[u8]) -> Result<(), String>;
+}
+
+impl Memory for fujimod_emulator::board::Board {
+    fn read(&self, address: u64, data: &mut [u8]) -> Result<(), String> {
+        self.inspect_physical(address, data)
+    }
+
+    fn write(&self, address: u64, data: &[u8]) -> Result<(), String> {
+        self.write_physical(address, data)
+    }
+}
+
+pub fn read_scene(path: &std::path::Path) -> Result<serde_json::Value, String> {
+    serde_json::from_slice(&crate::read(path, 64 << 20)?)
+        .map_err(|error| format!("{}: {error}", path.display()))
+}
+
 pub fn duration_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
     (duration.as_nanos().saturating_mul(u128::from(ticks_per_second)) / 1_000_000_000)
         .min(u128::from(u64::MAX)) as u64

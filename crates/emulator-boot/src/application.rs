@@ -61,6 +61,38 @@ pub enum Board {
     Xpp(Box<Session>),
 }
 
+impl crate::host::Memory for Board {
+    fn read(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.read(usize::try_from(address).map_err(|_| "physical address exceeds host size")?, bytes),
+            Self::Xpp(session) => session.board.inspect_physical(address, bytes),
+        }
+    }
+
+    fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.write_patch(usize::try_from(address).map_err(|_| "physical address exceeds host size")?, bytes),
+            Self::Xpp(session) => session.board.write_physical(address, bytes),
+        }
+    }
+}
+
+impl Board {
+    pub fn gpio_input(&mut self, port: u8, pin: u8, high: bool) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.set_gpio_input(usize::from(port), usize::from(pin), high),
+            Self::Xpp(session) => fujimod_emulator_xpp::board::gpio_input(session, port, pin, high),
+        }
+    }
+
+    pub fn set_scene(&mut self, scene: &Value) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.set_scene(scene),
+            Self::Xpp(session) => session.board.set_scene(scene),
+        }
+    }
+}
+
 pub struct Started {
     pub board: Board,
     pub quantum: usize,
@@ -94,7 +126,7 @@ impl Started {
         &mut self,
         instruction_limit: Option<u64>,
         duration: Option<std::time::Duration>,
-        mut observe: impl FnMut(&Self) -> Result<Option<u64>, String>,
+        mut observe: impl FnMut(&mut Self) -> Result<Option<u64>, String>,
     ) -> Result<Value, String> {
         if instruction_limit.is_none() && duration.is_none() {
             return Err("application startup requires an instruction or time limit".into());

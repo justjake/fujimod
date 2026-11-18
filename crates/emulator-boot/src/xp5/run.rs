@@ -273,7 +273,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             if limits.reached(&session) {
                 break;
             }
-            let next_patch = patches.advance(&session.board, start, ticks_per_second)?;
+            let next_patch = patches.advance(&session.board, now, start, ticks_per_second)?;
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }

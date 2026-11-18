@@ -435,6 +435,12 @@ impl Built {
         })
     }
 }
+/// Drive a named application GPIO bank through its modeled external pins.
+pub fn gpio_input(session: &mut fujimod_emulator_session::Session, port: u8, pin: u8, high: bool) -> Result<(), String> {
+    session.board.edit_device(session.node("gpio")?, |gpio: &mut fujimod_emulator_ip::socionext::gpio::Gpio| {
+        gpio.set_input(usize::from(port), usize::from(pin), high)
+    })
+}
 struct Source(Arc<flash::Aperture>);
 impl pl330::Source for Source {
     fn contains(&self, address: u64, len: usize) -> bool {

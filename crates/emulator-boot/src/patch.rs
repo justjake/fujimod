@@ -4,7 +4,7 @@
 //! after the run starts) at which each is applied. Every entry names the bytes it expects to
 //! replace; a run whose guest holds other bytes stops instead of writing. Patches touch guest RAM
 //! only, for the length of one run, and never write a firmware update file.
-use fujimod_emulator::board::Board;
+use crate::host::Memory;
 use serde::Deserialize;
 use std::{collections::VecDeque, ops::Range, path::Path};
 
@@ -72,15 +72,14 @@ impl Schedule {
     }
 
     /// Apply at the stopped boundary and return the next guest deadline.
-    pub fn advance(&mut self, board: &Board, start: u64, ticks_per_second: u64) -> Result<Option<u64>, String> {
+    pub fn advance(&mut self, memory: &dyn Memory, now: u64, start: u64, ticks_per_second: u64) -> Result<Option<u64>, String> {
         let deadline = |patch: &Patch| start.saturating_add(patch.at_ticks(ticks_per_second));
-        let now = board.now();
         while let Some(patch) = self.patches.front() {
             let at = deadline(patch);
             if now < at {
                 return Ok(Some(at));
             }
-            patch.apply(board, now)?;
+            patch.apply(memory, now)?;
             self.patches.pop_front();
         }
         Ok(None)
@@ -121,10 +120,10 @@ impl Patch {
             as u64
     }
 
-    pub(crate) fn apply(&self, board: &Board, now: u64) -> Result<(), String> {
+    pub(crate) fn apply(&self, memory: &dyn Memory, now: u64) -> Result<(), String> {
         let mut current = vec![0u8; self.original.len()];
-        board
-            .read_physical(self.address, &mut current)
+        memory
+            .read(self.address, &mut current)
             .map_err(|e| format!("patch at {:#x}: {e}", self.address))?;
         if current != self.original {
             return Err(format!(
@@ -132,8 +131,8 @@ impl Patch {
                 self.address, self.original, current
             ));
         }
-        board
-            .write_physical(self.address, &self.patched)
+        memory
+            .write(self.address, &self.patched)
             .map_err(|e| format!("patch at {:#x}: {e}", self.address))?;
         eprintln!(
             "FUJIMOD patch: {:#x} {:02x?} -> {:02x?} at {now}: {}",

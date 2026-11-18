@@ -3,6 +3,7 @@ use fujimod_catalog_configuration::{RunEngine, RunInputs, RunScene};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
+use boot::host::Memory;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode, time::Duration};
 
 const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
@@ -241,8 +242,8 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
         return Err("this run does not declare emulator mod loading".into());
     }
     if let Some(path) = boot_options.path("--scene") {
-        let bytes = std::fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-        let scene: RunScene = serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display()))?;
+        let scene: RunScene = serde_json::from_value(boot::host::read_scene(&path)?)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
         if !matches!(scene, RunScene::Exr2(_)) {
             return Err("selected board requires an EXR II scene".into());
         }
@@ -321,7 +322,7 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
     let report = boot::to_rec_with_actions(&mut session, limit, duration, automatic_setup,
         |session| {
             let key_deadline = keys.advance(session, start)?;
-            let patch_deadline = patches.advance(&session.board, start, boot::EXR2_TICKS_PER_SECOND)?;
+            let patch_deadline = patches.advance(&session.board, session.board.now(), start, boot::EXR2_TICKS_PER_SECOND)?;
             Ok(key_deadline.into_iter().chain(patch_deadline).min())
         },
         |session, status_report| {
@@ -446,8 +447,16 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let save_snapshot = options.path("--save-snapshot");
     let trace_output = options.pc_trace()?;
     let policy = options.execution_policy(trace_output.is_some())?;
-    if !options.values.is_empty() || !options.mods.is_empty()
-        || !options.preferred_languages.is_empty() || !options.pokes.is_empty()
+    let mut patches = boot::patch::Schedule::from_path(options.path("--patch").as_deref(), &[])?;
+    let scene = options.path("--scene").as_deref().map(boot::host::read_scene).transpose()?;
+    let gpio = options.text("--gpio")?;
+    let mut keys = boot::host::parse_keys(options.text("--keys")?.as_deref(),
+        options.text("--press")?.as_deref())?.into_iter().map(|edge| {
+        let wire = boot::keys::digital_key(&resolved.reference, &edge.name)?
+            .ok_or_else(|| format!("{} has no declared digital input", edge.name))?;
+        Ok((edge.delay, wire, edge.pressed))
+    }).collect::<Result<std::collections::VecDeque<_>, String>>()?;
+    if !options.values.is_empty() || !options.mods.is_empty() || !options.preferred_languages.is_empty()
     {
         return Err("application-profile runtime needs supported options and media in its startup plan".into());
     }
@@ -479,6 +488,19 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             None
         }
     };
+    if let Some(scene) = scene {
+        started.board.set_scene(&scene)?;
+    }
+    if let Some(levels) = gpio {
+        for level in levels.split(',') {
+            let (port, pin, high) = boot::host::parse_gpio(level)?;
+            started.board.gpio_input(port, pin, high)?;
+        }
+    }
+    for poke in &options.pokes {
+        let (address, word) = boot::host::parse_poke(poke)?;
+        started.board.write(address, &word.to_le_bytes())?;
+    }
     let frames = boot::output::Outputs::default();
     if let Some(directory) = &output {
         frames.attach(0, directory.clone(), viewer_port)?;
@@ -492,6 +514,18 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let mut sequences = BTreeMap::new();
     let state = started.run_with(instructions, duration, |board| {
         let (counts, now) = board.progress();
+        let deadline = |delay| start.saturating_add(boot::host::duration_ticks(delay, board.ticks_per_second));
+        let mut next_key = None;
+        while let Some((delay, wire, pressed)) = keys.front() {
+            let at = deadline(*delay);
+            if at > now {
+                next_key = Some(at);
+                break;
+            }
+            board.board.gpio_input(wire.port, wire.pin, wire.active == *pressed)?;
+            keys.pop_front();
+        }
+        let next_patch = patches.advance(&board.board, now, start, board.ticks_per_second)?;
         if next_status.is_some_and(|at| at <= now) {
             eprintln!("FUJIMOD status {}", serde_json::json!({"engine":board.engine,"instructions":counts,"now":now}));
             next_status = status_period.filter(|period| *period != 0).map(|period| now.saturating_add(period));
@@ -500,7 +534,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             frames.capture(output.as_deref().unwrap(), board.display_frames(), &mut sequences)?;
             next_frame = Some(now.saturating_add((board.ticks_per_second / 30).max(1)));
         }
-        Ok(next_status.into_iter().chain(next_frame).min())
+        Ok(next_status.into_iter().chain(next_frame).chain(next_patch).chain(next_key).min())
     })?;
     if let Some(directory) = &output {
         frames.capture(directory, started.display_frames(), &mut sequences)?;
