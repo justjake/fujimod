@@ -190,7 +190,10 @@ impl Work {
             return false;
         }
         match self.kind {
-            Kind::Reset => matches!(o, 0 | 4),
+            // +24: input-buffer size (height<<16 | width, width/height
+            // bound-checked by the writer before it stores them); only the
+            // first gate is written with it.
+            Kind::Reset => matches!(o, 0 | 4) || (o == 0x24 && self.base == 0xff950000),
             Kind::Resize => matches!(
                 o,
                 0 | 4
@@ -548,5 +551,23 @@ mod resize_tests {
         assert!(host.ram[0x1000..0x1100].iter().all(|v| *v == 0x55));
         assert_eq!(work.save()["state"]["frames"], 2);
         assert_eq!(host.irqs.last(), Some(&(200, false)));
+    }
+}
+
+#[cfg(test)]
+mod reset_size_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    #[test]
+    fn first_reset_gate_keeps_the_programmed_input_buffer_size() {
+        let mut work = Work::reset(0xff950000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        work.write(&mut cx, 0xff950024, 4, 0x1680f24);
+        assert!(cx.refusal().is_none());
+        assert_eq!(work.read(&mut cx, 0xff950024, 4), 0x1680f24);
+        let mut other = Work::reset(0xff973000).unwrap();
+        other.write(&mut cx, 0xff973024, 4, 1);
+        assert!(cx.refusal().is_some());
     }
 }
