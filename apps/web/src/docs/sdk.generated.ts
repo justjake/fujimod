@@ -72,7 +72,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Back from display settings",
+        "slug": "back-from-display-settings",
+        "description": "The back button sits at the leading edge of a hosted settings title.",
+        "source": "FOCAL_PREVIEW(\"Back from display settings\",\n              .description = \"The back button sits at the leading edge of a hosted settings title.\", .height = 100) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"title\", Focal_theme()->title_height, .childAlignment.x = CLAY_ALIGN_X_CENTER) {\n            FOCAL_BACK_BUTTON();\n            SDK_PREVIEW_LABEL(\"DISPLAY SETTING\");\n        }\n    }\n}",
+        "line": 58,
+        "width": 720,
+        "height": 100,
+        "page": "/docs/sdk/focal/back-button/back-from-display-settings/preview.html"
+      }
+    ]
   },
   {
     "title": "Caret",
@@ -123,7 +134,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Editing a recipe name",
+        "slug": "editing-a-recipe-name",
+        "description": "The blinking insertion caret sits between two runs of editable text.",
+        "source": "FOCAL_PREVIEW(\"Editing a recipe name\",\n              .description = \"The blinking insertion caret sits between two runs of editable text.\", .height = 120) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"field\", 64, .padding = {16, 16, 0, 0}, .childGap = 2) {\n            SDK_PREVIEW_LABEL(\"Classic\");\n            FOCAL_CARET(\"insertion\", .color = Focal_theme()->text, .width = 3, .height = 36, .rest = 1);\n            SDK_PREVIEW_LABEL(\" Chrome\");\n        }\n    }\n}",
+        "line": 69,
+        "width": 720,
+        "height": 120,
+        "page": "/docs/sdk/focal/caret/editing-a-recipe-name/preview.html"
+      }
+    ]
   },
   {
     "title": "Checkbox",
@@ -264,7 +286,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Selected settings",
+        "slug": "selected-settings",
+        "description": "An accent checkmark marks the saved option, and a contrast checkmark sits on a filled selection.",
+        "source": "FOCAL_PREVIEW(\"Selected settings\",\n              .description = \"An accent checkmark marks the saved option, and a contrast checkmark sits on a filled selection.\", .height = 160) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"saved\", 48, .childGap = 16) {\n            FOCAL_CHECKMARK(.text_size = 32, .accent = FOCAL_ACCENT_BLUE);\n            SDK_PREVIEW_LABEL(\"FINE\");\n        }\n        CLAY(FOCAL_ID(\"selected\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(48)},\n                       .padding = {14, 14, 0, 0}, .childGap = 16,\n                       .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}},\n            .backgroundColor = Focal_Theme_accent(Focal_theme(), FOCAL_ACCENT_GREEN),\n        }) {\n            FOCAL_CHECKMARK(.text_size = 32, .tone = FOCAL_CHECKMARK_CONTRAST,\n                            .accent = FOCAL_ACCENT_GREEN);\n            SDK_PREVIEW_LABEL(\"NORMAL\");\n        }\n    }\n}",
+        "line": 41,
+        "width": 720,
+        "height": 160,
+        "page": "/docs/sdk/focal/checkmark/selected-settings/preview.html"
+      }
+    ]
   },
   {
     "title": "Confirmation",
@@ -428,7 +461,28 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Format an SD card",
+        "slug": "format-an-sd-card",
+        "description": "A red title and explicit OK and CANCEL choices distinguish a destructive format confirmation.",
+        "source": "FOCAL_PREVIEW(\"Format an SD card\",\n              .description = \"A red title and explicit OK and CANCEL choices distinguish a destructive format confirmation.\", .height = 480) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_Confirmation dialog = {\n            .title = {.label = {.utf8 = \"FORMAT\"}},\n            .lines = {{.utf8 = \"FORMAT THE SD CARD?\"}, {.utf8 = \"ALL DATA WILL BE ERASED.\"}},\n            .line_count = 2,\n            .accept = {.utf8 = \"OK\"}, .cancel = {.utf8 = \"CANCEL\"},\n        };\n        FOCAL_CONFIRMATION(.dialog = &dialog, .presented = 1, .accent = FOCAL_ACCENT_RED,\n                           .focus = {.index = 1, .serial = 1});\n    }\n}",
+        "line": 341,
+        "width": 720,
+        "height": 480,
+        "page": "/docs/sdk/focal/confirmation/format-an-sd-card/preview.html"
+      },
+      {
+        "title": "Storage notice",
+        "slug": "storage-notice",
+        "description": "A plain one-button alert explains why a photo cannot be saved.",
+        "source": "FOCAL_PREVIEW(\"Storage notice\",\n              .description = \"A plain one-button alert explains why a photo cannot be saved.\", .height = 320) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_Confirmation dialog = {\n            .lines = {{.utf8 = \"THE SD CARD IS FULL.\"}}, .line_count = 1, .accept = {.utf8 = \"OK\"},\n        };\n        FOCAL_CONFIRMATION(.dialog = &dialog, .presented = 1, .plain = 1, .single = 1);\n    }\n}",
+        "line": 356,
+        "width": 720,
+        "height": 320,
+        "page": "/docs/sdk/focal/confirmation/storage-notice/preview.html"
+      }
+    ]
   },
   {
     "title": "Custom",
@@ -444,7 +498,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Exposure histogram",
+        "slug": "exposure-histogram",
+        "description": "A browser drawer paints histogram bins inside a custom element's layout bounds.",
+        "source": "FOCAL_PREVIEW(\"Exposure histogram\",\n              .description = \"A browser drawer paints histogram bins inside a custom element's layout bounds.\", .height = 238) {\n    (void)props;\n    Focal_Web_setCustomDrawer(preview_histogram);\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 22, 22}, .childGap = 12) {\n        SDK_PREVIEW_LABEL(\"EXPOSURE HISTOGRAM\");\n        Focal_Custom(FOCAL_ID(\"histogram\"), HISTOGRAM_DRAWER, 0x96bff7u, 0, 576, 148);\n    }\n}",
+        "line": 33,
+        "width": 720,
+        "height": 238,
+        "page": "/docs/sdk/focal/custom/exposure-histogram/preview.html"
+      }
+    ]
   },
   {
     "title": "Drop Shadow",
@@ -474,7 +539,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Raised settings card",
+        "slug": "raised-settings-card",
+        "description": "A rounded settings card casts a soft shadow onto the surrounding panel.",
+        "source": "FOCAL_PREVIEW(\"Raised settings card\",\n              .description = \"A rounded settings card casts a soft shadow onto the surrounding panel.\", .height = 190) {\n    (void)props;\n    FOCAL_THEME(&Focal_Theme_x100vi) {\n        CLAY(CLAY_ID(\"shadow stage\"), {\n            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},\n                       .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER}},\n            .backgroundColor = {52, 56, 63, 255},\n        }) {\n            FOCAL_DROP_SHADOW(\"card\", .color = {0, 0, 0, 210}, .radius = 16, .offset_y = 8) {\n                CLAY(FOCAL_ID(\"surface\"), {\n                    .layout = {.sizing = {CLAY_SIZING_FIXED(360), CLAY_SIZING_FIXED(94)},\n                               .childAlignment = {.x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER}},\n                    .backgroundColor = {85, 90, 99, 255}, .cornerRadius = CLAY_CORNER_RADIUS(14),\n                }) { SDK_PREVIEW_LABEL(\"IMAGE QUALITY\"); }\n            }\n        }\n    }\n}",
+        "line": 23,
+        "width": 720,
+        "height": 190,
+        "page": "/docs/sdk/focal/drop-shadow/raised-settings-card/preview.html"
+      }
+    ]
   },
   {
     "title": "Floating Chevron",
@@ -556,7 +632,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Text and live-view chevrons",
+        "slug": "text-and-live-view-chevrons",
+        "description": "Back and forward chevrons use solid ink on menus and translucent ink over live view.",
+        "source": "FOCAL_PREVIEW(\"Text and live-view chevrons\",\n              .description = \"Back and forward chevrons use solid ink on menus and translucent ink over live view.\", .height = 172) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"menu\", 55, .childGap = 22) {\n            FOCAL_KEYED(\"back\") FOCAL_FLOATING_CHEVRON(.direction = FOCAL_CHEVRON_BACK, .style = FOCAL_CHEVRON_TEXT);\n            SDK_PREVIEW_LABEL(\"MENU\");\n            FOCAL_KEYED(\"forward\") FOCAL_FLOATING_CHEVRON(.direction = FOCAL_CHEVRON_FORWARD, .style = FOCAL_CHEVRON_TEXT);\n        }\n        SDK_PREVIEW_ROW(\"live\", 55, .childGap = 22) {\n            FOCAL_KEYED(\"back\") FOCAL_FLOATING_CHEVRON(.direction = FOCAL_CHEVRON_BACK, .style = FOCAL_CHEVRON_LIVE);\n            SDK_PREVIEW_LABEL(\"LIVE VIEW\");\n            FOCAL_KEYED(\"forward\") FOCAL_FLOATING_CHEVRON(.direction = FOCAL_CHEVRON_FORWARD, .style = FOCAL_CHEVRON_LIVE);\n        }\n    }\n}",
+        "line": 72,
+        "width": 720,
+        "height": 172,
+        "page": "/docs/sdk/focal/floating-chevron/text-and-live-view-chevrons/preview.html"
+      }
+    ]
   },
   {
     "title": "Focus Bar",
@@ -607,7 +694,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Active and inactive row focus",
+        "slug": "active-and-inactive-row-focus",
+        "description": "The active row carries an accent stripe while the inactive focus highlight uses a muted fill.",
+        "source": "FOCAL_PREVIEW(\"Active and inactive row focus\",\n              .description = \"The active row carries an accent stripe while the inactive focus highlight uses a muted fill.\", .height = 180) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"focused\", 60) {\n            FOCAL_FOCUS_BAR(.focused = 1, .stripe = 1, .accent = FOCAL_ACCENT_RED);\n            CLAY(FOCAL_ID(\"focused label\"), {\n                .layout = {.padding = {20, 20, 0, 0},\n                           .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}},\n                .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,\n                             .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_CENTER,\n                                              .parent = CLAY_ATTACH_POINT_LEFT_CENTER}},\n            }) { SDK_PREVIEW_LABEL(\"IMAGE QUALITY\"); }\n        }\n        SDK_PREVIEW_ROW(\"inactive focus\", 60) {\n            FOCAL_FOCUS_BAR();\n            CLAY(FOCAL_ID(\"inactive label\"), {\n                .layout = {.padding = {20, 20, 0, 0}},\n                .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,\n                             .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_CENTER,\n                                              .parent = CLAY_ATTACH_POINT_LEFT_CENTER}},\n            }) { SDK_PREVIEW_LABEL(\"FILM SIMULATION\"); }\n        }\n    }\n}",
+        "line": 32,
+        "width": 720,
+        "height": 180,
+        "page": "/docs/sdk/focal/focus-bar/active-and-inactive-row-focus/preview.html"
+      }
+    ]
   },
   {
     "title": "Full Page Title",
@@ -648,7 +746,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Full-page settings titles",
+        "slug": "full-page-settings-titles",
+        "description": "The full-page title uses distinct appearances for a settings page and a live adjustment.",
+        "source": "FOCAL_PREVIEW(\"Full-page settings titles\",\n              .description = \"The full-page title uses distinct appearances for a settings page and a live adjustment.\", .height = 175) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.childGap = 22) {\n        static const struct Focal_Row menu = {.label = {.utf8 = \"IMAGE QUALITY SETTING\"}};\n        static const struct Focal_Row live = {.label = {.utf8 = \"WHITE BALANCE SHIFT\"}};\n        FOCAL_KEYED(\"menu\") FOCAL_FULL_PAGE_TITLE(.title = &menu);\n        FOCAL_KEYED(\"live\") FOCAL_FULL_PAGE_TITLE(.title = &live, .appearance = FOCAL_TITLE_APPEARANCE_LIVE);\n    }\n}",
+        "line": 21,
+        "width": 720,
+        "height": 175,
+        "page": "/docs/sdk/focal/full-page-title/full-page-settings-titles/preview.html"
+      }
+    ]
   },
   {
     "title": "Grid",
@@ -918,7 +1027,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Quick menu tiles",
+        "slug": "quick-menu-tiles",
+        "description": "A numbered quick menu grid uses pictograms and highlights the active tile.",
+        "source": "FOCAL_PREVIEW(\"Quick menu tiles\",\n              .description = \"A numbered quick menu grid uses pictograms and highlights the active tile.\", .height = 235) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_Grid grid = {\n            FOCAL_QUICK_MENU_GRID_LAYOUT, .coordinates = 1,\n        };\n        FOCAL_GRID(.grid = &grid, .count = 8, .focused = 2, .tile = preview_icon_tile, .context = (void *)&grid);\n    }\n}",
+        "line": 189,
+        "width": 720,
+        "height": 235,
+        "page": "/docs/sdk/focal/grid/quick-menu-tiles/preview.html"
+      }
+    ]
   },
   {
     "title": "Grid View",
@@ -1025,7 +1145,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Move focus across a quick menu",
+        "slug": "move-focus-across-a-quick-menu",
+        "description": "Arrow keys or taps move the highlight between tiles in a quick menu.",
+        "source": "FOCAL_PREVIEW(\"Move focus across a quick menu\",\n              .description = \"Arrow keys or taps move the highlight between tiles in a quick menu.\", .height = 235) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_Grid grid = {\n            FOCAL_QUICK_MENU_GRID_LAYOUT, .coordinates = 1,\n        };\n        static const struct Focal_GridViewSource source = {.tile = preview_icon_tile};\n        FOCAL_GRID_VIEW(.grid = &grid, .count = 8, .source = &source, .context = (void *)&grid,\n                        .focus = {.index = 1, .serial = 1});\n    }\n}",
+        "line": 166,
+        "width": 720,
+        "height": 235,
+        "page": "/docs/sdk/focal/grid-view/move-focus-across-a-quick-menu/preview.html"
+      }
+    ]
   },
   {
     "title": "Group",
@@ -1272,7 +1403,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Inline network status",
+        "slug": "inline-network-status",
+        "description": "An inline lock icon stays with its text as a network status wraps onto a second line.",
+        "source": "FOCAL_PREVIEW(\"Inline network status\",\n              .description = \"An inline lock icon stays with its text as a network status wraps onto a second line.\", .height = 150) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        static const struct Focal_InlineRun runs[] = {\n            {.kind = FOCAL_INLINE_TEXT, .text = \"Studio Wi-Fi is protected \", .length = sizeof \"Studio Wi-Fi is protected \" - 1},\n            {.kind = FOCAL_INLINE_BOX, .width = 22, .height = 22, .box = preview_lock},\n            {.kind = FOCAL_INLINE_TEXT, .text = \" and connects automatically.\", .length = sizeof \" and connects automatically.\" - 1},\n        };\n        const Clay_TextElementConfig text = {.fontSize = 29, .textColor = Focal_theme()->text};\n        Focal_InlineText(FOCAL_ID(\"status\"), runs, sizeof runs / sizeof runs[0], 440, &text, 40);\n    }\n}",
+        "line": 101,
+        "width": 720,
+        "height": 150,
+        "page": "/docs/sdk/focal/inline-text/inline-network-status/preview.html"
+      }
+    ]
   },
   {
     "title": "Key Action Row",
@@ -1379,7 +1521,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Settings actions",
+        "slug": "settings-actions",
+        "description": "The footer places SET and CANCEL key captions below a settings card.",
+        "source": "FOCAL_PREVIEW(\"Settings actions\",\n              .description = \"The footer places SET and CANCEL key captions below a settings card.\", .height = 165) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        static const struct Focal_FooterHint hints[] = {\n            {.glyph_role = FOCAL_FOOTER_GLYPH_CONFIRM, .text = \"SET\"},\n            {.glyph_role = FOCAL_FOOTER_GLYPH_CANCEL, .text = \"CANCEL\"},\n        };\n        FOCAL_GROUP(\"settings\") {\n            FOCAL_GROUP_ROW(\"size\", .label = \"IMAGE SIZE\", .value = \"L 3:2\");\n        }\n        FOCAL_KEY_ACTION_ROW(.hints = hints, .count = 2, .placement = FOCAL_KEY_ACTION_FOOTER);\n    }\n}",
+        "line": 203,
+        "width": 720,
+        "height": 165,
+        "page": "/docs/sdk/focal/key-action-row/settings-actions/preview.html"
+      }
+    ]
   },
   {
     "title": "Link Chip",
@@ -1450,7 +1603,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Connection shortcuts",
+        "slug": "connection-shortcuts",
+        "description": "A protected network chip with a lock icon sits beside a text-only settings shortcut.",
+        "source": "FOCAL_PREVIEW(\"Connection shortcuts\",\n              .description = \"A protected network chip with a lock icon sits beside a text-only settings shortcut.\", .height = 120) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        static const struct Focal_LinkChipStyle style = {\n            .background = {63, 68, 77, 255}, .ink = {255, 255, 255, 255},\n            .chevron = {190, 197, 210, 255}, .height = 52, .radius = 18,\n            .padding_x = 18, .gap = 10, .font_size = 25,\n        };\n        SDK_PREVIEW_ROW(\"links\", 68, .childGap = 18) {\n            Focal_LinkChip(FOCAL_ID(\"network\"), \"Studio Wi-Fi\", X70_ICON_LOCK, &style);\n            Focal_LinkChip(FOCAL_ID(\"settings\"), \"Connection Settings\", 0, &style);\n        }\n    }\n}",
+        "line": 89,
+        "width": 720,
+        "height": 120,
+        "page": "/docs/sdk/focal/link-chip/connection-shortcuts/preview.html"
+      }
+    ]
   },
   {
     "title": "List Editor",
@@ -1638,7 +1802,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Set the camera clock",
+        "slug": "set-the-camera-clock",
+        "description": "Arrow keys change and move between the staged hour and minute fields.",
+        "source": "FOCAL_PREVIEW(\"Set the camera clock\",\n              .description = \"Arrow keys change and move between the staged hour and minute fields.\", .height = 345) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        FOCAL_LIST_EDITOR(.editor = &preview_clock);\n    }\n}",
+        "line": 287,
+        "width": 720,
+        "height": 345,
+        "page": "/docs/sdk/focal/list-editor/set-the-camera-clock/preview.html"
+      }
+    ]
   },
   {
     "title": "List Item",
@@ -1712,7 +1887,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Menu and option rows",
+        "slug": "menu-and-option-rows",
+        "description": "Three rows show a setting with a value and disclosure, a checked setting, and a disabled option.",
+        "source": "FOCAL_PREVIEW(\"Menu and option rows\",\n              .description = \"Three rows show a setting with a value and disclosure, a checked setting, and a disabled option.\", .height = 238) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        static const struct Focal_Row menu = {\n            .label = {.utf8 = \"IMAGE SIZE\"}, .value = {.utf8 = \"L 3:2\"}, .opens = 1,\n        };\n        static const struct Focal_Row saved = {\n            .label = {.utf8 = \"AUTO ISO\"}, .kind = FOCAL_ROW_KIND_CHECKBOX_ON,\n        };\n        static const struct Focal_Row disabled = {.label = {.utf8 = \"RAW\"}, .disabled = 1};\n        FOCAL_KEYED(\"menu\") FOCAL_LIST_ITEM(.row = &menu, .appearance = FOCAL_LIST_ITEM_MENU);\n        FOCAL_KEYED(\"saved\") FOCAL_LIST_ITEM(.row = &saved, .appearance = FOCAL_LIST_ITEM_MENU);\n        FOCAL_KEYED(\"disabled\") FOCAL_LIST_ITEM(.row = &disabled, .appearance = FOCAL_LIST_ITEM_OPTION);\n    }\n}",
+        "line": 238,
+        "width": 720,
+        "height": 238,
+        "page": "/docs/sdk/focal/list-item/menu-and-option-rows/preview.html"
+      }
+    ]
   },
   {
     "title": "List Screen",
@@ -1773,7 +1959,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Image quality settings list",
+        "slug": "image-quality-settings-list",
+        "description": "The list highlights its leading row and shows a down arrow when more settings are available.",
+        "source": "FOCAL_PREVIEW(\"Image quality settings list\",\n              .description = \"The list highlights its leading row and shows a down arrow when more settings are available.\", .height = 395) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_ListPage page = {\n            .row_count = 4, .more_below = 1,\n            .rows = {\n                {.label = {.utf8 = \"IMAGE SIZE\"}, .value = {.utf8 = \"L 3:2\"}, .opens = 1},\n                {.label = {.utf8 = \"IMAGE QUALITY\"}, .value = {.utf8 = \"FINE\"}},\n                {.label = {.utf8 = \"RAW RECORDING\"}, .value = {.utf8 = \"LOSSLESS\"}},\n                {.label = {.utf8 = \"FILM SIMULATION\"}, .value = {.utf8 = \"PROVIA\"}},\n            },\n        };\n        FOCAL_TITLE_BAR(.title = {.utf8 = \"IMAGE QUALITY SETTING\"});\n        FOCAL_LIST_SCREEN(.page = &page, .focus_bar = 1, .arrows = 1);\n    }\n}",
+        "line": 63,
+        "width": 720,
+        "height": 395,
+        "page": "/docs/sdk/focal/list-screen/image-quality-settings-list/preview.html"
+      }
+    ]
   },
   {
     "title": "Live Picker",
@@ -2006,7 +2203,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Browse camera modes",
+        "slug": "browse-camera-modes",
+        "description": "Move through the wheel with arrow keys or taps to read about each camera mode.",
+        "source": "FOCAL_PREVIEW(\"Browse camera modes\",\n              .description = \"Move through the wheel with arrow keys or taps to read about each camera mode.\", .height = 480) {\n    (void)props;\n    static const struct Focal_LivePickerSource source = {.option = preview_shooting_mode};\n    static const struct Focal_LivePickerDelegate delegate = {.focused = preview_mode_focused};\n    struct Focal_PickerOption option;\n    preview_shooting_mode(0, preview_mode, &option);\n    SDK_PREVIEW_PAGE() {\n        FOCAL_LIVE_PICKER(.source = &source, .delegate = &delegate, .count = 3, .current = 1,\n                          .focus = {.index = preview_mode, .serial = 1},\n                          .title = {.utf8 = \"CAMERA MODE\"}, .name = option.name,\n                          .description = option.description, .accent = FOCAL_ACCENT_GREEN);\n    }\n}",
+        "line": 490,
+        "width": 720,
+        "height": 480,
+        "page": "/docs/sdk/focal/live-picker/browse-camera-modes/preview.html"
+      }
+    ]
   },
   {
     "title": "Live Slider",
@@ -2128,7 +2336,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Adjust LCD brightness",
+        "slug": "adjust-lcd-brightness",
+        "description": "Tap or drag the track to change the live LCD brightness value.",
+        "source": "FOCAL_PREVIEW(\"Adjust LCD brightness\",\n              .description = \"Tap or drag the track to change the live LCD brightness value.\", .height = 480) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static struct Focal_SliderContent brightness = {\n            .title = {.utf8 = \"LCD BRIGHTNESS\"}, .value = {.utf8 = \"+2\"},\n            .minimum = -5, .maximum = 5, .current = 2,\n            .hints = {\n                {.glyph_role = FOCAL_FOOTER_GLYPH_CONFIRM, .text = \"SET\"},\n                {.glyph_role = FOCAL_FOOTER_GLYPH_CANCEL, .text = \"CANCEL\"},\n            },\n        };\n        FOCAL_LIVE_SLIDER(.content = &brightness, .context = &brightness, .request = preview_brightness);\n    }\n}",
+        "line": 276,
+        "width": 720,
+        "height": 480,
+        "page": "/docs/sdk/focal/live-slider/adjust-lcd-brightness/preview.html"
+      }
+    ]
   },
   {
     "title": "Option List",
@@ -2335,7 +2554,28 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Image quality popover",
+        "slug": "image-quality-popover",
+        "description": "The compact option list opens beside the image quality row that anchors it.",
+        "source": "FOCAL_PREVIEW(\"Image quality popover\",\n              .description = \"The compact option list opens beside the image quality row that anchors it.\", .height = 360) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 36, 36}) {\n        static const struct Focal_OptionListSource source = {.row = preview_quality_row};\n        FOCAL_LAYER(FOCAL_ID(\"quality anchor\"),\n            .layout = {.sizing = {CLAY_SIZING_FIXED(258), CLAY_SIZING_FIXED(62)},\n                       .padding = {16, 8, 0, 0}, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER}},\n            .backgroundColor = Focal_theme()->focus_bar,\n        ) { SDK_PREVIEW_LABEL(\"IMAGE QUALITY\"); }\n        FOCAL_OPTION_LIST(.source = &source, .count = 4, .current = 0,\n                          .anchor = FOCAL_ID(\"quality anchor\").id, .presented = 1);\n    }\n}",
+        "line": 522,
+        "width": 720,
+        "height": 360,
+        "page": "/docs/sdk/focal/option-list/image-quality-popover/preview.html"
+      },
+      {
+        "title": "Image quality sheet",
+        "slug": "image-quality-sheet",
+        "description": "The option sheet shows a saved checkmark and a separate focus highlight on another choice.",
+        "source": "FOCAL_PREVIEW(\"Image quality sheet\",\n              .description = \"The option sheet shows a saved checkmark and a separate focus highlight on another choice.\", .height = 435) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_OptionListSource source = {.row = preview_quality_row};\n        static const struct Focal_Row title = {.label = {.utf8 = \"IMAGE QUALITY\"}};\n        FOCAL_OPTION_LIST(.source = &source, .count = 4, .current = 0, .title = &title,\n                          .focus = {.index = 1, .serial = 1}, .presented = 1);\n    }\n}",
+        "line": 511,
+        "width": 720,
+        "height": 435,
+        "page": "/docs/sdk/focal/option-list/image-quality-sheet/preview.html"
+      }
+    ]
   },
   {
     "title": "Pointer",
@@ -2378,7 +2618,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Return from an option panel",
+        "slug": "return-from-an-option-panel",
+        "description": "The floating back pointer attaches to the leading side of an image-size option panel.",
+        "source": "FOCAL_PREVIEW(\"Return from an option panel\",\n              .description = \"The floating back pointer attaches to the leading side of an image-size option panel.\", .height = 245) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"panel title\", 62, .childGap = 18) {\n            FOCAL_POINTER();\n            SDK_PREVIEW_LABEL(\"IMAGE SIZE\");\n        }\n        FOCAL_GROUP(\"sizes\") {\n            FOCAL_GROUP_ROW(\"large\", .label = \"L 3:2\", .checked = 1);\n            FOCAL_GROUP_ROW(\"medium\", .label = \"M 3:2\");\n        }\n    }\n}",
+        "line": 37,
+        "width": 720,
+        "height": 245,
+        "page": "/docs/sdk/focal/pointer/return-from-an-option-panel/preview.html"
+      }
+    ]
   },
   {
     "title": "Popup Title Bar",
@@ -2424,7 +2675,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Image size popup title",
+        "slug": "image-size-popup-title",
+        "description": "A popup title pairs the setting name with trailing artwork above the list of image sizes.",
+        "source": "FOCAL_PREVIEW(\"Image size popup title\",\n              .description = \"A popup title pairs the setting name with trailing artwork above the list of image sizes.\", .height = 225) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.childGap = 12) {\n        static const struct Focal_Row title = {\n            .label = {.utf8 = \"IMAGE SIZE\"},\n        };\n        static const struct Focal_TitleArtwork artwork = {.id = X70_ICON_CAMERA, .width = 24, .height = 24};\n        FOCAL_POPUP_TITLE_BAR(.title = &title, .artwork = &artwork);\n        FOCAL_GROUP(\"options\") {\n            FOCAL_GROUP_ROW(\"large\", .label = \"L 3:2\", .checked = 1);\n            FOCAL_GROUP_ROW(\"medium\", .label = \"M 3:2\");\n        }\n    }\n}",
+        "line": 42,
+        "width": 720,
+        "height": 225,
+        "page": "/docs/sdk/focal/popup-title-bar/image-size-popup-title/preview.html"
+      }
+    ]
   },
   {
     "title": "Scroll Arrow",
@@ -2488,7 +2750,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Scroll through a menu",
+        "slug": "scroll-through-a-menu",
+        "description": "Up and down arrows frame a list with more settings beyond both edges.",
+        "source": "FOCAL_PREVIEW(\"Scroll through a menu\",\n              .description = \"Up and down arrows frame a list with more settings beyond both edges.\", .height = 240) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        FOCAL_SCROLL_ARROW(.visible = 1);\n        FOCAL_GROUP(\"settings\") {\n            FOCAL_GROUP_ROW(\"quality\", .label = \"IMAGE QUALITY\", .value = \"FINE\");\n            FOCAL_GROUP_ROW(\"size\", .label = \"IMAGE SIZE\", .value = \"L 3:2\");\n        }\n        FOCAL_SCROLL_ARROW(.down = 1, .visible = 1);\n    }\n}",
+        "line": 86,
+        "width": 720,
+        "height": 240,
+        "page": "/docs/sdk/focal/scroll-arrow/scroll-through-a-menu/preview.html"
+      }
+    ]
   },
   {
     "title": "Shift Grid",
@@ -2642,7 +2915,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Fine-tune white balance",
+        "slug": "fine-tune-white-balance",
+        "description": "The outlined cursor shows a white balance adjustment of two steps toward red and one toward blue.",
+        "source": "FOCAL_PREVIEW(\"Fine-tune white balance\",\n              .description = \"The outlined cursor shows a white balance adjustment of two steps toward red and one toward blue.\", .height = 450) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        FOCAL_SHIFT_GRID(.content = {\n            .title = {.label = {.utf8 = \"WHITE BALANCE SHIFT\"}},\n            .caption = {.utf8 = \"R: +2   B: -1\"},\n            .hint = {.glyph_role = FOCAL_FOOTER_GLYPH_CONFIRM, .text = \"SET\"},\n            .artwork = SDK_PREVIEW_WB_GRID,\n            .values = {2, -1}, .minimum = -9, .maximum = 9,\n        });\n    }\n}",
+        "line": 83,
+        "width": 720,
+        "height": 450,
+        "page": "/docs/sdk/focal/shift-grid/fine-tune-white-balance/preview.html"
+      }
+    ]
   },
   {
     "title": "Tab Rail",
@@ -2738,7 +3022,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Shooting and setup tabs",
+        "slug": "shooting-and-setup-tabs",
+        "description": "The selected shooting tab has focus while the setup and playback tabs remain available.",
+        "source": "FOCAL_PREVIEW(\"Shooting and setup tabs\",\n              .description = \"The selected shooting tab has focus while the setup and playback tabs remain available.\", .height = 390) {\n    (void)props;\n    SDK_PREVIEW_CONTAINER(CLAY_LEFT_TO_RIGHT, .childGap = 12, .padding = {0, 30, 18, 18}) {\n        CLAY(FOCAL_ID(\"rail frame\"), {\n            .layout = {.sizing = {CLAY_SIZING_FIXED(Focal_theme()->list_left), CLAY_SIZING_GROW(0)}},\n        }) {\n            FOCAL_TAB_RAIL(.tabs = {FOCAL_ASSET_TAB_CAMERA_1, FOCAL_ASSET_TAB_CAMERA_2,\n                                   FOCAL_ASSET_TAB_SETUP_1, FOCAL_ASSET_TAB_PLAYBACK_1},\n                           .tab_count = 4, .tab = 1, .focus_scope = FOCAL_FOCUS_SCOPE_TABS);\n        }\n        FOCAL_GROUP(\"settings\") {\n            FOCAL_GROUP_ROW(\"quality\", .label = \"IMAGE QUALITY\", .value = \"FINE\");\n            FOCAL_GROUP_ROW(\"size\", .label = \"IMAGE SIZE\", .value = \"L 3:2\");\n        }\n    }\n}",
+        "line": 193,
+        "width": 720,
+        "height": 390,
+        "page": "/docs/sdk/focal/tab-rail/shooting-and-setup-tabs/preview.html"
+      }
+    ]
   },
   {
     "title": "Text Keyboard",
@@ -3193,7 +3488,28 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Edit a custom setting name",
+        "slug": "edit-a-custom-setting-name",
+        "description": "The letter tray shows the insertion caret and the currently focused key.",
+        "source": "FOCAL_PREVIEW(\"Edit a custom setting name\", .component = \"TextKeyboard\",\n              .description = \"The letter tray shows the insertion caret and the currently focused key.\") {\n    preview_letters(props);\n}",
+        "line": 134,
+        "width": 720,
+        "height": 480,
+        "page": "/docs/sdk/focal/text-keyboard/edit-a-custom-setting-name/preview.html"
+      },
+      {
+        "title": "Long-press character choices",
+        "slug": "long-press-character-choices",
+        "description": "A long press on the focused letter opens a strip of alternate characters.",
+        "source": "FOCAL_PREVIEW(\"Long-press character choices\", .component = \"TextKeyboard\",\n              .description = \"A long press on the focused letter opens a strip of alternate characters.\") {\n    preview_choices(props);\n}",
+        "line": 139,
+        "width": 720,
+        "height": 480,
+        "page": "/docs/sdk/focal/text-keyboard/long-press-character-choices/preview.html"
+      }
+    ]
   },
   {
     "title": "Title Bar",
@@ -3349,7 +3665,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Values in image settings",
+        "slug": "values-in-image-settings",
+        "description": "The value cell displays ordinary text, a custom-setting value, and a vector status mark.",
+        "source": "FOCAL_PREVIEW(\"Values in image settings\",\n              .description = \"The value cell displays ordinary text, a custom-setting value, and a vector status mark.\", .height = 192) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        static const struct Focal_Row values[] = {\n            {.value = {.utf8 = \"FINE\"}},\n            {.value = {.utf8 = \"Classic Chrome\"}, .custom = 1},\n            {.value_vector = X70_ICON_LOCK},\n        };\n        SDK_PREVIEW_ROW(\"quality\", 44, .childGap = 20) {\n            SDK_PREVIEW_LABEL(\"IMAGE QUALITY\");\n            FOCAL_VALUE(.row = &values[0]);\n        }\n        SDK_PREVIEW_ROW(\"simulation\", 44, .childGap = 20) {\n            SDK_PREVIEW_LABEL(\"FILM SIMULATION\");\n            FOCAL_VALUE(.row = &values[1], .index = 1);\n        }\n        SDK_PREVIEW_ROW(\"protection\", 44, .childGap = 20) {\n            SDK_PREVIEW_LABEL(\"PROTECT\");\n            FOCAL_VALUE(.row = &values[2], .index = 2);\n        }\n    }\n}",
+        "line": 168,
+        "width": 720,
+        "height": 192,
+        "page": "/docs/sdk/focal/value/values-in-image-settings/preview.html"
+      }
+    ]
   },
   {
     "title": "Value Editor",
@@ -3430,7 +3757,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Home and travel time",
+        "slug": "home-and-travel-time",
+        "description": "The time difference editor shows home and local time with the hours field selected.",
+        "source": "FOCAL_PREVIEW(\"Home and travel time\",\n              .description = \"The time difference editor shows home and local time with the hours field selected.\", .height = 400) {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        static const struct Focal_ListPage page = {\n            .row_count = 2,\n            .rows = {\n                {.label = {.utf8 = \"HOME\"}, .value = {.utf8 = \"09:30\"}},\n                {.label = {.utf8 = \"LOCAL\"}, .value = {.utf8 = \"14:30\"}},\n            },\n            .value_list = {.control = {\n                .kind = FOCAL_CONTROL_KIND_TIME_DIFFERENCE,\n                .sign = 0, .hours = 5, .minutes = 0, .field_cursor = 1,\n            }},\n        };\n        FOCAL_TITLE_BAR(.title = {.utf8 = \"TIME DIFFERENCE\"});\n        FOCAL_VALUE_EDITOR(.page = &page);\n    }\n}",
+        "line": 844,
+        "width": 720,
+        "height": 400,
+        "page": "/docs/sdk/focal/value-editor/home-and-travel-time/preview.html"
+      }
+    ]
   },
   {
     "title": "Vector Icon",
@@ -3506,7 +3844,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Connection status artwork",
+        "slug": "connection-status-artwork",
+        "description": "The Wi-Fi and lock vectors use different sizes and tints to distinguish connection status from network protection.",
+        "source": "FOCAL_PREVIEW(\"Connection status artwork\",\n              .description = \"The Wi-Fi and lock vectors use different sizes and tints to distinguish connection status from network protection.\", .height = 130) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.padding = {36, 36, 18, 18}, .childGap = 12) {\n        SDK_PREVIEW_ROW(\"network status\", 80, .childGap = 16) {\n            FOCAL_VECTOR_ICON(.id = X70_ICON_WIFI, .width = 60, .height = 60,\n                              .color = Focal_theme()->text);\n            SDK_PREVIEW_LABEL(\"Studio Wi-Fi\");\n            FOCAL_VECTOR_ICON(.id = X70_ICON_LOCK, .width = 34, .height = 34,\n                              .color = Focal_Theme_accent(Focal_theme(), FOCAL_ACCENT_BLUE));\n        }\n    }\n}",
+        "line": 54,
+        "width": 720,
+        "height": 130,
+        "page": "/docs/sdk/focal/vector-icon/connection-status-artwork/preview.html"
+      }
+    ]
   },
   {
     "title": "Window Title Bar",
@@ -3552,7 +3901,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Settings and warning titles",
+        "slug": "settings-and-warning-titles",
+        "description": "A floating window title shows the standard settings appearance and the confirmation appearance.",
+        "source": "FOCAL_PREVIEW(\"Settings and warning titles\",\n              .description = \"A floating window title shows the standard settings appearance and the confirmation appearance.\", .height = 170) {\n    (void)props;\n    SDK_PREVIEW_PAGE(.childGap = 16) {\n        static const struct Focal_Row settings = {.label = {.utf8 = \"SOUND SET-UP\"}};\n        static const struct Focal_Row warning = {.label = {.utf8 = \"FORMAT\"}};\n        FOCAL_KEYED(\"settings\") FOCAL_WINDOW_TITLE_BAR(.title = &settings, .z_index = FOCAL_POPUP_OPTIONS_Z);\n        FOCAL_KEYED(\"warning\") FOCAL_WINDOW_TITLE_BAR(.title = &warning, .z_index = FOCAL_POPUP_OPTIONS_Z,\n                                                     .appearance = FOCAL_TITLE_APPEARANCE_CONFIRMATION);\n    }\n}",
+        "line": 145,
+        "width": 720,
+        "height": 170,
+        "page": "/docs/sdk/focal/window-title-bar/settings-and-warning-titles/preview.html"
+      }
+    ]
   },
   {
     "title": "Action Kind",
@@ -3624,7 +3984,18 @@ export const focalComponents: readonly FocalComponent[] = [
         ]
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Menu row actions",
+        "slug": "menu-row-actions",
+        "description": "A submenu, a slider setting, and a read-only value carry the action kinds a menu uses to route input.",
+        "source": "FOCAL_PREVIEW(\"Menu row actions\", .component = \"Action Kind\", .height = 250,\n              .description = \"A submenu, a slider setting, and a read-only value carry the action kinds a menu uses to route input.\") {\n    (void)props;\n    static const struct Focal_Row rows[] = {\n        {.label = {.utf8 = \"IMAGE QUALITY\"}, .value = {.utf8 = \"FINE\"},\n         .action_kind = FOCAL_ITEM_SUBMENU, .opens = 1},\n        {.label = {.utf8 = \"LCD BRIGHTNESS\"}, .value = {.utf8 = \"+2\"},\n         .action_kind = FOCAL_ITEM_SLIDER},\n        {.label = {.utf8 = \"FREE SPACE\"}, .value = {.utf8 = \"21.4 GB\"},\n         .action_kind = FOCAL_ITEM_VALUE},\n    };\n    SDK_PREVIEW_PAGE(.padding = {24, 24, 18, 18}) {\n        FOCAL_SECTION(\"settings\", .title = \"Camera Settings\");\n        for (unsigned int i = 0; i < sizeof rows / sizeof rows[0]; ++i) FOCAL_KEYED(i) {\n            FOCAL_LIST_ITEM(.row = &rows[i], .appearance = FOCAL_LIST_ITEM_MENU);\n        }\n    }\n}",
+        "line": 9,
+        "width": 720,
+        "height": 250,
+        "page": "/docs/sdk/focal/action-kind/menu-row-actions/preview.html"
+      }
+    ]
   },
   {
     "title": "Components",
@@ -5397,7 +5768,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "A themed settings page",
+        "slug": "a-themed-settings-page",
+        "description": "A title band and a focused settings group inherit the shared theme and accent colors.",
+        "source": "FOCAL_PREVIEW(\"A themed settings page\", .component = \"Components\", .height = 250,\n              .description = \"A title band and a focused settings group inherit the shared theme and accent colors.\") {\n    (void)props;\n    SDK_PREVIEW_PAGE(.childGap = 20) {\n        FOCAL_TITLE_BAR(.title = {.utf8 = \"AF/MF SETTING\"}, .accent = FOCAL_ACCENT_GREEN,\n                        .custom_slot = 2, .page = 2, .pages = 3);\n        FOCAL_GROUP(\"focus\") {\n            FOCAL_GROUP_ROW(\"af\", .label = \"AF MODE\", .value = \"ZONE\",\n                            .opens = 1, .focused = 1, .accent = FOCAL_ACCENT_GREEN);\n            FOCAL_GROUP_ROW(\"peak\", .label = \"MF ASSIST\", .value = \"FOCUS PEAK HIGHLIGHT\");\n        }\n    }\n}",
+        "line": 28,
+        "width": 720,
+        "height": 250,
+        "page": "/docs/sdk/focal/components/a-themed-settings-page/preview.html"
+      }
+    ]
   },
   {
     "title": "Editor",
@@ -5613,7 +5995,18 @@ export const focalComponents: readonly FocalComponent[] = [
         ]
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Edit staged time fields",
+        "slug": "edit-staged-time-fields",
+        "description": "The editor definition supplies the fields, formatting, and edit ranges for a two-field clock.",
+        "source": "FOCAL_PREVIEW(\"Edit staged time fields\", .component = \"Editor\", .height = 345,\n              .description = \"The editor definition supplies the fields, formatting, and edit ranges for a two-field clock.\") {\n    (void)props;\n    SDK_PREVIEW_PAGE() {\n        FOCAL_LIST_EDITOR(.editor = &preview_clock);\n    }\n}",
+        "line": 42,
+        "width": 720,
+        "height": 345,
+        "page": "/docs/sdk/focal/editor/edit-staged-time-fields/preview.html"
+      }
+    ]
   },
   {
     "title": "Footer",
@@ -5673,7 +6066,18 @@ export const focalComponents: readonly FocalComponent[] = [
         ]
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Confirm and cancel hints",
+        "slug": "confirm-and-cancel-hints",
+        "description": "Footer hint definitions pair the camera's confirm and cancel keys with their action captions.",
+        "source": "FOCAL_PREVIEW(\"Confirm and cancel hints\", .component = \"Footer\", .height = 156,\n              .description = \"Footer hint definitions pair the camera's confirm and cancel keys with their action captions.\") {\n    (void)props;\n    SDK_PREVIEW_PAGE(.childGap = 16) {\n        FOCAL_TITLE_BAR(.title = {.utf8 = \"SELECT FOCUS AREA\"});\n        FOCAL_KEY_ACTION_ROW(.hints = preview_clock_hints, .count = 2,\n                             .placement = FOCAL_KEY_ACTION_FOOTER);\n    }\n}",
+        "line": 50,
+        "width": 720,
+        "height": 156,
+        "page": "/docs/sdk/focal/footer/confirm-and-cancel-hints/preview.html"
+      }
+    ]
   },
   {
     "title": "List Page",
@@ -7198,7 +7602,18 @@ export const focalComponents: readonly FocalComponent[] = [
         "members": []
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "A list page model",
+        "slug": "a-list-page-model",
+        "description": "A single list page model supplies the title, page counter, rows, and scroll availability.",
+        "source": "FOCAL_PREVIEW(\"A list page model\", .component = \"List Page\", .height = 378,\n              .description = \"A single list page model supplies the title, page counter, rows, and scroll availability.\") {\n    (void)props;\n    static const struct Focal_ListPage page = {\n        .title = {.utf8 = \"SOUND SET-UP\"}, .page = 1, .pages = 2, .row_count = 3, .more_below = 1,\n        .rows = {\n            {.label = {.utf8 = \"AF BEEP VOL.\"}, .value = {.utf8 = \"LOW\"}, .opens = 1},\n            {.label = {.utf8 = \"SELF-TIMER BEEP VOL.\"}, .value = {.utf8 = \"OFF\"}},\n            {.label = {.utf8 = \"SHUTTER VOLUME\"}, .value = {.utf8 = \"MEDIUM\"}},\n        },\n    };\n    SDK_PREVIEW_PAGE() {\n        FOCAL_TITLE_BAR(.title = page.title, .page = page.page, .pages = page.pages);\n        FOCAL_LIST_SCREEN(.page = &page, .arrows = 1, .focus_bar = 1);\n    }\n}",
+        "line": 60,
+        "width": 720,
+        "height": 378,
+        "page": "/docs/sdk/focal/list-page/a-list-page-model/preview.html"
+      }
+    ]
   },
   {
     "title": "Theme Assets",
@@ -7380,6 +7795,17 @@ export const focalComponents: readonly FocalComponent[] = [
         ]
       }
     ],
-    "previews": []
+    "previews": [
+      {
+        "title": "Semantic tab artwork",
+        "slug": "semantic-tab-artwork",
+        "description": "The theme resolves semantic tab roles into shooting, setup, and playback pictograms.",
+        "source": "FOCAL_PREVIEW(\"Semantic tab artwork\", .component = \"Theme Assets\", .height = 280,\n              .description = \"The theme resolves semantic tab roles into shooting, setup, and playback pictograms.\") {\n    (void)props;\n    SDK_PREVIEW_CONTAINER(CLAY_LEFT_TO_RIGHT, .padding = {16, 32, 16, 16}, .childGap = 14) {\n        CLAY(FOCAL_ID(\"rail frame\"), {\n            .layout = {.sizing = {CLAY_SIZING_FIXED(Focal_theme()->list_left), CLAY_SIZING_GROW(0)}},\n        }) {\n            FOCAL_TAB_RAIL(.tabs = {FOCAL_ASSET_TAB_CAMERA_1, FOCAL_ASSET_TAB_SETUP_1,\n                                   FOCAL_ASSET_TAB_PLAYBACK_1},\n                           .tab_count = 3, .tab = 1, .focus_scope = FOCAL_FOCUS_SCOPE_TABS);\n        }\n        FOCAL_GROUP(\"setup\") {\n            FOCAL_GROUP_ROW(\"date\", .label = \"DATE/TIME\", .opens = 1);\n            FOCAL_GROUP_ROW(\"sound\", .label = \"SOUND SET-UP\", .opens = 1);\n        }\n    }\n}",
+        "line": 77,
+        "width": 720,
+        "height": 280,
+        "page": "/docs/sdk/focal/theme-assets/semantic-tab-artwork/preview.html"
+      }
+    ]
   }
 ];
