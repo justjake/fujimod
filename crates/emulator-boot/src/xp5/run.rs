@@ -3,9 +3,10 @@
 use super::{
     Startup, Started, mod_loader, open as session_open,
 };
-use crate::host::{parse_gpio, parse_number, parse_poke, parse_seconds as seconds, parse_stub};
+use crate::host::{parse_gpio, parse_number, parse_poke, parse_stub};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_parts_controls::key_input::Key;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;

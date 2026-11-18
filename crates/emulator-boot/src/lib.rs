@@ -1443,41 +1443,40 @@ struct Driver<'a> {
 }
 
 impl Driver<'_> {
-fn advance(
-    &mut self,
-    session: &mut Session,
-    spec: &Prepared,
-    until: Option<u64>,
-) -> Result<(), String> {
-    if self.limits.reached(session) {
-        return Err("run limit reached during first-start input".into());
+    fn advance(
+        &mut self,
+        session: &mut Session,
+        spec: &Prepared,
+        until: Option<u64>,
+    ) -> Result<(), String> {
+        if self.limits.reached(session) {
+            return Err("run limit reached during first-start input".into());
+        }
+        let now: u64 = session.board.instruction_counts().iter().sum();
+        let pause = now.saturating_add(1_000_000).min(self.limits.instructions);
+        let until = until.into_iter().chain((self.action)(session)?).min();
+        if !self.limits.step(session, spec.quantum, Some(pause), until)? {
+            return Err("board is quiescent without an input or device deadline".into());
+        }
+        Ok(())
     }
-    let now: u64 = session.board.instruction_counts().iter().sum();
-    let pause = now.saturating_add(1_000_000).min(self.limits.instructions);
-    let until = until.into_iter().chain((self.action)(session)?).min();
-    if !self.limits.step(session, spec.quantum, Some(pause), until)? {
-        return Err("board is quiescent without an input or device deadline".into());
-    }
-    Ok(())
-}
 
-fn advance_ticks(
-    &mut self,
-    session: &mut Session,
-    spec: &Prepared,
-    ticks: u64,
-) -> Result<(), String> {
-    let until = session
-        .board
-        .now()
-        .checked_add(ticks)
-        .ok_or("input deadline overflows")?;
-    while session.board.now() < until {
-        self.advance(session, spec, Some(until))?;
+    fn advance_ticks(
+        &mut self,
+        session: &mut Session,
+        spec: &Prepared,
+        ticks: u64,
+    ) -> Result<(), String> {
+        let until = session
+            .board
+            .now()
+            .checked_add(ticks)
+            .ok_or("input deadline overflows")?;
+        while session.board.now() < until {
+            self.advance(session, spec, Some(until))?;
+        }
+        Ok(())
     }
-    Ok(())
-}
-
 }
 
 fn session_prepared(session: &Session) -> Result<Prepared, String> {
@@ -1495,7 +1494,11 @@ fn session_prepared(session: &Session) -> Result<Prepared, String> {
                 .ok_or("session overlay identity is not a string")
         })
         .collect::<Result<Vec<_>, _>>()?;
-    prepare(id, &overlays)
+    let mut prepared = prepare(id, &overlays)?;
+    if let Some(quantum) = session.definition["quantum"].as_u64() {
+        prepared.quantum = usize::try_from(quantum).map_err(|_| "boot quantum exceeds usize")?;
+    }
+    Ok(prepared)
 }
 
 fn calibrated_sample(session: &Session, key: &AdcKey) -> Result<u16, String> {
