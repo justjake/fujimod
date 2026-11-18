@@ -5,15 +5,16 @@ import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateFeatureMedia } from '../src/home/feature-media.ts';
 import { validateRuntimeApi } from './runtime-api.ts';
+import { parseSdkDocs, sdkDocsFiles, sdkDocsManifest, sdkDocsPath } from './sdk-docs.ts';
 
 export interface SiteAsset {
   path: string;
   bytes: number;
   sha256: string;
 }
-/** Staged paths: runtime bundles, the runtime catalog and feature media. */
+/** Staged paths: runtime bundles, the runtime catalog, feature media, and SDK docs. */
 const ASSET_PATH =
-  /^(?:runtime\/(?:catalog|sbom-components)\.json|runtime\/[a-z0-9-]+\/(?:licenses\/)?[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|artifacts\/docs\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)$/;
+  /^(?:runtime\/(?:catalog|sbom-components)\.json|runtime\/[a-z0-9-]+\/(?:licenses\/)?[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|artifacts\/docs\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|docs\/sdk\/focal\/(?:manifest\.json|[a-z0-9-]+\/[a-z0-9-]+\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*))$/;
 
 /** The `site-assets.json` that staging writes, checked before any file is fetched. */
 export function validateSiteAssets(value: unknown): SiteAsset[] {
@@ -103,10 +104,20 @@ export async function carrySite(origin: string, destination = 'public', parallel
     validateFeatureMedia(
       JSON.parse(await readFile(join(temporary, 'artifacts/docs/media.json'), 'utf8')),
     );
-    await mkdir(target, { recursive: true });
-    for (const directory of ['runtime', 'artifacts']) {
+    const sdkAssets = files.filter(({ path }) => path.startsWith(sdkDocsPath + '/'));
+    if (sdkAssets.length) {
+      const docs = parseSdkDocs(
+        await readFile(join(temporary, sdkDocsPath, sdkDocsManifest), 'utf8'),
+      );
+      const expected = new Set(sdkDocsFiles(docs).map((name) => `${sdkDocsPath}/${name}`));
+      if (expected.size !== sdkAssets.length || sdkAssets.some(({ path }) => !expected.has(path)))
+        throw Error('Deployed FocalUI SDK assets differ from the SDK manifest.');
+    }
+    await mkdir(resolve(target, dirname(sdkDocsPath)), { recursive: true });
+    for (const directory of ['runtime', 'artifacts', sdkDocsPath]) {
       await rm(join(target, directory), { recursive: true, force: true });
-      await rename(join(temporary, directory), join(target, directory));
+      if (directory !== sdkDocsPath || sdkAssets.length)
+        await rename(join(temporary, directory), join(target, directory));
     }
     await writeFile(join(target, 'site-assets.json'), manifestBytes);
     return { emulators: bundles.length, files: files.length };
