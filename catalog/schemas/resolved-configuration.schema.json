@@ -19612,6 +19612,15 @@
               },
               "type": "array"
             },
+            "release_drives": {
+              "description": "Hold drives under which a release input edge releases the latch.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
             "release_ticks": {
               "description": "Release input edge to the return to run time 0.",
               "format": "uint64",
@@ -19629,6 +19638,7 @@
             "kind",
             "run_drive",
             "hold_drives",
+            "release_drives",
             "positions",
             "latch_overrun_ticks",
             "release_ticks"

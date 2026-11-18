@@ -1818,6 +1818,8 @@ pub enum PartModel {
         run_drive: u32,
         /// Drive values that hold the cam still.
         hold_drives: Vec<u32>,
+        /// Hold drives under which a release input edge releases the latch.
+        release_drives: Vec<u32>,
         /// Contact states along motor run time, ascending from 0; the last
         /// is the release latch.
         positions: Vec<ContactPosition>,
