@@ -35,7 +35,10 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x80000000
+# DMA may target DRAM channels 0-2 (below 0xc0000000) and channel 3 (0x1c0000000 + 1 GiB):
+# playback reads picture files into high DRAM ("SD DMA exceeds aligned DRAM" at 0x80000000).
+ram_bytes = 0xc0000000
+ram_banks = [[0x1c0000000, 0x40000000]]
 
 [[device]]
 base = 0xff9b01e0
@@ -61,7 +64,10 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x80000000
+# DMA may target DRAM channels 0-2 (below 0xc0000000) and channel 3 (0x1c0000000 + 1 GiB):
+# playback reads picture files into high DRAM ("SD DMA exceeds aligned DRAM" at 0x80000000).
+ram_bytes = 0xc0000000
+ram_banks = [[0x1c0000000, 0x40000000]]
 
 [[device]]
 base = 0xff9b41e0

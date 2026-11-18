@@ -16,6 +16,7 @@ use fujimod_emulator_xp5_storage::{
 use fujimod_emulator_xp5_imaging::serial_sink;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+pub mod audio;
 pub mod clocks;
 pub mod codec;
 pub mod general_dma;
@@ -581,7 +582,9 @@ pub fn register_all(
     }
     for w in windows
         .iter()
-        .filter(|w| w.kind != "flash-storage" && !general_dma::owns(&w.kind))
+        .filter(|w| {
+            w.kind != "flash-storage" && !general_dma::owns(&w.kind) && !audio::owns(&w.kind)
+        })
     {
         match w.kind.as_str() {
             "imaging-serial-sink"
@@ -674,6 +677,7 @@ pub fn register_all(
         // Only a declared aperture exposes the flash backing on the bus.
         resources.storage.as_ref().filter(|_| aperture),
     )?;
+    audio::register_all(bus, windows)?;
     // Sensor command completion changes the receiver's active source. No
     // periodic polling deadline is needed to observe that causal edge.
     let sensors: Vec<_> = windows
