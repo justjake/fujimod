@@ -7,7 +7,7 @@
 use super::{
     manifest::BootState,
     firmware::Firmware,
-    rom_start::{self, RomStart},
+    rom_start::{self, Entry, RomStart},
 };
 use fujimod_catalog::reference::{ProcessorModel, RegionSize};
 use fujimod_catalog_configuration::{RunInputs, RunScene};
@@ -388,7 +388,14 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         kind: "boot-control".into(),
         options,
     });
-    let fragment = rom_start::Fragment::bundled()?;
+    let mut fragment = rom_start::Fragment::bundled()?;
+    let slot_base = match &rom.entry {
+        Entry::MaskRom(_) => 0xff9b_0000,
+        Entry::CardHandoff(handoff) => {
+            fragment.power_controller_registers.clone_from(&handoff.power_controller_registers);
+            handoff.slot
+        }
+    };
     state.ram.extend(fragment.ram);
     state.device.extend(fragment.device);
     for options in fragment.window_options {
@@ -428,8 +435,8 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     let slot = state
         .sd
         .iter_mut()
-        .find(|slot| slot.base == 0xff9b_0000)
-        .ok_or("ROM start needs the manifest's SD slot at 0xff9b0000")?;
+        .find(|slot| slot.base == slot_base)
+        .ok_or("early startup needs the SD card slot declared by its board facts")?;
     slot.present = rom.card_present;
     slot.files = rom.card_files.iter().map(|(name, _)| (name.clone(), name.clone())).collect();
     // The card model keeps only nonzero sectors and bounds them (the manifest's default holds a
@@ -452,6 +459,7 @@ pub(crate) fn open_from(
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
 ) -> Result<Opened, String> {
+    let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
     let rom_state;
     let state = match rom {
         Some(rom) => {
@@ -505,8 +513,9 @@ pub(crate) fn open_from(
     } else {
         xp5_boot::startup_from_profile(&resolved, firmware_profile, ticks_per_second)?
     };
-    if rom.is_some() {
+    if let Some(rom) = rom {
         let mpidr = Register::Arm64System(arm64::system_register("MPIDR_EL1")?);
+        let mut primary = true;
         for start in &mut startup.processors {
             let is_a53 = resolved
                 .reference
@@ -518,13 +527,26 @@ pub(crate) fn open_from(
                 continue;
             }
             let affinity = start.registers.iter().find(|(r, _)| *r == mpidr).map(|(_, v)| *v);
-            start.registers = vec![
-                (Register::Pc, rom_start::ROM_BASE),
-                (Register::Pstate, rom_start::ROM_PSTATE),
-            ];
+            match &rom.entry {
+                Entry::MaskRom(_) => {
+                    start.registers = vec![
+                        (Register::Pc, rom_start::ROM_BASE),
+                        (Register::Pstate, rom_start::ROM_PSTATE),
+                    ];
+                    // The ROM parks the secondary cores after reset.
+                    start.released = true;
+                }
+                Entry::CardHandoff(handoff) => {
+                    start.registers = vec![
+                        (Register::Pc, handoff.pc),
+                        (Register::Pstate, rom_start::ROM_PSTATE),
+                        (Register::Sp, handoff.sp),
+                    ];
+                    start.released = primary;
+                    primary = false;
+                }
+            }
             start.registers.extend(affinity.map(|v| (mpidr, v)));
-            // The ROM parks the secondaries itself (WFI at 0xfff02128).
-            start.released = true;
         }
     }
     // The manifest may extend the catalog body's DRAM map to what the firmware uses.
@@ -605,10 +627,9 @@ pub(crate) fn open_from(
         // memory mapping is read-only (host loading bypasses it), so no DMA master can overwrite
         // the ROM or the shadow. Cut by physical range: the M4's local addresses alias the same
         // windows, and the M4 gets no mapping for either window.
-        for (base, size) in [
-            (rom_start::ROM_BASE, rom_start::ROM_SIZE as u64),
-            (FLASH_APERTURE_BASE, FLASH_APERTURE_SIZE as u64),
-        ] {
+        for (base, size) in mask_rom.then_some((rom_start::ROM_BASE, rom_start::ROM_SIZE as u64))
+            .into_iter().chain([(FLASH_APERTURE_BASE, FLASH_APERTURE_SIZE as u64)])
+        {
             execution.peripherals = carve_out(std::mem::take(&mut execution.peripherals), base, size);
             let size = usize::try_from(size).map_err(|_| "region exceeds host address space")?;
             execution.ram.push(board::factory::Ram { base, size });
@@ -807,10 +828,10 @@ pub(crate) fn open_from(
         return Err("X100VI caller boot manifest has no device windows".into());
     }
     let mut images = initial_images(firmware, state)?;
-    if let Some(rom) = rom {
+    if let Some(Entry::MaskRom(bytes)) = rom.map(|rom| &rom.entry) {
         images.push(MemoryImage {
             address: rom_start::ROM_BASE,
-            bytes: rom.rom.clone(),
+            bytes: bytes.clone(),
         });
     }
     let run_scene = serde_json::to_value(run_scene).map_err(|error| error.to_string())?;
@@ -834,7 +855,8 @@ pub(crate) fn open_from(
         "mode": mode.name(),
         "quantum": quantum,
         "execution": {"kind":"xp5"},
-        "run_scene": run_scene
+        "run_scene": run_scene,
+        "startup": resolved.configuration.start
     });
     // A manifest DRAM override changes the machine, so it is part of the run's identity.
     if let (Some(dram), Some(object)) = (&state.dram, definition.as_object_mut()) {
@@ -860,6 +882,14 @@ pub(crate) fn open_from(
         images,
         scene,
     })?;
+    if let Some(Entry::CardHandoff(handoff)) = rom.map(|rom| &rom.entry) {
+        let stage = session.card_read(&format!("{:#x}", handoff.slot), rom_start::CARD_FILE_NAME,
+            None, handoff.stage_max_bytes)?;
+        if stage.is_empty() || stage.len() % 4 != 0 {
+            return Err("SD card stage must contain whole AArch64 instructions".into());
+        }
+        session.board.write_physical(handoff.pc, &stage)?;
+    }
     if rom.is_some() {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
     }

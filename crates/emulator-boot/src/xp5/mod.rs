@@ -92,12 +92,15 @@ pub(super) fn open_startup(
     }
     let mut runtime_files = Vec::new();
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard) {
-        let start = rom_start::RomStart::load(
-            rom_path.as_deref().ok_or("--start rom needs --rom FILE")?,
-            true,
-            card_files,
-            true,
-        )?;
+        let start = match (rom_path.as_deref(), start) {
+            (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?,
+            (None, RunStart::SdCard) => {
+                let handoff = rom_start::Handoff::for_firmware(&firmware_id)
+                    .ok_or("this SD card start requires --boot-rom")??;
+                rom_start::RomStart::from_card_handoff(handoff, card_files)?
+            }
+            (None, _) => return Err("ROM startup requires --boot-rom".into()),
+        };
         Some(match &sd_image {
             Some(image) => {
                 let start = start.with_card_image(image)?;

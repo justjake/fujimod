@@ -69,8 +69,35 @@ impl Fragment {
     }
 }
 
+/// Initial instruction source for an early boot.
+pub(crate) enum Entry {
+    MaskRom(Vec<u8>),
+    CardHandoff(Handoff),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Handoff {
+    pub pc: u64,
+    pub sp: u64,
+    pub slot: u64,
+    pub stage_max_bytes: usize,
+    pub power_controller_registers: BTreeMap<String, u16>,
+}
+
+impl Handoff {
+    pub fn for_firmware(firmware: &str) -> Option<Result<Self, String>> {
+        match firmware {
+            "xt5-431" => Some(toml::from_str(include_str!(
+                "../../../../catalog/firmware/xt5/4.31/xp5-boot/card-handoff.toml"
+            )).map_err(|error| format!("card-handoff.toml: {error}"))),
+            _ => None,
+        }
+    }
+}
+
 pub(crate) struct RomStart {
-    pub rom: Vec<u8>,
+    pub entry: Entry,
     pub source_straps: u32,
     /// `(file name on the card, bytes)`; the card is formatted in memory.
     pub card_files: Vec<(String, Vec<u8>)>,
@@ -101,11 +128,15 @@ impl RomStart {
         if digest != ROM_SHA256 {
             return Err(format!("boot ROM SHA-256 {digest} is not the captured ROM"));
         }
-        Self::with_rom(rom, dials_held, card_files, card_present)
+        Self::with_media(Entry::MaskRom(rom), dials_held, card_files, card_present)
     }
 
-    fn with_rom(
-        rom: Vec<u8>,
+    pub fn from_card_handoff(handoff: Handoff, files: Vec<(String, PathBuf)>) -> Result<Self, String> {
+        Self::with_media(Entry::CardHandoff(handoff), true, files, true)
+    }
+
+    fn with_media(
+        entry: Entry,
         dials_held: bool,
         card_files: Vec<(String, PathBuf)>,
         card_present: bool,
@@ -138,7 +169,7 @@ impl RomStart {
             files.push((name, bytes));
         }
         Ok(Self {
-            rom,
+            entry,
             source_straps: if dials_held { STRAPS_SD } else { STRAPS_DIRECT_FLASH },
             card_files: files,
             card_present,
@@ -165,13 +196,13 @@ mod tests {
     use super::*;
 
     fn start(dials_held: bool, files: Vec<(String, PathBuf)>) -> Result<RomStart, String> {
-        RomStart::with_rom(vec![0; ROM_SIZE], dials_held, files, true)
+        RomStart::with_media(Entry::MaskRom(vec![0; ROM_SIZE]), dials_held, files, true)
     }
 
     #[test]
     fn held_dials_pick_the_sd_straps() {
         let start = start(true, vec![]).unwrap();
-        assert_eq!(start.rom.len(), ROM_SIZE);
+        assert!(matches!(start.entry, Entry::MaskRom(ref bytes) if bytes.len() == ROM_SIZE));
         assert_eq!(start.source_straps, STRAPS_SD);
     }
 
