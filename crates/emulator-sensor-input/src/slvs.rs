@@ -392,6 +392,7 @@ mod tests {
                 dma: Some([162, 163]),
                 timing: [166, 164],
                 line_stride: false,
+                frame_start_pulse: Some(165),
             }),
             (0x59, 4),
         );
