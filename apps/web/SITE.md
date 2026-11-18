@@ -22,6 +22,25 @@ In this order:
    appears over the video. Captions are timed cues recorded by the reel's
    walkthrough with the video and drawn by the site over it.
 
+   A reel is edited from its recording by what each moment shows:
+
+   - Holds: a state the viewer must read (a picker with the chosen option
+     highlighted, the row showing its new value, the result in live view or
+     playback) stays on screen at least 1.2 s.
+   - Cuts: navigation between features (scrolling menu pages, switching
+     tabs, opening menus to reach a row) is cut out. The video cuts from the
+     last hold to the first frame of the next feature's own screen.
+   - Waits: idle time (live view settling, a menu opening, a page that is not
+     the subject) is trimmed to at most 0.3 s.
+   - Choices in a list scroll at a readable pace, about 0.15 s per row, and
+     hold on the chosen option before it is confirmed.
+   - Dial turns show several detents, about 0.4 s apart, with the value
+     indicator visible.
+
+   A caption appears at the cut into a feature's screen and stays until the
+   next feature's cut. It is a title in the top left of the video, not a
+   subtitle.
+
    - Shooting tools: ASPECT RATIO to 65:24, PHOTOMETRY to HIGHLIGHT, IMAGE
      QUALITY to FINE+RAW, zoom in with the digital teleconverter, shoot, and
      playback shows the zoomed 65:24 picture.
