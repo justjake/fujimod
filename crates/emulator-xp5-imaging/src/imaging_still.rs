@@ -1,5 +1,6 @@
 //! Modelled still data path of the X-T5 4.31 (opt-in, `XT5_STILL_PATH=real`):
-//! sensor RAW (RAW DMA unit 3) -> RIFP ConvertToYC -> RESZ ResizeToRecordSize -> JPEG main.
+//! sensor RAW (RAW DMA unit 3) -> RIFP ConvertToYC -> RESZ ResizeToRecordSize -> JPEG main,
+//! and RZL2 CreateInnerYC -> JPEG preview and thumbnail.
 //!
 //! # RIFP 0xffd02000 still runs
 //!
@@ -42,6 +43,24 @@
 //! In RCIZ queue mode (0x1486de0 -> 0x13be318) the driver writes only the destination words:
 //! the source is the RIFP inline stream. A start with source address 0 therefore reads the
 //! last RIFP output ([`YcOutput`]) at its pitch.
+//!
+//! # RZL2 0xff984000 (the same [`Resz`] with [`RZL2`])
+//!
+//! CreateInnerYC (step 0x26, 0x2d81e2c) runs RZL2 twice through 0x2d1d914 -> 0x2d3ba68: the
+//! main picture to buffer id 0x25 (640x480 preview), then id 0x25 to id 0x26 (160x120
+//! thumbnail). Its driver (parameters 0x14896d4 -> setter 0x13c055c, addresses 0x1489874 ->
+//! 0x13c0384; the mode 2 parameter block from 0x2d17678 / 0x2d15c20) programs the RESZ layout
+//! with every address word 4 bytes lower:
+//!
+//! * +0x10 formats (source class bits 0..1, destination class bits 4..5), +0x14 source size,
+//!   +0x18 crop origin, +0x1c crop size, +0x20 output size, encoded as for RESZ (0x2d17678
+//!   subtracts one from even counts);
+//! * +0xcc / +0xd0 source address bits 34..32 / 31..0, +0xd4 / +0xd8 source second plane,
+//!   +0xdc source pitch; +0xe0 / +0xe4, +0xe8 / +0xec and +0xf0 the same for the destination.
+//!
+//! The first pass reads every other line of the main picture (0x2d1776c doubles the source
+//! pitch and halves its lines), which the programmed words already express. RZL2 has no inline
+//! source: a start with source address 0 refuses.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::xtrans;
@@ -90,29 +109,76 @@ impl YcOutput {
     }
 }
 
-/// The words of one RESZ start.
+/// Where a scaler of the RESZ family keeps its address words (see the module notes); the size
+/// words (+0x14..+0x20) are common.
+#[derive(Debug)]
+pub struct Layout {
+    /// The block's name in log lines.
+    pub block: &'static str,
+    /// The device name ([`Device::name`]), the manifest window kind.
+    pub kind: &'static str,
+    /// Source address bits 34..32; bits 31..0 follow at +4, the second plane at +8 / +0xc and
+    /// the pitch at +0x10.
+    pub source: u64,
+    /// The same for the destination.
+    pub output: u64,
+    /// Whether a zero source address reads the RIFP still output (RCIZ inline).
+    pub inline: bool,
+}
+
+/// RESZ 0xffd0c000.
+pub static RESZ: Layout = Layout {
+    block: "RESZ",
+    kind: "imaging-resz",
+    source: 0xd0,
+    output: 0xe4,
+    inline: true,
+};
+
+/// RZL2 0xff984000.
+pub static RZL2: Layout = Layout {
+    block: "RZL2",
+    kind: "imaging-rzl2",
+    source: 0xcc,
+    output: 0xe0,
+    inline: false,
+};
+
+impl Layout {
+    fn words(&self) -> impl Iterator<Item = u64> + '_ {
+        [0x10, 0x14, 0x18, 0x1c, 0x20]
+            .into_iter()
+            .chain([self.source, self.output].into_iter().flat_map(|o| (0..5).map(move |i| o + 4 * i)))
+    }
+}
+
+/// The words of one RESZ (or RZL2) start.
 #[derive(Clone, Debug)]
 pub struct ReszJob {
     base: u64,
+    layout: &'static Layout,
     words: std::collections::BTreeMap<u64, u32>,
 }
-const RESZ_WORDS: [u64; 15] = [
-    0x10, 0x14, 0x18, 0x1c, 0x20, 0xd0, 0xd4, 0xd8, 0xdc, 0xe0, 0xe4, 0xe8, 0xec, 0xf0, 0xf4,
-];
 
 impl ReszJob {
     /// Scale this job's picture; `inline` replaces a zero source address.
     pub fn scale(&self, cx: &mut Cx<'_>, inline: Option<YcPicture>) -> Result<(), String> {
         let word = |o: u64| self.words.get(&o).copied().unwrap_or(0);
-        let address = |high, low| u64::from(word(low)) | (u64::from(word(high) & 7) << 32);
+        let address = |high: u64| u64::from(word(high + 4)) | (u64::from(word(high) & 7) << 32);
         let size = |w: u32| ((w & 0xffff) as usize + 1, (w >> 16) as usize + 1);
-        let (mut source, mut pitch) = (address(0xd0, 0xd4), word(0xe0) as usize);
-        let (output, out_pitch) = (address(0xe4, 0xe8), word(0xf4) as usize);
+        let (src, dst) = (self.layout.source, self.layout.output);
+        let (mut source, mut pitch) = (address(src), word(src + 0x10) as usize);
+        let (output, out_pitch) = (address(dst), word(dst + 0x10) as usize);
+        let name = self.layout.block;
         let from_rifp = source == 0;
         if from_rifp {
-            let picture = inline.ok_or(
-                "RESZ start with source address 0 (RCIZ inline) but no RIFP still output",
-            )?;
+            let picture = inline.ok_or_else(|| {
+                if self.layout.inline {
+                    format!("{name} start with source address 0 (RCIZ inline) but no RIFP still output")
+                } else {
+                    format!("{name} start with source address 0")
+                }
+            })?;
             (source, pitch) = (picture.address, picture.pitch as usize);
         }
         let (width, lines) = size(word(0x14));
@@ -123,23 +189,24 @@ impl ReszJob {
         };
         let out = size(word(0x20));
         let geometry = format!(
-            "RESZ {:#x}: source {source:#x}{} pitch {pitch:#x} size {width}x{lines}, crop {crop:?} \
+            "{name} {:#x}: source {source:#x}{} pitch {pitch:#x} size {width}x{lines}, crop {crop:?} \
              at {origin:?}, output {out:?} at {output:#x} pitch {out_pitch:#x} (+0x10 {:#x})",
             self.base,
             if from_rifp { " (RIFP output)" } else { "" },
             word(0x10)
         );
         // The X-T5 4.31 still ResizeToRecordSize run programs a second source/destination plane
-        // (+0xd8/+0xdc, +0xec/+0xf0) next to the packed 4:2:2 main plane that the JPEG main encode
-        // reads (0x32e1e000, 2 bytes per pixel). Its format is not decoded: scale plane 0 only and
-        // name the second plane in the log line.
-        let geometry = if [0xd8, 0xdc, 0xec, 0xf0].iter().any(|&o| word(o) != 0) {
+        // (RESZ +0xd8/+0xdc, +0xec/+0xf0) next to the packed 4:2:2 main plane that the JPEG main
+        // encode reads (0x32e1e000, 2 bytes per pixel). Its format is not decoded: scale plane 0
+        // only and name the second plane in the log line.
+        let planes = [src + 8, src + 0xc, dst + 8, dst + 0xc];
+        let geometry = if planes.iter().any(|&o| word(o) != 0) {
             format!(
                 "{geometry}; second plane source {:#x}:{:#x} destination {:#x}:{:#x} not modelled",
-                word(0xd8),
-                word(0xdc),
-                word(0xec),
-                word(0xf0)
+                word(planes[0]),
+                word(planes[1]),
+                word(planes[2]),
+                word(planes[3])
             )
         } else {
             geometry
@@ -270,28 +337,52 @@ pub fn rifp_run(
     })
 }
 
-/// RESZ 0xffd0c000: a completion stub that, with the still path, scales at each start (see
-/// the module notes). Without it (`rifp` `None`) it is the stub alone.
+/// RESZ 0xffd0c000 or RZL2 0xff984000 ([`Layout`]): a completion stub that, with the still
+/// path, scales at each start (see the module notes). Without it (`rifp` `None`) it is the stub
+/// alone.
 pub struct Resz {
     base: u64,
+    layout: &'static Layout,
     stub: CompletionStub,
     rifp: Option<YcOutput>,
 }
 
 impl Resz {
+    /// RESZ ([`RESZ`]).
     pub fn new(base: u64, stub: CompletionStub, rifp: Option<YcOutput>) -> Self {
-        Self { base, stub, rifp }
+        Self::with_layout(&RESZ, base, stub, rifp)
     }
-    /// A start: scale now, or, with source address 0 while a RIFP run is in progress, when
-    /// that run ends.
+    pub fn with_layout(
+        layout: &'static Layout,
+        base: u64,
+        stub: CompletionStub,
+        rifp: Option<YcOutput>,
+    ) -> Self {
+        Self {
+            base,
+            layout,
+            stub,
+            rifp,
+        }
+    }
+    /// A start: scale now, or, with an inline layout and source address 0 while a RIFP run is
+    /// in progress, when that run ends.
     fn start(&self, cx: &mut Cx<'_>, rifp: &YcOutput) -> Result<(), String> {
         let job = ReszJob {
             base: self.base,
-            words: RESZ_WORDS.iter().map(|&o| (o, self.stub.word(o))).collect(),
+            layout: self.layout,
+            words: self.layout.words().map(|o| (o, self.stub.word(o))).collect(),
         };
+        if !self.layout.inline {
+            return job.scale(cx, None);
+        }
+        let source = self.layout.source;
         let mut shared = rifp.0.lock().unwrap();
-        if job.words[&0xd0] & 7 == 0 && job.words[&0xd4] == 0 && shared.rifp_busy {
-            cx.log(&format!("RESZ {:#x}: inline start waits for the RIFP run", self.base));
+        if job.words[&source] & 7 == 0 && job.words[&(source + 4)] == 0 && shared.rifp_busy {
+            cx.log(&format!(
+                "{} {:#x}: inline start waits for the RIFP run",
+                self.layout.block, self.base
+            ));
             shared.deferred = Some(job);
             return Ok(());
         }
@@ -303,7 +394,7 @@ impl Resz {
 
 impl Device for Resz {
     fn name(&self) -> &'static str {
-        "imaging-resz"
+        self.layout.kind
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.stub.read(cx, address, size)
@@ -590,6 +681,92 @@ mod tests {
             assert_eq!(&host.ram[at..at + 24], [y, y, cb, cr].repeat(6).as_slice());
         }
         assert_eq!(shared.get().map(|p| p.address), Some(RAM + 0x1000));
+    }
+
+    /// RZL2: the RESZ layout with the address words 4 bytes lower and no inline source. Two
+    /// starts as CreateInnerYC programs them: every other line of the main picture to the
+    /// preview, then the preview to the thumbnail.
+    #[test]
+    fn rzl2_scales_with_its_address_words_and_refuses_a_zero_source() {
+        let options = toml::from_str(
+            "irq = 205\n\
+             registers = [{ offset = 0x00, mode = \"constant\", value = 0x1 }]\n\
+             starts = [{ offset = 0x04, mask = 0x1 }]\n\
+             delay_us = 200\n\
+             completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]\n\
+             ack = { offset = 0x108, mode = \"w1c\", status_offset = 0x104, bits = 0x7 }",
+        )
+        .unwrap();
+        let base = 0xff984000;
+        let mut rzl2 = Resz::with_layout(
+            &RZL2,
+            base,
+            CompletionStub::new(base, 0x1000, options, 1000).unwrap(),
+            Some(YcOutput::default()),
+        );
+        assert_eq!(rzl2.name(), "imaging-rzl2");
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        host.ram[..80].copy_from_slice(&picture(8, 4, 20));
+        // Pass 1: lines 0 and 2 (pitch doubled, 2 lines) of the 8x4 picture to 4x2.
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [
+            (0x14, 1 << 16 | 7),
+            (0x1c, 1 << 16 | 7),
+            (0x20, 1 << 16 | 3),
+            (0xd0, RAM as u32),
+            (0xdc, 40),
+            (0xe4, RAM as u32 + 0x1000),
+            (0xf0, 16),
+            (0x04, 1),
+        ] {
+            rzl2.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(&host.ram[0x1000..0x1008], [0, 2, 0x80, 0x40, 4, 6, 0x82, 0x40]);
+        assert_eq!(&host.ram[0x1010..0x1018], [32, 34, 0x80, 0x42, 36, 38, 0x82, 0x42]);
+        host.now = rzl2.next_deadline(0).unwrap();
+        rzl2.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(rzl2.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4) & 1, 1);
+        assert!(host.irqs.contains(&(205, true)));
+        rzl2.write(&mut Cx::new(&mut host, 0, 0, 0), base + 0x108, 4, 7);
+        // Pass 2: the 4x2 preview to 2x1.
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [
+            (0x14, 1 << 16 | 3),
+            (0x1c, 1 << 16 | 3),
+            (0x20, 1),
+            (0xd0, RAM as u32 + 0x1000),
+            (0xdc, 16),
+            (0xe4, RAM as u32 + 0x1800),
+            (0xf0, 4),
+            (0x04, 1),
+        ] {
+            rzl2.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(&host.ram[0x1800..0x1804], [0, 4, 0x80, 0x40]);
+        // A zero source address refuses, although a RIFP output exists.
+        let mut rzl2 = Resz::with_layout(
+            &RZL2,
+            base,
+            CompletionStub::new(base, 0x1000, toml::from_str("starts = [{ offset = 0x04, mask = 0x1 }]\ndelay_us = 200").unwrap(), 1000).unwrap(),
+            Some(YcOutput::default()),
+        );
+        rzl2.rifp.as_ref().unwrap().set(Some(YcPicture {
+            address: RAM,
+            pitch: 20,
+            width: 8,
+            lines: 4,
+        }));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [(0x14, 3 << 16 | 7), (0x20, 3 << 16 | 7), (0xe4, RAM as u32 + 0x1000), (0xf0, 16), (0x04, 1)] {
+            rzl2.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_some());
     }
 
     fn resz_with(picture: YcPicture) -> Resz {
