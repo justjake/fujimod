@@ -1558,6 +1558,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-contacts"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-controls",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-catalog-controls"
 version = "0.1.0"
 dependencies = [
@@ -1813,12 +1824,14 @@ dependencies = [
  "fujimod-catalog-assets",
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
+ "fujimod-catalog-contacts",
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-catalog-run-inputs",
  "fujimod-emulator",
  "fujimod-emulator-board-graph",
+ "fujimod-emulator-contacts",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
@@ -1856,12 +1869,28 @@ name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-configuration",
+ "fujimod-catalog-contacts",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
+ "fujimod-emulator-contacts",
  "fujimod-emulator-cpu",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
  "fujimod-workspace-hack",
+ "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-contacts"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-contacts",
+ "fujimod-catalog-controls",
+ "fujimod-emulator-devices",
+ "fujimod-emulator-session",
+ "fujimod-workspace-hack",
+ "serde",
  "serde_json",
 ]
 
@@ -2910,12 +2939,16 @@ name = "fujimod-mcp-camera"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
+ "fujimod-emulator-contacts",
  "fujimod-emulator-cpu",
  "fujimod-emulator-session",
  "fujimod-mcp-core",
+ "fujimod-remote",
  "fujimod-workspace-hack",
+ "futures-lite",
  "rmcp",
  "schemars",
  "serde",

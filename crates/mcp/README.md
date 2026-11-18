@@ -56,7 +56,8 @@ To SD boot an X70 1.10 from a FujiMod SD card directory:
 | `camera_open`, `camera_list`, `camera_close` | Open, list and close cameras |
 | `camera_checkpoint`, `camera_restore` | Save and return to named checkpoints, optionally files |
 | `camera_run` | Advance guest seconds, or until REC |
-| `camera_keys`, `camera_press` | List key names; press, release and settle |
+| `camera_controls` | Control ids, kinds and positions |
+| `camera_press`, `camera_turn` | Press a control or turn a rotary control, each edge confirmed by the firmware's key scanner, then settle |
 | `camera_screen`, `camera_state` | Screen and state without advancing time |
 | `camera_read_memory` | Physical memory as a hex dump or file |
 | `camera_profile_start`, `camera_profile_collect`, `camera_profile_show`, `camera_profile_diff` | Instructions executed per basic block, and what changed between two runs |
@@ -64,6 +65,11 @@ To SD boot an X70 1.10 from a FujiMod SD card directory:
 Every camera runs on its own thread; calls to different cameras proceed in
 parallel. Open cameras with `execution_policy` `exact` when their runs will
 be compared, so a restored checkpoint replays the same way.
+
+Controls connect when first used, once the firmware has loaded its
+configuration: `fujimod-emulator-contacts` compiles the camera's contact
+panel and contact driver from the catalog and installs them. A camera
+opened from a checkpoint file adopts the contacts saved with it.
 
 To find the code that handles a key: checkpoint, profile an idle run of the
 same length as the press, restore, profile the press, and diff the two.

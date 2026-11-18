@@ -1,14 +1,12 @@
 //! One emulated camera, owned by its thread.
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, path::PathBuf};
 
+use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_boot::{
-    self as boot,
-    host::{self, KeyEdge},
-    keys::Exr2Keys,
-};
+use fujimod_emulator_boot::{self as boot, host};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
+use fujimod_remote::{BoardRemote, Control, board::Options as RemoteOptions, operations};
 use serde_json::{Value, json};
 
 use crate::OpenParams;
@@ -58,6 +56,36 @@ pub struct Camera {
     quantum: usize,
     checkpoints: BTreeMap<String, Snapshot>,
     profiling: bool,
+    /// Firmware facts `fujimod-remote` reads to deliver and confirm inputs.
+    facts: Facts,
+}
+
+/// The catalog facts `fujimod-remote` needs for a resolved selection.
+fn remote_facts(resolved: &ResolvedConfiguration) -> Result<Facts, String> {
+    let selection = &resolved.reference;
+    let input = Selection {
+        firmware_id: &selection.firmware.id,
+        body_id: &selection.body.id,
+        firmware_sha256: selection
+            .firmware
+            .update
+            .as_ref()
+            .map(|content| content.sha256.as_str()),
+        remote_facts: selection
+            .firmware
+            .generated_facts
+            .as_ref()
+            .and_then(|facts| facts.remote.as_ref()),
+        physical_controls: selection.physical_controls.as_ref(),
+        control_ids: selection.control_ids.as_ref(),
+        connections: selection
+            .body
+            .connections
+            .iter()
+            .map(|connection| connection.id.as_str())
+            .collect(),
+    };
+    Facts::from_selection(&input, None)
 }
 
 /// Every file under `directory`, named by its path relative to it.
@@ -128,12 +156,14 @@ impl Camera {
                 .board
                 .set_execution_policy(ExecutionPolicy::parse(policy)?)?;
         }
+        let facts = remote_facts(&resolved)?;
         let mut camera = Self {
             session,
             resolved,
             quantum,
             checkpoints: BTreeMap::new(),
             profiling: false,
+            facts,
         };
         let started = std::time::Instant::now();
         if let Some(snapshot) = &request.snapshot {
@@ -144,11 +174,21 @@ impl Camera {
         } else {
             let edges = host::parse_keys(request.keys.as_deref(), None)?;
             let automatic_setup = edges.is_empty();
-            let mut keys = Exr2Keys::new(&camera.resolved, edges)?;
+            let mut keys = fujimod_emulator_contacts::Keys::new(
+                &camera.resolved.reference,
+                edges.into_iter().map(|edge| {
+                    (
+                        host::duration_ticks(edge.delay, TICKS_PER_SECOND),
+                        edge.name,
+                        edge.pressed,
+                    )
+                }),
+                TICKS_PER_SECOND,
+            )?;
             if let Some(levels) = &request.gpio {
                 for level in levels.split(',') {
                     let (port, pin, high) = host::parse_gpio(level.trim())?;
-                    keys.gpio_input(&mut camera.session, port, pin, high)?;
+                    fujimod_emulator_contacts::set_gpio(&mut camera.session, port, pin, high)?;
                 }
             }
             let start = camera.session.board.now();
@@ -199,28 +239,22 @@ impl Camera {
         Ok((summary, png))
     }
 
-    /// The key names `press` accepts, from the firmware's control ids.
-    pub fn keys(&self) -> Value {
-        let inputs = self
-            .resolved
-            .reference
-            .control_ids
-            .as_ref()
-            .and_then(|ids| ids.get("inputs"))
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        inputs
-            .iter()
-            .filter_map(|input| {
-                let key = input.get("debug_key")?.as_str()?;
-                Some(json!({
-                    "key": key,
-                    "target": input.get("target"),
-                    "electrical": input.get("electrical").and_then(|e| e.get("kind")),
-                }))
-            })
-            .collect()
+    /// Install the contact panel and driver once the firmware has loaded
+    /// its configuration.
+    fn connect(&mut self) -> Result<(), String> {
+        fujimod_emulator_contacts::connect(
+            &mut self.session,
+            &self.resolved.reference,
+            TICKS_PER_SECOND,
+        )
+        .map(|_| ())
+    }
+
+    /// The controls `press` and `turn` accept, with their positions.
+    pub fn controls(&mut self) -> Result<Value, String> {
+        self.connect()?;
+        let state = self.session.control_state()?;
+        serde_json::to_value(&state.inputs).map_err(|error| error.to_string())
     }
 
     fn progress(&self) -> (Vec<u64>, u64) {
@@ -247,25 +281,13 @@ impl Camera {
         Ok(())
     }
 
-    /// Run for guest seconds, applying key edges relative to the start.
-    pub fn run_for(&mut self, seconds: f64, edges: Vec<KeyEdge>) -> Result<(), String> {
+    /// Run for guest seconds.
+    pub fn run_for(&mut self, seconds: f64) -> Result<(), String> {
         if !(seconds.is_finite() && (0.0..=3600.0).contains(&seconds)) {
             return Err("seconds must be between 0 and 3600".into());
         }
-        let mut keys = Exr2Keys::new(&self.resolved, edges)?;
-        let start = self.session.board.now();
-        let end = start + (seconds * TICKS_PER_SECOND as f64) as u64;
-        loop {
-            let next = keys.advance(&mut self.session, start)?;
-            let now = self.session.board.now();
-            let until = match next {
-                None if now >= end => return Ok(()),
-                None => end,
-                Some(at) if now >= end => at,
-                Some(at) => at.min(end),
-            };
-            self.run_to(until)?;
-        }
+        let end = self.session.board.now() + (seconds * TICKS_PER_SECOND as f64) as u64;
+        self.run_to(end)
     }
 
     pub fn run_to_rec(&mut self, instruction_limit: u64) -> Result<(), String> {
@@ -280,23 +302,52 @@ impl Camera {
         .map(|_| ())
     }
 
-    pub fn press(&mut self, key: &str, hold_ms: u64, settle_ms: u64) -> Result<(), String> {
-        if hold_ms == 0 || hold_ms > 60_000 || settle_ms > 600_000 {
-            return Err("hold_ms must be 1..60000 and settle_ms at most 600000".into());
+    /// Deliver one operation through `fujimod-remote`, which waits until the
+    /// firmware accepts input and confirms the scanner registered it.
+    fn operate(
+        &mut self,
+        operation: impl for<'r> FnOnce(
+            &'r mut BoardRemote<&mut Session>,
+            u64,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), String>> + 'r>,
+        >,
+    ) -> Result<(), String> {
+        self.connect()?;
+        let options = RemoteOptions {
+            quantum: self.quantum,
+            window_instructions: 100_000,
+            scanout_node: boot::scanout_node(&self.session)?,
+            output: "lcd".into(),
+            // The EXR II display-timing model counts completed LCD frames here.
+            frame_counter_kind: "display-timing".into(),
+            frame_counter_pointer: "/0/banks/1/frames".into(),
+        };
+        let deadline = self.session.board.now() + 5 * TICKS_PER_SECOND;
+        let mut remote = BoardRemote::new(&mut self.session, self.facts.clone(), options)?;
+        futures_lite::future::block_on(operation(&mut remote, deadline))
+    }
+
+    pub fn press(&mut self, control: &str, settle_ms: u64) -> Result<(), String> {
+        if settle_ms > 600_000 {
+            return Err("settle_ms must be at most 600000".into());
         }
-        let edges = vec![
-            KeyEdge {
-                delay: Duration::ZERO,
-                name: key.into(),
-                pressed: true,
-            },
-            KeyEdge {
-                delay: Duration::from_millis(hold_ms),
-                name: key.into(),
-                pressed: false,
-            },
-        ];
-        self.run_for((hold_ms + settle_ms) as f64 / 1000.0, edges)
+        let control = Control::new(control);
+        self.operate(move |remote, deadline| {
+            Box::pin(async move { operations::press(remote, &control, deadline).await })
+        })?;
+        self.run_for(settle_ms as f64 / 1000.0)
+    }
+
+    pub fn turn(&mut self, control: &str, steps: i32, settle_ms: u64) -> Result<(), String> {
+        if settle_ms > 600_000 || steps.unsigned_abs() > 100 {
+            return Err("steps must be within 100 and settle_ms at most 600000".into());
+        }
+        let control = Control::new(control);
+        self.operate(move |remote, deadline| {
+            Box::pin(async move { operations::turn(remote, &control, steps, deadline).await })
+        })?;
+        self.run_for(settle_ms as f64 / 1000.0)
     }
 
     pub fn checkpoint(&mut self, name: &str, file: Option<&str>) -> Result<Value, String> {

@@ -31,11 +31,11 @@ use camera::{Camera, OpenRequest};
 use profile::Profile;
 
 const INSTRUCTIONS: &str = "Emulated cameras that stay running between calls. Open one with \
-camera_open (it boots to REC, or restores a checkpoint file), then press keys with camera_press \
-and read the reply's screen and state. Save named checkpoints with camera_checkpoint and return to \
-them with camera_restore instead of booting again. To find what code runs, call \
-camera_profile_start, act, then camera_profile_collect; compare two collections with \
-camera_profile_diff.";
+camera_open (it boots to REC, or restores a checkpoint file), list its controls with \
+camera_controls, then operate them with camera_press or camera_turn and read the reply's screen \
+and state. Save named checkpoints with camera_checkpoint and return to them with camera_restore \
+instead of booting again. To find what code runs, call camera_profile_start, act, then \
+camera_profile_collect; compare two collections with camera_profile_diff.";
 
 type Job = Box<dyn FnOnce(&mut Camera) + Send>;
 
@@ -217,12 +217,25 @@ pub struct RunParams {
 pub struct PressParams {
     /// Camera name.
     pub camera: String,
-    /// Key name from camera_keys (the firmware's debug key name, such as
-    /// `EXE_M` for MENU/OK) or a body connection id.
-    pub key: String,
-    /// Milliseconds the key stays down. Defaults to 150.
-    pub hold_ms: Option<u64>,
-    /// Guest milliseconds to keep running after release. Defaults to 500.
+    /// Control id from camera_controls, such as `menu_ok_button`, or a pad
+    /// direction such as `selector.up`.
+    pub control: String,
+    /// Guest milliseconds to keep running after the firmware registers the
+    /// release. Defaults to 500.
+    pub settle_ms: Option<u64>,
+    /// Return the screen afterwards. Defaults to true.
+    pub screen: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct TurnParams {
+    /// Camera name.
+    pub camera: String,
+    /// Rotary control id from camera_controls.
+    pub control: String,
+    /// Detents to turn; negative turns the other way.
+    pub steps: i32,
+    /// Guest milliseconds to keep running afterwards. Defaults to 500.
     pub settle_ms: Option<u64>,
     /// Return the screen afterwards. Defaults to true.
     pub screen: Option<bool>,
@@ -357,15 +370,15 @@ checkpoint files remain."
     }
 
     #[tool(
-        description = "List the key names camera_press accepts for this camera, with the \
-control each one operates."
+        description = "List the camera's controls: ids for camera_press and camera_turn, their \
+kinds, positions, and why any control is unavailable."
     )]
-    async fn camera_keys(
+    async fn camera_controls(
         &self,
         Parameters(CameraParams { camera }): Parameters<CameraParams>,
     ) -> Result<CallToolResult, ErrorData> {
-        match self.on(&camera, |camera| Ok(camera.keys())).await {
-            Ok(keys) => reply(json!({ "keys": keys }), None),
+        match self.on(&camera, |camera| camera.controls()).await {
+            Ok(controls) => reply(json!({ "controls": controls }), None),
             Err(error) => failed(error),
         }
     }
@@ -432,7 +445,7 @@ the state and screen."
                     camera.run_to_rec(instruction_limit.unwrap_or(2_000_000_000))?;
                 } else {
                     let seconds = seconds.ok_or("give seconds or until_rec")?;
-                    camera.run_for(seconds, Vec::new())?;
+                    camera.run_for(seconds)?;
                 }
                 camera.observe(screen.unwrap_or(true))
             })
@@ -444,8 +457,9 @@ the state and screen."
     }
 
     #[tool(
-        description = "Press and release a key, keep running for `settle_ms`, and return the \
-new state and screen."
+        description = "Press and release a control. Waits until the firmware is ready for input \
+and confirms its key scanner registered the press and the release, keeps running for \
+`settle_ms`, and returns the new state and screen."
     )]
     async fn camera_press(
         &self,
@@ -453,14 +467,40 @@ new state and screen."
     ) -> Result<CallToolResult, ErrorData> {
         let PressParams {
             camera,
-            key,
-            hold_ms,
+            control,
             settle_ms,
             screen,
         } = params;
         let result = self
             .on(&camera, move |camera| {
-                camera.press(&key, hold_ms.unwrap_or(150), settle_ms.unwrap_or(500))?;
+                camera.press(&control, settle_ms.unwrap_or(500))?;
+                camera.observe(screen.unwrap_or(true))
+            })
+            .await;
+        match result {
+            Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Turn a rotary control by detents, keep running for `settle_ms`, and \
+return the new state and screen."
+    )]
+    async fn camera_turn(
+        &self,
+        Parameters(params): Parameters<TurnParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let TurnParams {
+            camera,
+            control,
+            steps,
+            settle_ms,
+            screen,
+        } = params;
+        let result = self
+            .on(&camera, move |camera| {
+                camera.turn(&control, steps, settle_ms.unwrap_or(500))?;
                 camera.observe(screen.unwrap_or(true))
             })
             .await;

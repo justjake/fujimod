@@ -15,8 +15,6 @@ pub mod patch;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod mod_loader;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod keys;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
 pub mod host;
@@ -39,9 +37,6 @@ use fujimod_catalog_configuration::{
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog_assets::Content;
-use fujimod_catalog_controls::{
-    AdcInterval, ElectricalInput, InputTarget, facts::ConfigurationLocation,
-};
 use fujimod_emulator_cpu::arm::Coprocessor;
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
 use serde::Serialize;
@@ -128,19 +123,10 @@ struct Readiness {
     operation_alert_timer: Option<u64>,
 }
 #[derive(Clone)]
-struct AdcKey {
-    key_id: String,
-    adc: String,
-    channel: usize,
-    calibration_pointer: u64,
-    calibration_is_pointer: bool,
-    lower_offset: u64,
-    upper_offset: u64,
-}
-
-#[derive(Clone)]
 struct FirstStart {
-    key: AdcKey,
+    /// Debug key name pressed to accept a first-start page.
+    key: String,
+    located: fujimod_catalog_contacts::Located,
     hold_ticks: u64,
     settle_ticks: u64,
     max_presses: usize,
@@ -190,116 +176,16 @@ fn first_start_key(
     let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
-    let key = calibrated_key(resolved, inputs, key_id)?;
+    let located = fujimod_catalog_contacts::locate(&resolved.reference)?;
+    fujimod_emulator_contacts::check_key(&located, &resolved.reference, key_id)
+        .map_err(|error| format!("first-start key {key_id}: {error}"))?;
     Ok(Some(FirstStart {
-        key,
+        key: key_id.to_owned(),
+        located,
         hold_ticks: policy.hold_ticks,
         settle_ticks: policy.settle_ticks,
         max_presses: usize::from(policy.max_presses),
     }))
-}
-
-fn calibrated_key(resolved: &ResolvedConfiguration, inputs: &Exr2RunInputs, key_id: &str) -> Result<AdcKey, String> {
-    let facts = resolved
-        .reference
-        .firmware
-        .generated_facts
-        .as_ref()
-        .ok_or("first-start input requires generated firmware control facts")?;
-    let controls: fujimod_catalog_controls::FirmwareControlIds = serde_json::from_value(
-        resolved
-        .reference
-        .control_ids
-        .clone()
-        .ok_or("first-start input requires firmware control IDs")?,
-    )
-    .map_err(|error| format!("firmware control IDs: {error}"))?;
-    let mut matches = controls.inputs.iter().filter(|input| {
-        input.debug_key.as_deref() == Some(key_id)
-            && matches!(input.target, InputTarget::Control { .. })
-            && input.electrical.is_some()
-    });
-    let input = matches
-        .next()
-        .ok_or_else(|| format!("firmware has no control predicate for key {}", key_id))?;
-    if matches.next().is_some() {
-        return Err(format!(
-            "firmware key {} has ambiguous physical control predicates",
-            key_id
-        ));
-    }
-    let Some(ElectricalInput::Adc {
-        connection_id,
-        intervals,
-        callback: None,
-        ..
-    }) = &input.electrical
-    else {
-        return Err(format!(
-            "firmware key {} has no direct ADC predicate",
-            key_id
-        ));
-    };
-    let [
-        AdcInterval::ConfigurationU16 {
-            lower,
-            upper,
-            when: None,
-            unless,
-        },
-    ] = intervals.as_slice()
-    else {
-        return Err(format!(
-            "firmware key {} requires one ADC calibration interval",
-            key_id
-        ));
-    };
-    if !unless.is_empty() {
-        return Err(format!(
-            "firmware key {} has a conditional ADC calibration interval",
-            key_id
-        ));
-    }
-    let connection = resolved
-        .reference
-        .body
-        .connections
-        .iter()
-        .find(|connection| connection.id == *connection_id)
-        .ok_or("first-start ADC connection is absent from the body")?;
-    let channel = connection
-        .signals
-        .iter()
-        .filter_map(|signal| match signal {
-            fujimod_catalog::reference::ConnectionSignal::Adc { channel, .. } => {
-                Some(usize::from(*channel))
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    if channel.len() != 1 || inputs.adc.block_id != "adc" {
-        return Err("first-start ADC target is ambiguous or unsupported".into());
-    }
-    let cfgdata: ConfigurationLocation = serde_json::from_value(
-        facts
-            .cfgdata_location
-            .clone()
-            .ok_or("first-start calibration has no firmware configuration-block location")?,
-    )
-    .map_err(|error| format!("firmware configuration-block location: {error}"))?;
-    let (calibration_pointer, calibration_is_pointer) = match cfgdata {
-        ConfigurationLocation::Pointer { address } => (address, true),
-        ConfigurationLocation::Direct { address } => (address, false),
-    };
-    Ok(AdcKey {
-        key_id: key_id.to_owned(),
-        adc: inputs.adc.block_id.clone(),
-        channel: channel[0],
-        calibration_pointer,
-        calibration_is_pointer,
-        lower_offset: u64::from(*lower),
-        upper_offset: u64::from(*upper),
-    })
 }
 
 fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
@@ -612,11 +498,7 @@ impl Prepared {
                     }
                 },
                 "first_start": self.first_start.as_ref().map(|start| json!({
-                    "key_id":start.key.key_id,
-                    "adc":start.key.adc,"channel":start.key.channel,
-                    "calibration_pointer":start.key.calibration_pointer,
-                    "calibration_is_pointer":start.key.calibration_is_pointer,
-                    "lower_offset":start.key.lower_offset,"upper_offset":start.key.upper_offset,
+                    "key_id":start.key,
                     "hold_ticks":start.hold_ticks,"settle_ticks":start.settle_ticks,
                     "max_presses":start.max_presses,
                 })),
@@ -1506,41 +1388,20 @@ fn session_prepared(session: &Session) -> Result<Prepared, String> {
     Ok(prepared)
 }
 
-fn calibrated_sample(session: &Session, key: &AdcKey) -> Result<u16, String> {
-    let base = if key.calibration_is_pointer {
-        u64::from(word(session, key.calibration_pointer)?)
-    } else {
-        key.calibration_pointer
-    };
-    let half = |offset| -> Result<u16, String> {
-        let mut bytes = [0; 2];
-        session.board.read_physical(base + offset, &mut bytes)?;
-        Ok(u16::from_le_bytes(bytes))
-    };
-    let lower = half(key.lower_offset)?;
-    let upper = half(key.upper_offset)?;
-    if lower >= upper || upper >= 1023 {
-        return Err(format!("{} calibration does not describe a pressed ADC interval", key.key_id));
-    }
-    Ok((lower + upper) / 2)
-}
-
 fn press_setup_key(
     session: &mut Session,
     spec: &Prepared,
     s: &FirstStart,
     driver: &mut Driver<'_>,
 ) -> Result<(), String> {
-    let sample = calibrated_sample(session, &s.key)?;
-    let original = session.adc_samples(&s.key.adc)?;
-    let mut pressed = original.clone();
-    *pressed
-        .get_mut(s.key.channel)
-        .ok_or("first-start key ADC channel is absent")? = sample;
-    session.set_adc_samples(&s.key.adc, &pressed)?;
+    let selection = &spec.resolved.reference;
+    let key = |session: &mut Session, pressed| {
+        fujimod_emulator_contacts::set_key(session, selection, &s.located, &s.key, pressed, EXR2_TICKS_PER_SECOND)
+    };
+    key(session, true)?;
     let held = driver.advance_ticks(session, spec, s.hold_ticks);
     // Release even if the instruction budget or a modeled refusal stops the hold.
-    session.set_adc_samples(&s.key.adc, &original)?;
+    key(session, false)?;
     held?;
     driver.advance_ticks(session, spec, s.settle_ticks)
 }
@@ -1827,7 +1688,6 @@ fn to_rec_inner(
 /// Guest tick frequency for the native EXR II timebase.
 pub const EXR2_TICKS_PER_SECOND: u64 = 12_000_000;
 
-/// Capture the first active native scanout output without advancing guest time.
 /// Observe the boot progress words of a session built from a run configuration,
 /// without advancing guest time. `status` reports `running` until the run
 /// reaches REC.
@@ -1852,6 +1712,12 @@ pub fn status(session: &Session) -> Result<RecReport, String> {
     Ok(report)
 }
 
+/// The device node whose scanout presents the camera's display.
+pub fn scanout_node(session: &Session) -> Result<String, String> {
+    Ok(session_prepared(session)?.observation.scanout)
+}
+
+/// Capture the first active native scanout output without advancing guest time.
 pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {
     let spec = session_prepared(session)?;
     let display = session.scanout_state(&spec.observation.scanout)?;
