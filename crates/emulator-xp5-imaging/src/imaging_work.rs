@@ -195,8 +195,13 @@ impl Work {
             // first gate is written with it. +10: read-modify-write control
             // word whose bit 16 the first gate's setter sets or clears. +14/+18: window
             // size words (height<<16 | 15-bit width) chosen by the setter's selector.
+            // The remaining first-gate words (+0c, +1c/+20 packed fields chosen by a
+            // selector, +28/+2c low-halfword read-modify-write, +38..+58 setter
+            // words) are plain read-back words.
             Kind::Reset => {
-                matches!(o, 0 | 4) || (matches!(o, 0x10 | 0x14 | 0x18 | 0x24) && self.base == 0xff950000)
+                matches!(o, 0 | 4)
+                    || (self.base == 0xff950000
+                        && matches!(o, 0x0c | 0x10 | 0x14 | 0x18 | 0x1c | 0x20 | 0x24 | 0x28 | 0x2c | 0x38..=0x58))
             }
             Kind::Resize => matches!(
                 o,
@@ -578,6 +583,23 @@ mod reset_size_tests {
         }
         let mut other = Work::reset(0xff973000).unwrap();
         other.write(&mut cx, 0xff973024, 4, 1);
+        assert!(cx.refusal().is_some());
+    }
+
+    #[test]
+    fn first_reset_gate_keeps_the_remaining_configuration_words() {
+        let mut work = Work::reset(0xff950000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        let offsets = [0x0c, 0x1c, 0x20, 0x28, 0x2c, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58];
+        for (i, o) in offsets.into_iter().enumerate() {
+            let v = 0x420012 + i as u64;
+            work.write(&mut cx, 0xff950000 + o, 4, v);
+            assert_eq!(work.read(&mut cx, 0xff950000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        let mut other = Work::reset(0xff973000).unwrap();
+        other.write(&mut cx, 0xff97301c, 4, 1);
         assert!(cx.refusal().is_some());
     }
 }
