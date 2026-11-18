@@ -70,7 +70,7 @@
       "sections": [
         {
           "title": "Recommended Settings",
-          "markdown": "For faster start-up and response, open **SET-UP > POWER MANAGEMENT** and set **HIGH PERFORMANCE** to **ON**. Set **QUICK START** to **10 MIN** or **23 MIN** to keep the camera ready for that long after you switch it off, so it is ready to shoot as soon as you switch it back on. Both use more battery. See [POWER MANAGEMENT](/docs/manual/power-management/).",
+          "markdown": "For faster start-up and response, open **SET-UP > POWER MANAGEMENT** and choose one of these:\n\n- **HIGH PERFORMANCE** set to **ON** focuses faster and shortens the time the camera takes to start after you switch it on.\n- **QUICK START** set to **10 MIN** or **23 MIN** keeps the camera ready for that long after you switch it off, so it starts shooting at once when you switch it back on.\n\nBoth use more battery. See [POWER MANAGEMENT](/docs/manual/power-management/).",
           "anchor": "recommended-settings",
           "cameras": ["X-E2", "X-E2S", "X70"]
         },
