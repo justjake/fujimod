@@ -316,6 +316,9 @@ export default defineConfig(({ mode, command }) => ({
   },
   test: {
     pool: 'forks',
+    // Component tests initialize the Wasm module and drive async UI flows; a
+    // loaded machine pushes individual tests past vitest's 5 s default.
+    testTimeout: 30_000,
     projects: [
       {
         extends: true,
