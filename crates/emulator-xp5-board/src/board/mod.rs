@@ -292,6 +292,7 @@ fn register_with_resources(
         "clock-banks" => clocks::register(bus, window.base, window.size)?,
         "lz" => lz::register(bus, window.base, window.size)?,
         "jpeg-encoder" => jpeg::register(bus, window)?,
+        "jpeg-decoder" => jpeg::register_decoder(bus, window)?,
         "panel-spi" => {
             if window.base != 0xff919000 || window.size != 0x1000 {
                 return Err("invalid SPI9 panel window".into());

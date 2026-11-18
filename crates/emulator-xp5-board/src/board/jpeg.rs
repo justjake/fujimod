@@ -1,5 +1,6 @@
-//! Connect the XP5 JPEG encoder window to the shared X-Processor encoder
-//! under its wide register contract (`fujimod_emulator_ip::jpeg`).
+//! Connect the XP5 JPEG encoder and decoder windows to the shared
+//! X-Processor blocks under their wide register contracts
+//! (`fujimod_emulator_ip::jpeg`).
 //!
 //! With `XT5_SCENE` set, every packed 4:2:2 run encodes the host scene
 //! (`fujimod_emulator_imaging::frame::host_still_422`) at its programmed size,
@@ -9,16 +10,17 @@
 //! the JPEG source buffer stays zero. The scene is a host input outside the
 //! run definition and the checkpoint.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
-use fujimod_emulator_ip::jpeg::{Encoder, Registers, WINDOW};
+use fujimod_emulator_ip::jpeg::{Decoder, Encoder, Registers, WINDOW};
 
-pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), String> {
+/// The window's `irq` and `run_ticks` options; no other option is accepted.
+fn options(window: &DeviceWindow, block: &str) -> Result<(u32, u64), String> {
     if window.size != WINDOW
         || window
             .options
             .keys()
             .any(|key| !matches!(key.as_str(), "irq" | "run_ticks"))
     {
-        return Err("invalid JPEG encoder window or options".into());
+        return Err(format!("invalid JPEG {block} window or options"));
     }
     let number = |key: &str| {
         window
@@ -26,9 +28,26 @@ pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), Stri
             .get(key)
             .and_then(toml::Value::as_integer)
             .and_then(|n| u64::try_from(n).ok())
-            .ok_or_else(|| format!("JPEG encoder requires {key}"))
+            .ok_or_else(|| format!("JPEG {block} requires {key}"))
     };
     let irq = u32::try_from(number("irq")?).map_err(|e| e.to_string())?;
+    Ok((irq, number("run_ticks")?))
+}
+
+/// The XP5 JPEG decoder (kind `jpeg-decoder`): the shared decoder under its
+/// X-Processor 5 contract (`Decoder::wide`).
+pub fn register_decoder(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), String> {
+    let (irq, run_ticks) = options(window, "decoder")?;
+    bus.register(
+        window.base,
+        window.size,
+        Box::new(Decoder::wide("xp5-jpeg-decoder", window.base, irq, run_ticks)?),
+    )?;
+    Ok(())
+}
+
+pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), String> {
+    let (irq, run_ticks) = options(window, "encoder")?;
     bus.register(
         window.base,
         window.size,
@@ -36,7 +55,7 @@ pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), Stri
             "xp5-jpeg-encoder",
             window.base,
             irq,
-            number("run_ticks")?,
+            run_ticks,
             Registers::Wide,
         )?
         .with_scene(fujimod_emulator_imaging::frame::host_still_422)),
