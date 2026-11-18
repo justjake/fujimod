@@ -2,7 +2,8 @@
 
 import pytest
 from fujimod import usb
-from test_stream import E, control, opened
+
+from .test_stream import E, control, opened
 
 
 def window(capacity: int = 4) -> usb.DataWindow:

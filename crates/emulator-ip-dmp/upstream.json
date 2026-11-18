@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Zakuro",
+    "version": "e174910de5e7285581b153cbce05543efb135cd5",
+    "source": "https://github.com/fearkov/zakuro/tree/e174910de5e7285581b153cbce05543efb135cd5",
+    "license": "MIT",
+    "files": ["src/pica/LICENSE-zakuro"]
+  }
+]

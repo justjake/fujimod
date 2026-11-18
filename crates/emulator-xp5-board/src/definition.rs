@@ -1,4 +1,5 @@
 //! Caller-described XP5 graphs shared by language bindings.
+use fujimod_catalog_configuration::RunEngine;
 use crate::{board, boot, session::Inputs};
 use fujimod_emulator::board::{InterruptMap, InterruptRegisters, aprofile, bus::Mode, factory};
 use fujimod_emulator_cpu::{Model, arm64};
@@ -179,7 +180,7 @@ impl Definition {
         self,
         graph: factory::Graph,
         assets: &BTreeMap<String, Vec<u8>>,
-        engine: factory::Engine,
+        engine: RunEngine,
         mode: Mode,
         definition: serde_json::Value,
     ) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
@@ -307,7 +308,7 @@ mod tests {
             .open(
                 graph(),
                 &BTreeMap::new(),
-                factory::Engine::Unicorn,
+                RunEngine::Unicorn,
                 Mode::Strict,
                 value,
             )
@@ -339,7 +340,7 @@ mod tests {
 
     fn open(value: serde_json::Value) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
         let definition: Definition = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        definition.open(graph(), &BTreeMap::new(), factory::Engine::Unicorn, Mode::Strict, value)
+        definition.open(graph(), &BTreeMap::new(), RunEngine::Unicorn, Mode::Strict, value)
     }
 
     // Synthetic ladder fixture: the band and sample are test inputs.
@@ -389,7 +390,7 @@ mod tests {
                 .open(
                     graph(),
                     &BTreeMap::new(),
-                    factory::Engine::Unicorn,
+                    RunEngine::Unicorn,
                     Mode::Strict,
                     value
                 )
@@ -406,7 +407,7 @@ mod tests {
                 .open(
                     graph(),
                     &BTreeMap::new(),
-                    factory::Engine::Unicorn,
+                    RunEngine::Unicorn,
                     Mode::Strict,
                     value
                 )

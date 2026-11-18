@@ -13,7 +13,7 @@ export interface SiteAsset {
 }
 /** Staged paths: runtime bundles, the runtime catalog and feature media. */
 const ASSET_PATH =
-  /^(?:runtime\/catalog\.json|runtime\/[a-z0-9-]+\/(?:licenses\/)?[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|artifacts\/docs\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)$/;
+  /^(?:runtime\/(?:catalog|sbom-components)\.json|runtime\/[a-z0-9-]+\/(?:licenses\/)?[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|artifacts\/docs\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)$/;
 
 /** The `site-assets.json` that staging writes, checked before any file is fetched. */
 export function validateSiteAssets(value: unknown): SiteAsset[] {

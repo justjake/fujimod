@@ -15,9 +15,7 @@ import { FormatGuide } from '../install/FormatGuide';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
 import '../cameras/launcher.css';
 import { buildSdCardUtility, type SdCardUtilityDownload } from './card';
-import { SiteHeader } from '../ui/site-header';
-import '../home/site.css';
-import '../navigation.css';
+import { SiteFrame } from '../ui/SiteFrame';
 import './recovery.css';
 import { firmwareDownloadName } from '../firmware-download';
 
@@ -87,8 +85,7 @@ export default function Recovery() {
   }
 
   return (
-    <div class="shell recovery">
-      <SiteHeader root="../" current="recovery" />
+    <SiteFrame class="recovery">
       <main>
         <h1>Recovery</h1>
         <p class="recovery-lead">
@@ -252,6 +249,6 @@ export default function Recovery() {
           </Show>
         </Steps>
       </main>
-    </div>
+    </SiteFrame>
   );
 }

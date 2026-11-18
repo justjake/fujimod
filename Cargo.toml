@@ -41,9 +41,9 @@ members = [
   "crates/emulator",
   "crates/perf",
   "crates/emulator-boot",
+  "crates/emulator-board-graph",
   "crates/emulator-session",
   "crates/emulator-cli",
-  "crates/emulator-xp5-bringup",
   "crates/emulator-cpu",
   "crates/emulator-cpu-hvf",
   "crates/emulator-cpu-unicorn",
@@ -172,9 +172,9 @@ fujimod-catalog-service = { path = "crates/catalog-service", version = "0.1.0" }
 fujimod-catalog-settings = { path = "crates/catalog-settings", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-perf = { path = "crates/perf", version = "0.1.0" }
+fujimod-emulator-board-graph = { path = "crates/emulator-board-graph", version = "0.1.0" }
 fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
 fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
-fujimod-emulator-xp5-bringup = { path = "crates/emulator-xp5-bringup", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
 fujimod-emulator-models = { path = "crates/emulator-models", version = "0.1.0" }
 fujimod-emulator-exr2-boot-serial = { path = "crates/emulator-exr2-boot-serial", version = "0.1.0" }
@@ -285,15 +285,12 @@ strip = "none"
 [profile.release.package."*"]
 opt-level = 3
 
-# Published artifacts only (wheels, the web emulator): ThinLTO.
-[profile.dist]
+# The web builds (wasm targets only, so it never shares artifacts with native release): ThinLTO.
+[profile.release-web]
 inherits = "release"
 opt-level = 3
 lto = "thin"
 codegen-units = 16
-# Inherited incremental caches added 8.9 GB (one session per source change) to the web
-# emulator's target and make ThinLTO output no faster to rebuild.
-incremental = false
 strip = "debuginfo"
 
 # Build executables stay unstripped; distribution profiles apply to libraries.

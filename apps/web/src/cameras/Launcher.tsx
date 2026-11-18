@@ -10,7 +10,6 @@ import type { FirmwareDownloadFormat } from '../firmware-download';
 import type { FirmwareLibrary } from './firmware-library';
 import { FirmwareDownloads } from './FirmwareDownloads';
 import { FirmwarePicker } from './FirmwarePicker';
-import { ReleaseNotes } from './ReleaseNotes';
 import { DownloadModal } from './DownloadModal';
 import { latestCamera } from './selection';
 import './launcher.css';
@@ -134,31 +133,14 @@ export function CameraLauncher(props: {
     try {
       await props.download(target.firmware, target.format);
     } catch (error) {
-      if (modal() === target)
-        setDownloadError(shownError(error));
+      if (modal() === target) setDownloadError(shownError(error));
     } finally {
       setDownloading(false);
     }
   }
   return (
     <div class={{ launcher: true, 'launcher-pending': !props.ready, 'launcher-empty': !chosen() }}>
-      <section class="release-panel" aria-label="Current release">
-        <div class="release-heading">
-          <h3>{props.release ? `FujiMod ${props.release.tag}` : 'FujiMod'}</h3>
-          <Show when={props.release?.published_at}>
-            {(date) => (
-              <time datetime={date()}>
-                {new Date(date()).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  timeZone: 'UTC',
-                })}
-              </time>
-            )}
-          </Show>
-        </div>
-        <Show when={props.release?.notesText}>{(notes) => <ReleaseNotes text={notes()} />}</Show>
+      <section class="launcher-actions" aria-label="Camera actions">
         <Show when={!chosen()}>
           <div class="release-gate">
             Add base firmware to continue

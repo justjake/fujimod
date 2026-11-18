@@ -1181,12 +1181,12 @@
                 { "offset": 0, "mask": 1 }
               ],
               "job": {
-                "start": { "offset": 4, "mask": 1 },
+                "start": { "offset": 4, "mask": 5 },
                 "stop": { "offset": 0, "mask": 1 },
                 "irq_route": 130,
                 "ticks": 144000
               },
-              "basis": "Still development engine of X-T20 2.11 (step marker 0x06023320): started by +0x04 bit 0; a run raises interrupt 130 until the handler 0x1560744 stops the engine with +0x00 bit 0. run ticks are xpro-lab's 3 ms engine step; no data moves."
+              "basis": "Still development engine of X-T20 2.11 (step marker 0x06023320): started by a command in +0x04 bits 0..2 that 0x1561158 takes from its descriptor's first byte: a still runs 1 then 7, the develop-RAW service (USB RAW CONV., 0x1618d94) 1 then 6, and 0x1560e1c writes 2 between jobs, so bit 0 or bit 2 starts a job (xpro-lab emulator trace 2026-11-15); a run raises interrupt 130 until the handler 0x1560744 stops the engine with +0x00 bit 0. run ticks are xpro-lab's 3 ms engine step; no data moves."
             },
             {
               "base": 4294545408,

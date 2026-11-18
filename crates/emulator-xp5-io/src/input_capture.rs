@@ -1,6 +1,7 @@
 //! XP5 input-capture banks.
 //! Only disabled/reset and idle readback are supported. Active capture
 //! configuration refuses; no samples, cause bits or deadlines are invented.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{dma::{self, Direction}, Cx, Device};
 
 pub struct TransmitSink;
@@ -36,6 +37,15 @@ impl InputCapture {
     }
 }
 impl Device for InputCapture {
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode(self.name())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)
+    }
     fn name(&self) -> &'static str {
         "input-capture"
     }

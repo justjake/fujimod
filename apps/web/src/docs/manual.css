@@ -1,0 +1,221 @@
+.manual h1 {
+  margin: 8px 0 6px;
+  font-size: 32px;
+}
+
+.manual-lede {
+  margin: 0 0 32px;
+  color: var(--dim);
+}
+
+.manual-chapters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 48px;
+}
+
+.manual-chapters h2 {
+  display: flex;
+  gap: 10px;
+  margin: 28px 0 10px;
+  font-size: 17px;
+}
+
+.manual-chapters h2 span {
+  color: var(--dim);
+  font-weight: 400;
+}
+
+.manual-chapters ul,
+.manual-paths,
+.manual-credits,
+.manual-menu-tree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.manual-chapters li {
+  display: grid;
+  padding: 7px 0;
+  border-top: 1px solid var(--key);
+  font-size: 13px;
+}
+
+.manual-chapters li a {
+  width: fit-content;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.manual-chapters li span {
+  color: var(--dim);
+}
+
+.manual-crumb {
+  margin: 8px 0 0;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.manual-chapters a,
+.manual-crumb a,
+.manual-entry-links a,
+.manual-menu-tree a {
+  text-decoration: none;
+}
+
+.manual-chapters a:hover,
+.manual-crumb a:hover,
+.manual-entry-links a:hover,
+.manual-menu-tree a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.manual-feature h1 {
+  font-size: 30px;
+  letter-spacing: 0.02em;
+}
+
+.manual-introduction {
+  margin-bottom: 24px;
+}
+
+.manual-introduction .sdk-markdown {
+  color: var(--dim);
+}
+
+.manual-entry-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--docs-line);
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.manual-entry {
+  padding: 28px 0 8px;
+  scroll-margin-top: 16px;
+}
+
+.manual-entry h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+  letter-spacing: 0.03em;
+}
+
+.manual-entry p {
+  margin: 0 0 8px;
+  color: #c7c7cc;
+}
+
+.manual-paths {
+  margin-bottom: 4px;
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.manual-options {
+  display: grid;
+  grid-template-columns: fit-content(42%) minmax(0, 1fr);
+  gap: 6px 20px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.manual-options > div {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.manual-options dt {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.manual-options dd {
+  margin: 0;
+  color: var(--dim);
+}
+
+.manual-entry .manual-cameras,
+.manual-credits {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.manual-credits b {
+  color: #d1d1d6;
+}
+
+.manual-video {
+  display: block;
+  width: min(100%, 360px);
+  aspect-ratio: 3 / 2;
+  margin: 6px 0 10px;
+  border-radius: 10px;
+  background: var(--key);
+  object-fit: contain;
+}
+
+.manual .docs-layout main:has(.manual-index) {
+  max-width: 900px;
+}
+
+.manual-menu-tree > ul {
+  columns: 2;
+  column-gap: 40px;
+}
+
+.manual-menu-tree > ul > li {
+  break-inside: avoid;
+  margin-bottom: 18px;
+}
+
+.manual-menu-tree ul ul {
+  padding-left: 18px;
+  border-left: 1px solid var(--docs-line);
+}
+
+.manual-menu-tree a,
+.manual-menu-group {
+  display: block;
+  padding: 2px 0;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.manual-menu-group {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.manual-menu-tree > ul > li > .manual-menu-group {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+@media (width <= 620px) {
+  .manual-chapters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .manual-menu-tree > ul {
+    columns: 1;
+  }
+
+  .manual-menu-tree ul ul {
+    padding-left: 12px;
+  }
+}

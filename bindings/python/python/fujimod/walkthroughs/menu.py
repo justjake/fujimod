@@ -27,6 +27,7 @@ class MenuScreen(TypedDict, total=False):
     setting_id: int | None
     parent_pointer: int | None
     owner_item: int
+    picker_action: int  # FM_ActionId: low action number, high computed-row handle
     model_item: int
     focus: Literal['rows', 'tabs', 'fields']
     cursor: int | None

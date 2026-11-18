@@ -137,7 +137,6 @@ impl Controller {
             o,
             0 | 4
                 | 8
-                | 0xc
                 | 0x10
                 | 0x14
                 | 0x18
@@ -268,6 +267,15 @@ impl Controller {
         Ok(b)
     }
 }
+impl Controller {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state.regs.len() != self.state.regs.len() {
+            return Err("serial flash checkpoint has the wrong register count".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Controller {
     fn pollable(&self, offset: u64, size: u8) -> bool {
         offset == 0xff90a0f0 && size == 4
@@ -390,6 +398,7 @@ impl Device for Controller {
             cx.fail(e);
         }
     }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
@@ -415,7 +424,6 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         // Aperture window words and the per-opcode format fields a setup program writes.
         for (offset, value) in [
-            (0xc, 2),
             (0x24, 0xf000_0000),
             (0x28, u32::MAX),
             (0x2c, u32::MAX),

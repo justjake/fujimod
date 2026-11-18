@@ -6,7 +6,9 @@ import { defineConfig } from 'vite-plus';
 import { loadEnv, normalizePath, type Plugin, type Connect } from 'vite';
 import solid from '@solidjs/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
+import { previewLicenseFiles, sbomInputs } from './scripts/sbom/vite';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
+import { loadReleaseData } from './scripts/release-data.ts';
 import { localReleases } from './scripts/local-releases.ts';
 import { localMedia, previewMedia } from './scripts/local-media.ts';
 import { localReviewFiles } from './scripts/local-review-files.ts';
@@ -211,6 +213,21 @@ function simulatedUsbAvailable(env: Record<string, string>): boolean {
     }),
   );
 }
+function siteReleaseData(): Plugin {
+  return {
+    name: 'site-release-data',
+    async config(_config, { mode, command }) {
+      const env = loadEnv(mode, process.cwd(), 'FUJIMOD_');
+      const data = await loadReleaseData({
+        preview: command === 'serve' || mode === 'local-preview',
+        notesDirectory: env.FUJIMOD_RELEASE_NOTES,
+        contributorsDirectory: env.FUJIMOD_CONTRIBUTORS,
+        token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
+      });
+      return { define: { __FUJIMOD_RELEASE_DATA__: JSON.stringify(data) } };
+    },
+  };
+}
 export default defineConfig(({ mode, command }) => ({
   base: '/',
   resolve: { dedupe: ['solid-js', '@solidjs/web', '@solidjs/signals'] },
@@ -220,7 +237,6 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_BUILD_SHA__: JSON.stringify(
       execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().slice(0, 8),
     ),
-    __FUJIMOD_BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
     __FUJIMOD_SIMULATED_USB__: simulatedUsbAvailable(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
     __FUJIMOD_INITIAL_CATALOG__: readFileSync(
       catalogPath(loadEnv(mode, process.cwd(), 'FUJIMOD_')),
@@ -247,6 +263,9 @@ export default defineConfig(({ mode, command }) => ({
     ),
   },
   plugins: [
+    siteReleaseData(),
+    sbomInputs(),
+    previewLicenseFiles(),
     isolationHeaders(),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,

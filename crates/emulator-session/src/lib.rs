@@ -22,6 +22,12 @@ use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
 
 pub use state::SessionState;
 
+/// Hosted synchronization whose scheduling interval is measured in guest ticks.
+pub struct WindowAction {
+    pub interval: std::num::NonZeroU64,
+    pub synchronize: Box<dyn FnMut(&Board) -> Result<(), String>>,
+}
+
 pub struct Session {
     pub definition: serde_json::Value,
     pub board: Board,
@@ -31,6 +37,7 @@ pub struct Session {
     pub nodes: BTreeMap<String, usize>,
     pub contacts: BTreeMap<String, Contacts>,
     pub power_cycle: Option<power_cycle::PowerCycle>,
+    pub window_action: Option<WindowAction>,
     /// Host rendering memo; excluded from checkpoints, fingerprints and modeled state.
     pub recording_frames: std::cell::RefCell<
         BTreeMap<

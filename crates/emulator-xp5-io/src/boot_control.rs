@@ -63,6 +63,7 @@ impl Device for BootControl {
             _ => cx.unmodeled(),
         }
     }
+    fujimod_emulator_devices::checkpoint_fields!(state: State);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }

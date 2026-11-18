@@ -69,12 +69,12 @@ fn prefix_policy_and_owner_overlaps_are_checked() {
     assert!(session(d,image(entry,&[])).is_ok());
 }
 #[test]
-fn omitted_policy_preserves_non_executable_aperture() {
+fn omitted_policy_keeps_aperture_reads_gated_and_executes_in_place() {
     let entry=FLASH+0x7000;let mut d=definition(1,entry);
     d.as_object_mut().unwrap().remove("storage_immutable_prefix");
     let s=session(d,image(entry,&[0xe320f003])).unwrap();
     assert!(s.read(FLASH,&mut [0;4]).is_err());
-    let _=s.run(0,8);assert!(s.state(false).failure.is_some());
+    let _=s.run(0,8);assert!(s.state(false).failure.is_none());
 }
 
 #[test]

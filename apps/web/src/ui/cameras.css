@@ -180,6 +180,12 @@
     transform 140ms,
     visibility 0s 140ms;
 }
+@media (max-width: 600px) {
+  /* A hidden, off-screen tip still widens the document in WebKit. */
+  .progress-row .phase:not(.open) .tip {
+    display: none;
+  }
+}
 .progress-row .tip-scroll {
   max-height: min(420px, calc(100dvh - 40px));
   padding: 10px 12px 11px;

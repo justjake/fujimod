@@ -174,12 +174,31 @@ pub struct LogReply {
     pub raw: Vec<u8>,
 }
 pub(crate) fn log_request(capacity: NonZeroU32) -> Vec<u8> {
-    let mut parameters = [0; 16];
-    parameters[..4].copy_from_slice(&capacity.get().to_le_bytes());
-    memory_request(0x200001, 1, &parameters, &[])
+    buffered_read_request(1, capacity)
 }
 pub(crate) fn decode_log(bytes: Vec<u8>, capacity: NonZeroU32) -> Result<LogReply> {
-    console_header(&bytes, 1)?;
+    decode_buffered_read(bytes, capacity, 1)
+}
+
+/// Memory operation 4 reads the secondary buffered debug source. It shares the
+/// operation-1 request and reply shape (a single capacity parameter and a
+/// status/size header); only the operation code differs. Exposed so callers
+/// that must address operation 4 directly have a first-class command for it
+/// rather than a raw `research` request.
+pub(crate) fn drain_request(capacity: NonZeroU32) -> Vec<u8> {
+    buffered_read_request(4, capacity)
+}
+pub(crate) fn decode_drain(bytes: Vec<u8>, capacity: NonZeroU32) -> Result<LogReply> {
+    decode_buffered_read(bytes, capacity, 4)
+}
+
+fn buffered_read_request(function: u32, capacity: NonZeroU32) -> Vec<u8> {
+    let mut parameters = [0; 16];
+    parameters[..4].copy_from_slice(&capacity.get().to_le_bytes());
+    memory_request(0x200001, function, &parameters, &[])
+}
+fn decode_buffered_read(bytes: Vec<u8>, capacity: NonZeroU32, function: u32) -> Result<LogReply> {
+    console_header(&bytes, function)?;
     if bytes.len() < 28 {
         return Err(ProtocolError::ReplyLength {
             expected: 28,
@@ -214,6 +233,37 @@ mod tests {
         };
         let (bytes, _) = event.encode(NonZeroU32::new(256).unwrap()).unwrap();
         assert_eq!(&bytes[36..], b"S1 ON\n");
+    }
+    #[test]
+    fn drain_operation_four_mirrors_the_log_wire_shape_with_its_own_code() {
+        let capacity = NonZeroU32::new(248).unwrap();
+        let request = drain_request(capacity);
+        // Command 0x200001, operation code 4 at +0x10, capacity at +0x14.
+        assert_eq!(word(&request, 0), 0x200001);
+        assert_eq!(word(&request, 16), 4);
+        assert_eq!(word(&request, 20), 248);
+        // Identical to the operation-1 log request apart from the operation code.
+        let mut as_log = request.clone();
+        as_log[16..20].copy_from_slice(&1u32.to_le_bytes());
+        assert_eq!(as_log, log_request(capacity));
+    }
+    #[test]
+    fn drain_decode_requires_operation_four_echo_and_bounds_the_payload() {
+        let capacity = NonZeroU32::new(8).unwrap();
+        // Reply header: command echo, operation-4 echo, zero status, size at +24.
+        let mut reply = vec![0u8; 28];
+        reply[..4].copy_from_slice(&0x200001u32.to_le_bytes());
+        reply[16..20].copy_from_slice(&4u32.to_le_bytes());
+        reply[24..28].copy_from_slice(&3u32.to_le_bytes());
+        reply.extend_from_slice(b"abc");
+        let decoded = decode_drain(reply.clone(), capacity).unwrap();
+        assert_eq!(decoded.data, b"abc");
+        assert_eq!(decoded.status, 0);
+        // An operation-1 log decode rejects a reply that echoes operation 4.
+        assert!(decode_log(reply.clone(), capacity).is_err());
+        // A declared size past the payload is rejected.
+        reply[24..28].copy_from_slice(&9u32.to_le_bytes());
+        assert!(decode_drain(reply, capacity).is_err());
     }
     #[test]
     fn console_unknown_progress_is_retained_and_length_checked() {

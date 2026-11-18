@@ -1,9 +1,8 @@
 //! Common Device/Host adapter owned by the Unicorn application CPU profile.
 //! Devices receive physical RAM, guest time and IRQ lines, never CPU state.
 use super::Cluster;
-use fujimod_emulator_cpu::Cpu;
 use fujimod_emulator_devices::graphics::scanout::Frame;
-use fujimod_emulator_devices::{Cx, Device, Host, Record};
+use fujimod_emulator_devices::{Cx, Device, Host, Record, checkpoint::Checkpoint};
 use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
 use fujimod_emulator_xp4_io::adc::Adc;
 use fujimod_emulator_xp4_storage::storage::{self, DmaController, SerialFlashController};
@@ -39,6 +38,15 @@ impl<T: Device> Device for Connected<T> {
     fn next_deadline(&self, now: u64) -> Option<u64> {
         self.0.lock().unwrap().next_deadline(now)
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        self.0.lock().map_err(|_| "device lock poisoned")?.checkpoint()
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        self.0.lock().map_err(|_| "device lock poisoned")?.validate_checkpoint(saved)
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.0.lock().map_err(|_| "device lock poisoned")?.restore_checkpoint(saved)
+    }
     fn save(&self) -> serde_json::Value {
         self.0.lock().unwrap().save()
     }
@@ -63,7 +71,93 @@ pub struct Devices {
     pub outputs: BTreeMap<usize, serde_json::Value>,
     /// Single words owned by a declared model inside another block's range.
     carved: Vec<(u64, u64)>,
+    /// Epoch of the serial-flash array and its controller's read state, when this board has them.
+    nor_epoch: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
+const CHECKPOINT_KIND: &str = "xp4-devices-v1";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DeviceState {
+    windows: Vec<(u64, u64, usize)>,
+    events: BTreeSet<(u64, usize, u64)>,
+    log: Vec<Record>,
+    prior_records: usize,
+    outputs: BTreeMap<usize, serde_json::Value>,
+    frames: Vec<(usize, u64, u32, u32)>,
+    usb_present: Option<bool>,
+    nor_epoch: Option<u64>,
+}
+
+impl Devices {
+    pub fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let mut children = Vec::with_capacity(self.models.len());
+        let mut errors = Vec::new();
+        for (index, model) in self.models.iter().enumerate() {
+            let model = model.as_ref().ok_or("XP4 device is in use")?;
+            match model.checkpoint() {
+                Ok(saved) => children.push(saved),
+                Err(error) => errors.push(format!("device {index} ({}): {error}", model.name())),
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors.join("; "));
+        }
+        let state = DeviceState {
+            windows: self.windows.clone(), events: self.events.clone(), log: self.log.clone(),
+            prior_records: self.prior_records, outputs: self.outputs.clone(),
+            frames: self.frames.values().map(|frame| (frame.output, frame.sequence, frame.width, frame.height)).collect(),
+            usb_present: self.usb_presence.as_ref().map(|level| level.load(std::sync::atomic::Ordering::Relaxed)),
+            nor_epoch: self.nor_epoch.as_ref().map(|epoch| epoch.load(std::sync::atomic::Ordering::Relaxed)),
+        };
+        Ok(Checkpoint::encode(CHECKPOINT_KIND, &state)?.with_children(children)
+            .with_blobs(self.frames.values().map(|frame| Arc::from(frame.rgba.as_slice())).collect()))
+    }
+
+    pub fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: DeviceState = saved.decode(CHECKPOINT_KIND)?;
+        if state.windows != self.windows || saved.children().len() != self.models.len()
+            || state.usb_present.is_some() != self.usb_presence.is_some()
+            || state.nor_epoch.is_some() != self.nor_epoch.is_some()
+            || state.events.iter().any(|(_, node, _)| *node >= self.models.len())
+            || state.frames.len() != saved.blobs().len()
+            || state.frames.windows(2).any(|row| row[0].0 >= row[1].0)
+            || state.frames.iter().zip(saved.blobs()).any(|((_, _, w, h), blob)| {
+                usize::try_from(u64::from(*w) * u64::from(*h)).ok().and_then(|pixels| pixels.checked_mul(4)) != Some(blob.len())
+            })
+        {
+            return Err("XP4 checkpoint device graph or frame geometry differs".into());
+        }
+        for (model, child) in self.models.iter().zip(saved.children()) {
+            let model = model.as_ref().ok_or("XP4 device is in use")?;
+            model.validate_checkpoint(child).map_err(|error| format!("{}: {error}", model.name()))?;
+        }
+        Ok(())
+    }
+
+    pub fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let state: DeviceState = saved.decode(CHECKPOINT_KIND)?;
+        for (model, child) in self.models.iter_mut().zip(saved.children()) {
+            model.as_mut().ok_or("XP4 device is in use")?.restore_checkpoint(child)?;
+        }
+        self.events = state.events;
+        self.log = state.log;
+        self.prior_records = state.prior_records;
+        self.outputs = state.outputs;
+        self.frames = state.frames.into_iter().zip(saved.blobs()).map(|((output, sequence, width, height), rgba)| {
+            (output, Frame { output, sequence, width, height, rgba: rgba.to_vec() })
+        }).collect();
+        if let Some((presence, saved)) = self.usb_presence.as_ref().zip(state.usb_present) {
+            presence.store(saved, std::sync::atomic::Ordering::Relaxed);
+        }
+        if let Some((epoch, saved)) = self.nor_epoch.as_ref().zip(state.nor_epoch) {
+            epoch.store(saved, std::sync::atomic::Ordering::Relaxed);
+        }
+        Ok(())
+    }
+}
+
 struct PhysicalHost<'a> {
     cluster: &'a Cluster,
     events: &'a mut BTreeSet<(u64, usize, u64)>,
@@ -673,12 +767,23 @@ impl Devices {
         if let Some(raw) = wiring.raw {
             model = model.developing(raw)?;
         }
-        let (lo, hi) = model.window();
-        if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
-            return Err("Overlapping XP4 still engine window".into());
+        if wiring.firmware_color {
+            model = model.firmware_color()?;
+        }
+        let windows = model.windows();
+        for &(lo, hi) in &windows {
+            if let Some(&(base, end, owner)) = self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi) {
+                let name = self.models.get(owner).and_then(Option::as_ref)
+                    .map_or("unknown model", |device| device.name());
+                return Err(format!(
+                    "XP4 still engine {} at {lo:#x}..{hi:#x} overlaps {name} at {base:#x}..{end:#x}",
+                    model.name(),
+                ));
+            }
         }
         let id = self.models.len();
-        self.windows.push((lo, hi, id));
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
@@ -719,7 +824,7 @@ impl Devices {
     }
     pub fn pl011_uart(&mut self, wiring: &crate::definition::Pl011Uart) -> Result<(), String> {
         use fujimod_emulator_ip_arm::pl011::{Pl011, WINDOW};
-        let model = Pl011::new(wiring.base, wiring.irq)?;
+        let model = Pl011::with_rl78(wiring.base, wiring.irq, wiring.rl78.clone())?;
         let (lo, hi) = (wiring.base, wiring.base + WINDOW);
         if self.windows.iter().any(|&(a, b, _)| lo < b && a < hi) {
             return Err("Overlapping PL011 UART window".into());
@@ -951,6 +1056,7 @@ impl Devices {
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
             carved: Vec::new(),
+            nor_epoch: None,
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
@@ -1015,6 +1121,10 @@ impl Devices {
         self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
+    }
+    /// The serial-flash epoch: completed NOR mutations and changes of the controller's mapped-read state.
+    pub fn nor_epoch(&self) -> Option<Arc<std::sync::atomic::AtomicU64>> {
+        self.nor_epoch.clone()
     }
     pub fn partition_nor_prefix(&mut self, bytes: usize) {
         for (lo, hi, _) in &mut self.windows {
@@ -1102,6 +1212,7 @@ impl Devices {
                 (0xfff4a800, 0xfff4a880, 1),
             ],
             carved: Vec::new(),
+            nor_epoch: Some(port.lock().unwrap().epoch()),
         };
         if let Some(pad) = pad {
             if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {
@@ -1852,6 +1963,17 @@ impl Devices {
         }
         Err("ARMv7-A device made no deadline progress".into())
     }
+    pub fn set_scene(&mut self, input: &serde_json::Value) -> Result<(), String> {
+        let mut consumed = false;
+        for device in self.models.iter_mut().flatten() {
+            consumed |= device.set_scene(input)?;
+        }
+        if !consumed {
+            return Err("no device consumes scene input".into());
+        }
+        Ok(())
+    }
+
     pub fn snapshots(&self) -> std::collections::BTreeMap<String, String> {
         let mut counts = BTreeMap::new();
         for model in self.models.iter().flatten() {

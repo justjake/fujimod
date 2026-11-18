@@ -130,7 +130,7 @@ test('empty state has four disabled actions, a firmware gate, shared picker and 
   expect(actions).toHaveLength(4);
   expect([...actions].every((button) => button.disabled)).toBe(true);
   expect(host.querySelectorAll('.launcher-row > .i')).toHaveLength(0);
-  expect(host.querySelector('.release-notes strong')?.textContent).toBe('Faster');
+  expect(host.querySelector('.release-notes, .release-heading')).toBeNull();
   expect(host.querySelector('.file-drop-highlighted')).not.toBeNull();
   expect(host.querySelector('#firmware-file')).not.toBeNull();
   expect([...host.querySelectorAll('.downloads-model')].map((node) => node.textContent)).toEqual([

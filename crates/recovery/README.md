@@ -251,7 +251,55 @@ recorded in the loader's progress words and shown as red lamp blinks, and the st
 The command excludes `--fallback-wait-seconds`, takes no storage image and needs no card-resident
 setup in the recipe.
 
-`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-checked-redirect-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5)
+is the read-only startup plus one **checked redirect** (`StartupOptions::checked_redirect`; loader
+`assets/sd-boot-v1-xp5-checked-redirect-loader.generated.{bin,json}`, the same sources compiled with
+`-DXP5_READ_ONLY_STARTUP -DXP5_CHECKED_REDIRECT`). The stock reset stage loads its first raw section
+with a function of its own that copies it from the installed flash; the packager finds that function
+in the stock reset image by its instructions (every word is checked, the match must be unique and
+the function must have exactly one caller, `src/xp5/redirect.rs`) and plans the one word that makes
+it copy from the DRAM copy at `ADDRESS` instead. `ffboot.bin` is the unedited image cut after that
+section (the file is read in a fraction of a second), the section's bytes in it must equal the update's, and both section tables the stage may read must name the same
+section. The loader proves all of it against the installed flash before it writes anything (both tables
+and the range by CRC-32, the DRAM copy against the flash word for word, RAM 0 against the stock
+reset image) and with `--apply` then stores the one word, reads RAM 0 back and takes the word back
+if the read-back differs; an unproven redirect is never made and the stock boot goes on from the
+flash. `--verify-only` binds the same proof and never writes RAM 0 (and halts, `-902`, if RAM 0 is not the
+stock image at the end). The lamp is steady orange (red and green) while the loader reads the flash
+aperture, so a hang there is told from a plain read. A failure is shown as red lamp blinks (7 not
+proven, 8 changed and taken back, 9 the DRAM copy or RAM 0 changed after the check), success as green
+blinks (2 verified, 3 armed); after the green blinks, right before the hand-off, an armed redirect is
+checked once more (the DRAM copy's CRC-32 and RAM 0) and taken back if either changed (`-841`). A
+change that cannot be verified or taken back halts (`-901`). The binding must carry
+`orr x0, x20, #destination` as its word, which the loader decodes.
+
+`sd-boot-v1-copy-stub-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5)
+takes the same inputs as the checked redirect and replaces its one-word source change by a **copy stub**
+(`StartupOptions::copy_stub`; loader `assets/sd-boot-v1-xp5-copy-stub-loader.generated.{bin,json}`, the stub itself
+`assets/sd-boot-v1-xp5-copy-stub.generated.{bin,json}`). The packager finds the run of `nop` words between the
+reset entry's last helper (ending in `ret`) and the first exception vector table of the stock reset image, refuses the image
+unless nothing in it refers to that padding, binds the position-independent stub into it and a `bl` to the stub in
+place of the stage's copy call (the function the two section-table copies also call). With `--apply` the loader
+proves what the checked redirect proves, that the padding holds only `nop` words and that the stub bytes have the
+bound CRC-32, writes the stub first and the call word last, reads RAM 0 back against the packager's patched image
+(stock image, stub and call word) and takes everything back on any difference. At the moment of the call the stub
+checks the CRC-32 of the DRAM copy, copies from it with the stage's own copy function, checks the CRC-32 of the
+destination and copies from the flash instead on any difference, showing the path on the lamp (orange while it
+verifies, then one green pulse, or one, two or three red pulses) and leaving a status word in its parameter block.
+It never reads the flash aperture and writes nothing but its own block, the lamp pins, the stage's stack and, through
+the stage's copy function, the destination. The armed loader shows four green blinks (verified-only two).
+
+`sd-boot-v1-startup` and `sd-boot-v1-ram-startup` accept `--ram-overlay FILE` (XP5), a JSON
+description of bytes to add to the RAM image before it is packaged, so the loader's length and
+CRC checks cover them (`Recipe::build_startup_with_overlay` and `image::Overlay` are the library
+forms). It lists `regions` (`name`, `address`, `size`, `file`, `sha256`; each file is a basename in
+the description's directory) and `edits` (`address`, `old`, `new`, `what`). A region must lie in
+zero bytes outside every initialized section and every BSS extent of the RAM plan, since the stock
+startup may clear BSS after the image is loaded. An edit must replace the expected word of
+initialized bytes outside the regions. Nothing is written unless every check passes.
+`sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup` and `sd-boot-v1-copy-stub-startup` refuse an overlay, since their RAM image is never run.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per

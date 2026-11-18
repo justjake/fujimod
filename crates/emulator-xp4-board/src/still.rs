@@ -126,14 +126,34 @@
 //! `x * 6272 / 4704` (nearest neighbour), so the lines two bands share come
 //! out the same. The movie's RAW is read as 16-bit samples, as the still's;
 //! the firmware programs it 12-bit packed (source format 0x40101), which is
-//! not modeled. What the engine computes beyond that (the firmware's color,
-//! noise reduction, sharpening, and the copy pass's own processing, lens
-//! distortion correction among it) is not modeled. A pass in another mode,
-//! with a column start (bits 15..0 of +0x1c / +0x54) or whose source is not
-//! in the declared RAW at its pitch refuses.
+//! not modeled. What the engine computes beyond that (noise reduction,
+//! sharpening, and the copy pass's own processing, lens distortion
+//! correction among it) is not modeled. A pass in another mode, with a
+//! column start (bits 15..0 of +0x1c / +0x54) or whose source is not in the
+//! declared RAW at its pitch refuses.
+//!
+//! # RECC color pages
+//!
+//! RECC owns two parameter pages besides its control page ([`Contract::pages`]):
+//! RECC + 0x4000 (0xfff86000, the tone page) and RECC + 0x5000 (0xfff87000,
+//! the YCbCr page). The X-T3 5.11 still capture programs both before the
+//! band passes. Every word of a parameter page takes any value and reads it
+//! back: which words the setters write, and how wide each is, is not
+//! declared, so no write there refuses. The pages between them (0xfff83000
+//! to 0xfff85000) are not RECC's: the catalog declares them as plain
+//! register blocks.
+//!
+//! [`Engine::firmware_color`] (opt-in, on a developing RECC) develops the
+//! still bands (mode 0x620000) with the color these two pages hold when the
+//! pass ends, [`fujimod_emulator_xpp::development::FirmwareColor`]: the tone
+//! page's matrix and three curves, then the YCbCr page's matrix. A band
+//! pass whose pages hold no matrix refuses, and so does a movie band (mode
+//! 0x422000): which color the firmware programs for the movie is not
+//! modeled.
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_xpp::development::{
-    YcLayout, develop, scaled_line, size, step, y0l2_sample, yc_row,
+    FirmwareColor, YcLayout, develop, develop_firmware, scaled_line, size, step, y0l2_sample,
+    yc_row,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -203,6 +223,10 @@ pub struct Contract {
     pub acknowledge: Option<(u64, u32)>,
     /// An interrupt flag block in place of the acknowledge bit.
     pub flags: Option<Flags>,
+    /// Parameter pages beyond the register page: their offsets from the
+    /// engine's base, whole [`WINDOW`]s, whose every word takes any value
+    /// and reads it back.
+    pub pages: Vec<u64>,
     pub output: Output,
 }
 
@@ -218,11 +242,23 @@ pub struct Flags {
 }
 
 impl Contract {
+    /// Whether `offset` falls in one of the parameter pages.
+    fn paged(&self, offset: u64) -> bool {
+        self.pages
+            .iter()
+            .any(|&page| (page..page + WINDOW).contains(&offset))
+    }
     fn mask(&self, offset: u64) -> Option<u32> {
+        if self.paged(offset) {
+            return Some(u32::MAX);
+        }
         self.writable
             .iter()
             .find(|&&(o, _)| o == offset)
             .map(|&(_, m)| m)
+    }
+    fn reads(&self, offset: u64) -> bool {
+        self.paged(offset) || self.readable.contains(&offset)
     }
     /// Status bits of `offset` the engine owns.
     fn status(&self, offset: u64) -> u32 {
@@ -239,6 +275,11 @@ impl Contract {
         offsets.dedup();
         let bit = |&(o, m): &(u64, u32)| self.readable.contains(&o) && m != 0;
         let valid = offsets.len() == count
+            && self.pages.is_sorted_by(|a, b| a < b)
+            && self
+                .pages
+                .iter()
+                .all(|&page| page >= WINDOW && page.is_multiple_of(WINDOW))
             && offsets
                 .iter()
                 .chain(&self.readable)
@@ -322,6 +363,7 @@ pub fn contract(kind: Kind) -> Contract {
                 start: (0x00, 1),
                 acknowledge: Some((0x84, 1)),
                 flags: None,
+                pages: vec![],
                 output: Output::NotComputed,
             }
         }
@@ -385,6 +427,9 @@ pub fn contract(kind: Kind) -> Contract {
                 // timer interrupts; that mode 3 is an edge is inferred, not measured.
                 acknowledge: None,
                 flags: None,
+                // The tone (0xfff86000) and YCbCr (0xfff87000) pages, see
+                // the module notes.
+                pages: vec![0x4000, 0x5000],
                 output: Output::NotComputed,
             }
         }
@@ -454,6 +499,7 @@ pub fn contract(kind: Kind) -> Contract {
                 start: (0x004, 1),
                 acknowledge: Some((0x10c, 1)),
                 flags: None,
+                pages: vec![],
                 output: Output::NotComputed,
             }
         }
@@ -509,6 +555,7 @@ pub fn contract(kind: Kind) -> Contract {
                 start: (0x004, 1),
                 acknowledge: Some((0x0e4, 1)),
                 flags: None,
+                pages: vec![],
                 output: Output::NotComputed,
             }
         }
@@ -563,6 +610,7 @@ pub fn contract(kind: Kind) -> Contract {
                 start: (0x004, 1),
                 acknowledge: Some((0x09c, 1)),
                 flags: None,
+                pages: vec![],
                 output: Output::NotComputed,
             }
         }
@@ -629,6 +677,7 @@ pub fn contract(kind: Kind) -> Contract {
                     enable: 0x0a8,
                     done: 1,
                 }),
+                pages: vec![],
                 output: Output::NotComputed,
             }
         }
@@ -658,6 +707,8 @@ pub struct Engine {
     irq: u32,
     ticks: u64,
     contract: Contract,
+    /// RECC develops its still bands with the color its pages hold.
+    firmware_color: bool,
     state: State,
 }
 
@@ -674,6 +725,7 @@ impl Engine {
             irq,
             ticks,
             contract,
+            firmware_color: false,
             state: State::default(),
         })
     }
@@ -704,6 +756,26 @@ impl Engine {
         self.contract.output = Output::Develop(raw);
         Ok(self)
     }
+    /// A developing RECC develops its still bands with the color of its two
+    /// pages (opt-in, see the module notes).
+    pub fn firmware_color(mut self) -> Result<Self, String> {
+        if !matches!(self.contract.output, Output::Develop(_)) {
+            return Err(format!(
+                "{} firmware color needs a declared RAW",
+                self.contract.name
+            ));
+        }
+        self.firmware_color = true;
+        Ok(self)
+    }
+    /// The words of the parameter page at `page`, by their offset in it.
+    fn page_words(&self, page: u64) -> BTreeMap<u64, u32> {
+        self.state
+            .words
+            .range(page..page + WINDOW)
+            .map(|(&o, &v)| (o - page, v))
+            .collect()
+    }
     /// The X-Trans site of a pass's first RAW sample.
     fn site(name: &str, raw: Raw, source: u64, pitch: u64) -> Result<(usize, usize), String> {
         let offset = source
@@ -718,6 +790,11 @@ impl Engine {
     /// One band of the 4K movie (mode 0x422000, see the module notes).
     fn movie_band(&self, cx: &mut Cx<'_>, raw: Raw) -> Result<(), String> {
         let name = self.contract.name;
+        if self.firmware_color {
+            return Err(format!(
+                "{name} firmware color of a movie band is not modeled"
+            ));
+        }
         let word = |o| u64::from(self.word(o));
         let address = |high, low| (word(high) & 3) << 32 | word(low);
         let layout = match word(0x6c) & 3 {
@@ -785,14 +862,17 @@ impl Engine {
                 let phase = Self::site(name, raw, source, pitch)?;
                 let length = pitch * lines.saturating_sub(1) + 2 * width;
                 let bytes = cx.ram_bytes(source, length as usize)?;
-                let rows = develop(
-                    &bytes,
-                    pitch as usize,
-                    lines as usize,
-                    width as usize,
-                    phase,
-                    None,
-                )?;
+                let (pitch, lines, width) = (pitch as usize, lines as usize, width as usize);
+                let rows = if self.firmware_color {
+                    let color = FirmwareColor::from_words(
+                        &self.page_words(0x4000),
+                        &self.page_words(0x5000),
+                    )
+                    .map_err(|e| format!("{name}: {e}"))?;
+                    develop_firmware(&bytes, pitch, lines, width, phase, &color)?
+                } else {
+                    develop(&bytes, pitch, lines, width, phase, None)?
+                };
                 (word(0x54) >> 16, rows)
             }
             2 => {
@@ -880,15 +960,20 @@ impl Engine {
         }
         Ok(())
     }
-    pub fn window(&self) -> (u64, u64) {
-        (self.base, self.base + WINDOW)
+    /// The register page, then each parameter page.
+    pub fn windows(&self) -> Vec<(u64, u64)> {
+        std::iter::once(0)
+            .chain(self.contract.pages.iter().copied())
+            .map(|page| (self.base + page, self.base + page + WINDOW))
+            .collect()
     }
     fn word(&self, offset: u64) -> u32 {
         self.state.words.get(&offset).copied().unwrap_or(0)
     }
     fn offset(&self, address: u64, size: u8) -> Option<u64> {
         let offset = address.wrapping_sub(self.base);
-        (size == 4 && offset & 3 == 0 && offset < WINDOW).then_some(offset)
+        (size == 4 && offset & 3 == 0 && (offset < WINDOW || self.contract.paged(offset)))
+            .then_some(offset)
     }
     fn flag_level(&self, cx: &mut Cx<'_>, f: Flags) {
         let level = self.state.pending & self.word(f.enable) != 0;
@@ -923,7 +1008,7 @@ impl Device for Engine {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(offset) = self
             .offset(address, size)
-            .filter(|o| self.contract.readable.contains(o))
+            .filter(|&o| self.contract.reads(o))
         else {
             cx.unmodeled();
             return 0;
@@ -1868,5 +1953,184 @@ mod tests {
                 "{expected}: {refusal:?}"
             );
         }
+    }
+
+    /// The tone and YCbCr pages' words of a bring-up still (offsets within
+    /// each page): matrices, the curve widths and one curve for all three
+    /// outputs.
+    fn color_pages() -> (Vec<(u64, u32)>, Vec<(u64, u32)>) {
+        let curve: [u32; 16] = [
+            0x0443_0000,
+            0x058d_048c,
+            0x0780_0699,
+            0x0a7c_0878,
+            0x0e76_0c99,
+            0x155e_1244,
+            0x1da3_1811,
+            0x2540_21db,
+            0x2b64_28aa,
+            0x3009_2dad,
+            0x336d_31c3,
+            0x38dc_369b,
+            0x3bdb_3add,
+            0x3da6_3cca,
+            0x3f4b_3e82,
+            0x0000_3fff,
+        ];
+        let mut tone = vec![
+            (0x204, 0x1fb8_041b),
+            (0x208, 0x0000_002d),
+            (0x20c, 0x0470_1fc5),
+            (0x210, 0x0000_1fcb),
+            (0x214, 0x1f36_0049),
+            (0x218, 0x0000_0481),
+            (0x21c, 0x7666_5433),
+            (0x220, 0x0000_0066),
+        ];
+        for slot in [0x224, 0x264, 0x2a4] {
+            tone.extend(
+                curve
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &w)| (slot + 4 * i as u64, w)),
+            );
+        }
+        let ycbcr = vec![
+            (0x204, 0x0259_0132),
+            (0x208, 0x1f53_0075),
+            (0x20c, 0x0200_1ead),
+            (0x210, 0x1e53_0200),
+            (0x214, 0x0000_1fad),
+        ];
+        (tone, ycbcr)
+    }
+    fn program_color_pages(e: &mut Engine, h: &mut RecordingHost) {
+        let (tone, ycbcr) = color_pages();
+        for (page, words) in [(0x4000, tone), (0x5000, ycbcr)] {
+            for (o, v) in words {
+                let mut cx = Cx::new(h, 0, 0, 0);
+                e.write(&mut cx, RECC + page + o, 4, v.into());
+                assert!(cx.refusal().is_none(), "+{:#x}", page + o);
+            }
+        }
+    }
+    fn firmware_color_recc() -> Engine {
+        developing_recc().firmware_color().unwrap()
+    }
+
+    /// RECC's color pages: any word, any value, read back and kept by a
+    /// checkpoint; the pages between them are not RECC's.
+    #[test]
+    fn recc_owns_its_two_color_pages_and_reads_back_every_word() {
+        let mut e = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20).unwrap();
+        assert_eq!(
+            e.windows(),
+            [
+                (RECC, RECC + 0x1000),
+                (RECC + 0x4000, RECC + 0x5000),
+                (RECC + 0x5000, RECC + 0x6000)
+            ]
+        );
+        let resz = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20).unwrap();
+        assert_eq!(resz.windows(), [(RESZ, RESZ + 0x1000)]);
+        let mut h = RecordingHost::default();
+        for (o, v) in [
+            (0x4000, u32::MAX),
+            (0x4204, 0x1fb8_041b),
+            (0x5ffc, 0x1234_5678),
+        ] {
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            e.write(&mut cx, RECC + o, 4, v.into());
+            assert_eq!(e.read(&mut cx, RECC + o, 4), u64::from(v));
+            assert!(cx.refusal().is_none(), "+{o:#x}");
+        }
+        let mut other = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20).unwrap();
+        other.restore(&e.save()).unwrap();
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        assert_eq!(other.read(&mut cx, RECC + 0x5ffc, 4), 0x1234_5678);
+        for o in [0x1000, 0x3ffc, 0x6000] {
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            e.read(&mut cx, RECC + o, 4);
+            assert!(cx.refusal().is_some(), "+{o:#x}");
+        }
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        e.write(&mut cx, RECC + 0x4206, 2, 1);
+        assert!(cx.refusal().is_some());
+    }
+
+    /// With the option, a band develops with the color its pages hold when
+    /// the pass ends; without, the same pages leave the declared law.
+    #[test]
+    fn a_firmware_color_recc_develops_its_bands_with_its_pages() {
+        let raw = raw_samples();
+        let (tone, ycbcr) = color_pages();
+        let color = FirmwareColor::from_words(
+            &tone.iter().copied().collect(),
+            &ycbcr.iter().copied().collect(),
+        )
+        .unwrap();
+        let expected = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        let declared = develop(&raw[64 + 4..], 64, 6, 12, (0, 3), None).unwrap();
+        assert_ne!(expected, declared);
+        for (mut e, rows) in [
+            (firmware_color_recc(), &expected),
+            (developing_recc(), &declared),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            h.ram[..16 * 64].copy_from_slice(&raw);
+            program_color_pages(&mut e, &mut h);
+            assert_eq!(recc_pass(&mut e, &mut h, &band(0)), None);
+            for (y, row) in rows.iter().enumerate() {
+                let at = 0x1000 + (2 + y) * 48 + 8;
+                assert_eq!(h.ram[at..at + 24], row[..], "band line {y}");
+            }
+        }
+        // Read when the pass ends: a cleared matrix row refuses the next band.
+        let mut h = RecordingHost {
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        h.ram[..16 * 64].copy_from_slice(&raw);
+        let mut e = firmware_color_recc();
+        program_color_pages(&mut e, &mut h);
+        for o in [0x4204, 0x4208] {
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            e.write(&mut cx, RECC + o, 4, 0);
+        }
+        let refusal = recc_pass(&mut e, &mut h, &band(0));
+        assert!(
+            refusal
+                .as_deref()
+                .is_some_and(|r| r.contains("not programmed")),
+            "{refusal:?}"
+        );
+    }
+
+    #[test]
+    fn the_firmware_color_needs_a_developing_recc_and_refuses_movie_bands() {
+        for e in [
+            Engine::new(Kind::Recc, RECC, RECC_IRQ, 20).unwrap(),
+            Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20).unwrap(),
+        ] {
+            let error = e.firmware_color().err();
+            assert!(error.is_some_and(|e| e.contains("needs a declared RAW")));
+        }
+        let mut h = RecordingHost {
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        h.ram[..16 * 64].copy_from_slice(&raw_samples());
+        let mut e = firmware_color_recc();
+        program_color_pages(&mut e, &mut h);
+        let refusal = recc_pass(&mut e, &mut h, &movie_band(3, 32));
+        assert!(
+            refusal
+                .as_deref()
+                .is_some_and(|r| r.contains("movie band is not modeled")),
+            "{refusal:?}"
+        );
     }
 }

@@ -2,7 +2,6 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
-
 from fujimod import _native
 from fujimod.remote import Camera, Readiness, RemoteReadResult, control, menu, option
 
@@ -79,8 +78,10 @@ async def test_task_cancellation_returns_camera_ownership():
 
 async def test_ff80_camera_leases_and_returns_existing_session():
     from fujimod import usb
-    from test_async import opened
-    from test_stream import E, control as envelope
+
+    from .test_async import opened
+    from .test_stream import E
+    from .test_stream import control as envelope
 
     session, script = await opened([
         E.control(envelope(0xC2, 2)), E.read(2, b"ok"),
@@ -96,7 +97,7 @@ async def test_ff80_camera_leases_and_returns_existing_session():
 
 
 async def test_abandoned_usb_owner_fences_remote_without_more_io():
-    from test_async import opened
+    from .test_async import opened
 
     session, script = await opened()
     remote = Camera(_native.remote.Camera.synthetic_ff80(session))
@@ -152,8 +153,9 @@ async def test_memory_wait_repeats_raw_reads_and_predicate_in_rust():
 
 
 async def test_stable_memory_wait_checks_bytes_and_repeats_in_rust():
-    from test_async import opened
-    from test_stream import E, control as envelope, memory_read
+    from .test_async import opened
+    from .test_stream import E, memory_read
+    from .test_stream import control as envelope
 
     value = (3).to_bytes(4, "little")
     exchanges = [exchange for _ in range(3) for exchange in memory_read(768, value)]
@@ -200,8 +202,10 @@ async def test_touch_reaches_the_remote_and_awaits_the_decoded_report():
 async def test_operation_scoped_camera_returns_usb_between_wait_and_observation():
     from fujimod import usb
     from fujimod.remote import _ScopedNative
-    from test_async import opened
-    from test_stream import E, control as envelope, memory_read
+
+    from .test_async import opened
+    from .test_stream import E, memory_read
+    from .test_stream import control as envelope
 
     session, script = await opened([
         E.control(envelope(0xC2, 2)), E.read(2, b'ok'),

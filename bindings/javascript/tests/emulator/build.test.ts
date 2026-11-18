@@ -92,7 +92,7 @@ await test('build plan targets the public static library and preserves encoded R
   assert(plan.rust.at(-1)?.endsWith('/bindings/javascript/emulator/Cargo.toml'));
   assert(
     plan.link.includes(
-      '/tmp/emulator/rust/wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a',
+      '/tmp/emulator/rust/wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a',
     ),
   );
   assert(plan.link.includes('-sEXPORTED_FUNCTIONS=@/tmp/emulator/exports.json'));

@@ -100,6 +100,15 @@ impl Endpoint for LadderDriven {
         self.refresh();
         self.inner.transfer(frame, now_ns)
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        self.inner.checkpoint()
+    }
+    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.inner.validate_checkpoint(saved)
+    }
+    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.inner.restore_checkpoint(saved)
+    }
     fn save(&self) -> serde_json::Value {
         self.inner.save()
     }

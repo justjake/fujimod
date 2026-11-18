@@ -530,3 +530,45 @@ fn read_only_devices_refuse_file_puts() {
         b"{}"
     );
 }
+
+#[test]
+fn kept_listings_list_each_folder_once_per_command() {
+    let (mut fs, device) = filesystem();
+    fs.keep_listings();
+    for n in 0..50 {
+        device
+            .0
+            .lock()
+            .unwrap()
+            .files
+            .insert(format!("A:\\DCIM\\DSCF{n:04}.JPG"), vec![n as u8; 10]);
+    }
+    for n in 0..50 {
+        if n == 1 {
+            // Outlives the mount's short listing lifetime.
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        let node = files::list(&mut fs, &format!("DCIM/DSCF{n:04}.JPG"))
+            .unwrap()
+            .remove(0);
+        assert_eq!(files::get(&mut fs, &node, Some(4)).unwrap(), [n as u8; 4]);
+    }
+    // The root and DCIM, once each.
+    assert_eq!(device.0.lock().unwrap().lists, 2);
+    files::put(&mut fs, "DCIM/NEW.JPG", b"new").unwrap();
+    assert_eq!(files::list(&mut fs, "DCIM/NEW.JPG").unwrap()[0].size, 3);
+}
+
+#[test]
+fn get_many_reads_each_prefix_in_one_device_call() {
+    let (mut fs, _device) = filesystem();
+    let image = files::list(&mut fs, "DCIM/IMAGE.JPG").unwrap().remove(0);
+    let data = files::get_many(&mut fs, &[image.clone(), image.clone()], Some(3)).unwrap();
+    assert_eq!(data, [vec![0, 1, 2], vec![0, 1, 2]]);
+    let mut big = image;
+    big.size = IO_BYTES as u64 + 1;
+    assert_eq!(
+        files::get_many(&mut fs, &[big], None).err(),
+        Some(libc::EINVAL)
+    );
+}

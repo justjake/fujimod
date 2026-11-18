@@ -30,6 +30,7 @@ wasm-bindgen.workspace = true
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
+fujimod-catalog-configuration.workspace = true
 fujimod-emulator-ip.workspace = true
 fujimod-emulator-imaging.workspace = true
 fujimod-emulator-exr2-images.workspace = true

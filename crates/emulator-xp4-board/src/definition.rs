@@ -306,6 +306,9 @@ pub struct Pl011Uart {
     pub base: u64,
     #[serde(default)]
     pub irq: Option<u32>,
+    /// Optional virtual programming peer, with a declared code-flash geometry.
+    #[serde(default)]
+    pub rl78: Option<fujimod_emulator_ip_arm::pl011::Rl78Config>,
 }
 
 /// The XP4 JPEG encoder: register page base, completion interrupt line,
@@ -347,6 +350,11 @@ pub struct StillEngine {
     /// `crate::still`). Absent, a pass writes nothing.
     #[serde(default)]
     pub raw: Option<crate::still::Raw>,
+    /// RECC with `raw` only: its still bands develop with the color the
+    /// firmware programs into its two color pages (opt-in, see
+    /// `crate::still`). Absent, they develop with the declared sRGB law.
+    #[serde(default)]
+    pub firmware_color: bool,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the

@@ -34,7 +34,7 @@
   min-height: 252px;
   max-height: none;
 }
-.release-panel {
+.launcher-actions {
   display: flex;
   flex-direction: column;
   align-self: start;
@@ -43,55 +43,6 @@
   border-radius: 16px;
   background: rgb(18 18 20 / 90%);
   overflow: hidden;
-}
-.release-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #3a3a3c;
-}
-.release-heading h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 650;
-}
-.release-heading time {
-  color: var(--dim);
-  font-size: 13px;
-  white-space: nowrap;
-}
-.release-notes {
-  height: 488px;
-  padding: 16px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  font-size: 14px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-.release-notes h4 {
-  margin: 0 0 4px;
-  font-size: inherit;
-}
-.release-notes p,
-.release-notes ul,
-.release-notes ol {
-  margin: 0 0 14px;
-}
-.release-notes ul,
-.release-notes ol {
-  padding-left: 18px;
-}
-.release-notes > :last-child {
-  margin-bottom: 0;
-}
-.release-notes a {
-  color: #64d2ff;
-}
-.release-notes pre {
-  overflow-x: auto;
 }
 .release-gate {
   display: flex;
@@ -284,16 +235,12 @@
   .stage.idle .ghost {
     display: none;
   }
-  .release-notes {
-    height: auto;
-  }
   .launcher-firmware .downloads-table {
     position: static;
     height: 252px;
     flex: none;
   }
-  .launcher-empty .release-gate,
-  .launcher-empty .release-actions {
+  .launcher-empty .launcher-actions {
     display: none;
   }
 }

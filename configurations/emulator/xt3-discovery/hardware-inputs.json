@@ -34,7 +34,7 @@
             "2": 0,
             "3": 460,
             "16": 0,
-            "21": 0,
+            "21": 1,
             "27": 0,
             "32": 0,
             "34": 0,
@@ -46,7 +46,7 @@
           "rtc_ticks_per_second": 54000000,
           "rtc_basis": "Explicit unset RTC: control32=0 (stopped), low/high seconds34/35=0. 10a3398 stops32, loads34/35, then starts32 with0x8000;10a3344 reads a stable low/high pair. After a guest start the counter advances from guest ticks at the declared54MHz timebase. Counter writes while running and unsupported alarm interrupts refuse; no software date globals are supplied.",
           "ambient_celsius": 25,
-          "basis": "Declared catalog input."
+          "basis": "Declared catalog input. Register 21 is the USB port detection result the firmware reads after writing 0x0b00 to register 20 when a cable arrives; it starts its USB device only when the low bits read 1 or 3. The value 1 is inferred from a body that starts its USB device with a host attached, not read from the controller, and is served whether or not a cable is present."
         }
       },
       "4": {

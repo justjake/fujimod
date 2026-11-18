@@ -1,194 +1,26 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
-import type { JSX } from '@solidjs/web';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { reportDownload } from '../../downloads/report.ts';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import type { Firmware } from '../../catalog';
-import type { SdCardFile } from '../../patch/catalog';
 import type { LoadedRelease } from '../../patch/release';
-import { loadOtaRelease, storeName, type SdBootV2Release } from '../../ota/release';
+import { loadOtaRelease, type SdBootV2Release } from '../../ota/release';
 import {
-  sdBootV2Files,
   sdBootV2For,
   sdBootV2Plan,
   conflicting,
   plannedBytes,
   offered,
+  recipeCatalog,
   releaseCameras,
   type CardCamera,
 } from './plan';
 import { buildCard } from './build';
-import { SdBootV2Shape } from './SdBootV2Shape';
 import { InstallSteps } from '../../install/InstallSteps';
 import { InstallDialog } from '../../install/InstallDialog';
 import './sd-card.css';
-
-function Check(props: {
-  checked: boolean;
-  disabled?: boolean;
-  label: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <input
-      type="checkbox"
-      class="sd-check"
-      aria-label={props.label}
-      checked={props.checked}
-      disabled={props.disabled}
-      onChange={(event) => props.onChange(event.currentTarget.checked)}
-    />
-  );
-}
-
-function FileRow(props: {
-  name: string;
-  detail?: JSX.Element;
-  bytes?: number;
-  dim?: boolean;
-  folder?: boolean;
-  check?: JSX.Element;
-}) {
-  return (
-    <div class={{ r: true, 'sd-row': true, dim: props.dim, folder: props.folder }}>
-      <span class="tw" />
-      <span class="sd-slot">{props.check}</span>
-      <Icon name={props.folder ? 'folder' : 'file'} />
-      <span class="n">{props.name}</span>
-      <span class="sd-detail">{props.detail}</span>
-      <Show when={props.bytes !== undefined}>
-        <span class="s">{formatBytes(props.bytes!)}</span>
-      </Show>
-    </div>
-  );
-}
-
-function Folder(props: {
-  name: string;
-  detail?: string;
-  /** Shown after the name, such as the count of included files. */
-  count?: number;
-  /** Caps the folder's listing height and scrolls it. */
-  scroll?: boolean;
-  dim?: boolean;
-  check?: JSX.Element;
-  children: JSX.Element;
-}) {
-  const [open, setOpen] = createSignal(true);
-  return (
-    <>
-      <div class={{ r: true, 'sd-row': true, folder: true, dim: props.dim }}>
-        <button
-          type="button"
-          class="sd-twist"
-          aria-expanded={open() ? 'true' : 'false'}
-          aria-label={props.name}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span class={['tw', { closed: !open() }]}>
-            <Icon name="chevron" size={13} />
-          </span>
-        </button>
-        <span class="sd-slot">{props.check}</span>
-        <button
-          type="button"
-          class="fold"
-          tabindex={-1}
-          aria-hidden="true"
-          onClick={() => setOpen((value) => !value)}
-        >
-          <Icon name="folder" />
-          <span class="n">
-            {props.name}
-            <Show when={props.count !== undefined}>
-              <span class="sd-count"> ({props.count})</span>
-            </Show>
-          </span>
-          <span class="sd-detail">{props.detail}</span>
-        </button>
-      </div>
-      <div class={{ kids: true, 'sd-scroll': props.scroll }} hidden={!open()}>
-        {props.children}
-      </div>
-    </>
-  );
-}
-
-/** Optional card files in one folder, each with its own include box and one for the folder. */
-function OptionalFolder(props: {
-  name: string;
-  detail: string;
-  files: readonly SdCardFile[];
-  excluded: ReadonlySet<string>;
-  setExcluded: (paths: readonly string[], excluded: boolean) => void;
-  dim: boolean;
-}) {
-  const included = () => props.files.filter((file) => !props.excluded.has(file.path)).length;
-  return (
-    <Folder
-      name={props.name}
-      detail={props.detail}
-      count={included()}
-      scroll
-      dim={props.dim}
-      check={
-        <Show when={props.files.length}>
-          <input
-            type="checkbox"
-            class="sd-check"
-            aria-label={`Include every file in ${props.name}`}
-            checked={included() === props.files.length}
-            ref={(element) =>
-              createEffect(
-                () => included() > 0 && included() < props.files.length,
-                (mixed) => {
-                  element.indeterminate = mixed;
-                },
-              )
-            }
-            onChange={(event) =>
-              props.setExcluded(
-                props.files.map((file) => file.path),
-                !event.currentTarget.checked,
-              )
-            }
-          />
-        </Show>
-      }
-    >
-      <For each={props.files} keyed={(file) => file.path}>
-        {(file) => (
-          <FileRow
-            name={file().path.split('/').at(-1)!}
-            detail={
-              <Show
-                when={file().source}
-                fallback={[file().title, file().author].filter(Boolean).join(' · ')}
-              >
-                {(source) => (
-                  <a class="sd-source" href={source()} target="_blank" rel="noopener noreferrer">
-                    {[file().title, file().author].filter(Boolean).join(' · ')}
-                  </a>
-                )}
-              </Show>
-            }
-            bytes={file().bytes}
-            dim={props.dim || props.excluded.has(file().path)}
-            check={
-              <Check
-                label={`Include ${file().path.split('/').at(-1)}`}
-                checked={!props.excluded.has(file().path)}
-                onChange={(checked) => props.setExcluded([file().path], !checked)}
-              />
-            }
-          />
-        )}
-      </For>
-    </Folder>
-  );
-}
 
 export function SdBootV2Download(props: { release?: LoadedRelease; catalog: readonly Firmware[] }) {
   const card = () => props.release?.sd_card_files ?? [];
@@ -207,10 +39,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
 
   const chosen = createMemo(() => cameras().filter((camera) => chosenIds().has(camera.id)));
   const blocked = createMemo(() => conflicting(cameras(), chosen(), card()));
-  /** The rows document the chosen cameras, or preview the first camera, dimmed. */
-  const shown = createMemo(() => (chosen().length ? chosen() : cameras().slice(0, 1)));
-  const previewing = () => !chosen().length;
-  const processors = createMemo(() => [...new Set(shown().map((camera) => camera.processor))]);
+  const processors = createMemo(() => [...new Set(chosen().map((camera) => camera.processor))]);
   const rootFiles = createMemo(() => [
     ...new Set(
       processors().flatMap((processor) => {
@@ -219,11 +48,13 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
       }),
     ),
   ]);
-  const optional = createMemo(() => card().filter((file) => file.processor === undefined));
-  const inFolder = (folder: string) =>
-    optional().filter(
-      (file) => file.path.startsWith(`FUJIMOD/${folder}/`) && offered(file, shown()),
-    );
+  const recipes = createMemo(() => {
+    const supported = chosen().length ? chosen() : cameras();
+    return recipeCatalog(card()).filter((recipe) => offered(recipe, supported));
+  });
+  const included = createMemo(
+    () => recipes().filter((recipe) => !excluded().has(recipe.path)).length,
+  );
   const loaded = createMemo(() => {
     const map = new Map<string, SdBootV2Release>();
     for (const [id, value] of releases()) if (!(value instanceof Error)) map.set(id, value);
@@ -233,20 +64,6 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
     sdBootV2Plan({ cameras: chosen(), card: card(), releases: loaded(), excluded: excluded() }),
   );
   const pending = () => chosen().some((camera) => !releases().has(camera.id));
-  const store = createMemo(() => {
-    const files = new Map<string, { bytes: number; paths: string[] }>();
-    for (const camera of chosen()) {
-      const release = loaded().get(camera.id);
-      for (const [path, file] of Object.entries(release?.fs ?? {})) {
-        const name = storeName(file.sha256);
-        const entry = files.get(name) ?? { bytes: file.size, paths: [] };
-        if (!entry.paths.includes(path)) entry.paths.push(path);
-        files.set(name, entry);
-      }
-    }
-    return [...files].sort(([a], [b]) => a.localeCompare(b));
-  });
-
   function choose(camera: CardCamera, checked: boolean) {
     setChosenIds((ids) => {
       const next = new Set(ids);
@@ -300,211 +117,132 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   };
 
   return (
-    <Show when={cameras().length}>
-      <section class="sd-download" aria-labelledby="download">
-        <h2 class="section-heading" id="download">
-          Build your SD card
-        </h2>
-        <p class="sd-release-version">
-          FujiMod {props.release?.tag}
-          {props.release?.prerelease ? ' · Preview release' : ''} · SD boot v2
+    <section class="home-download" id="download" aria-label="SD card download">
+      <div class="home-sd-card">
+        <img src="/brand.png" alt="Fujimod" width="88" height="22" />
+        <p>
+          Fujimod lives on your SD card. Running Fujimod does not change the firmware on your
+          camera’s built-in storage.
         </p>
-        <div class="sd-cameras" role="group" aria-label="Cameras">
-          <For each={cameras()} keyed={(camera) => camera.id}>
-            {(camera) => (
-              <label
-                class={{ 'sd-camera': true, blocked: blocked().has(camera().id) }}
-                title={
-                  blocked().has(camera().id)
-                    ? `${camera().processor} SD boot files differ from the chosen cameras’.`
-                    : undefined
-                }
-              >
-                <input
-                  type="checkbox"
-                  class="sd-check"
-                  checked={chosenIds().has(camera().id)}
-                  disabled={blocked().has(camera().id)}
-                  onChange={(event) => choose(camera(), event.currentTarget.checked)}
-                />
-                <span class="sd-camera-name">
-                  <b>{camera().model}</b>
-                  <span>{camera().processor}</span>
-                </span>
-                <span class="sd-camera-version">{camera().version}</span>
-                <span class="sd-camera-mods">
-                  {camera().mods.length} {camera().mods.length === 1 ? 'mod' : 'mods'}
-                </span>
-              </label>
-            )}
-          </For>
-        </div>
-        <div class="sd-card">
-          <SdBootV2Shape />
-          <div class="sd-label">
-            <img src="/brand.png" alt="FujiMod" width="110" height="28" />
-            <span>FAT32</span>
-          </div>
-          <p class="sd-lead">
-            FujiMod lives on your SD card. Running FujiMod does not change the firmware on your
-            camera’s built-in storage.
-          </p>
-          <div class="tree sd-tree" id="sd-card-files">
-            <For each={processors()}>
-              {(processor) => {
-                const files = () => sdBootV2Files(card(), processor);
-                const size = (name: string) =>
-                  files().files.find((file) => file.path === name)?.bytes;
-                return (
-                  <Show when={sdBootV2For(processor)}>
-                    {(boot) => (
-                      <>
-                        <FileRow
-                          name="FFBOOT.BIN"
-                          detail={`FujiMod stage 1 boot loader. The boot ROM runs it when you hold the SD boot buttons; it hands off to ${boot().stage2}.`}
-                          bytes={size('FFBOOT.BIN')}
-                          dim={previewing()}
-                        />
-                        <FileRow
-                          name="FFSYS.BIN"
-                          detail="Used by the boot ROM to initialize RAM."
-                          bytes={size('FFSYS.BIN')}
-                          dim={previewing()}
-                        />
-                        <FileRow
-                          name={boot().stage2}
-                          detail="Loads the selected camera’s files from FUJIMOD/SYSTEM."
-                          bytes={size(boot().stage2)}
-                          dim={previewing()}
-                        />
-                      </>
-                    )}
-                  </Show>
-                );
-              }}
+        <fieldset>
+          <legend>Cameras</legend>
+          <Show
+            when={cameras().length}
+            fallback={<p role="status">No SD card downloads available.</p>}
+          >
+            <For each={cameras()} keyed={(camera) => camera.id}>
+              {(camera) => (
+                <label class="sd-camera">
+                  <input
+                    type="checkbox"
+                    checked={chosenIds().has(camera().id)}
+                    disabled={blocked().has(camera().id)}
+                    onChange={(event) => choose(camera(), event.currentTarget.checked)}
+                  />
+                  <span>{camera().model}</span>
+                  <small>{camera().version}</small>
+                </label>
+              )}
             </For>
-            <Folder name="FUJIMOD">
-              <FileRow
-                name="SETTINGS.JSN"
-                detail="FujiMod settings. Stock settings stay in the camera."
+          </Show>
+        </fieldset>
+        <Show when={recipes().length}>
+          <fieldset aria-label="Recipes">
+            <label>
+              <input
+                type="checkbox"
+                checked={included() === recipes().length}
+                ref={(input) =>
+                  createEffect(
+                    () => included() > 0 && included() < recipes().length,
+                    (mixed) => {
+                      input.indeterminate = mixed;
+                    },
+                  )
+                }
+                onChange={(event) =>
+                  setExcluded(
+                    recipes().map((recipe) => recipe.path),
+                    !event.currentTarget.checked,
+                  )
+                }
               />
-              <Show when={inFolder('RECIPES').length}>
-                <OptionalFolder
-                  name="RECIPES"
-                  detail="Recipes for EDIT/SAVE CUSTOM SETTING."
-                  files={inFolder('RECIPES')}
-                  excluded={excluded()}
-                  setExcluded={setExcluded}
-                  dim={false}
-                />
-              </Show>
-              <Show when={inFolder('FILMS').length}>
-                <OptionalFolder
-                  name="FILMS"
-                  detail="Custom film simulations."
-                  files={inFolder('FILMS')}
-                  excluded={excluded()}
-                  setExcluded={setExcluded}
-                  dim={false}
-                />
-              </Show>
-              <Folder
-                name="SYSTEM"
-                detail="Each camera’s system files. Wi-Fi updates keep the previous version."
-                dim={previewing()}
-              >
-                <For each={shown()} keyed={(camera) => camera.id}>
-                  {(camera) => (
-                    <Folder name={camera().id} dim={previewing()}>
-                      <FileRow
-                        name="A.JSN"
-                        detail="The installed version’s files."
-                        dim={previewing()}
+              <span>Recipes</span>
+              <small>{recipes().length}</small>
+            </label>
+            <details>
+              <summary>Choose recipes</summary>
+              <div class="home-recipe-list">
+                <For each={recipes()}>
+                  {(recipe) => (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!excluded().has(recipe.path)}
+                        onChange={(event) =>
+                          setExcluded([recipe.path], !event.currentTarget.checked)
+                        }
                       />
-                      <FileRow name="STATE.JSN" detail="Startup state." dim={previewing()} />
-                    </Folder>
+                      <span>{recipe.title ?? recipe.path.split('/').at(-1)}</span>
+                    </label>
                   )}
                 </For>
-                <Folder
-                  name="STORE"
-                  detail="Shared system files, named by content."
-                  dim={previewing()}
+              </div>
+            </details>
+          </fieldset>
+        </Show>
+      </div>
+      <button
+        type="button"
+        class="home-download-button"
+        disabled={!chosen().length}
+        onClick={() => setInstalling(true)}
+      >
+        Download
+      </button>
+      <Show when={installing()}>
+        <InstallDialog
+          title="FujiMod SD boot v2"
+          identity={`${chosen()
+            .map((camera) => `${camera.model} ${camera.version}`)
+            .join(' • ')} • ${props.release?.tag ?? ''}`}
+          busy={busy()}
+          close={() => setInstalling(false)}
+        >
+          <InstallSteps
+            kind="sd-boot-v2"
+            cameras={chosen().map((camera) => ({
+              firmwareId: camera.id,
+              name: `${camera.model} version ${camera.version}`,
+            }))}
+            files={['FUJIMOD', ...rootFiles()]}
+            loader={processors()
+              .map((processor) => sdBootV2For(processor)?.stage2)
+              .find(Boolean)}
+            download={
+              <>
+                <button
+                  type="button"
+                  class="mod-download"
+                  disabled={pending() || !!problem() || busy()}
+                  onClick={() => void download()}
                 >
-                  <For each={store()} keyed={([name]) => name}>
-                    {(entry) => (
-                      <FileRow
-                        name={entry()[0]}
-                        detail={entry()[1].paths.join(', ')}
-                        bytes={entry()[1].bytes}
-                      />
-                    )}
-                  </For>
-                </Folder>
-              </Folder>
-            </Folder>
-          </div>
-          <div class="sd-actions">
-            <button
-              type="button"
-              class="mod-download"
-              disabled={!chosen().length}
-              onClick={() => setInstalling(true)}
-            >
-              <Icon name="download" />
-              {chosen().length
-                ? `Get FujiMod for ${chosen()
-                    .map((camera) => camera.model)
-                    .join(', ')}`
-                : 'Choose a camera'}
-            </button>
-          </div>
-          <Show when={installing()}>
-            <InstallDialog
-              title="FujiMod SD boot v2"
-              identity={`${chosen()
-                .map((camera) => `${camera.model} ${camera.version}`)
-                .join(' • ')} • ${props.release?.tag ?? ''}`}
-              busy={busy()}
-              close={() => setInstalling(false)}
-            >
-              <InstallSteps
-                kind="sd-boot-v2"
-                cameras={chosen().map((camera) => ({
-                  firmwareId: camera.id,
-                  name: `${camera.model} version ${camera.version}`,
-                }))}
-                files={['FUJIMOD', ...rootFiles()]}
-                loader={processors()
-                  .map((processor) => sdBootV2For(processor)?.stage2)
-                  .find(Boolean)}
-                download={
-                  <>
-                    <button
-                      type="button"
-                      class="mod-download"
-                      disabled={pending() || !!problem() || busy()}
-                      onClick={() => void download()}
-                    >
-                      <Icon name="download" />
-                      {busy() ? progress() || 'Preparing…' : 'Download SD card files'}
-                      <Show when={!busy() && !pending() && !problem()}>
-                        <span class="mod-download-size">
-                          {formatBytes(plannedBytes(plan().files))}
-                        </span>
-                      </Show>
-                    </button>
-                    <Show when={problem() || error()}>
-                      <p class="firmware-error" role="alert">
-                        {error() || problem()}
-                      </p>
-                    </Show>
-                  </>
-                }
-              />
-            </InstallDialog>
-          </Show>
-        </div>
-      </section>
-    </Show>
+                  <Icon name="download" />
+                  {busy() ? progress() || 'Preparing…' : 'Download SD card files'}
+                  <Show when={!busy() && !pending() && !problem()}>
+                    <span class="mod-download-size">{formatBytes(plannedBytes(plan().files))}</span>
+                  </Show>
+                </button>
+                <Show when={problem() || error()}>
+                  <p class="firmware-error" role="alert">
+                    {error() || problem()}
+                  </p>
+                </Show>
+              </>
+            }
+          />
+        </InstallDialog>
+      </Show>
+    </section>
   );
 }

@@ -91,9 +91,9 @@ test('development routes serve the configured release, observe edits, and refuse
     expect(sourceHead.headers.get('content-length')).toBe('35');
     expect(await sourceHead.text()).toBe('');
 
-    // A missing configured source refuses the request instead of showing the old copy.
+    // A release without editable notes still serves its packaged Markdown.
     await rm(source);
-    expect((await fetch(`${base}/releases/v2/notes.md`)).status).toBe(404);
+    expect((await loadRelease(base))?.notesText).toBe('edited');
 
     // A card file directory joins the release index and its assets.
     options.notes = undefined;

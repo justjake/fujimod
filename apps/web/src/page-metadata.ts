@@ -1,3 +1,12 @@
+import { focalComponents } from './docs/sdk.generated';
+import { isManualPath } from './docs/manual-routes';
+import { textPagePath, textPages } from './text/routes';
+
+// The head is rendered on the server. Keep the manual data out of the shared client entry.
+const manualPageTitle = import.meta.env.SSR
+  ? (await import('./docs/manual-data')).manualPageTitle
+  : undefined;
+
 const pages = {
   '/': {
     title: 'FujiMod',
@@ -46,7 +55,39 @@ const pages = {
 export const siteOrigin = 'https://fujimod.com';
 
 export function pageMetadata(path: string) {
+  const textRoute = textPagePath(path);
+  if (textRoute) {
+    const page = textPages[textRoute];
+    return {
+      title: `${page.heading} · FujiMod`,
+      description: page.description,
+      canonical: siteOrigin + textRoute,
+    };
+  }
   const normalized = path.endsWith('/') ? path : path + '/';
+  if (manualPageTitle && isManualPath(normalized))
+    return {
+      title: `${manualPageTitle(normalized)} · FujiMod`,
+      description: 'The FujiMod camera manual.',
+      canonical: siteOrigin + normalized,
+    };
+  const componentSlug = /^\/docs\/sdk\/focal\/components\/([^/]+)\/$/.exec(normalized)?.[1];
+  const component = componentSlug
+    ? focalComponents.find((entry) => entry.slug === componentSlug)
+    : undefined;
+  if (component)
+    return {
+      title: `${component.title} · FocalUI SDK · FujiMod`,
+      description: component.summary.replace(/\s+/g, ' ').slice(0, 160) ||
+        'FocalUI component reference.',
+      canonical: siteOrigin + normalized,
+    };
+  if (normalized === '/docs/sdk/focal/')
+    return {
+      title: 'FocalUI SDK · FujiMod',
+      description: 'The FocalUI camera interface toolkit component reference.',
+      canonical: siteOrigin + normalized,
+    };
   const route = Object.hasOwn(pages, normalized) ? (normalized as keyof typeof pages) : '/';
   return { ...pages[route], canonical: siteOrigin + route };
 }

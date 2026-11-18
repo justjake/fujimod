@@ -16,6 +16,7 @@ import { gzipSync } from 'node:zlib';
 import { parseArgs } from 'node:util';
 import { sharedStringEncoding } from './shared-memory-encoding.ts';
 import { optimizeWasm } from './wasm-optimization.mts';
+import { cargoArtifacts, readLinkedCrates } from '../scripts/linked-crates.ts';
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const defaultOutput = resolve(root, '../../target/emulator');
@@ -119,9 +120,12 @@ export function options(args: string[], base = root): BuildOptions {
   )
     throw new Error('Invalid --opt-level value.');
   const incremental = values.incremental;
-  const codegenUnits = values['codegen-units'] === undefined
-    ? incremental ? 256 : undefined
-    : Number(values['codegen-units']);
+  const codegenUnits =
+    values['codegen-units'] === undefined
+      ? incremental
+        ? 256
+        : undefined
+      : Number(values['codegen-units']);
   if (codegenUnits !== undefined && (!Number.isSafeInteger(codegenUnits) || codegenUnits < 1))
     throw new Error('--codegen-units must be a positive integer.');
   if (values.allocator !== 'dlmalloc' && values.allocator !== 'emmalloc')
@@ -274,7 +278,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     '--locked',
     '-j2',
     '--profile',
-    'dist',
+    'release-web',
     '--lib',
     ...(selected.perf ? ['--features', 'perf'] : []),
     '--target',
@@ -303,9 +307,10 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
   const cmakeBuild = ['ninja', '-j2', '-C', unicorn, 'unicorn'];
   const link = [
     'emcc',
-    join(target, 'wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a'),
+    join(target, 'wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a'),
     '-o',
     join(out, 'camera.mjs'),
+    `-Wl,-Map=${join(out, 'camera.map')}`,
     // Keep the standalone module within static hosting's per-file size budget.
     selected.incremental ? '-O1' : '-Oz',
     '--no-entry',
@@ -507,7 +512,11 @@ export function build(selected: BuildOptions) {
   const start = performance.now();
   run(plan.cmakeBuild, plan.env);
   const unicornSeconds = (performance.now() - start) / 1000;
-  run(['cargo', `+${pinned.nightly}`, ...plan.rust.slice(1)], plan.env);
+  const cameraArtifacts = cargoArtifacts(
+    [`+${pinned.nightly}`, ...plan.rust.slice(1)],
+    root,
+    plan.env,
+  );
   const rustSeconds = (performance.now() - start) / 1000 - unicornSeconds;
   const webgpuEnv: NodeJS.ProcessEnv = {
     ...plan.env,
@@ -522,16 +531,16 @@ export function build(selected: BuildOptions) {
     delete webgpuEnv.CARGO_PROFILE_DIST_INCREMENTAL;
   }
   const webgpuStart = performance.now();
-  run(
+  const webgpuMap = join(out, 'dmp-webgpu.map');
+  const webgpuArtifacts = cargoArtifacts(
     [
-      'cargo',
       `+${pinned.nightly}`,
       '-Zbuild-std=std,panic_abort',
-      'build',
+      'rustc',
       '--locked',
       '-j2',
       '--profile',
-      'dist',
+      'release-web',
       '--lib',
       '--target',
       'wasm32-unknown-unknown',
@@ -540,14 +549,16 @@ export function build(selected: BuildOptions) {
       '-p',
       'fujimod-emulator-ip-dmp-webgpu',
     ],
+    root,
     webgpuEnv,
+    [`-Clink-arg=-Map=${webgpuMap}`],
   );
   run(
     [
       wasmBindgen(process.env),
       join(
         webgpuEnv.CARGO_TARGET_DIR!,
-        'wasm32-unknown-unknown/dist/fujimod_emulator_ip_dmp_webgpu.wasm',
+        'wasm32-unknown-unknown/release-web/fujimod_emulator_ip_dmp_webgpu.wasm',
       ),
       '--target',
       'web',
@@ -559,7 +570,10 @@ export function build(selected: BuildOptions) {
     webgpuEnv,
   );
   const webgpuSeconds = (performance.now() - webgpuStart) / 1000;
-  const archive = join(out, 'rust/wasm32-unknown-emscripten/dist/libfujimod_emulator_javascript.a');
+  const archive = join(
+    out,
+    'rust/wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a',
+  );
   const symbols = capture([
     'emnm',
     '--defined-only',
@@ -630,6 +644,15 @@ export function build(selected: BuildOptions) {
   };
   const receiptPath = join(out, 'build.json');
   writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  const cameraMap = join(out, 'camera.map');
+  writeFileSync(
+    join(out, 'linked-crates.json'),
+    JSON.stringify({
+      camera: readLinkedCrates(cameraMap, cameraArtifacts),
+      webgpu: readLinkedCrates(webgpuMap, webgpuArtifacts),
+    }) + '\n',
+  );
+  rmSync(cameraMap);
   stageRuntimeNotices(out);
   if (selected.stagePackage) stagePackage(out);
   console.log(JSON.stringify(receipt, null, 2));

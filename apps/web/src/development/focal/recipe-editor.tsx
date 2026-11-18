@@ -8,7 +8,7 @@ import './focal.css';
 /* A recipe editor over live view: settings in a translucent left column,
    the picture in the right. Choice rows scroll their choices as stock icons,
    slider rows step through segments as FUJIMOD SET-UP's color bars do, and
-   fly-outs (WB SHIFT, film notes) continue the focused row across the
+   the WB SHIFT fly-out continues the focused row across the
    picture. Compare shows the column twice, A and B, scrolled together. The
    same screen serves RAW CONVERSION in playback.
 
@@ -92,9 +92,13 @@ const DR: Choice[] = [
 
 const EFFECT: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
 const GRAIN: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
+const GRAIN_SIZE: Choice[] = [{ name: 'SMALL' }, { name: 'LARGE' }];
+const PRIORITY: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }, { name: 'AUTO' }];
+const CLARITY: Step[] = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
 
-/** A row's icon: a stock Q menu vector, or a mod's own artwork. */
-type RowIcon = { stock: number } | { mod: string };
+/** A row's icon: a stock Q menu vector, a mod's own artwork, or a word on a
+ * stock-style plate with an optional badge letter. */
+type RowIcon = { stock: number } | { mod: string } | { word: string; badge?: string };
 
 /** A slider's steps in order; numbers show signed, words as written. */
 type Step = number | string;
@@ -114,6 +118,8 @@ interface SliderSetting {
   id: string;
   name: string;
   icon: RowIcon;
+  /** A second dimension of the setting above, sharing its icon. */
+  continues?: boolean;
   steps: Step[];
 }
 interface ChoiceSetting {
@@ -121,6 +127,7 @@ interface ChoiceSetting {
   id: string;
   name: string;
   icon: RowIcon;
+  continues?: boolean;
   choices: Choice[];
 }
 type Setting = SliderSetting | ChoiceSetting;
@@ -129,6 +136,13 @@ const SETTINGS: Setting[] = [
   { kind: 'choice', id: 'film', name: 'FILM SIMULATION', icon: { stock: 0x5f3 }, choices: FILMS },
   { kind: 'choice', id: 'wb', name: 'WHITE BALANCE', icon: { stock: 0x609 }, choices: WB },
   { kind: 'choice', id: 'dr', name: 'DYNAMIC RANGE', icon: { stock: 0x5f1 }, choices: DR },
+  {
+    kind: 'choice',
+    id: 'priority',
+    name: 'D RANGE PRIORITY',
+    icon: { mod: 'd_range_priority' },
+    choices: PRIORITY,
+  },
   {
     kind: 'slider',
     id: 'highlight',
@@ -139,19 +153,20 @@ const SETTINGS: Setting[] = [
   { kind: 'slider', id: 'shadow', name: 'SHADOW TONE', icon: { stock: 0x607 }, steps: LEVELS },
   { kind: 'slider', id: 'color', name: 'COLOR', icon: { stock: 0x5f0 }, steps: LEVELS },
   { kind: 'slider', id: 'sharp', name: 'SHARPNESS', icon: { stock: 0x605 }, steps: LEVELS },
+  { kind: 'slider', id: 'clarity', name: 'CLARITY', icon: { mod: 'clarity' }, steps: CLARITY },
   { kind: 'slider', id: 'nr', name: 'NOISE REDUCTION', icon: { stock: 0x603 }, steps: NR_LEVELS },
   {
     kind: 'choice',
     id: 'chrome',
     name: 'COLOR CHROME EFFECT',
-    icon: { mod: 'color_chrome' },
+    icon: { word: 'Chrome' },
     choices: EFFECT,
   },
   {
     kind: 'choice',
     id: 'fxblue',
     name: 'COLOR CHROME FX BLUE',
-    icon: { mod: 'color_chrome_blue' },
+    icon: { word: 'Chrome', badge: 'B' },
     choices: EFFECT,
   },
   {
@@ -161,7 +176,22 @@ const SETTINGS: Setting[] = [
     icon: { mod: 'film_grain' },
     choices: GRAIN,
   },
+  {
+    kind: 'choice',
+    id: 'grainSize',
+    name: 'GRAIN SIZE',
+    icon: { mod: 'film_grain' },
+    continues: true,
+    choices: GRAIN_SIZE,
+  },
 ];
+
+/** Rows under one icon: a setting and the further dimensions that continue it. */
+const GROUPS: number[][] = SETTINGS.reduce<number[][]>((groups, setting, i) => {
+  if (setting.continues && groups.length) groups[groups.length - 1].push(i);
+  else groups.push([i]);
+  return groups;
+}, []);
 
 /** Every setting holds the index of its step or choice; WB SHIFT holds R and B. */
 type Recipe = Record<string, number> & { shiftR: number; shiftB: number };
@@ -171,6 +201,8 @@ const BASE: Recipe = {
   film: 3,
   wb: 0,
   dr: 0,
+  priority: 0,
+  clarity: at(CLARITY, 0),
   highlight: at(LEVELS, -1),
   shadow: at(LEVELS, 1),
   color: at(LEVELS, 2),
@@ -179,6 +211,7 @@ const BASE: Recipe = {
   chrome: 1,
   fxblue: 0,
   grain: 1,
+  grainSize: 0,
   shiftR: 2,
   shiftB: -3,
 };
@@ -225,11 +258,37 @@ function Photo(props: { recipe: Recipe }) {
 /* ---- Designs ----------------------------------------------------------------- */
 
 /* Five whole designs of the same layout, beside the embossed one built first.
-   Each sets every surface: the column, its rows and focus, the icon column,
-   the chosen choice, the slider's form, the title box, the legend and the
-   fly-outs. */
+   Each gives a row's choices a physical object that plainly scrolls sideways
+   (a recessed channel under a loupe, a drum, a film strip, a row of keys, a
+   small LCD), sets sliders in the same channel, and sets every other surface: the column, row focus, icons, the
+   title box, the legend and the fly-outs. */
 
-type DesignId = 'embossed' | 'paper' | 'viewfinder' | 'dial' | 'meter' | 'outline';
+type DesignId =
+  | 'embossed'
+  | 'loupe'
+  | 'drum'
+  | 'film'
+  | 'keys'
+  | 'lcd'
+  | 'mono'
+  | 'glass'
+  | 'wheel'
+  | 'hasselblad';
+
+/** How a drawer shows that its choices continue past its ends. */
+type Depth = 'shadow' | 'fade' | 'clip';
+
+/** Mockup options shared by every design. */
+const [center, setCenter] = createSignal(true);
+const [depth, setDepth] = createSignal<Depth>('shadow');
+/** The accent for focus and changes outside RAW CONVERSION, which is playback's. */
+type Accent = 'custom' | 'rec' | 'setup';
+const ACCENTS: Record<Accent, { label: string; color: string }> = {
+  custom: { label: 'Custom purple', color: '#7d3fc2' },
+  rec: { label: 'Shooting red', color: 'var(--color-rec)' },
+  setup: { label: 'Setup blue', color: 'var(--color-setup)' },
+};
+const [accent, setAccent] = createSignal<Accent>('custom');
 
 interface Mark {
   focused: boolean;
@@ -245,36 +304,74 @@ interface CornerMarks {
   lower?: string;
 }
 
-/** A chosen cell or a thumb's box: its own surface and edges, its ink, and marks. */
+/** A cell or a thumb's box: its own surface and edges, its ink, and marks. */
 interface Look {
   style: JSX.CSSProperties;
   ink: string;
   corners?: CornerMarks;
   /** A small square in the top right corner. */
   pip?: string;
+  /** A small dot under the middle. */
+  dot?: string;
 }
 
-/** How a slider row draws its steps. */
-type SliderForm =
-  /** A track with ticks, zero to the value filled, a square thumb carrying the number. */
-  | 'thumb'
-  /** A scale of ticks with a full-height needle on the value, the number at the end. */
-  | 'ruler'
-  /** Every step printed; the value large, the others small. */
-  | 'digits'
-  /** One block per step, zero to the value lit, the number at the end. */
-  | 'blocks';
+/** One cell of a strip: whether it is the chosen one, how many cells away
+ * from the chosen one it sits, and its row's state. */
+interface CellState extends Mark {
+  chosen: boolean;
+  distance: number;
+}
 
-interface SliderColors {
+/** The sideways-scrolling object a row's choices (and, in most designs, its
+ * slider steps) sit in. */
+interface Strip {
+  /** The fixed channel the strip runs in. */
+  track: (focused: boolean) => JSX.CSSProperties;
+  /** The strip's own surface, which slides with its cells. */
+  film?: JSX.CSSProperties;
+  /** Space between the channel's edges and the cells. */
+  inset: number;
+  gap: number;
+  /** A word cell's side padding and least width. */
+  pad: number;
+  min: number;
+  font: string;
+  cell: (state: CellState) => Look;
+  /** The chevron at an end with more cells beyond it, its halo, and the
+   * shadow cast over cells at that end. */
+  ends: { ink: string; halo?: string; shadow: string };
+}
+
+/** The FUJIMOD SET-UP slider: a track, zero to the value filled, a thumb. */
+interface ThumbColors {
   track: string;
   tick: string;
   zero: string;
   fill: string;
-  /** The value's box (thumb, needle label or lit digit) and its ink. */
   value: (mark: Mark) => Look;
-  /** Steps printed but not chosen ('digits'). */
-  other: string;
 }
+
+/** A ruler slider: a tick scale with each step labeled. The scale slides
+ * under a fixed needle in the middle, or stays put while the needle moves. */
+interface Ruler {
+  kind: 'ruler';
+  fixed: boolean;
+  /** Between steps, when the scale slides. */
+  spacing: number;
+  tick: string;
+  major: string;
+  /** The ticks from zero to the value. */
+  fill: string;
+  /** Unchosen step labels; none hides them. */
+  label?: string;
+  /** The needle and the chosen step's label. */
+  chosen: (mark: Mark) => string;
+  font: string;
+}
+
+/** Title case, for designs that do not write in capitals. */
+const titleCase = (name: string) =>
+  name.toLowerCase().replace(/(^|[\s+-])(\S)/g, (_, gap: string, c: string) => gap + c.toUpperCase());
 
 interface Card {
   style: JSX.CSSProperties;
@@ -288,26 +385,22 @@ interface Design {
   edge: (side: 'left' | 'right') => string | undefined;
   row: (focused: boolean) => JSX.CSSProperties;
   /** The row's own top and bottom lines, which a drawer's contents stay between. */
-  lines: { top: number; bottom: number };
+  lines: { top: number; bottom: number; right?: number };
+  /** How the design writes setting and choice names. */
+  text?: (name: string) => string;
   /** How the focused row is marked, beyond its own surface. */
-  focus: 'stripe' | 'corners' | 'frame' | 'none';
+  focus: 'stripe' | 'none';
   focusColor: string;
   iconInk: (focused: boolean) => string;
   /** The stroke after the icon column. */
   divider?: (focused: boolean) => string | undefined;
-  drawer?: (focused: boolean) => string | undefined;
-  choiceFont: string;
-  chosen: (mark: Mark) => Look;
-  /** Ink of the choices not chosen. */
-  other: (focused: boolean) => string;
-  slider: SliderForm;
-  sliderColors: (focused: boolean) => SliderColors;
+  strip: Strip;
+  /** The slider, set in the strip's channel. */
+  slider: ThumbColors | Ruler;
   card: Card;
   legend: { box: JSX.CSSProperties; key: JSX.CSSProperties };
   /** The fly-out's body below its band; the band is the focused row. */
   body: JSX.CSSProperties;
-  /** Drawn under everything in the column, for legibility over the picture. */
-  filter?: string;
 }
 
 const ACCENT = 'var(--accent)';
@@ -317,13 +410,24 @@ const bottom = (width: number, color: string) => `inset 0 -${width}px 0 ${color}
 /** Box shadows listed first paint on top; false entries drop out. */
 const edges = (...list: (string | false | undefined)[]) =>
   list.filter((edge): edge is string => typeof edge === 'string').join(', ') || undefined;
+/** Cells fade with distance from the chosen one. */
+const fade = (distance: number, steps: number[]) => steps[Math.min(distance, steps.length - 1)];
 
-const PAPER = 'rgb(236 234 228 / 0.95)';
-const PAPER_INK = '#16161a';
-const DIAL_PLATE = 'rgb(46 46 48 / 0.97)';
-const DIAL_LIT = '#f1f1ef';
+/** A raised part: lit top edge, dark bottom edge and a hard shadow below. */
+const RAISED = 'inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 -2px 0 rgb(0 0 0 / 0.55), 0 2px 0 #000';
+/** A recessed channel: shadowed top edge, lit bottom edge. */
+const RECESSED = 'inset 0 3px 0 #000, inset 0 -1px 0 rgb(255 255 255 / 0.22)';
 
-const DESIGNS: Record<DesignId, Design> = {
+const FILM_BASE = '#2a1d10';
+const FILM_EDGE = '#120b04';
+const FILM_LIT = '#f4ead4';
+const LCD = '#a6b19a';
+const LCD_LIT = '#c9d6b8';
+const LCD_INK = '#141a10';
+const MONO = '#b4b4b0';
+const MONO_INK = '#101010';
+
+const BASE_DESIGNS: Record<Exclude<DesignId, 'mono' | 'glass' | 'wheel' | 'hasselblad'>, Design> = {
   embossed: {
     label: 'Embossed',
     panel: { background: 'rgb(34 34 36 / 0.88)' },
@@ -340,18 +444,26 @@ const DESIGNS: Record<DesignId, Design> = {
     focusColor: ACCENT,
     iconInk: () => '#fff',
     divider: () => 'rgb(255 255 255 / 0.22)',
-    drawer: () => 'rgb(255 255 255 / 0.11)',
-    choiceFont: 'text-[16px] font-light tracking-[0.08em] uppercase',
-    chosen: (m) => ({
-      style: {
-        background: 'rgb(255 255 255 / 0.2)',
-        'box-shadow': edges(m.changed && bottom(3, ACCENT), m.focused && ring(3, '#fff')),
-      },
-      ink: '#fff',
-    }),
-    other: () => '#fff',
-    slider: 'thumb',
-    sliderColors: () => ({
+    strip: {
+      track: () => ({ background: 'rgb(255 255 255 / 0.11)' }),
+      inset: 0,
+      gap: 0,
+      pad: 10,
+      min: 0,
+      font: 'text-[16px] font-light tracking-[0.08em] uppercase',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: 'rgb(255 255 255 / 0.2)',
+                'box-shadow': edges(c.changed && bottom(3, ACCENT), c.focused && ring(3, '#fff')),
+              },
+              ink: '#fff',
+            }
+          : { style: {}, ink: '#fff' },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: 'rgb(0 0 0 / 0.85)' },
+    },
+    slider: {
       track: 'rgb(255 255 255 / 0.35)',
       tick: 'rgb(255 255 255 / 0.55)',
       zero: '#fff',
@@ -360,8 +472,7 @@ const DESIGNS: Record<DesignId, Design> = {
         style: { background: '#fff', 'box-shadow': m.focused ? ring(3, '#fff') : undefined },
         ink: m.changed ? ACCENT : '#000',
       }),
-      other: '#fff',
-    }),
+    },
     card: {
       style: { background: 'rgb(24 24 24 / 0.82)', color: '#fff' },
       class: 'font-light tracking-[0.14em] uppercase',
@@ -373,227 +484,581 @@ const DESIGNS: Record<DesignId, Design> = {
     body: { background: 'rgb(30 30 32 / 0.96)', 'box-shadow': ring(1, '#3e3e42'), color: '#fff' },
   },
 
-  /* Printed, like the engraving on a top dial: black ink on warm paper, the
-     chosen choice a solid black block, a change in red. */
-  paper: {
-    label: 'Paper',
-    panel: { background: PAPER },
+  /* A loupe over a recessed channel: the choices slide along a dark groove,
+     and the chosen one sits under a raised, beveled window in the middle.
+     Sliders run the same way, their steps passing under the window. */
+  loupe: {
+    label: 'Loupe',
+    panel: { background: 'rgb(40 40 43 / 0.92)' },
+    edge: (side) =>
+      side === 'right'
+        ? 'inset -1px 0 0 rgb(255 255 255 / 0.25), inset -3px 0 0 #000'
+        : 'inset 1px 0 0 rgb(255 255 255 / 0.25), inset 3px 0 0 #000',
+    row: (focused) => ({
+      background: focused ? 'rgb(84 84 90 / 0.97)' : undefined,
+      'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16), inset 0 -2px 0 #000',
+    }),
+    lines: { top: 1, bottom: 2 },
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => '#fff',
+    strip: {
+      track: (focused) => ({
+        background: focused ? '#141416' : '#0c0c0d',
+        'box-shadow': RECESSED,
+      }),
+      inset: 4,
+      gap: 2,
+      pad: 9,
+      min: 34,
+      font: 'text-[16px] font-normal tracking-[0.08em] uppercase',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: c.focused ? '#5e5e64' : '#3e3e42',
+                'box-shadow': edges(
+                  c.focused && ring(2, '#fff'),
+                  RAISED,
+                  c.changed && bottom(3, ACCENT),
+                ),
+              },
+              ink: '#fff',
+            }
+          : { style: { opacity: fade(c.distance, [1, 0.62, 0.4, 0.26]) }, ink: '#fff' },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: '#000' },
+    },
+    slider: {
+      track: 'rgb(255 255 255 / 0.22)',
+      tick: 'rgb(255 255 255 / 0.4)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: m.focused ? '#5e5e64' : '#3e3e42',
+          'box-shadow': edges(m.focused && ring(2, '#fff'), RAISED, m.changed && bottom(3, ACCENT)),
+        },
+        ink: '#fff',
+      }),
+    },
+    card: {
+      style: { background: 'rgb(40 40 43 / 0.94)', color: '#fff', 'box-shadow': RAISED },
+      class: 'font-light tracking-[0.14em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(40 40 43 / 0.94)', color: '#fff', 'box-shadow': RAISED },
+      key: { background: '#fff', color: '#000' },
+    },
+    body: { background: 'rgb(40 40 43 / 0.97)', color: '#fff', 'box-shadow': RAISED },
+  },
+
+  /* A drum: choices printed round a barrel that turns in a slot, shrinking and
+     darkening toward its ends. Rails above and below the middle mark the
+     chosen one. */
+  drum: {
+    label: 'Drum',
+    panel: { background: 'rgb(18 18 20 / 0.9)' },
     edge: (side) => (side === 'right' ? 'inset -2px 0 0 #000' : 'inset 2px 0 0 #000'),
     row: (focused) => ({
-      background: focused ? 'rgb(0 0 0 / 0.08)' : undefined,
-      'box-shadow': 'inset 0 -1px 0 rgb(0 0 0 / 0.16)',
+      background: focused ? 'rgb(52 52 56 / 0.96)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.1)',
     }),
     lines: { top: 0, bottom: 1 },
     focus: 'stripe',
     focusColor: ACCENT,
-    iconInk: () => PAPER_INK,
-    divider: () => 'rgb(0 0 0 / 0.2)',
-    choiceFont: 'text-[16px] font-medium tracking-[0.06em] uppercase',
-    chosen: (m) => ({
-      style: {
-        background: m.focused ? PAPER_INK : 'rgb(0 0 0 / 0.14)',
-        'box-shadow': m.changed ? bottom(4, ACCENT) : undefined,
-      },
-      ink: m.focused ? '#fff' : PAPER_INK,
-    }),
-    other: () => 'rgb(22 22 26 / 0.75)',
-    slider: 'thumb',
-    sliderColors: () => ({
-      track: 'rgb(0 0 0 / 0.3)',
-      tick: 'rgb(0 0 0 / 0.45)',
-      zero: PAPER_INK,
-      fill: ACCENT,
-      value: (m) => ({
-        style: {
-          background: m.focused ? PAPER_INK : PAPER,
-          'box-shadow': edges(m.changed && bottom(4, ACCENT), ring(2, PAPER_INK)),
-        },
-        ink: m.focused ? '#fff' : PAPER_INK,
+    iconInk: () => '#fff',
+    divider: () => 'rgb(255 255 255 / 0.14)',
+    strip: {
+      track: (focused) => ({
+        background: focused ? '#2c2c30' : '#1d1d20',
+        'box-shadow': edges(
+          'inset 0 2px 0 #000',
+          'inset 0 -2px 0 #000',
+          'inset 14px 0 0 rgb(0 0 0 / 0.45)',
+          'inset -14px 0 0 rgb(0 0 0 / 0.45)',
+          'inset 30px 0 0 rgb(0 0 0 / 0.25)',
+          'inset -30px 0 0 rgb(0 0 0 / 0.25)',
+        ),
       }),
-      other: PAPER_INK,
-    }),
+      inset: 3,
+      gap: 0,
+      pad: 8,
+      min: 32,
+      font: 'text-[17px] font-medium tracking-[0.05em] uppercase',
+      cell: (c) => {
+        const scale = fade(c.distance, [1, 0.84, 0.72, 0.64]);
+        const rail = c.changed ? ACCENT : c.focused ? '#fff' : 'rgb(255 255 255 / 0.7)';
+        return c.chosen
+          ? {
+              style: {
+                'box-shadow': edges(top(2, rail), bottom(2, rail)),
+                background: c.focused ? 'rgb(255 255 255 / 0.1)' : undefined,
+              },
+              ink: '#fff',
+            }
+          : {
+              style: {
+                transform: `scale(${scale})`,
+                opacity: fade(c.distance, [1, 0.6, 0.38, 0.24]),
+              },
+              ink: '#fff',
+            };
+      },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: 'rgb(0 0 0 / 0.85)' },
+    },
+    slider: {
+      track: 'rgb(255 255 255 / 0.3)',
+      tick: 'rgb(255 255 255 / 0.45)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => {
+        const rail = m.changed ? ACCENT : m.focused ? '#fff' : 'rgb(255 255 255 / 0.7)';
+        return {
+          style: {
+            background: m.focused ? '#3a3a3f' : '#1d1d20',
+            'box-shadow': edges(top(2, rail), bottom(2, rail)),
+          },
+          ink: '#fff',
+        };
+      },
+    },
     card: {
-      style: { background: PAPER, color: PAPER_INK, 'box-shadow': ring(2, PAPER_INK) },
+      style: { background: 'rgb(18 18 20 / 0.9)', color: '#fff', 'box-shadow': edges(top(2, '#fff'), bottom(2, '#fff')) },
       class: 'font-medium tracking-[0.12em] uppercase',
     },
     legend: {
-      box: { background: PAPER, color: PAPER_INK },
-      key: { background: PAPER_INK, color: '#fff' },
-    },
-    body: { background: PAPER, color: PAPER_INK, 'box-shadow': ring(2, PAPER_INK) },
-  },
-
-  /* The EVF's own language: no boxes, white type with a hard shadow straight
-     on a dimmed picture, the focused row held in AF-frame corners, sliders as
-     an exposure scale with a needle. */
-  viewfinder: {
-    label: 'Viewfinder',
-    panel: { background: 'rgb(0 0 0 / 0.42)' },
-    edge: () => undefined,
-    row: (focused) => ({ background: focused ? 'rgb(0 0 0 / 0.38)' : undefined }),
-    lines: { top: 0, bottom: 0 },
-    focus: 'corners',
-    focusColor: '#fff',
-    iconInk: () => '#fff',
-    choiceFont: 'text-[16px] font-normal tracking-[0.1em] uppercase',
-    chosen: (m) => ({
-      style: { 'box-shadow': bottom(3, m.changed ? ACCENT : '#fff') },
-      ink: '#fff',
-    }),
-    other: (focused) => (focused ? 'rgb(255 255 255 / 0.62)' : 'rgb(255 255 255 / 0.45)'),
-    slider: 'ruler',
-    sliderColors: (focused) => ({
-      track: 'rgb(255 255 255 / 0.6)',
-      tick: 'rgb(255 255 255 / 0.7)',
-      zero: '#fff',
-      fill: focused ? '#fff' : 'rgb(255 255 255 / 0.85)',
-      value: (m) => ({ style: {}, ink: m.changed ? '#ff5a4a' : '#fff' }),
-      other: '#fff',
-    }),
-    card: {
-      style: { color: '#fff', 'text-shadow': '0 2px 0 #000, 0 0 3px #000' },
-      class: 'font-normal tracking-[0.14em] uppercase',
-    },
-    legend: {
-      box: { background: 'rgb(0 0 0 / 0.45)', color: '#fff' },
+      box: { background: 'rgb(18 18 20 / 0.9)', color: '#fff' },
       key: { background: '#fff', color: '#000' },
     },
-    body: { background: 'rgb(0 0 0 / 0.62)', color: '#fff' },
-    filter: 'drop-shadow(0 1px 0 #000)',
+    body: { background: 'rgb(18 18 20 / 0.96)', color: '#fff', 'box-shadow': ring(2, '#000') },
   },
 
-  /* Machined plates with gaps between them. The focused plate lights up white
-     with black ink; only the chosen choice is bright, and sliders print every
-     step like a dial's scale with the value large. */
-  dial: {
-    label: 'Dial',
-    panel: { background: 'rgb(12 12 12 / 0.9)' },
-    edge: () => undefined,
+  /* Film: each row's choices are frames on a strip of film, sprocket holes
+     running past above and below. The chosen frame is lit as on a light
+     table. */
+  film: {
+    label: 'Film strip',
+    panel: { background: 'rgb(16 12 8 / 0.9)' },
+    edge: (side) => (side === 'right' ? 'inset -2px 0 0 #000' : 'inset 2px 0 0 #000'),
     row: (focused) => ({
-      background: focused ? DIAL_LIT : DIAL_PLATE,
-      'box-shadow': edges(bottom(3, 'rgb(12 12 12)'), focused && bottom(5, ACCENT)),
+      background: focused ? 'rgb(64 50 34 / 0.95)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(255 230 190 / 0.1)',
     }),
-    lines: { top: 0, bottom: 3 },
+    lines: { top: 0, bottom: 1 },
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => FILM_LIT,
+    strip: {
+      track: () => ({ background: FILM_EDGE }),
+      film: {
+        background: FILM_BASE,
+        'background-image': `repeating-linear-gradient(to right, transparent 0 3px, ${FILM_EDGE} 3px 7px, transparent 7px 10px), repeating-linear-gradient(to right, transparent 0 3px, ${FILM_EDGE} 3px 7px, transparent 7px 10px)`,
+        'background-size': '10px 4px, 10px 4px',
+        'background-position': '0 3px, 0 calc(100% - 3px)',
+        'background-repeat': 'repeat-x',
+      },
+      inset: 9,
+      gap: 3,
+      pad: 8,
+      min: 34,
+      font: 'text-[15px] font-medium tracking-[0.06em] uppercase',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: FILM_LIT,
+                'box-shadow': edges(c.focused && ring(2, ACCENT), c.changed && bottom(3, ACCENT)),
+              },
+              ink: FILM_EDGE,
+            }
+          : {
+              style: { background: 'rgb(255 230 190 / 0.08)' },
+              ink: `rgb(244 234 212 / ${fade(c.distance, [1, 0.75, 0.55, 0.4])})`,
+            },
+      ends: { ink: FILM_LIT, halo: 'rgb(0 0 0 / 0.55)', shadow: FILM_EDGE },
+    },
+    slider: {
+      track: 'rgb(244 234 212 / 0.3)',
+      tick: 'rgb(244 234 212 / 0.5)',
+      zero: FILM_LIT,
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: FILM_LIT,
+          'box-shadow': edges(m.focused && ring(2, ACCENT), m.changed && bottom(3, ACCENT)),
+        },
+        ink: FILM_EDGE,
+      }),
+    },
+    card: {
+      style: { background: FILM_LIT, color: FILM_EDGE },
+      class: 'font-medium tracking-[0.12em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(16 12 8 / 0.9)', color: FILM_LIT },
+      key: { background: FILM_LIT, color: FILM_EDGE },
+    },
+    body: { background: 'rgb(30 22 14 / 0.97)', color: FILM_LIT, 'box-shadow': ring(2, FILM_EDGE) },
+  },
+
+  /* Keys: each choice a raised key in a tray; the chosen key is pressed in and
+     its lamp is lit. Sliders are a row of numbered keys. */
+  keys: {
+    label: 'Keys',
+    panel: { background: 'rgb(26 26 28 / 0.92)' },
+    edge: (side) => (side === 'right' ? 'inset -2px 0 0 #000' : 'inset 2px 0 0 #000'),
+    row: (focused) => ({
+      background: focused ? 'rgb(58 58 62 / 0.96)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.07)',
+    }),
+    lines: { top: 1, bottom: 1 },
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => '#fff',
+    divider: () => 'rgb(0 0 0 / 0.8)',
+    strip: {
+      track: () => ({ background: '#0a0a0b', 'box-shadow': 'inset 0 2px 0 #000' }),
+      inset: 4,
+      gap: 4,
+      pad: 8,
+      min: 30,
+      font: 'text-[15px] font-semibold tracking-[0.05em] uppercase',
+      cell: (c) => {
+        const lamp = c.changed ? ACCENT : c.focused ? '#fff' : 'rgb(255 255 255 / 0.75)';
+        return c.chosen
+          ? {
+              style: {
+                background: '#202023',
+                transform: 'translateY(2px)',
+                'box-shadow': edges(
+                  top(3, lamp),
+                  c.focused && ring(1, '#fff'),
+                  'inset 0 4px 0 #000',
+                ),
+              },
+              ink: '#fff',
+            }
+          : {
+              style: {
+                background: '#3b3b3f',
+                'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -3px 0 #232326, 0 2px 0 #000',
+              },
+              ink: 'rgb(255 255 255 / 0.85)',
+            };
+      },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: '#000' },
+    },
+    slider: {
+      track: 'rgb(255 255 255 / 0.2)',
+      tick: 'rgb(255 255 255 / 0.4)',
+      zero: '#fff',
+      fill: ACCENT,
+      value: (m) => ({
+        style: {
+          background: '#3b3b3f',
+          'box-shadow': edges(
+            top(3, m.changed ? ACCENT : m.focused ? '#fff' : 'rgb(255 255 255 / 0.75)'),
+            m.focused && ring(1, '#fff'),
+            'inset 0 -3px 0 #232326, 0 2px 0 #000',
+          ),
+        },
+        ink: '#fff',
+      }),
+    },
+    card: {
+      style: {
+        background: '#3b3b3f',
+        color: '#fff',
+        'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -3px 0 #232326',
+      },
+      class: 'font-semibold tracking-[0.1em] uppercase',
+    },
+    legend: {
+      box: {
+        background: '#3b3b3f',
+        color: '#fff',
+        'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.3), inset 0 -3px 0 #232326',
+      },
+      key: { background: '#0a0a0b', color: '#fff' },
+    },
+    body: { background: 'rgb(26 26 28 / 0.97)', color: '#fff', 'box-shadow': ring(2, '#000') },
+  },
+
+  /* The top LCD: each row's choices on a small reflective LCD set into the
+     body, unchosen choices as faint ghost segments, the chosen one solid and
+     inverted. The focused row's LCD lights up. */
+  lcd: {
+    label: 'Top LCD',
+    panel: { background: 'rgb(22 22 22 / 0.92)' },
+    edge: (side) => (side === 'right' ? 'inset -2px 0 0 #000' : 'inset 2px 0 0 #000'),
+    row: (focused) => ({
+      background: focused ? 'rgb(54 54 54 / 0.96)' : undefined,
+      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.08)',
+    }),
+    lines: { top: 0, bottom: 1 },
+    focus: 'stripe',
+    focusColor: ACCENT,
+    iconInk: () => '#fff',
+    strip: {
+      track: (focused) => ({
+        background: focused ? LCD_LIT : LCD,
+        'box-shadow': edges(ring(2, '#050505'), 'inset 0 4px 0 rgb(0 0 0 / 0.28)'),
+      }),
+      inset: 6,
+      gap: 2,
+      pad: 7,
+      min: 28,
+      font: 'text-[16px] font-bold tracking-[0.04em] uppercase tabular-nums',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: LCD_INK,
+                'box-shadow': c.changed ? bottom(3, ACCENT) : undefined,
+              },
+              ink: c.focused ? LCD_LIT : LCD,
+            }
+          : { style: {}, ink: 'rgb(20 26 16 / 0.32)' },
+      ends: { ink: LCD_INK, shadow: 'rgb(20 26 16 / 0.45)' },
+    },
+    slider: {
+      track: 'rgb(20 26 16 / 0.35)',
+      tick: 'rgb(20 26 16 / 0.5)',
+      zero: LCD_INK,
+      fill: LCD_INK,
+      value: (m) => ({
+        style: { background: LCD_INK, 'box-shadow': m.changed ? bottom(3, ACCENT) : undefined },
+        ink: m.focused ? LCD_LIT : LCD,
+      }),
+    },
+    card: {
+      style: { background: LCD_LIT, color: LCD_INK, 'box-shadow': ring(2, '#050505') },
+      class: 'font-bold tracking-[0.08em] uppercase',
+    },
+    legend: {
+      box: { background: 'rgb(22 22 22 / 0.92)', color: '#fff' },
+      key: { background: LCD_LIT, color: LCD_INK },
+    },
+    body: { background: LCD_LIT, color: LCD_INK, 'box-shadow': ring(2, '#050505') },
+  },
+};
+
+/* The top LCD in monochrome: gray segments, and the focused row's LCD
+   outlined in the shooting accent rather than lit. */
+/** A pane of dark glass, lit along its top edge. */
+const GLASS: JSX.CSSProperties = {
+  background: 'rgb(30 30 32 / 0.52)',
+  'backdrop-filter': 'blur(24px) saturate(1.15)',
+  'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 0 0 1px rgb(255 255 255 / 0.1)',
+};
+
+const DESIGNS: Record<DesignId, Design> = {
+  ...BASE_DESIGNS,
+  mono: {
+  ...BASE_DESIGNS.lcd,
+  label: 'Mono LCD',
+  focus: 'none',
+  strip: {
+    ...BASE_DESIGNS.lcd.strip,
+    track: (focused) => ({
+      background: MONO,
+      'box-shadow': edges(
+        focused ? ring(3, ACCENT) : ring(2, '#050505'),
+        'inset 0 4px 0 rgb(0 0 0 / 0.28)',
+      ),
+    }),
+    cell: (c) =>
+      c.chosen
+        ? {
+            style: { background: MONO_INK, 'box-shadow': c.changed ? bottom(3, ACCENT) : undefined },
+            ink: MONO,
+          }
+        : { style: {}, ink: 'rgb(16 16 16 / 0.32)' },
+    ends: { ink: MONO_INK, shadow: 'rgb(16 16 16 / 0.45)' },
+  },
+  slider: {
+    track: 'rgb(16 16 16 / 0.35)',
+    tick: 'rgb(16 16 16 / 0.5)',
+    zero: MONO_INK,
+    fill: MONO_INK,
+    value: (m) => ({
+      style: { background: MONO_INK, 'box-shadow': m.changed ? bottom(3, ACCENT) : undefined },
+      ink: MONO,
+    }),
+  },
+  card: { ...BASE_DESIGNS.lcd.card, style: { background: MONO, color: MONO_INK, 'box-shadow': ring(2, '#050505') } },
+  legend: { ...BASE_DESIGNS.lcd.legend, key: { background: MONO, color: MONO_INK } },
+  body: { background: MONO, color: MONO_INK, 'box-shadow': ring(2, '#050505') },
+
+  },
+
+  /* Apple, Liquid Glass: the column a pane of dark glass, each row's choices
+     on a rounded track that brightens with focus, the chosen one a white
+     capsule (the accent when changed). Sliders are rulers sliding under a
+     fixed needle. Names in title case. */
+  glass: {
+    label: 'Glass',
+    panel: { background: 'rgb(22 22 24 / 0.5)', 'backdrop-filter': 'blur(24px) saturate(1.15)' },
+    edge: (side) =>
+      side === 'right' ? 'inset -1px 0 0 rgb(255 255 255 / 0.22)' : 'inset 1px 0 0 rgb(255 255 255 / 0.22)',
+    row: () => ({}),
+    lines: { top: 3, bottom: 3, right: 6 },
+    text: titleCase,
     focus: 'none',
     focusColor: ACCENT,
-    iconInk: (focused) => (focused ? '#000' : '#fff'),
-    divider: (focused) => (focused ? 'rgb(0 0 0 / 0.25)' : 'rgb(0 0 0 / 0.6)'),
-    choiceFont: 'text-[17px] font-semibold tracking-[0.04em] uppercase',
-    chosen: (m) => ({
-      style: {},
-      ink: m.changed ? ACCENT : m.focused ? '#000' : '#fff',
-    }),
-    other: (focused) => (focused ? 'rgb(0 0 0 / 0.28)' : 'rgb(255 255 255 / 0.26)'),
-    slider: 'digits',
-    sliderColors: (focused) => ({
-      track: 'transparent',
-      tick: 'transparent',
-      zero: 'transparent',
+    iconInk: (focused) => (focused ? '#fff' : 'rgb(255 255 255 / 0.78)'),
+    strip: {
+      track: (focused) => ({
+        background: focused ? 'rgb(255 255 255 / 0.17)' : 'rgb(255 255 255 / 0.06)',
+        'border-radius': '13px',
+        'box-shadow': focused
+          ? 'inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.14)'
+          : undefined,
+      }),
+      inset: 4,
+      gap: 2,
+      pad: 11,
+      min: 30,
+      font: 'text-[16px] font-medium',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: c.changed ? ACCENT : '#fff',
+                'border-radius': '10px',
+                'box-shadow': '0 1px 5px rgb(0 0 0 / 0.35)',
+              },
+              ink: c.changed ? '#fff' : '#000',
+            }
+          : { style: {}, ink: `rgb(255 255 255 / ${fade(c.distance, [0.92, 0.66, 0.45, 0.3])})` },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.5)', shadow: 'rgb(0 0 0 / 0.3)' },
+    },
+    slider: {
+      kind: 'ruler',
+      fixed: false,
+      spacing: 38,
+      tick: 'rgb(255 255 255 / 0.3)',
+      major: 'rgb(255 255 255 / 0.65)',
       fill: ACCENT,
-      value: (m) => ({ style: {}, ink: m.changed ? ACCENT : focused ? '#000' : '#fff' }),
-      other: focused ? 'rgb(0 0 0 / 0.32)' : 'rgb(255 255 255 / 0.3)',
-    }),
+      label: 'rgb(255 255 255 / 0.5)',
+      chosen: (m) => (m.changed ? ACCENT : '#fff'),
+      font: 'text-[12px] font-medium',
+    },
     card: {
-      style: { background: DIAL_LIT, color: '#000' },
+      style: { ...GLASS, 'border-radius': '14px', color: '#fff' },
+      class: 'font-semibold',
+    },
+    legend: {
+      box: { ...GLASS, 'border-radius': '12px', color: '#fff' },
+      key: { background: '#fff', color: '#000', 'border-radius': '6px' },
+    },
+    body: { ...GLASS, 'border-radius': '16px', color: '#fff' },
+  },
+
+  /* The iPhone Camera's mode dial: each row's choices a line of words, the
+     chosen one held in the middle in the accent while the row has focus, a
+     dot under it when changed. The focused row's icon turns the accent too.
+     Sliders are rulers under a fixed needle. */
+  wheel: {
+    label: 'Camera wheel',
+    panel: { background: 'rgb(0 0 0 / 0.55)' },
+    edge: () => undefined,
+    row: (focused) => ({ background: focused ? 'rgb(255 255 255 / 0.09)' : undefined }),
+    lines: { top: 0, bottom: 0 },
+    focus: 'none',
+    focusColor: ACCENT,
+    iconInk: (focused) => (focused ? ACCENT : '#fff'),
+    strip: {
+      track: () => ({}),
+      inset: 0,
+      gap: 0,
+      pad: 11,
+      min: 30,
+      font: 'text-[15px] font-semibold tracking-[0.08em] uppercase',
+      cell: (c) =>
+        c.chosen
+          ? { style: {}, ink: c.focused ? ACCENT : '#fff', dot: c.changed ? ACCENT : undefined }
+          : { style: {}, ink: `rgb(255 255 255 / ${fade(c.distance, [0.75, 0.5, 0.32, 0.2])})` },
+      ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.6)', shadow: 'rgb(0 0 0 / 0.5)' },
+    },
+    slider: {
+      kind: 'ruler',
+      fixed: false,
+      spacing: 34,
+      tick: 'rgb(255 255 255 / 0.35)',
+      major: 'rgb(255 255 255 / 0.75)',
+      fill: '#fff',
+      label: 'rgb(255 255 255 / 0.5)',
+      chosen: (m) => (m.focused || m.changed ? ACCENT : '#fff'),
+      font: 'text-[12px] font-semibold',
+    },
+    card: {
+      style: { background: 'rgb(0 0 0 / 0.5)', 'border-radius': '8px', color: '#fff' },
       class: 'font-semibold tracking-[0.06em] uppercase',
     },
     legend: {
-      box: { background: DIAL_LIT, color: '#000' },
-      key: { background: '#000', color: '#fff' },
+      box: { background: 'rgb(0 0 0 / 0.5)', 'border-radius': '8px', color: '#fff' },
+      key: { background: '#fff', color: '#000', 'border-radius': '5px' },
     },
-    body: { background: 'rgb(12 12 12 / 0.94)', color: '#fff', 'box-shadow': ring(2, DIAL_LIT) },
+    body: { background: 'rgb(0 0 0 / 0.7)', 'border-radius': '12px', color: '#fff' },
   },
 
-  /* An instrument panel: near-black, the focused row held in a red frame,
-     choices as indicator lamps (a lit bar over the chosen one), sliders as
-     segment meters lit from zero. */
-  meter: {
-    label: 'Meter',
-    panel: { background: 'rgb(6 6 6 / 0.84)' },
-    edge: (side) => (side === 'right' ? 'inset -1px 0 0 #333' : 'inset 1px 0 0 #333'),
-    row: () => ({ 'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.1)' }),
-    lines: { top: 0, bottom: 1 },
-    focus: 'frame',
-    focusColor: ACCENT,
-    iconInk: (focused) => (focused ? '#fff' : 'rgb(255 255 255 / 0.8)'),
-    choiceFont: 'text-[15px] font-medium tracking-[0.12em] uppercase',
-    chosen: (m) => ({
-      style: {
-        'box-shadow': top(4, m.focused ? ACCENT : 'rgb(255 255 255 / 0.85)'),
-        background: 'rgb(255 255 255 / 0.06)',
-      },
-      ink: '#fff',
-      pip: m.changed ? ACCENT : undefined,
-    }),
-    other: () => 'rgb(255 255 255 / 0.38)',
-    slider: 'blocks',
-    sliderColors: (focused) => ({
-      track: 'rgb(255 255 255 / 0.12)',
-      tick: 'rgb(255 255 255 / 0.12)',
-      zero: 'rgb(255 255 255 / 0.5)',
-      fill: focused ? ACCENT : 'rgb(255 255 255 / 0.82)',
-      value: (m) => ({ style: {}, ink: m.changed ? '#ff5a4a' : '#fff' }),
-      other: '#fff',
-    }),
-    card: {
-      style: { background: 'rgb(6 6 6 / 0.84)', color: '#fff', 'box-shadow': top(3, ACCENT) },
-      class: 'font-medium tracking-[0.14em] uppercase',
-    },
-    legend: {
-      box: { background: 'rgb(6 6 6 / 0.84)', color: '#fff' },
-      key: { background: '#fff', color: '#000' },
-    },
-    body: { background: 'rgb(6 6 6 / 0.94)', color: '#fff', 'box-shadow': ring(2, ACCENT) },
-  },
-
-  /* Wireframe: hairlines only over a light veil, everything drawn in 1px
-     white strokes; focus thickens and fills. */
-  outline: {
-    label: 'Outline',
-    panel: { background: 'rgb(0 0 0 / 0.5)' },
-    edge: (side) => (side === 'right' ? 'inset -1px 0 0 #fff' : 'inset 1px 0 0 #fff'),
+  /* Hasselblad's control screen: black, light type, hairlines; the chosen
+     choice outlined as its AF box is, and filled white with focus. Sliders
+     are its exposure scale: a fixed scale with the ticks from zero lit and
+     the value over the needle. */
+  hasselblad: {
+    label: 'Hasselblad',
+    panel: { background: 'rgb(0 0 0 / 0.8)' },
+    edge: (side) => (side === 'right' ? 'inset -1px 0 0 rgb(255 255 255 / 0.18)' : 'inset 1px 0 0 rgb(255 255 255 / 0.18)'),
     row: (focused) => ({
       background: focused ? 'rgb(255 255 255 / 0.1)' : undefined,
-      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.4)',
+      'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.14)',
     }),
     lines: { top: 0, bottom: 1 },
-    focus: 'frame',
-    focusColor: '#fff',
+    text: titleCase,
+    focus: 'stripe',
+    focusColor: ACCENT,
     iconInk: () => '#fff',
-    divider: () => 'rgb(255 255 255 / 0.4)',
-    choiceFont: 'text-[16px] font-light tracking-[0.1em] uppercase',
-    chosen: (m) => ({
-      style: {
-        'box-shadow': ring(m.focused ? 2 : 1, m.changed ? ACCENT : '#fff'),
-        background: m.focused ? 'rgb(255 255 255 / 0.14)' : undefined,
-      },
-      ink: '#fff',
-    }),
-    other: () => 'rgb(255 255 255 / 0.7)',
-    slider: 'thumb',
-    sliderColors: () => ({
-      track: 'rgb(255 255 255 / 0.7)',
-      tick: 'rgb(255 255 255 / 0.7)',
-      zero: '#fff',
-      fill: '#fff',
-      value: (m) => ({
-        style: {
-          background: m.focused ? '#fff' : 'rgb(0 0 0 / 0.75)',
-          'box-shadow': ring(m.focused ? 2 : 1, m.changed ? ACCENT : '#fff'),
-        },
-        ink: m.focused ? '#000' : '#fff',
-      }),
-      other: '#fff',
-    }),
+    strip: {
+      track: () => ({}),
+      inset: 6,
+      gap: 4,
+      pad: 8,
+      min: 30,
+      font: 'text-[17px] font-light tracking-[0.02em]',
+      cell: (c) =>
+        c.chosen
+          ? {
+              style: {
+                background: c.focused ? '#fff' : undefined,
+                'border-radius': '4px',
+                'box-shadow': edges(c.changed && bottom(3, ACCENT), ring(1.5, '#fff')),
+              },
+              ink: c.focused ? '#000' : '#fff',
+            }
+          : { style: {}, ink: 'rgb(255 255 255 / 0.5)' },
+      ends: { ink: '#fff', shadow: 'rgb(0 0 0 / 0.6)' },
+    },
+    slider: {
+      kind: 'ruler',
+      fixed: true,
+      spacing: 0,
+      tick: 'rgb(255 255 255 / 0.4)',
+      major: 'rgb(255 255 255 / 0.7)',
+      fill: ACCENT,
+      chosen: () => '#fff',
+      font: 'text-[12px] font-light',
+    },
     card: {
-      style: { background: 'rgb(0 0 0 / 0.5)', color: '#fff', 'box-shadow': ring(1, '#fff') },
-      class: 'font-light tracking-[0.14em] uppercase',
+      style: { background: 'rgb(0 0 0 / 0.72)', color: '#fff' },
+      class: 'font-light tracking-[0.02em]',
     },
     legend: {
-      box: { background: 'rgb(0 0 0 / 0.5)', color: '#fff', 'box-shadow': ring(1, '#fff') },
-      key: { background: '#fff', color: '#000' },
+      box: { background: 'rgb(0 0 0 / 0.72)', color: '#fff' },
+      key: { background: '#fff', color: '#000', 'border-radius': '4px' },
     },
-    body: { background: 'rgb(0 0 0 / 0.72)', color: '#fff', 'box-shadow': ring(1, '#fff') },
+    body: { background: 'rgb(0 0 0 / 0.85)', color: '#fff' },
   },
 };
 
@@ -608,7 +1073,9 @@ const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
 /** Where clipped rows or choices fade out, to show that more follow. */
-const FADE = 18;
+const FADE_WIDTH = 18;
+/** The space at a strip's end that its chevron keeps clear. */
+const LANE = 16;
 /** The focus frame around a value thumb, and the gap between the frame and the thumb. */
 const FRAME = 3;
 const FRAME_GAP = 2;
@@ -656,6 +1123,14 @@ function Marks(props: { look: Look }) {
   return (
     <>
       <Show when={props.look.corners}>{(corners) => <Corners {...corners()} />}</Show>
+      <Show when={props.look.dot}>
+        {(color) => (
+          <span
+            class="pointer-events-none absolute bottom-[3px] left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full"
+            style={{ background: color() }}
+          />
+        )}
+      </Show>
       <Show when={props.look.pip}>
         {(color) => (
           <span
@@ -696,8 +1171,39 @@ function Ink(props: { src: string; class: string; color: string }) {
   );
 }
 
-function RowIconView(props: { icon: RowIcon; color: string }) {
+/** A word on a plate in the icon ink, letters cut through, as the stock
+ * Color and Sharp icons are; a badge letter on its lower right corner. */
+function Wordmark(props: { word: string; badge?: string; color: string }) {
   return (
+    <span
+      class="relative flex h-[30px] w-[39px] items-center justify-center overflow-visible rounded-[3px]"
+      style={{ background: props.color }}
+    >
+      <span
+        class="inline-block text-[22px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap"
+        style={{ color: 'rgb(0 0 0 / 0.88)', transform: 'scaleX(0.46)' }}
+      >
+        {props.word}
+      </span>
+      <Show when={props.badge}>
+        <span
+          class="absolute -right-[8px] -bottom-[6px] flex h-[16px] w-[16px] items-center justify-center rounded-[3px] text-[12px] leading-none font-bold"
+          style={{ background: props.color, color: '#000', 'box-shadow': '0 0 0 2px #000' }}
+        >
+          {props.badge}
+        </span>
+      </Show>
+    </span>
+  );
+}
+
+function RowIconView(props: { icon: RowIcon; color: string }) {
+  const word = () => ('word' in props.icon ? props.icon : undefined);
+  return (
+    <Show
+      when={!word()}
+      fallback={<Wordmark word={word()!.word} badge={word()!.badge} color={props.color} />}
+    >
     <Show
       when={'stock' in props.icon ? props.icon.stock : undefined}
       fallback={
@@ -714,6 +1220,7 @@ function RowIconView(props: { icon: RowIcon; color: string }) {
         <Ink src={stock(id())} class="-mx-[10px] h-[36px] w-[60px]" color={props.color} />
       )}
     </Show>
+    </Show>
   );
 }
 
@@ -724,138 +1231,209 @@ interface ControlProps {
   pick: (value: number) => void;
 }
 
-/** Every choice in a row, scrolled to keep the chosen one in view. */
-function ChoiceStrip(props: ControlProps & { setting: ChoiceSetting; value: number; width: number }) {
-  const look = () => props.design.chosen({ focused: props.focused, changed: props.changed });
+interface StripItem {
+  name: string;
+  icon?: number;
+}
+
+/** A row's choices in its design's strip, slid to show the chosen one: held
+ * in the middle, or brought just into view from the start. */
+function Strip(props: ControlProps & { items: StripItem[]; value: number; width: number }) {
+  const strip = () => props.design.strip;
   let track: HTMLDivElement | undefined;
   const [offset, setOffset] = createSignal(0);
-  const [more, setMore] = createSignal(false);
+  const [before, setBefore] = createSignal(false);
+  const [after, setAfter] = createSignal(false);
+  /** Space before the first cell and after the last, so either can sit in the middle. */
+  const lead = () => (center() ? props.width / 2 : 0);
   const follow = () => {
     const chosen = track?.children[props.value] as HTMLElement | undefined;
     if (!track || !chosen) return;
-    // Start on a whole choice, the one that best centers the chosen one.
-    const centered = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
-    const end = chosen.offsetLeft + chosen.offsetWidth;
-    let best = 0;
-    const fits = track.scrollWidth <= props.width;
-    for (const cell of Array.from(track.children) as HTMLElement[]) {
-      const start = cell.offsetLeft;
-      if (fits || start > chosen.offsetLeft || end - start > props.width) continue;
-      if (Math.abs(start - centered) < Math.abs(best - centered)) best = start;
+    const cells = Array.from(track.children) as HTMLElement[];
+    let next: number;
+    if (center()) {
+      next = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
+    } else {
+      // Start on a whole cell, the one that best centers the chosen one.
+      const centered = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
+      const end = chosen.offsetLeft + chosen.offsetWidth;
+      next = 0;
+      if (track.scrollWidth > props.width)
+        for (const cell of cells) {
+          const start = cell.offsetLeft - strip().gap;
+          if (start > chosen.offsetLeft || end - start > props.width) continue;
+          if (Math.abs(start - centered) < Math.abs(next - centered)) next = Math.max(0, start);
+        }
     }
-    setOffset(best);
-    setMore(track.scrollWidth - best > props.width + 1);
+    setOffset(next);
+    const first = cells[0];
+    const last = cells[cells.length - 1];
+    setBefore(first.offsetLeft < next);
+    setAfter(last.offsetLeft + last.offsetWidth > next + props.width);
   };
   createEffect(
-    () => [props.value, props.width],
+    () => [props.value, props.width, props.design, center()],
     () => {
       requestAnimationFrame(follow);
     },
   );
+  /** Cells give way to the chevron's lane at an end with more beyond it:
+   * fading out, or cut off at the lane. */
+  const fadeMask = () => {
+    if (depth() === 'shadow') return undefined;
+    const from = LANE;
+    const width = depth() === 'fade' ? FADE_WIDTH : 0;
+    const end = (more: boolean, side: 'start' | 'end') =>
+      side === 'start'
+        ? more
+          ? `transparent ${from}px, #000 ${from + width}px`
+          : '#000 0'
+        : more
+          ? `#000 calc(100% - ${from + width}px), transparent calc(100% - ${from}px)`
+          : '#000 100%';
+    return `linear-gradient(to right, ${end(before(), 'start')}, ${end(after(), 'end')})`;
+  };
   return (
     <div
       class="relative h-full overflow-hidden"
+      style={{ width: `${props.width}px`, ...strip().track(props.focused) }}
+    >
+      <div class="absolute inset-0 overflow-hidden" style={{ 'mask-image': fadeMask() }}>
+        <div
+          ref={(element) => (track = element)}
+          class="absolute inset-y-0 left-0 flex items-stretch transition-transform duration-150 ease-out"
+          style={{
+            transform: `translateX(${-offset()}px)`,
+            padding: `${strip().inset}px ${lead() || strip().gap}px`,
+            gap: `${strip().gap}px`,
+            ...strip().film,
+          }}
+        >
+          <For each={props.items.map((item, i) => ({ item, i }))}>
+            {(entry) => {
+              const look = () =>
+                strip().cell({
+                  chosen: entry.i === props.value,
+                  distance: Math.abs(entry.i - props.value),
+                  focused: props.focused,
+                  changed: props.changed && entry.i === props.value,
+                });
+              return (
+                <div
+                  class="relative flex shrink-0 items-center justify-center transition-transform duration-150"
+                  style={{
+                    width: entry.item.icon !== undefined ? `${ICON_CELL}px` : undefined,
+                    'min-width': `${strip().min}px`,
+                    padding: entry.item.icon !== undefined ? undefined : `0 ${strip().pad}px`,
+                    ...look().style,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    props.pick(entry.i);
+                  }}
+                >
+                  <Show
+                    when={entry.item.icon}
+                    fallback={
+                      <span class={strip().font} style={{ color: look().ink }}>
+                        {props.design.text?.(entry.item.name) ?? entry.item.name}
+                      </span>
+                    }
+                  >
+                    {(icon) => (
+                      <Ink src={stock(icon())} class="h-[24px] w-[46px]" color={look().ink} />
+                    )}
+                  </Show>
+                  <Marks look={look()} />
+                </div>
+              );
+            }}
+          </For>
+        </div>
+      </div>
+      <Show when={depth() === 'shadow'}>
+        {/* The drawer is a recess: its walls shade both ends and the top,
+            whether or not anything lies past them. */}
+        <span
+          class="pointer-events-none absolute inset-0"
+          style={{
+            background: `linear-gradient(to right, ${strip().ends.shadow}, transparent ${LANE + 14}px, transparent calc(100% - ${LANE + 14}px), ${strip().ends.shadow})`,
+            'box-shadow': `inset 0 5px 6px -4px ${strip().ends.shadow}`,
+          }}
+        />
+      </Show>
+      <For each={['left', 'right'] as const}>
+        {(side) => (
+          <Show when={side === 'left' ? before() : after()}>
+            <span
+              class="pointer-events-none absolute inset-y-0 flex items-center"
+              style={{ [side]: '3px' }}
+            >
+              <Chevron side={side} ink={strip().ends.ink} halo={strip().ends.halo} />
+            </span>
+          </Show>
+        )}
+      </For>
+    </div>
+  );
+}
+
+/** The toolkit's chevron, small, pointing toward the choices past this end. */
+function Chevron(props: { side: 'left' | 'right'; ink: string; halo?: string }) {
+  return (
+    <svg
+      width="9"
+      height="16"
+      viewBox="0 0 9 16"
       style={{
-        width: `${props.width}px`,
-        'mask-image': `linear-gradient(to right, ${offset() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${more() ? 'transparent' : '#000'})`,
+        color: props.ink,
+        filter: props.halo ? `drop-shadow(0 1px 1px ${props.halo})` : undefined,
       }}
     >
-      <div
-        ref={(element) => (track = element)}
-        class="absolute inset-y-0 left-0 flex items-stretch"
-        style={{ transform: `translateX(${-offset()}px)` }}
-      >
-        <For each={props.setting.choices.map((choice, i) => ({ choice, i }))}>
-          {(item) => {
-            const chosen = () => item.i === props.value;
-            const ink = () => (chosen() ? look().ink : props.design.other(props.focused));
-            return (
-              <div
-                class="relative flex shrink-0 items-center justify-center"
-                style={{
-                  width: item.choice.icon ? `${ICON_CELL}px` : undefined,
-                  padding: item.choice.icon ? undefined : '0 10px',
-                  ...(chosen() ? look().style : {}),
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.pick(item.i);
-                }}
-              >
-                <Show
-                  when={item.choice.icon}
-                  fallback={
-                    <span class={props.design.choiceFont} style={{ color: ink() }}>
-                      {item.choice.name}
-                    </span>
-                  }
-                >
-                  {(icon) => <Ink src={stock(icon())} class="h-[24px] w-[48px]" color={ink()} />}
-                </Show>
-                <Show when={chosen()}>
-                  <Marks look={look()} />
-                </Show>
-              </div>
-            );
-          }}
-        </For>
-      </div>
-    </div>
+      <path
+        d={props.side === 'left' ? 'M7 2l-5 6 5 6' : 'M2 2l5 6-5 6'}
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
   );
 }
 
 type SliderProps = ControlProps & { setting: SliderSetting; value: number };
 
-/** Picks the step nearest a click across `inset` to `width - inset`. */
-function pickStep(e: MouseEvent, count: number, inset: number, pick: (value: number) => void) {
-  const element = e.currentTarget as HTMLElement;
-  e.stopPropagation();
-  const box = element.getBoundingClientRect();
-  const scale = box.width / element.offsetWidth;
-  const inner = (e.clientX - box.left) / scale - inset;
-  const i = Math.round((inner / (element.offsetWidth - 2 * inset)) * (count - 1));
-  pick(Math.max(0, Math.min(count - 1, i)));
-}
-
-function SliderView(props: SliderProps) {
-  return (
-    <>
-      <Show when={props.design.slider === 'thumb'}>
-        <ThumbSlider {...props} />
-      </Show>
-      <Show when={props.design.slider === 'ruler'}>
-        <RulerSlider {...props} />
-      </Show>
-      <Show when={props.design.slider === 'digits'}>
-        <DigitSlider {...props} />
-      </Show>
-      <Show when={props.design.slider === 'blocks'}>
-        <BlockSlider {...props} />
-      </Show>
-    </>
-  );
-}
-
 /** FUJIMOD SET-UP's segment bar: zero to the value filled, the value itself a
  * square thumb that carries the number. */
-function ThumbSlider(props: SliderProps) {
-  const colors = () => props.design.sliderColors(props.focused);
-  const look = () => colors().value({ focused: props.focused, changed: props.changed });
+function ThumbSlider(props: SliderProps & { colors: ThumbColors }) {
+  const look = () => props.colors.value({ focused: props.focused, changed: props.changed });
   const count = () => props.setting.steps.length;
   const zero = () => props.setting.steps.indexOf(0);
   const x = (i: number) => `calc(${INSET}px + (100% - ${2 * INSET}px) * ${i / (count() - 1)})`;
   return (
-    <div class="relative mx-[6px] flex-1" onClick={(e) => pickStep(e, count(), INSET, props.pick)}>
+    <div
+      class="relative mx-[6px] flex-1"
+      onClick={(e) => {
+        const element = e.currentTarget;
+        e.stopPropagation();
+        const box = element.getBoundingClientRect();
+        const scale = box.width / element.offsetWidth;
+        const inner = (e.clientX - box.left) / scale - INSET;
+        const i = Math.round((inner / (element.offsetWidth - 2 * INSET)) * (count() - 1));
+        props.pick(Math.max(0, Math.min(count() - 1, i)));
+      }}
+    >
       <div
         class="absolute top-1/2 h-[2px] -translate-y-1/2"
-        style={{ left: `${INSET}px`, right: `${INSET}px`, background: colors().track }}
+        style={{ left: `${INSET}px`, right: `${INSET}px`, background: props.colors.track }}
       />
       <div
         class="absolute top-1/2 h-[4px] -translate-y-1/2"
         style={{
           left: x(Math.min(zero(), props.value)),
           width: `calc((100% - ${2 * INSET}px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
-          background: colors().fill,
+          background: props.colors.fill,
         }}
       />
       <For each={props.setting.steps.map((step, i) => i)}>
@@ -866,7 +1444,7 @@ function ThumbSlider(props: SliderProps) {
               left: x(i),
               width: i === zero() ? '4px' : '2px',
               height: i === zero() ? '26px' : '10px',
-              background: i === zero() ? colors().zero : colors().tick,
+              background: i === zero() ? props.colors.zero : props.colors.tick,
             }}
           />
         )}
@@ -892,126 +1470,87 @@ function ThumbSlider(props: SliderProps) {
   );
 }
 
-/** The value printed at the row's end, for forms whose scale carries no number. */
-function ValueLabel(props: SliderProps & { class: string }) {
-  const look = () =>
-    props.design.sliderColors(props.focused).value({ focused: props.focused, changed: props.changed });
-  return (
-    <span
-      class={`flex w-[46px] shrink-0 items-center justify-end pr-[8px] tabular-nums ${props.class}`}
-      style={{ color: look().ink, ...look().style }}
-    >
-      {fmt(props.setting.steps[props.value])}
-    </span>
-  );
-}
+/** One setting's controls, beside its group's icon. */
+/** Steps between labeled ticks. */
+const RULER_DIVISIONS = 4;
 
-/** An exposure scale: ticks, a longer tick at zero, and a full-height needle
- * on the value; the number stands at the row's end. */
-function RulerSlider(props: SliderProps) {
-  const colors = () => props.design.sliderColors(props.focused);
+function RulerSlider(props: SliderProps & { ruler: Ruler; width: number }) {
+  const ruler = () => props.ruler;
+  const mark = () => ({ focused: props.focused, changed: props.changed });
   const count = () => props.setting.steps.length;
-  const zero = () => props.setting.steps.indexOf(0);
-  const inset = 10;
-  const x = (i: number) => `calc(${inset}px + (100% - ${2 * inset}px) * ${i / (count() - 1)})`;
+  const zero = () => Math.max(0, props.setting.steps.indexOf(0));
+  const pad = 26;
+  const spacing = () => (ruler().fixed ? (props.width - 2 * pad) / (count() - 1) : ruler().spacing);
+  /** Where step 0 sits in the control. */
+  const origin = () => (ruler().fixed ? pad : props.width / 2 - props.value * spacing());
+  const low = () => Math.min(zero(), props.value);
+  const high = () => Math.max(zero(), props.value);
+  const ticks = () => Array.from({ length: (count() - 1) * RULER_DIVISIONS + 1 }, (_, t) => t);
   return (
-    <div class="flex flex-1 items-stretch">
-      <div class="relative flex-1" onClick={(e) => pickStep(e, count(), inset, props.pick)}>
-        <div
-          class="absolute bottom-[12px] h-[1px]"
-          style={{ left: `${inset}px`, right: `${inset}px`, background: colors().track }}
-        />
-        <For each={props.setting.steps.map((step, i) => i)}>
-          {(i) => (
-            <span
-              class="absolute bottom-[12px] -translate-x-1/2"
-              style={{
-                left: x(i),
-                width: i === zero() ? '2px' : '1px',
-                height: i === zero() ? '16px' : '8px',
-                background: i === zero() ? colors().zero : colors().tick,
-              }}
-            />
-          )}
+    <div
+      class="relative h-full overflow-hidden"
+      style={{
+        width: `${props.width}px`,
+        'mask-image': ruler().fixed
+          ? undefined
+          : 'linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent)',
+      }}
+      onClick={(e) => {
+        const element = e.currentTarget;
+        e.stopPropagation();
+        const box = element.getBoundingClientRect();
+        const local = ((e.clientX - box.left) / box.width) * element.offsetWidth;
+        const i = Math.round((local - origin()) / spacing());
+        props.pick(Math.max(0, Math.min(count() - 1, i)));
+      }}
+    >
+      <div
+        class="absolute inset-y-0 left-0 transition-transform duration-150 ease-out"
+        style={{ transform: `translateX(${origin()}px)` }}
+      >
+        <For each={ticks()}>
+          {(t) => {
+            const at = t / RULER_DIVISIONS;
+            const major = t % RULER_DIVISIONS === 0;
+            const lit = () => at >= low() && at <= high() && high() > low();
+            return (
+              <span
+                class="absolute bottom-[6px] -translate-x-1/2 transition-colors duration-150"
+                style={{
+                  left: `${at * spacing()}px`,
+                  width: major ? '2px' : '1px',
+                  height: `${at === zero() ? 15 : major ? 11 : lit() ? 8 : 6}px`,
+                  background: lit() ? ruler().fill : major ? ruler().major : ruler().tick,
+                }}
+              />
+            );
+          }}
         </For>
-        <span
-          class="absolute bottom-[3px] -translate-x-1/2 border-x-[6px] border-b-[8px] border-x-transparent"
-          style={{ left: x(props.value), 'border-bottom-color': colors().fill }}
-        />
-        <span
-          class="absolute top-[5px] bottom-[12px] w-[3px] -translate-x-1/2"
-          style={{ left: x(props.value), background: colors().fill }}
-        />
-      </div>
-      <ValueLabel {...props} class="text-[19px] font-normal" />
-    </div>
-  );
-}
-
-/** Every step printed, as on a dial; the value large and bright. */
-function DigitSlider(props: SliderProps) {
-  const colors = () => props.design.sliderColors(props.focused);
-  const look = () => colors().value({ focused: props.focused, changed: props.changed });
-  const short = (step: Step) => (typeof step === 'string' ? step : fmt(step).replace('+', ''));
-  /** Five steps around the value, as much of the scale as a dial window shows. */
-  const shown = () => {
-    const steps = props.setting.steps.map((step, i) => ({ step, i }));
-    const first = Math.max(0, Math.min(steps.length - 5, props.value - 2));
-    return steps.slice(first, first + 5);
-  };
-  return (
-    <div class="flex flex-1 items-center justify-between px-[8px]">
-      <For each={shown()}>
-        {(item) => (
-          <span
-            class="relative flex h-full items-center justify-center tabular-nums"
-            style={{
-              color: item.i === props.value ? look().ink : colors().other,
-              'font-size': item.i === props.value ? '21px' : '13px',
-              'font-weight': item.i === props.value ? 700 : 500,
-              'min-width': item.i === props.value ? '26px' : undefined,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.pick(item.i);
-            }}
-          >
-            {item.i === props.value ? fmt(item.step) : short(item.step)}
-          </span>
-        )}
-      </For>
-    </div>
-  );
-}
-
-/** A segment meter: one block per step, lit from zero to the value. */
-function BlockSlider(props: SliderProps) {
-  const colors = () => props.design.sliderColors(props.focused);
-  const zero = () => props.setting.steps.indexOf(0);
-  const lit = (i: number) =>
-    (i >= Math.min(zero(), props.value) && i <= Math.max(zero(), props.value) && i !== zero()) ||
-    i === props.value;
-  return (
-    <div class="flex flex-1 items-stretch">
-      <div class="flex flex-1 items-center gap-[3px] pl-[8px]">
-        <For each={props.setting.steps.map((step, i) => i)}>
-          {(i) => (
-            <span
-              class="h-[18px] flex-1"
-              style={{
-                background: lit(i) ? colors().fill : colors().track,
-                'box-shadow': i === zero() ? ring(1, colors().zero) : undefined,
-                height: i === props.value ? '24px' : '18px',
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                props.pick(i);
-              }}
-            />
+        <For each={props.setting.steps}>
+          {(step, i) => (
+            <Show when={i() !== props.value && ruler().label}>
+              {(color) => (
+                <span
+                  class={`absolute top-[4px] -translate-x-1/2 leading-none tabular-nums ${ruler().font}`}
+                  style={{ left: `${i() * spacing()}px`, color: color() }}
+                >
+                  {fmt(step)}
+                </span>
+              )}
+            </Show>
           )}
         </For>
       </div>
-      <ValueLabel {...props} class="text-[18px] font-medium" />
+      <span
+        class="absolute top-[2px] -translate-x-1/2 text-[16px] leading-none font-semibold tabular-nums transition-[left] duration-150 ease-out"
+        style={{ left: `${origin() + props.value * spacing()}px`, color: ruler().chosen(mark()) }}
+      >
+        {fmt(props.setting.steps[props.value])}
+      </span>
+      <span
+        class="absolute bottom-[3px] h-[20px] w-[3px] -translate-x-1/2 rounded-full transition-[left] duration-150 ease-out"
+        style={{ left: `${origin() + props.value * spacing()}px`, background: ruler().chosen(mark()) }}
+      />
     </div>
   );
 }
@@ -1028,75 +1567,130 @@ function SettingRow(props: {
   send: Send;
 }) {
   const d = () => props.design;
-  const controlWidth = () => props.width - ICON_COLUMN - 1;
+  const controlWidth = () => props.width - ICON_COLUMN - 1 - (d().lines.right ?? 0);
   const pick = (value: number) =>
     props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   return (
     <div
       class="relative flex items-stretch"
-      style={{ height: `${ROW}px`, ...d().row(props.focused) }}
+      style={{
+        height: `${ROW}px`,
+        ...d().row(props.focused),
+        'padding-top': `${d().lines.top}px`,
+        'padding-bottom': `${d().lines.bottom}px`,
+        'padding-right': `${d().lines.right ?? 0}px`,
+      }}
       onClick={() => props.send({ focus: props.index, side: props.side })}
     >
+      <Show
+        when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
+        fallback={
+          <Strip
+            items={(props.setting as ChoiceSetting).choices}
+            value={props.recipe[props.setting.id]}
+            width={controlWidth()}
+            design={d()}
+            focused={props.focused}
+            changed={props.changed}
+            pick={pick}
+          />
+        }
+      >
+        {(slider) => (
+          <div class="flex flex-1 overflow-hidden" style={d().strip.track(props.focused)}>
+            <Show
+              when={'kind' in d().slider ? (d().slider as Ruler) : undefined}
+              fallback={
+                <ThumbSlider
+                  setting={slider()}
+                  colors={d().slider as ThumbColors}
+                  value={props.recipe[slider().id]}
+                  design={d()}
+                  focused={props.focused}
+                  changed={props.changed}
+                  pick={pick}
+                />
+              }
+            >
+              {(ruler) => (
+                <RulerSlider
+                  setting={slider()}
+                  ruler={ruler()}
+                  width={controlWidth()}
+                  value={props.recipe[slider().id]}
+                  design={d()}
+                  focused={props.focused}
+                  changed={props.changed}
+                  pick={pick}
+                />
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+/** A setting's icon, once, beside the rows of every dimension it has; the
+ * icon's cell takes the focus when any of them has it. */
+function SettingGroup(props: {
+  rows: number[];
+  recipe: Recipe;
+  other?: Recipe;
+  focus?: number;
+  width: number;
+  design: Design;
+  side?: Side;
+  send: Send;
+}) {
+  const d = () => props.design;
+  const at = () => props.rows.indexOf(props.focus ?? -1);
+  return (
+    <div class="relative flex">
       <div
         class="flex shrink-0 items-center justify-center"
         style={{
           width: `${ICON_COLUMN}px`,
-          'border-right': `1px solid ${d().divider?.(props.focused) ?? 'transparent'}`,
+          height: `${props.rows.length * ROW}px`,
+          ...d().row(at() >= 0),
+          'border-right': `1px solid ${d().divider?.(at() >= 0) ?? 'transparent'}`,
           'padding-bottom': `${d().lines.bottom - d().lines.top}px`,
         }}
+        onClick={() => props.send({ focus: props.rows[Math.max(0, at())], side: props.side })}
       >
-        <RowIconView icon={props.setting.icon} color={d().iconInk(props.focused)} />
+        <RowIconView icon={SETTINGS[props.rows[0]].icon} color={d().iconInk(at() >= 0)} />
       </div>
-      <div
-        class="flex min-w-0 flex-1 items-stretch"
-        style={{
-          background: d().drawer?.(props.focused),
-          'padding-top': `${d().lines.top}px`,
-          'padding-bottom': `${d().lines.bottom}px`,
-        }}
-      >
-        <Show
-          when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
-          fallback={
-            <ChoiceStrip
-              setting={props.setting as ChoiceSetting}
-              value={props.recipe[props.setting.id]}
-              width={controlWidth()}
+      <div class="flex min-w-0 flex-1 flex-col">
+        <For each={props.rows}>
+          {(index) => (
+            <SettingRow
+              setting={SETTINGS[index]}
+              index={index}
+              recipe={props.recipe}
+              focused={index === props.focus}
+              changed={
+                props.other !== undefined &&
+                props.other[SETTINGS[index].id] !== props.recipe[SETTINGS[index].id]
+              }
+              width={props.width}
               design={d()}
-              focused={props.focused}
-              changed={props.changed}
-              pick={pick}
-            />
-          }
-        >
-          {(slider) => (
-            <SliderView
-              setting={slider()}
-              value={props.recipe[slider().id]}
-              design={d()}
-              focused={props.focused}
-              changed={props.changed}
-              pick={pick}
+              side={props.side}
+              send={props.send}
             />
           )}
-        </Show>
+        </For>
       </div>
-      <Show when={props.focused}>
-        <Show when={d().focus === 'stripe'}>
-          <span
-            class="pointer-events-none absolute top-[1px] bottom-[2px] left-0"
-            style={{ width: `${STRIPE}px`, background: d().focusColor }}
-          />
-        </Show>
-        <Show when={d().focus === 'frame'}>
-          <span
-            class="pointer-events-none absolute inset-0"
-            style={{ 'box-shadow': ring(2, d().focusColor) }}
-          />
-        </Show>
-        <Show when={d().focus === 'corners'}>
-          <Corners arm={12} weight={3} color={d().focusColor} />
-        </Show>
+      <Show when={at() >= 0 && d().focus === 'stripe'}>
+        <span
+          class="pointer-events-none absolute left-0"
+          style={{
+            top: `${at() * ROW + 1}px`,
+            height: `${ROW - 3}px`,
+            width: `${STRIPE}px`,
+            background: d().focusColor,
+          }}
+        />
       </Show>
     </div>
   );
@@ -1129,21 +1723,17 @@ function Column(props: {
       <div
         class="relative flex-1 overflow-hidden"
         style={{
-          filter: props.design.filter,
-          'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE}px, #000 calc(100% - ${FADE}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
+          'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE_WIDTH}px, #000 calc(100% - ${FADE_WIDTH}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
         }}
       >
         <div style={{ transform: `translateY(${-scroll()}px)` }}>
-          <For each={SETTINGS}>
-            {(setting, i) => (
-              <SettingRow
-                setting={setting}
-                index={i()}
+          <For each={GROUPS}>
+            {(rows) => (
+              <SettingGroup
+                rows={rows}
                 recipe={props.recipe}
-                focused={i() === props.focus && props.active !== false}
-                changed={
-                  props.other !== undefined && props.other[setting.id] !== props.recipe[setting.id]
-                }
+                other={props.other}
+                focus={props.active !== false ? props.focus : undefined}
                 width={props.width}
                 design={props.design}
                 side={props.side}
@@ -1299,7 +1889,7 @@ function Legend(props: {
 
 /* ---- The editor screen ------------------------------------------------------- */
 
-type Fly = 'none' | 'shift' | 'film';
+type Fly = 'none' | 'shift';
 type Mode = 'live' | 'raw';
 
 interface EditorState {
@@ -1337,8 +1927,6 @@ function Editor(props: { state: EditorState; send?: Send }) {
     if (compare()) list.push({ glyph: 'AEL', label: 'A/B', key: 'Tab' });
     else if (focused().id === 'wb' && s().fly === 'none')
       list.push({ glyph: '▲', label: 'SHIFT', key: 's' });
-    else if (focused().id === 'film' && s().fly === 'none')
-      list.push({ glyph: 'DISP', label: 'INFO', key: 'i' });
     if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
     else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
     list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
@@ -1351,7 +1939,7 @@ function Editor(props: { state: EditorState; send?: Send }) {
       style={{
         '--hairline': colors.hairline,
         '--focus': colors.focus,
-        '--accent': s().mode === 'raw' ? 'var(--color-play)' : 'var(--color-rec)',
+        '--accent': s().mode === 'raw' ? 'var(--color-play)' : ACCENTS[accent()].color,
       }}
     >
       <Photo recipe={s().recipe} />
@@ -1412,39 +2000,37 @@ function Editor(props: { state: EditorState; send?: Send }) {
             class="absolute top-[10px] flex flex-col items-start gap-[4px]"
             style={{ left: `${WIDTH + 12}px` }}
           >
-            <span
-              class={`px-[12px] py-[6px] text-[22px] ${design().card.class}`}
-              style={design().card.style}
-            >
-              {focused().name}
-            </span>
+            <Show when={focused().id !== 'film'}>
+              <span
+                class={`px-[12px] py-[6px] text-[22px] ${design().card.class}`}
+                style={design().card.style}
+              >
+                {design().text?.(focused().name) ?? focused().name}
+              </span>
+            </Show>
             <span
               class={`px-[12px] py-[4px] text-[22px] ${design().card.class}`}
               style={design().card.style}
             >
-              {valueName(focused(), s().recipe)}
+              {design().text?.(valueName(focused(), s().recipe)) ??
+                valueName(focused(), s().recipe)}
             </span>
+            <Show when={focused().id === 'film' ? FILMS[s().recipe.film].note : undefined}>
+              {(note) => (
+                <p
+                  class="max-w-[400px] px-[12px] py-[8px] text-[19px] leading-[26px] font-light tracking-[0.03em]"
+                  style={{ ...design().card.style }}
+                >
+                  {note()}
+                </p>
+              )}
+            </Show>
           </div>
         </Show>
         <Show when={s().mode === 'raw'}>
           <span class="absolute top-[10px] right-[12px] bg-(--accent) px-[8px] py-[2px] text-[17px] font-bold">
             RAW
           </span>
-        </Show>
-        <Show when={s().fly === 'film'}>
-          <RowExtension
-            top={rowTop()}
-            left={WIDTH}
-            width={300}
-            design={design()}
-            title={FILMS[s().recipe.film].name}
-            bodyHeight={104}
-            onClick={() => send({ key: 'i' })}
-          >
-            <p class="text-[19px] leading-[27px] font-light tracking-[0.04em]">
-              {FILMS[s().recipe.film].note}
-            </p>
-          </RowExtension>
         </Show>
         <Show when={s().fly === 'shift'}>
           <RowExtension
@@ -1516,8 +2102,6 @@ function onKey(state: EditorState, key: string): EditorState {
   if (key === 'ArrowLeft') return step(state, -1);
   if (key === 'ArrowRight') return step(state, 1);
   if (key === 's' && id === 'wb' && !state.comparing) return { ...state, fly: 'shift' };
-  if (key === 'i' && id === 'film' && !state.comparing)
-    return { ...state, fly: state.fly === 'film' ? 'none' : 'film' };
   if (key === 'a') return { ...state, snapshot: { ...state.recipe }, comparing: false, side: 'b' };
   if (key === 'q' && state.snapshot)
     return { ...state, comparing: !state.comparing, fly: 'none', side: 'b' };
@@ -1566,7 +2150,7 @@ function Segmented<T extends string>(props: {
   pick: (value: T) => void;
 }) {
   return (
-    <div class="flex rounded-[12px] bg-[#1e1e20] p-[3px]">
+    <div class="flex flex-wrap rounded-[12px] bg-[#1e1e20] p-[3px]">
       <For each={props.choices}>
         {(choice) => (
           <button
@@ -1610,6 +2194,32 @@ function Live() {
           value={state().design}
           pick={(design) => setState({ ...state(), design })}
         />
+        <Segmented
+          choices={[
+            { value: 'shadow', label: 'Shadow' },
+            { value: 'fade', label: 'Fade' },
+            { value: 'clip', label: 'Clip' },
+          ]}
+          value={depth()}
+          pick={setDepth}
+        />
+        <Segmented
+          choices={(Object.keys(ACCENTS) as Accent[]).map((id) => ({
+            value: id,
+            label: ACCENTS[id].label,
+          }))}
+          value={accent()}
+          pick={setAccent}
+        />
+        <label class="flex min-h-[44px] items-center gap-[8px] px-[6px] text-[15px] font-semibold">
+          <input
+            type="checkbox"
+            class="size-[20px]"
+            checked={center()}
+            onChange={(e) => setCenter(e.currentTarget.checked)}
+          />
+          Center selected
+        </label>
       </div>
       <Fit>
         <Editor state={state()} send={send} />
@@ -1639,6 +2249,8 @@ const EDITED: Recipe = {
   color: at(LEVELS, -1),
   nr: at(NR_LEVELS, 'SNR'),
   grain: 2,
+  grainSize: 1,
+  clarity: at(CLARITY, 2),
   shiftR: 4,
   shiftB: -5,
 };
@@ -1677,9 +2289,10 @@ const STATES: { id: string; title: string; state: EditorState }[] = [
   {
     id: 'nr',
     title: 'NOISE REDUCTION with the levels below -2',
-    state: { ...INITIAL, focus: 7, recipe: EDITED },
+    state: { ...INITIAL, focus: 9, recipe: EDITED },
   },
-  { id: 'film-info', title: 'Film simulation notes', state: { ...INITIAL, focus: 0, fly: 'film' } },
+  { id: 'film-notes', title: 'Film simulation', state: { ...INITIAL, focus: 0 } },
+  { id: 'grain-size', title: 'GRAIN SIZE under the grain icon', state: { ...INITIAL, focus: 13, recipe: EDITED } },
   { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
   {
     id: 'compare',

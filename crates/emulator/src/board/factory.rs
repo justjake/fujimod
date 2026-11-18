@@ -1,14 +1,10 @@
 //! Checked construction and memory ownership for every execution backend.
+use fujimod_catalog_configuration::RunEngine;
 use super::{Board, InterruptMap, bus::Bus, set};
 use fujimod_emulator_cpu::{Cpu, Model, Register, memory::Backing, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::Library;
 use std::ptr::NonNull;
 
-#[derive(Clone, Copy)]
-pub enum Engine {
-    Unicorn,
-    Hypervisor,
-}
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Processor {
@@ -70,14 +66,14 @@ pub struct Graph {
 pub const TRANSLATION_CACHE_BYTES: u32 = 128 << 20;
 
 pub struct Options {
-    pub engine: Engine,
+    pub engine: RunEngine,
     translation_cache_size_bytes: Option<u32>,
     epoch: Option<(u64, Vec<u64>)>,
     ram_fill: Option<u8>,
 }
 
 impl Options {
-    pub fn new(engine: Engine) -> Self {
+    pub fn new(engine: RunEngine) -> Self {
         Self {
             engine,
             translation_cache_size_bytes: None,
@@ -151,6 +147,14 @@ pub fn translation_cache_size_bytes(processors: usize) -> Result<u32, String> {
         Ok(TRANSLATION_CACHE_BYTES)
     }
 }
+/// Reject configurations whose selected engine cannot run the requested processors.
+pub fn validate_engine(engine: RunEngine, models: impl IntoIterator<Item = Model>) -> Result<(), String> {
+    if engine == RunEngine::Hypervisor && models.into_iter().any(|model| !matches!(model, Model::ArmV8A | Model::CortexM4)) {
+        return Err("Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into());
+    }
+    Ok(())
+}
+
 pub(super) struct Engines {
     unicorn: Option<Library>,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -158,24 +162,15 @@ pub(super) struct Engines {
 }
 impl Engines {
     fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
-        if matches!(options.engine, Engine::Hypervisor)
-            && graph
-                .processors
-                .iter()
-                .any(|p| !matches!(p.model, Model::ArmV8A | Model::CortexM4))
-        {
-            return Err(
-                "Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into(),
-            );
-        }
+        validate_engine(options.engine, graph.processors.iter().map(|processor| processor.model))?;
         let need_uc = graph
             .processors
             .iter()
-            .any(|p| matches!(options.engine, Engine::Unicorn) || p.model != Model::ArmV8A);
+            .any(|p| matches!(options.engine, RunEngine::Unicorn) || p.model != Model::ArmV8A);
         let need_hvf = graph
             .processors
             .iter()
-            .any(|p| matches!(options.engine, Engine::Hypervisor) && p.model == Model::ArmV8A);
+            .any(|p| matches!(options.engine, RunEngine::Hypervisor) && p.model == Model::ArmV8A);
         let unicorn = if need_uc {
             Some(Library::linked()?)
         } else {
@@ -205,7 +200,7 @@ impl Engines {
         memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
-        if model == Model::ArmV8A && matches!(options.engine, Engine::Hypervisor) {
+        if model == Model::ArmV8A && matches!(options.engine, RunEngine::Hypervisor) {
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             return Ok(Box::new(
                 self.hypervisor
@@ -443,7 +438,7 @@ impl Graph {
             .processors
             .iter()
             .filter(|processor| {
-                matches!(options.engine, Engine::Unicorn) || processor.model != Model::ArmV8A
+                matches!(options.engine, RunEngine::Unicorn) || processor.model != Model::ArmV8A
             })
             .count();
         let translation_cache_size_bytes = match options.translation_cache_size_bytes {

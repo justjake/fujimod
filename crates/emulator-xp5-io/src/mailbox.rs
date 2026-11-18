@@ -2,6 +2,7 @@
 //! The two CPU aliases dispatch to one instance; only requester identity and
 //! register accesses select interrupt outputs. There are no deadlines, memory
 //! writes, command handlers or firmware execution state in this device.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -120,6 +121,21 @@ impl Device for Mailbox {
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.offset(address, size).is_some()
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &*self.channel.0.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode(self.name())?;
+        if state.causes & !CAUSES != 0 || state.traffic.len() > 64 {
+            return Err("unsupported mailbox checkpoint state".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        *self.channel.0.lock().unwrap() = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         self.channel.status()

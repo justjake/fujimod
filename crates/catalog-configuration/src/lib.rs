@@ -1243,6 +1243,14 @@ pub enum RunEngine {
     Hypervisor,
 }
 
+impl std::str::FromStr for RunEngine {
+    type Err = serde::de::value::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(serde::de::value::StrDeserializer::new(value))
+    }
+}
+
 /// Model-specific scene inputs and the devices that consume them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
