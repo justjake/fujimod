@@ -25,6 +25,8 @@
   margin-top: 28px;
 }
 .release-personal-note .note-socials {
+  display: grid;
+  justify-items: start;
   margin-top: 4px;
 }
 .release-personal-note .note-hover {
