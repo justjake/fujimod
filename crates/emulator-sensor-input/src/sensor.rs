@@ -1,5 +1,6 @@
 //! Eight-byte sensor command packets fetched by programmed DMA.
 //! Completion is scheduled; stock code owns its busy polls, cleanup and retries.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -448,6 +449,24 @@ impl Device for Command {
             }
         }
         self.state.registers.insert(0x204, 0);
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let sensor = self.sensor.0.lock().unwrap();
+        Checkpoint::encode(self.name(), &(&self.state, &*sensor))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (state, _): (State, SensorState) = saved.decode(self.name())?;
+        if state.pending.is_some() != state.deadline.is_some() {
+            return Err("sensor pending/deadline disagree".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (command, sensor) = saved.decode(self.name())?;
+        self.state = command;
+        *self.sensor.0.lock().unwrap() = sensor;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::json!({"command": self.state, "sensor": *self.sensor.0.lock().unwrap(), "command_latency_ticks": self.latency_ticks})

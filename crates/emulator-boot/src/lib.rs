@@ -2,10 +2,29 @@
 //!
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod frame_viewer;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod png_writer;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod output;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod media;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod patch;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod mod_loader;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod keys;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod application;
 mod first_start;
-pub mod graph;
+pub mod host;
+use fujimod_emulator_board_graph as graph;
 mod x70;
 pub mod xpp;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod xp5;
 
 use fujimod_emulator::board::{
         bus::{Bus, Mode},
@@ -15,7 +34,7 @@ use fujimod_emulator_session::Session;
 use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunExecution, RunExecutionMode, RunInputs, RunPurpose, RunScene,
+    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene,
     RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -109,7 +128,7 @@ struct Readiness {
     operation_alert_timer: Option<u64>,
 }
 #[derive(Clone)]
-struct FirstStart {
+struct AdcKey {
     key_id: String,
     adc: String,
     channel: usize,
@@ -117,6 +136,11 @@ struct FirstStart {
     calibration_is_pointer: bool,
     lower_offset: u64,
     upper_offset: u64,
+}
+
+#[derive(Clone)]
+struct FirstStart {
+    key: AdcKey,
     hold_ticks: u64,
     settle_ticks: u64,
     max_presses: usize,
@@ -166,6 +190,16 @@ fn first_start_key(
     let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
+    let key = calibrated_key(resolved, inputs, key_id)?;
+    Ok(Some(FirstStart {
+        key,
+        hold_ticks: policy.hold_ticks,
+        settle_ticks: policy.settle_ticks,
+        max_presses: usize::from(policy.max_presses),
+    }))
+}
+
+fn calibrated_key(resolved: &ResolvedConfiguration, inputs: &Exr2RunInputs, key_id: &str) -> Result<AdcKey, String> {
     let facts = resolved
         .reference
         .firmware
@@ -257,7 +291,7 @@ fn first_start_key(
         ConfigurationLocation::Pointer { address } => (address, true),
         ConfigurationLocation::Direct { address } => (address, false),
     };
-    Ok(Some(FirstStart {
+    Ok(AdcKey {
         key_id: key_id.to_owned(),
         adc: inputs.adc.block_id.clone(),
         channel: channel[0],
@@ -265,10 +299,7 @@ fn first_start_key(
         calibration_is_pointer,
         lower_offset: u64::from(*lower),
         upper_offset: u64::from(*upper),
-        hold_ticks: policy.hold_ticks,
-        settle_ticks: policy.settle_ticks,
-        max_presses: usize::from(policy.max_presses),
-    }))
+    })
 }
 
 fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
@@ -581,11 +612,11 @@ impl Prepared {
                     }
                 },
                 "first_start": self.first_start.as_ref().map(|start| json!({
-                    "key_id":start.key_id,
-                    "adc":start.adc,"channel":start.channel,
-                    "calibration_pointer":start.calibration_pointer,
-                    "calibration_is_pointer":start.calibration_is_pointer,
-                    "lower_offset":start.lower_offset,"upper_offset":start.upper_offset,
+                    "key_id":start.key.key_id,
+                    "adc":start.key.adc,"channel":start.key.channel,
+                    "calibration_pointer":start.key.calibration_pointer,
+                    "calibration_is_pointer":start.key.calibration_is_pointer,
+                    "lower_offset":start.key.lower_offset,"upper_offset":start.key.upper_offset,
                     "hold_ticks":start.hold_ticks,"settle_ticks":start.settle_ticks,
                     "max_presses":start.max_presses,
                 })),
@@ -830,9 +861,114 @@ impl Prepared {
     }
 }
 
+/// Select whether undeclared accesses stop or are recorded for model discovery.
+pub fn discovery_mode(discovery: bool) -> Mode {
+    if discovery { Mode::Discovery } else { Mode::Strict }
+}
+
+/// Files and startup settings for the selected processor generation.
+pub enum StartupInputs {
+    Exr2 { options: Options, mode: Mode },
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Xp5(xp5::Startup),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Application(application::Startup),
+}
+
+/// An unexecuted session and the generation-specific state needed to drive it.
+pub enum Opened {
+    Exr2(Box<Session>),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Xp5(Box<xp5::Started>),
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    Application(application::Started),
+}
+
+impl Opened {
+    /// Extract the EXR II session for callers that drive the EXR II boot workflow.
+    pub fn into_exr2(self) -> Result<Session, String> {
+        match self {
+            Self::Exr2(session) => Ok(*session),
+            #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+            Self::Xp5(_) | Self::Application(_) => Err("EXR II startup returned an application-profile session".into()),
+        }
+    }
+}
+
+/// Open the configured board from caller-selected files.
+pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Opened, String> {
+    match (resolved.configuration.inputs.as_ref(), inputs) {
+        (Some(RunInputs::Exr2(_)), StartupInputs::Exr2 { options, mode }) => {
+            Ok(Opened::Exr2(Box::new(open_exr2(resolved, options, mode)?)))
+        }
+        #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+        (Some(RunInputs::Xp5(_)), StartupInputs::Xp5(inputs)) => {
+            Ok(Opened::Xp5(Box::new(xp5::open_startup(&resolved, inputs)?)))
+        }
+        #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+        (Some(RunInputs::Xp4(_)) | None, StartupInputs::Application(inputs))
+            if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") =>
+        {
+            Ok(Opened::Application(application::open(&resolved, inputs)?))
+        }
+        _ => Err(format!(
+            "startup inputs do not match configuration {}",
+            resolved.configuration.id
+        )),
+    }
+}
+
+/// Optional instruction-entry trace shared by native boot workflows.
+pub struct TraceOutput {
+    pub path: PathBuf,
+    pub limit: usize,
+}
+
+impl TraceOutput {
+    pub fn begin(
+        &self, session: &Session,
+    ) -> Result<fujimod_emulator::board::observation::PcTrace, String> {
+        session.board.trace_pcs(self.limit)
+    }
+
+    pub fn write(
+        &self, trace: fujimod_emulator::board::observation::PcTrace,
+    ) -> Result<(), String> {
+        self.write_entries(trace.take())
+    }
+
+    pub fn write_entries(
+        &self, entries: fujimod_emulator::board::observation::PcEntries,
+    ) -> Result<(), String> {
+        let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
+        let mut writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(&mut writer, &entries).map_err(|error| error.to_string())?;
+        std::io::Write::flush(&mut writer).map_err(|error| error.to_string())
+    }
+}
+
+/// Restore a portable snapshot into a session built from the same inputs.
+pub fn load_snapshot(session: &mut Session, path: &Path) -> Result<(), String> {
+    let mut restore = || -> Result<(), String> {
+        let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+        let point = session.import_snapshot(&bytes)?;
+        session.restore(&point)
+    };
+    restore().map_err(|error| format!("{}: {error}", path.display()))
+}
+
+/// Write a portable snapshot of the current session boundary.
+pub fn save_snapshot(session: &Session, path: &Path) -> Result<(), String> {
+    let save = || -> Result<(), String> {
+        let bytes = session.checkpoint(None)?.export()?;
+        std::fs::write(path, bytes).map_err(|error| error.to_string())
+    };
+    save().map_err(|error| format!("{}: {error}", path.display()))
+}
+
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
-pub fn open(resolved: ResolvedConfiguration, options: Options) -> Result<Session, String> {
+fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> Result<Session, String> {
     let mut prepared = prepared(resolved)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
@@ -861,7 +997,7 @@ pub fn open(resolved: ResolvedConfiguration, options: Options) -> Result<Session
             .transpose()?
             .unwrap_or_default(),
     };
-    open_prepared(prepared, inputs)
+    open_prepared_mode(prepared, inputs, mode)
 }
 
 impl Prepared {
@@ -931,11 +1067,12 @@ fn camera_sections(
 struct RestartBuilder {
     prepared: Prepared,
     inputs: InputBytes,
+    mode: Mode,
 }
 impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
     fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
         open_prepared_epoch(
-            self.prepared.duplicate()?, self.inputs.clone(), Some((tick, counts, packet)),
+            self.prepared.duplicate()?, self.inputs.clone(), self.mode, Some((tick, counts, packet)),
         )
     }
 }
@@ -944,15 +1081,19 @@ impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
 /// A SoC that declares its power-on RAM contents starts with them, and its
 /// RAM is retained over restarts.
 pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
+    open_prepared_mode(prepared, inputs, Mode::Strict)
+}
+
+fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Result<Session, String> {
     let ram = if power_on_ram_fill(&prepared).is_some() {
         prepared.execution.ram.iter().map(|r| (r.base, r.size)).collect()
     } else { Vec::new() };
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
-        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone() })
+        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), mode })
     } else {
         None
     };
-    let mut session = open_prepared_epoch(prepared, inputs, None)?;
+    let mut session = open_prepared_epoch(prepared, inputs, mode, None)?;
     if let Some(builder) = cycle {
         let media = fujimod_emulator_session::durable::Spec {
             cards: session.contacts.keys().cloned().collect(),
@@ -972,6 +1113,7 @@ fn power_on_ram_fill(prepared: &Prepared) -> Option<u8> {
 fn open_prepared_epoch(
     prepared: Prepared,
     inputs: InputBytes,
+    mode: Mode,
     epoch: Option<(u64, Vec<u64>, [u8; 16])>,
 ) -> Result<Session, String> {
     let ram_fill = power_on_ram_fill(&prepared);
@@ -992,6 +1134,7 @@ fn open_prepared_epoch(
         return Err("NAND image must be at most 256 MiB".into());
     }
     let mut session_definition = prepared.to_json();
+    session_definition["mode"] = json!(mode.name());
     session_definition["inputs"]["nand_selected"] = json!(inputs.nand.is_some());
     session_definition["inputs"]["settings_selected"] = json!(inputs.settings.is_some());
     let InputBytes {
@@ -1160,10 +1303,7 @@ fn open_prepared_epoch(
         .map_err(|e| e.to_string())?
         .build(&assets)?;
     let built = plan.build(resources, epoch.as_ref().map_or(0, |e| e.0), &mut RefuseAdapters)?;
-    let bus_mode = match prepared.execution_policy.mode {
-        RunExecutionMode::Strict => Mode::Strict,
-    };
-    let bus = Bus::from_graph(bus_mode, built.graph)?;
+    let bus = Bus::from_graph(mode, built.graph)?;
     let mut options = factory::Options::new(prepared.execution_policy.engine);
     if epoch.is_none()
         && let Some(byte) = ram_fill
@@ -1200,6 +1340,7 @@ fn open_prepared_epoch(
         nodes: built.node_ids,
         contacts: built.contacts,
         power_cycle: None,
+        window_action: None,
         recording_frames: Default::default(),
     })
 }
@@ -1225,6 +1366,7 @@ pub struct RecReport {
     /// First active scanout output presenting configured graphics, when present.
     pub scanout_instance: Option<usize>,
     pub failure: Option<String>,
+    pub discovery_callee_stubs: Value,
 }
 fn word(session: &Session, address: u64) -> Result<u32, String> {
     let mut bytes = [0; 4];
@@ -1270,6 +1412,7 @@ fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<RecRepo
             .into_iter()
             .next(),
         failure: None,
+        discovery_callee_stubs: session.board.discovery_callee_stubs(),
     })
 }
 
@@ -1294,44 +1437,49 @@ fn presented_instances(display: &Value) -> Vec<usize> {
         .filter_map(|instance| instance["instance"].as_u64()?.try_into().ok())
         .collect()
 }
-fn advance(
-    session: &mut Session,
-    spec: &Prepared,
-    end: u64,
-    until: Option<u64>,
-) -> Result<(), String> {
-    let now: u64 = session.board.instruction_counts().iter().sum();
-    if now >= end {
-        return Err("instruction limit reached during first-start input".into());
-    }
-    let tick = session.board.now();
-    session.run_with_limits(
-        end - now,
-        spec.quantum,
-        Some(now.saturating_add(1_000_000).min(end)),
-        until,
-    )?;
-    if session.board.now() == tick && session.board.instruction_counts().iter().sum::<u64>() == now
-    {
-        return Err("board is quiescent without an input or device deadline".into());
-    }
-    Ok(())
+type WindowAction<'a> = dyn FnMut(&mut Session) -> Result<Option<u64>, String> + 'a;
+
+struct Driver<'a> {
+    limits: host::Limits,
+    action: &'a mut WindowAction<'a>,
+    automatic_setup: bool,
 }
-fn advance_ticks(
-    session: &mut Session,
-    spec: &Prepared,
-    end: u64,
-    ticks: u64,
-) -> Result<(), String> {
-    let until = session
-        .board
-        .now()
-        .checked_add(ticks)
-        .ok_or("input deadline overflows")?;
-    while session.board.now() < until {
-        advance(session, spec, end, Some(until))?;
+
+impl Driver<'_> {
+    fn advance(
+        &mut self,
+        session: &mut Session,
+        spec: &Prepared,
+        until: Option<u64>,
+    ) -> Result<(), String> {
+        if self.limits.reached(session) {
+            return Err("run limit reached during first-start input".into());
+        }
+        let now: u64 = session.board.instruction_counts().iter().sum();
+        let pause = now.saturating_add(1_000_000).min(self.limits.instructions);
+        let until = until.into_iter().chain((self.action)(session)?).min();
+        if !self.limits.step(session, spec.quantum, Some(pause), until)? {
+            return Err("board is quiescent without an input or device deadline".into());
+        }
+        Ok(())
     }
-    Ok(())
+
+    fn advance_ticks(
+        &mut self,
+        session: &mut Session,
+        spec: &Prepared,
+        ticks: u64,
+    ) -> Result<(), String> {
+        let until = session
+            .board
+            .now()
+            .checked_add(ticks)
+            .ok_or("input deadline overflows")?;
+        while session.board.now() < until {
+            self.advance(session, spec, Some(until))?;
+        }
+        Ok(())
+    }
 }
 
 fn session_prepared(session: &Session) -> Result<Prepared, String> {
@@ -1349,41 +1497,50 @@ fn session_prepared(session: &Session) -> Result<Prepared, String> {
                 .ok_or("session overlay identity is not a string")
         })
         .collect::<Result<Vec<_>, _>>()?;
-    prepare(id, &overlays)
+    let mut prepared = prepare(id, &overlays)?;
+    if let Some(quantum) = session.definition["quantum"].as_u64() {
+        prepared.quantum = usize::try_from(quantum).map_err(|_| "boot quantum exceeds usize")?;
+    }
+    Ok(prepared)
 }
 
-fn press_setup_key(
-    session: &mut Session,
-    spec: &Prepared,
-    s: &FirstStart,
-    end: u64,
-) -> Result<(), String> {
-    let base = if s.calibration_is_pointer {
-        u64::from(word(session, s.calibration_pointer)?)
+fn calibrated_sample(session: &Session, key: &AdcKey) -> Result<u16, String> {
+    let base = if key.calibration_is_pointer {
+        u64::from(word(session, key.calibration_pointer)?)
     } else {
-        s.calibration_pointer
+        key.calibration_pointer
     };
     let half = |offset| -> Result<u16, String> {
         let mut bytes = [0; 2];
         session.board.read_physical(base + offset, &mut bytes)?;
         Ok(u16::from_le_bytes(bytes))
     };
-    let lower = half(s.lower_offset)?;
-    let upper = half(s.upper_offset)?;
+    let lower = half(key.lower_offset)?;
+    let upper = half(key.upper_offset)?;
     if lower >= upper || upper >= 1023 {
-        return Err("first-start key calibration does not describe a pressed ADC interval".into());
+        return Err(format!("{} calibration does not describe a pressed ADC interval", key.key_id));
     }
-    let original = session.adc_samples(&s.adc)?;
+    Ok((lower + upper) / 2)
+}
+
+fn press_setup_key(
+    session: &mut Session,
+    spec: &Prepared,
+    s: &FirstStart,
+    driver: &mut Driver<'_>,
+) -> Result<(), String> {
+    let sample = calibrated_sample(session, &s.key)?;
+    let original = session.adc_samples(&s.key.adc)?;
     let mut pressed = original.clone();
     *pressed
-        .get_mut(s.channel)
-        .ok_or("first-start key ADC channel is absent")? = (lower + upper) / 2;
-    session.set_adc_samples(&s.adc, &pressed)?;
-    let held = advance_ticks(session, spec, end, s.hold_ticks);
+        .get_mut(s.key.channel)
+        .ok_or("first-start key ADC channel is absent")? = sample;
+    session.set_adc_samples(&s.key.adc, &pressed)?;
+    let held = driver.advance_ticks(session, spec, s.hold_ticks);
     // Release even if the instruction budget or a modeled refusal stops the hold.
-    session.set_adc_samples(&s.adc, &original)?;
+    session.set_adc_samples(&s.key.adc, &original)?;
     held?;
-    advance_ticks(session, spec, end, s.settle_ticks)
+    driver.advance_ticks(session, spec, s.settle_ticks)
 }
 
 fn setup_key(
@@ -1391,13 +1548,13 @@ fn setup_key(
     spec: &Prepared,
     inputs: &Exr2RunInputs,
     key: &str,
-    end: u64,
+    driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
     let key =
         first_start_key(&spec.resolved, inputs, key)?.ok_or("first-start policy is absent")?;
     *presses += 1;
-    press_setup_key(session, spec, &key, end)
+    press_setup_key(session, spec, &key, driver)
 }
 
 fn setup_calendar(
@@ -1405,7 +1562,7 @@ fn setup_calendar(
     spec: &Prepared,
     inputs: &Exr2RunInputs,
     menu: &fujimod_catalog::first_start::FirstStartMenu,
-    end: u64,
+    driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
     let seconds = session.definition["inputs"]["clock_seconds_2000"]
@@ -1434,7 +1591,7 @@ fn setup_calendar(
             if read(session)?.1 as usize == field {
                 break;
             }
-            setup_key(session, spec, inputs, "RIGHT", end, presses)?;
+            setup_key(session, spec, inputs, "RIGHT", driver, presses)?;
         }
         if read(session)?.1 as usize != field {
             return Err("date editor did not select the requested field".into());
@@ -1476,7 +1633,7 @@ fn setup_calendar(
                 spec,
                 inputs,
                 if increase { "UP" } else { "DOWN" },
-                end,
+                driver,
                 presses,
             )?;
             let after = read(session)?;
@@ -1500,9 +1657,34 @@ fn setup_calendar(
 /// Run a named runtime to REC or an explicit stopped frontier. First-start menus
 /// use calibrated UP/DOWN and MENU/OK ADC presses, never RAM writes.
 pub fn to_rec(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
+    to_rec_with(session, instruction_limit, None, |_session, _status| Ok(()))
+}
+
+/// Run EXR II's first-start and REC workflow with a guest-time ceiling and
+/// an observational host callback between scheduler windows.
+pub fn to_rec_with(
+    session: &mut Session,
+    instruction_limit: u64,
+    duration: Option<std::time::Duration>,
+    observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
+) -> Result<RecReport, String> {
+    to_rec_with_actions(session, instruction_limit, duration, true, |_| Ok(None), observe_window)
+}
+
+/// Run with explicit scheduled host actions before each scheduler window.
+pub fn to_rec_with_actions(
+    session: &mut Session,
+    instruction_limit: u64,
+    duration: Option<std::time::Duration>,
+    automatic_setup: bool,
+    mut action: impl FnMut(&mut Session) -> Result<Option<u64>, String>,
+    mut observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
+) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
-    let result = to_rec_inner(session, instruction_limit);
+    let limits = host::Limits::new(session, Some(instruction_limit), duration, EXR2_TICKS_PER_SECOND)?;
+    let mut driver = Driver { limits, action: &mut action, automatic_setup };
+    let result = to_rec_inner(session, &mut driver, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
 }
@@ -1514,24 +1696,24 @@ fn boot_progress(session: &Session) -> fujimod_perf::GuestProgress {
     }
 }
 
-fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecReport, String> {
-    if instruction_limit == 0 {
-        return Err("instruction limit must be positive".into());
-    }
+fn to_rec_inner(
+    session: &mut Session,
+    driver: &mut Driver<'_>,
+    observe_window: &mut impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
+) -> Result<RecReport, String> {
     let spec = session_prepared(session)?;
-    let end = session
-        .board
-        .instruction_counts()
-        .iter()
-        .sum::<u64>()
-        .checked_add(instruction_limit)
-        .ok_or("instruction limit overflows")?;
+    let limits = driver.limits;
     let mut presses = 0;
     let mut confirmations = 0;
     loop {
         let mut report = observe(session, &spec, presses)?;
-        if report.instructions >= end {
-            report.status = "instruction-limit".into();
+        observe_window(session, &report)?;
+        if limits.reached(session) {
+            report.status = if report.instructions >= limits.instructions {
+                "instruction-limit"
+            } else {
+                "time-limit"
+            }.into();
             return Ok(report);
         }
         let presented = report.scanout_instance.is_some();
@@ -1545,7 +1727,7 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
             report.status = "rec".into();
             return Ok(report);
         }
-        let result = if report.ui_mode == spec.observation.setup_mode
+        let result = if driver.automatic_setup && report.ui_mode == spec.observation.setup_mode
             && report.system_mode == 3
             && report.menu_active != 0
             && report.pending_mode == 0
@@ -1602,7 +1784,7 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
                     let key = if current > selected { "UP" } else { "DOWN" };
                     let key = first_start_key(&spec.resolved, inputs, key)?
                         .ok_or("first-start policy is absent")?;
-                    press_setup_key(session, &spec, &key, end).and_then(|()| {
+                    press_setup_key(session, &spec, &key, driver).and_then(|()| {
                         let after = word(session, menu.cursor)? as usize;
                         let expected = if current > selected { current - 1 } else { current + 1 };
                         if after != expected { return Err(format!("START MENU cursor did not move from {current} to {expected}: {after}")); }
@@ -1611,23 +1793,25 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
                 } else {
                     presses += 1;
                     confirmations += 1;
-                    press_setup_key(session, &spec, start, end)
+                    press_setup_key(session, &spec, start, driver)
                 }
             } else {
                 if word(session, u64::from(report.menu_node))? == menu.date_kind {
-                    setup_calendar(session, &spec, inputs, menu, end, &mut presses)?;
+                    setup_calendar(session, &spec, inputs, menu, driver, &mut presses)?;
                 }
                 presses += 1;
                 confirmations += 1;
-                press_setup_key(session, &spec, start, end)
+                press_setup_key(session, &spec, start, driver)
             }
         } else {
-            advance(session, &spec, end, None)
+            driver.advance(session, &spec, None)
         };
         if let Err(error) = result {
             let mut report = observe(session, &spec, presses)?;
-            report.status = if report.instructions >= end {
+            report.status = if report.instructions >= limits.instructions {
                 "instruction-limit"
+            } else if limits.reached(session) {
+                "time-limit"
             } else {
                 "stopped"
             }
@@ -1637,6 +1821,9 @@ fn to_rec_inner(session: &mut Session, instruction_limit: u64) -> Result<RecRepo
         }
     }
 }
+
+/// Guest tick frequency for the native EXR II timebase.
+pub const EXR2_TICKS_PER_SECOND: u64 = 12_000_000;
 
 /// Capture the first active native scanout output without advancing guest time.
 pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {

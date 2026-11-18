@@ -135,6 +135,30 @@ impl Maintenance {
         })
     }
 
+    pub fn portable(&self, cpus: &[impl Borrow<Core>]) -> Result<Vec<Vec<u8>>, String> {
+        self.ready(cpus)?;
+        cpus.iter().zip(&self.owners)
+            .map(|(cpu, owner)| cpu.borrow().owned_snapshot(owner)).collect()
+    }
+
+    pub fn import_portable(&self, cpus: &[impl Borrow<Core>], data: &[std::sync::Arc<[u8]>])
+        -> Result<Vec<Box<dyn fujimod_emulator_cpu::Snapshot>>, String>
+    {
+        self.ready(cpus)?;
+        if data.len() != cpus.len() {
+            return Err("XP4 snapshot processor count differs".into());
+        }
+        cpus.iter().zip(&self.owners).zip(data)
+            .map(|((cpu, owner), data)| cpu.borrow().import_owned_snapshot(owner, data)).collect()
+    }
+
+    pub fn restore_portable(&self, cpus: &[impl Borrow<Core>], state: &[Box<dyn fujimod_emulator_cpu::Snapshot>]) -> Result<(), String> {
+        for ((cpu, owner), saved) in cpus.iter().zip(&self.owners).zip(state) {
+            cpu.borrow().restore_owned_snapshot(owner, saved.as_ref())?;
+        }
+        Ok(())
+    }
+
     pub fn settle(
         &self,
         cpus: &[impl Borrow<Core>],

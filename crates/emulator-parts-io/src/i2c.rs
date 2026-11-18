@@ -6,6 +6,7 @@
 //!
 //! An address without a declared target is not acknowledged. A register a part
 //! does not model refuses.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::i2c::Bus;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -20,6 +21,15 @@ pub trait Registers: Send {
     }
     fn write(&mut self, register: u8, value: u8) -> Result<(), String>;
     fn read(&mut self, register: u8) -> Result<u8, String>;
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Err(format!("{} has no exact checkpoint implementation", self.name()))
+    }
+    fn validate_checkpoint(&self, _: &Checkpoint) -> Result<(), String> {
+        Err(format!("{} has no exact checkpoint implementation", self.name()))
+    }
+    fn restore_checkpoint(&mut self, _: &Checkpoint) -> Result<(), String> {
+        Err(format!("{} has no exact checkpoint implementation", self.name()))
+    }
     fn save(&self) -> Value;
     fn restore(&mut self, state: &Value) -> Result<(), String>;
 }
@@ -63,6 +73,29 @@ impl Targets {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+struct Saved {
+    active: Option<usize>,
+    pointers: Vec<Pointer>,
+    addresses: Vec<u8>,
+}
+
+impl Targets {
+    fn validate_saved(&self, saved: &Checkpoint) -> Result<Saved, String> {
+        let state: Saved = saved.decode("i2c-targets")?;
+        if state.pointers.len() != self.targets.len()
+            || state.active.is_some_and(|index| index >= self.targets.len())
+            || state.addresses.iter().copied().ne(self.targets.iter().map(|part| part.address))
+            || saved.children().len() != self.targets.len()
+        {
+            return Err("I2C target wiring differs from checkpoint".into());
+        }
+        for (part, checkpoint) in self.targets.iter().zip(saved.children()) {
+            part.registers.validate_checkpoint(checkpoint)?;
+        }
+        Ok(state)
+    }
+}
 impl Bus for Targets {
     fn start(&mut self, address: u16, read: bool) -> bool {
         self.active = self.targets.iter().position(|t| u16::from(t.address) == address);
@@ -96,6 +129,27 @@ impl Bus for Targets {
     }
     fn stop(&mut self) {
         self.active = None;
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let children = self.targets.iter().map(|t| t.registers.checkpoint())
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Checkpoint::encode("i2c-targets", &Saved {
+            active: self.active,
+            pointers: self.pointers.clone(),
+            addresses: self.targets.iter().map(|part| part.address).collect(),
+        })?.with_children(children))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_saved(saved).map(|_| ())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        let state = self.validate_saved(saved)?;
+        for (part, checkpoint) in self.targets.iter_mut().zip(saved.children()) {
+            part.registers.restore_checkpoint(checkpoint)?;
+        }
+        self.active = state.active;
+        self.pointers = state.pointers;
+        Ok(())
     }
     fn save(&self) -> Value {
         json!({
@@ -146,6 +200,7 @@ impl Registers for RetainedRegisters {
             .copied()
             .ok_or_else(|| format!("register {register:#04x} was never written"))
     }
+    fujimod_emulator_devices::checkpoint_fields!(written: BTreeMap<u8, u8>);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }

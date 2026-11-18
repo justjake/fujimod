@@ -89,31 +89,54 @@ fn both(cpu: &Core, selector: (u32, u32, u32, u32)) -> Result<[u32; 2], String> 
 
 impl State {
     pub(super) fn capture(cpu: &Core, context: &Context) -> Result<Self, String> {
-        let cpsr = context.get32(arm::CPSR)?;
-        let registers = array(arm::CORE.map(|r| context.get32(r)))?;
-        let scalar = array(SCALARS.map(|r| context.get32(r)))?;
-        let vectors = array((0..16).map(|i| context.get(Register::Arm32(arm::Register::Q(i)))))?;
+        Self::capture_registers(
+            cpu,
+            |register| context.get32(register),
+            |index| context.get(Register::Arm32(arm::Register::Q(index))),
+            |value| context.put32(arm::CPSR, value),
+        )
+    }
+
+    /// The managed translation owner cannot take a native context. Read the
+    /// same architectural banks while paused, restoring the original bank
+    /// before returning even if a register read fails.
+    pub(super) fn capture_owned(cpu: &Core) -> Result<Self, String> {
+        let get32 = |register| {
+            let mut bytes = [0; 4];
+            if cpu.read_register(register, &mut bytes)? != bytes.len() {
+                return Err(format!("Cortex-A7 checkpoint register {register:?} has unexpected width"));
+            }
+            Ok(u32::from_le_bytes(bytes))
+        };
+        let vector = |index| {
+            let mut bytes = [0; 16];
+            if cpu.read_register(Register::Arm32(arm::Register::Q(index)), &mut bytes)? != bytes.len() {
+                return Err(format!("Cortex-A7 checkpoint vector Q{index} has unexpected width"));
+            }
+            Ok(bytes)
+        };
+        Self::capture_registers(cpu, get32, vector, |value| put(cpu, arm::CPSR, value))
+    }
+
+    fn capture_registers(
+        cpu: &Core, get32: impl Fn(Register) -> Result<u32, String>,
+        vector: impl Fn(u8) -> Result<[u8; 16], String>, set_mode: impl Fn(u32) -> Result<(), String>,
+    ) -> Result<Self, String> {
+        let cpsr = get32(arm::CPSR)?;
+        let registers = array(arm::CORE.map(&get32))?;
+        let scalar = array(SCALARS.map(&get32))?;
+        let vectors = array((0..16).map(vector))?;
         let banks = array(MODES.map(|mode| {
-            context.put32(arm::CPSR, cpsr & !31 | mode)?;
+            set_mode(cpsr & !31 | mode)?;
             Ok(Bank {
-                registers: array((8..15).map(|i| context.get32(arm::CORE[i])))?,
-                spsr: if matches!(mode, 0x10 | 0x1f) {
-                    None
-                } else {
-                    Some(context.get32(arm::SPSR)?)
-                },
+                registers: array((8..15).map(|i| get32(arm::CORE[i])))?,
+                spsr: if matches!(mode, 0x10 | 0x1f) { None } else { Some(get32(arm::SPSR)?) },
             })
         }));
-        let restored = context.put32(arm::CPSR, cpsr);
-        let banks = banks?;
-        restored?;
+        set_mode(cpsr)?;
         Ok(Self {
             identity: identity(cpu)?,
-            cpsr,
-            registers,
-            scalar,
-            vectors,
-            banks,
+            cpsr, registers, scalar, vectors, banks: banks?,
             cp15: array(CP15.map(|selector| both(cpu, selector)))?,
             late: array(LATE.map(|selector| both(cpu, selector)))?,
             thread: both(cpu, THREAD_PRIVILEGED)?,

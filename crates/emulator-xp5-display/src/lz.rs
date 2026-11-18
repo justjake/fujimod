@@ -1,6 +1,7 @@
 //! XP5 DMA high-address registers and an explicitly selected OSD transport.
 //! The register-level engine is shared in `crate::lz_osd`.
 use fujimod_framebuffer_xp5::emulator_codec as codec;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -48,6 +49,16 @@ impl Device for AddressHigh {
             return;
         }
         self.0.lock().unwrap()[o as usize / 4] = v as u32;
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &*self.0.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode::<[u32; 2]>(self.name()).map(|_| ())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        *self.0.lock().unwrap() = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::json!(*self.0.lock().unwrap())

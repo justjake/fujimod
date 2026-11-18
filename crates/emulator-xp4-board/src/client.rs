@@ -51,6 +51,10 @@ impl Session {
         }
     }
     pub fn run_board(&self, limit: u64, quantum: usize) -> Result<(), String> {
+        self.run_board_window(limit, quantum, None)
+    }
+
+    pub fn run_board_window(&self, limit: u64, quantum: usize, until: Option<u64>) -> Result<(), String> {
         self.inner.host_mutation()?;
         if quantum == 0 {
             return Err("Board quantum must be positive".to_owned());
@@ -61,10 +65,13 @@ impl Session {
         loop {
             self.inner.healthy()?;
             let state = unsafe { &*self.inner.state.get() };
-            if state.instructions >= target {
+            if state.instructions >= target || until.is_some_and(|at| state.ticks >= at) {
                 return Ok(());
             }
-            let remaining = target - state.instructions;
+            let mut remaining = target - state.instructions;
+            if let Some(until) = until {
+                remaining = remaining.min(self.inner.instruction_rate.budget(state.ticks, state.tick_phase, until)?);
+            }
             let runnable: Vec<_> = state
                 .waiting
                 .iter()
@@ -72,7 +79,7 @@ impl Session {
                 .filter_map(|(core, waiting)| (*waiting == 0).then_some(core))
                 .collect();
             if runnable.is_empty() {
-                if self.idle() {
+                if self.idle_until(until) {
                     continue;
                 }
                 self.inner.healthy()?;
@@ -91,4 +98,72 @@ impl Session {
             )?;
         }
     }
+
+    /// Attach explicit ARM32 routine substitutions to a discovery session.
+    pub fn install_discovery_callee_stubs(&self, stubs: &[CalleeStub]) -> Result<(), String> {
+        if stubs.is_empty() {
+            return Ok(());
+        }
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        if self.inner.counted || !state.discovery.enabled || !state.callee_stubs.is_empty() || stubs.len() > 4096 {
+            return Err("XP4 callee substitutions require a fresh exact discovery hook set".into());
+        }
+        let mut entries = BTreeMap::new();
+        for stub in stubs {
+            if stub.core >= self.inner.cpus.len() || stub.address & 1 != 0
+                || u32::try_from(stub.address).is_err() || u32::try_from(stub.value).is_err()
+                || entries.insert((stub.core, stub.address), (stub.clone(), 0)).is_some()
+            {
+                return Err("invalid or duplicate XP4 discovery callee substitution".into());
+            }
+        }
+        state.callee_stubs = entries;
+        Ok(())
+    }
+
+    pub fn discovery_callee_stubs(&self) -> serde_json::Value {
+        let state = unsafe { &*self.inner.state.get() };
+        serde_json::json!(state.callee_stubs.values().map(|(stub, hits)| serde_json::json!({
+            "kind":"callee_stub", "name":stub.name, "core":stub.core, "address":format!("{:#x}", stub.address),
+            "value":stub.value, "hits":hits,
+        })).collect::<Vec<_>>())
+    }
+
+    pub fn set_scene(&self, scene: &serde_json::Value) -> Result<(), String> {
+        self.inner.external_devices(|devices, _| devices.set_scene(scene))
+    }
+
+    /// Resolve an application processor address through its stopped MMU view.
+    pub fn translate(&self, core: usize, address: u64, access: Access) -> Result<u64, String> {
+        self.inner.cpu(core)?.translate(address, access)
+    }
+
+    pub fn write_patch(&self, address: usize, bytes: &[u8]) -> Result<(), String> {
+        self.write(address, bytes)?;
+        for cpu in &self.inner.cpus {
+            cpu.invalidate_code(None)?;
+        }
+        Ok(())
+    }
+
+    pub fn begin_pc_trace(&self, limit: usize) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        if self.inner.counted {
+            return Err(counted::NEEDS_EXACT.into());
+        }
+        let state = unsafe { &mut *self.inner.state.get() };
+        if state.pc_trace.is_some() {
+            return Err("PC trace is already attached".into());
+        }
+        state.pc_trace = Some(fujimod_emulator::board::observation::PcRecorder::new(limit)?);
+        Ok(())
+    }
+
+    pub fn take_pc_trace(&self) -> Result<fujimod_emulator::board::observation::PcEntries, String> {
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        state.pc_trace.take().map(|mut trace| trace.take()).ok_or("no active PC trace".into())
+    }
+
 }

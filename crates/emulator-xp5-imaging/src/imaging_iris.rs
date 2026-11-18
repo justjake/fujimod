@@ -1,4 +1,5 @@
 //! Functional SPI5 aperture pulse completion at the stock IRQ boundary.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -92,6 +93,21 @@ impl Device for Iris {
         if !self.motion.batches.is_empty() {
             self.schedule(cx);
         }
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Ok(Checkpoint::encode(self.name(), &self.motion)?
+            .with_children(vec![self.serial.checkpoint()?]))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let _: Motion = saved.decode(self.name())?;
+        let [serial] = saved.children() else { return Err("missing serial motion state".into()); };
+        self.serial.validate_checkpoint(serial)
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.serial.restore_checkpoint(&saved.children()[0])?;
+        self.motion = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::json!({"serial": self.serial.save(), "iris": self.motion})

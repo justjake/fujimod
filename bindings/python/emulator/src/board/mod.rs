@@ -523,7 +523,7 @@ impl Board {
         continue_refusals: bool,
         engine: &str,
     ) -> PyResult<Self> {
-        let engine: RunEngine = serde_json::from_value(serde_json::Value::String(engine.into()))
+        let engine: RunEngine = engine.parse()
             .map_err(|e| PyValueError::new_err(format!("invalid engine: {e}")))?;
         let mode = match execution_mode {
             "strict" => Mode::Strict,
@@ -582,8 +582,7 @@ impl Board {
             .and_then(serde_json::Value::as_str)
             == Some("xpp")
         {
-            if !matches!(engine, RunEngine::Unicorn)
-                || !models.is_empty()
+            if !models.is_empty()
                 || json::<serde_json::Value>(scene)? != serde_json::json!({})
             {
                 return Err(PyValueError::new_err(
@@ -596,6 +595,7 @@ impl Board {
                 assets,
                 read_limit,
                 mode,
+                engine,
                 continue_refusals,
                 serde_json::json!({"execution":json::<serde_json::Value>(execution)?,"devices":json::<serde_json::Value>(devices)?}),
             );
@@ -633,6 +633,7 @@ impl Board {
                     nodes: BTreeMap::new(),
                     contacts: BTreeMap::new(),
                     power_cycle: None,
+                    window_action: None,
                     recording_frames: Default::default(),
                     resources: Default::default(),
                 })),
@@ -718,6 +719,7 @@ impl Board {
                 nodes: built.node_ids,
                 contacts: built.contacts,
                 power_cycle: None,
+                window_action: None,
                 recording_frames: Default::default(),
                 resources: built.resources,
             })),
@@ -1301,6 +1303,33 @@ impl Board {
             .coprocessor(json::<arm::Coprocessor>(selector)?, value)
             .map_err(error)
     }
+    /// Resolve a virtual address using the selected processor's current mappings.
+    fn translate(&self, core: usize, address: u64, access: &str) -> PyResult<u64> {
+        use fujimod_emulator_cpu::Access;
+        let access = match access {
+            "read" => Access::Read,
+            "write" => Access::Write,
+            "fetch" => Access::Fetch,
+            _ => return Err(PyValueError::new_err("invalid translation access")),
+        };
+        self.board()?.cpu(core).map_err(error)?.translate(address, access).map_err(error)
+    }
+    fn read_virtual<'py>(
+        &self, py: Python<'py>, core: usize, address: u64, size: usize,
+    ) -> PyResult<Bound<'py, PyBytes>> {
+        self.check_read(size)?;
+        let cpu = self.board()?.cpu(core).map_err(error)?;
+        let result = PyBytes::new_with(py, size, |bytes| {
+            cpu.read_virtual(address, fujimod_emulator_cpu::Access::Read, bytes)
+                .map_err(error)
+        })?;
+        fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
+        Ok(result)
+    }
+    fn take_console(&mut self) -> PyResult<Vec<String>> {
+        Ok(self.board_mut()?.take_console())
+    }
+
     fn mem_read<'py>(
         &self,
         py: Python<'py>,
@@ -1855,6 +1884,10 @@ impl Board {
                 )
             })
             .collect())
+    }
+    /// Digest a physical RAM range without routing a guest access.
+    fn range_digest(&self, address: u64, length: u64) -> PyResult<String> {
+        Ok(self.board()?.range_digest(address, length).to_string())
     }
     fn state(&self, py: Python<'_>) -> PyResult<String> {
         if let Some(Backend::Xp4(session)) = &self.backend {

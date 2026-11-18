@@ -1,4 +1,5 @@
 //! A single word whose reads drain bus traffic and discard the value.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 
 pub struct DiscardedRead {
@@ -15,6 +16,15 @@ impl DiscardedRead {
 }
 
 impl Device for DiscardedRead {
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode(self.name())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)
+    }
     fn name(&self) -> &'static str {
         "discarded-read"
     }

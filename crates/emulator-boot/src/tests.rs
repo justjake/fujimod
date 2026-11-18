@@ -518,7 +518,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
     };
 
     let direct = snapshot(
-        open(ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(), Options {
+        open_exr2(ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(), Options {
             update: PathBuf::from(&update),
             boot_rom: PathBuf::from(&boot_rom),
             nand: None,
@@ -528,7 +528,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             camera: Some(reference_camera()),
             access_point: None,
             capability_reply: None,
-        })
+        }, Mode::Strict)
         .unwrap(),
     );
     assert!(direct.1.iter().sum::<u64>() >= INSTRUCTIONS);
@@ -557,11 +557,11 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
         std::env::var_os("FUJIMOD_TEST_BOOT_ROM"),
         std::env::var_os("FUJIMOD_TEST_RESTART_IMAGE"),
     ) else { return };
-    let mut session = open(ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(), Options {
+    let mut session = open_exr2(ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(), Options {
         update: update.into(), boot_rom: boot_rom.into(), nand: None, settings: None,
         clock_seconds_2000: None, preferred_languages: vec![], camera: Some(reference_camera()),
         access_point: None, capability_reply: None,
-    }).unwrap();
+    }, Mode::Strict).unwrap();
     session.run_with_limits(5_000_000, 1000, None, None).unwrap();
     session.logic_input("usb_cable", true).unwrap();
     let image = std::fs::read(payload).unwrap();
@@ -1042,3 +1042,53 @@ fn statistics_dma_uses_its_selected_latency_instead_of_the_scene_frame_period() 
 
 #[path = "tests/output_timing.rs"]
 mod output_timing;
+
+#[test]
+fn exr2_image_transfer_maps_cpu_pages_and_keeps_device_register_bounds() {
+    // The image-transfer block occupies 32 bytes, smaller than a CPU page.
+    let prepared = crate::prepare("x70-110-rec", &[]).unwrap();
+    for core in 0..2 {
+        let aperture = prepared
+            .execution
+            .peripherals
+            .iter()
+            .find(|p| {
+                p.core == core
+                    && p.address <= 0xfff64000
+                    && p.address + p.size as u64 >= 0xfff65000
+            })
+            .expect("both CPUs must map the image-transfer page");
+        assert_eq!(aperture.address % 0x1000, 0);
+        assert_eq!(aperture.physical % 0x1000, 0);
+        assert_eq!(aperture.size % 0x1000, 0);
+    }
+    let window = prepared.devices_value["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|node| node["windows"].as_array().unwrap())
+        .find(|window| window["base"] == 0xfff64000u64)
+        .unwrap();
+    assert_eq!(window["size"], 0x20);
+}
+
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+#[test]
+fn common_open_checks_generation_before_loading_startup_files() {
+    let resolved = ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap();
+    let inputs = StartupInputs::Xp5(xp5::Startup {
+        update: "unavailable.dat".into(),
+        manifest: None,
+        boot_rom: None,
+        card_image: None,
+        card_files: vec![],
+        scene: None,
+        output: None, viewer_port: None,
+        mode: Mode::Strict,
+        quantum: None,
+    });
+    assert_eq!(
+        open(resolved, inputs).err().unwrap(),
+        "startup inputs do not match configuration x70-110-rec"
+    );
+}

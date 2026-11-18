@@ -1290,6 +1290,10 @@ impl Board {
         }
         Ok(())
     }
+    /// Observe the latest scanouts without draining the board's output queue.
+    pub fn display_frames(&self) -> Vec<fujimod_emulator_devices::graphics::scanout::Frame> {
+        self.state.borrow().frames.values().cloned().collect()
+    }
     pub fn take_frames(&mut self) -> Vec<fujimod_emulator_devices::graphics::scanout::Frame> {
         std::mem::take(&mut self.state.borrow_mut().frames)
             .into_values()

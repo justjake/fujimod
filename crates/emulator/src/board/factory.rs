@@ -147,6 +147,14 @@ pub fn translation_cache_size_bytes(processors: usize) -> Result<u32, String> {
         Ok(TRANSLATION_CACHE_BYTES)
     }
 }
+/// Reject configurations whose selected engine cannot run the requested processors.
+pub fn validate_engine(engine: RunEngine, models: impl IntoIterator<Item = Model>) -> Result<(), String> {
+    if engine == RunEngine::Hypervisor && models.into_iter().any(|model| !matches!(model, Model::ArmV8A | Model::CortexM4)) {
+        return Err("Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into());
+    }
+    Ok(())
+}
+
 pub(super) struct Engines {
     unicorn: Option<Library>,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
@@ -154,16 +162,7 @@ pub(super) struct Engines {
 }
 impl Engines {
     fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
-        if matches!(options.engine, RunEngine::Hypervisor)
-            && graph
-                .processors
-                .iter()
-                .any(|p| !matches!(p.model, Model::ArmV8A | Model::CortexM4))
-        {
-            return Err(
-                "Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into(),
-            );
-        }
+        validate_engine(options.engine, graph.processors.iter().map(|processor| processor.model))?;
         let need_uc = graph
             .processors
             .iter()

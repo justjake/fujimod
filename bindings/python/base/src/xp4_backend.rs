@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 pub trait Xp4Backend {
+    fn catalog_quantum(&self) -> Option<usize>;
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()>;
     fn read_register(&self, core: usize, register: Register) -> PyResult<u64>;
     fn write_register(&self, core: usize, register: Register, value: u64) -> PyResult<()>;

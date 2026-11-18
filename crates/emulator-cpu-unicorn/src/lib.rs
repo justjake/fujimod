@@ -88,6 +88,7 @@ impl Library {
             tlbi_owner: Cell::new(None),
             tlbi_executing: Cell::new(false),
             memory_regions: RefCell::new(None),
+            has_engine_ram: Cell::new(false),
             #[cfg(test)]
             memory_region_queries: Cell::new(0),
             mmio: RefCell::new(BTreeMap::new()),
@@ -144,6 +145,7 @@ pub struct Core {
     tlbi_owner: Cell<Option<u64>>,
     tlbi_executing: Cell<bool>,
     memory_regions: RefCell<Option<Vec<MemoryRegion>>>,
+    has_engine_ram: Cell<bool>,
     #[cfg(test)]
     memory_region_queries: Cell<u64>,
     // Stable callback contexts survive partial unmaps and remapping. They are
@@ -153,6 +155,20 @@ pub struct Core {
     mmio: RefCell<BTreeMap<u64, MmioMapping>>,
 }
 impl Core {
+    fn capture_context(&self) -> Result<Context, String> {
+        let mut raw = std::ptr::null_mut();
+        self.check(unsafe { (self.api.uc_context_alloc)(self.raw, &mut raw) })?;
+        let mut context = Context {
+            api: self.api.clone(),
+            raw,
+            owner: self.identity,
+            durable: Err("processor architecture has not been captured".into()),
+        };
+        self.check(unsafe { (self.api.uc_context_save)(self.raw, raw) })?;
+        context.durable = durable::capture(self, &context);
+        Ok(context)
+    }
+
     pub(crate) fn set_parallel_cpus(&self, enabled: bool) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         let set = self
@@ -747,6 +763,12 @@ impl Cpu for Core {
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self.cached_memory_regions()?.to_vec())
     }
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        if self.has_engine_ram.get() {
+            return Err("processor has engine-owned RAM outside the board checkpoint".into());
+        }
+        Ok(frozen::backings(self.identity))
+    }
     unsafe fn map_backing(
         &self,
         address: u64,
@@ -834,6 +856,7 @@ impl Cpu for Core {
         self.check_tlbi_mutation()?;
         frozen::check(self.identity, address, bytes)?;
         self.check(unsafe { (self.api.uc_mem_map)(self.raw, address, bytes as u64, permissions) })?;
+        self.has_engine_ram.set(true);
         self.invalidate_memory_regions();
         Ok(())
     }
@@ -976,17 +999,7 @@ impl Cpu for Core {
         if self.tlbi_owner.get().is_some() {
             return Err("Attached Cortex-A7 snapshots require whole-owner coordination".into());
         }
-        let mut raw = std::ptr::null_mut();
-        self.check(unsafe { (self.api.uc_context_alloc)(self.raw, &mut raw) })?;
-        let mut context = Context {
-            api: self.api.clone(),
-            raw,
-            owner: self.identity,
-            durable: Err("processor architecture has not been captured".into()),
-        };
-        self.check(unsafe { (self.api.uc_context_save)(self.raw, raw) })?;
-        context.durable = durable::capture(self, &context);
-        Ok(Box::new(context))
+        Ok(Box::new(self.capture_context()?))
     }
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
         if frozen::any(self.identity) {
