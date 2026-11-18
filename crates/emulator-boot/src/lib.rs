@@ -1340,6 +1340,7 @@ fn open_prepared_epoch(
         nodes: built.node_ids,
         contacts: built.contacts,
         power_cycle: None,
+        window_action: None,
         recording_frames: Default::default(),
     })
 }

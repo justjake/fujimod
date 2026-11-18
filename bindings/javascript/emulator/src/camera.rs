@@ -480,6 +480,7 @@ impl Session {
             resources: built.resources,
             contacts: built.contacts,
             power_cycle: None,
+            window_action: None,
             recording_frames: Default::default(),
         };
         let mut session = Self::start_camera(

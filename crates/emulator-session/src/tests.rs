@@ -112,6 +112,7 @@ fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sy
         nodes: BTreeMap::from([("sd".into(), id), ("adc".into(), adc)]),
         contacts: BTreeMap::from([("sd".into(), contacts)]),
         power_cycle: None,
+        window_action: None,
         recording_frames: Default::default(),
     }
 }

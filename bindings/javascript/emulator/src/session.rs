@@ -324,6 +324,7 @@ impl Session {
                 nodes: Default::default(),
                 contacts: Default::default(),
                 power_cycle: None,
+                window_action: None,
                 recording_frames: Default::default(),
             },
             owner: next_owner(),

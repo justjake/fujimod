@@ -71,7 +71,7 @@ impl Boot for CatalogBoot {
             }))? else {
                 return Err("XP5 startup returned another processor generation".into());
             };
-            let (session, inputs, read_limit) = started.into_loader_session()?;
+            let (session, inputs, read_limit) = started.into_session();
             return Ok(Opened::Xp5 {session, inputs, read_limit});
         }
         if inputs.manifest.is_some() || inputs.quantum.is_some() {

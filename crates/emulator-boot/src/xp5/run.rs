@@ -210,7 +210,6 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     };
     let Started { firmware, state, opened } = *started;
     let session_open::Opened {
-        flash_shadow,
         mut session,
         inputs,
         outputs,
@@ -289,9 +288,6 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             }
             let until = next_patch.map_or(now.saturating_add(slice), |at| at.min(now.saturating_add(slice)));
             let result = limits.step(&mut session, quantum, None, Some(until));
-            if let Some(storage) = &flash_shadow {
-                session_open::sync_flash_aperture(storage, &mut session)?;
-            }
             for line in session.board.take_console() {
                 println!("{line}");
             }

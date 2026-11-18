@@ -41,14 +41,11 @@ pub struct Started {
 }
 
 impl Started {
-    /// Transfer a loader-start board and its physical controls to a language binding.
-    pub fn into_loader_session(
+    /// Transfer the opened board and physical input handle to a language binding.
+    pub fn into_session(
         self,
-    ) -> Result<(fujimod_emulator_session::Session, fujimod_emulator_xp5_board::session::Inputs, usize), String> {
-        if self.opened.flash_shadow.is_some() {
-            return Err("XP5 ROM start needs the flash aperture driver".into());
-        }
-        Ok((self.opened.session, self.opened.inputs, self.opened.read_limit))
+    ) -> (fujimod_emulator_session::Session, fujimod_emulator_xp5_board::session::Inputs, usize) {
+        (self.opened.session, self.opened.inputs, self.opened.read_limit)
     }
 
     pub fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {

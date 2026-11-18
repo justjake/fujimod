@@ -32,9 +32,6 @@ use std::{
 };
 
 pub(crate) struct Opened {
-    /// ROM start only: the flash image whose overlay changes `sync_flash_aperture` copies into
-    /// the CPU's aperture memory.
-    pub flash_shadow: Option<flash_storage::Medium>,
     pub session: Session,
     pub inputs: Inputs,
     pub outputs: crate::output::Outputs,
@@ -229,9 +226,9 @@ fn shadow_flash_aperture(
 /// run slices (1 ms of guest time), so a read in the slice that changes a page can still see the
 /// old bytes. The stock boot does erase and program flash (about 1.6 MiB at `0x6d60000` by the
 /// first-start screens, in the hand-off boot too), so a ROM start cannot refuse program and erase.
-pub(crate) fn sync_flash_aperture(
+fn sync_flash_aperture(
     storage: &flash_storage::Medium,
-    session: &mut Session,
+    board: &board::Board,
 ) -> Result<(), String> {
     let flash_storage::Medium::Nor(storage) = storage else {
         return Err("ROM start needs the NOR flash image to back the aperture".into());
@@ -240,7 +237,7 @@ pub(crate) fn sync_flash_aperture(
     for page in storage.take_dirty_pages() {
         let offset = page * 4096;
         let bytes = storage.read(offset, 4096)?;
-        session.board.write_physical(FLASH_APERTURE_BASE + offset, &bytes)?;
+        board.write_physical(FLASH_APERTURE_BASE + offset, &bytes)?;
     }
     Ok(())
 }
@@ -897,9 +894,13 @@ pub(crate) fn open_from(
     }
     if rom.is_some() {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
+        let storage = storage.ok_or("early startup flash backing is absent")?;
+        session.window_action = Some(fujimod_emulator_session::WindowAction {
+            interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
+            synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
+        });
     }
     Ok(Opened {
-        flash_shadow: if rom.is_some() { storage } else { None },
         session,
         inputs,
         outputs,

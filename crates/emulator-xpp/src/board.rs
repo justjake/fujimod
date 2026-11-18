@@ -431,7 +431,7 @@ impl Built {
         }
         Ok(fujimod_emulator_session::Session {
             definition, board: self.board, controls: None, contact_driver: None, resources,
-            nodes: self.nodes, contacts: self.contacts, power_cycle: None, recording_frames: Default::default(),
+            nodes: self.nodes, contacts: self.contacts, power_cycle: None, window_action: None, recording_frames: Default::default(),
         })
     }
 }
