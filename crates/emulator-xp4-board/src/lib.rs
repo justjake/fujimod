@@ -2,6 +2,7 @@
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
 mod client;
+mod checkpoint;
 mod counted;
 mod definition;
 mod initial_security;

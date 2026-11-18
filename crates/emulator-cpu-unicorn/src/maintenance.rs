@@ -4,8 +4,8 @@
 //! The board owner is responsible for domain membership, recipient selection,
 //! delivery, failure handling, and acknowledgment. Attachment alone does not
 //! implement cross-core delivery.
-use crate::{Core, ffi};
-use fujimod_emulator_cpu::{Identity, Model, arm};
+use crate::{Core, durable, ffi};
+use fujimod_emulator_cpu::{Identity, Model, Snapshot, arm};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub use crate::ffi::{TlbiEvent as Event, TlbiInfo as Status};
@@ -87,6 +87,33 @@ impl Core {
         self.check_translation_owner(owner)?;
         self.check_tlbi_ready()?;
         self.check(unsafe { (self.api.uc_ctl)(self.raw, ffi::ctl(11, 0, 1)) })
+    }
+
+    /// Encode architectural state after the whole translation owner has stopped its processors.
+    pub fn owned_snapshot(&self, owner: &Owner) -> Result<Vec<u8>, String> {
+        self.check_translation_owner(owner)?;
+        self.check_tlbi_ready()?;
+        self.capture_context()?.export()
+    }
+
+    /// Validate detached architectural state for the fresh processor owner.
+    pub fn import_owned_snapshot(&self, owner: &Owner, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        self.check_translation_owner(owner)?;
+        self.check_tlbi_ready()?;
+        durable::import(self, bytes)
+    }
+
+    /// Restore through the owner so it can settle address-translation state.
+    pub fn restore_owned_snapshot(&self, owner: &Owner, snapshot: &dyn Snapshot) -> Result<(), String> {
+        self.check_translation_owner(owner)?;
+        self.check_tlbi_ready()?;
+        if snapshot.owner() != self.identity {
+            return Err("CPU snapshot belongs to a different processor".into());
+        }
+        let imported = snapshot.as_any().downcast_ref::<durable::Imported>()
+            .ok_or("translation owner requires a portable CPU snapshot")?;
+        imported.restore(self)?;
+        self.flush_local_translations(owner)
     }
 
     pub(crate) fn check_tlbi_ready(&self) -> Result<(), String> {

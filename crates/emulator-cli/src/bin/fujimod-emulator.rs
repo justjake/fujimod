@@ -483,11 +483,11 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let stubs = options.stubs.iter().map(|specification| boot::host::parse_stub(specification))
         .collect::<Result<Vec<_>, _>>()?;
     let stubbed = stubs.iter().map(|stub| stub.address).collect::<Vec<_>>();
+    if let Some(path) = load_snapshot {
+        started.load_snapshot(&path)?;
+    }
     let trace = match &mut started.board {
         boot::application::Board::Xpp(session) => {
-            if let Some(path) = load_snapshot {
-                boot::load_snapshot(session, &path)?;
-            }
             session.board.set_execution_policy(policy)?;
             session.board.install_discovery_callee_stubs(&stubs)?;
             trace_output.as_ref().map(|output| output.begin(session)).transpose()?
@@ -495,9 +495,6 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         boot::application::Board::Xp4(board) => {
             if !stubs.is_empty() {
                 return Err("XP4 CLI substitutions require the shared board backend".into());
-            }
-            if load_snapshot.is_some() || save_snapshot.is_some() {
-                return Err("XP4 portable snapshots require the shared board backend".into());
             }
             if let Some(trace) = &trace_output {
                 board.begin_pc_trace(trace.limit)?;
@@ -570,8 +567,8 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     if let boot::application::Board::Xpp(session) = &started.board {
         session.board.check_discovery_callee_stubs()?;
     }
-    if let (Some(path), boot::application::Board::Xpp(session)) = (save_snapshot, &started.board) {
-        boot::save_snapshot(session, &path)?;
+    if let Some(path) = save_snapshot {
+        started.save_snapshot(&path)?;
     }
     if let Some(path) = screenshot {
         let shown = started.display_frames();

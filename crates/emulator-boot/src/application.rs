@@ -126,6 +126,7 @@ pub struct Started {
     pub quantum: usize,
     pub ticks_per_second: u64,
     pub engine: RunEngine,
+    snapshot_identity: Option<String>,
 }
 
 impl Started {
@@ -133,6 +134,28 @@ impl Started {
         match &self.board {
             Board::Xp4(board) => (board.instructions(), board.now()),
             Board::Xpp(session) => (session.board.instruction_counts(), session.board.now()),
+        }
+    }
+
+    pub fn load_snapshot(&mut self, path: &Path) -> Result<(), String> {
+        match &mut self.board {
+            Board::Xp4(board) => {
+                let identity = self.snapshot_identity.as_deref().ok_or("XP4 startup identity is absent")?;
+                let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+                board.restore_snapshot(identity, &bytes)
+            }
+            Board::Xpp(session) => crate::load_snapshot(session, path),
+        }
+    }
+
+    pub fn save_snapshot(&self, path: &Path) -> Result<(), String> {
+        match &self.board {
+            Board::Xp4(board) => {
+                let identity = self.snapshot_identity.as_deref().ok_or("XP4 startup identity is absent")?;
+                let bytes = board.export_snapshot(identity)?;
+                std::fs::write(path, bytes).map_err(|error| format!("{}: {error}", path.display()))
+            }
+            Board::Xpp(session) => crate::save_snapshot(session, path),
         }
     }
 
@@ -235,8 +258,18 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
     }
     let mode = if startup.discovery { Mode::Discovery } else { Mode::Strict };
     let body = &resolved.reference;
+    let mut snapshot_identity = None;
     let board = match (body.soc.id.as_str(), document.board) {
         ("xp4", Plan::Xp4 { definition }) => {
+            let geometry = json!({
+                "configuration": resolved.configuration, "definition": definition,
+                "images": document.images.iter().map(|image| (image.address, &image.sha256)).collect::<Vec<_>>(),
+                "flash": flash.as_ref().map(|bytes| format!("{:x}", Sha256::digest(bytes))),
+                "sd_card_files": files.iter().map(|(name, bytes)| (name, format!("{:x}", Sha256::digest(bytes)))).collect::<BTreeMap<_, _>>(),
+            });
+            snapshot_identity = Some(format!("{:x}", Sha256::digest(
+                serde_json::to_vec(&geometry).map_err(|error| error.to_string())?
+            )));
             let mut definition: xp4::Definition = serde_json::from_value(definition)
                 .map_err(|error| format!("XP4 board definition: {error}"))?;
             if engine != RunEngine::Unicorn {
@@ -311,7 +344,7 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
         Some(RunInputs::Xp4(inputs)) => inputs.ticks_per_second,
         _ => 54_000_000,
     };
-    Ok(Started { board, quantum, ticks_per_second, engine })
+    Ok(Started { board, quantum, ticks_per_second, engine, snapshot_identity })
 }
 
 fn install_card_files(
