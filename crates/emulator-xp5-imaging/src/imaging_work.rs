@@ -195,13 +195,11 @@ impl Work {
             // first gate is written with it. +10: read-modify-write control
             // word whose bit 16 the first gate's setter sets or clears. +14/+18: window
             // size words (height<<16 | 15-bit width) chosen by the setter's selector.
-            // The remaining first-gate words (+0c, +1c/+20 packed fields chosen by a
-            // selector, +28/+2c low-halfword read-modify-write, +38..+58 setter
-            // words) are plain read-back words.
+            // Every other word the first gate's setters, getters and read-modify-write
+            // helpers address below +0x800 is a plain read-back word (PLAIN_RESET_WORDS).
             Kind::Reset => {
                 matches!(o, 0 | 4)
-                    || (self.base == 0xff950000
-                        && matches!(o, 0x0c | 0x10 | 0x14 | 0x18 | 0x1c | 0x20 | 0x24 | 0x28 | 0x2c | 0x38..=0x58))
+                    || (self.base == 0xff950000 && PLAIN_RESET_WORDS.iter().any(|r| r.contains(&o)))
             }
             Kind::Resize => matches!(
                 o,
@@ -248,6 +246,32 @@ impl Work {
         }
     }
 }
+/// Word offsets (4-byte aligned) of the first reset gate that only latch a value.
+const PLAIN_RESET_WORDS: &[std::ops::RangeInclusive<u64>] = &[
+    0x0c..=0x58,
+    0x98..=0x98,
+    0xdc..=0xdc,
+    0xfc..=0xfc,
+    0x13c..=0x13c,
+    0x17c..=0x17c,
+    0x1bc..=0x1bc,
+    0x1fc..=0x1fc,
+    0x23c..=0x23c,
+    0x27c..=0x27c,
+    0x2bc..=0x2bc,
+    0x2fc..=0x308,
+    0x328..=0x328,
+    0x368..=0x368,
+    0x3a8..=0x3a8,
+    0x3e8..=0x3e8,
+    0x428..=0x428,
+    0x468..=0x468,
+    0x4a8..=0x4a8,
+    0x4e8..=0x4e8,
+    0x528..=0x57c,
+    0x5f0..=0x638,
+    0x670..=0x7ac,
+];
 impl Device for Work {
     fn name(&self) -> &'static str {
         match self.kind {
@@ -591,13 +615,17 @@ mod reset_size_tests {
         let mut work = Work::reset(0xff950000).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
-        let offsets = [0x0c, 0x1c, 0x20, 0x28, 0x2c, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58];
+        let offsets = [0x0c, 0x1c, 0x20, 0x28, 0x2c, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58, 0x98, 0x2bc, 0x328, 0x57c, 0x5f0, 0x7a8, 0x7ac];
         for (i, o) in offsets.into_iter().enumerate() {
             let v = 0x420012 + i as u64;
             work.write(&mut cx, 0xff950000 + o, 4, v);
             assert_eq!(work.read(&mut cx, 0xff950000 + o, 4), v);
         }
         assert!(cx.refusal().is_none());
+        work.write(&mut cx, 0xff950008, 4, 1);
+        assert!(cx.refusal().is_some());
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
         let mut other = Work::reset(0xff973000).unwrap();
         other.write(&mut cx, 0xff97301c, 4, 1);
         assert!(cx.refusal().is_some());
