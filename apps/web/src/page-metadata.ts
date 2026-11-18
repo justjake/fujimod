@@ -1,4 +1,4 @@
-import { focalComponents } from './docs/sdk.generated';
+import { focalComponents } from './docs/sdk-data';
 import { isManualPath } from './docs/manual-routes';
 import { textPagePath, textPages } from './text/routes';
 
