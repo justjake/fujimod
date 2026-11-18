@@ -1,0 +1,58 @@
+update_sha256 = "0ee53160737b770ca9927b11885140228df1142d2694ba2e8e32b127f205c03c"
+verification = []
+
+[[sections]]
+name = "loader"
+address = 528384
+size = 123584
+dat_offset = 787132
+encoding = "raw"
+sha256 = "a93509990cd55fcd05e946d89016da638d133e48ae72bf35abea8d7deb134b31"
+
+[[sections]]
+name = "unit-0"
+address = 8916992
+size = 2097208
+dat_offset = 1311420
+encoding = "method4"
+sha256 = "89f362f4b5d3f6fce94666e6f2d9772671ff3f777428d5ba4d224a818923d941"
+
+[[sections]]
+name = "camera-app"
+address = 18616320
+size = 29247904
+dat_offset = 10224316
+encoding = "method4"
+sha256 = "6580323aa7138668ddb3281e1ebf0fa87a927fe414e320184630e1089d07f6a2"
+
+[[sections]]
+name = "recording-app"
+address = 47820800
+size = 23113728
+dat_offset = 18481852
+encoding = "method4"
+sha256 = "8bd88929e684021633b7eedef4669794fc15077c5b59318f5a136322551d621f"
+
+[[sections]]
+name = "ui-overlays"
+address = 101429248
+size = 15753216
+dat_offset = 28443324
+encoding = "method4"
+sha256 = "b536953d96ea86a70708e7c16825d8a7eaade820312a3851a91aa3a962115d2b"
+
+[[sections]]
+name = "attribute-table-f"
+address = 6819840
+size = 9112832
+dat_offset = 45482684
+encoding = "method4"
+sha256 = "6091bac4135a718310ffa712a436b9c7d7be489aa8bf98ef30f0da8927b559b6"
+
+[[sections]]
+name = "attribute-table-g"
+address = 1029701632
+size = 2073600
+dat_offset = 107610812
+encoding = "method4"
+sha256 = "c1d24530880f3ce12bf3c8f11dec51d347a858ec48a1fb16ca5c51d1cc4a8fca"

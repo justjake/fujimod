@@ -1,0 +1,9 @@
+version = 1
+firmware = "xm5-130"
+load_firmware = true
+
+# The body's DRAM catalog extent: Linux 256 MiB at 0x40000000 plus the shared arenas
+# (research/xm5-130/linux-boot.md). Installed capacity is unmeasured.
+[[ram]]
+base = 0
+size = 0x68000000
