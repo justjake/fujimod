@@ -52,7 +52,7 @@ impl Outputs {
         self.finish()?;
         for (&bank, output) in self.0.lock().unwrap().iter() {
             let frame = output.directory.join(format!("latest-bank{bank}.png"));
-            if frame.is_file() {
+            if output.next_archive > 0 && frame.is_file() {
                 std::fs::copy(&frame, path).map_err(|error| format!("{}: {error}", path.display()))?;
                 return Ok(());
             }

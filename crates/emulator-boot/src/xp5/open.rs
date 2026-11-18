@@ -25,6 +25,7 @@ use fujimod_emulator_xp5_board::{
 use fujimod_emulator_xp5_io::mailbox;
 use fujimod_emulator_xp5_storage::flash_storage;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     path::Path,
@@ -847,6 +848,14 @@ pub(crate) fn open_from(
     }
     let run_scene = serde_json::to_value(run_scene).map_err(|error| error.to_string())?;
     let scene = scene_override.map(crate::host::read_scene).transpose()?;
+    let mut checkpoint_wiring = state.clone();
+    for window in &mut checkpoint_wiring.device {
+        // Host frame publication does not change the modeled boot graph.
+        window.options.remove("viewer_port");
+        window.options.remove("viewer_bind");
+    }
+    let wiring = serde_json::to_vec(&checkpoint_wiring).map_err(|error| error.to_string())?;
+    let wiring_sha256 = format!("{:x}", Sha256::digest(wiring));
     let mut definition = json!({
         "schema": 1,
         "configuration_id": resolved.configuration.id,
@@ -858,7 +867,9 @@ pub(crate) fn open_from(
         "quantum": quantum,
         "execution": {"kind":"xp5"},
         "run_scene": run_scene,
-        "startup": resolved.configuration.start
+        "startup": resolved.configuration.start,
+        "boot_wiring_sha256": wiring_sha256,
+        "update_sha256": firmware.source_sha256
     });
     // A manifest DRAM override changes the machine, so it is part of the run's identity.
     if let (Some(dram), Some(object)) = (&state.dram, definition.as_object_mut()) {

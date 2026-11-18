@@ -42,6 +42,9 @@ pub(crate) fn array<'a>(v: &'a Value, name: &str) -> Result<&'a [Value], String>
 pub(crate) fn extent(v: &Value) -> Result<(u64, usize), String> {
     let address = number(&v["address"])?;
     let size = usize::try_from(number(&v["size"])?).map_err(|e| e.to_string())?;
+    if !(1..=(64 << 20)).contains(&size) {
+        return Err("mod extent must be between 1 byte and 64 MiB".into());
+    }
     address
         .checked_add(size as u64)
         .ok_or("mod extent overflow")?;
@@ -235,6 +238,9 @@ impl Loaded {
             number(&ready["address"])?,
             u32::try_from(number(&ready["value"])?).map_err(|_| "load_ready value exceeds u32")?,
         );
+        if ready.0 & 3 != 0 {
+            return Err("mod load-ready word must be aligned".into());
+        }
         let reservations = array(&manifest, "reservations")?
             .iter()
             .map(extent)
