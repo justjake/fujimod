@@ -200,6 +200,16 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
       >
         Download
       </button>
+      <div class="home-download-disclaimer">
+        <p>
+          Please read <a href="/safety">safety</a> so you can make an informed decision about using
+          Fujimod.
+        </p>
+        <p>
+          Fujimod is not approved or endorsed by Fujifilm in any way, and using it will probably void
+          your warranty. We are not responsible for any damages to your camera.
+        </p>
+      </div>
       <Show when={installing()}>
         <InstallDialog
           title="FujiMod SD boot v2"
