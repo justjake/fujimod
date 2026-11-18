@@ -29,9 +29,10 @@ export function SiteFrame(props: { class?: string; children: JSX.Element }) {
             )}
           </For>
         </nav>
-        <a class="site-discord" href="https://discord.gg/jWvFPakw7X">
-          Discord
-        </a>
+        <nav class="site-external" aria-label="Community">
+          <a href="https://github.com/justjake/fujimod">GitHub</a>
+          <a href="https://discord.gg/jWvFPakw7X">Discord</a>
+        </nav>
       </header>
       {props.children}
     </div>
