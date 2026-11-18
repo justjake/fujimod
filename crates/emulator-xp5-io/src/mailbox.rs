@@ -80,6 +80,10 @@ impl Device for Mailbox {
             (0x10, true) => 0x10,
             (0x14, true) => 0x20,
             (0x18, true) => 0x40,
+            // X-T5 4.31 playback entry (0x13f7dfc..0x13f7e08) waits for the companion link state 3,
+            // then writes 0x7f here before it clears +0x00. Meaning not decoded (0x7f covers every
+            // cause bit, so probably a clear or mask word): stored only, no cause raised.
+            (0x1c, false) => 0,
             (0x20, _) => 0,
             _ if value == 0 => 0,
             _ => {
