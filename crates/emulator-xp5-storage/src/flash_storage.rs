@@ -173,6 +173,26 @@ impl Medium {
     }
 }
 
+/// Bus masters (general DMA) read the CPU aperture from the same backing as the aperture device,
+/// including the erased tail, and the read is recorded as guest evidence like a CPU read.
+impl fujimod_emulator_devices::dma::ReadSource for Medium {
+    fn read(&self, offset: u64, out: &mut [u8]) -> Result<(), String> {
+        out.copy_from_slice(&self.read_device(offset, out.len())?);
+        Ok(())
+    }
+}
+
+impl Medium {
+    /// The CPU aperture `BASE..BASE + SIZE` as a read-only bus-master window.
+    pub fn read_window(&self) -> fujimod_emulator_devices::dma::ReadWindow {
+        fujimod_emulator_devices::dma::ReadWindow {
+            base: BASE,
+            size: SIZE,
+            source: Arc::new(self.clone()),
+        }
+    }
+}
+
 pub struct Aperture(pub Medium);
 impl Device for Aperture {
     fn name(&self) -> &'static str {
@@ -344,6 +364,25 @@ mod tests {
         assert_eq!(storage.take_dirty_pages(), vec![1, 2]);
         assert!(storage.take_dirty_pages().is_empty());
         assert_eq!(storage.read(5000, 1).unwrap(), vec![1]);
+    }
+    #[test]
+    fn bus_master_window_reads_the_aperture_bytes_and_erased_tail() {
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0xa5; 16]).unwrap()));
+        let medium = Medium::Nor(storage.clone());
+        let window = medium.read_window();
+        assert_eq!((window.base, window.size), (BASE, SIZE));
+        let mut aperture = Aperture(medium);
+        let mut host = fujimod_emulator_devices::test_host::recording::RecordingHost::default();
+        let cpu = aperture.read(&mut Cx::new(&mut host, 0, 0, 0), BASE + 12, 8);
+        let mut bytes = [0; 8];
+        window.source.read(12, &mut bytes).unwrap();
+        assert_eq!(u64::from_le_bytes(bytes), cpu);
+        assert_eq!(bytes, [0xa5, 0xa5, 0xa5, 0xa5, 0xff, 0xff, 0xff, 0xff]);
+        window.source.read(SIZE - 8, &mut bytes).unwrap();
+        assert_eq!(bytes, [0xff; 8]);
+        assert!(window.source.read(SIZE - 4, &mut bytes).is_err());
+        // DMA reads are guest evidence, as CPU aperture reads are.
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 24);
     }
     #[test]
     fn session_checkpoint_round_trips_overlay_and_reads() {

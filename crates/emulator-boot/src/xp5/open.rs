@@ -155,11 +155,12 @@ fn devices_and_resources(
         displays: BTreeMap::new(),
     };
     if let Some(card) = card_image {
-        // A raw card image (`--sd-image`) replaces the formatted volume of the ROM-start slot.
+        // A raw card image (`--card-image`) replaces the formatted volume of slot 1, in the ROM
+        // start and in the loader start.
         let slot = resources
             .sd
             .get_mut(&0xff9b_0000)
-            .ok_or("ROM start needs the SD slot at 0xff9b0000")?;
+            .ok_or("a card image needs the SD slot at 0xff9b0000")?;
         slot.card = Some(card.clone());
     }
     for window in &mut windows {
@@ -402,7 +403,34 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         }
     };
     state.ram.extend(fragment.ram);
-    state.device.extend(fragment.device);
+    for window in fragment.device {
+        // A bring-up stub page the manifest already owns (the X-T5's memory-controller pages
+        // 0xfaf27000 and 0xfaf37000) keeps the manifest's registers and gains the ROM-start
+        // registers it does not list, instead of a second device on the same page.
+        let owned = state.device.iter_mut().find(|existing| {
+            existing.base == window.base
+                && existing.size == window.size
+                && existing.kind == "bringup-stub"
+                && window.kind == "bringup-stub"
+        });
+        let Some(existing) = owned else {
+            state.device.push(window);
+            continue;
+        };
+        let offset = |register: &toml::Value| register.get("offset").and_then(toml::Value::as_integer);
+        let added = window.options.get("registers").and_then(toml::Value::as_array).cloned().unwrap_or_default();
+        let registers = existing
+            .options
+            .entry("registers")
+            .or_insert_with(|| toml::Value::Array(Vec::new()))
+            .as_array_mut()
+            .ok_or("bring-up stub registers must be an array")?;
+        for register in added {
+            if !registers.iter().any(|listed| offset(listed) == offset(&register)) {
+                registers.push(register);
+            }
+        }
+    }
     for options in fragment.window_options {
         let window = state
             .device
@@ -466,6 +494,7 @@ pub(crate) fn open_from(
     mode: Mode,
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
+    loader_card: Option<&super::loader_card::LoaderCard>,
 ) -> Result<Opened, String> {
     let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
     let rom_state;
@@ -850,8 +879,11 @@ pub(crate) fn open_from(
         run_directory,
         &outputs,
         windows,
-        &rom.map(RomStart::assets).unwrap_or_default(),
-        rom.and_then(|rom| rom.card_image.as_ref()).map(|image| &image.card),
+        &rom.map(RomStart::assets)
+            .or_else(|| loader_card.map(|card| card.assets.clone()))
+            .unwrap_or_default(),
+        rom.and_then(|rom| rom.card_image.as_ref()).map(|image| &image.card)
+            .or_else(|| loader_card.and_then(|card| card.card.as_ref())),
         reference.soc.processors.iter()
             .position(|processor| processor.model == ProcessorModel::CortexM4),
     )?;

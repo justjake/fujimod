@@ -34,6 +34,8 @@ pub struct Work {
     state: State,
     interval_ns: u64,
     source_luma: Option<u8>,
+    /// Bring-up option: unmodeled aligned words read back their last write (kept in `state.regs`).
+    retain_words: bool,
 }
 impl Work {
     pub fn reset(base: u64) -> Result<Self, String> {
@@ -46,6 +48,7 @@ impl Work {
             state: State::default(),
             interval_ns: 0,
             source_luma: None,
+            retain_words: false,
         })
     }
     pub fn movdc(base: u64, period_us: u64, luma: u8) -> Result<Self, String> {
@@ -71,7 +74,18 @@ impl Work {
             state: State::default(),
             interval_ns,
             source_luma: luma,
+            retain_words: false,
         })
+    }
+    /// Let every aligned word of the window that has no modeled meaning read back its last
+    /// write (0 before any write) instead of stopping as unmodeled. A bring-up option: the
+    /// words have no side effects and are saved in the exact checkpoint with the other registers.
+    pub fn with_retained_words(mut self) -> Self {
+        self.retain_words = true;
+        self
+    }
+    fn retained(&self, size: u8, o: u64) -> bool {
+        self.retain_words && size == 4 && o & 3 == 0 && o < 0x1000 && !self.known(o)
     }
     fn irq(&self, cx: &mut Cx<'_>) {
         let line = match self.kind {
@@ -124,7 +138,11 @@ impl Work {
             if address == 0 || address & 7 != 0 {
                 return Err("MOVDC output DMA requires a nonzero 8-byte-aligned address".into());
             }
-            fujimod_emulator_imaging::frame::paint(cx, address, width, height, self.state.r(0xd0), luma)?;
+            let stride = self.state.r(0xd0);
+            // XT5_SCENE (a host input outside the checkpoint) replaces the flat source.
+            if !fujimod_emulator_imaging::frame::paint_scene(cx, address, width, height, stride, self.state.frames)? {
+                fujimod_emulator_imaging::frame::paint(cx, address, width, height, stride, luma)?;
+            }
         } else {
             // Half-size packed422: consume the actual programmed input. The
             // supported horizontal filter uses the normalized seven-tap
@@ -291,6 +309,9 @@ impl Device for Work {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);
         let o = address.wrapping_sub(self.base);
+        if self.retained(size, o) {
+            return u64::from(self.state.r(o));
+        }
         if size != 4 || !self.known(o) {
             cx.unmodeled();
             return 0;
@@ -320,6 +341,10 @@ impl Device for Work {
         self.advance(cx);
         let o = address.wrapping_sub(self.base);
         let v = value as u32;
+        if self.retained(size, o) {
+            self.state.regs.insert(o, v);
+            return;
+        }
         if size != 4 || !self.known(o) {
             cx.unmodeled();
             return;
@@ -538,6 +563,46 @@ mod reset_tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         work.read(&mut cx, BASE + 0x5c, 4);
         assert!(cx.refusal().is_some());
+    }
+}
+
+#[cfg(test)]
+mod retain_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    const BASE: u64 = 0xff950000;
+    #[test]
+    fn reset_gate_retains_unmodeled_words_only_when_enabled() {
+        let mut host = RecordingHost::default();
+        let mut strict = Work::reset(BASE).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        strict.write(&mut cx, BASE + 0x5c, 4, 5);
+        assert!(cx.is_unmodeled());
+
+        let mut work = Work::reset(BASE).unwrap().with_retained_words();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE + 0x10, 4), 0);
+        // Read-modify-write bit set/clear, as X-T5 4.31 does on +0x08..+0x10.
+        work.write(&mut cx, BASE + 0x10, 4, 0x8000_0001);
+        let v = work.read(&mut cx, BASE + 0x10, 4);
+        work.write(&mut cx, BASE + 0x10, 4, v & !1);
+        work.write(&mut cx, BASE + 0x7ac, 4, 0x1234_5678);
+        assert_eq!(work.read(&mut cx, BASE + 0x10, 4), 0x8000_0000);
+        assert_eq!(work.read(&mut cx, BASE + 0x7ac, 4), 0x1234_5678);
+        // Modeled registers keep their behaviour: +0 reports ready, not the written word.
+        work.write(&mut cx, BASE, 4, 3);
+        assert_eq!(work.read(&mut cx, BASE, 4), 1);
+        // Narrow accesses stay unmodeled.
+        assert!(!cx.is_unmodeled());
+        work.read(&mut cx, BASE + 0x10, 2);
+        assert!(cx.is_unmodeled());
+
+        let checkpoint = work.checkpoint().unwrap();
+        let mut restored = Work::reset(BASE).unwrap().with_retained_words();
+        restored.restore_checkpoint(&checkpoint).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(restored.read(&mut cx, BASE + 0x7ac, 4), 0x1234_5678);
+        assert_eq!(restored.checkpoint().unwrap(), checkpoint);
     }
 }
 

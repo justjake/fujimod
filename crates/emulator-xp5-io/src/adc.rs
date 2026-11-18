@@ -19,12 +19,37 @@ struct State {
 pub struct Adc {
     state: State,
     input: Arc<dyn Controls>,
+    /// Host overrides of the idle samples (`XT5_ADC`), read in place of `state.samples`. They are
+    /// kept outside the checkpointed state and the manifest, so a snapshot loads with any value.
+    overrides: [Option<u16>; 15],
+}
+
+/// Parse `XT5_ADC="CHANNEL=SAMPLE,..."`: idle samples that replace the manifest's for this run,
+/// for example the position of a dial or switch read through an ADC channel. On the X-T5, channel
+/// 3 is the drive dial (4095 = HDR, 3500 = single frame).
+fn parse_overrides(spec: &str) -> Result<[Option<u16>; 15], String> {
+    let mut overrides = [None; 15];
+    for item in spec.split(',').map(str::trim).filter(|item| !item.is_empty()) {
+        let (channel, sample) = item.split_once('=').ok_or("XT5_ADC needs CHANNEL=SAMPLE[,...]")?;
+        let channel: usize = channel.trim().parse().map_err(|_| format!("XT5_ADC: invalid channel in {item}"))?;
+        let sample: u16 = sample.trim().parse().map_err(|_| format!("XT5_ADC: invalid sample in {item}"))?;
+        if sample > 4095 {
+            return Err(format!("XT5_ADC: sample {sample} exceeds 12 bits"));
+        }
+        *overrides.get_mut(channel).ok_or_else(|| format!("XT5_ADC: channel {channel} is outside 0..=14"))? =
+            Some(sample);
+    }
+    Ok(overrides)
 }
 impl Adc {
     pub fn new(input: Arc<dyn Controls>, samples: [u16; 15]) -> Result<Self, String> {
         if samples.iter().any(|v| *v > 4095) {
             return Err("ADC samples must be 12-bit".into());
         }
+        let overrides = match std::env::var("XT5_ADC") {
+            Ok(spec) => parse_overrides(&spec)?,
+            Err(_) => [None; 15],
+        };
         Ok(Self {
             state: State {
                 enable: 0,
@@ -35,6 +60,7 @@ impl Adc {
                 samples,
             },
             input,
+            overrides,
         })
     }
 }
@@ -63,7 +89,7 @@ impl Device for Adc {
             0xc => self.state.ack as u64,
             0x10..=0x48 => {
                 let n = ((offset - 0x10) / 4) as usize;
-                self.input.sample(n, self.state.samples[n]) as u64
+                self.input.sample(n, self.overrides[n].unwrap_or(self.state.samples[n])) as u64
             }
             0x4c => self.state.mask as u64,
             0x50 => 8,
@@ -181,5 +207,22 @@ mod tests {
         input.advance(2_000_000_000);
         adc.restore(&saved).unwrap();
         assert_eq!(adc.read(&mut cx, BASE + 0x10 + 11 * 4, 4), 3472);
+        // A host override replaces the idle sample and is not part of the saved state.
+        adc.overrides = parse_overrides("3=3500, 7=100").unwrap();
+        assert_eq!(adc.read(&mut cx, BASE + 0x10 + 3 * 4, 4), 3500);
+        assert_eq!(adc.read(&mut cx, BASE + 0x10 + 7 * 4, 4), 100);
+        assert_eq!(adc.save()["adc"]["samples"][7], 2241);
+        adc.restore(&saved).unwrap();
+        let checkpoint = adc.checkpoint().unwrap();
+        adc.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(adc.read(&mut cx, BASE + 0x10 + 3 * 4, 4), 3500);
+    }
+    #[test]
+    fn sample_overrides_are_validated() {
+        assert_eq!(parse_overrides("").unwrap(), [None; 15]);
+        assert_eq!(parse_overrides("14=0").unwrap()[14], Some(0));
+        assert!(parse_overrides("15=1").is_err());
+        assert!(parse_overrides("3=4096").is_err());
+        assert!(parse_overrides("3").is_err());
     }
 }

@@ -33,11 +33,41 @@ bus_drain = 0x80000000
 base = 0x60000000
 size = 0x20000000
 
+# DRAM channel 2: the half-press boost (0x13adb58 mode 5) trains channels 2/3 and then maps
+# 0x80000000 + 1 GiB with 0x14c9a18 (0x13adf50; table 0x18f24f8). The still sequence writes there
+# 0.19 s after S2 (0xbb00f6b0). Channel 3 (table base word 0x1c0000000) is not mapped yet.
+# The first 16 KiB granule stays with the SoC profile's 4-byte peripheral/bus-drain window at 0x80000000.
+[[ram]]
+base = 0x80004000
+size = 0x3fffc000
+
 # M-core SRAM: stock 13f7b58 copies flash f01c0000 here before reset release.
 [[ram]]
 base = 0xfa200000
 size = 0x100000
 
+# DDR PHY register and firmware space, RAM in every start mode. The first half-press (S1) DMA-copies
+# the PHY firmware (0x10000 bytes from 0x10c0800) to 0xfb4a0000 and writes PHY registers at
+# 0xfb400000 + 2*reg. The mailbox pages above each region are stubs (manifest.d/48-ddr-phy.toml).
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# Boot SRAM, 256 KiB. The SoC profile maps it only for ROM/SD starts, but the application keeps the AE
+# statistics banks here (0xff800000 and 0xff8075a0, 0x75a0 bytes each; planes at 0xff80eb40; counter
+# 0xff82c008). The statistics model writes its frames into this RAM (no imaging-statistics window).
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
+# Both slots are empty by default. A loader run with --card-image or --card-file inserts a card in
+# slot 1 (0xff9b0000): present becomes true and the slot's host gains irq = 262
+# (crates/emulator-boot/src/xp5/loader_card.rs). The formatted volume below is then the card only
+# for --card-file without an image.
 [[sd]]
 base = 0xff9b0000
 present = false

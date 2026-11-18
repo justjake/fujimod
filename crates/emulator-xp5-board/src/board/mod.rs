@@ -20,6 +20,7 @@ pub mod clocks;
 pub mod general_dma;
 pub mod i2c;
 pub mod imaging;
+pub mod jpeg;
 pub mod lz;
 pub mod renderer;
 pub mod serial;
@@ -235,6 +236,21 @@ fn register_with_resources(
                 Box::new(fujimod_emulator_xp5_io::bringup_stub::BringupStub::new(window.base, window.size, options)?),
             )?;
         }
+        "completion-stub" => {
+            let options: fujimod_emulator_xp5_io::completion_stub::Options =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("completion stub options: {e}"))?;
+            // XP5 board time is in nanoseconds.
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+                    window.base,
+                    window.size,
+                    options,
+                    1000,
+                )?),
+            )?;
+        }
         "write-only-registers" => {
             if !window.options.is_empty() {
                 return Err("write-only-registers takes no options".into());
@@ -275,6 +291,7 @@ fn register_with_resources(
         }
         "clock-banks" => clocks::register(bus, window.base, window.size)?,
         "lz" => lz::register(bus, window.base, window.size)?,
+        "jpeg-encoder" => jpeg::register(bus, window)?,
         "panel-spi" => {
             if window.base != 0xff919000 || window.size != 0x1000 {
                 return Err("invalid SPI9 panel window".into());
@@ -649,6 +666,8 @@ pub fn register_all(
         windows,
         resources.companion.as_ref().map(|c| c.pins.companion),
         resources.pins.clone(),
+        // Only a declared aperture exposes the flash backing on the bus.
+        resources.storage.as_ref().filter(|_| aperture),
     )?;
     // Sensor command completion changes the receiver's active source. No
     // periodic polling deadline is needed to observe that causal edge.

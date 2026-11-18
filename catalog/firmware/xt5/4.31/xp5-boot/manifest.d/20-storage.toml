@@ -83,11 +83,11 @@ kind = "power-gates"
 # 0x1c8c378. Zero readback is a session assumption. The target ranges are bus ports, not
 # RAM: the stock code reads only the first word. The 0x60000000 aperture replaces the
 # X100VI's 0x68000000, which no X-T5 code path reads.
-[[device]]
-base = 0x60000000
-size = 4
-kind = "discarded-read"
+# 0x60000000 is DRAM now (manifest.toml maps RAM to 0x80000000, as the former X-T5 runner did),
+# so the drain read of that port lands in RAM instead of a discarded-read window.
 
+# 0x80000000 stays a discarded-read port (first 16 KiB granule; DRAM channel 2 RAM starts at 0x80004000).
+# The drain helper reads it again during the still develop (0x14c9984, 0.29 s after S2).
 [[device]]
 base = 0x80000000
 size = 4

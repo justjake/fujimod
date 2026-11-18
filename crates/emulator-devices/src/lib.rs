@@ -29,6 +29,6 @@ pub mod test_host;
 pub mod work;
 pub mod xp5;
 
-pub use bus::{Cx, Device, Host};
+pub use bus::{Cx, Device, Host, PostedWrite};
 pub use map::WordMap;
 pub use record::{Action, Record, Unsupported, Value};

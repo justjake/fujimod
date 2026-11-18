@@ -2761,6 +2761,7 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]

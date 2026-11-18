@@ -59,6 +59,7 @@ impl Endpoint for GenericSink {
         }
         if self.miso_high { u16::MAX } else { 0 }
     }
+    fujimod_emulator_devices::checkpoint_fields!(miso_high: bool, transfers: u64, last: Vec<u16>);
     fn save(&self) -> serde_json::Value {
         serde_json::json!({"miso_high": self.miso_high, "transfers": self.transfers, "last": self.last})
     }

@@ -139,6 +139,9 @@ impl Board {
                 let capability = C::of_mut(device).ok_or(message)?;
                 let mut cx = fujimod_emulator_devices::Cx::new(host, usize::MAX, 0, id);
                 let result = input(capability, &mut cx);
+                if !cx.take_posted_writes().is_empty() {
+                    cx.fail("an external device input cannot issue bus-master MMIO writes");
+                }
                 Ok(match cx.take_refusal() {
                     Some(error) => Err(error),
                     None => result,
@@ -190,6 +193,9 @@ impl Board {
                 let device = bus.device_mut::<T>(id)?;
                 let mut cx = fujimod_emulator_devices::Cx::new(host, usize::MAX, 0, id);
                 let result = input(device, &mut cx);
+                if !cx.take_posted_writes().is_empty() {
+                    cx.fail("an external device input cannot issue bus-master MMIO writes");
+                }
                 // Return the operation's refusal inside the host result so
                 // already emitted IRQ effects still wake their controllers.
                 Ok(match cx.take_refusal() {

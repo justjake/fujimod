@@ -12,5 +12,148 @@ base = 0xff948000
 size = 0x1000
 kind = "imaging-sensor"
 [device.options]
+# Bring-up: X-T5 4.31 writes +0x440..+0x484 and uses +0x4c0..+0x4e8 (meaning unknown); they read back
+# their last write.
+retain_words = true
 # Functional scheduled latency per packet, not measured camera timing.
 command_latency_us = 1
+
+# The other imaging windows are adapted from the X100VI fragment (x100vi/1.31/xp5-boot/
+# manifest.d/50-imaging.toml). The window addresses are the XP5 SoC profile's
+# (catalog/soc/xp5/soc.json), which the former X-T5 bring-up runner used unchanged for this body.
+# Differences from the X100VI fragment:
+#   - Frame periods are 33333 us (30 frames per second): the X-T5 REC start sequence gives up
+#     after about 1 s without a frame. A functional cadence, not measured sensor timing.
+#   - No imaging-statistics window at 0xff800000 (size 0xeb40). The former runner omitted it, and it
+#     shares its base with the boot SRAM that the SD-card start turns into RAM (card-handoff.toml,
+#     pc = 0xff800000).
+#   - No focus or iris actuator: on the X-T5, SSP4 (0xff914000) is the audio codec link
+#     (40-serial.toml) and SSP5 (0xff915000) carries the panels (43-panel-serial.toml).
+#   - The receiver PHY (0xff944000) and the input reset gate (0xff950000) are declared in
+#     52-imaging-phy.toml and 51-imaging-reset.toml.
+# Not checked against X-T5 hardware: these are FujiMod's functional stand-ins, as on the X100VI.
+
+# Sensor stream and receiver enables gate RAW14-LE16 ramp production.
+# Guest-programmed raw input DMA receives pixels; causes 1/0 drive stock IRQs.
+[[device]]
+base = 0xff940000
+size = 0x1000
+kind = "imaging-receiver"
+[device.options]
+frame_period_us = 33333
+frame_active_us = 10000 # Functional phase interval; DMA completes after frame-end.
+[[device]]
+base = 0xff941000
+size = 0x1000
+kind = "imaging-receiver"
+[device.options]
+frame_period_us = 33333
+
+# Input-engine reset/ready gate used by native imgdc startup.
+[[device]]
+base = 0xff946000
+size = 0x1000
+kind = "imaging-input"
+[device.options]
+# Word 15 (+0x17c) reads as the idle status the REC task waits for (3030610, 2ff7930).
+idle_status = true
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff970000
+size = 0x1000
+kind = "movdc"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+[[device]]
+base = 0xff971000
+size = 0x1000
+kind = "movdc"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+[[device]]
+base = 0xff972000
+size = 0x1000
+kind = "movdc"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+[[device]]
+base = 0xff973000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff982000
+size = 0x1000
+kind = "imaging-resize"
+[device.options]
+completion_us = 1000
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff976000
+size = 0x1000
+kind = "imaging-paf"
+[device.options]
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff974000
+size = 0x1000
+kind = "imaging-preview"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+# RIFP I/O DMA. The still path (0x2c51f98, recfRecifProcess / recfRecizProcess) uses it only
+# in register-list mode: it reads the recf register queue (0x13c0e54 / 0x13c0e94, 8-byte
+# entries value, address) from DRAM and performs each entry as a 32-bit MMIO write, which
+# starts RIFP (0xffd02004 = 1). START +0x40, IRQ enable +0x44, done +0x48 (w1c), INTID 230.
+# queue_completion_us is functional, not measured.
+[[device]]
+base = 0xffd01000
+size = 0x1000
+kind = "imaging-rifp-io"
+[device.options]
+queue_completion_us = 5
+
+[[device]]
+base = 0xffd02000
+size = 0x1000
+kind = "imaging-rifp"
+[device.options]
+completion_us = 1000
+source_luma = 128
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+# SSP instance 3. The former X-T5 runner found no GPIO chip select for it (a controller-native
+# select, like the X100VI's imaging serial output) and bound an unidentified peer to GPIO 19.15,
+# an unused latch that stays low, so the endpoint is always selected. The peer accepts every
+# frame and answers low. The select pin, the peer and source_hz are UNVERIFIED bring-up inputs.
+[[device]]
+base = 0xff913000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 19, pin = 15, active_high = false }
+part = { kind = "generic-sink", miso_high = false }
