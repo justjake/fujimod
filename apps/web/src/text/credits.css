@@ -1,0 +1,97 @@
+.credits-page {
+  grid-template-columns: 200px minmax(0, 760px);
+}
+
+.credits-page main :is(.credits-people, .credits-recipes ul) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.credits-page main :is(.credits-people, .credits-recipes) li {
+  margin: 0;
+}
+
+.credits-people {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 10px 16px;
+  font-size: 13px;
+}
+
+.credits-people a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  text-decoration: none;
+}
+
+.credits-people a:hover {
+  text-decoration: underline;
+}
+
+.credits-people span {
+  overflow-wrap: anywhere;
+}
+
+.credits-people img {
+  flex: none;
+  border-radius: 50%;
+  background: var(--key);
+}
+
+.credits-recipes {
+  margin: 0;
+  font-size: 13px;
+}
+
+.credits-recipes > div {
+  margin-bottom: 18px;
+}
+
+.credits-recipes dt {
+  color: #f2f2f7;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.credits-recipes dd {
+  margin: 0;
+}
+
+.credits-recipes ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+
+.credits-components {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.credits-components th,
+.credits-components td {
+  padding: 6px 8px 6px 0;
+  border-bottom: 1px solid var(--key);
+  text-align: left;
+  vertical-align: top;
+}
+
+.credits-components th {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+@media (width <= 900px) {
+  .credits-page {
+    grid-template-columns: minmax(0, 760px);
+  }
+}

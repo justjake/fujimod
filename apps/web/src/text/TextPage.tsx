@@ -12,13 +12,14 @@ export type TextSection = {
 
 export default function TextPage(props: {
   title: string;
+  class?: string;
   sections?: readonly TextSection[];
   children?: JSX.Element;
 }) {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
   return (
     <SiteFrame>
-      <div class="text-page">
+      <div class={['text-page', props.class]}>
         <Show when={props.sections?.length}>
           <nav class="page-outline" aria-label="On this page">
             <b>On this page</b>
@@ -26,7 +27,7 @@ export default function TextPage(props: {
               <For each={props.sections}>
                 {(section) => (
                   <li class={section.level === 3 ? 'page-outline-subheading' : undefined}>
-                    <a href={`${path}#${section.id}`}>{section.title}</a>
+                    <a href={`${path}#${encodeURIComponent(section.id)}`}>{section.title}</a>
                   </li>
                 )}
               </For>

@@ -4,7 +4,7 @@ import { lazy, Loading } from 'solid-js';
 import { getRequestEvent } from '@solidjs/web';
 import { isDevToolsPath } from './dev-tools/routes';
 import { isManualPath } from './docs/manual-routes';
-import { textPagePath, textPages } from './text/routes';
+import { textPagePath } from './text/routes';
 const Home = lazy(() => import('./home/Page'));
 const DevTools = lazy(() => import('./dev-tools/Page'));
 const BugReport = lazy(() => import('./bug/Page'));
@@ -15,15 +15,19 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
   : undefined;
 const SdkDocs = lazy(() => import('./docs/Page'));
 const Manual = lazy(() => import('./docs/Manual'));
-const Safety = lazy(() => import('./text/Safety'));
-const TextPage = lazy(() => import('./text/TextPage'));
+const textRoutes = {
+  '/safety': lazy(() => import('./text/Safety')),
+  '/credits': lazy(() => import('./text/Credits')),
+  '/releases': lazy(() => import('./text/Releases')),
+};
 export default function App() {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
   const textRoute = textPagePath(path);
   if (textRoute) {
+    const TextPage = textRoutes[textRoute];
     return (
       <Loading>
-        {textRoute === '/safety' ? <Safety /> : <TextPage title={textPages[textRoute].heading} />}
+        <TextPage />
       </Loading>
     );
   }

@@ -1,6 +1,20 @@
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { type Plugin } from 'vite';
+import { staticFiles } from '../local-review-files.ts';
+
+export function previewLicenseFiles(): Plugin {
+  return {
+    name: 'credits-license-files',
+    configureServer(server) {
+      const directory = resolve(server.config.root, 'dist/client/licenses');
+      server.middlewares.use((request, response, next) => {
+        if (!request.url?.startsWith('/licenses/') || !existsSync(directory)) return next();
+        return staticFiles(directory, '/licenses/')(request, response, next);
+      });
+    },
+  };
+}
 
 /** Record installed packages that contribute output, including build-time CSS imports. */
 export function sbomInputs(): Plugin {

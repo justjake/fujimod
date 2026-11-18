@@ -1,0 +1,514 @@
+{
+  "contributors": [
+    {
+      "name": "Acros1044",
+      "source": "https://github.com/Acros1044",
+      "avatar": "https://github.com/Acros1044.png?size=96"
+    },
+    {
+      "name": "AdamKadmon",
+      "source": "https://github.com/AdamKadmon",
+      "avatar": "https://github.com/AdamKadmon.png?size=96"
+    },
+    {
+      "name": "adanaxxx",
+      "source": "https://github.com/adanaxxx",
+      "avatar": "https://github.com/adanaxxx.png?size=96"
+    },
+    {
+      "name": "aiv-rgb",
+      "source": "https://github.com/aiv-rgb",
+      "avatar": "https://github.com/aiv-rgb.png?size=96"
+    },
+    {
+      "name": "ajjj001",
+      "source": "https://github.com/ajjj001",
+      "avatar": "https://github.com/ajjj001.png?size=96"
+    },
+    {
+      "name": "andrewferdi",
+      "source": "https://github.com/andrewferdi",
+      "avatar": "https://github.com/andrewferdi.png?size=96"
+    },
+    {
+      "name": "ay-iv",
+      "source": "https://github.com/ay-iv",
+      "avatar": "https://github.com/ay-iv.png?size=96"
+    },
+    {
+      "name": "BlancRyuuzaki",
+      "source": "https://github.com/BlancRyuuzaki",
+      "avatar": "https://github.com/BlancRyuuzaki.png?size=96"
+    },
+    {
+      "name": "chris-rudmin",
+      "source": "https://github.com/chris-rudmin",
+      "avatar": "https://github.com/chris-rudmin.png?size=96"
+    },
+    {
+      "name": "datapush3r",
+      "source": "https://github.com/datapush3r",
+      "avatar": "https://github.com/datapush3r.png?size=96"
+    },
+    {
+      "name": "extremelygayguy",
+      "source": "https://github.com/extremelygayguy",
+      "avatar": "https://github.com/extremelygayguy.png?size=96"
+    },
+    {
+      "name": "fr0styx",
+      "source": "https://github.com/fr0styx",
+      "avatar": "https://github.com/fr0styx.png?size=96"
+    },
+    {
+      "name": "frogboy33b",
+      "source": "https://github.com/frogboy33b",
+      "avatar": "https://github.com/frogboy33b.png?size=96"
+    },
+    {
+      "name": "haibangdang",
+      "source": "https://github.com/haibangdang",
+      "avatar": "https://github.com/haibangdang.png?size=96"
+    },
+    {
+      "name": "heblushabus",
+      "source": "https://github.com/heblushabus",
+      "avatar": "https://github.com/heblushabus.png?size=96"
+    },
+    {
+      "name": "heytchap",
+      "source": "https://github.com/heytchap",
+      "avatar": "https://github.com/heytchap.png?size=96"
+    },
+    {
+      "name": "huarox",
+      "source": "https://github.com/huarox",
+      "avatar": "https://github.com/huarox.png?size=96"
+    },
+    {
+      "name": "hyprspacecoyote",
+      "source": "https://github.com/hyprspacecoyote",
+      "avatar": "https://github.com/hyprspacecoyote.png?size=96"
+    },
+    {
+      "name": "immanuel-lam",
+      "source": "https://github.com/immanuel-lam",
+      "avatar": "https://github.com/immanuel-lam.png?size=96"
+    },
+    {
+      "name": "improyes",
+      "source": "https://github.com/improyes",
+      "avatar": "https://github.com/improyes.png?size=96"
+    },
+    {
+      "name": "jacintosalz",
+      "source": "https://github.com/jacintosalz",
+      "avatar": "https://github.com/jacintosalz.png?size=96"
+    },
+    {
+      "name": "jiijii0",
+      "source": "https://github.com/jiijii0",
+      "avatar": "https://github.com/jiijii0.png?size=96"
+    },
+    {
+      "name": "justjake",
+      "source": "https://github.com/justjake",
+      "avatar": "https://github.com/justjake.png?size=96"
+    },
+    {
+      "name": "KaramelliSundae",
+      "source": "https://github.com/KaramelliSundae",
+      "avatar": "https://github.com/KaramelliSundae.png?size=96"
+    },
+    {
+      "name": "leafall903",
+      "source": "https://github.com/leafall903",
+      "avatar": "https://github.com/leafall903.png?size=96"
+    },
+    {
+      "name": "leon-good-life",
+      "source": "https://github.com/leon-good-life",
+      "avatar": "https://github.com/leon-good-life.png?size=96"
+    },
+    {
+      "name": "MariMul",
+      "source": "https://github.com/MariMul",
+      "avatar": "https://github.com/MariMul.png?size=96"
+    },
+    {
+      "name": "miegl",
+      "source": "https://github.com/miegl",
+      "avatar": "https://github.com/miegl.png?size=96"
+    },
+    {
+      "name": "MoneyM78",
+      "source": "https://github.com/MoneyM78",
+      "avatar": "https://github.com/MoneyM78.png?size=96"
+    },
+    {
+      "name": "PhilippMolitor",
+      "source": "https://github.com/PhilippMolitor",
+      "avatar": "https://github.com/PhilippMolitor.png?size=96"
+    },
+    {
+      "name": "Picazsoo",
+      "source": "https://github.com/Picazsoo",
+      "avatar": "https://github.com/Picazsoo.png?size=96"
+    },
+    {
+      "name": "piratenpanda",
+      "source": "https://github.com/piratenpanda",
+      "avatar": "https://github.com/piratenpanda.png?size=96"
+    },
+    {
+      "name": "refto",
+      "source": "https://github.com/refto",
+      "avatar": "https://github.com/refto.png?size=96"
+    },
+    {
+      "name": "sawdsawd",
+      "source": "https://github.com/sawdsawd",
+      "avatar": "https://github.com/sawdsawd.png?size=96"
+    },
+    {
+      "name": "shanecranor",
+      "source": "https://github.com/shanecranor",
+      "avatar": "https://github.com/shanecranor.png?size=96"
+    },
+    {
+      "name": "skeet70",
+      "source": "https://github.com/skeet70",
+      "avatar": "https://github.com/skeet70.png?size=96"
+    },
+    {
+      "name": "Skopega",
+      "source": "https://github.com/Skopega",
+      "avatar": "https://github.com/Skopega.png?size=96"
+    },
+    {
+      "name": "snfoo",
+      "source": "https://github.com/snfoo",
+      "avatar": "https://github.com/snfoo.png?size=96"
+    },
+    {
+      "name": "tokim25",
+      "source": "https://github.com/tokim25",
+      "avatar": "https://github.com/tokim25.png?size=96"
+    },
+    {
+      "name": "victorputroagung",
+      "source": "https://github.com/victorputroagung",
+      "avatar": "https://github.com/victorputroagung.png?size=96"
+    },
+    {
+      "name": "weaksignals-lab",
+      "source": "https://github.com/weaksignals-lab",
+      "avatar": "https://github.com/weaksignals-lab.png?size=96"
+    },
+    {
+      "name": "WRKHARDR",
+      "source": "https://github.com/WRKHARDR",
+      "avatar": "https://github.com/WRKHARDR.png?size=96"
+    },
+    {
+      "name": "yasohanzo",
+      "source": "https://github.com/yasohanzo",
+      "avatar": "https://github.com/yasohanzo.png?size=96"
+    }
+  ],
+  "testers": [
+    { "name": "anonymous" },
+    { "name": "jody", "source": "https://www.instagram.com/jody_hinterleitner" }
+  ],
+  "recipeAuthors": [
+    {
+      "name": "Anders Lindborg; posted by Ritchie Roesch (Fuji X Weekly)",
+      "recipes": [
+        {
+          "name": "Kodak Tri-X 400",
+          "source": "https://fujixweekly.com/2020/06/18/fujifilm-x100v-film-simulation-recipe-kodak-tri-x-400/"
+        }
+      ]
+    },
+    {
+      "name": "Chris Rahim (@chris.rahim)",
+      "recipes": [
+        { "name": "Chris Classic", "source": "https://filmsimrecipes.com/project/chris-classic/" }
+      ]
+    },
+    {
+      "name": "Christophe Schmitt",
+      "recipes": [{ "name": "High End", "source": "https://filmsimrecipes.com/project/high-end/" }]
+    },
+    {
+      "name": "DE LUCA EMANUELE (@emadeluca89)",
+      "recipes": [
+        {
+          "name": "Last Summer Roll",
+          "source": "https://filmsimrecipes.com/project/last-summer-roll/"
+        }
+      ]
+    },
+    {
+      "name": "Gilson Teixeira (@the_hyper)",
+      "recipes": [
+        {
+          "name": "Kodak Portra do Sol",
+          "source": "https://filmsimrecipes.com/project/kodak-portra-do-sol/"
+        }
+      ]
+    },
+    {
+      "name": "Grischa (@gr.scha)",
+      "recipes": [
+        {
+          "name": "Cinematic Gold",
+          "source": "https://filmsimrecipes.com/project/cinematic-gold/"
+        },
+        { "name": "Summer Made", "source": "https://filmsimrecipes.com/project/summer-made/" }
+      ]
+    },
+    {
+      "name": "jal-co / Carl Cruz",
+      "recipes": [
+        {
+          "name": "LEICA X",
+          "source": "https://github.com/jal-co/jalco-fuji-recipes/blob/main/recipes/leica-x.md"
+        }
+      ]
+    },
+    {
+      "name": "Jamie Chance",
+      "recipes": [
+        {
+          "name": "Summer Negative",
+          "source": "https://filmsimrecipes.com/project/summer-negative/"
+        }
+      ]
+    },
+    {
+      "name": "Mehdi Berrada",
+      "recipes": [
+        {
+          "name": "Yakisugi",
+          "source": "https://film.recipes/2022/08/11/yakisugi-film-recipe-by-mehdi-berrada/"
+        }
+      ]
+    },
+    {
+      "name": "Michele Macaluso",
+      "recipes": [{ "name": "Cashmere", "source": "https://filmsimrecipes.com/project/cashmere/" }]
+    },
+    {
+      "name": "Mohammad (@moesdeph)",
+      "recipes": [
+        {
+          "name": "California Hues",
+          "source": "https://filmsimrecipes.com/project/california-hues/"
+        }
+      ]
+    },
+    {
+      "name": "Nathalie Boucry (Fujifilm FS RECIPE)",
+      "recipes": [
+        {
+          "name": "The Rewinder",
+          "source": "https://www.fujifilm-x.com/en-us/stories/classic-neg-fs-recipe-x-nathalie-boucry"
+        }
+      ]
+    },
+    {
+      "name": "Osan Bilgi (@osanbilgi)",
+      "recipes": [
+        {
+          "name": "Classic Cuban Neg",
+          "source": "https://filmsimrecipes.com/project/classic-cuban-neg/"
+        },
+        { "name": "Summer Chrome", "source": "https://filmsimrecipes.com/project/summer-chrome/" }
+      ]
+    },
+    {
+      "name": "Piotr Skrzypek / Ritchie Roesch",
+      "recipes": [
+        {
+          "name": "Kodak Portra 160",
+          "source": "https://fujixweekly.com/2020/03/29/not-my-fujifilm-x-t1-x-trans-ii-kodak-portra-160-film-simulation-recipe/"
+        }
+      ]
+    },
+    {
+      "name": "Reggie Ballesteros (Reggie B); posted by Ritchie Roesch",
+      "recipes": [
+        {
+          "name": "Reggie's Portra",
+          "source": "https://fujixweekly.com/2022/06/11/fujifilm-x-trans-iv-film-simulation-recipe-reggies-portra/"
+        },
+        {
+          "name": "Reggie's Superia",
+          "source": "https://fujixweekly.com/2026/03/12/reggies-superia-a-fujifilm-recipe-for-x-trans-iv-v-cameras/"
+        }
+      ]
+    },
+    {
+      "name": "Richard (@richardgphotos)",
+      "recipes": [
+        {
+          "name": "Classic Continental",
+          "source": "https://filmsimrecipes.com/project/classic-continental/"
+        }
+      ]
+    },
+    {
+      "name": "Ritchie Roesch (Fuji X Weekly)",
+      "recipes": [
+        {
+          "name": "Agfa Optima",
+          "source": "https://fujixweekly.com/2020/03/22/fujifilm-x-t1-agfa-optima-provia-film-simulation-recipe/"
+        },
+        {
+          "name": "Astia (Fuji X Weekly)",
+          "source": "https://fujixweekly.com/2020/08/22/fujifilm-x-trans-ii-film-simulation-recipe-astia/"
+        },
+        {
+          "name": "CineStill 800T",
+          "source": "https://fujixweekly.com/2021/09/26/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-cinestill-800t/"
+        },
+        {
+          "name": "Classic Chrome (Fuji X Weekly)",
+          "source": "https://fujixweekly.com/2020/01/21/first-fujifilm-x-t1-film-simulation-recipes/"
+        },
+        {
+          "name": "Classic Kodak Color",
+          "source": "https://fujixweekly.com/2022/09/28/fujifilm-x70-x-trans-ii-film-simulation-recipe-classic-kodak-chrome/"
+        },
+        {
+          "name": "Color Negative Film",
+          "source": "https://fujixweekly.com/2022/07/19/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-color-negative-film/"
+        },
+        {
+          "name": "Cross Process",
+          "source": "https://fujixweekly.com/2020/07/20/fujifilm-xq1-x-trans-ii-film-simulation-recipe-cross-process/"
+        },
+        {
+          "name": "Ektachrome 100SW",
+          "source": "https://fujixweekly.com/2020/02/17/fujifilm-x-t1-x-trans-ii-ektachrome-100sw-film-simulation-recipe/"
+        },
+        {
+          "name": "Eterna (Fuji X Weekly)",
+          "source": "https://fujixweekly.com/2020/06/11/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-eterna/"
+        },
+        {
+          "name": "Fujichrome Slide",
+          "source": "https://fujixweekly.com/2022/09/09/fujifilm-x70-x-trans-ii-film-simulation-recipe-fujichrome-slide/"
+        },
+        {
+          "name": "Fujicolor Pro (X-Trans III)",
+          "source": "https://fujixweekly.com/2023/05/08/fujicolor-pro-fujifilm-x-trans-iii-x-t3-x-t30-film-simulation-recipe/"
+        },
+        {
+          "name": "Jon's Classic Chrome",
+          "source": "https://fujixweekly.com/2021/02/21/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-jons-classic-chrome/"
+        },
+        {
+          "name": "Kodachrome 64",
+          "source": "https://fujixweekly.com/2020/02/03/my-fujifilm-x-t1-x-trans-ii-kodachrome-64-film-simulation-recipe/"
+        },
+        {
+          "name": "Kodachrome II",
+          "source": "https://fujixweekly.com/2020/02/12/fujifilm-x-t1-x-trans-ii-kodachrome-ii-film-simulation-recipe/"
+        },
+        {
+          "name": "Kodacolor",
+          "source": "https://fujixweekly.com/2020/02/03/my-fujifilm-x-t1-x-trans-ii-kodacolor-film-simulation-recipe/"
+        },
+        {
+          "name": "Kodacolor 200",
+          "source": "https://fujixweekly.com/2021/11/02/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-kodacolor-200/"
+        },
+        {
+          "name": "Kodak Color Negative",
+          "source": "https://fujixweekly.com/2022/09/04/fujifilm-x70-x-trans-ii-film-simulation-recipe-kodak-color-negative/"
+        },
+        {
+          "name": "Kodak Gold 200 (X-T30)",
+          "source": "https://fujixweekly.com/2020/04/16/my-fujifilm-x-t30-kodak-gold-200-film-simulation-recipe/"
+        },
+        {
+          "name": "Kodak Platinum 200",
+          "source": "https://fujixweekly.com/2021/06/07/fujifilm-x-trans-ii-film-simulation-recipe-kodak-platinum-200/"
+        },
+        {
+          "name": "Kodak Portra 400 (X100F)",
+          "source": "https://fujixweekly.com/2018/05/30/my-fujifilm-x100f-kodak-portra-400-film-simulation-recipe/"
+        },
+        {
+          "name": "Kodak Portra 800 (X100V)",
+          "source": "https://fujixweekly.com/2020/11/03/fujifilm-x100v-film-simulation-recipe-kodak-portra-800/"
+        },
+        {
+          "name": "Lomography Color 100",
+          "source": "https://fujixweekly.com/2020/07/22/fujifilm-xq1-x-trans-ii-film-simulation-recipe-lomography-color-100/"
+        },
+        {
+          "name": "Monochrome Red",
+          "source": "https://fujixweekly.com/2022/09/06/fujifilm-x70-x-trans-ii-film-simulation-recipe-monochrome-red/"
+        },
+        {
+          "name": "Porto 200",
+          "source": "https://fujixweekly.com/2020/10/27/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-porto-200/"
+        },
+        {
+          "name": "Portra v2",
+          "source": "https://fujixweekly.com/2021/04/18/fujifilm-x-trans-ii-film-simulation-recipe-portra-v2/"
+        },
+        {
+          "name": "Pro Film",
+          "source": "https://fujixweekly.com/2023/08/08/pro-film-fujifilm-x70-x-trans-ii-film-simulation-recipe/"
+        },
+        {
+          "name": "Provia Negative",
+          "source": "https://fujixweekly.com/2023/03/20/fujifilm-x-trans-ii-film-simulation-recipe-provia-negative/"
+        },
+        {
+          "name": "Scanned Negative",
+          "source": "https://fujixweekly.com/2022/01/24/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-scanned-negative/"
+        },
+        {
+          "name": "Sepia (X-Trans II variant)",
+          "source": "https://fujixweekly.com/2020/07/01/sepia-the-forgotten-film-simulation/"
+        },
+        {
+          "name": "Velvia (Fuji X Weekly)",
+          "source": "https://fujixweekly.com/2020/01/21/first-fujifilm-x-t1-film-simulation-recipes/"
+        },
+        {
+          "name": "Winter Slide",
+          "source": "https://fujixweekly.com/2021/12/13/fujifilm-x-t1-x-trans-ii-film-simulation-recipe-winter-slide/"
+        },
+        {
+          "name": "Yosemite Velvia",
+          "source": "https://fujixweekly.com/2021/06/07/fujifilm-x-trans-ii-film-simulation-recipe-yosemite-velvia/"
+        }
+      ]
+    },
+    {
+      "name": "Serhat (@sartfilm)",
+      "recipes": [
+        { "name": "Retro Negative", "source": "https://filmsimrecipes.com/project/retro-negative/" }
+      ]
+    },
+    {
+      "name": "Shadi Mahayni (@shadi.3001)",
+      "recipes": [{ "name": "3001", "source": "https://filmsimrecipes.com/project/3001/" }]
+    },
+    {
+      "name": "Thomas Schwab; posted by Ritchie Roesch",
+      "recipes": [
+        {
+          "name": "Kodak Portra 800 v2",
+          "source": "https://fujixweekly.com/2021/05/17/fujifilm-x-trans-iv-film-simulation-recipe-kodak-portra-800-v2/"
+        }
+      ]
+    }
+  ]
+}

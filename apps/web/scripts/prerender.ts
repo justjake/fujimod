@@ -24,6 +24,7 @@ export const routes = [
 ];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
 export async function prerender(output = 'dist') {
+  process.env.FUJIMOD_PRERENDER_OUTPUT = resolve(output);
   const { handleRequest } = await import(pathToFileURL(resolve(output, 'server/server.js')).href);
   for (const route of routes) {
     const response = await handleRequest(
@@ -33,7 +34,7 @@ export async function prerender(output = 'dist') {
     if (!response.ok) throw Error(`Prerender ${route}: HTTP ${response.status}`);
     const html = await response.text();
     const expected = textPagePath(route)
-      ? 'class="text-page"'
+      ? 'class="text-page'
       : isManualPath(route)
         ? 'class="shell manual"'
         : route.startsWith('/docs/sdk/focal/')

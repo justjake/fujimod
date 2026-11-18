@@ -12,6 +12,7 @@ import { routes } from './prerender.ts';
 import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual-data.ts';
 import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
 import { textPagePath } from '../src/text/routes.ts';
+import credits from '../src/text/credits.generated.json' with { type: 'json' };
 const root = resolve(process.argv[2] || 'dist/client');
 const chapters = manualChapters();
 const manualPage = chapters[0]?.pages[0];
@@ -46,6 +47,7 @@ const server = createServer(async (req, res) => {
         '.js': 'text/javascript',
         '.css': 'text/css',
         '.json': 'application/json',
+        '.txt': 'text/plain; charset=utf-8',
         '.wasm': 'application/wasm',
         '.svg': 'image/svg+xml',
         '.png': 'image/png',
@@ -147,6 +149,63 @@ try {
       await atomicUpdates.click();
       await safety.waitForURL(base + '/safety#atomic-updates');
       await safety.close();
+
+      const creditsPage = await noJs.newPage();
+      await creditsPage.goto(base + '/credits');
+      const creditHeadings = [
+        'GitHub Contributors',
+        'Testing & Feedback',
+        'Recipe Authors',
+        'Open Source',
+      ];
+      assert.deepEqual(
+        await creditsPage
+          .getByRole('navigation', { name: 'On this page' })
+          .getByRole('link')
+          .allTextContents(),
+        creditHeadings,
+      );
+      assert.equal(
+        await creditsPage.locator('#github-contributors + ul li').count(),
+        credits.contributors.length,
+      );
+      const testers = creditsPage.locator('#testing-feedback + ul');
+      assert.equal(
+        await testers.getByRole('link', { name: 'jody' }).getAttribute('href'),
+        'https://www.instagram.com/jody_hinterleitner',
+      );
+      assert.equal(await testers.locator('li').count(), 2);
+      assert.equal(await testers.getByText('anonymous', { exact: true }).count(), 1);
+      assert.equal(await testers.getByRole('link', { name: 'anonymous' }).count(), 0);
+      assert.equal(
+        await creditsPage.locator('.credits-recipes a').count(),
+        credits.recipeAuthors.reduce((sum, author) => sum + author.recipes.length, 0),
+      );
+      const sbom = await (await noJs.request.get(base + '/sbom.json')).json();
+      const components = creditsPage.locator('.credits-components tbody tr');
+      assert.equal(await components.count(), sbom.components.length);
+      const licenseHref = await components
+        .first()
+        .locator('a[href^="/licenses/"]')
+        .getAttribute('href');
+      assert.ok(licenseHref);
+      const license = await noJs.request.get(base + licenseHref);
+      assert.equal(license.status(), 200);
+      assert.ok((await license.text()).trim().length > 100);
+      await creditsPage.close();
+
+      const releases = await noJs.newPage();
+      await releases.goto(base + '/releases');
+      const releaseDates = await releases
+        .locator('main time')
+        .evaluateAll((elements) => elements.map((time) => (time as HTMLTimeElement).dateTime));
+      assert.ok(releaseDates.length, 'Expected release history');
+      assert.deepEqual(releaseDates, [...releaseDates].sort((a, b) => b.localeCompare(a)));
+      assert.equal(
+        await releases.getByRole('navigation', { name: 'On this page' }).getByRole('link').count(),
+        releaseDates.length,
+      );
+      await releases.close();
 
       const docs = await noJs.newPage();
       await docs.goto(base + manualRoot);

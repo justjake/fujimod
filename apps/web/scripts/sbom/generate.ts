@@ -5,6 +5,7 @@ import { cycloneDx, type Component } from './bom.ts';
 import { cargoComponents } from './cargo.ts';
 import { rustStandardLibrary } from './toolchain.ts';
 import { npmComponents } from './npm.ts';
+import { writeLicenseIndex } from './licenses.ts';
 
 const filename = '.sbom-npm-inputs.json';
 const output = resolve(process.argv[2]);
@@ -31,6 +32,7 @@ const bom = cycloneDx([
   rustStandardLibrary(root, 'website'),
   ...assets,
 ]);
+writeLicenseIndex(bom, output);
 const destination = join(client, 'sbom.json');
 const temporary = destination + '.' + randomUUID() + '.tmp';
 try {
