@@ -17,7 +17,13 @@
 # limit. capabilities sets only bit 35 (UHS-II support), the only capability bit
 # the driver reads; the X-T5 has two UHS-II slots. The other bits are unknown.
 # No interrupt line is declared: the boot polls, and an asserted interrupt
-# refuses.
+# refuses. The stock OS driver drives a card it finds through interrupts, so a
+# run that inserts a card wires the slot's host to its line: slot 1 is the
+# host at 0xff9b0000, INTID 262 (the X-T5 bring-up runner's wiring, kept in
+# catalog/soc/xp5/rom-start.toml [[window_options]]). The ROM start and the
+# loader start with --card-image/--card-file add it at run time
+# (crates/emulator-boot/src/xp5/loader_card.rs), so a run without a card keeps
+# this wiring and its snapshots. Slot 2 (0xff9b4000) has no known line.
 
 [[device]]
 base = 0xff9b0000
@@ -29,7 +35,7 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x40000000
+ram_bytes = 0x80000000
 
 [[device]]
 base = 0xff9b01e0
@@ -55,7 +61,7 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x40000000
+ram_bytes = 0x80000000
 
 [[device]]
 base = 0xff9b41e0

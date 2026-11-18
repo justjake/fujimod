@@ -33,6 +33,25 @@ pub struct Register {
     pub value: u64,
 }
 
+impl Register {
+    /// The value a read of this register returns under its mode. `phase` is the
+    /// register's toggle phase (advanced by a toggle read) and `written` tells
+    /// whether the register has been written since reset.
+    pub fn read(&self, phase: &mut bool, written: bool) -> u64 {
+        match self.mode {
+            Mode::Constant => self.value,
+            Mode::Toggle => {
+                let value = if *phase { self.value } else { 0 };
+                *phase = !*phase;
+                value
+            }
+            Mode::Command => 0,
+            Mode::AfterWrite if written => self.value,
+            Mode::AfterWrite => 0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -108,22 +127,11 @@ impl Device for BringupStub {
         };
         let mask = Self::mask(size);
         if let Some(register) = self.state.registers.iter().find(|r| r.offset == offset) {
-            let value = match register.mode {
-                Mode::Constant => register.value,
-                Mode::Toggle => {
-                    let high = self.state.phase.entry(offset).or_insert(false);
-                    let value = if *high { register.value } else { 0 };
-                    *high = !*high;
-                    value
-                }
-                Mode::Command => 0,
-                Mode::AfterWrite => {
-                    if self.state.written.get(&offset).copied().unwrap_or(false) {
-                        register.value
-                    } else {
-                        0
-                    }
-                }
+            let written = self.state.written.get(&offset).copied().unwrap_or(false);
+            let value = if register.mode == Mode::Toggle {
+                register.read(self.state.phase.entry(offset).or_insert(false), written)
+            } else {
+                register.read(&mut false, written)
             };
             return value & mask;
         }

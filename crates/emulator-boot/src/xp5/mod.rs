@@ -6,6 +6,7 @@
 
 mod card_image;
 mod display_output;
+mod loader_card;
 pub mod firmware;
 mod manifest;
 mod open;
@@ -38,6 +39,8 @@ pub struct Started {
     firmware: firmware::Firmware,
     state: manifest::BootState,
     opened: open::Opened,
+    /// The loader start's `--card-image`, written back at the end of a run.
+    card_write_back: Option<loader_card::WriteBack>,
 }
 
 impl Started {
@@ -86,7 +89,7 @@ pub(super) fn open_startup(
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
-    let mut runtime_files = Vec::new();
+    let mut loader = None;
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard | RunStart::Setup) {
         let start = match (rom_path.as_deref(), start) {
             (None, RunStart::Setup) => {
@@ -119,10 +122,14 @@ pub(super) fn open_startup(
         if rom_path.is_some() {
             return Err("a boot ROM requires a ROM or SD card startup".into());
         }
-        runtime_files = card_files;
+        // The loader start's card: slot 1, inserted before the board is built (loader_card.rs).
+        loader = loader_card::LoaderCard::load(sd_image.as_deref(), &card_files)?;
+        if let Some(card) = &loader {
+            card.apply(&mut state)?;
+        }
         None
     };
-    let mut opened = open::open_from(
+    let opened = open::open_from(
         &firmware,
         &state,
         configuration,
@@ -131,9 +138,8 @@ pub(super) fn open_startup(
         mode,
         quantum_override,
         rom.as_ref(),
+        loader.as_ref(),
     )?;
-    if rom.is_none() {
-        crate::media::attach(&mut opened.session, sd_image.as_deref(), &runtime_files)?;
-    }
-    Ok(Started { firmware, state, opened })
+    let card_write_back = loader.and_then(|card| card.write_back);
+    Ok(Started { firmware, state, opened, card_write_back })
 }

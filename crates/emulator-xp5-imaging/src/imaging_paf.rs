@@ -9,6 +9,20 @@ pub struct Paf {
     registers: BTreeMap<u64, u32>,
     generation: u64,
     deadline: Option<u64>,
+    /// Device configuration from the manifest, not guest state. Retained words live in
+    /// `registers`.
+    #[serde(skip)]
+    retain_words: bool,
+}
+impl Paf {
+    /// Bring-up option: every aligned word with no modeled meaning reads back its last write.
+    pub fn with_retained_words(mut self) -> Self {
+        self.retain_words = true;
+        self
+    }
+    fn retains(&self, offset: u64, size: u8) -> bool {
+        self.retain_words && size == 4 && offset & 3 == 0 && offset < 0x1000
+    }
 }
 impl Device for Paf {
     fn name(&self) -> &'static str {
@@ -18,6 +32,9 @@ impl Device for Paf {
         let offset = address.wrapping_sub(0xff976000);
         self.advance(cx);
         if size != 4 || !matches!(offset, 0 | 0x300 | 0x308) {
+            if self.retains(offset, size) {
+                return u64::from(self.registers.get(&offset).copied().unwrap_or(0));
+            }
             cx.unmodeled();
             return 0;
         }
@@ -32,7 +49,11 @@ impl Device for Paf {
         let offset = address.wrapping_sub(0xff976000);
         self.advance(cx);
         if size != 4 || !matches!(offset, 0 | 0x300 | 0x308) {
-            cx.unmodeled();
+            if self.retains(offset, size) {
+                self.registers.insert(offset, value as u32);
+            } else {
+                cx.unmodeled();
+            }
             return;
         }
         self.registers.insert(offset, value as u32);
@@ -61,8 +82,10 @@ impl Device for Paf {
         serde_json::to_value(self).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
+        let retain_words = self.retain_words;
         *self =
             serde_json::from_value(value.clone()).map_err(|e| format!("PAF checkpoint: {e}"))?;
+        self.retain_words = retain_words;
         Ok(())
     }
 }

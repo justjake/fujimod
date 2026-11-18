@@ -95,9 +95,11 @@ pub struct Run {
     pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
     pub boot_rom: Option<PathBuf>,
-    /// A raw SD card image in place of the in-memory volume (ROM start only).
+    /// A raw SD card image in place of the in-memory volume. ROM and SD starts load it read-only;
+    /// the loader start puts it in slot 1 and writes changed sectors back at the end of the run.
     pub card_image: Option<PathBuf>,
-    /// Files on the in-memory SD card, as `(name, path)` (ROM start only).
+    /// Files on the SD card, as `(name, path)`: the startup card of a ROM or SD start, or the
+    /// slot-1 card of the loader start.
     pub card_files: Vec<(String, PathBuf)>,
     /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
     pub keys: Option<String>,
@@ -153,7 +155,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         card_image: sd_image,
         card_files,
         keys: key_script,
-        gpio,
+        gpio: gpio_spec,
         pokes,
         press,
         discovery,
@@ -197,8 +199,31 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let keys = crate::host::parse_keys(key_script.as_deref(), press.as_deref())?.into_iter()
         .map(|edge| Ok((edge.delay, Key::parse(&edge.name)?, edge.pressed)))
         .collect::<Result<Vec<_>, String>>()?;
-    let gpio = gpio.as_deref().map(|spec| spec.split(',').map(parse_gpio).collect::<Result<Vec<_>, _>>())
-        .transpose()?.unwrap_or_default();
+    // `PORT:PIN=LEVEL` applies before the run; `PORT:PIN=LEVEL@MS` applies MS milliseconds of
+    // guest time after the run starts (after a snapshot load, like `--press`). The X-T5 shutter
+    // release has no key name: half press is `0:0=0@MS`, full press `0:1=0@MS`, release `=1@MS`.
+    let mut gpio = Vec::new();
+    let mut timed_gpio = Vec::new();
+    for item in gpio_spec.as_deref().unwrap_or_default().split(',').filter(|item| !item.trim().is_empty()) {
+        match item.trim().split_once('@') {
+            Some((level, at)) => {
+                let at_ms: u64 = at.trim().parse()
+                    .map_err(|_| format!("--gpio {item}: the time after @ is whole milliseconds"))?;
+                timed_gpio.push((at_ms, parse_gpio(level)?));
+            }
+            None => gpio.push(parse_gpio(item.trim())?),
+        }
+    }
+    // A stable sort keeps the written order of levels that share a time.
+    timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
+    // XT5_WATCH_AFTER_MS=N arms the --watch-pcs witnesses only after N ms of guest time from the
+    // run start, so the log shows the first hits after an event (a key press), not earlier ones.
+    let watch_after_ms = match std::env::var("XT5_WATCH_AFTER_MS") {
+        Ok(value) => Some(value.trim().parse::<u64>()
+            .map_err(|_| "XT5_WATCH_AFTER_MS needs whole milliseconds".to_string())?)
+            .filter(|ms| *ms > 0),
+        Err(_) => None,
+    };
     let pokes = pokes.iter().map(|spec| parse_poke(spec)).collect::<Result<Vec<_>, _>>()?;
     let request = Startup {
         update,
@@ -217,7 +242,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     else {
         return Err("XP5 startup returned another processor generation".into());
     };
-    let Started { firmware, state, opened } = *started;
+    let Started { firmware, state, opened, card_write_back } = *started;
     let session_open::Opened {
         mut session,
         inputs,
@@ -233,7 +258,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .board
         .install_discovery_callee_stubs(&callee_stubs)?;
     session.board.set_execution_policy(policy)?;
-    session.board.watch_pcs(&watch_pcs)?;
+    if watch_after_ms.is_none() {
+        session.board.watch_pcs(&watch_pcs)?;
+    }
     let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     // Emulator-only FujiMod (--mod): built and placed before the run, hook words attached between
     // run slices once the stock UILIB-ready flag holds. See mod_loader.rs.
@@ -268,6 +295,13 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         let delay_ticks = crate::host::duration_ticks(delay, ticks_per_second);
         inputs.key(&mut session, start.saturating_add(delay_ticks), key, pressed)?;
     }
+    let millisecond_tick = |ms: u64| {
+        start.saturating_add(crate::host::duration_ticks(std::time::Duration::from_millis(ms), ticks_per_second))
+    };
+    let mut timed_gpio: std::collections::VecDeque<_> = timed_gpio.into_iter()
+        .map(|(at_ms, level)| (millisecond_tick(at_ms), at_ms, level))
+        .collect();
+    let mut watch_after = watch_after_ms.map(|ms| (millisecond_tick(ms), ms));
     let interrupted = Arc::new(AtomicBool::new(false));
     let signal = interrupted.clone();
     ctrlc::set_handler(move || signal.store(true, Ordering::Release))
@@ -294,7 +328,26 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }
-            let until = next_patch.map_or(now.saturating_add(slice), |at| at.min(now.saturating_add(slice)));
+            while let Some(&(at, at_ms, (port, pin, high))) = timed_gpio.front() {
+                if at > now {
+                    break;
+                }
+                timed_gpio.pop_front();
+                inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
+                eprintln!("FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})", u8::from(high));
+            }
+            if let Some((at, after_ms)) = watch_after
+                && at <= now
+            {
+                watch_after = None;
+                session.board.watch_pcs(&watch_pcs)?;
+                eprintln!("FUJIMOD XP5 watch-pcs armed at {after_ms} ms (tick {now})");
+            }
+            // Stop the slice at the next scheduled host action, so it applies at its guest time.
+            let until = [next_patch, timed_gpio.front().map(|item| item.0), watch_after.map(|item| item.0)]
+                .into_iter()
+                .flatten()
+                .fold(now.saturating_add(slice), u64::min);
             Ok(std::ops::ControlFlow::Continue(Some(until)))
         },
         |session, result| {
@@ -380,6 +433,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
+    let card_write = card_write_back.as_ref().map_or(Ok(()), |back| back.write(&session));
     let output_finish = screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
     let state = session.board.state();
     let state_write = serde_json::to_vec_pretty(&state)
@@ -402,6 +456,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         ("board", board_finish),
         ("outputs", output_finish),
         ("board state", state_write),
+        ("card image", card_write),
     ]
     .into_iter()
     .filter_map(|(name, result)| result.err().map(|error| format!("{name}={error}")))

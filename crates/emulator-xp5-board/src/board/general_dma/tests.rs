@@ -21,6 +21,9 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
+        Self::with_dma(json!({"companion_irq_base":83}))
+    }
+    fn with_dma(dma: serde_json::Value) -> Self {
         let pins = Pins::shared();
         let mut graph = DeviceGraph::new();
         graph
@@ -42,16 +45,11 @@ impl Fixture {
                     {"select":{"port":11,"pin":3,"active_high":false},"part":{"kind":"lsm6ds-configuration-registers"}}
                 ]}}),
             ),
-            window(
-                0xff930000,
-                0x8000,
-                "general-dma",
-                json!({"companion_irq_base":83}),
-            ),
+            window(0xff930000, 0x8000, "general-dma", dma),
             window(0xff90e500, 0x20, "dma-request-routing", json!({})),
             window(0xff90e748, 0x40, "dma-address-high", json!({})),
         ];
-        register_all(&mut graph, &windows, Some(4), pins).unwrap();
+        register_all(&mut graph, &windows, Some(4), pins, None).unwrap();
         let mut f = Self {
             graph,
             host: RecordingHost {
@@ -270,7 +268,7 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
     let windows = ssp5_windows(
         json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()}),
     );
-    register_all(&mut graph, &windows, Some(4), pins.clone()).unwrap();
+    register_all(&mut graph, &windows, Some(4), pins.clone(), None).unwrap();
     let mut f = Fixture {
         graph,
         host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
@@ -305,12 +303,12 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
         json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":2,"wire":wire.clone()}),
     ] {
         let pins = Pins::shared();
-        let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(options), Some(4), pins);
+        let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(options), Some(4), pins, None);
         assert_eq!(error.err().as_deref(), Some("invalid XP5 serial DMA request wiring"));
     }
     let mut outside = ssp5_windows(json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire}));
     outside[1].base = 0xff91a000;
-    let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared());
+    let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared(), None);
     assert_eq!(error.err().as_deref(), Some("invalid XP5 PL022 window"));
 }
 
@@ -330,7 +328,7 @@ fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_l
         graph
             .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
             .unwrap();
-        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins).unwrap();
+        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins, None).unwrap();
         let mut f = Fixture {
             graph,
             host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
@@ -347,6 +345,53 @@ fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_l
         assert!(f.host.core_irqs.is_empty() && f.host.irqs.is_empty());
     }
     let both = options(json!({"companion_irq_line":99,"companion_irq_unconnected":true}));
-    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared());
+    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared(), None);
     assert_eq!(error.err().as_deref(), Some("PL022 interrupt output is both connected and unconnected"));
+}
+
+#[test]
+fn a53_irq_base_adds_one_gic_spi_per_channel_beside_the_companion_line() {
+    let f = Fixture::new();
+    let bank0 = f.graph.at(0xff930000).unwrap();
+    assert_eq!(
+        f.graph.nodes[bank0].device.save()["interrupts"],
+        json!([[{"Core":{"core":4,"line":83}}],[{"Core":{"core":4,"line":84}}]])
+    );
+    let mut f = Fixture::with_dma(json!({"companion_irq_base":83,"a53_irq_base":237}));
+    // X-T5 4.31 channel 1 (bank 0, lane 1) completes the DDR PHY training copy on INTID 238.
+    let bank0 = f.graph.at(0xff930000).unwrap();
+    assert_eq!(
+        f.graph.nodes[bank0].device.save()["interrupts"],
+        json!([
+            [{"Core":{"core":4,"line":83}},{"Shared":237}],
+            [{"Core":{"core":4,"line":84}},{"Shared":238}]
+        ])
+    );
+    let bank7 = f.graph.at(0xff937000).unwrap();
+    assert_eq!(
+        f.graph.nodes[bank7].device.save()["interrupts"][1],
+        json!([{"Core":{"core":4,"line":98}},{"Shared":252}])
+    );
+    // Bank 5 is channels 10 and 11: both completions reach both controllers.
+    assert_eq!(f.transfer(5, &[9]), [0]);
+    assert_eq!(f.host.core_irqs, [(4, 93, true), (4, 94, true)]);
+    assert_eq!(f.host.irqs, [(247, true), (248, true)]);
+}
+
+#[test]
+fn a53_irq_base_outside_the_gic_spi_range_refuses() {
+    for base in [31, 1005] {
+        let windows = vec![
+            window(
+                0xff930000,
+                0x8000,
+                "general-dma",
+                json!({"companion_irq_base":83,"a53_irq_base":base}),
+            ),
+            window(0xff90e500, 0x20, "dma-request-routing", json!({})),
+            window(0xff90e748, 0x40, "dma-address-high", json!({})),
+        ];
+        let mut graph = DeviceGraph::new();
+        assert!(register_all(&mut graph, &windows, Some(4), Pins::shared(), None).is_err());
+    }
 }

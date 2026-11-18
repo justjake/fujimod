@@ -56,8 +56,20 @@ pub struct InputBuffer {
     state: Arc<Mutex<State>>,
     wiring: Wiring,
     statistics: Option<Statistics>,
+    /// Bring-up option: aligned words outside the wired register map read back their last
+    /// write (kept in `State::regs`, so they are part of the checkpoint).
+    retain_window: bool,
 }
 impl InputBuffer {
+    /// Let every aligned word of the 4 KiB window beyond the wired register map read back its
+    /// last write (0 before any write) instead of stopping as unmodeled.
+    pub fn with_retained_window(mut self) -> Self {
+        self.retain_window = true;
+        self
+    }
+    fn retains(&self, o: u64, n: u8) -> bool {
+        self.retain_window && n == 4 && o & 3 == 0 && o < 0x1000 && o > self.wiring.write_limit
+    }
     pub fn set_statistics(&mut self, statistics: Statistics) {
         self.statistics = Some(statistics);
     }
@@ -79,6 +91,7 @@ impl InputBuffer {
             state: Arc::default(),
             wiring,
             statistics,
+            retain_window: false,
         })
     }
     fn irq(&self, s: &State, cx: &mut Cx<'_>) {
@@ -133,6 +146,9 @@ impl Device for InputBuffer {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
         self.advance(cx);
         let o = address.wrapping_sub(self.wiring.base);
+        if self.retains(o, n) && o > self.wiring.max_offset {
+            return u64::from(self.state.lock().unwrap().r(o));
+        }
         if n != 4 || o & 3 != 0 || o > self.wiring.max_offset {
             cx.unmodeled();
             return 0;
@@ -154,6 +170,10 @@ impl Device for InputBuffer {
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, value: u64) {
         self.advance(cx);
         let o = address.wrapping_sub(self.wiring.base);
+        if self.retains(o, n) && o != self.wiring.ready {
+            self.state.lock().unwrap().regs.insert(o, value as u32);
+            return;
+        }
         if n != 4 || o & 3 != 0 || o > self.wiring.max_offset {
             cx.unmodeled();
             return;

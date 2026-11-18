@@ -3,6 +3,7 @@ pub mod adc;
 pub mod boot_control;
 pub mod bringup_stub;
 pub mod clocks;
+pub mod completion_stub;
 pub mod connection_status;
 pub mod discarded_read;
 pub mod gates;
