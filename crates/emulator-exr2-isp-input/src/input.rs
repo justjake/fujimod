@@ -722,7 +722,16 @@ impl ImageInput {
             raw3_ack,
             ..
         } = &mut self.state;
-        if r[1] & 1 != 0 && r[0x35c / 4] & 1 != 0 && !*capture_ack && dma.deadline().is_none() {
+        // A cleared input window has no sample pairs to transfer. The channel
+        // can already be enabled while the sensor continues clocking frames
+        // and the receiver is being programmed for its next readout.
+        let window_programmed = r[0x14 / 4] != 0 || r[0x18 / 4] != 0;
+        if window_programmed
+            && r[1] & 1 != 0
+            && r[0x35c / 4] & 1 != 0
+            && !*capture_ack
+            && dma.deadline().is_none()
+        {
             *dma = Self::prepare_raw_channel(
                 cx.now(),
                 self.options.raw_dma_ticks,
@@ -734,10 +743,20 @@ impl ImageInput {
                 "RAW channel2",
             )?;
             *raw_exposure = sensor.physical_exposure();
-            raw_origins.insert(physical(r[0x358 / 4] as u64, 1)?,
-                [(r[0x14 / 4] >> 16 & 0x3fff) as usize, (r[0x18 / 4] >> 16 & 0x3fff) as usize]);
+            raw_origins.insert(
+                physical(r[0x358 / 4] as u64, 1)?,
+                [
+                    (r[0x14 / 4] >> 16 & 0x3fff) as usize,
+                    (r[0x18 / 4] >> 16 & 0x3fff) as usize,
+                ],
+            );
         }
-        if r[1] & 1 != 0 && r[0x378 / 4] & 1 != 0 && !*raw3_ack && raw3_dma.deadline().is_none() {
+        if window_programmed
+            && r[1] & 1 != 0
+            && r[0x378 / 4] & 1 != 0
+            && !*raw3_ack
+            && raw3_dma.deadline().is_none()
+        {
             *raw3_dma = Self::prepare_raw_channel(
                 cx.now(),
                 self.options.raw_dma_ticks,
@@ -748,8 +767,13 @@ impl ImageInput {
                 0x37c,
                 "RAW channel3",
             )?;
-            raw_origins.insert(physical(r[0x374 / 4] as u64, 1)?,
-                [(r[0x14 / 4] >> 16 & 0x3fff) as usize, (r[0x18 / 4] >> 16 & 0x3fff) as usize]);
+            raw_origins.insert(
+                physical(r[0x374 / 4] as u64, 1)?,
+                [
+                    (r[0x14 / 4] >> 16 & 0x3fff) as usize,
+                    (r[0x18 / 4] >> 16 & 0x3fff) as usize,
+                ],
+            );
         }
         Ok(true)
     }
