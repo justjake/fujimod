@@ -592,3 +592,35 @@ fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a
     assert!((0x1034..=0x1054).contains(&pcs[0]), "{:#x}", pcs[0]);
     assert!(pcs[1..].iter().all(|pc| (0x202c..=0x204c).contains(pc)), "{pcs:x?}");
 }
+
+#[test]
+fn cohort_ends_when_its_first_core_reaches_the_limit() {
+    let clock = fujimod_emulator_cpu::Clock {
+        now: 1000,
+        phase: 0,
+        ratio: Ratio::new(1, 1).unwrap(),
+    };
+    let mut epoch = super::Epoch::new(
+        3,
+        clock,
+        100,
+        fujimod_perf::EngineEndReason::OtherExit,
+    );
+    let cohort = [0, 1, 2];
+    assert!(epoch.open(&cohort));
+    // Owner callbacks split the epoch into segments; each core keeps its
+    // remaining share while every core has some left.
+    assert_eq!(epoch.advance(1, 30).unwrap(), 30);
+    assert_eq!(epoch.advance(2, 60).unwrap(), 30);
+    assert!(epoch.open(&cohort));
+    assert_eq!((epoch.room(0), epoch.room(1), epoch.room(2)), (100, 70, 40));
+    // Core 2 reaches the limit. Cores 0 and 1 still have room, but they
+    // would run alone against core 2's stores, so the cohort ends and time
+    // advances to the furthest core only.
+    assert_eq!(epoch.advance(2, 40).unwrap(), 40);
+    assert_eq!(epoch.advance(0, 10).unwrap(), 0);
+    assert!(!epoch.open(&cohort));
+    assert_eq!(epoch.clock(2).unwrap().now, 1100);
+    // A core outside the cohort (waiting or not released) does not end it.
+    assert!(epoch.open(&[0, 1]));
+}
