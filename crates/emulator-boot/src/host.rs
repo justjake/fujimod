@@ -1,6 +1,6 @@
 //! Host timing and observation around one shared session scheduler window.
 use fujimod_emulator_session::Session;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Host inspection and verified writes to modeled physical memory.
 pub trait Memory {
@@ -63,6 +63,33 @@ impl Execution for Session {
 pub(crate) struct Limits {
     pub instructions: u64,
     pub tick: Option<u64>,
+    /// Host wall-clock deadline. The other budgets count guest time or progress, which can advance
+    /// far slower than real time while a core polls a device, so only this one bounds a run's wait.
+    pub wall: Option<Instant>,
+}
+
+/// Why a driven run ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StopReason {
+    /// The guest-time budget (`--seconds`) elapsed.
+    GuestTime,
+    /// The instruction budget (`--instruction-limit`) was spent.
+    Instructions,
+    /// The host wall-clock budget (`--wall-seconds`) elapsed.
+    WallClock,
+    /// A caller stop (an interrupt) ended the run, or the board went quiescent.
+    Other,
+}
+
+impl StopReason {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::GuestTime => "guest-time-limit",
+            Self::Instructions => "instruction-limit",
+            Self::WallClock => "wall-clock-limit",
+            Self::Other => "stopped",
+        }
+    }
 }
 
 impl Limits {
@@ -90,12 +117,31 @@ impl Limits {
             None => u64::MAX,
         };
         let tick = duration.map(|duration| now.saturating_add(duration_ticks(duration, ticks_per_second)));
-        Ok(Self { instructions, tick })
+        Ok(Self { instructions, tick, wall: None })
+    }
+
+    /// Also end the run once `wall` of host time has passed.
+    pub fn with_wall(mut self, wall: Option<Duration>) -> Self {
+        self.wall = wall.and_then(|wall| Instant::now().checked_add(wall));
+        self
     }
 
     pub fn reached(&self, session: &impl Execution) -> bool {
+        self.stop_reason(session).is_some()
+    }
+
+    /// The budget that is spent, if any.
+    pub fn stop_reason(&self, session: &impl Execution) -> Option<StopReason> {
         let (counts, now) = session.progress();
-        self.tick.is_some_and(|tick| now >= tick) || counts.into_iter().sum::<u64>() >= self.instructions
+        if self.tick.is_some_and(|tick| now >= tick) {
+            Some(StopReason::GuestTime)
+        } else if counts.into_iter().sum::<u64>() >= self.instructions {
+            Some(StopReason::Instructions)
+        } else if self.wall.is_some_and(|wall| Instant::now() >= wall) {
+            Some(StopReason::WallClock)
+        } else {
+            None
+        }
     }
 
     pub fn step(
@@ -233,4 +279,80 @@ pub fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
         return Err("--poke address needs 4-byte alignment".into());
     }
     Ok((address, value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ops::ControlFlow;
+
+    /// A machine that advances a fixed amount of guest time and instructions per window.
+    struct Slow {
+        counts: Vec<u64>,
+        now: u64,
+        windows: u64,
+    }
+
+    impl Slow {
+        fn new() -> Self {
+            Self { counts: vec![0, 0], now: 0, windows: 0 }
+        }
+    }
+
+    impl Execution for Slow {
+        fn progress(&self) -> (Vec<u64>, u64) {
+            (self.counts.clone(), self.now)
+        }
+
+        fn run_window(&mut self, _end: u64, _quantum: usize, _pause_after: Option<u64>, _until: Option<u64>) -> Result<(), String> {
+            self.windows += 1;
+            self.counts[0] += 1;
+            self.now += 1;
+            Ok(())
+        }
+    }
+
+    fn drive(limits: Limits, session: &mut Slow) -> u64 {
+        limits.drive(session, 1, |_| Ok(ControlFlow::Continue(None)), |_, _| Ok(())).unwrap();
+        session.windows
+    }
+
+    #[test]
+    fn a_wall_deadline_ends_a_run_whose_guest_budgets_never_arrive() {
+        let mut session = Slow::new();
+        let limits = Limits::new(&session, Some(u64::MAX / 4), Some(Duration::from_secs(3600)), 1_000_000_000)
+            .unwrap()
+            .with_wall(Some(Duration::from_millis(50)));
+        let started = Instant::now();
+        drive(limits, &mut session);
+        assert_eq!(limits.stop_reason(&session), Some(StopReason::WallClock));
+        assert!(started.elapsed() < Duration::from_secs(30));
+    }
+
+    #[test]
+    fn an_elapsed_wall_deadline_stops_before_any_window() {
+        let mut session = Slow::new();
+        let limits = Limits::new(&session, None, None, 1_000_000_000).unwrap().with_wall(Some(Duration::ZERO));
+        assert_eq!(drive(limits, &mut session), 0);
+        assert_eq!(limits.stop_reason(&session), Some(StopReason::WallClock));
+    }
+
+    #[test]
+    fn guest_budgets_report_their_own_reason() {
+        let mut session = Slow::new();
+        let limits = Limits::new(&session, Some(5), None, 1_000_000_000).unwrap();
+        assert_eq!(drive(limits, &mut session), 5);
+        assert_eq!(limits.stop_reason(&session).map(StopReason::name), Some("instruction-limit"));
+        let mut session = Slow::new();
+        let limits = Limits::new(&session, None, Some(Duration::from_nanos(7)), 1_000_000_000).unwrap();
+        assert_eq!(drive(limits, &mut session), 7);
+        assert_eq!(limits.stop_reason(&session).map(StopReason::name), Some("guest-time-limit"));
+    }
+
+    #[test]
+    fn no_budget_never_reports_a_reason() {
+        let session = Slow::new();
+        let limits = Limits::new(&session, None, None, 1_000_000_000).unwrap();
+        assert_eq!(limits.stop_reason(&session), None);
+    }
 }
