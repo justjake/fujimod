@@ -52,7 +52,9 @@
 //! and the end of the output at +0x108; a failed one sets bit 17. The level
 //! interrupt is high while either is set. The stream refill on status bit 24
 //! (+0x118 = 4) is not modeled and fails. 4:2:2 output for a 4:2:0 stream is
-//! not checked against a camera.
+//! not checked against a camera. [`Decoder::wide`] is the X-Processor 5
+//! decoder: the same words with high address words, an interrupt mask and
+//! the output pitch its driver's callers assume (see there).
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_image_codecs::jpeg::{Codec, decode};
 use serde::{Deserialize, Serialize};
@@ -607,6 +609,8 @@ impl Encoder {
 const D_STATUS: u64 = 0x04;
 const D_INITIALISED: u32 = 1 << 16;
 const D_FAILED: u32 = 1 << 17;
+/// Wide contract: the decoder wants more stream (refill, +0x118 = 4).
+const D_REFILL: u32 = 1 << 24;
 const D_SCALE: u64 = 0xa0;
 const D_OUTPUT: u64 = 0x100;
 const D_LIMIT: u64 = 0x104;
@@ -618,6 +622,15 @@ const D_INITIALISE: u32 = 1;
 const D_CROP: u64 = 0x120;
 const D_CROP_X: u64 = 0x124;
 const D_CROP_Y: u64 = 0x128;
+/// Wide contract words (X-Processor 5).
+const D_MASK: u64 = 0x08;
+const D_STATUS_2: u64 = 0x10;
+const D_STATUS_3: u64 = 0x14;
+const D_FORMAT: u64 = 0x11c;
+const D_OUTPUT_HIGH: u64 = 0x140;
+const D_LIMIT_HIGH: u64 = 0x144;
+const D_END_HIGH: u64 = 0x148;
+const D_STREAM_HIGH: u64 = 0x14c;
 const MAX_SIDE: usize = 8192;
 
 #[derive(Default, Serialize, Deserialize)]
@@ -628,13 +641,31 @@ struct DecoderState {
     due: Option<u64>,
     status: u32,
     end: u32,
+    /// Bits 34..32 of the end of the output (wide contract only).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    end_high: u32,
     runs: u64,
 }
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
+/// One decoded and packed output picture.
+struct Packed {
+    bytes: Vec<u8>,
+    width: usize,
+    height: usize,
+}
+
 pub struct Decoder {
     name: &'static str,
     base: u64,
     irq: u32,
     ticks: u64,
+    /// The X-Processor 5 register contract (see [`Decoder::wide`]).
+    wide: bool,
+    /// Diagnostics already logged; not part of the device state.
+    noted: bool,
     state: DecoderState,
 }
 impl Decoder {
@@ -647,17 +678,65 @@ impl Decoder {
             base,
             irq,
             ticks,
+            wide: false,
+            noted: false,
             state: DecoderState::default(),
+        })
+    }
+    /// The X-Processor 5 decoder (X-T5 4.31 low driver 0x13c2fcc..0x13c39a8,
+    /// mid driver 0x2c41bb0..0x2c428b4). Same words as the X-Processor Pro
+    /// block, plus:
+    /// - bits 34..32 of the output (+0x140), the stream (+0x14c) and the end
+    ///   of the output (+0x148, read), and bits 33..32 of the output limit
+    ///   (+0x144), which counts bytes;
+    /// - an interrupt mask at +0x08 (a set bit masks that status bit; the
+    ///   normal decode leaves bits 4, 17 and 24 clear);
+    /// - status bit 24 (stream refill wanted, not modeled: a run always gets
+    ///   its whole stream), and two more write-1-to-clear status words at
+    ///   +0x10 and +0x14 that this model never sets;
+    /// - an output format word at +0x11c, which the normal decode writes 0
+    ///   (packed 4:2:2); other values are refused;
+    /// - reset with +0x00 bit 8, which cancels a run and clears the status.
+    ///
+    /// The output is packed 4:2:2 (Y0 Y1 Cb Cr) with lines of
+    /// `round_up(width, 16) >> scale` pixels, the pitch the driver's callers
+    /// compute (0x2dd9bec: twice the scaled width); padding pixels repeat the
+    /// last column. The line count is the scaled height.
+    pub fn wide(name: &'static str, base: u64, irq: u32, ticks: u64) -> Result<Self, String> {
+        Ok(Self {
+            wide: true,
+            ..Self::new(name, base, irq, ticks)?
         })
     }
     fn word(&self, offset: u64) -> u32 {
         self.state.words.get(&offset).copied().unwrap_or(0)
     }
-    /// Decodes, crops, scales and packs; `Ok(None)` when the picture does
-    /// not fit the output limit.
-    fn decode(&self, cx: &mut Cx<'_>) -> Result<Option<u32>, String> {
+    /// A buffer address: the low word and, under the wide contract, bits
+    /// 34..32 from `high`.
+    fn address(&self, low: u64, high: u64, bits: u32) -> u64 {
+        let high = if self.wide {
+            u64::from(self.word(high) & bits) << 32
+        } else {
+            0
+        };
+        high | u64::from(self.word(low))
+    }
+    /// The status bits that raise the interrupt.
+    fn pending(&self) -> u32 {
+        let raised = self.state.status & (DONE | D_FAILED | D_REFILL);
+        if self.wide {
+            raised & !self.word(D_MASK)
+        } else {
+            raised
+        }
+    }
+    fn update_irq(&self, cx: &mut Cx<'_>) {
+        cx.set_irq(self.irq, self.pending() != 0);
+    }
+    /// Decodes, crops, scales and packs.
+    fn decode(&self, cx: &mut Cx<'_>) -> Result<Packed, String> {
         let stream = cx.ram_bytes(
-            self.word(D_STREAM).into(),
+            self.address(D_STREAM, D_STREAM_HIGH, 7),
             self.word(D_STREAM_SIZE) as usize,
         )?;
         let (ycc, width, height) = decode(&stream, MAX_SIDE, MAX_SIDE)?;
@@ -672,12 +751,19 @@ impl Decoder {
         let shift = self.word(D_SCALE) & 3;
         let step = 1usize << shift;
         let (w, h) = ((x1 + 1 - x0) >> shift, (y1 + 1 - y0) >> shift);
-        let stride = w.div_ceil(16) * 16 * 2;
-        if stride * h > self.word(D_LIMIT) as usize {
-            return Ok(None);
+        if w == 0 || h == 0 {
+            return Err("JPEG decoder output is empty".into());
         }
+        // Pixels per output line, and how many of them carry picture.
+        let line_pixels = if self.wide {
+            (x1 + 1 - x0).next_multiple_of(16) >> shift
+        } else {
+            w.next_multiple_of(16)
+        };
+        let stride = line_pixels.next_multiple_of(2) * 2;
         let mut out = vec![0u8; stride * h];
         let mut line = vec![[0u32; 3]; w];
+        let n = (step * step) as u32;
         for y in 0..h {
             line.iter_mut().for_each(|p| *p = [0; 3]);
             for sy in 0..step {
@@ -691,11 +777,15 @@ impl Decoder {
                     }
                 }
             }
-            let n = (step * step) as u32;
-            let pixels: Vec<[u8; 3]> = line
+            let mut pixels: Vec<[u8; 3]> = line
                 .iter()
                 .map(|s| s.map(|v| ((v + n / 2) / n) as u8))
                 .collect();
+            if self.wide {
+                // Padding columns repeat the last picture column.
+                let last = pixels[w - 1];
+                pixels.resize(line_pixels.next_multiple_of(2), last);
+            }
             for (x, p) in pixels.iter().enumerate() {
                 let at = y * stride + x / 2 * 4;
                 out[at + x % 2] = p[0];
@@ -708,9 +798,39 @@ impl Decoder {
                 }
             }
         }
-        let output = self.word(D_OUTPUT);
-        cx.ram_write(output.into(), &out)?;
-        Ok(Some(output + out.len() as u32))
+        Ok(Packed {
+            bytes: out,
+            width: line_pixels,
+            height: h,
+        })
+    }
+    /// One run: `Ok(None)` when the picture does not fit the output limit.
+    fn run(&mut self, cx: &mut Cx<'_>) -> Result<Option<u64>, String> {
+        if self.wide && self.word(D_FORMAT) != 0 {
+            return Err(format!(
+                "output format word +0x11c = {:#x} is not modeled (only 0, packed 4:2:2)",
+                self.word(D_FORMAT)
+            ));
+        }
+        let packed = self.decode(cx)?;
+        let limit = if self.wide {
+            u64::from(self.word(D_LIMIT_HIGH) & 3) << 32 | u64::from(self.word(D_LIMIT))
+        } else {
+            u64::from(self.word(D_LIMIT))
+        };
+        if packed.bytes.len() as u64 > limit {
+            return Ok(None);
+        }
+        let output = self.address(D_OUTPUT, D_OUTPUT_HIGH, 7);
+        if self.wide && !self.noted {
+            self.noted = true;
+            cx.log(&format!(
+                "{}: decoded {}x{} lines of packed 4:2:2 to {output:#x}",
+                self.name, packed.width, packed.height
+            ));
+        }
+        cx.ram_write(output, &packed.bytes)?;
+        Ok(Some(output + packed.bytes.len() as u64))
     }
 }
 impl Device for Decoder {
@@ -726,6 +846,8 @@ impl Device for Decoder {
         u64::from(match offset {
             D_STATUS => self.state.status,
             D_END => self.state.end,
+            D_END_HIGH if self.wide => self.state.end_high,
+            D_STATUS_2 | D_STATUS_3 if self.wide => 0,
             CONTROL => self.word(CONTROL) & !(START | RESET),
             D_COMMAND => 0,
             o => self.word(o),
@@ -742,16 +864,23 @@ impl Device for Decoder {
         match offset {
             D_STATUS => {
                 self.state.status &= !value;
-                if self.state.status & (DONE | D_FAILED) == 0 {
-                    cx.set_irq(self.irq, false);
-                }
-                return;
+                return self.update_irq(cx);
             }
+            D_STATUS_2 | D_STATUS_3 | D_END_HIGH if self.wide => return,
             D_COMMAND if value == D_INITIALISE => {
                 self.state.status |= D_INITIALISED;
                 return;
             }
-            D_COMMAND => return cx.fail("JPEG decoder stream refill is not modeled"),
+            D_COMMAND => {
+                return cx.fail(format!(
+                    "JPEG decoder command {value:#x} (output continue or stream refill) is not modeled"
+                ));
+            }
+            CONTROL if self.wide && value & RESET != 0 => {
+                self.state.due = None;
+                self.state.status = 0;
+                self.update_irq(cx);
+            }
             CONTROL if value & START != 0 && self.state.due.is_none() => {
                 self.state.due = cx.now().checked_add(self.ticks);
                 if self.state.due.is_none() {
@@ -765,6 +894,9 @@ impl Device for Decoder {
         } else {
             self.state.words.insert(offset, value);
         }
+        if self.wide && offset == D_MASK {
+            self.update_irq(cx);
+        }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if !self.state.due.is_some_and(|at| at <= cx.now()) {
@@ -772,15 +904,16 @@ impl Device for Decoder {
         }
         self.state.due = None;
         self.state.runs += 1;
-        match self.decode(cx) {
+        match self.run(cx) {
             Ok(Some(end)) => {
-                self.state.end = end;
+                self.state.end = end as u32;
+                self.state.end_high = (end >> 32) as u32 & 7;
                 self.state.status |= DONE;
             }
             Ok(None) => self.state.status |= D_FAILED,
             Err(e) => return cx.fail(format!("JPEG decoder run failed: {e}")),
         }
-        cx.set_irq(self.irq, true);
+        self.update_irq(cx);
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
         self.state.due
@@ -799,11 +932,18 @@ impl Device for Decoder {
 }
 impl Decoder {
     fn check(&self, state: &DecoderState) -> Result<(), String> {
+        let allowed = if self.wide {
+            DONE | D_FAILED | D_INITIALISED | D_REFILL
+        } else {
+            DONE | D_FAILED | D_INITIALISED
+        };
         if state
             .words
             .iter()
             .any(|(o, v)| o & 3 != 0 || *o >= WINDOW || *v == 0)
-            || state.status & !(DONE | D_FAILED | D_INITIALISED) != 0
+            || state.status & !allowed != 0
+            || (!self.wide && state.end_high != 0)
+            || state.end_high & !7 != 0
         {
             return Err("Invalid JPEG decoder checkpoint".into());
         }
@@ -1185,6 +1325,188 @@ mod tests {
             assert_eq!(cx.refusal(), None);
             assert!(read(&mut e, &mut h, STREAM) > 0x40);
             assert!(h.bytes(STREAM_AT + 0x40, 16).unwrap().iter().all(|&b| b == 0));
+        }
+    }
+
+    mod wide_decoder {
+        use super::super::*;
+        use fujimod_emulator_devices::Host;
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+        const ENCODER: u64 = 0xffd1_0000;
+        const BASE: u64 = 0xffd1_1000;
+        const IRQ: u32 = 208;
+        /// Above 4 GiB, so the high address words are needed to reach it.
+        const RAM: u64 = 0x1_0000_0000;
+        const SOURCE_AT: u64 = RAM + 0x1000;
+        const STREAM_AT: u64 = RAM + 0x4_0000;
+        const OUTPUT_AT: u64 = RAM + 0x8_0000;
+        /// The interrupt mask the X-T5 4.31 normal decode programs
+        /// (0x2c42164..0x2c42194 through 0x13c339c): bits 5, 16 and
+        /// 18..23 masked; done (4), error (17) and refill (24) open.
+        const NORMAL_MASK: u32 = 1 << 5 | 1 << 16 | 0x3f << 18;
+
+        fn host() -> RecordingHost {
+            RecordingHost {
+                ram: vec![0; 1 << 20],
+                ram_base: RAM,
+                ..RecordingHost::default()
+            }
+        }
+        fn write(d: &mut dyn Device, h: &mut RecordingHost, address: u64, value: u32) {
+            let mut cx = Cx::new(h, 0, 0, 0);
+            d.write(&mut cx, address, 4, value.into());
+            assert!(cx.refusal().is_none(), "{address:#x} {value:#x}");
+        }
+        fn read(d: &mut dyn Device, h: &mut RecordingHost, address: u64) -> u32 {
+            let mut cx = Cx::new(h, 0, 0, 0);
+            let value = d.read(&mut cx, address, 4) as u32;
+            assert!(cx.refusal().is_none(), "{address:#x}");
+            value
+        }
+        fn finish(d: &mut dyn Device, h: &mut RecordingHost) {
+            h.now = d.next_deadline(h.now).expect("a run is due");
+            let mut cx = Cx::new(h, 0, 0, 0);
+            d.advance(&mut cx);
+            assert_eq!(cx.refusal(), None);
+        }
+        /// A `width` x `height` 4:2:2 stream at STREAM_AT whose luma rises
+        /// by 4 per column, with Cb 90 and Cr 170; returns its size.
+        fn stream(h: &mut RecordingHost, width: usize, height: usize) -> u32 {
+            let source: Vec<u8> = (0..width * height / 2)
+                .flat_map(|i| {
+                    let x = (i % (width / 2) * 2) as u8;
+                    [x * 4, (x + 1) * 4, 90, 170]
+                })
+                .collect();
+            h.ram_write(SOURCE_AT, &source).unwrap();
+            let mut e = Encoder::new("xp5-jpeg-encoder", ENCODER, 207, 10, Registers::Wide).unwrap();
+            for _ in 0..TABLE_WORDS {
+                write(&mut e, h, ENCODER + TABLES, 0x0101_0101);
+            }
+            write(&mut e, h, ENCODER + FORMAT, PACKED_422);
+            write(&mut e, h, ENCODER + SIZE, (height << 16 | width) as u32);
+            write(&mut e, h, ENCODER + SOURCE_HIGH, (SOURCE_AT >> 32) as u32);
+            write(&mut e, h, ENCODER + SOURCE, SOURCE_AT as u32);
+            write(&mut e, h, ENCODER + DESTINATION_HIGH, (STREAM_AT >> 32) as u32);
+            write(&mut e, h, ENCODER + DESTINATION, STREAM_AT as u32);
+            write(&mut e, h, ENCODER + LIMIT, 0x4_0000);
+            write(&mut e, h, ENCODER, START);
+            finish(&mut e, h);
+            read(&mut e, h, ENCODER + STREAM)
+        }
+        /// The X-T5 4.31 initialisation 0x13c3120 and programmer 0x13c339c,
+        /// in their write order, then the start 0x13c3190.
+        fn program(d: &mut Decoder, h: &mut RecordingHost, size: u32, scale: u32, limit: u64) {
+            write(d, h, BASE + D_COMMAND, D_INITIALISE);
+            let status = read(d, h, BASE + D_STATUS);
+            assert_eq!(status & D_INITIALISED, D_INITIALISED);
+            write(d, h, BASE + D_STATUS, status);
+            write(d, h, BASE + CONTROL, RESET);
+            assert_eq!(read(d, h, BASE + CONTROL) & RESET, 0);
+            write(d, h, BASE + D_MASK, NORMAL_MASK);
+            write(d, h, BASE + D_SCALE, scale);
+            write(d, h, BASE + D_OUTPUT_HIGH, (OUTPUT_AT >> 32) as u32 & 7);
+            write(d, h, BASE + D_OUTPUT, OUTPUT_AT as u32);
+            write(d, h, BASE + D_LIMIT_HIGH, (limit >> 32) as u32 & 3);
+            write(d, h, BASE + D_LIMIT, limit as u32);
+            write(d, h, BASE + D_STREAM_HIGH, (STREAM_AT >> 32) as u32 & 7);
+            write(d, h, BASE + D_STREAM, STREAM_AT as u32);
+            write(d, h, BASE + D_STREAM_SIZE, size);
+            write(d, h, BASE + D_FORMAT, 0);
+            write(d, h, BASE + D_CROP, 0);
+            write(d, h, BASE + D_CROP_X, 0);
+            write(d, h, BASE + D_CROP_Y, 0);
+            let control = read(d, h, BASE + CONTROL);
+            write(d, h, BASE + CONTROL, control | START);
+        }
+
+        #[test]
+        fn the_driver_sequence_decodes_above_4_gib_and_interrupts() {
+            let mut h = host();
+            let size = stream(&mut h, 64, 16);
+            let mut d = Decoder::wide("xp5-jpeg-decoder", BASE, IRQ, 10).unwrap();
+            program(&mut d, &mut h, size, 0, 64 * 16 * 2);
+            finish(&mut d, &mut h);
+            assert!(h.irq, "done raises INTID 208");
+            assert_eq!(h.irqs.last(), Some(&(IRQ, true)));
+            // ISR 0x2c41bb0: read and write back +0x04, then +0x14, then the end.
+            let status = read(&mut d, &mut h, BASE + D_STATUS);
+            assert_eq!(status, DONE);
+            write(&mut d, &mut h, BASE + D_STATUS, status);
+            assert!(!h.irq);
+            let status_3 = read(&mut d, &mut h, BASE + D_STATUS_3);
+            write(&mut d, &mut h, BASE + D_STATUS_3, status_3);
+            let end = u64::from(read(&mut d, &mut h, BASE + D_END_HIGH)) << 32
+                | u64::from(read(&mut d, &mut h, BASE + D_END));
+            assert_eq!(end, OUTPUT_AT + 64 * 16 * 2);
+            let out = h.bytes(OUTPUT_AT, 64 * 16 * 2).unwrap();
+            for (i, q) in out.chunks(4).enumerate() {
+                let x = (i % 32 * 2) as i32;
+                assert!((i32::from(q[0]) - x * 4).abs() <= 3, "{i} {q:?}");
+                assert!((i32::from(q[1]) - (x + 1) * 4).abs() <= 3, "{i} {q:?}");
+                assert!((i32::from(q[2]) - 90).abs() <= 3 && (i32::from(q[3]) - 170).abs() <= 3);
+            }
+            // The checkpoint keeps the end and the status.
+            let saved = d.save();
+            let mut other = Decoder::wide("xp5-jpeg-decoder", BASE, IRQ, 10).unwrap();
+            other.restore(&saved).unwrap();
+            assert_eq!(read(&mut other, &mut h, BASE + D_END_HIGH), 1);
+            assert!(Decoder::new("decoder", BASE, IRQ, 10).unwrap().restore(&saved).is_err());
+        }
+
+        #[test]
+        fn a_scaled_run_uses_the_callers_pitch_and_repeats_the_last_column() {
+            // 40x16 at 1/2: lines of round_up(40, 16) >> 1 = 24 pixels, 20 of picture.
+            let mut h = host();
+            let size = stream(&mut h, 40, 16);
+            let mut d = Decoder::wide("xp5-jpeg-decoder", BASE, IRQ, 10).unwrap();
+            program(&mut d, &mut h, size, 1, 48 * 16 * 2);
+            finish(&mut d, &mut h);
+            assert_eq!(read(&mut d, &mut h, BASE + D_STATUS), DONE);
+            assert_eq!(read(&mut d, &mut h, BASE + D_END), (OUTPUT_AT + 24 * 2 * 8) as u32);
+            let out = h.bytes(OUTPUT_AT, 24 * 2 * 8).unwrap();
+            for line in out.chunks(48) {
+                let luma: Vec<i32> = line.chunks(4).flat_map(|q| [q[0], q[1]]).map(i32::from).collect();
+                for (x, &y) in luma.iter().enumerate().take(20) {
+                    assert!((y - (x as i32 * 8 + 2)).abs() <= 3, "{x} {luma:?}");
+                }
+                assert!(luma[20..].iter().all(|&y| y == luma[19]), "{luma:?}");
+            }
+        }
+
+        #[test]
+        fn the_mask_holds_the_interrupt_and_a_short_limit_fails_the_run() {
+            let mut h = host();
+            let size = stream(&mut h, 32, 16);
+            let mut d = Decoder::wide("xp5-jpeg-decoder", BASE, IRQ, 10).unwrap();
+            program(&mut d, &mut h, size, 0, 16);
+            write(&mut d, &mut h, BASE + D_MASK, NORMAL_MASK | DONE | D_FAILED);
+            finish(&mut d, &mut h);
+            assert_eq!(read(&mut d, &mut h, BASE + D_STATUS), D_FAILED);
+            assert!(!h.irq);
+            write(&mut d, &mut h, BASE + D_MASK, NORMAL_MASK);
+            assert!(h.irq);
+            // Reset cancels and clears.
+            write(&mut d, &mut h, BASE + CONTROL, RESET);
+            assert_eq!(read(&mut d, &mut h, BASE + D_STATUS), 0);
+            assert!(!h.irq);
+        }
+
+        #[test]
+        fn unmodeled_formats_and_commands_are_refused() {
+            let mut h = host();
+            let size = stream(&mut h, 32, 16);
+            let mut d = Decoder::wide("xp5-jpeg-decoder", BASE, IRQ, 10).unwrap();
+            program(&mut d, &mut h, size, 0, 0x1000);
+            write(&mut d, &mut h, BASE + D_FORMAT, 1);
+            h.now = d.next_deadline(h.now).unwrap();
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            d.advance(&mut cx);
+            assert!(cx.refusal().is_some_and(|r| r.contains("+0x11c")));
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            d.write(&mut cx, BASE + D_COMMAND, 4, 4);
+            assert!(cx.refusal().is_some());
         }
     }
 }
