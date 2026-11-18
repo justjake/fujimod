@@ -34,6 +34,27 @@ footer a {
 .home-reel {
   margin: 0;
 }
+.home-reel-video {
+  position: relative;
+}
+.home-reel-caption {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  width: fit-content;
+  max-width: calc(100% - 20px);
+  margin-inline: auto;
+  padding: 5px 10px;
+  border-radius: 5px;
+  background: rgb(0 0 0 / 85%);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
+}
 .home-reel video {
   display: block;
   width: 100%;

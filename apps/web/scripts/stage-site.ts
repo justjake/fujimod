@@ -13,8 +13,12 @@ export interface SiteInputs {
 /** Files of the media for cards the homepage still shows; recordings of removed cards stay behind. */
 export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<string>) {
   const shown = new Set(shownCards);
-  const cards = Object.keys(media.cards).filter((card) => shown.has(card));
-  return new Set(cards.flatMap((card) => [media.cards[card].video, media.cards[card].still]));
+  const cards = Object.entries(media.cards)
+    .filter(([id]) => shown.has(id))
+    .map(([, recording]) => recording);
+  return new Set(
+    [...cards, ...Object.values(media.reels ?? {})].flatMap(({ video, still }) => [video, still]),
+  );
 }
 
 /** Cold inputs named by prepared manifests accompany the ordinary runtime files. */
@@ -25,8 +29,7 @@ export function runtimeBundleFiles(manifest: unknown) {
   const dmpCpuRenderer = Reflect.get(manifest, 'dmpCpuRenderer');
   if (dmpCpuRenderer !== undefined && typeof dmpCpuRenderer !== 'boolean')
     throw Error('Runtime manifest has an invalid DMP renderer selection.');
-  if (dmpCpuRenderer === false)
-    files.push('dmp_webgpu.js', 'dmp_webgpu_bg.wasm');
+  if (dmpCpuRenderer === false) files.push('dmp_webgpu.js', 'dmp_webgpu_bg.wasm');
   if (manifest.construction !== 'prepared') return files;
   if (
     !('prepared' in manifest) ||
