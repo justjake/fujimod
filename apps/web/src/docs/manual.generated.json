@@ -66,7 +66,7 @@
     "starting-fujimod": {
       "title": "Starting Fujimod",
       "summary": "Start Fujimod from the SD card.",
-      "introduction": "Insert the SD card prepared for FujiMod. Follow the starting instructions shown during installation. The welcome message opens the first time FujiMod starts.",
+      "introduction": "1. Download the SD card files for your camera. Unzip them to the top level of a FAT32 SD card.\n2. Switch the camera off and insert the SD card. Remove and reinsert the battery to make sure the camera is fully off.\n3. Hold the buttons for your camera while turning the power switch ON. Release them once the switch is in the ON position.\n\n- **X70** — center of the command control + Movie-record button / Function button (Fn1)\n- **X-E2S** — center of the command dial + Function button (Fn7)\n- **X-E2** — center of the command dial + Function button (Fn7)\n\nLook for the Fujimod name in the upper-left corner of the display.",
       "sections": [
         {
           "path": ["SET-UP", "FUJIMOD SET-UP"],
@@ -76,6 +76,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--show-welcome-message",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "SHOW WELCOME MESSAGE"]],
           "summary": "Show the welcome message again.",
           "options": [],
           "credits": {
@@ -90,25 +91,8 @@
     "back-up-your-camera": {
       "title": "Back Up Your Camera",
       "summary": "Save a copy of the camera’s internal data.",
-      "introduction": "Open **SET-UP > FUJIMOD SET-UP > BACK UP INTERNAL DATA** and choose **BACK UP**. When the backup is complete, turn the camera off and remove the SD card. Copy the **BACKUP** folder from the SD card to a computer.\n\nSee [Safety](https://fujimod.com/safety) for information on backing up and using custom firmware.",
+      "introduction": "Open **SET-UP > FUJIMOD SET-UP > BACK UP INTERNAL DATA** and choose **BACK UP**. When the backup is complete, turn the camera off and remove the SD card. Copy the **BACKUP** folder from the SD card to a computer.\n\nThe backup holds your camera’s own factory calibration data. No download can replace it. An SD card can be lost, damaged, or reformatted, so keep the copy on your computer.\n\nSee [Safety](/safety) for more about backups and custom firmware.",
       "sections": [
-        {
-          "path": ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"],
-          "title": "BACK UP INTERNAL DATA",
-          "kind": "link",
-          "order": 2,
-          "stock": false,
-          "anchor": "set-up--fujimod-set-up--boot--change--back-up-internal-data",
-          "cameras": ["X-E2", "X-E2S", "X70"],
-          "summary": "Open the backup screen before changing the boot method.",
-          "options": [],
-          "credits": {
-            "premiere": false,
-            "inspired": [],
-            "thanks": []
-          },
-          "media": null
-        },
         {
           "path": ["SET-UP", "FUJIMOD SET-UP"],
           "title": "BACK UP INTERNAL DATA",
@@ -117,6 +101,10 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--back-up-internal-data",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [
+            ["SET-UP", "FUJIMOD SET-UP", "BACK UP INTERNAL DATA"],
+            ["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE", "BACK UP INTERNAL DATA"]
+          ],
           "summary": "Saves a copy of internal storage to /BACKUP on the SD card. Includes camera settings, custom settings, and unique factory calibration data.",
           "options": [],
           "credits": {
@@ -134,6 +122,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--back-up-internal-data--back-up",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "BACK UP INTERNAL DATA", "BACK UP"]],
           "summary": "Copy internal data to the BACKUP folder on the SD card.",
           "options": [],
           "credits": {
@@ -157,8 +146,9 @@
           "order": 10,
           "stock": false,
           "anchor": "shooting-menu--fujimod",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
-          "summary": "Open the FujiMod shooting settings.",
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD"]],
+          "summary": "Open the Fujimod shooting settings.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -174,8 +164,9 @@
           "order": 18,
           "stock": false,
           "anchor": "set-up--fujimod-set-up",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
-          "summary": "Updates FujiMod over Wi-Fi, backs up the camera’s internal data to the SD card, installs the bootloader for automatic boot and lists the build’s mods.",
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP"]],
+          "summary": "Updates Fujimod over Wi-Fi, backs up the camera’s internal data to the SD card, installs the bootloader for automatic boot and lists the build’s mods.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -192,7 +183,8 @@
           "stock": false,
           "anonymous": true,
           "anchor": "set-up--fujimod-set-up--build",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]"]],
           "summary": "View details of the installed firmware.",
           "options": [],
           "credits": {
@@ -209,7 +201,8 @@
           "order": 0,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--firmware",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "FIRMWARE"]],
           "summary": "Shows the installed firmware version.",
           "options": [],
           "credits": {
@@ -226,8 +219,9 @@
           "order": 1,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--mods",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
-          "summary": "Lists the mods in this FujiMod version. Mods this camera cannot run are listed apart.",
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "MODS"]],
+          "summary": "Lists the mods in this Fujimod version. Mods this camera cannot run are listed apart.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -243,7 +237,8 @@
           "order": 2,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--built",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "BUILT"]],
           "summary": "Shows when the running firmware was built.",
           "options": [],
           "credits": {
@@ -260,7 +255,8 @@
           "order": 3,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--commit",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "COMMIT"]],
           "summary": "Shows the revision of the running build.",
           "options": [],
           "credits": {
@@ -284,7 +280,8 @@
           "order": 31,
           "stock": true,
           "anchor": "shooting-menu--photometry",
-          "cameras": ["X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "PHOTOMETRY"]],
           "summary": "Adds HIGHLIGHT and RAW HIGHLIGHT metering modes, which expose for detail in the brightest areas.",
           "options": [
             {
@@ -354,6 +351,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--zone-focus",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS"]],
           "summary": "Show the focus distance, the near and far limits of sharp focus and the hyperfocal distance on the shooting display, and set the hyperfocal distance with a button.",
           "options": [],
           "credits": {
@@ -371,6 +369,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--zone-focus--zone-readout",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS", "ZONE READOUT"]],
           "summary": "Show the focus distance and the near and far limits of acceptable sharpness for the current aperture.",
           "options": [
             {
@@ -402,6 +401,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--zone-focus--show-in-af",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS", "SHOW IN AF"]],
           "summary": "Show the readout in autofocus as well as manual focus.",
           "options": [
             {
@@ -433,6 +433,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--zone-focus--circle-of-confusion",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS", "CIRCLE OF CONFUSION"]],
           "summary": "Choose how strictly sharpness is judged. STRICT narrows the zone, for large prints or close viewing.",
           "options": [
             {
@@ -464,6 +465,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--zone-focus--units",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "ZONE FOCUS", "UNITS"]],
           "summary": "Show distances in meters or feet.",
           "options": [
             {
@@ -495,6 +497,7 @@
           "stock": true,
           "anchor": "shooting-menu--autofocus-setting",
           "cameras": ["X70"],
+          "paths": [["SHOOTING MENU", "AUTOFOCUS SETTING"]],
           "summary": "Adjust how the camera searches for focus.",
           "options": [],
           "credits": {
@@ -512,6 +515,7 @@
           "stock": false,
           "anchor": "shooting-menu--autofocus-setting--af-range",
           "cameras": ["X70"],
+          "paths": [["SHOOTING MENU", "AUTOFOCUS SETTING", "AF RANGE"]],
           "summary": "Limits how close the camera focuses, so AF finds distant subjects faster.",
           "options": [
             {
@@ -548,6 +552,7 @@
           "stock": false,
           "anchor": "shooting-menu--autofocus-setting--af-miss",
           "cameras": ["X70"],
+          "paths": [["SHOOTING MENU", "AUTOFOCUS SETTING", "AF MISS"]],
           "summary": "Choose where the lens rests when AF cannot find focus.",
           "options": [
             {
@@ -578,7 +583,8 @@
           "order": 25,
           "stock": false,
           "anchor": "shooting-menu--mf-snap-focus",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MF SNAP FOCUS"]],
           "summary": "Choose the distance used by the SNAP FOCUS action in manual focus mode.",
           "options": [],
           "credits": {
@@ -599,6 +605,7 @@
           "stock": false,
           "anchor": "system-changes--autofocus",
           "cameras": ["X70"],
+          "paths": [["SYSTEM CHANGES", "AUTOFOCUS"]],
           "summary": "In AF-S mode, when phase detection fails, the camera estimates focus and measures again before using contrast detection.",
           "options": [],
           "credits": {
@@ -623,6 +630,7 @@
           "stock": false,
           "anchor": "shooting-menu--ae-af-scene",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "AE/AF & SCENE"]],
           "summary": "Adjust focus and exposure lock and choose a scene position.",
           "options": [],
           "credits": {
@@ -640,6 +648,7 @@
           "stock": false,
           "anchor": "shooting-menu--ae-af-scene--ae-af-lock-mode",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "AE/AF & SCENE", "AE/AF-LOCK MODE"]],
           "summary": "Choose whether the lock is held while the button is pressed or toggled with each press.",
           "options": [],
           "credits": {
@@ -657,6 +666,7 @@
           "stock": false,
           "anchor": "shooting-menu--ae-af-scene--ae-af-lock-button",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "AE/AF & SCENE", "AE/AF-LOCK BUTTON"]],
           "summary": "Choose whether the button locks focus, exposure, or both.",
           "options": [],
           "credits": {
@@ -674,6 +684,7 @@
           "stock": false,
           "anchor": "shooting-menu--ae-af-scene--scene-position",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "AE/AF & SCENE", "SCENE POSITION"]],
           "summary": "Select a scene suited to the subject or shooting conditions.",
           "options": [],
           "credits": {
@@ -698,6 +709,7 @@
           "stock": false,
           "anchor": "shooting-menu--shape-aspect",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT"]],
           "summary": "Choose the aspect ratio, framing guides, and anamorphic display settings.",
           "options": [],
           "credits": {
@@ -715,6 +727,7 @@
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--aspect-ratio",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT", "ASPECT RATIO"]],
           "summary": "Choose the shape of still pictures: wide, square or tall.",
           "options": [
             {
@@ -813,6 +826,7 @@
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--edit-aspect-ratios",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT", "EDIT ASPECT RATIOS"]],
           "summary": "Add up to eight custom ratios and hide ratios from the picker.",
           "options": [],
           "credits": {
@@ -833,6 +847,7 @@
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--edit-aspect-ratios--add-ratio",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT", "EDIT ASPECT RATIOS", "ADD RATIO"]],
           "summary": "Add an aspect ratio to the list.",
           "options": [],
           "credits": {
@@ -849,7 +864,8 @@
           "order": 2,
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--surround-view",
-          "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT", "SURROUND VIEW"]],
           "summary": "Choose how the area outside the frame is shown.",
           "options": [
             {
@@ -897,7 +913,8 @@
           "order": 3,
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--desqueeze",
-          "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT", "DESQUEEZE"]],
           "summary": "Choose the squeeze factor of your anamorphic adapter.",
           "options": [
             {
@@ -949,6 +966,7 @@
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--desqueeze-jpeg",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHAPE & ASPECT", "DESQUEEZE JPEG"]],
           "summary": "Choose whether JPEG pictures are also recorded at their corrected width.",
           "options": [
             {
@@ -979,7 +997,11 @@
           "order": 5,
           "stock": false,
           "anchor": "shooting-menu--shape-aspect--framing-guideline",
-          "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [
+            ["SHOOTING MENU", "SHAPE & ASPECT", "FRAMING GUIDELINE"],
+            ["SET-UP", "SCREEN SET-UP", "FRAMING GUIDELINE"]
+          ],
           "summary": "Choose a framing guide, including Golden Ratio, Golden Spiral and Dynamic Symmetry. Guides follow the selected image bounds and aspect ratio.",
           "options": [
             {
@@ -1122,23 +1144,6 @@
             "card": "shape_guideline_item",
             "options": []
           }
-        },
-        {
-          "path": ["SET-UP", "SCREEN SET-UP"],
-          "title": "FRAMING GUIDELINE",
-          "kind": "value",
-          "order": 5,
-          "stock": true,
-          "anchor": "set-up--screen-set-up--framing-guideline",
-          "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
-          "summary": "Choose a composition guide to display while shooting.",
-          "options": [],
-          "credits": {
-            "premiere": false,
-            "inspired": [],
-            "thanks": []
-          },
-          "media": null
         }
       ]
     },
@@ -1155,6 +1160,7 @@
           "stock": true,
           "anchor": "shooting-menu--digital-tele-conv",
           "cameras": ["X70"],
+          "paths": [["SHOOTING MENU", "DIGITAL TELE-CONV."]],
           "summary": "28mm is the lens without the teleconverter. With WIDE CONVERSION LENS on, the choices are 21mm, 26mm and 38mm. DIGITAL FOCAL LENGTH is also a button action: each press steps to the next focal length.",
           "options": [
             {
@@ -1198,6 +1204,7 @@
           "stock": false,
           "anchor": "drive--software-nd",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["DRIVE", "SOFTWARE ND"]],
           "summary": "Take long exposures in bright conditions by blending short exposures taken over a longer duration. Experimental.",
           "options": [
             {
@@ -1256,6 +1263,7 @@
           "stock": true,
           "anchor": "shooting-menu--interval-timer-shooting",
           "cameras": [],
+          "paths": [["SHOOTING MENU", "INTERVAL TIMER SHOOTING"]],
           "summary": "NUMBER OF TIMES offers ∞, between 999 and 1. The shooting display shows the count of frames taken.",
           "options": [],
           "credits": {
@@ -1282,7 +1290,8 @@
           "order": 3,
           "stock": true,
           "anchor": "shooting-menu--film-simulation",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM SIMULATION"]],
           "summary": "Adds ETERNA, Classic Negative calibrated for the X70, Neutral and approximations of three film simulations from newer cameras, and films saved on the memory card. Monochrome and SEPIA move to the end of the list.",
           "options": [
             {
@@ -1333,7 +1342,8 @@
           "order": 5,
           "stock": false,
           "anchor": "shooting-menu--fujimod--hide-films",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "HIDE FILMS"]],
           "summary": "Every installed stock, built-in and card film is listed with SHOW or HIDE. Hidden films leave every film picker. Without a saved choice, MONOCHROME, the ACROS variants and SEPIA start hidden.",
           "options": [],
           "credits": {
@@ -1353,7 +1363,8 @@
           "order": 35,
           "stock": true,
           "anchor": "shooting-menu--film-simulation-bkt",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM SIMULATION BKT"]],
           "summary": "Choose three film simulations to apply to each shot in film simulation bracketing.",
           "options": [],
           "credits": {
@@ -1370,7 +1381,8 @@
           "order": 0,
           "stock": true,
           "anchor": "shooting-menu--film-simulation-bkt--film-1",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM SIMULATION BKT", "FILM 1"]],
           "summary": "Choose the film simulation for the first image.",
           "options": [],
           "credits": {
@@ -1387,7 +1399,8 @@
           "order": 1,
           "stock": true,
           "anchor": "shooting-menu--film-simulation-bkt--film-2",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM SIMULATION BKT", "FILM 2"]],
           "summary": "Choose the film simulation for the second image.",
           "options": [],
           "credits": {
@@ -1404,7 +1417,8 @@
           "order": 2,
           "stock": true,
           "anchor": "shooting-menu--film-simulation-bkt--film-3",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM SIMULATION BKT", "FILM 3"]],
           "summary": "Choose the film simulation for the third image.",
           "options": [],
           "credits": {
@@ -1422,6 +1436,7 @@
           "stock": false,
           "anchor": "set-up--screen-set-up--film-icons",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "SCREEN SET-UP", "FILM ICONS"]],
           "summary": "Choose the artwork of every film simulation icon: the FILM SIMULATION list and its menu row, the Q menu, RECIPES, the film editor, card films and the shooting display.",
           "options": [
             {
@@ -1462,6 +1477,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-editor",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EDITOR"]],
           "summary": "Create and edit film simulations, saved as files on the memory card.",
           "options": [],
           "credits": {
@@ -1489,6 +1505,7 @@
           "stock": false,
           "anchor": "shooting-menu--monochromatic-color",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MONOCHROMATIC COLOR"]],
           "summary": "Applies to MONOCHROME, MONOCHROME with a filter and the ACROS films. With any other film the row is grayed and photographs are not toned. RAW CONVERSION keeps the values the RAF was shot with.",
           "options": [],
           "credits": {
@@ -1509,6 +1526,7 @@
           "stock": false,
           "anchor": "shooting-menu--monochromatic-color--warm-cool",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MONOCHROMATIC COLOR", "WARM-COOL"]],
           "summary": "Positive values tone the photograph warm, negative values cool. Still JPEGs are toned; live view and movies are not.",
           "options": [
             {
@@ -1625,6 +1643,7 @@
           "stock": false,
           "anchor": "shooting-menu--monochromatic-color--magenta-green",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MONOCHROMATIC COLOR", "MAGENTA-GREEN"]],
           "summary": "Positive values tone the photograph green, negative values magenta. Still JPEGs are toned; live view and movies are not.",
           "options": [
             {
@@ -1741,6 +1760,7 @@
           "stock": false,
           "anchor": "shooting-menu--color-chrome",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "COLOR CHROME"]],
           "summary": "Adjust the rendering of saturated colors.",
           "options": [],
           "credits": {
@@ -1758,6 +1778,7 @@
           "stock": false,
           "anchor": "shooting-menu--color-chrome--color-chrome-effect",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "COLOR CHROME", "COLOR CHROME EFFECT"]],
           "summary": "Render saturated reds, yellows and greens deeper, with more tonal gradation. Bursts in continuous drive are recorded without it.",
           "options": [
             {
@@ -1794,6 +1815,7 @@
           "stock": false,
           "anchor": "shooting-menu--color-chrome--color-chrome-fx-blue",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "COLOR CHROME", "COLOR CHROME FX BLUE"]],
           "summary": "Render blues, such as skies and the sea, deeper.",
           "options": [
             {
@@ -1836,7 +1858,8 @@
           "order": 14,
           "stock": false,
           "anchor": "shooting-menu--d-range-priority",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "D RANGE PRIORITY"]],
           "summary": "An active level sets DYNAMIC RANGE, HIGHLIGHT TONE and SHADOW TONE together; OFF restores the values they had before. The underlying rows stay set while a level is active.",
           "options": [
             {
@@ -1878,6 +1901,7 @@
           "stock": false,
           "anchor": "shooting-menu--tone-curve",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "TONE CURVE"]],
           "summary": "Adjusts HIGHLIGHTS and SHADOWS from -2 to +2 on one screen, replacing HIGHLIGHT TONE and SHADOW TONE.",
           "options": [],
           "credits": {
@@ -1898,6 +1922,7 @@
           "stock": false,
           "anchor": "shooting-menu--shadow-tone",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "SHADOW TONE"]],
           "summary": "View the shadow adjustment. Use TONE CURVE to change it.",
           "options": [],
           "credits": {
@@ -1914,7 +1939,8 @@
           "order": 18,
           "stock": true,
           "anchor": "shooting-menu--color",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "COLOR"]],
           "summary": "HIGHLIGHT TONE and SHADOW TONE also take -1.5, -0.5, +0.5 and +1.5. The extra values appear in SHOOTING MENU, the Q menu, TONE CURVE, custom settings and recipes, and RAW CONVERSION offers them too.",
           "options": [
             {
@@ -1988,6 +2014,7 @@
           "stock": false,
           "anchor": "shooting-menu--grain-effect",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "GRAIN EFFECT"]],
           "summary": "Choose the strength and size of the grain.",
           "options": [],
           "credits": {
@@ -2005,6 +2032,7 @@
           "stock": false,
           "anchor": "shooting-menu--grain-effect--strength",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "GRAIN EFFECT", "STRENGTH"]],
           "summary": "Choose how strong the grain is. Bursts in continuous drive are recorded without grain.",
           "options": [
             {
@@ -2041,6 +2069,7 @@
           "stock": false,
           "anchor": "shooting-menu--grain-effect--size",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "GRAIN EFFECT", "SIZE"]],
           "summary": "Choose how coarse the grain is.",
           "options": [
             {
@@ -2072,6 +2101,7 @@
           "stock": false,
           "anchor": "shooting-menu--grain-effect--texture",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "GRAIN EFFECT", "TEXTURE"]],
           "summary": "Choose the texture of the grain applied to the image.",
           "options": [],
           "credits": {
@@ -2089,6 +2119,7 @@
           "stock": false,
           "anchor": "shooting-menu--clarity",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "CLARITY"]],
           "summary": "Positive values deepen and brighten broad local structure in the midtones; negative values soften it. Highlights and shadows are protected. 0 skips it. Bursts in continuous drive are recorded without it.",
           "options": [
             {
@@ -2172,6 +2203,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS"]],
           "summary": "Adjust the effects that give photographs the appearance of film.",
           "options": [],
           "credits": {
@@ -2189,6 +2221,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--halation",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "HALATION"]],
           "summary": "Add a glow around bright areas.",
           "options": [],
           "credits": {
@@ -2206,6 +2239,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--halation--strength",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "HALATION", "STRENGTH"]],
           "summary": "Choose how strongly light sources glow. Bursts in continuous drive are recorded without halation.",
           "options": [
             {
@@ -2252,6 +2286,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--halation--color",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "HALATION", "COLOR"]],
           "summary": "Choose warm, neutral or red halation.",
           "options": [
             {
@@ -2288,6 +2323,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--light-leaks",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS"]],
           "summary": "Add the effect of light reaching the edge of the film.",
           "options": [],
           "credits": {
@@ -2305,6 +2341,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--light-leaks--leaks",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS", "LEAKS"]],
           "summary": "Choose how strongly a soft light leak enters from an edge or corner. Each photograph gets its own leak, and now and then none. Bursts in continuous drive are recorded without it.",
           "options": [
             {
@@ -2341,6 +2378,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--light-leaks--color",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS", "COLOR"]],
           "summary": "Choose warm, red or rainbow leaks.",
           "options": [
             {
@@ -2377,6 +2415,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--light-leaks--expired",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "LIGHT LEAKS", "EXPIRED"]],
           "summary": "Give each photograph a slight random color cast, faded blacks and softer contrast, as old film does.",
           "options": [
             {
@@ -2408,6 +2447,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--film-borders",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS"]],
           "summary": "Add a border to the photograph.",
           "options": [],
           "credits": {
@@ -2425,6 +2465,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--film-borders--borders",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS", "BORDERS"]],
           "summary": "Burn the frame into every JPEG. Bursts in continuous drive are recorded without it.",
           "options": [
             {
@@ -2456,6 +2497,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--film-borders--style",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "FILM BORDERS", "STYLE"]],
           "summary": "Choose a 35 mm negative or slide rebate with sprocket holes and edge printing, an instant print border, a thin black frame, or a 35-to-120 conversion: the picture edge to edge with sprocket holes punched into it and the film simulation printed along the film edge.",
           "options": [
             {
@@ -2502,6 +2544,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--negative",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "NEGATIVE"]],
           "summary": "Records JPEGs as color negatives on an orange film base, ready to invert in Negative Lab Pro or a similar tool.",
           "options": [
             {
@@ -2533,6 +2576,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--date-stamp",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP"]],
           "summary": "Choose whether new JPEG photographs carry the date, and how it looks.",
           "options": [],
           "credits": {
@@ -2553,6 +2597,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--date-stamp--stamp",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP", "STAMP"]],
           "summary": "Turn the date stamp on or off. RAW files are not changed.",
           "options": [
             {
@@ -2584,6 +2629,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--date-stamp--style",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP", "STYLE"]],
           "summary": "Choose the color of the stamp.",
           "options": [
             {
@@ -2620,6 +2666,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--date-stamp--format",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP", "FORMAT"]],
           "summary": "Choose what the stamp shows and its order.",
           "options": [
             {
@@ -2661,6 +2708,7 @@
           "stock": false,
           "anchor": "shooting-menu--film-effects--date-stamp--corner",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FILM EFFECTS", "DATE STAMP", "CORNER"]],
           "summary": "Choose the corner of the photograph that carries the stamp.",
           "options": [
             {
@@ -2698,7 +2746,8 @@
           "order": 20,
           "stock": true,
           "anchor": "shooting-menu--noise-reduction",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "NOISE REDUCTION"]],
           "summary": "Further control or completely disable noise reduction. We recommend SPECKLE NR ONLY.",
           "options": [
             {
@@ -2747,6 +2796,7 @@
           "stock": true,
           "anchor": "shooting-menu--image-size",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "IMAGE SIZE"]],
           "summary": "Controls image max size only. Aspect ratio selection moved to SHAPE & ASPECT > ASPECT RATIO.",
           "options": [],
           "credits": {
@@ -2766,7 +2816,8 @@
           "order": 2,
           "stock": true,
           "anchor": "shooting-menu--image-quality",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "IMAGE QUALITY"]],
           "summary": "New ULTRAFINE quality level preserves even more detail. Variable file size, may be as large as RAW files in rare cases.",
           "options": [
             {
@@ -2823,6 +2874,7 @@
           "stock": false,
           "anchor": "set-up--save-data-set-up--raw-crop-file",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "SAVE DATA SET-UP", "RAW CROP FILE"]],
           "summary": "Save a separate crop description for the RAW image.",
           "options": [],
           "credits": {
@@ -2847,6 +2899,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--pixel-mapping",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "PIXEL MAPPING"]],
           "summary": "Repair the pixels listed in FUJIMOD/HOTPIX.TXT on the memory card in each photo, with the same circuit the camera uses for its factory defect list.",
           "options": [
             {
@@ -2885,6 +2938,7 @@
           "stock": true,
           "anchor": "playback-menu--raw-conversion",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["PLAYBACK MENU", "RAW CONVERSION"]],
           "summary": "Create a JPEG from a RAW photograph.",
           "options": [],
           "credits": {
@@ -2902,6 +2956,7 @@
           "stock": false,
           "anchor": "playback-menu--raw-conversion--monochrome-wc",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["PLAYBACK MENU", "RAW CONVERSION", "MONOCHROME WC"]],
           "summary": "Make a monochrome image warmer or cooler.",
           "options": [],
           "credits": {
@@ -2919,6 +2974,7 @@
           "stock": false,
           "anchor": "playback-menu--raw-conversion--monochrome-mg",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["PLAYBACK MENU", "RAW CONVERSION", "MONOCHROME MG"]],
           "summary": "Shift the tint of a monochrome image toward magenta or green.",
           "options": [],
           "credits": {
@@ -2936,6 +2992,7 @@
           "stock": false,
           "anchor": "playback-menu--raw-conversion--grain-effect",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["PLAYBACK MENU", "RAW CONVERSION", "GRAIN EFFECT"]],
           "summary": "Add grain to the converted image.",
           "options": [],
           "credits": {
@@ -2953,6 +3010,7 @@
           "stock": false,
           "anchor": "playback-menu--raw-conversion--clarity",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["PLAYBACK MENU", "RAW CONVERSION", "CLARITY"]],
           "summary": "Adjust fine contrast in the converted image.",
           "options": [],
           "credits": {
@@ -2976,7 +3034,8 @@
           "order": 7,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"]],
           "summary": "Store up to 255 custom settings (aka recipes) in your LIBRARY on the SD card. Move settings to your FAVORITES (C1-C7) for quick access. Download and share recipes in JSON format, browse BY AUTHOR and remix the original to make it your own. Yes, custom settings now include WHITE BALANCE SHIFT.",
           "options": [],
           "credits": {
@@ -2996,7 +3055,8 @@
           "order": 0,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--current",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "CURRENT"]],
           "summary": "Manage the selected recipe and the current shooting settings.",
           "options": [],
           "credits": {
@@ -3013,7 +3073,10 @@
           "order": 1,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--current--save-current-as-new",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [
+            ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "CURRENT", "SAVE CURRENT AS NEW"]
+          ],
           "summary": "Save the current shooting settings as a new recipe.",
           "options": [],
           "credits": {
@@ -3030,7 +3093,10 @@
           "order": 2,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--current--auto-update-current",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [
+            ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "CURRENT", "AUTO-UPDATE CURRENT"]
+          ],
           "summary": "Choose whether changes to shooting settings are saved to the current recipe automatically.",
           "options": [],
           "credits": {
@@ -3047,7 +3113,8 @@
           "order": 3,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--current--unselect",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "CURRENT", "UNSELECT"]],
           "summary": "Clear the current recipe selection.",
           "options": [],
           "credits": {
@@ -3064,7 +3131,8 @@
           "order": 0,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--enter-author-info--name",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "ENTER AUTHOR INFO", "NAME"]],
           "summary": "Enter the name to use when crediting the recipe author.",
           "options": [],
           "credits": {
@@ -3081,7 +3149,8 @@
           "order": 1,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--enter-author-info--url",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "ENTER AUTHOR INFO", "URL"]],
           "summary": "Enter the recipe author’s website.",
           "options": [],
           "credits": {
@@ -3098,7 +3167,8 @@
           "order": 1,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--favorites",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "FAVORITES"]],
           "summary": "Open the recipes assigned to C1 through C7.",
           "options": [],
           "credits": {
@@ -3115,7 +3185,8 @@
           "order": 0,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "FAVORITES", "{favorite}"]],
           "summary": "Open the recipe in C1–C7. An empty slot offers CREATE NEW.",
           "options": [],
           "credits": {
@@ -3138,7 +3209,17 @@
           "order": 0,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite--compare-with-current--save-all",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [
+            [
+              "SHOOTING MENU",
+              "EDIT/SAVE CUSTOM SETTING",
+              "FAVORITES",
+              "{favorite}",
+              "COMPARE WITH CURRENT",
+              "SAVE ALL"
+            ]
+          ],
           "summary": "Save all differing current settings to the selected recipe.",
           "options": [],
           "credits": {
@@ -3155,7 +3236,8 @@
           "order": 2,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY"]],
           "summary": "Browse and organize recipes stored on the SD card.",
           "options": [],
           "credits": {
@@ -3172,7 +3254,8 @@
           "order": 0,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--my-recipes",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "MY RECIPES"]],
           "summary": "Show recipes you created.",
           "options": [],
           "credits": {
@@ -3189,7 +3272,8 @@
           "order": 1,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--by-name",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "BY NAME"]],
           "summary": "Browse recipes by name.",
           "options": [],
           "credits": {
@@ -3206,7 +3290,8 @@
           "order": 2,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--by-film-simulation",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "BY FILM SIMULATION"]],
           "summary": "Browse recipes by film simulation.",
           "options": [],
           "credits": {
@@ -3223,7 +3308,8 @@
           "order": 3,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--by-author",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "BY AUTHOR"]],
           "summary": "Browse recipes by author.",
           "options": [],
           "credits": {
@@ -3240,7 +3326,8 @@
           "order": 4,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--any-color",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "ANY COLOR"]],
           "summary": "Show recipes that use a color film simulation.",
           "options": [],
           "credits": {
@@ -3257,7 +3344,8 @@
           "order": 5,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--any-monochrome",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "ANY MONOCHROME"]],
           "summary": "Show recipes that use a monochrome film simulation.",
           "options": [],
           "credits": {
@@ -3274,7 +3362,8 @@
           "order": 6,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--uses-custom-film",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "USES CUSTOM FILM"]],
           "summary": "Show recipes that use a custom film simulation.",
           "options": [],
           "credits": {
@@ -3291,7 +3380,8 @@
           "order": 7,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--hidden",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "HIDDEN"]],
           "summary": "Show recipes you moved to HIDDEN.",
           "options": [],
           "credits": {
@@ -3308,7 +3398,8 @@
           "order": 8,
           "stock": false,
           "anchor": "shooting-menu--edit-save-custom-setting--library--erase-hidden",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "LIBRARY", "ERASE HIDDEN"]],
           "summary": "Erase recipes in HIDDEN.",
           "options": [],
           "credits": {
@@ -3332,12 +3423,13 @@
           "order": 0,
           "stock": false,
           "anchor": "shooting-menu--fujimod--recipe-in-exif",
-          "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "RECIPE IN EXIF"]],
           "summary": "Choose whether each JPEG records the active recipe and its settings in its EXIF User Comment.",
           "options": [
             {
               "label": "ON",
-              "summary": "Each photo records the recipe name, film simulation, tone and color settings, and the FujiMod effects that are on.",
+              "summary": "Each photo records the recipe name, film simulation, tone and color settings, and the Fujimod effects that are on.",
               "credits": null
             },
             {
@@ -3371,6 +3463,7 @@
           "stock": false,
           "anchor": "drive--custom-settings-bkt",
           "cameras": ["X70"],
+          "paths": [["DRIVE", "CUSTOM SETTINGS BKT"]],
           "summary": "For each shutter release, create up to 3 JPEGs with different CUSTOM SETTINGS recipes.",
           "options": [],
           "credits": {
@@ -3388,6 +3481,7 @@
           "stock": false,
           "anchor": "shooting-menu--custom-settings-bkt",
           "cameras": ["X70"],
+          "paths": [["SHOOTING MENU", "CUSTOM SETTINGS BKT"]],
           "summary": "Choose up to five custom settings to bracket. Shown in the CUSTOM SETTINGS BKT drive mode.",
           "options": [],
           "credits": {
@@ -3415,6 +3509,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--disposable",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "DISPOSABLE"]],
           "summary": "Shoot a roll of 24, 27 or 36 exposures before playback unlocks.",
           "options": [],
           "credits": {
@@ -3432,6 +3527,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--disposable--roll",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "DISPOSABLE", "ROLL"]],
           "summary": "Choose the size of the next roll. While a roll is in progress the shooting display counts the exposures left, and PLAYBACK stays locked until the last one. OFF ends a roll in progress.",
           "options": [
             {
@@ -3473,6 +3569,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--disposable--recipe",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "DISPOSABLE", "RECIPE"]],
           "summary": "Keep one recipe selected for the whole roll: the camera selects it again at power on and whenever another recipe is chosen while shooting is idle.",
           "options": [
             {
@@ -3534,6 +3631,7 @@
           "stock": false,
           "anchor": "shooting-menu--fujimod--disposable--start-new-roll",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "DISPOSABLE", "START NEW ROLL"]],
           "summary": "Begin a roll of the chosen size with the chosen recipe. The last picture ends the roll: playback unlocks and ROLL COMPLETE shows.",
           "options": [],
           "credits": {
@@ -3561,6 +3659,7 @@
           "stock": true,
           "anchor": "shooting-menu--movie-set-up",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MOVIE SET-UP"]],
           "summary": "Adjust settings for movie recording.",
           "options": [],
           "credits": {
@@ -3577,7 +3676,8 @@
           "order": 4,
           "stock": false,
           "anchor": "shooting-menu--movie-set-up--f-log-recording",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MOVIE SET-UP", "F-Log RECORDING"]],
           "summary": "Record movies in F-Log format. NOTE: Suffers from 8-bit clipping. We recommend ETERNA instead.",
           "options": [
             {
@@ -3621,6 +3721,7 @@
           "stock": false,
           "anchor": "shooting-menu--movie-set-up--film-simulation",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "MOVIE SET-UP", "FILM SIMULATION"]],
           "summary": "Choose the movie look. F-Log takes precedence while enabled.",
           "options": [],
           "credits": {
@@ -3656,6 +3757,7 @@
           "stock": false,
           "anchor": "set-up--hdmi-output",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "HDMI OUTPUT"]],
           "summary": "Choose whether an HDMI device shows the shooting view or playback only.",
           "options": [
             {
@@ -3694,7 +3796,8 @@
           "stock": true,
           "anchor": "shooting-menu--control-ring-setting",
           "cameras": ["X70"],
-          "summary": "Adds EXPOSURE COMP. and the FujiMod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
+          "paths": [["SHOOTING MENU", "CONTROL RING SETTING"]],
+          "summary": "Adds EXPOSURE COMP. and the Fujimod settings ASPECT RATIO, SELECT RECIPE and SURROUND VIEW.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -3713,7 +3816,8 @@
           "order": 7,
           "stock": true,
           "anchor": "set-up--button-dial-setting",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING"]],
           "summary": "Assign functions to buttons and dials.",
           "options": [],
           "credits": {
@@ -3730,7 +3834,8 @@
           "order": 0,
           "stock": true,
           "anchor": "set-up--button-dial-setting--function-fn-setting",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING"]],
           "summary": "Choose the function each Fn button performs.",
           "options": [],
           "credits": {
@@ -3747,7 +3852,10 @@
           "order": 10060,
           "stock": false,
           "anchor": "set-up--button-dial-setting--function-fn-setting--button--raw-view",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [
+            ["SET-UP", "BUTTON/DIAL SETTING", "FUNCTION (Fn) SETTING", "{button}", "RAW VIEW"]
+          ],
           "summary": "Assign RAW VIEW to see how close the brightest areas are to losing RAW detail. Press the assigned button again to return to the normal live view.",
           "options": [],
           "credits": {
@@ -3767,7 +3875,8 @@
           "order": 3,
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS"]],
           "summary": "Choose assignments for camera buttons and dials.",
           "options": [],
           "credits": {
@@ -3784,7 +3893,8 @@
           "order": 0,
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--ev-dial",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "EV DIAL"]],
           "summary": "Choose an action and the value each EV notch selects.",
           "options": [],
           "credits": {
@@ -3817,6 +3927,7 @@
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--command-control",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "COMMAND CONTROL"]],
           "summary": "Choose the setting the command control adjusts.",
           "options": [],
           "credits": {
@@ -3836,7 +3947,8 @@
           "order": 2,
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--control-ring",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "CONTROL RING"]],
           "summary": "Choose the setting the control ring adjusts.",
           "options": [],
           "credits": {
@@ -3854,6 +3966,7 @@
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--auto-lever",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "AUTO LEVER"]],
           "summary": "Choose an action and the value each Auto-lever position selects.",
           "options": [],
           "credits": {
@@ -3873,7 +3986,8 @@
           "order": 4,
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--shutter-dial",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "SHUTTER DIAL"]],
           "summary": "Choose an action and the value each shutter notch selects.",
           "options": [],
           "credits": {
@@ -3894,6 +4008,7 @@
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--aperture-ring",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "APERTURE RING"]],
           "summary": "Choose an action and the value each aperture notch selects.",
           "options": [],
           "credits": {
@@ -3913,7 +4028,8 @@
           "order": 6,
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--focus-mode-selector",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "FOCUS MODE SELECTOR"]],
           "summary": "Choose an action and the value S, C and M each select.",
           "options": [],
           "credits": {
@@ -3934,6 +4050,7 @@
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--ae-l-af-l",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "AE-L/AF-L"]],
           "summary": "Choose the AE-L/AF-L button action and press operation.",
           "options": [],
           "credits": {
@@ -3954,6 +4071,7 @@
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--drive-button",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "DRIVE BUTTON"]],
           "summary": "Choose the DRIVE button action and press operation.",
           "options": [],
           "credits": {
@@ -3973,7 +4091,8 @@
           "order": 9,
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--q-button",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "Q BUTTON"]],
           "summary": "Choose the Q button action and press operation.",
           "options": [],
           "credits": {
@@ -3994,6 +4113,7 @@
           "stock": false,
           "anchor": "set-up--button-dial-setting--unlocked-controls--command-press",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "BUTTON/DIAL SETTING", "UNLOCKED CONTROLS", "COMMAND PRESS"]],
           "summary": "Choose the command control press action and press operation.",
           "options": [],
           "credits": {
@@ -4020,7 +4140,8 @@
           "order": 3,
           "stock": false,
           "anchor": "shooting-menu--fujimod--hud-layout",
-          "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SHOOTING MENU", "FUJIMOD", "HUD LAYOUT"]],
           "summary": "Choose where the shooting display shows the battery, the film simulation and the digital focal length.",
           "options": [
             {
@@ -4052,6 +4173,7 @@
           "stock": true,
           "anchor": "set-up--screen-set-up",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "SCREEN SET-UP"]],
           "summary": "Adjust the information shown on the camera display.",
           "options": [],
           "credits": {
@@ -4069,6 +4191,7 @@
           "stock": false,
           "anchor": "set-up--screen-set-up--menu-opacity",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "SCREEN SET-UP", "MENU OPACITY"]],
           "summary": "Applies to Q and shooting menus. SET-UP and playback menus stay opaque.",
           "options": [
             {
@@ -4110,6 +4233,7 @@
           "stock": false,
           "anchor": "set-up--screen-set-up--indicator-opacity",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "SCREEN SET-UP", "INDICATOR OPACITY"]],
           "summary": "Applies to the shooting overlay, including text, frames and guides.",
           "options": [
             {
@@ -4163,6 +4287,7 @@
           "stock": false,
           "anchor": "set-up--screen-set-up--menu-animations",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "SCREEN SET-UP", "MENU ANIMATIONS"]],
           "summary": "Choose whether the menu entry slides, value-list exit slides and confirmation blinks play. Other transitions are unaffected.",
           "options": [
             {
@@ -4194,6 +4319,7 @@
           "stock": false,
           "anchor": "set-up--menu-style",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "MENU STYLE"]],
           "summary": "Choose the menu renderer and appearance.",
           "options": [
             {
@@ -4249,6 +4375,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--appearance",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "APPEARANCE"]],
           "summary": "Choose the REC, SET-UP and PLAY colors and the BACKGROUND COLOR of the FUJIMOD menu style.",
           "options": [],
           "credits": {
@@ -4266,6 +4393,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--appearance--rec-color",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "APPEARANCE", "REC COLOR"]],
           "summary": "Choose the accent color for shooting menus.",
           "options": [],
           "credits": {
@@ -4283,6 +4411,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--appearance--set-up-color",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "APPEARANCE", "SET-UP COLOR"]],
           "summary": "Choose the accent color for setup menus.",
           "options": [],
           "credits": {
@@ -4300,6 +4429,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--appearance--play-color",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "APPEARANCE", "PLAY COLOR"]],
           "summary": "Choose the accent color for playback menus.",
           "options": [],
           "credits": {
@@ -4317,6 +4447,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--appearance--background-color",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "APPEARANCE", "BACKGROUND COLOR"]],
           "summary": "Choose the background color for the menus.",
           "options": [],
           "credits": {
@@ -4334,6 +4465,7 @@
           "stock": false,
           "anchor": "system-changes--menu-order",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SYSTEM CHANGES", "MENU ORDER"]],
           "summary": "Put the SHOOTING MENU rows in the X100VI order.",
           "options": [],
           "credits": {
@@ -4358,6 +4490,7 @@
           "stock": true,
           "anchor": "set-up--touch-screen-setting",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "TOUCH SCREEN SETTING"]],
           "summary": "Touch also works in the menus: tap a row, tab or option to choose it, tap outside a pop-up or tap BACK to go back.",
           "options": [
             {
@@ -4385,7 +4518,7 @@
     },
     "hide-features": {
       "title": "HIDE FEATURES",
-      "summary": "Choose which FujiMod features appear in the menus.",
+      "summary": "Choose which Fujimod features appear in the menus.",
       "introduction": "Open **HIDE FEATURES** to show the settings you use and hide the others.",
       "sections": [
         {
@@ -4395,8 +4528,9 @@
           "order": 420,
           "stock": false,
           "anchor": "set-up--fujimod-set-up--hide-features",
-          "cameras": ["X-T20", "X70"],
-          "summary": "Choose which FujiMod features appear in the menus.",
+          "cameras": ["X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "HIDE FEATURES"]],
+          "summary": "Choose which Fujimod features appear in the menus.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -4409,7 +4543,7 @@
     },
     "check-for-updates": {
       "title": "CHECK FOR UPDATES",
-      "summary": "Download and install a FujiMod update.",
+      "summary": "Download and install a Fujimod update.",
       "introduction": "Open **CHECK FOR UPDATES**, then choose **CONNECT WI-FI** if the camera is offline. When an update is ready, choose **DOWNLOAD** and then **RESTART TO UPDATE**.",
       "sections": [
         {
@@ -4420,6 +4554,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--check-for-updates",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES"]],
           "summary": "Connect to fujimod.com over Wi-Fi to update FUJIMOD on your SD card. Keeps your current version installed, and automatically reverts to it if new version crashes during start-up.",
           "options": [],
           "credits": {
@@ -4437,6 +4572,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--check-for-updates--check-again",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CHECK AGAIN"]],
           "summary": "Check whether an update is available.",
           "options": [],
           "credits": {
@@ -4454,6 +4590,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--check-for-updates--connect-wi-fi",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "CONNECT WI-FI"]],
           "summary": "Join a Wi-Fi network. Connection details are kept on internal storage shared with PC AUTO SAVE.",
           "options": [],
           "credits": {
@@ -4471,6 +4608,16 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--check-for-updates--connect-wi-fi--search-again",
           "cameras": ["X70"],
+          "paths": [
+            [
+              "SET-UP",
+              "FUJIMOD SET-UP",
+              "[build]",
+              "CHECK FOR UPDATES",
+              "CONNECT WI-FI",
+              "SEARCH AGAIN"
+            ]
+          ],
           "summary": "Scan again for Wi-Fi networks.",
           "options": [],
           "credits": {
@@ -4488,6 +4635,7 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--check-for-updates--download",
           "cameras": ["X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "DOWNLOAD"]],
           "summary": "Download the available update to the SD card.",
           "options": [],
           "credits": {
@@ -4505,6 +4653,9 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--build--check-for-updates--restart-to-update",
           "cameras": ["X70"],
+          "paths": [
+            ["SET-UP", "FUJIMOD SET-UP", "[build]", "CHECK FOR UPDATES", "RESTART TO UPDATE"]
+          ],
           "summary": "Restart the camera to load the downloaded update.",
           "options": [],
           "credits": {
@@ -4518,8 +4669,8 @@
     },
     "boot-setup": {
       "title": "BOOT SETUP",
-      "summary": "Choose how the camera starts FujiMod.",
-      "introduction": "Choose **AUTOMATIC** to start FujiMod from the SD card when you turn the camera on. Choose **MANUAL** to start it with the button combination.",
+      "summary": "Choose how the camera starts Fujimod.",
+      "introduction": "Choose **AUTOMATIC** to start Fujimod from the SD card when you turn the camera on. Choose **MANUAL** to start it with the button combination.",
       "sections": [
         {
           "path": ["SET-UP", "FUJIMOD SET-UP"],
@@ -4530,7 +4681,8 @@
           "anonymous": true,
           "anchor": "set-up--fujimod-set-up--boot",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "summary": "View and change the way FujiMod starts.",
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]"]],
+          "summary": "View and change the way Fujimod starts.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -4547,11 +4699,12 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--boot--boot-setup",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "BOOT SETUP"]],
           "summary": "Optionally modify the internal firmware to boot FM_EXR2.BIN if present on the SD card. If there is a problem during start-up, the camera boots its original internal firmware instead.",
           "options": [
             {
               "label": "MANUAL",
-              "summary": "Hold Fn + dial while switching power on to start FujiMod.",
+              "summary": "Hold the SD boot buttons while turning the camera on to start Fujimod.",
               "credits": null
             },
             {
@@ -4575,7 +4728,8 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--boot--change",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "summary": "Choose how to start FujiMod.",
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE"]],
+          "summary": "Choose how to start Fujimod.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -4592,7 +4746,8 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--boot--change--manual",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "summary": "Start FujiMod using the button combination.",
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE", "MANUAL"]],
+          "summary": "Start Fujimod using the button combination.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -4609,7 +4764,8 @@
           "stock": false,
           "anchor": "set-up--fujimod-set-up--boot--change--automatic",
           "cameras": ["X-E2", "X-E2S", "X70"],
-          "summary": "Start FujiMod from the SD card at power-on.",
+          "paths": [["SET-UP", "FUJIMOD SET-UP", "[boot]", "CHANGE", "AUTOMATIC"]],
+          "summary": "Start Fujimod from the SD card at power-on.",
           "options": [],
           "credits": {
             "premiere": false,
@@ -4626,6 +4782,7 @@
           "stock": false,
           "anchor": "system-changes--boot-resilience",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SYSTEM CHANGES", "BOOT RESILIENCE"]],
           "summary": "Detect faults during custom firmware start-up, and restart to working firmware.",
           "options": [],
           "credits": {
@@ -4650,6 +4807,7 @@
           "stock": true,
           "anchor": "set-up--save-data-set-up",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "SAVE DATA SET-UP"]],
           "summary": "Choose how the camera stores files on the SD card.",
           "options": [],
           "credits": {
@@ -4667,6 +4825,7 @@
           "stock": false,
           "anchor": "set-up--save-data-set-up--date-folders",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "SAVE DATA SET-UP", "DATE FOLDERS"]],
           "summary": "Keep each day's pictures in their own folder, named after the date.",
           "options": [
             {
@@ -4710,6 +4869,7 @@
           "stock": false,
           "anchor": "set-up--save-data-set-up--format-card-name",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "SAVE DATA SET-UP", "FORMAT CARD NAME"]],
           "summary": "Choose whether FORMAT names the memory card after the date, such as 2026-10-22.",
           "options": [
             {
@@ -4747,7 +4907,8 @@
           "order": 10,
           "stock": true,
           "anchor": "set-up--power-management",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "POWER MANAGEMENT"]],
           "summary": "Adjust power and standby settings.",
           "options": [],
           "credits": {
@@ -4764,7 +4925,8 @@
           "order": 2,
           "stock": false,
           "anchor": "set-up--power-management--quick-start",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "POWER MANAGEMENT", "QUICK START"]],
           "summary": "Keeps the camera ready after it is turned off, so it starts shooting at once when turned on again. Uses more battery.",
           "options": [
             {
@@ -4795,7 +4957,7 @@
     "performance": {
       "title": "Performance",
       "summary": "Learn about changes to camera responsiveness.",
-      "introduction": "FujiMod includes changes to live view, focusing, and menu drawing. The changes in use depend on the installed build.",
+      "introduction": "Fujimod includes changes to live view, focusing, and menu drawing. The changes in use depend on the installed build.",
       "sections": [
         {
           "path": ["SYSTEM CHANGES"],
@@ -4805,6 +4967,7 @@
           "stock": false,
           "anchor": "system-changes--hardware-divide",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SYSTEM CHANGES", "HARDWARE DIVIDE"]],
           "summary": "Divide values with the camera's hardware divider to cut live-view CPU time.",
           "options": [],
           "credits": {
@@ -4822,6 +4985,7 @@
           "stock": false,
           "anchor": "system-changes--live-view-optimization",
           "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SYSTEM CHANGES", "LIVE VIEW OPTIMIZATION"]],
           "summary": "Do repeated profile work with fewer instructions to cut live-view CPU time.",
           "options": [],
           "credits": {
@@ -4846,6 +5010,7 @@
           "stock": false,
           "anchor": "set-up--devtools",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "DEVTOOLS"]],
           "summary": "Open the diagnostic settings.",
           "options": [],
           "credits": {
@@ -4863,6 +5028,7 @@
           "stock": false,
           "anchor": "set-up--devtools--usb-debugging",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "DEVTOOLS", "USB DEBUGGING"]],
           "summary": "Enables the stock diagnostic USB path, which can change normal USB behavior. Disconnect USB before changing the setting, then reconnect it. The camera keeps the choice after it is turned off.",
           "options": [
             {
@@ -4893,8 +5059,9 @@
           "order": 1,
           "stock": false,
           "anchor": "set-up--devtools--build-overlay",
-          "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
-          "summary": "Shows the body, version and build date in the corner of menus and option popups, and the FujiMod mark with its version in live view. Playback hides it so photo information stays clear. The choice is saved on the SD card.",
+          "cameras": ["X-E2", "X-E2S", "X70"],
+          "paths": [["SET-UP", "DEVTOOLS", "BUILD OVERLAY"]],
+          "summary": "Shows the body, version and build date in the corner of menus and option popups, and the Fujimod mark with its version in live view. Playback hides it so photo information stays clear. The choice is saved on the SD card.",
           "options": [
             {
               "label": "ON",
@@ -4925,6 +5092,7 @@
           "stock": false,
           "anchor": "set-up--devtools--bug-report-shortcut",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "DEVTOOLS", "BUG REPORT SHORTCUT"]],
           "summary": "Choose whether holding the delete button saves a bug report.",
           "options": [],
           "credits": {
@@ -4945,6 +5113,7 @@
           "stock": false,
           "anchor": "set-up--devtools--overlay-rendering",
           "cameras": ["X-E2S", "X70"],
+          "paths": [["SET-UP", "DEVTOOLS", "OVERLAY RENDERING"]],
           "summary": "Choose how the camera draws overlays.",
           "options": [],
           "credits": {
@@ -5035,7 +5204,7 @@
       "order": 2,
       "stock": false,
       "anchor": "shooting-menu--shape-aspect--surround-view",
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "shape-aspect"
     },
     {
@@ -5045,7 +5214,7 @@
       "order": 3,
       "stock": false,
       "anchor": "shooting-menu--shape-aspect--desqueeze",
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "shape-aspect"
     },
     {
@@ -5065,7 +5234,7 @@
       "order": 5,
       "stock": false,
       "anchor": "shooting-menu--shape-aspect--framing-guideline",
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "shape-aspect"
     },
     {
@@ -5075,7 +5244,7 @@
       "order": 2,
       "stock": true,
       "anchor": "shooting-menu--image-quality",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "image-size-and-image-quality"
     },
     {
@@ -5085,7 +5254,7 @@
       "order": 3,
       "stock": true,
       "anchor": "shooting-menu--film-simulation",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "film-simulation"
     },
     {
@@ -5135,7 +5304,7 @@
       "order": 7,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5145,7 +5314,7 @@
       "order": 0,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--current",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5155,7 +5324,7 @@
       "order": 1,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--current--save-current-as-new",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5165,7 +5334,7 @@
       "order": 2,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--current--auto-update-current",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5175,7 +5344,7 @@
       "order": 3,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--current--unselect",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5185,7 +5354,7 @@
       "order": 0,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--enter-author-info--name",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5195,7 +5364,7 @@
       "order": 1,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--enter-author-info--url",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5205,7 +5374,7 @@
       "order": 1,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--favorites",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5215,7 +5384,7 @@
       "order": 0,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5231,7 +5400,7 @@
       "order": 0,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--favorites--favorite--compare-with-current--save-all",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5241,7 +5410,7 @@
       "order": 2,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5251,7 +5420,7 @@
       "order": 0,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--my-recipes",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5261,7 +5430,7 @@
       "order": 1,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--by-name",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5271,7 +5440,7 @@
       "order": 2,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--by-film-simulation",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5281,7 +5450,7 @@
       "order": 3,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--by-author",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5291,7 +5460,7 @@
       "order": 4,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--any-color",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5301,7 +5470,7 @@
       "order": 5,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--any-monochrome",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5311,7 +5480,7 @@
       "order": 6,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--uses-custom-film",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5321,7 +5490,7 @@
       "order": 7,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--hidden",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5331,7 +5500,7 @@
       "order": 8,
       "stock": false,
       "anchor": "shooting-menu--edit-save-custom-setting--library--erase-hidden",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "edit-save-custom-setting"
     },
     {
@@ -5551,7 +5720,7 @@
       "order": 10,
       "stock": false,
       "anchor": "shooting-menu--fujimod",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -5561,7 +5730,7 @@
       "order": 0,
       "stock": false,
       "anchor": "shooting-menu--fujimod--recipe-in-exif",
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "recipe-in-exif"
     },
     {
@@ -5661,7 +5830,7 @@
       "order": 3,
       "stock": false,
       "anchor": "shooting-menu--fujimod--hud-layout",
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "hud-layout"
     },
     {
@@ -5681,7 +5850,7 @@
       "order": 5,
       "stock": false,
       "anchor": "shooting-menu--fujimod--hide-films",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "film-simulation"
     },
     {
@@ -5691,7 +5860,7 @@
       "order": 14,
       "stock": false,
       "anchor": "shooting-menu--d-range-priority",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "tone"
     },
     {
@@ -5751,7 +5920,7 @@
       "order": 18,
       "stock": true,
       "anchor": "shooting-menu--color",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "tone"
     },
     {
@@ -5761,7 +5930,7 @@
       "order": 20,
       "stock": true,
       "anchor": "shooting-menu--noise-reduction",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "noise-reduction"
     },
     {
@@ -5811,7 +5980,7 @@
       "order": 25,
       "stock": false,
       "anchor": "shooting-menu--mf-snap-focus",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "focus"
     },
     {
@@ -5831,7 +6000,7 @@
       "order": 31,
       "stock": true,
       "anchor": "shooting-menu--photometry",
-      "cameras": ["X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2S", "X70"],
       "page": "metering"
     },
     {
@@ -5851,7 +6020,7 @@
       "order": 35,
       "stock": true,
       "anchor": "shooting-menu--film-simulation-bkt",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "film-simulation"
     },
     {
@@ -5861,7 +6030,7 @@
       "order": 0,
       "stock": true,
       "anchor": "shooting-menu--film-simulation-bkt--film-1",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "film-simulation"
     },
     {
@@ -5871,7 +6040,7 @@
       "order": 1,
       "stock": true,
       "anchor": "shooting-menu--film-simulation-bkt--film-2",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "film-simulation"
     },
     {
@@ -5881,7 +6050,7 @@
       "order": 2,
       "stock": true,
       "anchor": "shooting-menu--film-simulation-bkt--film-3",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "film-simulation"
     },
     {
@@ -5951,7 +6120,7 @@
       "order": 4,
       "stock": false,
       "anchor": "shooting-menu--movie-set-up--f-log-recording",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "movie-recording"
     },
     {
@@ -5990,8 +6159,8 @@
       "kind": "value",
       "order": 5,
       "stock": true,
-      "anchor": "set-up--screen-set-up--framing-guideline",
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "anchor": "shooting-menu--shape-aspect--framing-guideline",
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "shape-aspect"
     },
     {
@@ -6041,7 +6210,7 @@
       "order": 7,
       "stock": true,
       "anchor": "set-up--button-dial-setting",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6051,7 +6220,7 @@
       "order": 0,
       "stock": true,
       "anchor": "set-up--button-dial-setting--function-fn-setting",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6061,7 +6230,7 @@
       "order": 10060,
       "stock": false,
       "anchor": "set-up--button-dial-setting--function-fn-setting--button--raw-view",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6071,7 +6240,7 @@
       "order": 3,
       "stock": false,
       "anchor": "set-up--button-dial-setting--unlocked-controls",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6081,7 +6250,7 @@
       "order": 0,
       "stock": false,
       "anchor": "set-up--button-dial-setting--unlocked-controls--ev-dial",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6101,7 +6270,7 @@
       "order": 2,
       "stock": false,
       "anchor": "set-up--button-dial-setting--unlocked-controls--control-ring",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6121,7 +6290,7 @@
       "order": 4,
       "stock": false,
       "anchor": "set-up--button-dial-setting--unlocked-controls--shutter-dial",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6141,7 +6310,7 @@
       "order": 6,
       "stock": false,
       "anchor": "set-up--button-dial-setting--unlocked-controls--focus-mode-selector",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6171,7 +6340,7 @@
       "order": 9,
       "stock": false,
       "anchor": "set-up--button-dial-setting--unlocked-controls--q-button",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "button-dial-setting"
     },
     {
@@ -6201,7 +6370,7 @@
       "order": 10,
       "stock": true,
       "anchor": "set-up--power-management",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "power-management"
     },
     {
@@ -6211,7 +6380,7 @@
       "order": 2,
       "stock": false,
       "anchor": "set-up--power-management--quick-start",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "power-management"
     },
     {
@@ -6301,7 +6470,7 @@
       "order": 1,
       "stock": false,
       "anchor": "set-up--devtools--build-overlay",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "devtools-bug-reports"
     },
     {
@@ -6331,7 +6500,7 @@
       "order": 18,
       "stock": false,
       "anchor": "set-up--fujimod-set-up",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -6342,7 +6511,7 @@
       "stock": false,
       "anonymous": true,
       "anchor": "set-up--fujimod-set-up--build",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -6352,7 +6521,7 @@
       "order": 0,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--build--firmware",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -6362,7 +6531,7 @@
       "order": 1,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--build--mods",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -6372,7 +6541,7 @@
       "order": 2,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--build--built",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -6382,7 +6551,7 @@
       "order": 3,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--build--commit",
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "about-this-version"
     },
     {
@@ -6502,7 +6671,7 @@
       "kind": "link",
       "order": 2,
       "stock": false,
-      "anchor": "set-up--fujimod-set-up--boot--change--back-up-internal-data",
+      "anchor": "set-up--fujimod-set-up--back-up-internal-data",
       "cameras": ["X-E2", "X-E2S", "X70"],
       "page": "back-up-your-camera"
     },
@@ -6593,7 +6762,7 @@
       "order": 420,
       "stock": false,
       "anchor": "set-up--fujimod-set-up--hide-features",
-      "cameras": ["X-T20", "X70"],
+      "cameras": ["X70"],
       "page": "hide-features"
     },
     {
@@ -6739,7 +6908,7 @@
       }
     },
     "unlocked_controls": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6767,7 +6936,7 @@
       }
     },
     "d_range_priority": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6803,7 +6972,7 @@
       }
     },
     "desqueeze": {
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6843,7 +7012,7 @@
       }
     },
     "f_log": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6895,7 +7064,7 @@
       }
     },
     "film_simulation": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6903,7 +7072,7 @@
       }
     },
     "framing_guideline": {
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6911,7 +7080,7 @@
       }
     },
     "build_overlay": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6943,7 +7112,7 @@
       }
     },
     "hide_films": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6951,7 +7120,7 @@
       }
     },
     "highlight_metering": {
-      "cameras": ["X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [["Ricoh GRIII"]],
@@ -6959,7 +7128,7 @@
       }
     },
     "hud_layout": {
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -6975,7 +7144,7 @@
       }
     },
     "jpeg_max": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -7055,7 +7224,7 @@
       }
     },
     "noise_reduction": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -7095,7 +7264,7 @@
       }
     },
     "raw_view": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -7103,7 +7272,7 @@
       }
     },
     "recipe_exif": {
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X-T3", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -7111,7 +7280,7 @@
       }
     },
     "recipes": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X-T3", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -7143,7 +7312,7 @@
       }
     },
     "snap_focus": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [["Ricoh GRIII"]],
@@ -7159,7 +7328,7 @@
       }
     },
     "surround_view": {
-      "cameras": ["X-E2", "X-E2S", "X-T2", "X-T20", "X100F", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
@@ -7187,7 +7356,7 @@
       }
     },
     "tone_steps": {
-      "cameras": ["X-E2", "X-E2S", "X-T20", "X70"],
+      "cameras": ["X-E2", "X-E2S", "X70"],
       "credits": {
         "premiere": false,
         "inspired": [],
