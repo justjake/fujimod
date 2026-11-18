@@ -50,6 +50,7 @@ function PreviewControls(props: { sendKey: (key: string) => void }) {
 /** A FocalUI preview running in Wasm, scaled to the surrounding column. */
 export default function FocalUIPreview(props: { preview: FocalPreview }) {
   const [view, setView] = createSignal<'preview' | 'source'>('preview');
+  const [showControls, setShowControls] = createSignal(false);
   let frame: HTMLIFrameElement | undefined;
   const sendKey = (key: string) => {
     frame?.contentWindow?.postMessage({ type: 'focal-preview-key', key }, window.location.origin);
@@ -57,27 +58,40 @@ export default function FocalUIPreview(props: { preview: FocalPreview }) {
   return (
     <figure class="sdk-preview">
       <h2 class="sdk-preview-title">{props.preview.title}</h2>
-      <div class="sdk-preview-tabs" role="tablist" aria-label={props.preview.title}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view() === 'preview' ? 'true' : 'false'}
-          onClick={() => {
-            setView('preview');
-          }}
-        >
-          Preview
-        </button>
-        <Show when={props.preview.source}>
+      <div class="sdk-preview-toolbar">
+        <div class="sdk-preview-tabs" role="tablist" aria-label={props.preview.title}>
           <button
             type="button"
             role="tab"
-            aria-selected={view() === 'source' ? 'true' : 'false'}
+            aria-selected={view() === 'preview' ? 'true' : 'false'}
             onClick={() => {
-              setView('source');
+              setView('preview');
             }}
           >
-            Source
+            Preview
+          </button>
+          <Show when={props.preview.source}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view() === 'source' ? 'true' : 'false'}
+              onClick={() => {
+                setView('source');
+              }}
+            >
+              Source
+            </button>
+          </Show>
+        </div>
+        <Show when={view() === 'preview'}>
+          <button
+            type="button"
+            aria-expanded={showControls() ? 'true' : 'false'}
+            onClick={() => {
+              setShowControls((visible) => !visible);
+            }}
+          >
+            {showControls() ? 'Hide controls' : 'Show controls'}
           </button>
         </Show>
       </div>
@@ -100,7 +114,9 @@ export default function FocalUIPreview(props: { preview: FocalPreview }) {
                 loading="lazy"
               />
             </div>
-            <PreviewControls sendKey={sendKey} />
+            <Show when={showControls()}>
+              <PreviewControls sendKey={sendKey} />
+            </Show>
           </div>
         }
       >
