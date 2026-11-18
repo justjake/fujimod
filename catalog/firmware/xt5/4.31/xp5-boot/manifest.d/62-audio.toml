@@ -10,7 +10,13 @@
 # (bit 0), +0x1c soft reset (write 1, poll bit 0 to 0: 0x1388744), +0x20 interrupt mask,
 # +0x24 status (0x1388e00 polls bit 16 or 17 after enable, no timeout), +0x28 DMA enable.
 # This window replaces the former +0x1c-only reset-handshake at 0xff91c000 (20-storage.toml).
-# Instance 1 (0xff991000) keeps its reset stub in 49-gap-stubs.toml: movie audio does not use it.
+# Instance 1 (0xff991000) is the same interface. In movie mode the audio task enables it
+# (0x1388658 -> 0x1388e00 with id 1) and polls +0x24 for bit 16 or 17 with no timeout. It was a
+# bring-up stub whose +0x24 read 0, so the poll spun forever on its core (run58: CPU 3 at
+# 0x1388e84..0x1388e9c reading 0xff991024 from before S1 to the end). That most likely starved
+# the `hist` task (mailbox 0xaf, entry 0x2e17e58), so the movie AE histogram job (0x3051d84 -> 0x2e17e00,
+# done callback 0x304a4f0 -> MOVDC message 0x16a3) never completed and MOVDC deferred every
+# STOP request (+0x30 bit 0x20000000 from 0x304522c, cleared only in 0x3051e5c).
 #
 # Receive DMA: 0x1491a8c starts handle 0x1c121d4 = descriptor 0xa (0x18e9660 + 0xa * 0x14 =
 # {channel 0x10, request 0x40, class 1, burst 0x10}). Channels 0x10..0x17 (0x138babc class 1)
@@ -28,6 +34,17 @@
 # bytes_per_tick time the PL330's unpaced transfers; they are functional, not measured.
 [[device]]
 base = 0xff91c000
+size = 0x1000
+kind = "audio-serial"
+[device.options]
+sample_rate_hz = 48000
+tone_hz = 1000
+tone_amplitude = 0.25
+
+# Instance 1: transmit only in the paths read so far; the same test signal options are declared
+# because the model requires them, and its receive FIFO is not read.
+[[device]]
+base = 0xff991000
 size = 0x1000
 kind = "audio-serial"
 [device.options]
