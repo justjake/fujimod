@@ -394,6 +394,29 @@ impl Pl330 {
                         t.dar = t.dar.wrapping_add(count as u32);
                     }
                 }
+                // DMASTZ: store one destination burst of zeros without using the FIFO
+                // (X-T5 4.31 audio serial instance 1 transmit program clears its buffer with it).
+                0x0c => {
+                    let count = ((1u32 << (t.ccr >> 15 & 7)) * ((t.ccr >> 18 & 15) + 1)) as usize;
+                    t.destination.get_or_insert(t.dar);
+                    let at = u64::from(t.dar);
+                    self.pace(&mut paced, at, count);
+                    let zeros = vec![0u8; count];
+                    match self.sources.iter().find(|s| s.contains(at, count)) {
+                        Some(source) if !source.writable() => {
+                            return Err(format!(
+                                "PL330 store into a read-only source at {at:#x} ({count} bytes)"
+                            ));
+                        }
+                        Some(source) if apply => source.write(at, &zeros)?,
+                        None if apply => cx.ram_write(at, &zeros)?,
+                        _ => {}
+                    }
+                    t.bytes += count as u64;
+                    if t.ccr >> 14 & 1 != 0 {
+                        t.dar = t.dar.wrapping_add(count as u32);
+                    }
+                }
                 // DMARMB, DMAWMB, DMANOP
                 0x12 | 0x13 | 0x18 => {}
                 // DMAWFP<S|P|B>, DMAFLUSHP
