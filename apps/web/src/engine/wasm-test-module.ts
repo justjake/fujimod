@@ -227,6 +227,7 @@ export function testCameraModule(shared = false) {
         translation_cache_size_bytes: 0,
         scanout_instance: null,
         failure: null,
+        discovery_callee_stubs: null,
       };
     }
     preview() {

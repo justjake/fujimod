@@ -1367,6 +1367,7 @@ pub struct RecReport {
     /// First active scanout output presenting configured graphics, when present.
     pub scanout_instance: Option<usize>,
     pub failure: Option<String>,
+    #[tsify(type = "unknown")]
     pub discovery_callee_stubs: Value,
 }
 fn word(session: &Session, address: u64) -> Result<u32, String> {
