@@ -94,7 +94,7 @@ for (const engine of [chromium, webkit]) {
         0,
       );
       await page
-        .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
+        .locator('#workspace button[aria-label="Run unmodified in your browser"]')
         .waitFor({ state: 'attached' });
       for (const href of await page
         .locator('main .manual-feature-link')
