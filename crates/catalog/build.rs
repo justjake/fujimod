@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 fn json_files(root: &Path, files: &mut Vec<PathBuf>) {
@@ -37,7 +38,15 @@ fn main() {
         json_files(&path, &mut files);
     }
     files.sort();
-    let mut source = String::from("const BUNDLED_CATALOG: &[(ReferenceKind, &str, &str)] = &[\n");
+    let out = PathBuf::from(env::var_os("OUT_DIR").expect("output directory"));
+    let browser = env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("emscripten");
+    // Stream the JSON records from one compressed frame in the browser build.
+    let mut packed = browser.then(|| {
+        let file = fs::File::create(out.join("bundled_catalog.zst")).expect("create packed catalog");
+        zstd::stream::write::Encoder::new(file, 9).expect("start packed catalog")
+    });
+    let document_type = if browser { "usize" } else { "&str" };
+    let mut source = format!("const BUNDLED_CATALOG: &[(ReferenceKind, &str, {document_type})] = &[\n");
     for path in files {
         let Some(layer) = path.strip_prefix(&catalog).ok().and_then(|relative| {
             relative
@@ -81,13 +90,19 @@ fn main() {
             .expect("catalog file is under root");
         let include = relative.to_string_lossy().replace('\\', "/");
         let label = relative.to_string_lossy();
-        source.push_str(&format!(
-            "    (ReferenceKind::{kind}, {label:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))),\n"
-        ));
+        let document = if let Some(packed) = &mut packed {
+            let bytes = fs::read(&path).expect("read catalog document");
+            packed.write_all(&bytes).expect("compress catalog document");
+            bytes.len().to_string()
+        } else {
+            format!("include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))")
+        };
+        source.push_str(&format!("    (ReferenceKind::{kind}, {label:?}, {document}),\n"));
         println!("cargo:rerun-if-changed={}", path.display());
     }
     source.push_str("];\n");
-    let output =
-        PathBuf::from(env::var_os("OUT_DIR").expect("output directory")).join("bundled_catalog.rs");
-    fs::write(output, source).expect("write embedded catalog index");
+    if let Some(packed) = packed {
+        packed.finish().expect("finish packed catalog");
+    }
+    fs::write(out.join("bundled_catalog.rs"), source).expect("write embedded catalog index");
 }
