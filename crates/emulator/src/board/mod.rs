@@ -198,6 +198,7 @@ struct State {
     parallel: Option<interactive::Epoch>,
     decoders: decoder::Decoders,
     memory_access: bool,
+    mprofile_loops: loops::MProfileLoops,
 }
 struct Binding {
     state: Rc<RefCell<State>>,
@@ -450,6 +451,7 @@ impl Board {
             parallel: None,
             decoders: decoder::Decoders::default(),
             memory_access: false,
+            mprofile_loops: loops::MProfileLoops::new(n),
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
@@ -856,7 +858,11 @@ impl Board {
                     fujimod_emulator_cpu::FastMmioRead::consuming_u32(offset, read)
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+        self.state
+            .borrow_mut()
+            .mprofile_loops
+            .add_reads(core, address, &fast_reads);
         unsafe {
             cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
         }
@@ -1011,11 +1017,19 @@ impl Board {
                 })
                 .transpose()?
                 .unwrap_or(u64::MAX);
-            if until.is_some_and(|until| s.timeline.now() >= until) || remaining == 0 {
+            // A run a loop window stopped continues to its counted end, as
+            // ordinary execution would have, before the clock limit applies.
+            let resume = s.mprofile_loops.take_resume().filter(|&(core, end)| {
+                end > s.instructions[core] && s.released[core] && !s.waiting[core]
+            });
+            if (resume.is_none() && until.is_some_and(|until| s.timeline.now() >= until))
+                || remaining == 0
+            {
                 return Ok(());
             }
             let n = self.cpus.len();
-            if pause_after.is_some_and(|pause| s.total_instructions().is_ok_and(|n| n >= pause))
+            if resume.is_none()
+                && pause_after.is_some_and(|pause| s.total_instructions().is_ok_and(|n| n >= pause))
                 && (s.execution_policy == ExecutionPolicy::Interactive
                     || completed_slice
                         .is_some_and(|core| (core + 1..n).all(|c| !s.released[c] || s.waiting[c])))
@@ -1057,9 +1071,11 @@ impl Board {
                 }
             }
             let start = self.next_core.get();
-            let core = (0..n)
-                .map(|i| (start + i) % n)
-                .find(|&c| s.released[c] && !s.waiting[c]);
+            let core = resume.map(|(core, _)| core).or_else(|| {
+                (0..n)
+                    .map(|i| (start + i) % n)
+                    .find(|&c| s.released[c] && !s.waiting[c])
+            });
             let Some(core) = core else {
                 if until.is_none() && s.timeline.next_event().is_none() {
                     self.idle_stopped.set(true);
@@ -1116,7 +1132,13 @@ impl Board {
                 .copied()
                 .ok_or_else(|| format!("timeline has no processor {core}"))?;
             let boundary = engine_run_boundary(&s.timeline, instruction_limit, until, lag)?;
-            let budget = s.timeline.processor_budget(core, instruction_limit, until)? as usize;
+            let budget = match resume {
+                Some((_, end)) => (end - s.instructions[core]).min(remaining) as usize,
+                None => s
+                    .timeline
+                    .processor_budget(core, instruction_limit, until)?
+                    as usize,
+            };
             if budget == 0 {
                 return Err("scheduler made no progress at a device deadline".into());
             }
@@ -1144,6 +1166,7 @@ impl Board {
             s.code_run = Some(core);
             s.active_slice = Some(slice);
             let entered = s.instructions[core];
+            s.mprofile_loops.begin_run(core, entered + budget as u64);
             drop(s);
             let cpu = &self.cpus[core];
             // The exact budget ends at the first device/DMA/processor event
@@ -1174,6 +1197,7 @@ impl Board {
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
             let mut s = self.state.borrow_mut();
             s.active_slice = None;
+            s.mprofile_loops.end_run();
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {
                 return Err(error);
@@ -2131,6 +2155,9 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
                 mprofile::Entry::Execute => (),
             }
             s.refresh_processors()?;
+            if matches!(entry, mprofile::Entry::Execute) && s.mprofile_loop(cpu, b.core, pc)? {
+                return Ok(());
+            }
         }
         if !cpu.features().instruction_progress {
             s.account(b.core, 1)?;

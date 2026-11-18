@@ -539,7 +539,7 @@ fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String>
                     body.id, wire.output_connection_id, wire.input_connection_id
                 ));
             }
-            Ok(Feedback { port, register: 0, bit, input_port, input_pin })
+            Ok(Feedback { port, register: 0, bit, input_port, input_pin, rise_delay: 0, latch_high: false })
         })
         .collect()
 }

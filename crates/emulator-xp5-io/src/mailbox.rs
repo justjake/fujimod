@@ -2,12 +2,20 @@
 //! The two CPU aliases dispatch to one instance; only requester identity and
 //! register accesses select interrupt outputs. There are no deadlines, memory
 //! writes, command handlers or firmware execution state in this device.
+//!
+//! Word 7 (offset 0x1c), written by the main core, masks causes: a set bit
+//! holds that cause's interrupt output low while the cause stays latched.
+//! UNVERIFIED reading of the stock code: the main core writes it 0 after
+//! clearing every cause when it starts the companion and 0x7f, every cause,
+//! before it stops the companion; no code reads it and the companion never
+//! addresses it.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
 const CAUSES: u32 = 0x79;
+const MASK: usize = 7;
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
@@ -79,6 +87,7 @@ impl Device for Mailbox {
             (0x10, true) => 0x10,
             (0x14, true) => 0x20,
             (0x18, true) => 0x40,
+            (0x1c, false) if value as u32 & !0x7f == 0 => 0,
             (0x20, _) => 0,
             _ if value == 0 => 0,
             _ => {
@@ -87,14 +96,14 @@ impl Device for Mailbox {
             }
         };
         let mut s = self.channel.0.lock().unwrap();
-        let old = s.causes;
+        let old = s.causes & !s.words[MASK];
         if o == 0x20 {
             s.causes &= !(value as u32);
         } else {
             s.words[(o / 4) as usize] = value as u32;
             s.causes |= bit;
         }
-        let causes = s.causes;
+        let causes = s.causes & !s.words[MASK];
         s.traffic
             .push(json!({"cpu":cx.cpu,"offset":o,"word":value as u32}));
         if s.traffic.len() > 64 {
@@ -127,7 +136,7 @@ impl Device for Mailbox {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let s: State = serde_json::from_value(value.clone())
             .map_err(|e| format!("mailbox checkpoint: {e}"))?;
-        if s.causes & !CAUSES != 0 || s.traffic.len() > 64 {
+        if s.causes & !CAUSES != 0 || s.words[MASK] & !0x7f != 0 || s.traffic.len() > 64 {
             return Err("unsupported mailbox checkpoint state".into());
         }
         *self.channel.0.lock().unwrap() = s;
@@ -229,6 +238,27 @@ mod tests {
         assert_eq!(m.save(), saved);
         write(&mut m, &mut h, 0, 0x20, 0xffffffff);
         assert_eq!(m.save()["causes"], 0);
+    }
+    #[test]
+    fn main_core_mask_holds_latched_causes_low_until_cleared() {
+        let mut m = device();
+        let mut h = TestHost::default();
+        write(&mut m, &mut h, 4, 0x14, 0x22);
+        write(&mut m, &mut h, 0, 0x1c, 0x7f);
+        write(&mut m, &mut h, 3, 0xc, 0x10);
+        assert_eq!(h.irqs, vec![(142, true), (142, false)]);
+        assert!(h.core.is_empty());
+        assert_eq!(m.save()["causes"], 0x28);
+        write(&mut m, &mut h, 0, 0x20, 0x7f);
+        write(&mut m, &mut h, 0, 0x1c, 0);
+        assert!(h.core.is_empty());
+        write(&mut m, &mut h, 0, 0, 1);
+        assert_eq!(h.core, vec![(4, 55, true)]);
+        for (cpu, value) in [(4, 1), (0, 0x80)] {
+            let mut cx = Cx::new(&mut h, cpu, 0, 0);
+            m.write(&mut cx, 0xff90e11c, 4, value);
+            assert!(cx.is_unmodeled());
+        }
     }
     #[test]
     fn invalid_accesses_and_execution_metadata_are_refused_without_mutation() {

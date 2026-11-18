@@ -397,7 +397,7 @@ fn register_with_resources(
                 .any(|k| {
                     !matches!(
                         k.as_str(),
-                        "input_irqs" | "feedback" | "initial_outputs" | "initial_inputs" | "pad_model"
+                        "input_irqs" | "companion_input_irqs" | "feedback" | "initial_outputs" | "initial_inputs" | "pad_model"
                     )
                 })
             {
@@ -438,6 +438,20 @@ fn register_with_resources(
             }) {
                 return Err("a GPIO pad driven by feedback cannot declare an initial input".into());
             }
+            let companion_input_irqs: Vec<fujimod_emulator_devices::parts::gpio::InputIrq> = window
+                .options
+                .get("companion_input_irqs")
+                .map(|v| {
+                    serde_json::from_value(serde_json::to_value(v).map_err(|e| e.to_string())?)
+                        .map_err(|e| format!("GPIO companion input routes: {e}"))
+                })
+                .transpose()?
+                .unwrap_or_default();
+            let companion_core = if companion_input_irqs.is_empty() {
+                0
+            } else {
+                companion.ok_or("GPIO companion input routes require the companion")?
+            };
             bus.register(
                 window.base,
                 window.size,
@@ -472,6 +486,7 @@ fn register_with_resources(
                             .unwrap_or_default(),
                     )?
                     .with_initial_inputs(initial_inputs)?
+                    .with_core_input_irqs(companion_core, companion_input_irqs)?
                     .with_feedback(feedback)?,
                 ),
             )?;

@@ -436,3 +436,538 @@ fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
     assert_eq!(words.position(), 12);
     assert_eq!(calls.load(Ordering::Acquire), 1);
 }
+
+/// A Cortex-M4 with the M-profile controller and the flag device at
+/// 0x8000000. Thumb code at 0x2000: a counted SUBS/BNE delay (40 instructions,
+/// about 17 ticks), then a poll of
+/// bit 0 of the RAM flag (0x3000) or the device register, then `B .`.
+/// `poll` is the instruction between the load and the branch.
+fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
+    let (base, shift) = if mmio { (0x2201, 0x06d2) } else { (0x2203, 0x0312) };
+    let code = [
+        0x2014, // MOVS R0,#20
+        0x3801, // SUBS R0,#1
+        0xd1fd, // BNE  0x2002
+        base,   // MOVS R2,#1 or #3
+        shift,  // LSLS R2,R2,#27 or #12
+        0x6811, // LDR  R1,[R2]
+        poll,
+        0xd5fc, // BPL  0x200a
+        0x2777, // MOVS R7,#0x77
+        0xe7fe, // B    .
+    ];
+    let flag = Flag {
+        value: Arc::new(AtomicU32::new(0)),
+        due: Some(53),
+        declared,
+        irq: false,
+    };
+    m4_board_with(Box::new(flag), &code, mode)
+}
+/// A Cortex-M4 with the M-profile controller, `device` at 0x8000000 and
+/// Thumb `code` at 0x2000.
+fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board {
+    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![Processor {
+            model: Model::CortexM4,
+            registers: vec![],
+            released: true,
+            rprofile: None,
+            mprofile: Some(crate::board::mprofile::Config {
+                clock_hz: 1_000_000_000,
+                board_ticks_per_second: 1_000_000_000,
+                vector_base: 0,
+            }),
+        }],
+        dma_mappings: vec![memory::BusMapping::ram(0, 0x4000)],
+        ram: vec![Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        mappings: vec![MemoryMap {
+            core: 0,
+            address: 0,
+            physical: 0,
+            size: 0x4000,
+            permissions: 7,
+        }],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(7, 3).unwrap(),
+    };
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(0x8000000, 4, device).unwrap();
+    let mut board = graph
+        .build(
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    let vectors = [0x3f00u32, 0x2001];
+    board
+        .write_memory(
+            0,
+            0,
+            &vectors
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board
+        .write_memory(
+            0,
+            0x2000,
+            &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+    board.set_loop_mode(mode).unwrap();
+    board
+}
+const LSLS_31: u16 = 0x07c9;
+/// Board state (virtual time, instruction counts, NVIC and devices), every
+/// core register and the polled RAM. Durable CPU state is not available for
+/// the M-profile backend.
+fn m4_state(board: &Board) -> (Value, Vec<u32>, Vec<u8>) {
+    let registers = arm::CORE
+        .iter()
+        .chain([arm::CPSR, Register::Pc].iter())
+        .map(|&r| board.read_register(0, r).unwrap() as u32)
+        .collect();
+    let mut ram = vec![0; 0x10];
+    board.cpu(0).unwrap().read_memory(0x3000, &mut ram).unwrap();
+    (board.state(), registers, ram)
+}
+fn m4_statistic(board: &Board, name: &str) -> u64 {
+    board.loop_statistics().unwrap()[0][name].as_u64().unwrap_or(0)
+}
+#[test]
+fn m4_polls_and_delays_stop_at_device_deadlines_with_rational_time() {
+    for mmio in [false, true] {
+        for quantum in [1, 7, 1000] {
+            let mut off = m4_board(mmio, true, LoopMode::Disabled, LSLS_31);
+            let mut measured = m4_board(mmio, true, LoopMode::Measure, LSLS_31);
+            let mut on = m4_board(mmio, true, LoopMode::Accelerate, LSLS_31);
+            for tick in [9, 28, 52, 53, 54, 100] {
+                for board in [&mut off, &mut measured, &mut on] {
+                    board.run_until(tick, quantum).unwrap();
+                }
+                let right = m4_state(&off);
+                for (name, left) in [("measure", &measured), ("accelerate", &on)] {
+                    assert_eq!(
+                        m4_state(left),
+                        right,
+                        "{name} mmio={mmio} quantum={quantum} tick={tick}"
+                    );
+                }
+            }
+            assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
+            assert_eq!(m4_statistic(&measured, "loop_accelerated_instructions"), 0);
+            assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0);
+            assert!(m4_statistic(&on, "loop_counted_instructions") > 0);
+            assert!(m4_statistic(&on, "loop_poll_instructions") > 0);
+        }
+    }
+}
+#[test]
+fn m4_undeclared_device_reads_and_stores_never_accelerate_the_poll() {
+    // An undeclared register, and a poll that stores (STR R1,[R2,#4]).
+    for (mmio, declared, poll, failure) in [
+        (true, false, LSLS_31, "loop_proofs_failed_loop_read_unavailable"),
+        (false, true, 0x6051, "loop_proofs_failed_structural"),
+    ] {
+        let mut off = m4_board(mmio, declared, LoopMode::Disabled, poll);
+        let mut on = m4_board(mmio, declared, LoopMode::Accelerate, poll);
+        for board in [&mut off, &mut on] {
+            board.run_until(50, 1000).unwrap();
+        }
+        assert_eq!(m4_state(&on), m4_state(&off), "mmio={mmio} declared={declared}");
+        assert_eq!(m4_statistic(&on, "loop_poll_instructions"), 0, "{failure}");
+        assert!(m4_statistic(&on, failure) > 0, "{failure}");
+        // The counted delay before the poll still accelerates.
+        assert!(m4_statistic(&on, "loop_counted_instructions") > 0);
+    }
+}
+
+/// A one-shot alarm: a write arms a deadline that many ticks ahead; at the
+/// deadline it sets the RAM flag at 0x3000.
+struct Alarm {
+    due: Option<u64>,
+}
+impl Device for Alarm {
+    fn name(&self) -> &'static str {
+        "test-alarm"
+    }
+    fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        cx.unmodeled();
+        0
+    }
+    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, value: u64) {
+        self.due = Some(cx.now() + value);
+    }
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.due
+    }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        if self.due.is_some_and(|due| due <= cx.now()) {
+            self.due = None;
+            cx.ram_write(0x3000, &1u32.to_le_bytes()).unwrap();
+        }
+    }
+    fn save(&self) -> Value {
+        json!({"due":self.due})
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.save())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("test-alarm", &self.save())
+    }
+}
+#[test]
+fn m4_windows_end_at_a_deadline_the_core_schedules_during_its_run() {
+    // Arm the alarm 9 ticks ahead, then poll the RAM flag it sets. The run
+    // began with no deadline pending, so only the alarm, scheduled by the
+    // core's own store during the run, bounds the window.
+    let code = [
+        0x2201, // MOVS R2,#1
+        0x06d2, // LSLS R2,R2,#27
+        0x2109, // MOVS R1,#9
+        0x6011, // STR  R1,[R2]
+        0x2303, // MOVS R3,#3
+        0x031b, // LSLS R3,R3,#12
+        0x6819, // LDR  R1,[R3]
+        0x07c9, // LSLS R1,R1,#31
+        0xd5fc, // BPL  0x200c
+        0x2777, // MOVS R7,#0x77
+        0xbf30, // WFI
+    ];
+    for quantum in [1, 7, 1000] {
+        let mut off = m4_board_with(Box::new(Alarm { due: None }), &code, LoopMode::Disabled);
+        let mut on = m4_board_with(Box::new(Alarm { due: None }), &code, LoopMode::Accelerate);
+        // One run spans the arming store and the alarm's deadline.
+        for tick in [40, 60] {
+            off.run_until(tick, quantum).unwrap();
+            on.run_until(tick, quantum).unwrap();
+            assert_eq!(m4_state(&on), m4_state(&off), "quantum={quantum} tick={tick}");
+        }
+        assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
+        assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0);
+    }
+}
+
+/// Raises NVIC line 0 of core 1 on any write.
+struct Doorbell;
+impl Device for Doorbell {
+    fn name(&self) -> &'static str {
+        "test-doorbell"
+    }
+    fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        cx.unmodeled();
+        0
+    }
+    fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+        cx.set_core_irq(1, 0, true).unwrap();
+    }
+    fn save(&self) -> Value {
+        json!({})
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.save())
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("test-doorbell", &self.save())
+    }
+}
+/// Two Cortex-M4 cores. Core 1 enables NVIC line 0 with interrupts masked and
+/// waits in WFI. Core 0 rings the doorbell, which wakes core 1 during core 0's
+/// run, then polls the RAM flag core 1 sets after a counted delay.
+fn m4_pair(mode: LoopMode) -> Board {
+    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    let processor = |vector_base| Processor {
+        model: Model::CortexM4,
+        registers: vec![],
+        released: true,
+        rprofile: None,
+        mprofile: Some(crate::board::mprofile::Config {
+            clock_hz: 1_000_000_000,
+            board_ticks_per_second: 1_000_000_000,
+            vector_base,
+        }),
+    };
+    let ram = |core| MemoryMap {
+        core,
+        address: 0,
+        physical: 0,
+        size: 0x4000,
+        permissions: 7,
+    };
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![processor(0), processor(0x1000)],
+        dma_mappings: vec![memory::BusMapping::ram(0, 0x4000)],
+        ram: vec![Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        mappings: vec![ram(0), ram(1)],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(7, 3).unwrap(),
+    };
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(0x8000000, 4, Box::new(Doorbell)).unwrap();
+    let mut board = graph
+        .build(
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+    let words = |board: &mut Board, address, values: &[u32]| {
+        board
+            .write_memory(0, address, &values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>())
+            .unwrap();
+    };
+    words(&mut board, 0, &[0x3f00, 0x2001]);
+    words(&mut board, 0x1000, &[0x3e00, 0x2101]);
+    let halfwords = |board: &mut Board, address, code: &[u16]| {
+        board
+            .write_memory(0, address, &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>())
+            .unwrap();
+    };
+    halfwords(
+        &mut board,
+        0x2000,
+        &[
+            0x201e, // MOVS R0,#30
+            0x3801, // SUBS R0,#1
+            0xd1fd, // BNE  0x2002
+            0x2201, // MOVS R2,#1
+            0x06d2, // LSLS R2,R2,#27
+            0x6011, // STR  R1,[R2]   (doorbell)
+            0x2303, // MOVS R3,#3
+            0x031b, // LSLS R3,R3,#12
+            0x6819, // LDR  R1,[R3]
+            0x07c9, // LSLS R1,R1,#31
+            0xd5fc, // BPL  0x2010
+            0x2777, // MOVS R7,#0x77
+            0xbf30, // WFI
+        ],
+    );
+    halfwords(
+        &mut board,
+        0x2100,
+        &[
+            0xb672, // CPSID I
+            0x20e0, // MOVS R0,#0xe0
+            0x0600, // LSLS R0,R0,#24
+            0x21e1, // MOVS R1,#0xe1
+            0x0209, // LSLS R1,R1,#8
+            0x1840, // ADDS R0,R0,R1  (NVIC ISER0)
+            0x2101, // MOVS R1,#1
+            0x6001, // STR  R1,[R0]
+            0xbf30, // WFI
+            0x2032, // MOVS R0,#50
+            0x3801, // SUBS R0,#1
+            0xd1fd, // BNE  0x2114
+            0x2203, // MOVS R2,#3
+            0x0312, // LSLS R2,R2,#12
+            0x2101, // MOVS R1,#1
+            0x6011, // STR  R1,[R2]
+            0xe7fe, // B    .
+        ],
+    );
+    board.set_loop_mode(mode).unwrap();
+    board
+}
+fn m4_pair_state(board: &Board) -> (Value, Vec<u32>, Vec<u8>) {
+    let registers = (0..2)
+        .flat_map(|core| {
+            arm::CORE
+                .iter()
+                .chain([arm::CPSR, Register::Pc].iter())
+                .map(move |&r| board.read_register(core, r).unwrap() as u32)
+        })
+        .collect();
+    let mut ram = vec![0; 0x10];
+    board.cpu(0).unwrap().read_memory(0x3000, &mut ram).unwrap();
+    (board.state(), registers, ram)
+}
+#[test]
+fn m4_windows_end_at_the_slice_of_a_peer_woken_during_the_run() {
+    for quantum in [1, 7, 64, 1000] {
+        let mut off = m4_pair(LoopMode::Disabled);
+        let mut on = m4_pair(LoopMode::Accelerate);
+        for tick in [20, 60, 120, 200, 1200] {
+            off.run_until(tick, quantum).unwrap();
+            on.run_until(tick, quantum).unwrap();
+            assert_eq!(m4_pair_state(&on), m4_pair_state(&off), "quantum={quantum} tick={tick}");
+        }
+        assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77, "quantum={quantum}");
+        assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0, "quantum={quantum}");
+    }
+}
+
+/// Cortex-M4 core 0 drives a loopback PL022 at 0x8000000: it writes a byte to
+/// DR, polls SR.RNE with the X-H2S sequence (LDRH; AND.W #4; UXTH; CMP; BEQ),
+/// reads DR and repeats. With `peer`, core 1 runs a counted delay and reads
+/// CR0 forever. Its device read stalls it to the frontier, so core 0 resumes
+/// behind the frontier and its windows are bounded by slices as well as by
+/// serial deadlines.
+fn m4_ssp(mode: LoopMode, peer: bool) -> Board {
+    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
+    let processor = |vector_base| Processor {
+        model: Model::CortexM4,
+        registers: vec![],
+        released: true,
+        rprofile: None,
+        mprofile: Some(crate::board::mprofile::Config {
+            clock_hz: 1_000_000_000,
+            board_ticks_per_second: 1_000_000_000,
+            vector_base,
+        }),
+    };
+    let ram = |core| MemoryMap {
+        core,
+        address: 0,
+        physical: 0,
+        size: 0x4000,
+        permissions: 7,
+    };
+    let cores = if peer { 2 } else { 1 };
+    let graph = Graph {
+        decoders: vec![],
+        processors: [processor(0), processor(0x1000)]
+            .into_iter()
+            .take(cores)
+            .collect(),
+        dma_mappings: vec![memory::BusMapping::ram(0, 0x4000)],
+        ram: vec![Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        mappings: (0..cores).map(ram).collect(),
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(7, 3).unwrap(),
+    };
+    let ssp = Controller::new(
+        0x8000000,
+        Clock {
+            source_hz: 48_000_000,
+            ticks_per_second: 1_000_000_000,
+        },
+        vec![],
+        Box::new(fujimod_emulator_parts_io::serial::Unconnected),
+    )
+    .unwrap();
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(0x8000000, 0x1000, Box::new(ssp)).unwrap();
+    let mut board = graph
+        .build(
+            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    for core in 0..cores {
+        board.map_mmio(core, 0x8000000, 0x1000, 0x8000000).unwrap();
+    }
+    let write = |board: &mut Board, address, bytes: Vec<u8>| {
+        board.write_memory(0, address, &bytes).unwrap();
+    };
+    let words = |values: &[u32]| {
+        values
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
+    let halfwords = |code: &[u16]| {
+        code.iter()
+            .flat_map(|h| h.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
+    write(&mut board, 0, words(&[0x3f00, 0x2001]));
+    write(&mut board, 0x1000, words(&[0x3e00, 0x2101]));
+    write(
+        &mut board,
+        0x2000,
+        halfwords(&[
+            0x2201, // MOVS R2,#1
+            0x06d2, // LSLS R2,R2,#27
+            0x21c7, // MOVS R1,#0xc7      (8 bits, Motorola mode 3)
+            0x6011, // STR  R1,[R2]       CR0
+            0x2106, // MOVS R1,#6
+            0x6111, // STR  R1,[R2,#0x10] CPSR
+            0x2103, // MOVS R1,#3
+            0x6051, // STR  R1,[R2,#4]    CR1 = SSE | LBM
+            0x215a, // MOVS R1,#0x5a      (0x2010)
+            0x6091, // STR  R1,[R2,#8]    DR
+            0x8995, // LDRH R5,[R2,#0xc]  SR (0x2014)
+            0xf005, 0x0504, // AND.W R5,R5,#4
+            0xb2ad, // UXTH R5,R5
+            0x2d00, // CMP  R5,#0
+            0xd0f9, // BEQ  0x2014
+            0x6891, // LDR  R1,[R2,#8]    DR
+            0x3601, // ADDS R6,#1
+            0xe7f4, // B    0x2010
+        ]),
+    );
+    write(
+        &mut board,
+        0x2100,
+        halfwords(&[
+            0x2201, // MOVS R2,#1
+            0x06d2, // LSLS R2,R2,#27
+            0x2032, // MOVS R0,#50       (0x2104)
+            0x3801, // SUBS R0,#1
+            0xd1fd, // BNE  0x2106
+            0x6813, // LDR  R3,[R2]      CR0
+            0xe7fa, // B    0x2104
+        ]),
+    );
+    board.set_loop_mode(mode).unwrap();
+    board
+}
+fn m4_ssp_state(board: &Board, cores: usize) -> (Value, Vec<u32>) {
+    let registers = (0..cores)
+        .flat_map(|core| {
+            arm::CORE
+                .iter()
+                .chain([arm::CPSR, Register::Pc].iter())
+                .map(move |&r| board.read_register(core, r).unwrap() as u32)
+        })
+        .collect();
+    (board.state(), registers)
+}
+#[test]
+fn m4_ssp_receive_polls_match_instruction_execution() {
+    for peer in [false, true] {
+        let cores = if peer { 2 } else { 1 };
+        for quantum in [7, 100, 1000] {
+            let mut off = m4_ssp(LoopMode::Disabled, peer);
+            let mut on = m4_ssp(LoopMode::Accelerate, peer);
+            for tick in (1..=20).map(|i| i * 997) {
+                off.run_until(tick, quantum).unwrap();
+                on.run_until(tick, quantum).unwrap();
+                assert_eq!(
+                    m4_ssp_state(&on, cores),
+                    m4_ssp_state(&off, cores),
+                    "peer={peer} quantum={quantum} tick={tick}"
+                );
+            }
+            assert!(
+                on.read_register(0, arm::CORE[6]).unwrap() > 10,
+                "peer={peer}"
+            );
+            assert!(
+                m4_statistic(&on, "loop_poll_instructions") > 0,
+                "peer={peer} quantum={quantum}"
+            );
+        }
+    }
+}

@@ -7,9 +7,13 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicU16, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 const DEPTH: usize = 8;
+/// Side-effect-free registers: CR0, CR1, SR, CPSR, IMSC, RIS, MIS, DMACR.
+/// DR (pops the receive FIFO) and ICR (write-only) are never published.
+const PUBLISHED: [u64; 8] = [0, 4, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x24];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Clock {
     pub source_hz: u64,
@@ -42,6 +46,12 @@ struct Engine {
     clock: Clock,
     state: State,
     wire: Box<dyn Wire>,
+    /// Register values as of the last access, advance or restore. They change
+    /// only at those points or at a deadline this device declares.
+    published: [Arc<AtomicU32>; PUBLISHED.len()],
+    /// The same values for halfword reads; every register fits 16 bits
+    /// and a read returns the same value at either width.
+    published16: [Arc<AtomicU16>; PUBLISHED.len()],
 }
 impl Engine {
     fn frame(&self, word: u16) -> Result<Frame, String> {
@@ -197,10 +207,17 @@ impl Engine {
         self.state.pending.is_some() || !self.state.tx.is_empty()
     }
     fn read(&mut self, offset: u64, now: u64) -> Result<u64, String> {
-        Ok(match offset {
+        if offset == 8 {
+            return Ok(self.receive(now)? as u64);
+        }
+        self.register(offset)
+            .ok_or_else(|| "PL022 register is unmodeled".into())
+    }
+    /// A register whose read has no side effect.
+    fn register(&self, offset: u64) -> Option<u64> {
+        Some(match offset {
             0 => self.state.control as u64,
             4 => self.state.enable as u64,
-            8 => self.receive(now)? as u64,
             0xc => {
                 u64::from(self.state.tx.is_empty())
                     | (u64::from(self.state.tx.len() < DEPTH) << 1)
@@ -213,8 +230,15 @@ impl Engine {
             0x18 => self.ris() as u64,
             0x1c => (self.ris() & self.state.mask) as u64,
             0x24 => self.state.dma as u64,
-            _ => return Err("PL022 register is unmodeled".into()),
+            _ => return None,
         })
+    }
+    fn publish_registers(&self) {
+        for (i, offset) in PUBLISHED.into_iter().enumerate() {
+            let value = self.register(offset).unwrap();
+            self.published[i].store(value as u32, Ordering::Release);
+            self.published16[i].store(value as u16, Ordering::Release);
+        }
     }
     fn write(&mut self, offset: u64, value: u64, now: u64) -> Result<(), String> {
         match offset {
@@ -283,17 +307,18 @@ impl Port for DmaPort {
             return Err("PL022 DMA width is unmodeled".into());
         }
         let mut e = self.0.lock().map_err(|_| "PL022 state poisoned")?;
-        let word = e.receive(now)? as u64;
-        Ok(word & (u64::MAX >> (64 - bytes as u32 * 8)))
+        let word = e.receive(now);
+        e.publish_registers();
+        Ok(word? as u64 & (u64::MAX >> (64 - bytes as u32 * 8)))
     }
     fn transmit(&mut self, now: u64, bytes: u8, value: u64) -> Result<(), String> {
         if !matches!(bytes, 1 | 2) || value >> (bytes as u32 * 8) != 0 {
             return Err("PL022 DMA width/value is unmodeled".into());
         }
-        self.0
-            .lock()
-            .map_err(|_| "PL022 state poisoned")?
-            .transmit(now, value as u16)
+        let mut e = self.0.lock().map_err(|_| "PL022 state poisoned")?;
+        let result = e.transmit(now, value as u16);
+        e.publish_registers();
+        result
     }
 }
 pub struct Controller {
@@ -312,14 +337,18 @@ impl Controller {
         {
             return Err("invalid PL022 clock or aperture".into());
         }
+        let engine = Engine {
+            clock,
+            state: State::default(),
+            wire,
+            published: Default::default(),
+            published16: Default::default(),
+        };
+        engine.publish_registers();
         Ok(Self {
             base,
             interrupts,
-            engine: Arc::new(Mutex::new(Engine {
-                clock,
-                state: State::default(),
-                wire,
-            })),
+            engine: Arc::new(Mutex::new(engine)),
         })
     }
     pub fn port(&self) -> SharedPort {
@@ -330,6 +359,7 @@ impl Controller {
         (matches!(size, 2 | 4) && offset <= 0x24 && offset & 3 == 0).then_some(offset)
     }
     fn publish(&self, e: &mut Engine, cx: &mut Cx<'_>) {
+        e.publish_registers();
         let high = e.irq();
         if high == e.state.irq_published {
             return;
@@ -389,6 +419,35 @@ impl Device for Controller {
     fn next_deadline(&self, now: u64) -> Option<u64> {
         self.engine.lock().unwrap().next(now)
     }
+    fn fast_reads(
+        &self,
+        window_base: u64,
+        window_size: u64,
+    ) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
+        let e = self.engine.lock().unwrap();
+        use fujimod_emulator_devices::bus::{FastReadValue, FastReadWord};
+        PUBLISHED
+            .into_iter()
+            .enumerate()
+            .flat_map(|(i, offset)| {
+                [
+                    FastReadValue::AtomicU32(e.published[i].clone()),
+                    FastReadValue::AtomicU16(e.published16[i].clone()),
+                ]
+                .map(|value| (offset, value))
+            })
+            .filter_map(|(offset, value)| {
+                let address = self.base.checked_add(offset)?;
+                let end = address.checked_add(value.width())?;
+                (address >= window_base && end <= window_base.checked_add(window_size)?).then(
+                    || FastReadWord {
+                        offset: address - window_base,
+                        value,
+                    },
+                )
+            })
+            .collect()
+    }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.offset(address, size)
             .is_some_and(|o| matches!(o, 0 | 4 | 0xc | 0x10 | 0x14 | 0x18 | 0x1c | 0x24))
@@ -445,6 +504,7 @@ impl Device for Controller {
         }
         e.wire.restore(&value["wire"])?;
         e.state = state;
+        e.publish_registers();
         Ok(())
     }
 }

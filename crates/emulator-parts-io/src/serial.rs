@@ -53,13 +53,19 @@ pub trait Wire: Send {
     /// Validate before changing state; restoration does not perform transfers.
     fn restore(&mut self, state: &Value) -> Result<(), String>;
 }
+fn unconnected(frame: Frame) -> String {
+    format!(
+        "serial wire input is unconnected ({}-bit mode {} word {:#x})",
+        frame.bits, frame.mode, frame.word
+    )
+}
 pub struct Unconnected;
 impl Wire for Unconnected {
-    fn begin(&mut self, _: Frame) -> Result<u64, String> {
-        Err("serial wire input is unconnected".into())
+    fn begin(&mut self, frame: Frame) -> Result<u64, String> {
+        Err(unconnected(frame))
     }
-    fn finish(&mut self, _: u64, _: Frame, _: u64) -> Result<u16, String> {
-        Err("serial wire input is unconnected".into())
+    fn finish(&mut self, _: u64, frame: Frame, _: u64) -> Result<u16, String> {
+        Err(unconnected(frame))
     }
     fn save(&self) -> Value {
         Value::Null
@@ -70,6 +76,30 @@ impl Wire for Unconnected {
         } else {
             Err("invalid unconnected serial wire state".into())
         }
+    }
+}
+
+/// A wire whose one part is always selected: the link has no chip select.
+pub struct Dedicated(pub Box<dyn Endpoint>);
+impl Wire for Dedicated {
+    fn begin(&mut self, frame: Frame) -> Result<u64, String> {
+        self.0.validate(frame)?;
+        Ok(0)
+    }
+    fn finish(&mut self, token: u64, frame: Frame, now: u64) -> Result<u16, String> {
+        if token != 0 {
+            return Err("invalid dedicated serial token".into());
+        }
+        Ok(self.0.transfer(frame, now))
+    }
+    fn save(&self) -> Value {
+        serde_json::json!({"kind": "dedicated", "part": self.0.name(), "state": self.0.save()})
+    }
+    fn restore(&mut self, state: &Value) -> Result<(), String> {
+        if state["kind"] != "dedicated" || state["part"] != self.0.name() {
+            return Err("dedicated serial wire differs from checkpoint".into());
+        }
+        self.0.restore(&state["state"])
     }
 }
 

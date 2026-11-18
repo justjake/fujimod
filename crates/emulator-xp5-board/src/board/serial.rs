@@ -20,7 +20,7 @@ pub(super) struct Connection {
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
-enum Part {
+pub(super) enum Part {
     PowerController {
         rtc_seconds: u32,
         rtc_valid: bool,
@@ -31,8 +31,19 @@ enum Part {
     },
     SerialCalibrationRegisters { miso_high: bool },
     SerialCommandRegisters(fujimod_emulator_parts_io::serial_command_registers::Wiring),
-    BisConfigurationRegisters { revision: [u8; 2], idle_high: bool },
-    Lsm6dsConfigurationRegisters,
+    BisConfigurationRegisters {
+        revision: [u8; 2],
+        samples: [u16; 2],
+        idle_high: bool,
+        #[serde(default)]
+        block: Option<[u8; 6]>,
+    },
+    Lsm6dsConfigurationRegisters {
+        temperature: i16,
+        #[serde(default)]
+        motion: Option<fujimod_emulator_parts_io::lsm6ds::Motion>,
+    },
+    FramedCommandPeer { initial_frame: u32 },
     /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
     GenericSink { miso_high: bool },
@@ -164,12 +175,17 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
         ),
         Part::BisConfigurationRegisters {
             revision,
+            samples,
             idle_high,
-        } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::new(
-            revision, idle_high,
+            block,
+        } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::with_block(
+            revision, samples, idle_high, block,
         )?),
-        Part::Lsm6dsConfigurationRegisters => {
-            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::default())
+        Part::Lsm6dsConfigurationRegisters { temperature, motion } => {
+            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature, motion))
+        }
+        Part::FramedCommandPeer { initial_frame } => {
+            Box::new(fujimod_emulator_parts_io::framed_command_peer::Peer::new(initial_frame)?)
         }
         Part::GenericSink { miso_high } => Box::new(GenericSink { miso_high, transfers: 0, last: vec![] }),
     })
@@ -187,6 +203,11 @@ fn attachments(
             ))
         })
         .collect()
+}
+pub(super) fn dedicated_wire(
+    part: Part,
+) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
+    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None)?)))
 }
 pub(super) fn gpio_wire(
     pins: SharedPins,

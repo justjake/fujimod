@@ -36,6 +36,9 @@ enum WireInput {
     GpioSelected {
         endpoints: Vec<super::serial::Connection>,
     },
+    Dedicated {
+        part: super::serial::Part,
+    },
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,7 +72,10 @@ pub fn register_all(
     let mut connections = BTreeMap::new();
     let mut serials = vec![];
     for w in windows.iter().filter(|w| w.kind == "pl022") {
-        if w.base != 0xff911000 || w.size != 0x1000 {
+        // The SSP instances are 0x1000 windows at 0xff910000 + n*0x1000, n = 0..11 (the
+        // instance field of the stock serial client descriptors).
+        let instance = w.base.wrapping_sub(0xff910000);
+        if w.base < 0xff910000 || instance % 0x1000 != 0 || instance / 0x1000 > 11 || w.size != 0x1000 {
             return Err("invalid XP5 PL022 window".into());
         }
         let wiring: SerialWiring = options(w)?;
@@ -86,6 +92,7 @@ pub fn register_all(
             WireInput::GpioSelected { endpoints } => {
                 super::serial::gpio_wire(pins.clone(), endpoints)?
             }
+            WireInput::Dedicated { part } => super::serial::dedicated_wire(part)?,
         };
         let serial = Controller::new(
             w.base,
