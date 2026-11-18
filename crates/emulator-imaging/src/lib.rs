@@ -10,3 +10,4 @@ pub mod optics;
 pub mod radiometric;
 pub mod scene;
 pub mod timing;
+pub mod xtrans;

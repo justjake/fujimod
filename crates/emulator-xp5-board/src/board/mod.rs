@@ -598,7 +598,8 @@ pub fn register_all(
             | "movdc"
             | "imaging-resize"
             | "imaging-statistics"
-            | "imaging-paf" => continue,
+            | "imaging-paf"
+            | "imaging-resz" => continue,
             "clock-banks" => {
                 let specialized: Vec<u64> = windows
                     .iter()

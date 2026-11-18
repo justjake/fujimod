@@ -40,6 +40,8 @@ pub enum Key {
     StickLeft,
     StickRight,
     StickPush,
+    /// Playback button (scanner debug name K_PLAY).
+    Play,
 }
 impl Key {
     pub fn parse(s: &str) -> Result<Self, String> {
@@ -66,6 +68,7 @@ impl Key {
             "STICK_LEFT" => Ok(Self::StickLeft),
             "STICK_RIGHT" => Ok(Self::StickRight),
             "STICK_PUSH" => Ok(Self::StickPush),
+            "PLAY" | "K_PLAY" | "PLAYBACK" => Ok(Self::Play),
             _ => Err(format!("unknown physical key {s:?}")),
         }
     }

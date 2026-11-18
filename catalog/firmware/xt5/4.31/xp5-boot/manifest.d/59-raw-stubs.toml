@@ -1,0 +1,66 @@
+# X-T5 4.31 RAW (RAF) capture: completion stub for the LSRAW lossless/near-lossless RAW codec.
+# Decoded statically from the stock driver (scratch/raf/, 2026-11-19); not checked against
+# hardware, not run.
+#
+# Only needed when RAW RECORDING is LOSSLESS COMPRESSED or COMPRESSED (MODE eCompress
+# [0x25bccac] = 1 or 2). With UNCOMPRESSED (0) the RAF path is expected [G] to skip Recf
+# sequence 0x15 (step 0x1e recbfCompressRaw) and this block is never started.
+#
+# Users: recfLsrawEncProcess 0x2d3c390 (step 0x1e, sequence 0x15, capture) and
+# recfLsrawDecProcess 0x2d3c588 (step 0x1f/0x6e/0x6f, sequences 0x24..0x27 = in-camera RAW
+# conversion, not capture). Driver 0x2c4ec40..0x2c50500, state word 0x3832fe0.
+# INTID 209: logical IRQ 0xf in table 0x18ea918 (entry 0xd1, flag 1 = level).
+# All accesses use the 32-bit helpers 0x5dd28 (write) / 0x5dd50 (read) with constant addresses.
+#
+# Open 0x2c50340: sem 0xa; clocks 0x13ab5d0(0x16, 0x700001/0x710001/0x600001);
+#   power/reset 0x2c502bc(0): clear 0xff90db04 bit 14, poll 0xff90db24 bit 14 == 0 at
+#   0x2c50320 (power-gates mirror, already modelled);
+#   +0x08 = mask word, 1 = masked: all reporting bits masked except bit 16 (0x2c4eed8);
+#   ISR 0x2c4f6c8 registered on logical 0xf; state 1;
+#   +0x100 = 1 (0x2c4f548) = INIT. The open ISR reads +0x04: bit 16 -> state 2 (ready),
+#   bit 1 -> 5, bit 0 -> 4, none -> 9; writes the read bits back to +0x04 (w1c); calls the
+#   callback 0x2d39d5c, which sets event flag 0x10. recfLsrawEncProcess waits for that flag
+#   with NO timeout (0x2d3c3dc), so +0x100 must complete with an interrupt.
+# Start 0x2c4f92c (state 2 -> 3):
+#   0x2c4f79c: +0x00 = 0x100 (soft reset), then polls +0x00 bit 8 until it reads 0
+#              (read 0x2c4ecdc, loop 0x2c4f7c0..0x2c4f7cc) -> +0x00 is a command word.
+#   0x2c4f7d8: parameters +0x104, +0x80 (mode bits 8/4/1..0), +0x84, +0x88, +0x8c, +0x90,
+#              +0x94, +0x98, +0x9c, +0xa0 (stored)
+#   0x2c4f5b4: input address +0x144 (bits 34..32) / +0x140; 0x2c4f61c: output address
+#              +0x14c / +0x148; 0x2c4f684 reads +0x14c/+0x148 back for cache maintenance.
+#   +0x08 mask: everything masked except bit 0.
+#   ISR 0x2c50018 registered on logical 0xf; state 3.
+#   +0x00 = 1 (0x2c4ec94) = START (last write).
+# ISR 0x2c50018: reads +0x04 (0x2c4ee68). bit 2 or bit 1 set -> error path 0x2c4ff30.
+#   Otherwise: reads +0x0c (flags), +0x10 (bits 22..16, 15..0), +0xa4 (OUTPUT LENGTH, stored
+#   by 0x2c4fcb4 into the job result +0x40); state 4; writes the read bits back to +0x04;
+#   calls the callback (event flag 0x10).
+# recfLsrawEncProcess after the flag (2 s timeout, 0x2d3c428): reads +0x00; if bits 5..4
+#   read 1 it checks +0x8c/+0xa4/+0x80 and spins forever at 0x2d3c540 on a mismatch. The
+#   command mode below reads 0, so that check is skipped.
+#
+# Functional limit: the stub writes no compressed data and +0xa4 reads 0 (or its last
+# write). A RAF built from it would have an empty or invalid CFA chunk. Prefer
+# UNCOMPRESSED RAW for the first RAF; see scratch/raf/REPORT notes in the hand-off.
+#
+# Ownership checked against manifest.toml and manifest.d/*.toml (10..60, including 55, 56,
+# 57): 0xffd12000..0xffd12fff is not owned (nearest: 0xffd10000 jpeg-encoder,
+# 0xffd0c000 RESZ stub, 0xffd21000 KB stub). INTID 209 is not used by any other window.
+#
+# delay_us is functional, not measured.
+[[device]]
+base = 0xffd12000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "command" },
+]
+irq = 209
+starts = [
+  { offset = 0x000, mask = 0x1 },
+  { offset = 0x100, mask = 0x1 },
+]
+delay_us = 200
+completion = [{ offset = 0x04, set = 0x10001 }]
+ack = { offset = 0x04, mode = "w1c" }

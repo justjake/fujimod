@@ -18,7 +18,7 @@ use fujimod_emulator_parts_controls::{key_input::Key, ladder_keys};
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
-const CONTROL_KEYS: [(&str, Key); 16] = [
+const CONTROL_KEYS: [(&str, Key); 17] = [
     ("menu_ok_button", Key::Menu),
     ("disp_back_bluetooth_button", Key::Back),
     ("selector_up_button", Key::Up),
@@ -35,6 +35,7 @@ const CONTROL_KEYS: [(&str, Key); 16] = [
     ("focus_stick.left", Key::StickLeft),
     ("focus_stick.right", Key::StickRight),
     ("focus_stick", Key::StickPush),
+    ("playback_button", Key::Play),
 ];
 
 /// The emulator key that presses a catalog control identity, if one exists.
@@ -194,9 +195,10 @@ mod tests {
                 ladder_keys::Wire::Adc { channel: 14 },
                 ladder_keys::Wire::PowerControllerRegister { register: 0x34, released: 1023 },
                 ladder_keys::Wire::PowerControllerRegister { register: 0x35, released: 1023 },
+                ladder_keys::Wire::Adc { channel: 11 },
             ]
         );
-        assert_eq!(options.ladders.iter().map(|ladder| ladder.rungs.len()).sum::<usize>(), 16);
+        assert_eq!(options.ladders.iter().map(|ladder| ladder.rungs.len()).sum::<usize>(), 17);
         let rung = |key: Key| {
             options
                 .ladders
@@ -211,6 +213,7 @@ mod tests {
         assert_eq!(rung(Key::StickPush), (0, 200, 100));
         assert_eq!(rung(Key::Back), (768, 933, 850));
         assert_eq!(rung(Key::Up), (377, 420, 398));
+        assert_eq!(rung(Key::Play), (2102, 2325, 2213));
 
         let keys = ControlsOptions::LadderKeys(options)
             .open(fujimod_emulator_devices::xp5::pins::Pins::shared())
@@ -221,6 +224,11 @@ mod tests {
         keys.advance(1);
         assert_eq!(keys.register_sample(0x34), Some(554));
         assert_eq!(keys.sample(2, 4095), 2213);
+        // PLAY pulls ADC11 (focus-mode selector at C) into the shared band.
+        assert_eq!(keys.sample(11, 4095), 4095);
+        keys.enqueue(Duration::from_nanos(1), Key::Play, true).unwrap();
+        keys.advance(1);
+        assert_eq!(keys.sample(11, 4095), 2213);
         let error = keys.enqueue(Duration::from_nanos(2), Key::ShutterHalf, true).unwrap_err();
         assert!(error.contains("no declared ladder rung"), "{error}");
     }
@@ -255,10 +263,10 @@ mod tests {
     fn rungs_without_an_emulator_key_and_foreign_resolutions_are_refused() {
         let mut resolved = xt5();
         let mut document = resolved.reference.physical_controls.take().unwrap();
-        document["ladders"][0]["rungs"][0]["control_id"] = serde_json::json!("playback_button");
+        document["ladders"][0]["rungs"][0]["control_id"] = serde_json::json!("rear_command_dial");
         resolved.reference.physical_controls = Some(document.clone());
         let error = ladder_keys(&resolved).unwrap_err();
-        assert!(error.contains("playback_button have no emulator key"), "{error}");
+        assert!(error.contains("rear_command_dial have no emulator key"), "{error}");
 
         // A 10-bit register ladder declared with 12-bit resolution is not the model's wire.
         let mut document = xt5().reference.physical_controls.unwrap();

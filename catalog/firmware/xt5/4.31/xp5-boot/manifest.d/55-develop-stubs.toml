@@ -92,10 +92,14 @@ registers = []
 #  +0x118 stop 0x13be99c: bits 0..3 or 8..11 non-zero -> -0xff. Left unwritten (reads 0).
 #  +0x108 stop polls 0x1487a48 until bit 24 and bit 8 read 1 -> constant
 #  +0x00  stop 0x13bd38c writes 0; 0x14879f4 polls until bit 0 reads 1 -> constant
+# imaging-resz is this completion stub (same options); with XT5_STILL_PATH=real each start
+# also scales the packed 4:2:2 source (+0xd0/+0xd4, pitch +0xe0, size +0x14) to the
+# destination (+0xe4/+0xe8, pitch +0xf4, size +0x20), nearest neighbour; a zero source
+# (RCIZ inline) reads the RIFP still output (emulator-xp5-imaging imaging_still.rs).
 [[device]]
 base = 0xffd0c000
 size = 0x1000
-kind = "completion-stub"
+kind = "imaging-resz"
 [device.options]
 registers = [
   { offset = 0x00, mode = "constant", value = 0x1 },

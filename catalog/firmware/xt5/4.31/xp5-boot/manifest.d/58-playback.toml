@@ -1,0 +1,29 @@
+# X-T5 4.31 playback: JPEG decoder. Decoded statically (scratch/playback/); not checked against hardware.
+#
+# Low driver 0x13c2fcc..0x13c39a8, mid driver 0x2c41bb0..0x2c428b4. A normal decode is
+# 0x2c42720(request, wait): power on 0x13c2ff8 (clocks 0x13ab5d0(7, 0x700001 / 0x710001 /
+# 0x5f0001)), ungate 0x2c426f4(0) (0xff90db04 bit 13 clear, poll 0xff90db24 bit 13 clear), then
+# 0x2c41fb4: initialise 0x13c3120 (+0x118 = 1, poll +0x04 bit 16, write it back, +0x00 = 0x100,
+# poll bit 8 clear), check 0x13c357c, program 0x13c339c, register the ISR 0x2c41bb0 on logical
+# interrupt 0xe (table 0x18ea918: INTID 208), and start 0x13c3190 (+0x00 |= 1).
+# Program 0x13c339c: +0x08 interrupt mask (1 = masked; the normal decode writes bits 5, 16,
+# 18..23 and leaves done 4, error 17 and refill 24 open), +0xa0 scale (1 / 2^n), output
+# +0x140/+0x100 (bits 34..32, low word), output limit in bytes +0x144/+0x104, stream
+# +0x14c/+0x10c, stream size +0x110, format word +0x11c (0 for a normal decode), crop enable
+# +0x120, x and y +0x124/+0x128 (start | end << 16, inclusive).
+# ISR 0x2c41bb0 reads +0x04 and writes it back (write-1-to-clear). Bit 4 = done: it reads and
+# writes back +0x14, then reads the end of the output at +0x148/+0x108 and stores end - output
+# as the output length; bit 17 = error; bit 24 = stream refill (+0x118 = 4, 0x13c384c, used only
+# by the streaming caller 0x2de3304 -> 0x2c422b4); otherwise it reads +0x10 and writes it back.
+# Callers of 0x2c42720: ims 0x2dd9a74 (0x2dd9ba8, callback 0x2dd6124, waits event 0x10 for
+# 1000 ms), 0x2d75920 and 0x2de3304.
+# The output is packed 4:2:2 with lines of round_up(width, 16) >> scale pixels, the pitch the
+# ims caller assumes (0x2dd9bec). run_ticks is functional, not measured.
+[[device]]
+base = 0xffd11000
+size = 0x1000
+kind = "jpeg-decoder"
+
+[device.options]
+irq = 208
+run_ticks = 1000
