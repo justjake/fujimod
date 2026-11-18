@@ -6,14 +6,14 @@
   font-size: 15px;
   line-height: 1.7;
 }
-.release-personal-note > time,
 .release-personal-note .note-socials {
   display: block;
   color: var(--dim);
   font-size: 13px;
 }
 .release-personal-note > time {
-  margin-bottom: 20px;
+  display: block;
+  margin-bottom: 1em;
 }
 .release-personal-note p {
   margin: 0 0 1em;
