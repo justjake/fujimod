@@ -1279,7 +1279,14 @@
                 { "offset": 0, "mask": 1 },
                 { "offset": 136, "mask": 65537 }
               ],
-              "basis": "Unit at 0xfffd4000 of X-T20 2.11 section 6: a field-writer family covers +0x000..+0x098 (0x155d7c4 writes +0x00 bit 0, then 0x155d820..0x155e158 write +0x004, +0x008, +0x010..+0x02c, +0x040..+0x06c and +0x080..+0x098 with 14-, 3- and 1-bit fields). Three words are read only as status: +0x088 (0x155df64 takes bits 20..21, 16, 4..5 and 0), +0x090 (0x155dfa0) and +0x094 (0x155e09c), six flags each. The recording pipeline enters it through 0x155d16c (callers 0x1615ce4 and 0x16b1b7c), which first calls 0x155d0ec: that writes the +0x00 bit and polls it through 0x155d7f8 until it reads 1. 0x155d40c then polls +0x088 through 0x155df64 until bit 0 and bit 16 both read 1. The AUTO position of the auto mode selector lever is one path into this call chain (strict graph board, 2026-11-04). Its name and what it computes are unknown. The words read back their last write and start at 0; +0x00 bit 0 and +0x088 bits 0 and 16 are the only status bits the driver waits for and are declared idle. No interrupt, DMA or data is modeled."
+              "job": {
+                "start": { "offset": 4, "mask": 1 },
+                "status": { "offset": 144, "mask": 1 },
+                "clear": { "offset": 148, "mask": 1 },
+                "irq_route": 142,
+                "ticks": 144000
+              },
+              "basis": "Unit at 0xfffd4000 of X-T20 2.11 section 6: a field-writer family covers +0x000..+0x098 (0x155d7c4 writes +0x00 bit 0, then 0x155d820..0x155e158 write +0x004, +0x008, +0x010..+0x02c, +0x040..+0x06c and +0x080..+0x098 with 14-, 3- and 1-bit fields). Three words are read only as status: +0x088 (0x155df64 takes bits 20..21, 16, 4..5 and 0), +0x090 (0x155dfa0) and +0x094 (0x155e09c), six flags each. The recording pipeline enters it through 0x155d16c (callers 0x1615ce4 and 0x16b1b7c), which first calls 0x155d0ec: that writes the +0x00 bit and polls it through 0x155d7f8 until it reads 1. 0x155d40c then polls +0x088 through 0x155df64 until bit 0 and bit 16 both read 1. On X-T2 4.41, +0x04 bit 0 starts a run that pulses GIC 142 (descriptor row 0x42) and completes the queued request. The words read back their last write and start at 0; +0x00 bit 0 and +0x088 bits 0 and 16 are the only status bits the driver waits for and are declared idle. No DMA or data is modeled."
             },
             {
               "base": 4294430720,

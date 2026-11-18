@@ -158,6 +158,7 @@ fn register_blocks_and_imaging_resume_jobs_and_readouts() {
         .with_job(blocks::Job {
             start: (4, 1),
             status: Some((8, 1)),
+            clear: None,
             stop: None,
             irq: 100,
             ticks: 10,

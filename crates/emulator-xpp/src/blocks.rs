@@ -178,6 +178,7 @@ pub struct Frames {
 pub struct Job {
     pub start: (u64, u32),
     pub status: Option<(u64, u32)>,
+    pub clear: Option<(u64, u32)>,
     pub stop: Option<(u64, u32)>,
     pub irq: u32,
     pub ticks: u64,
@@ -470,6 +471,12 @@ impl Block {
             || bit(job.start)
             || job.status.is_some() && job.stop.is_some()
             || job.stop.is_some_and(bit)
+            || job.clear.is_some_and(|clear| {
+                bit(clear)
+                    || job.status.is_none()
+                    || job.start.0 == clear.0
+                    || job.status.is_some_and(|s| s.0 == clear.0)
+            })
             || job.status.is_some_and(|status| {
                 bit(status)
                     || job.start.0 == status.0
@@ -659,6 +666,9 @@ impl Block {
                 )
             }
         };
+        if destination == 0 && destination_stride == 0 && matches!(work, Work::Develop { .. }) {
+            return Ok(());
+        }
         if let Some(row) = rows.first().filter(|row| row.len() > destination_stride) {
             return Err(format!(
                 "Still picture line of {} bytes wider than its destination stride {destination_stride} ({} lines to {destination:#x})",
@@ -704,6 +714,7 @@ impl Block {
                 || self.job.is_some_and(|j| {
                     j.start.0 == o
                         || j.status.is_some_and(|s| s.0 == o)
+                        || j.clear.is_some_and(|c| c.0 == o)
                         || j.stop.is_some_and(|s| s.0 == o)
                 })
                 || self
@@ -1123,7 +1134,7 @@ impl Device for Block {
                 self.state.status = 0;
                 cx.set_irq(job.irq, false);
             }
-            if job.status.is_some_and(|s| s.0 == offset) {
+            if job.clear.or(job.status).is_some_and(|s| s.0 == offset) {
                 self.state.status &= !value;
                 if self.state.status == 0 {
                     cx.set_irq(job.irq, false);
@@ -1328,6 +1339,7 @@ mod tests {
             .with_job(Job {
                 start: (0, 1),
                 status: Some((0x64, 1)),
+                clear: None,
                 stop: None,
                 irq: 143,
                 ticks: 100,
@@ -1470,6 +1482,7 @@ mod tests {
         let job = Job {
             start: (0x04, 1),
             status: Some((0x44, 1)),
+            clear: None,
             stop: None,
             irq: 128,
             ticks: 100,
@@ -1874,6 +1887,7 @@ mod tests {
         let job = Job {
             start: (0, 1),
             status: Some((0x3c, 1)),
+            clear: None,
             stop: None,
             irq: 132,
             ticks: 10,
@@ -1895,6 +1909,7 @@ mod tests {
         let job = Job {
             start: (4, 1),
             status: None,
+            clear: None,
             stop: Some((0, 1)),
             irq: 130,
             ticks: 10,
@@ -1930,6 +1945,7 @@ mod tests {
         let job = Job {
             start: (4, 1),
             status: None,
+            clear: None,
             stop: Some((0, 1)),
             irq: 130,
             ticks: 10,
@@ -2243,6 +2259,7 @@ mod tests {
         let job = Job {
             start: (4, 1),
             status: None,
+            clear: None,
             stop: None,
             irq: 144,
             ticks: 10,
@@ -2271,6 +2288,7 @@ mod tests {
         let job = Job {
             start: (4, 1),
             status: None,
+            clear: None,
             stop: None,
             irq: 144,
             ticks: 10,

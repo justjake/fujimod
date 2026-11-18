@@ -66,6 +66,60 @@ pub enum Mechanism {
     },
     /// Existing asynchronous file SDK, invoked through a stock dispatcher.
     StockSdk(Box<StockSdk>),
+    /// X-Processor Pro storage path, catalogued as driver-table routine and
+    /// cell addresses. The calls are recorded but not executed here.
+    DriverTable(Box<DriverTable>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+#[serde(deny_unknown_fields)]
+pub struct DriverTable {
+    /// Selects a drive from the path's drive letter through `drive_map` and
+    /// calls the driver object found in `driver_table`.
+    pub open: u32,
+    /// Maps a path's drive letter to the storage unit behind it.
+    pub drive_select: u32,
+    /// Cell holding the drive-letter map consulted during selection.
+    pub drive_map: u32,
+    /// Table of driver-object pointers the entry points look up by slot.
+    pub driver_table: u32,
+    /// Cell holding the driver context passed to the table calls.
+    pub context_slot: u32,
+    /// Byte cell holding the media code handed over with each queued packet.
+    pub media_queue: u32,
+    /// Reports whether media for the selected drive is present and ready.
+    pub media_ready: u32,
+    /// Copies a caller record into a `packet_bytes`-sized stack frame and
+    /// hands it to `queue_send` together with the byte at `media_queue`.
+    pub request_packet: u32,
+    /// Enqueues a prepared packet for the selected driver object.
+    pub queue_send: u32,
+    /// Alias bit applied to storage addresses, as in the mailbox reservation.
+    pub address_alias: u32,
+    /// Size in bytes of the stack frame holding the copied request packet.
+    pub packet_bytes: u32,
+    /// Handle-checked entry points that look a driver object up in
+    /// `driver_table` and call the function pointer at `slot`.
+    pub windows: Vec<DriverWindow>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+#[serde(deny_unknown_fields)]
+pub struct DriverWindow {
+    /// Entry point reached only after its handle check succeeds.
+    pub address: u32,
+    /// Byte offset of the function pointer the entry point calls.
+    pub slot: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,6 +319,56 @@ impl FirmwareCard {
                         && u64::from(p.pool_begin) < u64::from(a) + n
                     {
                         return Err("Stock card control range overlaps its pool".into());
+                    }
+                }
+            }
+            Mechanism::DriverTable(p) => {
+                if p.address_alias != 0 && !p.address_alias.is_power_of_two() {
+                    return Err("Invalid driver-table card reservation".into());
+                }
+                if p.packet_bytes < 8 || p.packet_bytes > 4096 || p.packet_bytes % 4 != 0 {
+                    return Err("Invalid driver-table card packet size".into());
+                }
+                for a in [
+                    p.open,
+                    p.drive_select,
+                    p.drive_map,
+                    p.driver_table,
+                    p.context_slot,
+                    p.media_queue,
+                    p.media_ready,
+                    p.request_packet,
+                    p.queue_send,
+                ] {
+                    if a == 0 || a % 4 != 0 {
+                        return Err("Invalid driver-table card routine".into());
+                    }
+                }
+                let entry_points = [
+                    p.open,
+                    p.request_packet,
+                    p.queue_send,
+                    p.media_ready,
+                    p.drive_select,
+                ];
+                for (i, a) in entry_points.into_iter().enumerate() {
+                    for &b in &entry_points[i + 1..] {
+                        if a == b {
+                            return Err("Driver-table card routines overlap".into());
+                        }
+                    }
+                }
+                if p.windows.is_empty() || p.windows.len() > 32 {
+                    return Err("Invalid driver-table card window set".into());
+                }
+                for w in &p.windows {
+                    if w.address == 0
+                        || w.address % 4 != 0
+                        || w.slot == 0
+                        || w.slot % 4 != 0
+                        || w.slot >= 0x1000
+                    {
+                        return Err("Invalid driver-table card window".into());
                     }
                 }
             }

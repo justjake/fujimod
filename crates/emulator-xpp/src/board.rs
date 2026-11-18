@@ -125,6 +125,22 @@ pub struct HostImage {
     /// Rows of red, green and blue bytes, in hexadecimal.
     pub rgb: String,
 }
+/// Focus-dependent contrast curve parameters for `Model::Statistics`.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContrastFocusSpec {
+    peak_position: u32,
+    sigma: f64,
+    buffers: Vec<ContrastBufferSpec>,
+}
+/// Peak (in-focus) word values for one declared statistics buffer.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ContrastBufferSpec {
+    output: u64,
+    indices: Vec<u32>,
+    peak_words: Vec<u32>,
+}
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BlockJob {
@@ -132,6 +148,8 @@ pub struct BlockJob {
     /// Absent: `stop` names the bit a write clears to acknowledge.
     #[serde(default)]
     pub status: Option<(u64, u32)>,
+    #[serde(default)]
+    pub clear: Option<(u64, u32)>,
     #[serde(default)]
     pub stop: Option<(u64, u32)>,
     pub irq: u32,
@@ -266,6 +284,10 @@ pub enum Model {
         /// this reference (declared with the imaging control's `integration`).
         #[serde(default)]
         exposure_reference: Option<u32>,
+        /// Focus-dependent contrast peak shared with the lens port's focus
+        /// position.
+        #[serde(default)]
+        contrast_focus: Option<ContrastFocusSpec>,
     },
     /// GPIO keys whose inputs also drive external interrupt lines; follows
     /// the GPIO bank and the reset/gate bank.
@@ -655,6 +677,9 @@ pub fn build(
     // shared with the live-view film that draws the same light.
     let scene_light =
         std::sync::Arc::new(std::sync::atomic::AtomicU32::new(statistics::LIGHT_UNIT));
+    // The lens port's current focus position, shared with the statistics
+    // engine's contrast-focus model.
+    let lens_focus = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
     let exposure_reference = spec.nodes.iter().find_map(|n| match &n.model {
         Model::Statistics {
             scene: Some(_),
@@ -873,6 +898,7 @@ pub fn build(
                     model = model.with_job(blocks::Job {
                         start: j.start,
                         status: j.status,
+                        clear: j.clear,
                         stop: j.stop,
                         irq: j.irq,
                         ticks: j.ticks,
@@ -1005,6 +1031,7 @@ pub fn build(
                 buffers,
                 buffer_light_words,
                 exposure_reference,
+                contrast_focus,
             } => {
                 let mut model = statistics::Engine::new(base, irq, period_ticks)?;
                 if let Some(scene) = scene {
@@ -1038,6 +1065,20 @@ pub fn build(
                 }
                 for (output, words) in buffer_light_words {
                     model = model.with_buffer_light_words(output, &words)?;
+                }
+                if let Some(cf) = contrast_focus {
+                    model = model.with_contrast_focus(statistics::ContrastFocus {
+                        position: lens_focus.clone(),
+                        peak_position: cf.peak_position,
+                        sigma: cf.sigma,
+                    })?;
+                    for buf in cf.buffers {
+                        model = model.with_buffer_contrast_words(
+                            buf.output,
+                            &buf.indices,
+                            &buf.peak_words,
+                        )?;
+                    }
                 }
                 devices.register(base, statistics::WINDOW, Box::new(model))?
             }
@@ -1300,7 +1341,8 @@ pub fn build(
                     },
                     pins.clone().ok_or("The lens follows the GPIO bank")?,
                     lines.clone(),
-                )?;
+                )?
+                .with_focus_position(lens_focus.clone());
                 devices.register(port, serial::REGISTERS, Box::new(model))?
             }
             Model::Decompressor { base, irq } => devices.register(
@@ -1422,7 +1464,8 @@ pub fn build(
                         setup_ticks,
                         bytes_per_tick,
                     },
-                )?;
+                )?
+                .with_peripheral_ticks_per_byte(5000);
                 devices.register(dma, 0x1000, Box::new(engine))?;
                 id
             }

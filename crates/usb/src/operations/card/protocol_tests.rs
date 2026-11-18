@@ -3,7 +3,7 @@ use crate::{
     ff80::{SessionState, framing::RequestKind},
     testing::{Peer, peer_session},
 };
-use fujimod_catalog_card::StockSdk;
+use fujimod_catalog_card::{DriverTable, DriverWindow, StockSdk};
 use futures_lite::future::block_on;
 use std::{
     collections::BTreeMap,
@@ -1084,4 +1084,97 @@ fn directory_size_width_is_explicit_and_geometry_is_checked() {
     sdk.directory_size_bytes = 4;
     sdk.directory_size_offset = u32::MAX;
     assert!(p.validate().is_err());
+}
+
+fn driver_table() -> DriverTable {
+    DriverTable {
+        open: 0x8000,
+        drive_select: 0x8010,
+        drive_map: 0x8020,
+        driver_table: 0x8030,
+        context_slot: 0x8040,
+        media_queue: 0x8044,
+        media_ready: 0x8050,
+        request_packet: 0x8060,
+        queue_send: 0x8070,
+        address_alias: 0x40000000,
+        packet_bytes: 64,
+        windows: vec![
+            DriverWindow {
+                address: 0x8100,
+                slot: 4,
+            },
+            DriverWindow {
+                address: 0x8104,
+                slot: 8,
+            },
+        ],
+    }
+}
+
+#[test]
+fn driver_table_mechanism_accepts_synthetic_routines_and_refuses_broken_ones() {
+    let mut p = profile();
+    p.mechanism = Mechanism::DriverTable(Box::new(driver_table()));
+    p.validate().unwrap();
+    let Mechanism::DriverTable(table) = &mut p.mechanism else {
+        panic!()
+    };
+    table.windows[0].slot = 0;
+    assert!(p.validate().is_err());
+    let Mechanism::DriverTable(table) = &mut p.mechanism else {
+        panic!()
+    };
+    table.windows[0].slot = 4;
+    table.queue_send = table.open;
+    assert!(p.validate().is_err());
+    let Mechanism::DriverTable(table) = &mut p.mechanism else {
+        panic!()
+    };
+    table.queue_send = 0x8070;
+    table.packet_bytes = 6;
+    assert!(p.validate().is_err());
+    let Mechanism::DriverTable(table) = &mut p.mechanism else {
+        panic!()
+    };
+    table.packet_bytes = 64;
+    table.address_alias = 3;
+    assert!(p.validate().is_err());
+    let Mechanism::DriverTable(table) = &mut p.mechanism else {
+        panic!()
+    };
+    table.address_alias = 0;
+    table.windows.clear();
+    assert!(p.validate().is_err());
+}
+
+#[test]
+fn driver_table_mechanism_executes_refuse_without_any_camera_traffic() {
+    block_on(async {
+        let camera = camera();
+        let mut p = profile();
+        p.mechanism = Mechanism::DriverTable(Box::new(driver_table()));
+        let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+            .await
+            .unwrap();
+        assert!(
+            execute(
+                &mut session,
+                limits(),
+                &p,
+                Request::List {
+                    pattern: "A:\\*.*".into(),
+                },
+            )
+            .await
+            .is_err()
+        );
+        assert_eq!(camera.lock().unwrap().mutations, 0);
+        assert!(
+            Volume::attach(&mut session, limits(), &p, None, None)
+                .await
+                .is_err()
+        );
+        assert_eq!(camera.lock().unwrap().mutations, 0);
+    })
 }

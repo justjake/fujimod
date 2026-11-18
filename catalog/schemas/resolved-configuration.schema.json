@@ -6991,6 +6991,28 @@
       ],
       "type": "object"
     },
+    "DriverWindow": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "description": "Entry point reached only after its handle check succeeds.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "slot": {
+          "description": "Byte offset of the function pointer the entry point calls.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "slot"
+      ],
+      "type": "object"
+    },
     "EarlyBootConstants": {
       "additionalProperties": false,
       "description": "Exact register and command values for this firmware's early restart.",
@@ -14698,6 +14720,17 @@
       "additionalProperties": false,
       "description": "Job law of a register block: each start finishes one job after the\ndeclared ticks; the status bit is set and the level interrupt line is high\nuntil the status bit is written.",
       "properties": {
+        "clear": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterIdleBits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Separate write-to-clear register for `status`, if not cleared by writing\n`status` itself."
+        },
         "irq_route": {
           "description": "Level interrupt line of the job status.",
           "format": "uint32",
@@ -14717,7 +14750,7 @@
               "type": "null"
             }
           ],
-          "description": "Status bit the job sets; writing it clears it. Without one the job\nends with an interrupt edge."
+          "description": "Status bit the job sets; writing it (or `clear`) clears it. Without one\nthe job ends with an interrupt edge."
         },
         "stop": {
           "anyOf": [
@@ -17792,6 +17825,105 @@
             "directory_size_bytes",
             "chunk_bytes",
             "end_of_directory_status"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "X-Processor Pro storage path, catalogued as driver-table routine and\ncell addresses. The calls are recorded but not executed here.",
+          "properties": {
+            "address_alias": {
+              "description": "Alias bit applied to storage addresses, as in the mailbox reservation.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "context_slot": {
+              "description": "Cell holding the driver context passed to the table calls.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "drive_map": {
+              "description": "Cell holding the drive-letter map consulted during selection.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "drive_select": {
+              "description": "Maps a path's drive letter to the storage unit behind it.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "driver_table": {
+              "description": "Table of driver-object pointers the entry points look up by slot.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "driver_table",
+              "type": "string"
+            },
+            "media_queue": {
+              "description": "Byte cell holding the media code handed over with each queued packet.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "media_ready": {
+              "description": "Reports whether media for the selected drive is present and ready.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "open": {
+              "description": "Selects a drive from the path's drive letter through `drive_map` and\ncalls the driver object found in `driver_table`.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "packet_bytes": {
+              "description": "Size in bytes of the stack frame holding the copied request packet.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "queue_send": {
+              "description": "Enqueues a prepared packet for the selected driver object.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "request_packet": {
+              "description": "Copies a caller record into a `packet_bytes`-sized stack frame and\nhands it to `queue_send` together with the byte at `media_queue`.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "windows": {
+              "description": "Handle-checked entry points that look a driver object up in\n`driver_table` and call the function pointer at `slot`.",
+              "items": {
+                "$ref": "#/$defs/DriverWindow"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "open",
+            "drive_select",
+            "drive_map",
+            "driver_table",
+            "context_slot",
+            "media_queue",
+            "media_ready",
+            "request_packet",
+            "queue_send",
+            "address_alias",
+            "packet_bytes",
+            "windows"
           ],
           "type": "object"
         }

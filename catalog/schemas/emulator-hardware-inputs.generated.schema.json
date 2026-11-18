@@ -2809,6 +2809,24 @@
           "description": "Declared basis.",
           "type": "string"
         },
+        "contrast_indices": {
+          "description": "`u32` word indices of the buffer that peak at `ZoneContrastFocus`.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "contrast_peak_words": {
+          "description": "Peak (in-focus) values for `contrast_indices`.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
         "light_words": {
           "description": "`u32` word indices of the buffer that are linear light sums: the engine\nscales them with the scene light and the published exposure, like the\nzone sums. Empty: every word is written as declared.",
           "items": {
@@ -3243,6 +3261,17 @@
           },
           "type": "array"
         },
+        "contrast_focus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ZoneContrastFocus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Focus-dependent contrast peak shared with the lens port's focus\nposition."
+        },
         "exposure": {
           "anyOf": [
             {
@@ -3292,6 +3321,33 @@
       "required": [
         "report_register",
         "input_ready_irq"
+      ],
+      "type": "object"
+    },
+    "ZoneContrastFocus": {
+      "additionalProperties": false,
+      "description": "Focus-dependent contrast curve parameters for declared statistics buffers.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "peak_position": {
+          "description": "Lens focus position at which contrast peaks.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sigma": {
+          "description": "Gaussian width in focus-position units.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "basis",
+        "peak_position",
+        "sigma"
       ],
       "type": "object"
     },

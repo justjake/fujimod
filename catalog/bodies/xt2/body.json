@@ -218,6 +218,50 @@
               "size": 4096,
               "idle_bits": [],
               "basis": "DesignWare PCIe root-complex registers of X-T2 4.41: routine 0xa7c1e0 programs +0x710 (port link control) and, after link up, +0x18 and +0x4; 0xa80950 programs outbound translation windows through +0x900..+0x91c to 0xfe081000 (endpoint configuration header, whose +0x3c/+0x3d interrupt line and pin are checked) and 0xf0000000. Plain registers: with the PHY link down, only the +0x710 setup before the poll is reached."
+            },
+            {
+              "base": 4294778880,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 152,
+                  "mask": 262148
+                }
+              ],
+              "basis": "X-T2 4.41 register block at 0xfffd2000 (+0x000 bit 0 ready/idle polled == 1 by 0x15b61ac after writing 0; +0x098 bits 2 and 18 polled == 1 by 0x15b69e4 via 0x15b7bc0; +0x004/+0x008/+0x010/+0x09c accessed by 0x15b6cc0..0x15b7c0c when switching out of ADV. mode)."
+            },
+            {
+              "base": 4294791168,
+              "size": 4096,
+              "idle_bits": [
+                {
+                  "offset": 0,
+                  "mask": 2147483648
+                }
+              ],
+              "job": {
+                "start": {
+                  "offset": 0,
+                  "mask": 1
+                },
+                "status": {
+                  "offset": 100,
+                  "mask": 1
+                },
+                "irq_route": 143,
+                "ticks": 100000
+              },
+              "fixed_words": [
+                {
+                  "offset": 96,
+                  "value": 1
+                }
+              ],
+              "basis": "Borrowed discovery input from xt20-discovery, not measured on an X-T2: playback display engine at 0xfffd5000 (+0x000 bit 31 ready, bit 0 start, +0x060/+0x064 status/mirror, +0x068 final control, IRQ 143, 100000-tick completion)."
             }
           ]
         }

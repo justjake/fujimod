@@ -1506,10 +1506,14 @@ pub struct RegisterBlockJob {
     pub irq_route: u32,
     /// Start bit.
     pub start: RegisterIdleBits,
-    /// Status bit the job sets; writing it clears it. Without one the job
-    /// ends with an interrupt edge.
+    /// Status bit the job sets; writing it (or `clear`) clears it. Without one
+    /// the job ends with an interrupt edge.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<RegisterIdleBits>,
+    /// Separate write-to-clear register for `status`, if not cleared by writing
+    /// `status` itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear: Option<RegisterIdleBits>,
     /// Bit that stops the block; it reads back clear once written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop: Option<RegisterIdleBits>,

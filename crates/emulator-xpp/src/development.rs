@@ -138,6 +138,9 @@ pub fn film(
     if (0x300..0x318).step_by(4).all(|o| live(o) == 0) {
         return Err("Still development before the color unit was programmed".into());
     }
+    let still = still.filter(|_| {
+        !(still_word(0x200) & 1 != 0 && (0x21c..0x2cc).step_by(4).all(|o| still_word(o) == 0))
+    });
     if still.is_some() && (0x21c..0x2cc).step_by(4).all(|o| still_word(o) == 0) {
         return Err("Still development before the still tone unit was programmed".into());
     }
