@@ -33,6 +33,16 @@
 //! other than the driver's 1 encodes a flat grey picture, and a run without
 //! loaded tables uses flat ones; none of those cases is observed on a camera.
 //!
+//! Host scene (functional shortcut). An encoder built with
+//! [`Encoder::with_scene`] asks its [`SceneSource`] for a packed 4:2:2 picture
+//! of the programmed size at each packed 4:2:2 run. When the source returns
+//! one, the run writes it into the programmed source window (address, origin,
+//! pitch) and encodes it, instead of whatever the firmware's develop chain
+//! left there. This bypasses the sensor readout and the develop blocks, which
+//! are not modeled; it only puts a host-chosen picture at the right geometry
+//! into every encode (main image, thumbnails, ResizeComp). The source is a
+//! host input outside the device state and the run definition.
+//!
 //! Decoder (X-Processor Pro contract). Initialization writes 1 to +0x118 and
 //! waits for status bit 16; status +0x04 is write-1-to-clear. A run reads the
 //! stream at +0x10c (size +0x110) and writes packed 4:2:2 (Y0 Y1 Cb Cr, lines
@@ -78,6 +88,11 @@ const TABLE_WORDS: usize = 32;
 const SOF: usize = 2 + 420 + 134 + 6;
 const NOTED_FORMAT: u8 = 1;
 const NOTED_TABLES: u8 = 2;
+const NOTED_SCENE_WRITE: u8 = 4;
+
+/// A host picture for a run of `width` x `height`: packed 4:2:2 lines of
+/// `width * 2` bytes, or `None` to encode the source buffer as programmed.
+pub type SceneSource = fn(width: usize, height: usize) -> Option<Vec<u8>>;
 const MAX_STREAM: usize = 64 * 1024 * 1024;
 
 /// How the encoder treats words other than its run registers.
@@ -157,6 +172,8 @@ pub struct Encoder {
     irq: u32,
     ticks: u64,
     registers: Registers,
+    /// Host picture source; not part of the device state.
+    scene: Option<SceneSource>,
     /// Diagnostics already logged; not part of the device state.
     noted: u8,
     state: State,
@@ -181,9 +198,55 @@ impl Encoder {
             irq,
             ticks,
             registers,
+            scene: None,
             noted: 0,
             state: State::default(),
         })
+    }
+    /// Encodes the picture `scene` gives for each packed 4:2:2 run in place
+    /// of the source buffer (see the module notes).
+    pub fn with_scene(mut self, scene: SceneSource) -> Self {
+        self.scene = Some(scene);
+        self
+    }
+    /// The run's source: the host scene, written into the source window, or
+    /// the window as the firmware left it.
+    fn scene_or_source(
+        &mut self,
+        cx: &mut Cx<'_>,
+        width: usize,
+        height: usize,
+    ) -> Result<Vec<u8>, String> {
+        let Some(scene) = self
+            .scene
+            .and_then(|scene| scene(width, height))
+            .filter(|scene| scene.len() == width * height * 2)
+        else {
+            return self.source(cx, width, height);
+        };
+        let origin = self.word(WINDOW_ORIGIN);
+        let (x, y) = ((origin & 0xffff) as usize, (origin >> 16) as usize);
+        let pitch = match (self.word(PITCH) & 0xffff) as usize {
+            0 => width,
+            n => n.max(x + width),
+        };
+        let base = self.address(SOURCE, SOURCE_HIGH);
+        cx.log(&format!(
+            "{}: host scene {width}x{height} into source {base:#x} pitch {pitch} at ({x}, {y})",
+            self.name
+        ));
+        let written = scene.chunks_exact(width * 2).enumerate().try_for_each(|(line, row)| {
+            cx.ram_write(base + (((y + line) * pitch + x) * 2) as u64, row)
+        });
+        if let Err(error) = written {
+            let name = self.name;
+            self.note(
+                cx,
+                NOTED_SCENE_WRITE,
+                &format!("{name}: host scene not written to the source buffer ({error}); encoding it anyway"),
+            );
+        }
+        Ok(scene)
     }
     /// The physical windows the encoder owns.
     pub fn windows(&self) -> Vec<(u64, u64)> {
@@ -260,7 +323,7 @@ impl Encoder {
             );
             return Ok((vec![128; wide * high * 2], wide, high));
         }
-        let source = self.source(cx, width, height)?;
+        let source = self.scene_or_source(cx, width, height)?;
         if (wide, high) == (width, height) {
             return Ok((source, wide, high));
         }
