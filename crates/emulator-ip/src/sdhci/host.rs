@@ -59,6 +59,22 @@ pub struct Options {
     /// Further DRAM banks SDMA reaches: (physical base, bytes).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ram_banks: Vec<(u64, u64)>,
+    /// 0x40000000..0x60000000 aliases DRAM at 0 (address & 0x3fffffff), as on
+    /// the X-Processor 4 and earlier bodies. XP5 maps separate DRAM there.
+    #[serde(default = "dram_alias_default")]
+    pub dram_alias: bool,
+    /// Absolute address of this port's DMA address-high word, which lies
+    /// outside the SDHCI register file (XP5: 0xff90e7d8 + slot * 0xc for
+    /// port 0, written by 0x13a8ea0 before each block transfer). Bits 2..0
+    /// are DMA address bits 34..32; the SDMA system address holds bits 31..0.
+    #[serde(default)]
+    pub address_high: Option<u64>,
+}
+fn dram_alias_default() -> bool {
+    true
+}
+fn is_zero(value: &u32) -> bool {
+    *value == 0
 }
 const MAX_DATA_FAULTS: usize = 32;
 const COMMAND_TIMEOUT_ERROR: u16 = 1;
@@ -117,6 +133,9 @@ struct Request {
     quantity: usize,
     cursor: usize,
     address: u32,
+    /// Address-high word latched when the command starts (DMA bits 34..32).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    address_high: u32,
     phase: Phase,
     due: Option<u64>,
     command: u8,
@@ -160,6 +179,8 @@ pub struct SdHost {
     /// read-modify-writes +0x124 bit 9 (0x13a8ae0) once a card is present; the meaning is unknown,
     /// so the words only keep their last 32-bit write.
     vendor: [u32; 8],
+    /// Last value written to the `address_high` word (DMA address bits 34..32).
+    address_high: u32,
 }
 /// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
 /// default and high speed and whose groups 2-6 offer function 0 only.
@@ -236,6 +257,8 @@ impl SdHost {
             || options.rca == 0
             || options.ram_bytes == 0
             || options.ram_bytes > 0x1_0000_0000
+            || options.protocol == Protocol::Rom && !options.dram_alias
+            || options.address_high.is_some_and(|a| a & 3 != 0)
         {
             return Err("Invalid SD latency, RCA or DRAM extent".into());
         }
@@ -264,6 +287,7 @@ impl SdHost {
             fault_history: Vec::new(),
             cmd8_responses: 0,
             vendor: [0; 8],
+            address_high: 0,
         })
     }
     /// Declare a data CRC failure for later multi-block transfers.
@@ -427,9 +451,10 @@ impl SdHost {
     /// `keep_alias`: a DRAM-alias address stays aliased (ROM and single-block
     /// reads, while physical low RAM may be shadowed by ROM). Outside the
     /// alias, only the ROM protocol refuses; others address DRAM directly.
-    fn physical(&self, address: u32, len: usize, keep_alias: bool) -> Result<u64, String> {
-        let a = address as u64;
-        let alias = (0x40000000..0x60000000).contains(&a);
+    /// `high` supplies DMA address bits 34..32 (XP5 address-high word).
+    fn physical(&self, high: u32, address: u32, len: usize, keep_alias: bool) -> Result<u64, String> {
+        let a = u64::from(high) << 32 | u64::from(address);
+        let alias = self.options.dram_alias && (0x40000000..0x60000000).contains(&a);
         if self.options.protocol == Protocol::Rom && !alias {
             return Err("ROM SDMA requires DRAM alias".into());
         }
@@ -447,7 +472,7 @@ impl SdHost {
                 && (alias || !self.options.ram_banks.iter().any(|&(b, n)| inside(b, n)))
         {
             return Err(format!(
-                "SD DMA exceeds aligned DRAM: address {address:#x} (physical {physical:#x}) length {len:#x}"
+                "SD DMA exceeds aligned DRAM: address {a:#x} (physical {physical:#x}) length {len:#x}"
             ));
         }
         Ok(if keep_alias && alias { a } else { physical })
@@ -521,6 +546,7 @@ impl SdHost {
             quantity: 0,
             cursor: 0,
             address: self.regs.word(0),
+            address_high: self.address_high,
             phase: Phase::Command,
             due: None,
             command,
@@ -788,7 +814,7 @@ impl SdHost {
                 self.regs.get(0x34) & self.regs.get(0x38)
             };
             if r.transfer == Transfer::Dma {
-                self.physical(r.address, r.quantity, rom || r.command == 17)?;
+                self.physical(r.address_high, r.address, r.quantity, rom || r.command == 17)?;
                 let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
                 if !rom
                     && r.quantity > boundary - r.address as usize % boundary
@@ -970,7 +996,7 @@ impl SdHost {
             .ok_or("SDMA address overflow")?;
         let end = r.fault.filter(|f| *f > r.cursor).unwrap_or(r.quantity);
         let length = (end - r.cursor).min(boundary - address as usize % boundary);
-        let physical = self.physical(address, length, rom || r.command == 17)?;
+        let physical = self.physical(r.address_high, address, length, rom || r.command == 17)?;
         match r.payload {
             Payload::Write(first) => {
                 cx.ram_read(physical, &mut self.scratch[..length])?;
@@ -1318,6 +1344,8 @@ struct Snapshot {
     cmd8_responses: u64,
     #[serde(default, skip_serializing_if = "vendor_clear")]
     vendor: [u32; 8],
+    #[serde(default, skip_serializing_if = "is_zero")]
+    address_high: u32,
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -1357,6 +1385,8 @@ impl Device for SdHost {
             cmd8_responses: u64,
             #[serde(skip_serializing_if = "vendor_clear")]
             vendor: [u32; 8],
+            #[serde(skip_serializing_if = "is_zero")]
+            address_high: u32,
             regs: &'a Registers,
             clocks: &'a Clocks,
             state: State,
@@ -1384,6 +1414,7 @@ impl Device for SdHost {
                 initialization_fault: self.options.initialization_fault,
                 cmd8_responses: self.cmd8_responses,
                 vendor: self.vendor,
+                address_high: self.address_high,
                 regs: &self.regs,
                 clocks: &self.clocks,
                 state: self.state,
@@ -1427,6 +1458,7 @@ impl Device for SdHost {
         self.card = s.card;
         self.cmd8_responses = s.cmd8_responses;
         self.vendor = s.vendor;
+        self.address_high = s.address_high;
         self.reads = s.reads;
         self.contacts.restore_level(s.contacts);
         self.regs = s.regs;
@@ -1455,9 +1487,13 @@ impl Device for SdHost {
                 Payload::Write(lba) => serde_json::json!({"kind":"write","lba":lba}),
                 Payload::Metadata { bytes, len } => serde_json::json!({"kind":"metadata","bytes":fujimod_emulator_devices::state::bytes(&bytes),"len":len}),
             };
-            serde_json::json!({"state":r.state,"app":r.app,"block_length":r.block_length,"bus_width":r.bus_width,"response":r.response,
+            let mut value = serde_json::json!({"state":r.state,"app":r.app,"block_length":r.block_length,"bus_width":r.bus_width,"response":r.response,
                 "payload":payload,"transfer":r.transfer,"quantity":r.quantity,"cursor":r.cursor,"address":r.address,"phase":r.phase,
-                "due":r.due,"command":r.command,"fault":r.fault})
+                "due":r.due,"command":r.command,"fault":r.fault});
+            if r.address_high != 0 {
+                value["address_high"] = r.address_high.into();
+            }
+            value
         });
         let mut value = serde_json::json!({"reads":self.reads,"card":self.card.state(),"contacts":[self.contacts.present(),self.contacts.protected()],"registers":self.regs.0.as_slice(),
             "clocks":self.clocks.save(),"state":self.state,"app":self.app,"block_length":self.block_length,"bus_width":self.bus_width,
@@ -1468,12 +1504,20 @@ impl Device for SdHost {
         if self.access_mode != 0 {
             value["access_mode"] = self.access_mode.into();
         }
+        if self.address_high != 0 {
+            value["address_high"] = self.address_high.into();
+        }
         Ok(value)
     }
     fn name(&self) -> &'static str {
         "sdhci-memory-card"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if self.options.address_high == Some(address) {
+            // The driver only writes the word; a read has no observed value.
+            cx.unmodeled();
+            return 0;
+        }
         if !self.registers_enabled() {
             return 0;
         }
@@ -1487,6 +1531,15 @@ impl Device for SdHost {
         value
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if self.options.address_high == Some(address) {
+            // 0x13a8ea0 stores (buffer >> 32) & 7 (ubfx #32, #3 at 0x13a1f3c and 0x13a37c8).
+            if size != 4 || value > 7 {
+                cx.unmodeled();
+            } else {
+                self.address_high = value as u32;
+            }
+            return;
+        }
         if !self.registers_enabled() {
             return;
         }
@@ -1739,6 +1792,8 @@ mod tests {
                 initialization_fault: InitializationFault::None,
                 high_speed: false,
                 ram_banks: vec![],
+                dram_alias: true,
+                address_high: None,
             },
             Wiring {
                 card: Card::new(sd_card::Options {
@@ -2032,6 +2087,92 @@ mod tests {
         m.write(&mut cx, BASE + 12, 4, 0x26000000);
         assert!(cx.refusal().is_some());
         assert!(!m.busy());
+    }
+    #[test]
+    fn xp5_address_high_word_moves_sdma_into_a_high_dram_bank() {
+        // X-T5 4.31 movie recording: low SDMA address 0xd0ec6bc0 with address-high 1
+        // (0x13a8ea0 writes 0xff90e7d8 for slot 0 port 0) targets DRAM channel 3.
+        const HIGH: u64 = 0xff90e7d8;
+        let mut m = host(Protocol::Sdhc);
+        m.options.ram_bytes = 0xc0000000;
+        m.options.ram_banks = vec![(0x1c0000000, 0x40000000)];
+        m.options.dram_alias = false;
+        m.options.address_high = Some(HIGH);
+        // The test RAM folds addresses with & 0x3fffffff: 0x1d0ec6bc0 is byte 0x10ec6bc0.
+        let mut h = Ram::new(0x10ec6bc0 + 0x400);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        m.card.write_bytes(0, &[0x5a; 512]).unwrap();
+        for (size, value) in [(4, 8), (2, 1)] {
+            let mut cx = h.cx();
+            m.write(&mut cx, HIGH, size, value);
+            assert!(cx.refusal().is_some());
+        }
+        let mut cx = h.cx();
+        assert_eq!(m.read(&mut cx, HIGH, 4), 0);
+        assert!(cx.refusal().is_some());
+        let mut cx = h.cx();
+        m.write(&mut cx, HIGH, 4, 1);
+        assert_eq!(cx.refusal(), None);
+        write(&mut m, &mut h, 0, 4, 0xd0ec6bc0);
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 1);
+        command(&mut m, &mut h, 0x123a0037, 0);
+        let saved = m.checkpoint().unwrap();
+        assert_eq!(m.fingerprint().unwrap()["request"]["address_high"], 1);
+        // The request latched the high bits: a later word write does not move it.
+        let mut cx = h.cx();
+        m.write(&mut cx, HIGH, 4, 0);
+        assert_eq!(cx.refusal(), None);
+        due(&mut m, &mut h);
+        assert!(h.effects.contains(&Effect::Write(0x1d0ec6bc0, 512)));
+        assert_eq!(&h.bytes[0x10ec6bc0..0x10ec6dc0], &[0x5a; 512]);
+        // The exact checkpoint keeps the word and the latched request bits.
+        m.restore_checkpoint(&saved).unwrap();
+        assert_eq!(m.address_high, 1);
+        assert_eq!(m.request.as_ref().unwrap().address_high, 1);
+        // CMD25 reads the card data from the same high address.
+        let mut m = host(Protocol::Sdhc);
+        m.options.ram_bytes = 0xc0000000;
+        m.options.ram_banks = vec![(0x1c0000000, 0x40000000)];
+        m.options.dram_alias = false;
+        m.options.address_high = Some(HIGH);
+        let mut h = Ram::new(0x10ec6bc0 + 0x400);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        h.bytes[0x10ec6bc0..0x10ec6dc0].fill(0xa5);
+        let mut cx = h.cx();
+        m.write(&mut cx, HIGH, 4, 1);
+        write(&mut m, &mut h, 0, 4, 0xd0ec6bc0);
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 1);
+        command(&mut m, &mut h, 0x193a0027, 8);
+        due(&mut m, &mut h);
+        assert_eq!(m.card().sector(8).unwrap(), [0xa5; 512]);
+        // Without the high word the same low address is outside every bank.
+        let mut cx = h.cx();
+        m.write(&mut cx, HIGH, 4, 0);
+        write(&mut m, &mut h, 0x30, 2, 0xffff);
+        write(&mut m, &mut h, 0, 4, 0xd0ec6bc0);
+        write(&mut m, &mut h, 6, 2, 1);
+        write(&mut m, &mut h, 8, 2, 8);
+        write(&mut m, &mut h, 10, 2, 0);
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 12, 4, 0x193a0027);
+        assert!(cx.refusal().unwrap().contains("address 0xd0ec6bc0"));
+    }
+    #[test]
+    fn xp5_dram_at_0x40000000_is_not_an_alias() {
+        let mut m = host(Protocol::Sdhc);
+        m.options.ram_bytes = 0xc0000000;
+        assert_eq!(m.physical(0, 0x40001000, 512, false).unwrap(), 0x1000);
+        m.options.dram_alias = false;
+        assert_eq!(m.physical(0, 0x40001000, 512, true).unwrap(), 0x40001000);
+        assert_eq!(m.physical(0, 0x40001000, 512, false).unwrap(), 0x40001000);
+        assert_eq!(m.physical(1, 0xd0ec6bc0, 512, false).unwrap_err(), "SD DMA exceeds aligned DRAM: address 0x1d0ec6bc0 (physical 0x1d0ec6bc0) length 0x200");
+        m.options.ram_banks = vec![(0x1c0000000, 0x40000000)];
+        assert_eq!(m.physical(1, 0xd0ec6bc0, 512, false).unwrap(), 0x1d0ec6bc0);
+        assert!(m.physical(1, 0xfffffe00, 0x400, false).is_err());
     }
     #[test]
     fn dma_boundary_requires_ack_resume_and_writes_before_irq() {

@@ -30,6 +30,8 @@ fn polled_host(high_speed: bool) -> (SdHost, Ram) {
             initialization_fault: InitializationFault::None,
             high_speed,
             ram_banks: vec![],
+            dram_alias: true,
+            address_high: None,
         },
         card,
         Contacts::new(true, false),
