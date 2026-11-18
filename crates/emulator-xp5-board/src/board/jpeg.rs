@@ -65,6 +65,35 @@ pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), Stri
 
 #[cfg(test)]
 mod tests {
+    /// The X-T5 4.31 playback fragment declares a decoder this board opens,
+    /// and the board refuses options it does not know.
+    #[test]
+    fn the_xt5_decoder_window_opens() {
+        use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
+        #[derive(serde::Deserialize)]
+        struct Fragment {
+            device: Vec<DeviceWindow>,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/58-playback.toml"
+        );
+        let fragment: Fragment = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let window = fragment
+            .device
+            .iter()
+            .find(|window| window.kind == "jpeg-decoder")
+            .expect("a jpeg-decoder window");
+        assert_eq!((window.base, window.size), (0xffd1_1000, 0x1000));
+        let mut graph = DeviceGraph::new();
+        super::register_decoder(&mut graph, window).unwrap();
+        assert!(graph.at(0xffd1_1000).is_ok());
+        let mut extra = window.clone();
+        extra.base = 0xffd1_2000;
+        extra.options.insert("format".into(), toml::Value::Integer(1));
+        assert!(super::register_decoder(&mut DeviceGraph::new(), &extra).is_err());
+    }
+
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
     use fujimod_emulator_devices::{Cx, Device};
     use fujimod_emulator_imaging::frame::{BARS, Scene, render_422, ycbcr};

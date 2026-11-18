@@ -1363,6 +1363,24 @@
           "basis": "Band 768..933, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
         }
       ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 11
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads this ADC channel at 12-bit resolution through the sample cache 0x2029f0e (channel 11 of the array at 0x2029ef8). The channel is shared by the focus-mode selector and the playback button: scanner row 78 (focus C, callback 0x1406a98) accepts 3751..4095 and 2102..2325, and row 80 (playback, callback 0x1406994) accepts 1701..1879, 1880..2101 and 2102..2325, so a pressed playback button pulls each selector position into a lower band. Bands come from the firmware's factory key-band table. Only the band with the selector at C is declared, the position the run's ADC input holds. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "playback_button",
+          "band_low": 2102,
+          "band_high": 2325,
+          "sample": 2213,
+          "basis": "Band 2102..2325 (configuration words 0x3893 low, 0x3891 high), derived from the firmware's factory key-band table: playback pressed with the focus-mode selector at C, which row 78 also reads as C. The sample is the band midpoint."
+        }
+      ]
     }
   ]
 }

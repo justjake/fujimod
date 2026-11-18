@@ -346,6 +346,7 @@ mod tests {
                 LadderWire::Adc { channel: 14 },
                 LadderWire::PowerControllerRegister { register: 0x34 },
                 LadderWire::PowerControllerRegister { register: 0x35 },
+                LadderWire::Adc { channel: 11 },
             ]
         );
         assert!(
@@ -354,8 +355,12 @@ mod tests {
                 .iter()
                 .all(|ladder| ladder.released.is_none())
         );
-        // Playback shares ADC11 with the focus-mode switch and has no band of its own.
-        for unestablished in ["playback_button", "focus_mode_selector", "shutter_button"] {
+        // Playback shares ADC11 with the focus-mode switch: only its band with
+        // the switch at C (the run's ADC11 input) is declared.
+        let (ladder, play) = controls.ladder_rung("playback_button").unwrap();
+        assert_eq!(ladder.wire, LadderWire::Adc { channel: 11 });
+        assert_eq!((play.band_low, play.band_high), (2102, 2325));
+        for unestablished in ["focus_mode_selector", "shutter_button"] {
             assert!(
                 controls.ladder_rung(unestablished).is_none(),
                 "{unestablished}"
