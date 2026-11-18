@@ -79,6 +79,68 @@ fn shared_boot_summary(
 }
 
 
+/// One physical input requested through the frame viewer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ViewerInput {
+    /// A key of the body's key model.
+    Key(Key),
+    /// The shutter release: half (S1) or full (S2) press.
+    Shutter { full: bool },
+}
+
+impl ViewerInput {
+    /// Validate a viewer key name. The names are the `--press` key names.
+    fn parse(name: &str) -> Result<Self, String> {
+        Ok(match Key::parse(name)? {
+            Key::ShutterHalf => Self::Shutter { full: false },
+            Key::ShutterFull => Self::Shutter { full: true },
+            key => Self::Key(key),
+        })
+    }
+}
+
+/// Viewer key requests waiting for the next run slice. The viewer's client threads push them;
+/// the run loop applies them at the guest time it reaches between slices.
+type ViewerQueue = std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<(ViewerInput, bool)>>>;
+
+fn viewer_key_handler(queue: ViewerQueue) -> crate::frame_viewer::KeyHandler {
+    std::sync::Arc::new(move |name: &str, pressed: bool| {
+        let input = ViewerInput::parse(name)?;
+        queue.lock().map_err(|_| "viewer key queue is poisoned".to_string())?.push_back((input, pressed));
+        Ok(())
+    })
+}
+
+/// Apply one viewer input at guest time `now`. A body whose key model has no shutter wiring
+/// (the X-T5 ladder keys) gets the shutter as its GPIO release lines: half press drives 0:0 low,
+/// full press drives 0:1 low and holds 0:0 low while it is down.
+fn apply_viewer_input(
+    inputs: &fujimod_emulator_xp5_board::session::Inputs,
+    session: &mut fujimod_emulator_session::Session,
+    now: u64,
+    shutter: &mut [bool; 2],
+    (input, pressed): (ViewerInput, bool),
+) -> Result<(), String> {
+    match input {
+        ViewerInput::Key(key) => inputs.key(session, now, key, pressed),
+        ViewerInput::Shutter { full } => {
+            let key = if full { Key::ShutterFull } else { Key::ShutterHalf };
+            if inputs.key(session, now, key, pressed).is_ok() {
+                return Ok(());
+            }
+            let (half_high, full_high) = shutter_levels(shutter, full, pressed);
+            inputs.gpio(session, 0, 0, half_high)?;
+            inputs.gpio(session, 0, 1, full_high)
+        }
+    }
+}
+
+/// Record a shutter edge and return the active-low GPIO levels of 0:0 (S1) and 0:1 (S2).
+fn shutter_levels(shutter: &mut [bool; 2], full: bool, pressed: bool) -> (bool, bool) {
+    shutter[usize::from(full)] = pressed;
+    (!(shutter[0] || shutter[1]), !shutter[1])
+}
+
 /// One XP5 boot: the run configuration plus the caller's input files.
 pub struct Run {
     pub configuration: ResolvedConfiguration,
@@ -225,6 +287,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         Err(_) => None,
     };
     let pokes = pokes.iter().map(|spec| parse_poke(spec)).collect::<Result<Vec<_>, _>>()?;
+    let viewer_queue = ViewerQueue::default();
     let request = Startup {
         update,
         manifest,
@@ -234,6 +297,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         scene,
         output: Some(run_directory.clone()),
         viewer_port,
+        viewer_keys: viewer_port.map(|_| viewer_key_handler(viewer_queue.clone())),
         mode,
         quantum: quantum_override,
     };
@@ -302,6 +366,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .map(|(at_ms, level)| (millisecond_tick(at_ms), at_ms, level))
         .collect();
     let mut watch_after = watch_after_ms.map(|ms| (millisecond_tick(ms), ms));
+    let mut viewer_shutter = [false; 2];
     let interrupted = Arc::new(AtomicBool::new(false));
     let signal = interrupted.clone();
     ctrlc::set_handler(move || signal.store(true, Ordering::Release))
@@ -335,6 +400,18 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                 timed_gpio.pop_front();
                 inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
                 eprintln!("FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})", u8::from(high));
+            }
+            let requested: Vec<_> = viewer_queue.lock()
+                .map_err(|_| "viewer key queue is poisoned".to_string())?
+                .drain(..)
+                .collect();
+            for request in requested {
+                if let Err(error) = apply_viewer_input(&inputs, session, now, &mut viewer_shutter, request) {
+                    // A key the body does not wire is the user's request failing, not the run's.
+                    eprintln!("FUJIMOD XP5 viewer key {request:?}: {error}");
+                } else {
+                    eprintln!("FUJIMOD XP5 viewer key {request:?} at tick {now}");
+                }
             }
             if let Some((at, after_ms)) = watch_after
                 && at <= now
@@ -551,5 +628,47 @@ fn post_mortem(
     }
     for entry in board.pc_entries() {
         eprintln!("FUJIMOD XP5 pc-entry: {entry}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn viewer_key_names_map_to_physical_inputs() {
+        assert_eq!(ViewerInput::parse("SHUTTER_HALF"), Ok(ViewerInput::Shutter { full: false }));
+        assert_eq!(ViewerInput::parse("shutter_full"), Ok(ViewerInput::Shutter { full: true }));
+        assert_eq!(ViewerInput::parse("OK"), Ok(ViewerInput::Key(Key::Menu)));
+        assert_eq!(ViewerInput::parse("DISP"), Ok(ViewerInput::Key(Key::Back)));
+        assert_eq!(ViewerInput::parse("STICK_PUSH"), Ok(ViewerInput::Key(Key::StickPush)));
+        assert_eq!(ViewerInput::parse("PLAY"), Ok(ViewerInput::Key(Key::Play)));
+        assert_eq!(ViewerInput::parse("REAR+"), Ok(ViewerInput::Key(Key::RearPlus)));
+        assert!(ViewerInput::parse("POWER").is_err());
+    }
+
+    #[test]
+    fn viewer_handler_queues_valid_keys_and_refuses_unknown_names() {
+        let queue = ViewerQueue::default();
+        let handler = viewer_key_handler(queue.clone());
+        handler("UP", true).unwrap();
+        handler("SHUTTER_FULL", false).unwrap();
+        assert!(handler("NOT_A_KEY", true).is_err());
+        let queued: Vec<_> = queue.lock().unwrap().drain(..).collect();
+        assert_eq!(queued, [
+            (ViewerInput::Key(Key::Up), true),
+            (ViewerInput::Shutter { full: true }, false),
+        ]);
+    }
+
+    #[test]
+    fn full_shutter_press_holds_half_press_line_low() {
+        let mut shutter = [false; 2];
+        assert_eq!(shutter_levels(&mut shutter, false, true), (false, true));
+        assert_eq!(shutter_levels(&mut shutter, true, true), (false, false));
+        assert_eq!(shutter_levels(&mut shutter, false, false), (false, false));
+        assert_eq!(shutter_levels(&mut shutter, true, false), (true, true));
+        assert_eq!(shutter_levels(&mut shutter, true, true), (false, false));
+        assert_eq!(shutter_levels(&mut shutter, true, false), (true, true));
     }
 }
