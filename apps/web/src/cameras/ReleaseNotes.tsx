@@ -1,4 +1,6 @@
 import { For } from 'solid-js';
+import { releaseNoteFeature } from '../docs/manual-data';
+import { ManualFeatureLink } from '../ui/ManualFeatureLink';
 
 /** Deliberately limited Markdown: text never becomes HTML or an image. */
 function Inline(props: { text: string; depth?: number }) {
@@ -23,8 +25,17 @@ function Inline(props: { text: string; depth?: number }) {
             </em>
           );
         const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
-        if (link?.[2].startsWith('feature:'))
-          return <Inline text={link[1]} depth={(props.depth ?? 0) + 1} />;
+        if (link?.[2].startsWith('feature:')) {
+          const feature = releaseNoteFeature(link[2].slice('feature:'.length));
+          const label = <Inline text={link[1]} depth={(props.depth ?? 0) + 1} />;
+          return feature ? (
+            <ManualFeatureLink page={feature.page} row={feature.anchor} credits={feature.credits}>
+              {label}
+            </ManualFeatureLink>
+          ) : (
+            label
+          );
+        }
         if (link && /^(https?:\/\/|\/[^/]|#)/i.test(link[2]))
           return (
             <a href={link[2]} target="_blank" rel="noopener noreferrer">
@@ -39,7 +50,7 @@ function Inline(props: { text: string; depth?: number }) {
 type Block =
   | { kind: 'heading' | 'paragraph' | 'code'; text: string }
   | { kind: 'list'; ordered: boolean; items: string[] };
-export function noteBlocks(text: string): Block[] {
+export function noteBlocks(text: string, title?: string): Block[] {
   const blocks: Block[] = [];
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   for (let i = 0; i < lines.length; i++) {
@@ -70,12 +81,18 @@ export function noteBlocks(text: string): Block[] {
       else blocks.push({ kind: 'paragraph', text: line });
     }
   }
+  const first = blocks[0];
+  if (title && first?.kind === 'heading') {
+    const normalize = (heading: string) =>
+      heading.toLowerCase().replace(/^fujimod v(?=\d)/, 'fujimod ');
+    if (normalize(first.text) === normalize(title)) blocks.shift();
+  }
   return blocks;
 }
-export function ReleaseNotes(props: { text: string }) {
+export function ReleaseNotes(props: { text: string; title?: string }) {
   return (
     <div class="release-notes">
-      <For each={noteBlocks(props.text)}>
+      <For each={noteBlocks(props.text, props.title)}>
         {(block) => {
           switch (block.kind) {
             case 'heading':

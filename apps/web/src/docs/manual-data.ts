@@ -22,6 +22,15 @@ export type ManualPage = {
 };
 
 const pages: Readonly<Partial<Record<string, ManualPage>>> = manual.pages;
+const featureLinks: Readonly<Partial<Record<string, { page: string; anchor?: string }>>> =
+  manual.feature_links;
+const releaseFeatures: Readonly<Partial<Record<string, { credits: Credits }>>> = manual.features;
+
+export function releaseNoteFeature(id: string) {
+  const destination = Object.hasOwn(featureLinks, id) ? featureLinks[id] : undefined;
+  return destination ? { ...destination, credits: releaseFeatures[id]?.credits } : undefined;
+}
+
 export const manualMenuRows = manual.menus;
 
 export function manualRoutes() {

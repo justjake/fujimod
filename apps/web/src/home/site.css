@@ -73,13 +73,6 @@ footer a {
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.home-release-notes .release-notes {
-  height: auto;
-  padding: 0;
-  overflow: visible;
-  line-height: inherit;
-}
-
 .home-release-notes h2 {
   display: flex;
   flex-wrap: wrap;
@@ -121,4 +114,8 @@ footer a {
     gap: 40px;
     margin-bottom: 72px;
   }
+}
+
+.home-release-notes .release-notes a:not(.manual-feature-link) {
+  color: #64d2ff;
 }

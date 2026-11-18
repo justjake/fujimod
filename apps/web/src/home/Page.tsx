@@ -15,6 +15,7 @@ import { releaseData } from '../release-data';
 import { SiteFrame } from '../ui/SiteFrame';
 import { FeatureReels } from './FeatureReels';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
+import { recipeCatalog } from './sd-boot-v2/plan';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
 import { sha256 } from '../patch/patcher';
 import { initialize } from 'fujimod';
@@ -69,13 +70,7 @@ export default function Home() {
       <SiteFrame>
         <main>
           <ReleasePersonalNote />
-          <FeatureReels
-            recipeCount={() =>
-              state.release?.sd_card_files?.filter((file) =>
-                file.path.startsWith('FUJIMOD/RECIPES/'),
-              ).length ?? 0
-            }
-          />
+          <FeatureReels recipeCount={recipeCatalog(state.release?.sd_card_files).length} />
           <section class="home-release">
             <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
             <Show when={releaseData.current}>
@@ -90,7 +85,7 @@ export default function Home() {
                       }).format(new Date(release().publishedAt))}
                     </time>
                   </h2>
-                  <ReleaseNotes text={release().notes} />
+                  <ReleaseNotes title={`Fujimod ${release().version}`} text={release().notes} />
                   <p class="home-release-history">
                     <a href="/releases">All releases →</a>
                   </p>

@@ -64,3 +64,26 @@ test('wrapped bullet text stays in its list item without an extra paragraph', ()
   );
   expect(host.querySelector('strong')?.textContent).toBe('Faster menus.');
 });
+
+test('uses the manual-notes destination and suppresses just the matching release title', () => {
+  const host = document.createElement('div');
+  dispose = render(
+    () => (
+      <ReleaseNotes
+        title="Fujimod v0.2.0"
+        text={
+          '# FujiMod 0.2.0\n\n## Changes\n- [Highlight metering](feature:highlight_metering)\n- [Retired feature](feature:missing)'
+        }
+      />
+    ),
+    host,
+  );
+  expect([...host.querySelectorAll('h4')].map((heading) => heading.textContent)).toEqual([
+    'Changes',
+  ]);
+  expect(host.querySelector('a.manual-feature-link')?.getAttribute('href')).toBe(
+    '/docs/manual/metering/#shooting-menu--photometry',
+  );
+  expect(host.querySelectorAll('a')).toHaveLength(1);
+  expect(host.textContent).toContain('Retired feature');
+});

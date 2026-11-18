@@ -13,6 +13,7 @@ import {
   conflicting,
   plannedBytes,
   offered,
+  recipeCatalog,
   releaseCameras,
   type CardCamera,
 } from './plan';
@@ -49,11 +50,11 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   ]);
   const recipes = createMemo(() => {
     const supported = chosen().length ? chosen() : cameras();
-    return card().filter(
-      (file) => file.path.startsWith('FUJIMOD/RECIPES/') && offered(file, supported),
-    );
+    return recipeCatalog(card()).filter((recipe) => offered(recipe, supported));
   });
-  const included = () => recipes().filter((recipe) => !excluded().has(recipe.path)).length;
+  const included = createMemo(
+    () => recipes().filter((recipe) => !excluded().has(recipe.path)).length,
+  );
   const loaded = createMemo(() => {
     const map = new Map<string, SdBootV2Release>();
     for (const [id, value] of releases()) if (!(value instanceof Error)) map.set(id, value);
@@ -167,7 +168,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                 }
               />
               <span>Recipes</span>
-              <small>{included()}</small>
+              <small>{recipes().length}</small>
             </label>
             <details>
               <summary>Choose recipes</summary>

@@ -1,4 +1,4 @@
-import { Show, createSignal, type Accessor } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { ManualFeatureLink as Link } from '../ui/ManualFeatureLink';
 import { featureMedia, type Media } from './feature-media';
@@ -31,7 +31,6 @@ function ReelVideo(props: { title: string; clips: readonly Media[] }) {
           muted
           playsinline
           autoplay
-          controls
           preload="metadata"
           loop={props.clips.length - failed().size === 1}
           onEnded={() => setFrame((index) => index + 1)}
@@ -67,7 +66,7 @@ const controls = clips([
   'menu_theme_item',
 ]);
 
-export function FeatureReels(props: { recipeCount: Accessor<number> }) {
+export function FeatureReels(props: { recipeCount: number }) {
   return (
     <section class="home-reels" aria-label="Features">
       <Reel title="Shooting tools" clips={shooting}>
@@ -106,7 +105,7 @@ export function FeatureReels(props: { recipeCount: Accessor<number> }) {
         <Link page="noise-reduction" row="NOISE REDUCTION">
           NOISE REDUCTION
         </Link>{' '}
-        off, <Show when={props.recipeCount()}>{props.recipeCount()} </Show>
+        off, <Show when={props.recipeCount}>{props.recipeCount} </Show>
         <Link page="edit-save-custom-setting" row="EDIT/SAVE CUSTOM SETTING">
           RECIPES
         </Link>{' '}

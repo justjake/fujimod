@@ -77,16 +77,48 @@ for (const engine of [chromium, webkit]) {
       );
       assert.match(await page.locator('.home-sd-card').innerText(), /lives on your SD card/);
       assert.equal(await page.locator('.home-release-notes a[href="/releases"]').count(), 1);
+      const releaseHeading = page.locator('.home-release-notes h2');
+      const title = await releaseHeading.evaluate((heading) =>
+        heading.firstChild?.textContent?.trim(),
+      );
+      assert.ok(title);
+      assert.equal(
+        await page
+          .locator('.home-release-notes .release-notes h4')
+          .getByText(title, { exact: true })
+          .count(),
+        0,
+      );
+      assert.equal(
+        await page.locator('#workspace .release-notes, #workspace .release-heading').count(),
+        0,
+      );
+      await page
+        .locator('#workspace button[aria-label="Run unmodified in your browser"]')
+        .waitFor({ state: 'attached' });
       for (const href of await page
         .locator('main .manual-feature-link')
         .evaluateAll((links) => links.map((link) => link.getAttribute('href')!))) {
         const url = new URL(href, base);
         assert.ok(
-          manualPageAt(url.pathname)?.sections.some(({ anchor }) => '#' + anchor === url.hash),
+          manualPageAt(url.pathname) &&
+            (!url.hash ||
+              manualPageAt(url.pathname)?.sections.some(({ anchor }) => '#' + anchor === url.hash)),
           href,
         );
       }
       const reelVideos = page.locator('.home-reel video');
+      assert.ok(
+        await reelVideos.evaluateAll((videos: HTMLVideoElement[]) =>
+          videos.every(
+            (video) =>
+              !video.controls &&
+              video.autoplay &&
+              video.playsInline &&
+              (video.muted || video.defaultMuted),
+          ),
+        ),
+      );
       const sources = await reelVideos.evaluateAll((videos) =>
         videos.map((video) => video.getAttribute('src')!.split('/').at(-1)!),
       );
@@ -115,8 +147,48 @@ for (const engine of [chromium, webkit]) {
       const recipeGroup = page.getByRole('group', { name: 'Recipes' });
       const recipeToggle = recipeGroup.getByRole('checkbox', { name: /^Recipes/ });
       const recipeList = recipeGroup.locator('.home-recipe-list input');
+      assert.match(
+        await page.locator('.home-reels').innerText(),
+        new RegExp(`\\b${recipes.length} RECIPES\\b`),
+      );
+      assert.equal((await recipeGroup.locator('small').innerText()).trim(), String(recipes.length));
+      assert.ok(await recipeToggle.isChecked());
+      assert.equal(await recipeToggle.evaluate((el: HTMLInputElement) => el.indeterminate), false);
       await recipeGroup.getByText('Choose recipes', { exact: true }).click();
       assert.equal(await recipeList.count(), recipes.length);
+      assert.equal(
+        await recipeGroup.locator('.home-recipe-list input:checked').count(),
+        recipes.length,
+      );
+      await recipeGroup.getByText('Choose recipes', { exact: true }).click();
+
+      if (engine === chromium && !mobile) {
+        await reelVideos.evaluateAll((videos: HTMLVideoElement[]) =>
+          Promise.all(
+            videos.map(async (video) => {
+              if (!Number.isFinite(video.duration)) return;
+              video.pause();
+              const time = Math.min(1.8, video.duration * 0.4);
+              if (Math.abs(video.currentTime - time) < 0.01) return;
+              const sought = new Promise<void>((resolve) =>
+                video.addEventListener('seeked', () => resolve(), { once: true }),
+              );
+              video.currentTime = time;
+              await sought;
+            }),
+          ),
+        );
+        for (const [selector, name] of [
+          ['.home-reels', 'reels-and-sd-card'],
+          ['#software', 'emulator-top'],
+        ]) {
+          await page
+            .locator(selector)
+            .evaluate((element) => scrollBy(0, element.getBoundingClientRect().top - 20));
+          await page.screenshot({ path: resolve(output, `${name}@2x.png`) });
+        }
+      }
+      await recipeGroup.getByText('Choose recipes', { exact: true }).click();
       await recipeToggle.uncheck();
       assert.equal(await recipeGroup.locator('.home-recipe-list input:checked').count(), 0);
       await recipeToggle.check();
@@ -128,31 +200,13 @@ for (const engine of [chromium, webkit]) {
       assert.ok(await recipeToggle.evaluate((el: HTMLInputElement) => el.indeterminate));
       await recipeGroup.getByText('Choose recipes', { exact: true }).click();
 
-      if (engine === chromium) {
-        await reelVideos.evaluateAll((videos: HTMLVideoElement[]) =>
-          Promise.all(
-            videos.map(async (video) => {
-              if (!Number.isFinite(video.duration)) return;
-              video.pause();
-              const sought = new Promise<void>((resolve) =>
-                video.addEventListener('seeked', () => resolve(), { once: true }),
-              );
-              video.currentTime = Math.min(1.8, video.duration * 0.4);
-              await sought;
-            }),
-          ),
-        );
-        await page.evaluate(() => scrollTo(0, 0));
-        await page.screenshot({
-          fullPage: true,
-          path: resolve(output, mobile ? 'phone@2x.png' : 'desktop@2x.png'),
-        });
-      }
       for (const selector of [
         '.release-personal-note .manual-feature-link',
         '.home-reels .manual-feature-link',
+        '.home-release-notes .release-notes .manual-feature-link',
       ]) {
         const link = page.locator(selector).first();
+        if (!(await link.count())) continue;
         const href = await link.getAttribute('href');
         if (mobile) await link.tap();
         else await link.hover();
