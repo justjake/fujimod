@@ -1558,17 +1558,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-catalog-contacts"
-version = "0.1.0"
-dependencies = [
- "fujimod-catalog",
- "fujimod-catalog-controls",
- "fujimod-workspace-hack",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "fujimod-catalog-controls"
 version = "0.1.0"
 dependencies = [
@@ -1744,6 +1733,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-wiring"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-controls",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-catalog-workflows"
 version = "0.1.0"
 dependencies = [
@@ -1824,14 +1824,14 @@ dependencies = [
  "fujimod-catalog-assets",
  "fujimod-catalog-configuration",
  "fujimod-catalog-construction",
- "fujimod-catalog-contacts",
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-catalog-run-inputs",
+ "fujimod-catalog-wiring",
  "fujimod-emulator",
  "fujimod-emulator-board-graph",
- "fujimod-emulator-contacts",
+ "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
@@ -1869,10 +1869,10 @@ name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog-configuration",
- "fujimod-catalog-contacts",
  "fujimod-catalog-resolution",
+ "fujimod-catalog-wiring",
  "fujimod-emulator-boot",
- "fujimod-emulator-contacts",
+ "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
@@ -1881,12 +1881,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "fujimod-emulator-contacts"
+name = "fujimod-emulator-controls"
 version = "0.1.0"
 dependencies = [
  "fujimod-catalog",
- "fujimod-catalog-contacts",
  "fujimod-catalog-controls",
+ "fujimod-catalog-wiring",
  "fujimod-emulator-devices",
  "fujimod-emulator-session",
  "fujimod-workspace-hack",
@@ -2942,7 +2942,7 @@ dependencies = [
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
- "fujimod-emulator-contacts",
+ "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-session",
  "fujimod-mcp-core",

@@ -174,7 +174,7 @@ impl Camera {
         } else {
             let edges = host::parse_keys(request.keys.as_deref(), None)?;
             let automatic_setup = edges.is_empty();
-            let mut keys = fujimod_emulator_contacts::Keys::new(
+            let mut keys = fujimod_emulator_controls::Keys::new(
                 &camera.resolved.reference,
                 edges.into_iter().map(|edge| {
                     (
@@ -188,7 +188,7 @@ impl Camera {
             if let Some(levels) = &request.gpio {
                 for level in levels.split(',') {
                     let (port, pin, high) = host::parse_gpio(level.trim())?;
-                    fujimod_emulator_contacts::set_gpio(&mut camera.session, port, pin, high)?;
+                    fujimod_emulator_controls::set_gpio(&mut camera.session, port, pin, high)?;
                 }
             }
             let start = camera.session.board.now();
@@ -239,10 +239,10 @@ impl Camera {
         Ok((summary, png))
     }
 
-    /// Install the contact panel and driver once the firmware has loaded
-    /// its configuration.
+    /// Install the control wiring and input confirmation once the firmware
+    /// has loaded its configuration.
     fn connect(&mut self) -> Result<(), String> {
-        fujimod_emulator_contacts::connect(
+        fujimod_emulator_controls::connect(
             &mut self.session,
             &self.resolved.reference,
             TICKS_PER_SECOND,

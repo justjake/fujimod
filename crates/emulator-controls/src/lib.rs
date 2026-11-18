@@ -1,11 +1,17 @@
-//! Contact panels and contact drivers for emulator sessions, compiled from
-//! the catalog's located controls.
+//! A running camera's physical controls, built from the catalog.
 //!
-//! The contact panel says which electrical levels every control pose
-//! presents. The contact driver says, for every pose, which firmware scanner
-//! records must read ready before the pose changes and which must report it
-//! afterwards. Both come from the catalog and the session's device graph;
-//! ADC thresholds are read from the firmware's loaded configuration.
+//! The firmware sees controls only as electrical inputs: GPIO levels, ADC
+//! voltages and serial status bits. Two things let a host operate them:
+//!
+//! - The wiring: the electrical levels every control position presents,
+//!   composed across controls that share a wire. The session holds it as
+//!   its `SwitchPanel`.
+//! - The input confirmation: for every position, the firmware key scanner
+//!   records that must read ready before it changes and must report it
+//!   afterwards. The session holds it as its `contact_driver`.
+//!
+//! Both come from the catalog and the session's device graph; ADC thresholds
+//! are read from the firmware's loaded configuration.
 #![forbid(unsafe_code)]
 
 mod graph;
@@ -17,8 +23,8 @@ mod panel;
 use std::collections::{BTreeMap, BTreeSet};
 
 use fujimod_catalog::reference::ResolvedSelection;
-use fujimod_catalog_contacts::{Located, LocatedControl, ScannerRecord};
 use fujimod_catalog_controls::{AdcInterval, facts::ConfigurationLocation};
+use fujimod_catalog_wiring::{Located, LocatedControl, ScannerRecord};
 use fujimod_emulator_devices::parts::switch_panel;
 use fujimod_emulator_session::{
     Session,
@@ -86,11 +92,13 @@ pub struct Problem {
     pub reason: String,
 }
 
-/// A compiled panel and driver for one session.
+/// The wiring and input confirmation built for one session.
 #[derive(Clone)]
-pub struct Contacts {
-    pub panel: switch_panel::Spec,
-    pub driver: contact_driver::Spec,
+pub struct Controls {
+    /// Electrical levels of every control position.
+    pub wiring: switch_panel::Spec,
+    /// Scanner checks that confirm each position change.
+    pub confirmation: contact_driver::Spec,
     /// Electronic controls that could not be compiled.
     pub problems: Vec<Problem>,
 }
@@ -103,7 +111,7 @@ struct Checks<'a> {
     /// Calibration offsets of every admitted band on each ADC channel.
     channel_tags: BTreeMap<u8, BTreeSet<u32>>,
     /// The located predicate behind each scanner record.
-    sources: BTreeMap<u64, &'a fujimod_catalog_contacts::Wire>,
+    sources: BTreeMap<u64, &'a fujimod_catalog_wiring::Wire>,
 }
 
 fn configuration_offsets(interval: &AdcInterval) -> Option<[u32; 2]> {
@@ -226,7 +234,7 @@ pub fn compile(
     definition: &Value,
     calibration: Option<&dyn Calibration>,
     ticks_per_second: u64,
-) -> Result<Contacts, String> {
+) -> Result<Controls, String> {
     let nodes = Nodes::new(definition)?;
     // Rotary steps go to the encoder, never to scanner buttons.
     let mut controls: Vec<LocatedControl> = located.controls.clone();
@@ -243,7 +251,7 @@ pub fn compile(
         located.analog_levels,
         located.scanner_stable_offset,
     )?;
-    let sources: BTreeMap<u64, &fujimod_catalog_contacts::Wire> = located
+    let sources: BTreeMap<u64, &fujimod_catalog_wiring::Wire> = located
         .controls
         .iter()
         .flat_map(|row| row.input.values().flatten())
@@ -402,12 +410,12 @@ pub fn compile(
         }
     }
     let poll_ticks = (ticks_per_second / 1000).max(1);
-    Ok(Contacts {
-        panel: switch_panel::Spec {
+    Ok(Controls {
+        wiring: switch_panel::Spec {
             controls: plan.controls,
             circuits: plan.circuits,
         },
-        driver: contact_driver::Spec {
+        confirmation: contact_driver::Spec {
             poll_ticks,
             max_phase_ticks: ticks_per_second * 3,
             catalog: inputs,
@@ -418,8 +426,9 @@ pub fn compile(
     })
 }
 
-/// Compile the selected body's controls for a running session, reading
-/// thresholds from the firmware's loaded configuration, and install them.
+/// Build the selected body's control wiring and input confirmation for a
+/// running session, reading thresholds from the firmware's loaded
+/// configuration, and install them.
 /// Does nothing when the session's controls are already connected.
 pub fn connect(
     session: &mut Session,
@@ -429,8 +438,8 @@ pub fn connect(
     if session.controls.is_some() {
         return Ok(Vec::new());
     }
-    let located = fujimod_catalog_contacts::locate(selection)?;
-    let contacts = {
+    let located = fujimod_catalog_wiring::locate(selection)?;
+    let controls = {
         let calibration = located
             .calibration
             .map(|location| LiveCalibration::new(session, location))
@@ -444,17 +453,17 @@ pub fn connect(
             ticks_per_second,
         )?
     };
-    session.configure_controls(contacts.panel)?;
-    session.configure_contact_driver(contacts.driver)?;
-    Ok(contacts.problems)
+    session.configure_controls(controls.wiring)?;
+    session.configure_contact_driver(controls.confirmation)?;
+    Ok(controls.problems)
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use fujimod_catalog_contacts::{Located, LocatedControl, ScannerRecord, Wire, WireKind};
     use fujimod_catalog_controls::AdcInterval;
+    use fujimod_catalog_wiring::{Located, LocatedControl, ScannerRecord, Wire, WireKind};
     use fujimod_emulator_devices::parts::switch_panel::Signal;
     use serde_json::json;
 
@@ -532,10 +541,10 @@ mod tests {
             ]},
             "execution": {"mappings": [], "ram": [{"base": 0, "size": 0x10000}]},
         });
-        let contacts = super::compile(&located, &definition, None, 12_000_000).unwrap();
-        assert!(contacts.problems.is_empty());
-        let ladder = contacts
-            .panel
+        let controls = super::compile(&located, &definition, None, 12_000_000).unwrap();
+        assert!(controls.problems.is_empty());
+        let ladder = controls
+            .wiring
             .circuits
             .iter()
             .find(|c| c.controls == ["down", "up"])
@@ -564,22 +573,22 @@ mod tests {
                 .iter()
                 .any(|case| case.positions == ["pressed", "pressed"])
         );
-        let shoot = contacts
-            .panel
+        let shoot = controls
+            .wiring
             .circuits
             .iter()
             .find(|c| c.controls == ["shoot"])
             .unwrap();
         assert_eq!(shoot.cases.len(), 2);
         assert!(
-            contacts
-                .panel
+            controls
+                .wiring
                 .controls
                 .iter()
                 .all(|control| control.initial == "released")
         );
-        let up = contacts
-            .driver
+        let up = controls
+            .confirmation
             .actuators
             .iter()
             .find(|a| a.id == "up")

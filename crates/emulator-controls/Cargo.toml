@@ -1,6 +1,6 @@
 [package]
-name = "fujimod-catalog-contacts"
-description = "Physical controls resolved against located firmware inputs and body wiring"
+name = "fujimod-emulator-controls"
+description = "Control wiring and input confirmation for emulator sessions, built from the catalog"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,10 @@ doctest = false
 
 [dependencies]
 fujimod-catalog.workspace = true
+fujimod-catalog-wiring.workspace = true
 fujimod-catalog-controls.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-session.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 fujimod-workspace-hack.workspace = true

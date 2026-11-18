@@ -102,19 +102,21 @@ layers lack, the layer gains it.
 
 Presses and turns go through `fujimod-remote`, which waits until the
 firmware accepts input and confirms its key scanner registered each edge.
-On an emulated camera that needs the session's contact panel and contact
-driver, which two crates build from the catalog:
+On an emulated camera that needs two things on the session, which two
+crates build from the catalog: the control wiring (the electrical levels of
+every control position, the session's `SwitchPanel`) and the input
+confirmation (the scanner records each position must read ready and report,
+the session's `contact_driver`).
 
-- `fujimod-catalog-contacts` resolves every physical control against the
+- `fujimod-catalog-wiring` resolves every physical control against the
   firmware's located inputs and the body's wiring: concrete pins, ADC
   channels, threshold band offsets, scanner records and interfaces.
-- `fujimod-emulator-contacts` compiles that against the session's device
-  graph into the panel (the electrical levels of every control pose,
-  composed across controls sharing a wire) and the driver (the scanner
-  records each pose must read ready and report), reading thresholds from
-  the firmware's loaded configuration, and installs both. Its `Keys` and
-  `set_key` drive the same panel for timed key scripts, the CLI's `--keys`
-  and `--press`, and boot's first-start acceptance.
+- `fujimod-emulator-controls` builds the wiring, composed across controls
+  sharing a wire, and the input confirmation against the session's device
+  graph, reading thresholds from the firmware's loaded configuration, and
+  installs both. Its `Keys` and `set_key` drive the same wiring for timed
+  key scripts, the CLI's `--keys` and `--press`, and boot's first-start
+  acceptance.
 
 On X70 1.10 every electronic control compiles, with thresholds read from
 the running firmware.
@@ -301,7 +303,7 @@ implemented tool against X70 1.10:
   MENU/OK press, differed by about 15 million instructions and 9,723
   blocks that only ran with the press.
 - A camera opened from a checkpoint file adopted the saved camera's
-  contacts and accepted presses.
+  control wiring and accepted presses.
 - A FujiMod SD card booted to REC, showed its welcome sheet after eight
   guest seconds, and DISP/BACK dismissed it.
 
