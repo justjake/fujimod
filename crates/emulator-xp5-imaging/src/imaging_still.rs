@@ -35,10 +35,17 @@
 //!
 //! * +0x14 source size, +0x18 crop origin, +0x1c crop size, +0x20 output size: (lines - 1) << 16
 //!   | (pixels - 1) for the sizes, y << 16 | x for the origin. A zero crop size takes the source.
+//! * +0x24 / +0x28 horizontal / vertical: bits 16..17 a power-of-two pre-decimation of the
+//!   source (0x13bd86c / 0x13bd918 for RESZ, 0x13c06ac / 0x13c06e4 for RZL2; the shift is
+//!   chosen by 0x148942c: 2 when (source - 1) / (output - 1) > 3, 1 when > 1, else 0), bits
+//!   0..15 the Q12 step ((decimated crop - 1) << 12) / (output - 1). The crop origin and crop
+//!   size count decimated pixels and lines (0x2d17678 shifts the source size right before it
+//!   writes the crop), so input pixel x of the crop is source pixel (origin + x) << shift.
 //! * +0xd0 / +0xd4 source address bits 34..32 / 31..0, +0xe0 source pitch; +0xe4 / +0xe8 and
 //!   +0xf4 the same for the destination.
 //! * +0xd8 / +0xdc and +0xec / +0xf0 (second planes) are logged and ignored: only packed pictures are
-//!   modelled. The steps (+0x24 / +0x28), phases and the 31-tap filter are not applied.
+//!   modelled. The Q12 steps (the output follows crop / output instead), phases and the
+//!   31-tap filter are not applied; the pre-decimation is.
 //!
 //! In RCIZ queue mode (0x1486de0 -> 0x13be318) the driver writes only the destination words:
 //! the source is the RIFP inline stream. A start with source address 0 therefore reads the
@@ -53,8 +60,10 @@
 //! with every address word 4 bytes lower:
 //!
 //! * +0x10 formats (source class bits 0..1, destination class bits 4..5), +0x14 source size,
-//!   +0x18 crop origin, +0x1c crop size, +0x20 output size, encoded as for RESZ (0x2d17678
-//!   subtracts one from even counts);
+//!   +0x18 crop origin, +0x1c crop size, +0x20 output size and the +0x24 / +0x28
+//!   pre-decimation, encoded as for RESZ (0x2d17678 subtracts one from even counts). Both
+//!   CreateInnerYC passes decimate by 4: 7728x2576 -> crop 1932x644 -> 640x480, then 640x480
+//!   -> crop 160x120 -> 160x120;
 //! * +0xcc / +0xd0 source address bits 34..32 / 31..0, +0xd4 / +0xd8 source second plane,
 //!   +0xdc source pitch; +0xe0 / +0xe4, +0xe8 / +0xec and +0xf0 the same for the destination.
 //!
@@ -146,7 +155,7 @@ pub static RZL2: Layout = Layout {
 
 impl Layout {
     fn words(&self) -> impl Iterator<Item = u64> + '_ {
-        [0x10, 0x14, 0x18, 0x1c, 0x20]
+        [0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28]
             .into_iter()
             .chain([self.source, self.output].into_iter().flat_map(|o| (0..5).map(move |i| o + 4 * i)))
     }
@@ -182,17 +191,32 @@ impl ReszJob {
             (source, pitch) = (picture.address, picture.pitch as usize);
         }
         let (width, lines) = size(word(0x14));
+        // Pre-decimation shifts (+0x24 / +0x28 bits 16..17); the crop counts decimated
+        // pixels and lines.
+        let shift = (
+            ((word(0x24) >> 16) & 3) as usize,
+            ((word(0x28) >> 16) & 3) as usize,
+        );
+        let decimated = (width.div_ceil(1 << shift.0), lines.div_ceil(1 << shift.1));
         let origin = ((word(0x18) & 0xffff) as usize, (word(0x18) >> 16) as usize);
         let crop = match word(0x1c) {
-            0 => (width - origin.0.min(width), lines - origin.1.min(lines)),
+            0 => (
+                decimated.0 - origin.0.min(decimated.0),
+                decimated.1 - origin.1.min(decimated.1),
+            ),
             w => size(w),
         };
         let out = size(word(0x20));
         let geometry = format!(
             "{name} {:#x}: source {source:#x}{} pitch {pitch:#x} size {width}x{lines}, crop {crop:?} \
-             at {origin:?}, output {out:?} at {output:#x} pitch {out_pitch:#x} (+0x10 {:#x})",
+             at {origin:?}{}, output {out:?} at {output:#x} pitch {out_pitch:#x} (+0x10 {:#x})",
             self.base,
             if from_rifp { " (RIFP output)" } else { "" },
+            if shift == (0, 0) {
+                String::new()
+            } else {
+                format!(" after decimation by ({}, {})", 1 << shift.0, 1 << shift.1)
+            },
             word(0x10)
         );
         // The X-T5 4.31 still ResizeToRecordSize run programs a second source/destination plane
@@ -211,20 +235,31 @@ impl ReszJob {
         } else {
             geometry
         };
+        // The setters (0x13bd86c, 0x13c06ac) write only bits 0..17 and a shift up to 2.
+        let steps = [word(0x24), word(0x28)];
+        if steps.iter().any(|w| w >> 18 != 0 || (w >> 16) & 3 == 3) {
+            return Err(format!(
+                "{geometry}: undecoded step words +0x24 {:#x} / +0x28 {:#x}",
+                steps[0], steps[1]
+            ));
+        }
+        // Only the source pixels the crop reaches must fit the pitch: the X-T5 playback full-size
+        // resize programs a 7760-pixel source with a 15488-byte pitch and a 7740-pixel crop.
+        let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
         if output == 0
             || crop.0 == 0
             || crop.1 == 0
-            || origin.0 + crop.0 > width
-            || origin.1 + crop.1 > lines
+            || origin.0 + crop.0 > decimated.0
+            || origin.1 + crop.1 > decimated.1
             || out.0 % 2 != 0
-            || pitch < 2 * width
+            || pitch < 2 * used
             || out_pitch < 2 * out.0
         {
             return Err(format!("{geometry} is outside the modelled layout"));
         }
-        let bytes = cx.ram_bytes(source, pitch * (lines - 1) + 2 * width)?;
+        let bytes = cx.ram_bytes(source, pitch * (lines - 1) + 2 * used)?;
         cx.log(&geometry);
-        scale_422(&bytes, pitch, origin, crop, out, |y, line| {
+        scale_422(&bytes, pitch, shift, origin, crop, out, |y, line| {
             cx.ram_write(output + (y * out_pitch) as u64, line)
         })
     }
@@ -235,10 +270,12 @@ fn pixels_lines(word: u32) -> (usize, usize) {
 }
 
 /// Nearest-neighbour scale of packed 4:2:2 `source` (pitch `pitch`) from the crop at `origin`
-/// of `crop` (pixels, lines) to `out` (pixels, lines), written line by line to `write`.
+/// of `crop` (pixels, lines) to `out` (pixels, lines), written line by line to `write`. The
+/// origin and crop count source pixels and lines decimated by `1 << shift`.
 fn scale_422(
     source: &[u8],
     pitch: usize,
+    shift: (usize, usize),
     origin: (usize, usize),
     crop: (usize, usize),
     out: (usize, usize),
@@ -246,9 +283,9 @@ fn scale_422(
 ) -> Result<(), String> {
     let mut line = vec![0u8; out.0 * 2];
     for y in 0..out.1 {
-        let row = &source[(origin.1 + y * crop.1 / out.1) * pitch..];
+        let row = &source[((origin.1 + y * crop.1 / out.1) << shift.1) * pitch..];
         for pair in 0..out.0 / 2 {
-            let x = [0, 1].map(|i| origin.0 + (2 * pair + i) * crop.0 / out.0);
+            let x = [0, 1].map(|i| (origin.0 + (2 * pair + i) * crop.0 / out.0) << shift.0);
             line[pair * 4] = row[x[0] / 2 * 4 + x[0] % 2];
             line[pair * 4 + 1] = row[x[1] / 2 * 4 + x[1] % 2];
             line[pair * 4 + 2] = row[x[0] / 2 * 4 + 2];
@@ -327,7 +364,7 @@ pub fn rifp_run(
         }
     } else {
         cx.log(&format!("{} copies packed 4:2:2", geometry()));
-        scale_422(&bytes, pitch, origin, crop, out, |y, line| write(cx, y, line))?;
+        scale_422(&bytes, pitch, (0, 0), origin, crop, out, |y, line| write(cx, y, line))?;
     }
     Ok(YcPicture {
         address: output,
@@ -468,7 +505,7 @@ mod tests {
     fn scaling_takes_the_nearest_pixel_and_the_first_pixel_pair_chroma() {
         let source = picture(8, 4, 20);
         let mut out = Vec::new();
-        scale_422(&source, 20, (0, 0), (8, 4), (4, 2), |y, line| {
+        scale_422(&source, 20, (0, 0), (0, 0), (8, 4), (4, 2), |y, line| {
             out.push((y, line.to_vec()));
             Ok(())
         })
@@ -767,6 +804,108 @@ mod tests {
             rzl2.write(&mut cx, base + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_some());
+    }
+
+    /// Colour bars through the X-T5 4.31 preview and playback scalers (run45 words): RZL2
+    /// decimates the picture by 4 (+0x24 / +0x28 = 0x21000) and crops the whole decimated
+    /// picture to the 640x480 preview; RESZ scales its 640x426 letterbox band to the 960x640
+    /// panel. Reading the crop in source pixels showed only the first quarter of each axis
+    /// (2 of the 8 bars, no lower part).
+    #[test]
+    fn decimated_crop_keeps_every_colour_bar_from_capture_to_panel() {
+        const BARS: usize = 8;
+        let bar = |b: usize| [16 + 28 * b as u8, 0x80 + b as u8, 0x40 + b as u8];
+        let (width, lines) = (2560, 1920);
+        let (preview, panel) = (RAM + 0xa0_0000, RAM + 0xc0_0000);
+        let mut ram = vec![0u8; 0xe0_0000];
+        for y in 0..lines {
+            for pair in 0..width / 2 {
+                // The lower quarter is a ramp: Y follows the line.
+                let [luma, cb, cr] = if y < lines * 3 / 4 {
+                    bar(pair * 2 * BARS / width)
+                } else {
+                    [(y / 8) as u8, 0x80, 0x80]
+                };
+                ram[y * width * 2 + pair * 4..][..4].copy_from_slice(&[luma, luma, cb, cr]);
+            }
+        }
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
+        let stub = |irq: u32| {
+            let options = toml::from_str(&format!(
+                "irq = {irq}\nstarts = [{{ offset = 0x04, mask = 0x1 }}]\ndelay_us = 200"
+            ))
+            .unwrap();
+            move |base| CompletionStub::new(base, 0x1000, options, 1000).unwrap()
+        };
+        let base = 0xff984000;
+        let mut rzl2 = Resz::with_layout(&RZL2, base, stub(205)(base), Some(YcOutput::default()));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [
+            (0x14, 1919 << 16 | 2559),
+            (0x1c, 479 << 16 | 639),
+            (0x20, 479 << 16 | 639),
+            (0x24, 0x21000),
+            (0x28, 0x21000),
+            (0xd0, RAM as u32),
+            (0xdc, 2560 * 2),
+            (0xe4, preview as u32),
+            (0xf0, 0x500),
+            (0x04, 1),
+        ] {
+            rzl2.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+        let mut resz = Resz::new(0xffd0c000, stub(203)(0xffd0c000), Some(YcOutput::default()));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [
+            (0x14, 431 << 16 | 639),
+            (0x1c, 425 << 16 | 639),
+            (0x20, 639 << 16 | 959),
+            (0x24, 2729),
+            (0x28, 2724),
+            (0xd4, (preview + 27 * 0x500) as u32),
+            (0xe0, 0x500),
+            (0xe8, panel as u32),
+            (0xf4, 0x780),
+            (0x04, 1),
+        ] {
+            resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+        let pixel = |x: usize, y: usize| {
+            let at = (panel - RAM) as usize + y * 0x780 + x / 2 * 4;
+            let p = &host.ram[at..at + 4];
+            [p[x % 2], p[2], p[3]]
+        };
+        // Preview lines 27..453 are source lines 108..1812: bars down to panel line ~531,
+        // the ramp below.
+        for b in 0..BARS {
+            assert_eq!(pixel(b * 120 + 60, 100), bar(b), "bar {b}");
+            assert_eq!(pixel(b * 120 + 60, 500), bar(b), "bar {b} low");
+        }
+        let ramp = pixel(480, 600)[0];
+        assert!(usize::from(ramp) >= 1440 / 8 && pixel(480, 639)[0] > ramp, "ramp {ramp}");
+        // An undecoded shift (3) refuses.
+        let mut rzl2 = Resz::with_layout(&RZL2, base, stub(205)(base), Some(YcOutput::default()));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [
+            (0x14, 1919 << 16 | 2559),
+            (0x20, 479 << 16 | 639),
+            (0x24, 0x31000),
+            (0xd0, RAM as u32),
+            (0xdc, 2560 * 2),
+            (0xe4, preview as u32),
+            (0xf0, 0x500),
+            (0x04, 1),
+        ] {
+            rzl2.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        let refusal = cx.refusal().unwrap();
+        assert!(refusal.contains("undecoded step words"), "{refusal}");
     }
 
     fn resz_with(picture: YcPicture) -> Resz {

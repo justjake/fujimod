@@ -213,15 +213,23 @@ impl Sensor {
         if address == 0 || width == 0 || height == 0 {
             return Ok(());
         }
-        let line = u64::from(width) * 2;
         let stride = if routes.line_stride {
             u64::from(reg(base + 0x18))
         } else {
-            line
+            u64::from(width) * 2
         };
-        if stride < line || stride % 2 != 0 {
+        // A programmed stride of exactly 1.5 bytes a sample is a packed 12-bit line (X-T5 4.31
+        // movie live view: unit 3 at 7776 samples with pitch 11664). Writing 16-bit lines there
+        // would overrun the guest buffer by a third, so such lines are packed instead.
+        let packed12 = routes.line_stride && width % 2 == 0 && stride * 2 == u64::from(width) * 3;
+        let line = if packed12 {
+            stride
+        } else {
+            u64::from(width) * 2
+        };
+        if stride < line || (!packed12 && stride % 2 != 0) {
             return Err(format!(
-                "RAW DMA line stride {stride:#x} does not hold {width} 16-bit samples"
+                "RAW DMA line stride {stride:#x} does not hold {width} 16-bit or packed 12-bit samples"
             ));
         }
         let size = stride * u64::from(height - 1) + line;
@@ -232,11 +240,19 @@ impl Sensor {
         let mut bytes = Vec::with_capacity(line as usize);
         for y in 0..height {
             bytes.clear();
-            for x in 0..width {
-                // Explicit RAW14-in-LE16 moving ramp for the normal REC14 profile.
-                let sample =
-                    ((u64::from(x) * 31 + u64::from(y) * 17 + frame * 131) & 0x3fff) as u16;
-                bytes.extend_from_slice(&sample.to_le_bytes());
+            // Explicit RAW14 moving ramp for the normal REC14 profile.
+            let sample =
+                |x: u32| ((u64::from(x) * 31 + u64::from(y) * 17 + frame * 131) & 0x3fff) as u16;
+            if packed12 {
+                // Two 12-bit samples (the ramp's top 12 bits) in three bytes, little-endian.
+                for x in (0..width).step_by(2) {
+                    let (a, b) = (sample(x) >> 2, sample(x + 1) >> 2);
+                    bytes.extend_from_slice(&[a as u8, (a >> 8) as u8 | (b << 4) as u8, (b >> 4) as u8]);
+                }
+            } else {
+                for x in 0..width {
+                    bytes.extend_from_slice(&sample(x).to_le_bytes());
+                }
             }
             cx.ram_write(address + stride * u64::from(y), &bytes)?;
         }
@@ -911,7 +927,15 @@ mod tests {
         assert_eq!(&host.ram[12..14], &17u16.to_le_bytes());
         assert_eq!(&host.ram[20..22], &[0x55; 2]);
         assert!(host.irqs.iter().rev().find(|(i, _)| *i == 97).unwrap().1);
+        // 1.5 bytes a sample: packed 12-bit, two samples in three bytes, nothing past the pitch.
+        host.ram.fill(0x55);
         sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), 0x58, 6);
+        sensor.frame_start(0);
+        sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
+        // Frame 1: samples 131, 162, 193, 224 -> 12-bit 32, 40, 48, 56.
+        assert_eq!(&host.ram[..6], &[32, 0x80, 2, 48, 0x80, 3]);
+        assert_eq!(&host.ram[12..14], &[0x55; 2]);
+        sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), 0x58, 4);
         sensor.frame_start(0);
         assert!(sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).is_err());
     }
