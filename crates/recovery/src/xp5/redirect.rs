@@ -1921,8 +1921,8 @@ pub(in crate::xp5) mod tests {
 
     const OS_FUNCTION: usize = 0x2d50;
     const OS_LOOKUP: usize = 0x2f0c;
-    const OS_DST: u64 = 0x4_2000;
-    const OS_HEAD: usize = 0x2000;
+    pub(in crate::xp5) const OS_DST: u64 = 0x4_2000;
+    pub(in crate::xp5) const OS_HEAD: usize = 0x2000;
     const OS_FLASH: usize = 0x20_0000;
 
     /// A compressed stream of the codec's own format that holds `data` as literals only.
@@ -1960,7 +1960,7 @@ pub(in crate::xp5) mod tests {
     }
     /// A synthetic stock reset image, update and RAM image around the OS load function's words: the
     /// function, its three callers (ids 1, 2 and 6), the two table copies, a compressed OS section.
-    fn os_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    pub(in crate::xp5) fn os_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let mut reset = vec![0u8; 0x1_4000];
         put(&mut reset, 0x1c0, RET).unwrap();
         for at in (0x1c4..0x800).step_by(4) {

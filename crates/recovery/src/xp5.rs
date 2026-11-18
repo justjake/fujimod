@@ -2363,6 +2363,76 @@ mod tests {
         assert_ne!(apply[0].bytes[stub_at + 48..stub_at + 48 + stub_template::IMAGE.len()], stub[0].bytes[0xc000 + copy_stub_template::SETUP_SD_COPY_STUB + 48..0xc000 + copy_stub_template::SETUP_SD_COPY_STUB + 48 + stub_template::IMAGE.len()]);
     }
 
+    /// `redirect_fixture` for the OS section: a stage with the OS load function and its three callers, tables that
+    /// name the section compressed, and the update's compressed bytes.
+    fn os_fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+        let (fixture_data, mut s, _) = fixture();
+        let (reset, mut update, ram_stage) = redirect::tests::os_stage(0);
+        update[..0x40000].copy_from_slice(&fixture_data[..0x40000]);
+        let mut stock = reset.clone();
+        put64(&mut stock, s.selector, 1).unwrap();
+        update[0x40000..0x40000 + stock.len()].copy_from_slice(&stock);
+        s.reset_copy_size = 0x1_4000;
+        let mut ram = ram_stage.clone();
+        ram[..0x1_4000].copy_from_slice(&stock);
+        put64(&mut ram, s.selector, 0).unwrap();
+        (update, s, ram)
+    }
+
+    #[test]
+    fn the_os_startup_packages_the_decoded_section_alone_and_binds_the_crcs_the_stub_and_the_call() {
+        let (data, s, ram) = os_fixture();
+        let at = 0xc000 + os_loader_template::SETUP_SD_REDIRECT;
+        let os_at = 0xc000 + os_loader_template::SETUP_SD_OS;
+        let stub_at = 0xc000 + os_loader_template::SETUP_SD_COPY_STUB;
+        let head = ram[redirect::tests::OS_DST as usize..].to_vec();
+        for (mode, apply) in [(CheckedRedirect::Apply, 1u64), (CheckedRedirect::VerifyOnly, 0)] {
+            let files = package_os(&data, &s, ram.clone(), 0, 0x3000_0000, mode).unwrap();
+            assert_eq!(files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["marble_init.bin", "ffboot.bin"]);
+            // The card's file is the decoded section's initialized bytes and nothing else.
+            assert_eq!(files[1].bytes, head);
+            let marble = &files[0].bytes;
+            let q = |at: usize, n: usize| u64::from_le_bytes(marble[at + 8 * n..at + 8 * n + 8].try_into().unwrap());
+            assert_eq!((q(at, 0), q(at, 1), q(at, 2)), (1, apply, 0x28ac));
+            assert_eq!((q(at, 7), q(at, 8), q(at, 10)), (0, head.len() as u64, u64::from(crate::xp4::crc32(&head))));
+            assert_eq!(q(at, 9), 0xf000_0000 + 0x20_0000);
+            // The OS words: the compressed range's length and CRC-32, the id, the destination, the copy function.
+            let comp = &data[0x20_0000..0x20_0000 + q(os_at, 1) as usize];
+            assert_eq!((q(os_at, 0), q(os_at, 2), q(os_at, 3), q(os_at, 4), q(os_at, 6)), (1, u64::from(crate::xp4::crc32(comp)), 6, redirect::tests::OS_DST, 0x2_0000));
+            assert!(marble[os_at + 64..os_at + 96].iter().all(|b| *b == 0));
+            // The stub's size and place, and the request's length and CRC-32 are the file's.
+            assert_eq!(q(stub_at, 1), 0x200);
+            let request = 0xc000 + os_loader_template::SETUP_SD_REQUEST;
+            assert_eq!((q(request, 1), q(request, 2)), (head.len() as u64, u64::from(crate::xp4::crc32(&head))));
+        }
+        let apply = package_os(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        let verify = package_os(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::VerifyOnly).unwrap();
+        assert_eq!(apply[1].bytes, verify[1].bytes);
+        // Apply and verify-only differ in the apply word alone.
+        let differing: Vec<usize> = (0..apply[0].bytes.len()).filter(|&n| apply[0].bytes[n] != verify[0].bytes[n]).collect();
+        assert_eq!(differing, [at + 8]);
+    }
+
+    #[test]
+    fn the_os_startup_refuses_what_it_cannot_prove_or_place() {
+        let (data, s, ram) = os_fixture();
+        let go = |data: &[u8], s: &Setup, ram: Vec<u8>, destination: u64| {
+            package_os(data, s, ram, 0, destination, CheckedRedirect::Apply)
+        };
+        assert!(go(&data, &s, ram.clone(), 0x3000_0000).is_ok());
+        assert!(go(&data, &s, ram.clone(), 0x3000_0010).is_err());
+        assert!(go(&data, &s, ram.clone(), 0x1000_0000).is_err());
+        assert!(go(&data, &s, ram.clone(), READ_ONLY_CEILING).is_err());
+        // The card's OS section is not the decode of the flash's compressed bytes.
+        let mut changed = ram.clone();
+        changed[redirect::tests::OS_DST as usize + 3] ^= 1;
+        assert!(go(&data, &s, changed, 0x3000_0000).is_err());
+        // The stage's OS call is not where the load function's callers are.
+        let mut changed = data.clone();
+        changed[0x40000 + 0x28a8..0x40000 + 0x28ac].copy_from_slice(&0x5280_0020u32.to_le_bytes());
+        assert!(go(&changed, &s, ram.clone(), 0x3000_0000).is_err());
+    }
+
     #[test]
     fn the_marker_refuses_what_it_cannot_prove_or_place() {
         let (data, s, ram) = marker_fixture();
