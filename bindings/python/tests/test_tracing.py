@@ -5,7 +5,8 @@ from collections.abc import Sequence
 import pytest
 from fujimod import usb
 from fujimod.usb import testing, tracing
-from test_stream import LIMITS, E, control, memory_read
+
+from .test_stream import LIMITS, E, control, memory_read
 
 
 async def opened(

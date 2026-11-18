@@ -58,3 +58,169 @@ fn selected_ram_survives_a_modeled_restart() {
     session.board.read_physical(0x200, &mut actual).unwrap();
     assert_eq!(actual, witness);
 }
+
+#[test]
+fn cold_restart_reinitializes_unselected_ram_to_power_on_fill() {
+    struct Builder;
+    impl ColdBoot for Builder {
+        fn build(
+            &mut self,
+            tick: u64,
+            counts: Vec<u64>,
+            packet: [u8; 16],
+        ) -> Result<Session, String> {
+            let power = Arc::new(Mutex::new(WakeAlarm::new(
+                1_000_000,
+                clock::POWER_HOLD_RELEASE_LIMIT_TICKS,
+            )?));
+            power.lock().unwrap().initialize_packet(packet)?;
+            Ok(card_session_with_power_alias_and_fill(
+                Some((tick, counts)),
+                Some(power),
+                false,
+                Some(0xff),
+            ))
+        }
+    }
+    let power = Arc::new(Mutex::new(
+        WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap(),
+    ));
+    {
+        let mut p = power.lock().unwrap();
+        p.initialize_packet([0x5a; 16]).unwrap();
+        p.write(0, 0x69, 1).unwrap();
+        p.write(0, 0x6a, 0).unwrap();
+        p.write(0, 0x68, 1).unwrap();
+    }
+    let mut session = card_session_with_power_alias_and_fill(None, Some(power), false, Some(0xff));
+    session
+        .configure_power_cycle(PowerCycle::new(
+            "clocks".into(),
+            crate::durable::Spec {
+                cards: vec!["sd".into()],
+                nands: vec![],
+            },
+            Box::new(Builder),
+        ))
+        .unwrap();
+    session
+        .board
+        .write_physical(0x200, &[0x12, 0x34, 0x56, 0x78])
+        .unwrap();
+    session
+        .board
+        .write_physical(0, &0xe5801000u32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_physical(4, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_register(0, arm::CORE[0], 0xfff88084)
+        .unwrap();
+    session.board.write_register(0, arm::CORE[1], 0).unwrap();
+    session
+        .run_with_limits(10_000_000, 128, None, Some(200_000))
+        .unwrap();
+    assert!(session.board.is_powered_off());
+    session
+        .run_with_limits(10_000_000, 128, None, Some(1_000_000))
+        .unwrap();
+    assert!(session.board.epoch_is_unexecuted());
+    let mut actual = [0; 4];
+    session.board.read_physical(0x200, &mut actual).unwrap();
+    assert_eq!(actual, [0xff; 4]);
+}
+
+#[test]
+fn retained_backing_without_identity_bus_mapping_survives_restart() {
+    struct Builder;
+    impl ColdBoot for Builder {
+        fn build(
+            &mut self,
+            tick: u64,
+            counts: Vec<u64>,
+            packet: [u8; 16],
+        ) -> Result<Session, String> {
+            let power = Arc::new(Mutex::new(WakeAlarm::new(
+                1_000_000,
+                clock::POWER_HOLD_RELEASE_LIMIT_TICKS,
+            )?));
+            power.lock().unwrap().initialize_packet(packet)?;
+            Ok(card_session_with_power_and_alias(
+                Some((tick, counts)),
+                Some(power),
+                true,
+            ))
+        }
+    }
+    let power = Arc::new(Mutex::new(
+        WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap(),
+    ));
+    {
+        let mut p = power.lock().unwrap();
+        p.initialize_packet([0x5a; 16]).unwrap();
+        p.write(0, 0x69, 1).unwrap();
+        p.write(0, 0x6a, 0).unwrap();
+        p.write(0, 0x68, 1).unwrap();
+    }
+    let mut session = card_session_with_power_and_alias(None, Some(power), true);
+    session
+        .configure_power_cycle(
+            PowerCycle::new(
+                "clocks".into(),
+                crate::durable::Spec {
+                    cards: vec!["sd".into()],
+                    nands: vec![],
+                },
+                Box::new(Builder),
+            )
+            .with_retained_ram(vec![(0x20800, 4096)]),
+        )
+        .unwrap();
+    let witness = [0x12, 0x34, 0x56, 0x78];
+    session.board.write_memory(0, 0x30ffe, &witness).unwrap();
+    assert!(
+        session
+            .board
+            .inspect_physical(0x20100, &mut [0; 4])
+            .is_err()
+    );
+    let mut before = [0; 2];
+    session.board.inspect_backing(0x21ffe, &mut before).unwrap();
+    assert!(
+        session
+            .board
+            .restore_backing(0x21ffe, &[1, 2, 3, 4])
+            .is_err()
+    );
+    let mut after = [0; 2];
+    session.board.inspect_backing(0x21ffe, &mut after).unwrap();
+    assert_eq!(before, after);
+    assert!(session.board.validate_backing(u64::MAX - 1, 4).is_err());
+    session
+        .board
+        .write_physical(0, &0xe5801000u32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_physical(4, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_register(0, arm::CORE[0], 0xfff88084)
+        .unwrap();
+    session.board.write_register(0, arm::CORE[1], 0).unwrap();
+    session
+        .run_with_limits(10_000_000, 128, None, Some(200_000))
+        .unwrap();
+    assert!(session.board.is_powered_off());
+    session
+        .run_with_limits(10_000_000, 128, None, Some(1_000_000))
+        .unwrap();
+    assert!(session.board.epoch_is_unexecuted());
+    let mut actual = [0; 4];
+    session.board.read_memory(0, 0x30ffe, &mut actual).unwrap();
+    assert_eq!(actual, witness);
+}

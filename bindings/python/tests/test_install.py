@@ -5,9 +5,10 @@ import struct
 
 import pytest
 from fujimod import usb
-from test_async import opened, run
-from test_sequence import write
-from test_stream import LIMITS, E, control, memory_read
+
+from .test_async import opened, run
+from .test_sequence import write
+from .test_stream import LIMITS, E, control, memory_read
 
 
 def query(tag: int, primary: int = 0, secondary: int = 0) -> list[E]:

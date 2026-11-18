@@ -1,10 +1,10 @@
 """Missing and stale derived files are repaired by the TypeScript asset builder."""
-from pathlib import Path
 import os
 import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
-
 from fujimod import scenes
 
 
@@ -62,6 +62,7 @@ def test_materialization_requires_an_existing_output_of_the_expected_size(
     def materialize(*args, **kwargs):
         if output is not None:
             asset.write_bytes(output)
+        return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(scenes.subprocess, 'run', materialize)
     with pytest.raises(ValueError, match='missing or.*byte count'):
@@ -83,6 +84,7 @@ def test_replacing_the_scene_inode_requires_materialization(tmp_path, monkeypatc
     def materialize(*args, **kwargs):
         calls.append(args)
         asset.write_bytes(b'good')
+        return subprocess.CompletedProcess(args, 0)
 
     monkeypatch.setattr(scenes.subprocess, 'run', materialize)
     assert scenes.default_scene_raf().read_bytes() == b'good'

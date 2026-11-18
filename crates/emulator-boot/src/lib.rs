@@ -1078,16 +1078,12 @@ impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
 }
 
 /// Construct an unexecuted strict board from a prepared run and byte inputs.
-/// A SoC that declares its power-on RAM contents starts with them, and its
-/// RAM is retained over restarts.
+/// A SoC that declares its power-on RAM contents starts each epoch with them.
 pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, String> {
     open_prepared_mode(prepared, inputs, Mode::Strict)
 }
 
 fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Result<Session, String> {
-    let ram = if power_on_ram_fill(&prepared).is_some() {
-        prepared.execution.ram.iter().map(|r| (r.base, r.size)).collect()
-    } else { Vec::new() };
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
         Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), mode })
     } else {
@@ -1099,9 +1095,14 @@ fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Res
             cards: session.contacts.keys().cloned().collect(),
             nands: vec!["nand".into()],
         };
-        session.configure_power_cycle(fujimod_emulator_session::power_cycle::PowerCycle::new(
-            "clocks".into(), media, Box::new(builder),
-        ).with_logic_inputs(vec!["usb_cable".into()]).with_retained_ram(ram))?;
+        session.configure_power_cycle(
+            fujimod_emulator_session::power_cycle::PowerCycle::new(
+                "clocks".into(),
+                media,
+                Box::new(builder),
+            )
+            .with_logic_inputs(vec!["usb_cable".into()]),
+        )?;
     }
     Ok(session)
 }

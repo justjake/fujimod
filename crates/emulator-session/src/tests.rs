@@ -17,6 +17,25 @@ fn card_session_with_epoch(epoch: Option<(u64, Vec<u64>)>) -> Session {
     card_session_with_power(epoch, None)
 }
 fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sync::Arc<std::sync::Mutex<fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm>>>) -> Session {
+    card_session_with_power_and_alias(epoch, power, false)
+}
+fn card_session_with_power_and_alias(
+    epoch: Option<(u64, Vec<u64>)>,
+    power: Option<
+        std::sync::Arc<std::sync::Mutex<fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm>>,
+    >,
+    alias: bool,
+) -> Session {
+    card_session_with_power_alias_and_fill(epoch, power, alias, None)
+}
+fn card_session_with_power_alias_and_fill(
+    epoch: Option<(u64, Vec<u64>)>,
+    power: Option<
+        std::sync::Arc<std::sync::Mutex<fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm>>,
+    >,
+    alias: bool,
+    fill: Option<u8>,
+) -> Session {
     let contacts = fujimod_emulator_devices::parts::card_contacts::Contacts::new(true, false);
     let card = fat::format(
         &format(),
@@ -92,11 +111,38 @@ fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sy
         "mappings":[{"core":0,"address":0,"physical":0,"size":4096,"permissions":7}],
         "peripherals":[],"decoders":[],"instructions_per_tick":[24,1]
     })).unwrap();
+    if alias {
+        graph.ram.push(factory::Ram {
+            base: 0x20000,
+            size: 4096,
+        });
+        graph.ram.push(factory::Ram {
+            base: 0x21000,
+            size: 4096,
+        });
+        graph.mappings.push(factory::MemoryMap {
+            core: 0,
+            address: 0x30000,
+            physical: 0x20000,
+            size: 4096,
+            permissions: 7,
+        });
+        graph.mappings.push(factory::MemoryMap {
+            core: 0,
+            address: 0x31000,
+            physical: 0x21000,
+            size: 4096,
+            permissions: 7,
+        });
+    }
     if resources.clocks.contains_key("clocks") {
         graph.peripherals.push(factory::Peripheral { core: 0, address: 0xfff88000, physical: 0xfff88000, size: 0x100 });
     }
     let mut options = factory::Options::new(RunEngine::Unicorn)
         .with_translation_cache_size_bytes(1 << 20);
+    if let Some(byte) = fill {
+        options = options.with_ram_fill(byte);
+    }
     if let Some((tick, counts)) = epoch {
         options = options.with_epoch(tick, counts);
     }

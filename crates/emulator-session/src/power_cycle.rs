@@ -148,14 +148,18 @@ impl Session {
             // Copy once from the old board to the freshly reconstructed board.
             // The bounded buffer avoids a second full-RAM allocation.
             if !cycle.ram.is_empty() {
+                for &(base, size) in &cycle.ram {
+                    self.board.validate_backing(base, size)?;
+                    next.board.validate_backing(base, size)?;
+                }
                 let mut buffer = vec![0; 1024 * 1024];
                 for &(base, size) in &cycle.ram {
                     let mut offset = 0;
                     while offset < size {
                         let count = buffer.len().min(size - offset);
                         let address = base.checked_add(offset as u64).ok_or("retained RAM range overflows")?;
-                        self.board.inspect_physical(address, &mut buffer[..count])?;
-                        next.board.write_physical(address, &buffer[..count])?;
+                        self.board.inspect_backing(address, &mut buffer[..count])?;
+                        next.board.restore_backing(address, &buffer[..count])?;
                         offset += count;
                     }
                 }

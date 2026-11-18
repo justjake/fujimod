@@ -5,14 +5,15 @@ import importlib
 import json
 
 import pytest
-from contract_assertions import expect
 from fujimod import catalog, usb
 from fujimod.catalog import service as data
 from fujimod.usb import app80, testing
-from test_app80 import config_read, config_write
-from test_async import dispatched, run
-from test_async import opened as async_opened
-from test_stream import LIMITS, E, opened
+
+from .contract_assertions import expect
+from .test_app80 import config_read, config_write
+from .test_async import dispatched, run
+from .test_async import opened as async_opened
+from .test_stream import LIMITS, E, opened
 
 
 def definition(

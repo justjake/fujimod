@@ -696,6 +696,26 @@ impl Board {
     pub fn inspect_physical(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         self.physical_memory.read_host(address, bytes)
     }
+    /// Inspect a declared backing address independently of bus mappings.
+    pub fn inspect_backing(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.physical_memory.read_backing(address, bytes)
+    }
+    /// Validate a complete backing range without reading or modifying it.
+    pub fn validate_backing(&self, address: u64, size: usize) -> Result<(), String> {
+        self.physical_memory
+            .backing_chunks(address, size)
+            .map(|_| ())
+    }
+    /// Restore backing bytes into an unexecuted epoch without changing bus mappings.
+    pub fn restore_backing(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        if !self.epoch_is_unexecuted() {
+            return Err("backing restore requires an unexecuted epoch".into());
+        }
+        let mut state = self.state.borrow_mut();
+        state.code_run = None;
+        self.physical_memory
+            .write_backing(&self.cpus, &state.exclusive, address, bytes)
+    }
     pub fn write_physical(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
         state.code_run = None;
