@@ -1,49 +1,56 @@
 import { For } from 'solid-js';
 import { SiteFrame } from '../ui/SiteFrame';
-import { focalComponents } from './sdk.generated';
 import { manualChapters } from './manual-data';
 import { manualRoot } from './manual-routes';
 import './docs-overview.css';
 
 const chapters = manualChapters();
 
+/** The developer SDKs, each with its own reference under /docs/sdk/. */
+const sdks = [
+  {
+    title: 'FocalUI',
+    href: '/docs/sdk/focal/',
+    description:
+      'Declarative multi-touch UI framework inspired by SwiftUI and rendered on the GPU.',
+  },
+];
+
 export default function DocsOverview() {
   return (
     <SiteFrame class="docs-overview">
       <article>
-        <h1>Docs</h1>
-        <div class="docs-overview-grid">
-          <section>
-            <h2>
-              <a href={manualRoot}>Manual</a>
-            </h2>
-            <p>Every Fujimod feature on the camera, organized like Fujifilm's own manual.</p>
-            <ol>
-              <For each={chapters}>
-                {(chapter) => (
-                  <li>
-                    <a href={chapter.pages[0]?.href ?? manualRoot}>{chapter.title}</a>
-                  </li>
-                )}
-              </For>
-            </ol>
-          </section>
-          <section>
-            <h2>
-              <a href="/docs/sdk/focal/">FocalUI SDK</a>
-            </h2>
-            <p>The toolkit mods use to draw camera screens, with live previews of each component.</p>
-            <ul>
-              <For each={focalComponents}>
-                {(component) => (
-                  <li>
-                    <a href={`/docs/sdk/focal/components/${component.slug}/`}>{component.title}</a>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </section>
-        </div>
+        <section>
+          <h2>
+            <a href={manualRoot}>Manual</a>
+          </h2>
+          <p>Learn how to use your Fujimod camera.</p>
+          <ol>
+            <For each={chapters}>
+              {(chapter) => (
+                <li>
+                  <a href={chapter.pages[0]?.href ?? manualRoot}>{chapter.title}</a>
+                </li>
+              )}
+            </For>
+          </ol>
+        </section>
+        <section>
+          <h2>
+            Fujimod SDK <span class="docs-overview-badge">Work in progress</span>
+          </h2>
+          <p>Documentation for Fujimod firmware developers.</p>
+          <For each={sdks}>
+            {(sdk) => (
+              <div class="docs-overview-sdk">
+                <h3>
+                  <a href={sdk.href}>{sdk.title}</a>
+                </h3>
+                <p>{sdk.description}</p>
+              </div>
+            )}
+          </For>
+        </section>
       </article>
     </SiteFrame>
   );
