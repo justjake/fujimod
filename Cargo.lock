@@ -1430,6 +1430,7 @@ dependencies = [
  "fujimod-catalog-restart",
  "fujimod-catalog-settings",
  "fujimod-workspace-hack",
+ "ruzstd",
  "schemars",
  "serde",
  "serde-wasm-bindgen",
@@ -1437,6 +1438,7 @@ dependencies = [
  "sha2 0.10.9",
  "tsify",
  "wasm-bindgen",
+ "zstd",
 ]
 
 [[package]]
