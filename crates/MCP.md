@@ -115,9 +115,9 @@ camera.
 
 | Group | Tool | Does | USB |
 |---|---|---|---|
-| Cameras | `camera_open` | Boot an SD card (stock or a build) or attach to a USB camera | see open questions |
+| Cameras | `camera_open` | Boot an SD card (stock or a build), open a checkpoint file, or attach to a USB camera | see open questions |
 | | `camera_list` | Open cameras, their kind, firmware and checkpoints | yes |
-| | `camera_checkpoint` | Save the whole machine under a name | no |
+| | `camera_checkpoint` | Save the whole machine under a name, optionally to a file | no |
 | | `camera_restore` | Return to a named checkpoint | no |
 | | `camera_fork` | Open a second camera from a checkpoint | no |
 | | `camera_close` | Release the camera | yes |
@@ -138,6 +138,28 @@ camera.
 
 `camera_run` conditions: frame completed, memory range changed, address
 reached, input accepted, UI ready, guest deadline.
+
+### Checkpoint files
+
+Agreed: checkpoints can be saved to a file and a camera can be opened from
+one, so a boot is paid for once per build, not once per server process.
+
+A portable snapshot (`emulator-session/src/checkpoint/portable.rs`) carries
+the session definition: the run configuration id, overlays, quantum, clock,
+languages, device graph and input identities. It does not carry the
+firmware update or boot ROM, and today it only restores into a session the
+caller has already built from the same inputs
+(`fujimod_emulator_boot::load_snapshot`).
+
+`camera_open` from a file hides that step. It reads the definition from the
+snapshot header, builds the unexecuted board that definition names, then
+imports and restores the snapshot. The caller supplies the firmware files
+the header identifies, or a directory to find them in by hash. Whether the
+SD card and NAND contents travel in the snapshot is not yet checked.
+
+A snapshot written by a board built another way, such as the Python board
+factory in the private repository, has a different definition and is
+refused.
 
 ### Rules
 
