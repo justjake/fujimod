@@ -248,7 +248,7 @@ impl Work {
 }
 /// Word offsets (4-byte aligned) of the first reset gate that only latch a value.
 const PLAIN_RESET_WORDS: &[std::ops::RangeInclusive<u64>] = &[
-    0x0c..=0x58,
+    0x08..=0x58,
     0x98..=0x98,
     0xdc..=0xdc,
     0xfc..=0xfc,
@@ -508,11 +508,26 @@ mod reset_tests {
         assert!(host.irqs.is_empty());
     }
     #[test]
+    fn reset_gate_control_word_at_8_is_a_plain_read_modify_write_word() {
+        // The firmware's setters read +8, change one bit and write it back, and
+        // nothing polls it afterward. The power-on value is unverified.
+        let mut work = Work::reset(BASE).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE + 8, 4), 0);
+        for bit in [0, 4, 8, 12, 16, 17, 20, 21, 24] {
+            let word = work.read(&mut cx, BASE + 8, 4);
+            work.write(&mut cx, BASE + 8, 4, word | (1 << bit));
+            assert_eq!(work.read(&mut cx, BASE + 8, 4), word | (1 << bit));
+        }
+        assert!(cx.refusal().is_none());
+    }
+    #[test]
     fn reset_gate_refuses_the_rest_of_the_block() {
         let mut work = Work::reset(BASE).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        work.read(&mut cx, BASE + 8, 4);
+        work.read(&mut cx, BASE + 0x5c, 4);
         assert!(cx.refusal().is_some());
     }
 }
@@ -621,7 +636,7 @@ mod reset_size_tests {
             assert_eq!(work.read(&mut cx, 0xff950000 + o, 4), v);
         }
         assert!(cx.refusal().is_none());
-        work.write(&mut cx, 0xff950008, 4, 1);
+        work.write(&mut cx, 0xff95005c, 4, 1);
         assert!(cx.refusal().is_some());
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
