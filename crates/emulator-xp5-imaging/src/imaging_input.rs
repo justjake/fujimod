@@ -85,6 +85,10 @@ pub struct Input {
     frames: u64,
     deadline: Option<u64>,
     frame_completion: bool,
+    /// Bit 0 of the one-bit acknowledge register at +0x48: written 1 after reset and once per
+    /// completion. It does not gate the frame interrupt, so it is only latched.
+    #[serde(default)]
+    acknowledge: bool,
 }
 impl Device for Input {
     fn name(&self) -> &'static str {
@@ -100,6 +104,7 @@ impl Device for Input {
         match offset {
             0 => u64::from(self.ready || self.generation == 0),
             4 => u64::from(self.running),
+            0x48 => u64::from(self.acknowledge),
             0x10c => u64::from(self.pending),
             _ => {
                 cx.unmodeled();
@@ -128,6 +133,8 @@ impl Device for Input {
                 self.deadline = Some(cx.now() + 1_000_000);
                 cx.schedule(self.deadline.unwrap(), self.generation | (1 << 63));
             }
+        } else if size == 4 && offset == 0x48 {
+            self.acknowledge = value & 1 != 0;
         } else if size == 4 && offset == 0x10c {
             // 318bc5c clears every pending cause by writing sixteen zero flags.
             self.pending &= value as u32 & 0xffff;
@@ -160,7 +167,7 @@ impl Device for Input {
             self.ready = true;
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool);
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
@@ -181,6 +188,16 @@ mod tests {
             .rev()
             .find(|(n, _)| *n == line)
             .is_some_and(|(_, v)| *v)
+    }
+    #[test]
+    fn input_acknowledge_register_latches_bit_zero() {
+        let mut input = Input::default();
+        let mut host = RecordingHost::default();
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4, 3);
+        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4), 1);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4, 0);
+        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4), 0);
+        assert!(!irq(&host, 229));
     }
     #[test]
     fn phy_and_input_reset_wait_for_their_guest_deadlines() {

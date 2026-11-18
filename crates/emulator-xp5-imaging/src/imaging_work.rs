@@ -446,6 +446,43 @@ mod tests {
 }
 
 #[cfg(test)]
+mod reset_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    const BASE: u64 = 0xff950000;
+    #[test]
+    fn reset_gate_reports_ready_after_its_deadline_and_keeps_the_enable_word() {
+        let mut work = Work::reset(BASE).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE, 4), 1);
+        work.write(&mut cx, BASE, 4, 0);
+        assert_eq!(work.read(&mut cx, BASE, 4), 0);
+        assert!(cx.refusal().is_none());
+        host.now = 100_000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE, 4), 1);
+        // Read-modify-write of +4 bit 0 in both directions.
+        let word = work.read(&mut cx, BASE + 4, 4);
+        work.write(&mut cx, BASE + 4, 4, word | 1);
+        assert_eq!(work.read(&mut cx, BASE + 4, 4), 1);
+        let word = work.read(&mut cx, BASE + 4, 4);
+        work.write(&mut cx, BASE + 4, 4, word & !1);
+        assert_eq!(work.read(&mut cx, BASE + 4, 4), 0);
+        assert!(cx.refusal().is_none());
+        assert!(host.irqs.is_empty());
+    }
+    #[test]
+    fn reset_gate_refuses_the_rest_of_the_block() {
+        let mut work = Work::reset(BASE).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        work.read(&mut cx, BASE + 8, 4);
+        assert!(cx.refusal().is_some());
+    }
+}
+
+#[cfg(test)]
 mod resize_tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
