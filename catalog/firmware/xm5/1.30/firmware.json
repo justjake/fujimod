@@ -35,6 +35,16 @@
       "address": 94784,
       "value": 0,
       "size": 8
+     },
+     {
+      "address": 126924,
+      "words": [4294967295, 15719457, 1431677612],
+      "word_size": 4
+     },
+     {
+      "address": 127232,
+      "value": 1,
+      "size": 4
      }
     ],
     "cpu": [
