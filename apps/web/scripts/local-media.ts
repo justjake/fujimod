@@ -8,18 +8,18 @@ export function previewMedia(
   root: string | undefined,
   fallback: string | undefined,
 ): string | undefined {
-  if (root) {
-    for (const directory of ['media/frontier/site', 'media/current']) {
-      const path = resolve(root, directory);
-      try {
-        const { cards } = JSON.parse(readFileSync(resolve(path, 'media.json'), 'utf8'));
-        if (cards && Object.keys(cards).length) return path;
-      } catch (error) {
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-      }
+  const candidates = root
+    ? [resolve(root, 'media/frontier/site'), resolve(root, 'media/current')]
+    : [];
+  if (fallback) candidates.push(fallback);
+  for (const path of candidates) {
+    try {
+      const { cards } = JSON.parse(readFileSync(resolve(path, 'media.json'), 'utf8'));
+      if (cards && Object.keys(cards).length) return path;
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
     }
   }
-  return fallback;
 }
 
 export function recordingFiles(directory: string): Connect.NextHandleFunction {

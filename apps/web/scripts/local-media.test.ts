@@ -70,7 +70,10 @@ await test('frontier, current, promoted and output media use filesystem paths an
     );
     await writeFile(join(root, 'media/builds/one/site/media.json'), '{"cards":{}}');
     assert.equal(previewMedia(root, undefined), undefined);
+    assert.equal(previewMedia(root, join(root, 'media/current')), undefined);
     const staged = join(root, 'staged');
+    await mkdir(staged);
+    await writeFile(join(staged, 'media.json'), '{"cards":{"staged":{}}}');
     assert.equal(previewMedia(root, staged), staged);
   } finally {
     await new Promise<void>((done) => server.close(() => done()));
