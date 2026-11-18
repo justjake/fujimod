@@ -170,9 +170,6 @@ cloud machine with Mesa's software Vulkan driver:
 - A snapshot taken with SD card files attached restored into a board built
   with the same SD card files and continued running.
 
-A board assembled any other way has a different definition, even when it
-runs the same native device models, and its snapshots are refused.
-
 ### SD boot
 
 The `fujimod-emulator` CLI SD boots a FujiMod SD card today, although the
@@ -194,19 +191,7 @@ releases them 0.3 s into the run. With a FujiMod 0.0.2 SD card this reached
 REC after 718 million guest instructions in 2.9 s of wall time; eight guest
 seconds later the FujiMod welcome sheet was on screen.
 
-`camera_open` uses this path. Teaching the boot crate to accept an
-`sd_card` start, mapped onto the same inputs, keeps the button timing in the
-run configuration instead of in each caller.
-
-Two pieces still live outside the boot crate:
-
-- Pressing a control needs the physical contact panel and the contact
-  driver installed on the session (`configure_controls`,
-  `configure_contact_driver`). The catalog boot does not install them, so
-  the module needs a generator for both specifications in this repository.
-- `fujimod.remote` facts for X70 1.10 need the input task layout and the
-  parameter-independent inputs in addition to what the catalog selection
-  provides.
+`camera_open` uses this path.
 
 ### Rules
 
@@ -269,8 +254,8 @@ adding `reqwest`.
    from, so the module can press controls on a catalog-built camera.
 2. How a build is made. The likely answer is that `camera_open` takes a
    built SD card directory and the agent runs the build itself.
-3. Opening a physical camera. Camera runs go through a queue elsewhere, and
-   an interactive USB session opened by an agent may not fit it.
+3. Opening a physical camera: whether an agent may hold an interactive USB
+   session open, or only run prepared jobs against the camera.
 4. Whether guest time is a useful performance measure beyond instruction
    counts. This design assumes instruction counts and guest ticks are
    reliable for comparison and that host time is not.
