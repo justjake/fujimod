@@ -87,11 +87,5 @@ const sections: readonly TextSection[] = [
 ];
 
 export default function Credits() {
-  return (
-    <TextPage title="Credits" class="credits-page" sections={sections}>
-      <p class="lede">
-        Fujimod is made by people who write code, test on their cameras, and bring it to new bodies.
-      </p>
-    </TextPage>
-  );
+  return <TextPage title="Credits" class="credits-page" sections={sections} />;
 }

@@ -152,6 +152,7 @@ try {
 
       const creditsPage = await noJs.newPage();
       await creditsPage.goto(base + '/credits');
+      assert.equal(await creditsPage.locator('main h1 + h2').count(), 1);
       const creditHeadings = [
         'GitHub Contributors',
         'Testing & Feedback',
@@ -170,9 +171,11 @@ try {
         credits.contributors.length,
       );
       const testers = creditsPage.locator('#testing-feedback + ul');
+      const jody = testers.getByRole('link', { name: 'jody' });
+      assert.equal(await jody.getAttribute('href'), 'https://www.instagram.com/jody_hinterleitner');
       assert.equal(
-        await testers.getByRole('link', { name: 'jody' }).getAttribute('href'),
-        'https://www.instagram.com/jody_hinterleitner',
+        await jody.evaluate((node) => getComputedStyle(node).textDecorationLine),
+        'underline',
       );
       assert.equal(await testers.locator('li').count(), 2);
       assert.equal(await testers.getByText('anonymous', { exact: true }).count(), 1);
@@ -182,6 +185,17 @@ try {
         credits.recipeAuthors.reduce((sum, author) => sum + author.recipes.length, 0),
       );
       const sbom = await (await noJs.request.get(base + '/sbom.json')).json();
+      const licenseDetails = creditsPage.locator('.credits-license-details');
+      assert.equal(await licenseDetails.getAttribute('open'), null);
+      assert.equal(await creditsPage.locator('.credits-products li').count(), 3);
+      await licenseDetails.locator('summary').click();
+      assert.ok(await licenseDetails.locator('.credits-components').isVisible());
+      assert.equal(
+        await licenseDetails
+          .locator('.credits-components-scroll')
+          .evaluate((node) => getComputedStyle(node).maxHeight),
+        '420px',
+      );
       const components = creditsPage.locator('.credits-components tbody tr');
       assert.equal(await components.count(), sbom.components.length);
       const licenseHref = await components
@@ -200,7 +214,10 @@ try {
         .locator('main time')
         .evaluateAll((elements) => elements.map((time) => (time as HTMLTimeElement).dateTime));
       assert.ok(releaseDates.length, 'Expected release history');
-      assert.deepEqual(releaseDates, [...releaseDates].sort((a, b) => b.localeCompare(a)));
+      assert.deepEqual(
+        releaseDates,
+        [...releaseDates].sort((a, b) => b.localeCompare(a)),
+      );
       assert.equal(
         await releases.getByRole('navigation', { name: 'On this page' }).getByRole('link').count(),
         releaseDates.length,

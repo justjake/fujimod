@@ -22,7 +22,9 @@ export function writeLicenseIndex(bom: ReturnType<typeof cycloneDx>, output: str
     }
     return {
       name: component.name,
-      version: component.version,
+      version: /^[a-f0-9]{40,64}$/i.test(component.version)
+        ? component.version.slice(0, 12)
+        : component.version,
       source: component.externalReferences[0].url,
       license: 'license' in declared ? declared.license.id : declared.expression,
       licensePath: '/licenses/' + filename,

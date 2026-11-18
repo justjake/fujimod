@@ -19,6 +19,7 @@ export interface CargoTarget {
   features?: string[];
   noDefaultFeatures?: boolean;
   product: Product;
+  linkedDirectories: readonly string[];
 }
 
 export function cargoComponents(root: string, builds: CargoTarget[]): Component[] {
@@ -27,6 +28,7 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
   const registries = readdirSync(registry).map((directory) => join(registry, directory));
   const result: Component[] = [];
   for (const build of builds) {
+    const linked = new Set(build.linkedDirectories);
     const manifest = build.manifest ?? 'Cargo.toml';
     const lock = join(root, dirname(manifest), 'Cargo.lock');
     const packageTable = parse(readFileSync(lock, 'utf8')).package;
@@ -75,6 +77,7 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
       const [, name, version, location] = match;
       const key = `${name}@${version}`;
       if (location && isAbsolute(location)) {
+        if (!linked.has(location)) continue;
         if (relative(root, location).startsWith('..'))
           throw Error(`${key}: external path crate needs pinned upstream provenance`);
         result.push(...vendoredComponents(root, location, build.product));
@@ -83,6 +86,7 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
       let directory: string;
       let source: string;
       let purl: string | undefined;
+      let shippedVersion = version;
       if (location) {
         // Cargo reports Git URLs with an abbreviated revision in tree output.
         // Resolve the full revision and checkout location with Cargo itself.
@@ -110,6 +114,8 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
         if (!pkg || !revision)
           throw Error(`${key}: unable to resolve Cargo Git source ${location}`);
         directory = dirname(pkg.manifest_path);
+        if (!linked.has(directory)) continue;
+        shippedVersion = revision;
         source = `${repository.split('?')[0].replace(/\.git$/, '')}/tree/${revision}`;
       } else {
         const sources = packages.filter(
@@ -118,7 +124,8 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
         );
         const installed = registries
           .map((registry) => join(registry, `${name}-${version}`))
-          .filter((path) => existsSync(join(path, 'Cargo.toml')));
+          .filter((path) => linked.has(path) && existsSync(join(path, 'Cargo.toml')));
+        if (!installed.length) continue;
         if (
           sources.length !== 1 ||
           installed.length !== 1 ||
@@ -142,7 +149,7 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
       );
       result.push({
         name,
-        version,
+        version: shippedVersion,
         source,
         purl,
         license: pkg.license ?? identifyLicense(texts[0], key),

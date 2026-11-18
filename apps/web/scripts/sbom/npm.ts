@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { vendoredComponents } from './vendor.ts';
 import { identifyLicense, licenseFiles, type Component } from './bom.ts';
 
@@ -9,17 +9,14 @@ interface Edges<T> {
   optionalDependencies?: Record<string, T>;
 }
 
-interface Package extends Edges<string> {
+interface Package {
   name: string;
   version: string;
   license?: string;
-  peerDependencies?: Record<string, string>;
-  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 }
 
 interface Locked extends Edges<Locked> {
   devDependencies?: Record<string, Locked>;
-  path: string;
   from: string;
   version: string;
   resolved?: string;
@@ -27,6 +24,28 @@ interface Locked extends Edges<Locked> {
 
 function manifest(path: string): Package {
   return JSON.parse(readFileSync(join(path, 'package.json'), 'utf8')) as Package;
+}
+
+/** Resolve packages from emitted modules and assets, including pnpm's real paths. */
+export function emittedPackageDirectories(files: Iterable<string>, root: string): string[] {
+  const packages = new Set<string>();
+  const modules = `${sep}node_modules${sep}`;
+  for (const id of files) {
+    const path = resolve(root, id.split('?')[0]);
+    if (!path.includes(modules) || !existsSync(path)) continue;
+    let directory = dirname(realpathSync(path));
+    while (directory.includes(modules)) {
+      if (existsSync(join(directory, 'package.json'))) {
+        const pkg = manifest(directory);
+        if (pkg.name && pkg.version) {
+          packages.add(directory);
+          break;
+        }
+      }
+      directory = dirname(directory);
+    }
+  }
+  return [...packages].sort();
 }
 
 export function npmComponents(root: string, bundlePackages: string[]): Component[] {
@@ -37,11 +56,8 @@ export function npmComponents(root: string, bundlePackages: string[]): Component
       { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
     ),
   ) as Locked[];
-  const byPath = new Map(projects.map((project) => [project.path, project]));
-  const expanded = new Map<string, Locked>();
   const locked = new Map<string, Locked>();
   function index(node: Locked) {
-    if (node.dependencies || node.optionalDependencies) expanded.set(node.path, node);
     if (node.resolved) {
       const key = `${node.from}@${node.version}`;
       locked.set(key, node);
@@ -80,35 +96,6 @@ export function npmComponents(root: string, bundlePackages: string[]): Component
       products: ['website'],
     });
   }
-  const visited = new Set<string>();
-  const vendored: Component[] = [];
-  function visit(node: Locked, optional = false) {
-    if (visited.has(node.path)) return;
-    if (!existsSync(join(node.path, 'package.json'))) {
-      if (optional) return;
-      throw Error(`Missing installed package from pnpm-lock.yaml: ${node.path}`);
-    }
-    visited.add(node.path);
-    const workspace = byPath.get(node.path);
-    const pkg = manifest(node.path);
-    if (workspace) vendored.push(...vendoredComponents(root, node.path, 'website'));
-    else add(node.path, node);
-    const edges = workspace ?? expanded.get(node.path) ?? node;
-    for (const [name, child] of Object.entries({
-      ...edges.dependencies,
-      ...edges.optionalDependencies,
-    })) {
-      if (
-        name in (pkg.dependencies ?? {}) ||
-        (name in (pkg.peerDependencies ?? {}) && !pkg.peerDependenciesMeta?.[name]?.optional)
-      )
-        visit(child);
-      else if (name in (pkg.optionalDependencies ?? {})) visit(child, true);
-    }
-  }
-  const website = byPath.get(join(root, 'apps/web'));
-  if (!website) throw Error('Web project missing from pnpm-lock.yaml');
-  visit(website);
   for (const path of bundlePackages) {
     const pkg = manifest(path);
     const node = locked.get(`${pkg.name}@${pkg.version}`);
@@ -116,5 +103,5 @@ export function npmComponents(root: string, bundlePackages: string[]): Component
       throw Error(`${pkg.name}@${pkg.version}: emitted package absent from pnpm-lock.yaml`);
     add(path, node);
   }
-  return [...components.values(), ...vendored];
+  return [...components.values(), ...vendoredComponents(root, join(root, 'apps/web'), 'website')];
 }

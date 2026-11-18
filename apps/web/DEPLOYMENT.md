@@ -72,9 +72,9 @@ it reads the site's `site-assets.json`, downloads every file it lists, and check
 each file's size and SHA-256 and each runtime loader against this checkout's
 Camera API before running the same checks, tests, build and upload as a manual
 deploy. A size or hash mismatch, or a runtime missing a Camera method, stops the
-deploy. When the bindings change the Camera API, a maintainer deploys
-fresh runtimes with `--runtime` and `--media`, and the nightly deploy then
-carries those forward.
+deploy. A runtime SBOM without linker provenance also requires a fresh runtime
+build. A maintainer deploys fresh runtimes with `--runtime` and `--media`, and
+the nightly deploy carries those forward.
 
 The workflow needs the repository secret `CLOUDFLARE_API_TOKEN`: a Cloudflare API
 token from the "Edit Cloudflare Workers" template, limited to the account in

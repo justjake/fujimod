@@ -27,7 +27,8 @@
   text-decoration: none;
 }
 
-.credits-people a:hover {
+.credits-people a:hover,
+.credits-people a:not(:has(img)) {
   text-decoration: underline;
 }
 
@@ -64,6 +65,37 @@
   display: flex;
   flex-wrap: wrap;
   gap: 2px 14px;
+}
+
+.credits-page main .credits-products {
+  padding: 0;
+  list-style: none;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.credits-products b {
+  margin-right: 6px;
+  color: #d1d1d6;
+}
+
+.credits-license-details {
+  margin-top: 16px;
+  border-top: 1px solid var(--key);
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.credits-license-details summary {
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.credits-components-scroll {
+  max-height: 420px;
+  overflow: auto;
 }
 
 .credits-components {
