@@ -192,8 +192,11 @@ impl Work {
         match self.kind {
             // +24: input-buffer size (height<<16 | width, width/height
             // bound-checked by the writer before it stores them); only the
-            // first gate is written with it.
-            Kind::Reset => matches!(o, 0 | 4) || (o == 0x24 && self.base == 0xff950000),
+            // first gate is written with it. +10: read-modify-write control
+            // word whose bit 16 the first gate's setter sets or clears.
+            Kind::Reset => {
+                matches!(o, 0 | 4) || (matches!(o, 0x10 | 0x24) && self.base == 0xff950000)
+            }
             Kind::Resize => matches!(
                 o,
                 0 | 4
@@ -566,6 +569,8 @@ mod reset_size_tests {
         work.write(&mut cx, 0xff950024, 4, 0x1680f24);
         assert!(cx.refusal().is_none());
         assert_eq!(work.read(&mut cx, 0xff950024, 4), 0x1680f24);
+        work.write(&mut cx, 0xff950010, 4, 0x10000);
+        assert_eq!(work.read(&mut cx, 0xff950010, 4), 0x10000);
         let mut other = Work::reset(0xff973000).unwrap();
         other.write(&mut cx, 0xff973024, 4, 1);
         assert!(cx.refusal().is_some());
