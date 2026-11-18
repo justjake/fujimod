@@ -20,6 +20,9 @@ export default function DocsOverview() {
   return (
     <SiteFrame class="docs-overview">
       <article>
+        <h1>
+          Docs <span class="docs-overview-badge">Work in progress</span>
+        </h1>
         <section>
           <h2>
             <a href={manualRoot}>Manual</a>
@@ -38,9 +41,7 @@ export default function DocsOverview() {
           </For>
         </section>
         <section>
-          <h2>
-            Fujimod SDK <span class="docs-overview-badge">Work in progress</span>
-          </h2>
+          <h2>Fujimod SDK</h2>
           <p>Documentation for Fujimod firmware developers.</p>
           <For each={sdks}>
             {(sdk) => (
