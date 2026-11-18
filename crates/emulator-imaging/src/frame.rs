@@ -1,6 +1,25 @@
 //! Declared fixed-luma Y0,Y1,Cb,Cr input at programmed imaging DMA outputs.
 //! This source is a scenario input, not sensor/ISP or coefficient fidelity.
+//!
+//! Host scene. The `XT5_SCENE` environment variable replaces the flat source with a host
+//! picture, for live view ([`paint_scene`], MOVDC) and for still captures ([`host_still_422`],
+//! the XP5 JPEG encoder shortcut):
+//!
+//! - `bars`: colour bars with a moving marker.
+//! - `PATH.bmp`: an uncompressed 24- or 32-bit BMP.
+//! - `video:avf:N[@WxH[@FPS]]`: AVFoundation video device `N` (webcam, OBS Virtual Camera,
+//!   iPhone Continuity Camera, "Capture screen N"), through an ffmpeg child process.
+//! - `video:PATH_OR_URL[@WxH[@FPS]]`: a video file, looped in real time, or a stream URL.
+//! - `video:lavfi:GRAPH[@WxH[@FPS]]`: an ffmpeg lavfi source, such as `testsrc2`.
+//! - `fifo:PATH@WxH`: raw rgb24 frames written by any producer.
+//!
+//! Live scenes ([`live`]) are sampled at the moment of use: every live-view frame and every
+//! JPEG encode takes the newest frame the reader thread has completed, scaled bilinearly to the
+//! programmed size. The scene is a host input outside the run definition, the checkpoint and
+//! the wiring hash.
 use fujimod_emulator_devices::Cx;
+
+pub mod live;
 
 pub fn paint(
     cx: &mut Cx<'_>,
@@ -32,12 +51,39 @@ pub fn paint(
     Ok(())
 }
 
-/// A host-supplied virtual scene: colour bars or an RGB picture.
+/// A host-supplied virtual scene: colour bars, an RGB picture or a live feed.
 pub enum Scene {
     /// Seven colour bars and black over the top three quarters, a grey ramp below.
     Bars,
     /// An uncompressed BMP, top row first, three bytes (R, G, B) per pixel.
     Picture { width: usize, height: usize, rgb: Vec<u8> },
+    /// A video device, file, URL or FIFO; colour bars until its first frame.
+    Live(live::LiveFeed),
+}
+
+/// What one render of a scene draws: the scene with a live feed resolved to its newest frame.
+enum View<'a> {
+    Bars,
+    Nearest { width: usize, height: usize, rgb: &'a [u8] },
+    Bilinear(live::Sampler<'a>),
+}
+
+/// Holds a live frame for the duration of one render, so every row comes from one frame.
+fn snapshot(scene: &Scene) -> (Option<std::sync::Arc<live::RgbFrame>>, &Scene) {
+    match scene {
+        Scene::Live(feed) => (feed.latest(), scene),
+        _ => (None, scene),
+    }
+}
+
+fn view<'a>(scene: &'a Scene, frame: Option<&'a live::RgbFrame>, width: usize) -> View<'a> {
+    match (scene, frame) {
+        (Scene::Picture { width: pw, height: ph, rgb }, _) => {
+            View::Nearest { width: *pw, height: *ph, rgb }
+        }
+        (Scene::Live(_), Some(frame)) => View::Bilinear(live::Sampler::new(frame, width)),
+        _ => View::Bars,
+    }
 }
 
 fn bmp(name: &str) -> Option<Scene> {
@@ -72,9 +118,10 @@ fn bmp(name: &str) -> Option<Scene> {
     Some(Scene::Picture { width: w, height: rows, rgb })
 }
 
-/// The scene selected by the `XT5_SCENE` environment variable: `bars` for colour bars, or the
-/// path of an uncompressed 24- or 32-bit BMP. `None` when the variable is unset or the file is
-/// unreadable.
+/// The scene selected by the `XT5_SCENE` environment variable: `bars` for colour bars, the
+/// path of an uncompressed 24- or 32-bit BMP, or a live `video:` or `fifo:` source (see the
+/// module documentation). `None` when the variable is unset or the BMP is unreadable; a live
+/// source that cannot start falls back to colour bars.
 ///
 /// The variable is read once per process. It is a host input outside the run definition and the
 /// checkpoint: a snapshot loads with or without it, and the pictures differ accordingly.
@@ -87,6 +134,28 @@ pub fn host_scene() -> Option<&'static Scene> {
             if name == "bars" {
                 eprintln!("XT5_SCENE: colour bars");
                 return Some(Scene::Bars);
+            }
+            let live = if let Some(rest) = name.strip_prefix("video:") {
+                Some(live::parse_video(rest))
+            } else {
+                name.strip_prefix("fifo:").map(live::parse_fifo)
+            };
+            if let Some(spec) = live {
+                let started = spec.and_then(|spec| {
+                    let feed = live::LiveFeed::start(&spec, &name)?;
+                    eprintln!(
+                        "XT5_SCENE: {name}: live {}x{} at {} fps; colour bars until the first frame",
+                        spec.width, spec.height, spec.fps
+                    );
+                    Ok(feed)
+                });
+                return Some(match started {
+                    Ok(feed) => Scene::Live(feed),
+                    Err(error) => {
+                        eprintln!("XT5_SCENE: {name}: {error}; using colour bars");
+                        Scene::Bars
+                    }
+                });
             }
             let scene = bmp(&name);
             match &scene {
@@ -126,7 +195,8 @@ pub fn ycbcr([r, g, b]: [u8; 3]) -> [i32; 3] {
 
 /// Line `y` of `scene` rendered at `width` x `height` as packed 4:2:2 (Y0, Y1, Cb, Cr) into
 /// `row` (`width * 2` bytes; `width` even). `marker` draws a white vertical stripe 16 pixels
-/// wide centred on that column, so successive live-view frames show motion.
+/// wide centred on that column, so successive live-view frames show motion. A live scene takes
+/// its newest frame for this line alone; [`render_422`] holds one frame for a whole picture.
 pub fn render_422_row(
     scene: &Scene,
     y: usize,
@@ -135,10 +205,19 @@ pub fn render_422_row(
     marker: Option<usize>,
     row: &mut [u8],
 ) {
+    let (frame, scene) = snapshot(scene);
+    row_422(&view(scene, frame.as_deref(), width), y, width, height, marker, row);
+}
+
+fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Option<usize>, row: &mut [u8]) {
     let (w, h) = (width, height);
+    let bilinear = match view {
+        View::Bilinear(sampler) => Some(sampler.row(y, h)),
+        _ => None,
+    };
     let pixel = |x: usize| -> [u8; 3] {
-        match scene {
-            Scene::Bars => {
+        match view {
+            View::Bars => {
                 if marker.is_some_and(|m| x.abs_diff(m) < 8) {
                     [235, 235, 235]
                 } else if y > h * 3 / 4 {
@@ -148,10 +227,11 @@ pub fn render_422_row(
                     BARS[x * 8 / w]
                 }
             }
-            Scene::Picture { width, height, rgb } => {
+            View::Nearest { width, height, rgb } => {
                 let p = ((y * height / h) * width + x * width / w) * 3;
                 [rgb[p], rgb[p + 1], rgb[p + 2]]
             }
+            View::Bilinear(_) => bilinear.as_ref().expect("bilinear row")(x),
         }
     };
     for pair in 0..w / 2 {
@@ -164,27 +244,32 @@ pub fn render_422_row(
 }
 
 /// The whole of `scene` at `width` x `height` as packed 4:2:2 lines of `width * 2` bytes,
-/// without the motion marker. `None` for an odd or empty size.
+/// without the motion marker. A live scene contributes its newest frame at the time of the
+/// call. `None` for an odd or empty size.
 pub fn render_422(scene: &Scene, width: usize, height: usize) -> Option<Vec<u8>> {
     if width == 0 || width & 1 != 0 || height == 0 {
         return None;
     }
+    let (frame, scene) = snapshot(scene);
+    let view = view(scene, frame.as_deref(), width);
     let mut out = vec![0u8; width * height * 2];
     for (y, row) in out.chunks_exact_mut(width * 2).enumerate() {
-        render_422_row(scene, y, width, height, None, row);
+        row_422(&view, y, width, height, None, row);
     }
     Some(out)
 }
 
 /// The `XT5_SCENE` scene ([`host_scene`]) as a still picture of `width` x `height`, packed
-/// 4:2:2; `None` when no scene is set or the size is odd or empty.
+/// 4:2:2; `None` when no scene is set or the size is odd or empty. A live scene gives the
+/// newest frame at the moment of the call, so each JPEG encode is a snapshot of the feed.
 pub fn host_still_422(width: usize, height: usize) -> Option<Vec<u8>> {
     render_422(host_scene()?, width, height)
 }
 
 /// Host-supplied virtual scene for a packed 4:2:2 output, selected by the `XT5_SCENE` environment
 /// variable ([`host_scene`]). Colour bars carry a marker that moves with `frame`; a BMP is scaled
-/// (nearest neighbour) to the output. The layout matches [`paint`]: Y0,Y1,Cb,Cr per pixel pair.
+/// (nearest neighbour) to the output; a live scene's newest frame is scaled bilinearly. The
+/// layout matches [`paint`]: Y0,Y1,Cb,Cr per pixel pair.
 /// Returns `false` when no scene is set, so the caller paints its declared flat source.
 pub fn paint_scene(
     cx: &mut Cx<'_>,
@@ -210,9 +295,11 @@ pub fn paint_scene(
         .ok_or("YUV DMA address overflow")?;
     let (w, h) = (width as usize, height as usize);
     let marker = (frame % w as u64) as usize * 8 % w;
+    let (live, scene) = snapshot(scene);
+    let view = view(scene, live.as_deref(), w);
     let mut row = vec![0u8; w * 2];
     for y in 0..h {
-        render_422_row(scene, y, w, h, Some(marker), &mut row);
+        row_422(&view, y, w, h, Some(marker), &mut row);
         cx.ram_write(address + y as u64 * u64::from(stride), &row)?;
     }
     Ok(true)
