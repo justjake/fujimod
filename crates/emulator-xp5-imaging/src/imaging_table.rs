@@ -4,12 +4,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub const BASE: u64 = 0xff96c000;
-/// The status word; stock code reads it and keeps only bit 0.
+/// Windows of this kind and the word runs the stock firmware writes in each (inclusive start and
+/// end offsets), one 32-bit store each.
+pub const BASES: [u64; 2] = [0xff96c000, 0xff96e000];
+/// The status word of the first window; stock code reads it and keeps only bit 0.
 pub const STATUS: u64 = 0xb30;
 
-/// Word runs the stock firmware writes (inclusive start, inclusive end), one 32-bit store each.
-const TABLE_RUNS: [(u64, u64); 9] = [
+const RUNS_C: [(u64, u64); 9] = [
     (0x000, 0x00c),
     (0x108, 0x118),
     (0x200, 0x26c),
@@ -20,9 +21,20 @@ const TABLE_RUNS: [(u64, u64); 9] = [
     (0x700, 0x76c),
     (0xc00, 0xca0),
 ];
+const RUNS_E: [(u64, u64); 6] = [
+    (0x000, 0x000),
+    (0x100, 0x120),
+    (0x200, 0x264),
+    (0x400, 0x468),
+    (0x500, 0x5ec),
+    (0x700, 0x700),
+];
 
-fn table(offset: u64) -> bool {
-    offset % 4 == 0 && TABLE_RUNS.iter().any(|&(a, b)| (a..=b).contains(&offset))
+fn runs(base: u64) -> &'static [(u64, u64)] {
+    if base == BASES[0] { &RUNS_C } else { &RUNS_E }
+}
+fn table(base: u64, offset: u64) -> bool {
+    offset % 4 == 0 && runs(base).iter().any(|&(a, b)| (a..=b).contains(&offset))
 }
 
 /// Words latch what was written. The status word reads zero at reset and is not changed by
@@ -30,29 +42,39 @@ fn table(offset: u64) -> bool {
 /// reader discards the bit, so a constant zero satisfies it.
 #[derive(Default, Serialize, Deserialize)]
 pub struct Table {
+    #[serde(default)]
+    base: u64,
     words: BTreeMap<u64, u32>,
+}
+impl Table {
+    pub fn reset(base: u64) -> Option<Self> {
+        BASES.contains(&base).then(|| Self { base, words: BTreeMap::new() })
+    }
+    fn known(&self, offset: u64) -> bool {
+        table(self.base, offset) || (self.base == BASES[0] && offset == STATUS)
+    }
 }
 impl Device for Table {
     fn name(&self) -> &'static str {
         "imaging-table"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        let offset = address.wrapping_sub(BASE);
-        if size != 4 || !(offset == STATUS || table(offset)) {
+        let offset = address.wrapping_sub(self.base);
+        if size != 4 || !self.known(offset) {
             cx.unmodeled();
             return 0;
         }
         u64::from(self.words.get(&offset).copied().unwrap_or(0))
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        let offset = address.wrapping_sub(BASE);
-        if size != 4 || !(offset == STATUS || table(offset)) {
+        let offset = address.wrapping_sub(self.base);
+        if size != 4 || !self.known(offset) {
             cx.unmodeled();
             return;
         }
         self.words.insert(offset, value as u32);
     }
-    fujimod_emulator_devices::checkpoint_fields!(words: BTreeMap<u64, u32>);
+    fujimod_emulator_devices::checkpoint_fields!(base: u64, words: BTreeMap<u64, u32>);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
@@ -67,24 +89,28 @@ impl Device for Table {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    const C: u64 = BASES[0];
+    const E: u64 = BASES[1];
     #[test]
     fn the_status_word_reads_zero_and_the_read_gets_past() {
-        let mut t = Table::default();
+        let mut t = Table::reset(C).unwrap();
         let mut host = RecordingHost::default();
-        assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), BASE + STATUS, 4), 0);
+        assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), C + STATUS, 4), 0);
     }
     #[test]
     fn table_words_read_back() {
-        let mut t = Table::default();
-        let mut host = RecordingHost::default();
-        for (o, v) in [(0x0, 0x10302), (0x108, 0x1000100), (0xca0, 5), (0x66c - 4, 9)] {
-            t.write(&mut Cx::new(&mut host, 0, 0, 0), BASE + o, 4, v);
-            assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), BASE + o, 4), v);
+        for (base, o, v) in [(C, 0x0, 0x10302), (C, 0xca0, 5), (E, 0x0, 0x111121), (E, 0x5ec, 9)] {
+            let mut t = Table::reset(base).unwrap();
+            let mut host = RecordingHost::default();
+            t.write(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4, v);
+            assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4), v);
         }
     }
     #[test]
     fn an_unlisted_word_is_unmodeled() {
-        assert!(!table(0x10) && !table(0xb30) && !table(0x2) && !table(0x670) && !table(0xca4));
-        assert!(table(0x668) && table(0xc00));
+        assert!(!table(C, 0x10) && !table(C, 0xb30) && !table(C, 0x2) && !table(C, 0x670) && !table(C, 0xca4));
+        assert!(table(C, 0x668) && table(C, 0xc00));
+        assert!(!table(E, 0x4) && !table(E, 0x124) && table(E, 0x700));
+        assert!(Table::reset(0xff96d000).is_none());
     }
 }
