@@ -1,0 +1,39 @@
+# Companion serial controller: SSP instance 5 (the SoC's `spi5`). The companion's serial
+# setup at 0x3894 takes its instance from descriptor 0x316f8 (first word 5; the X-T5
+# companion's descriptor holds 1, its other words are the same) and builds
+# (instance + 0x5f910) << 12 + 8 and + 0xc at 0x38da..0x3902; 0x3864 then drains the
+# receive FIFO (status bit 2) through the data register.
+# The peers are the companion's two transfer routines, with the X-T5 command sets on
+# other chip selects: 0xc3c4 drives GPIO 0x000c0008 (port 12, pin 8) low around a
+# transfer and carries the BIS configuration sequence (09, 01 vv, 02 vv, 0b 05, 1c 4b,
+# reads a1/a2 storing the reply's low nibble, from 0x12446); 0xc430 drives 0x000c0009
+# (port 12, pin 9) low and its 18 callers send the LSM6DS-class register writes. The parts
+# are the existing explicit models; revision nibbles and idle MISO are the X-T5's
+# inherited scenario inputs, not X-H2 measurements. The DMA request pair and the SSP
+# interrupt line of instance 5 are not known, so neither is declared: a DMA request or a
+# raised interrupt on this instance refuses. source_hz is the X-T5 value, UNVERIFIED.
+[[device]]
+base = 0xff915000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+[device.options.wire]
+kind = "gpio-selected"
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 12
+pin = 8
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "bis-configuration-registers"
+revision = [0, 0]
+idle_high = false
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 12
+pin = 9
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "lsm6ds-configuration-registers"
