@@ -250,8 +250,15 @@ adding `reqwest`.
 
 ## Open questions
 
-1. Where the contact panel, contact driver and extra remote facts come
-   from, so the module can press controls on a catalog-built camera.
+1. A generator for the contact panel and contact driver. Remote facts come
+   from the catalog selection (`Facts::from_selection`), and a press on a
+   restored X70 1.10 camera works with them alone. The press also needs
+   the panel and driver installed on the session (`configure_controls`,
+   `configure_contact_driver`), and nothing in this repository generates
+   them. The catalog describes every control, and the boot crate's key
+   path already reads ADC thresholds from the running firmware's
+   configuration (`emulator-boot/src/keys.rs`), so the generator can work
+   from the catalog and live configuration alone.
 2. How a build is made. The likely answer is that `camera_open` takes a
    built SD card directory and the agent runs the build itself.
 3. Opening a physical camera: whether an agent may hold an interactive USB
