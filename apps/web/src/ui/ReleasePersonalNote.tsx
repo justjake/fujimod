@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import { featureMedia } from '../home/feature-media';
+import { ManualFeatureLink } from './ManualFeatureLink';
 import { releaseData, type SiteReleaseData } from '../release-data';
 import './release-personal-note.css';
 
@@ -10,7 +10,6 @@ const manual = '/docs/manual/';
 export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
   const data = () => props.data ?? releaseData;
   const note = () => data().personalNote;
-  const halation = featureMedia()('halation_strength_item', 'halation_color_item');
   return (
     <article class="release-personal-note" aria-label="A note from Jake">
       <Show when={data().current}>
@@ -63,37 +62,29 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
         </span>{' '}
         I want to give a big shout out to <a href="https://github.com/heytchap">heytchap</a> for
         turning the X70 into a mini-X100VI-plus by building film simulations like{' '}
-        <a class="note-feature" href={manual + 'film-effects/'}>
+        <ManualFeatureLink page="film-effects" row="NEGATIVE">
           COLOR NEGATIVE
-        </a>{' '}
+        </ManualFeatureLink>{' '}
         and effects like{' '}
-        <a class="note-feature" href={manual + 'grain-effect-and-clarity/'}>
+        <ManualFeatureLink
+          page="grain-effect-and-clarity"
+          row="GRAIN EFFECT"
+          card="film_grain_graininess_item"
+        >
           GRAIN
-        </a>
+        </ManualFeatureLink>
         ,{' '}
-        <a class="note-feature" href={manual + 'color/'}>
+        <ManualFeatureLink page="color" row="COLOR CHROME EFFECT">
           COLOR CHROME FX
-        </a>
+        </ManualFeatureLink>
         ,{' '}
-        <a class="note-feature" href={manual + 'grain-effect-and-clarity/'}>
+        <ManualFeatureLink page="grain-effect-and-clarity" row="CLARITY">
           CLARITY
-        </a>{' '}
+        </ManualFeatureLink>{' '}
         and even{' '}
-        <span class="note-hover">
-          <a class="note-feature" href={manual + 'film-effects/'}>
-            HALATION
-          </a>
-          <span class="note-popover">
-            <Show when={halation}>
-              {(media) => (
-                <video src={`/artifacts/docs/${media().video}`} muted autoplay loop playsinline />
-              )}
-            </Show>
-            <b>HALATION</b>
-            <span>Adds the red glow film shows around bright highlights.</span>
-            <em>IMAGE QUALITY SETTING › FILM SIMULATION</em>
-          </span>
-        </span>
+        <ManualFeatureLink page="film-effects" row="HALATION" card="halation_strength_item">
+          HALATION
+        </ManualFeatureLink>
         ; <a href="https://github.com/shanecranor">shane</a> +{' '}
         <a href="https://github.com/chris-rudmin">chris-rudmin</a> for adding our 2nd and 3rd bodies
         X-E2 and X-E2S and optimizing performance;{' '}
@@ -103,9 +94,9 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
       <p>
         In the coming weeks we’ll be focused on maturing the Fujimod platform with support for more
         bodies and automated nightly releases (delivered by our{' '}
-        <a class="note-feature" href={manual + 'check-for-updates/'}>
+        <ManualFeatureLink page="check-for-updates" row="CHECK FOR UPDATES">
           Wi-Fi update system
-        </a>
+        </ManualFeatureLink>
         ).
       </p>
       <p>

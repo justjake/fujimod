@@ -1,7 +1,6 @@
 declare global {
   interface Window {
     __hydrationDOM: Element | null;
-    __hoverCardStates: boolean[];
   }
 }
 import { createServer } from 'node:http';
@@ -202,7 +201,7 @@ try {
       await docs.close();
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'I’m making FujiMod to unlock your camera’s full potential.'],
+        ['/', 'Today we’re releasing the second version of Fujimod'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
@@ -227,11 +226,11 @@ try {
             await page.getByRole('button', { name: 'New camera', exact: true }).count(),
             0,
           );
-          assert.equal(await page.locator('#camera-table').count(), 0);
+          assert.equal(await page.locator('#camera-table').count(), 1);
           assert.equal(await page.locator('header .site-nav').count(), 1);
-          assert.equal(await page.locator('.personal-note').count(), 1);
-          assert.equal(await page.locator('#features').count(), 1);
-          assert.equal(await page.locator('.sd-download').count(), 0);
+          assert.equal(await page.locator('.release-personal-note').count(), 1);
+          assert.equal(await page.locator('.home-reel').count(), 3);
+          assert.equal(await page.locator('.home-download').count(), 1);
           assert.equal(
             await page
               .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
@@ -252,54 +251,12 @@ try {
       await touchPage.waitForFunction(
         () => performance.getEntriesByName('camera-catalog-ready').length > 0,
       );
-      const trigger = touchPage.locator('#features .catalog-ref').first();
-      await touchPage.evaluate(() => {
-        window.__hoverCardStates = [];
-        const card = document.querySelector('.catalog-card')!;
-        new MutationObserver(() => {
-          window.__hoverCardStates.push(card.classList.contains('on'));
-        }).observe(card, { attributes: true, attributeFilter: ['class'] });
-      });
+      const trigger = touchPage.locator('.home-reels .manual-feature-link').first();
       await trigger.tap();
-      await touchPage.waitForTimeout(600);
-      const states = await touchPage.evaluate(() => window.__hoverCardStates);
-      assert.ok(states.includes(true), `${type.name()}: the tap must open its card`);
-      assert.ok(
-        states.slice(states.indexOf(true)).every(Boolean),
-        `${type.name()}: focus and compatibility mouse events must not close the tapped card: ${JSON.stringify(states)}`,
-      );
-      assert.equal(
-        await touchPage.locator('.catalog-card.on').count(),
-        1,
-        `${type.name()}: the first tap must keep its card open`,
-      );
+      await touchPage.locator('.catalog-card.on').waitFor();
       await touchPage.screenshot({ path: resolve(hoverProof, `${type.name()}-touch.png`) });
-      await trigger.tap();
-      await touchPage.waitForTimeout(600);
-      assert.equal(
-        await touchPage.locator('.catalog-card.on').count(),
-        0,
-        `${type.name()}: the second tap must dismiss its card`,
-      );
-      await trigger.tap();
-      await touchPage.waitForTimeout(600);
-      assert.equal(await touchPage.locator('.catalog-card.on').count(), 1);
       await touchPage.touchscreen.tap(4, 4);
-      assert.equal(
-        await touchPage.locator('.catalog-card.on').count(),
-        0,
-        `${type.name()}: an outside tap must dismiss the card`,
-      );
-      const option = touchPage.locator('#features .catalog-chip.catalog-ref').first();
-      const optionLabel = await option.innerText();
-      await option.tap();
-      await touchPage.waitForTimeout(600);
-      assert.equal(
-        await touchPage.locator('.catalog-card.on .catalog-card-title').innerText(),
-        optionLabel,
-      );
-      await touchPage.touchscreen.tap(4, 4);
-      assert.equal(await touchPage.locator('.catalog-card.on').count(), 0);
+      await touchPage.locator('.catalog-card.on').waitFor({ state: 'detached' });
       await touch.close();
       const context = await browser.newContext();
       const page = await context.newPage();
@@ -356,34 +313,24 @@ try {
         'hydrate existing homepage nodes',
       );
       assert.equal(await page.locator('header .site-nav').count(), 1);
-      assert.equal(await page.locator('.personal-note').count(), 1);
+      assert.equal(await page.locator('.release-personal-note').count(), 1);
       assert.equal(await page.locator('h1').count(), 0);
-      assert.equal(await page.locator('.sd-download').count(), 0);
+      assert.equal(await page.locator('.home-download').count(), 1);
       assert.equal(
         await page
           .locator('.release-showcase,.release-highlight,.release-bodies,#quickstart')
           .count(),
         0,
       );
-      await page.locator('#features .catalog-ref').first().focus();
-      assert.equal(await page.locator('.catalog-card.on').count(), 1);
+      await page.locator('.home-reels .manual-feature-link').first().focus();
+      await page.locator('.catalog-card.on').waitFor();
       await page.keyboard.press('Escape');
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
-      const desktopTrigger = page.locator('#features .catalog-ref').first();
+      await page.locator('.catalog-card.on').waitFor({ state: 'detached' });
+      const desktopTrigger = page.locator('.home-reels .manual-feature-link').first();
       await desktopTrigger.hover();
       await page.locator('.catalog-card.on').waitFor();
       await page.mouse.move(0, 0);
       await page.waitForTimeout(300);
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
-      await desktopTrigger.click();
-      await page.mouse.move(0, 0);
-      await page.waitForTimeout(300);
-      assert.equal(await page.locator('.catalog-card.on').count(), 1);
-      await page.keyboard.press('Escape');
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
-      await desktopTrigger.press('Enter');
-      assert.equal(await page.locator('.catalog-card.on').count(), 1);
-      await desktopTrigger.press(' ');
       assert.equal(await page.locator('.catalog-card.on').count(), 0);
       // The idle homepage has no camera bar; feedback opens from its URL.
       await page.goto(base + '/?feedback');

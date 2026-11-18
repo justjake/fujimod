@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import type { Credits } from '../home/catalog';
 import { Rich } from '../home/catalog-parts';
 import { featureMedia, type Media } from '../home/feature-media';
+import { ManualFeatureLink } from '../ui/ManualFeatureLink';
 import { Markdown } from './Markdown';
 import type { ManualPage, ManualSection } from './manual-data';
 import { manualRoot } from './manual-routes';
@@ -131,7 +132,11 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
       <Show when={props.page.sections.length > 1}>
         <nav class="manual-entry-links" aria-label="On this page">
           <For each={props.page.sections}>
-            {(section) => <a href={`${props.path}#${section.anchor}`}>{section.title}</a>}
+            {(section) => (
+              <ManualFeatureLink page={props.path} row={section.anchor}>
+                {section.title}
+              </ManualFeatureLink>
+            )}
           </For>
         </nav>
       </Show>

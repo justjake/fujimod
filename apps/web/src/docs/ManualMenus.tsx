@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import { manualMenuRows } from './manual-data';
-import { manualPagePath, manualRoot } from './manual-routes';
+import { ManualFeatureLink } from '../ui/ManualFeatureLink';
+import { manualRoot } from './manual-routes';
 
 type MenuRow = (typeof manualMenuRows)[number];
 type MenuNode = {
@@ -30,7 +31,11 @@ function MenuBranches(props: { nodes: Map<string, MenuNode> }) {
         {(node) => (
           <li>
             <Show when={node.row} fallback={<span class="manual-menu-group">{node.title}</span>}>
-              {(row) => <a href={`${manualPagePath(row().page)}#${row().anchor}`}>{node.title}</a>}
+              {(row) => (
+                <ManualFeatureLink page={row().page} row={row().anchor}>
+                  {node.title}
+                </ManualFeatureLink>
+              )}
             </Show>
             <Show when={node.children.size}>
               <MenuBranches nodes={node.children} />

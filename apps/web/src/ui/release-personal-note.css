@@ -27,12 +27,6 @@
 .release-personal-note .note-socials {
   margin-top: 4px;
 }
-.release-personal-note .note-feature {
-  font-size: 0.86em;
-  letter-spacing: 0.03em;
-  font-weight: 600;
-  text-decoration-style: dotted;
-}
 .release-personal-note .note-hover {
   position: relative;
 }
@@ -73,15 +67,6 @@
   margin-top: 4px;
   padding-top: 6px;
   border-top: 1px solid var(--edge);
-}
-.release-personal-note .note-popover video {
-  width: 100%;
-  border-radius: 6px;
-}
-.release-personal-note .note-popover em {
-  font-style: normal;
-  color: var(--dim);
-  font-size: 10px;
 }
 @media (max-width: 1050px) {
   .release-personal-note .note-hover {

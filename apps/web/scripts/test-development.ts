@@ -53,7 +53,7 @@ for (const engine of [chromium, webkit]) {
         await search.scrollIntoViewIfNeeded();
         await page.screenshot({ path: `build/development-hydration/${engine.name()}.png` });
       }
-      await page.locator('#features .catalog-ref').first().focus();
+      await page.locator('.home-reels .manual-feature-link').first().focus();
       await page.locator('.catalog-card.on').waitFor();
       assert.equal(staleImports, 0);
       assert.deepEqual(errors, [], `${engine.name()} visit ${visit}: page initializes`);

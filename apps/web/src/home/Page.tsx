@@ -5,10 +5,15 @@ import { Show, createSignal, onSettled } from 'solid-js';
 import { createHomeState } from './state';
 import { startHome, type HomeController } from './controller';
 import { FaultPanel } from '@fujimod/emulator-ui/ui/fault';
-import { PersonalNote } from '../ui/personal-note';
+import { ReleasePersonalNote } from '../ui/ReleasePersonalNote';
+import { CameraTable } from '../ui/cameras';
+import { cameraProgress } from '../ui/catalog-progress';
+import generations from '../../devices/generations.generated.json';
+import owners from '../../devices/owners.json';
+import { ReleaseNotes } from '../cameras/ReleaseNotes';
+import { releaseData } from '../release-data';
 import { SiteFrame } from '../ui/SiteFrame';
-import { FeatureCatalog } from './Features';
-import { FeatureOutline } from './Outline';
+import { FeatureReels } from './FeatureReels';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
 import { sha256 } from '../patch/patcher';
@@ -63,13 +68,39 @@ export default function Home() {
     <>
       <SiteFrame>
         <main>
-          <PersonalNote />
-          <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
-          <FeatureCatalog />
-          <FeatureOutline />
+          <ReleasePersonalNote />
+          <FeatureReels
+            recipeCount={() =>
+              state.release?.sd_card_files?.filter((file) =>
+                file.path.startsWith('FUJIMOD/RECIPES/'),
+              ).length ?? 0
+            }
+          />
+          <section class="home-release">
+            <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
+            <Show when={releaseData.current}>
+              {(release) => (
+                <article class="home-release-notes">
+                  <h2>
+                    Fujimod {release().version}
+                    <time datetime={release().publishedAt}>
+                      {new Intl.DateTimeFormat('en-US', {
+                        dateStyle: 'long',
+                        timeZone: 'UTC',
+                      }).format(new Date(release().publishedAt))}
+                    </time>
+                  </h2>
+                  <ReleaseNotes text={release().notes} />
+                  <p class="home-release-history">
+                    <a href="/releases">All releases →</a>
+                  </p>
+                </article>
+              )}
+            </Show>
+          </section>
           <div class="emulator-heading">
             <h2 class="section-heading" id="software">
-              Software
+              Emulator
             </h2>
             <Show when={state.activeCamera}>
               <span
@@ -160,6 +191,7 @@ export default function Home() {
               />
             </Show>
           </EmulatorWorkspace>
+          <CameraTable columns={generations} progress={cameraProgress} owners={owners} />
         </main>
         <footer id="preview-credit" hidden={!state.idle}>
           <Show when={state.previewCredit}>
