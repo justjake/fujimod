@@ -1,4 +1,4 @@
-//! XP5 imaging table window at 0xff96c000: write-only 32-bit words and one status word.
+//! XP5 imaging table windows (0xff96c000 and kin): write-only 32-bit words and one status word.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 
 /// Windows of this kind and the word runs the stock firmware writes in each (inclusive start and
 /// end offsets), one 32-bit store each.
-pub const BASES: [u64; 2] = [0xff96c000, 0xff96e000];
+pub const BASES: [u64; 5] =
+    [0xff96c000, 0xff96e000, 0xff959000, 0xff95a000, 0xff95b000];
 /// The status word of the first window; stock code reads it and keeps only bit 0.
 pub const STATUS: u64 = 0xb30;
 
@@ -30,8 +31,18 @@ const RUNS_E: [(u64, u64); 6] = [
     (0x700, 0x700),
 ];
 
+// Three 0x400-byte tables back to back in each of the last two windows, nine 0x100-byte tables in
+// the first; loops copy byte-packed words with one 32-bit store each and never read them back.
+const RUNS_9: [(u64, u64); 1] = [(0x000, 0x8fc)];
+const RUNS_A: [(u64, u64); 1] = [(0x000, 0xbfc)];
+
 fn runs(base: u64) -> &'static [(u64, u64)] {
-    if base == BASES[0] { &RUNS_C } else { &RUNS_E }
+    match base {
+        b if b == BASES[0] => &RUNS_C,
+        b if b == BASES[1] => &RUNS_E,
+        b if b == BASES[2] => &RUNS_9,
+        _ => &RUNS_A,
+    }
 }
 fn table(base: u64, offset: u64) -> bool {
     offset % 4 == 0 && runs(base).iter().any(|&(a, b)| (a..=b).contains(&offset))
@@ -104,6 +115,18 @@ mod tests {
             let mut host = RecordingHost::default();
             t.write(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4, v);
             assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4), v);
+        }
+    }
+    #[test]
+    fn the_coefficient_windows_latch_their_runs_and_refuse_the_rest() {
+        for (base, last, past) in [(BASES[2], 0x8fc, 0x900), (BASES[3], 0xbfc, 0xc00), (BASES[4], 0xbfc, 0xc00)] {
+            let mut t = Table::reset(base).unwrap();
+            let mut host = RecordingHost::default();
+            for o in [0, 0x100, last] {
+                t.write(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4, 0xa28065 + o);
+                assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4), 0xa28065 + o);
+            }
+            assert!(table(base, last) && !table(base, past) && !table(base, 2));
         }
     }
     #[test]

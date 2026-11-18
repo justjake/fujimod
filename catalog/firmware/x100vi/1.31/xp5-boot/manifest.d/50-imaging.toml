@@ -48,6 +48,23 @@ base = 0xff96e000
 size = 0x1000
 kind = "imaging-table"
 
+# Write-only word tables filled by byte-packing loops (nine 0x100-byte tables, then two sets of three
+# 0x400-byte tables); nothing reads them.
+[[device]]
+base = 0xff959000
+size = 0x1000
+kind = "imaging-table"
+
+[[device]]
+base = 0xff95a000
+size = 0x1000
+kind = "imaging-table"
+
+[[device]]
+base = 0xff95b000
+size = 0x1000
+kind = "imaging-table"
+
 # Input-engine reset/ready gate used by native imgdc startup.
 [[device]]
 base = 0xff946000
