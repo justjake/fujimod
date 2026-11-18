@@ -35,10 +35,23 @@ size = 0x20000000
 
 # DRAM channel 2: the half-press boost (0x13adb58 mode 5) trains channels 2/3 and then maps
 # 0x80000000 + 1 GiB with 0x14c9a18 (0x13adf50; table 0x18f24f8). The still sequence writes there
-# 0.19 s after S2 (0xbb00f6b0). Channel 3 (table base word 0x1c0000000) is not mapped yet.
+# 0.19 s after S2 (0xbb00f6b0).
 # The first 16 KiB granule stays with the SoC profile's 4-byte peripheral/bus-drain window at 0x80000000.
 [[ram]]
 base = 0x80004000
+size = 0x3fffc000
+
+# DRAM channel 3: table 0x18f24f8 gives 0x1c0000000 + 1 GiB (entries: 0+1G, 0x40000000+1G,
+# 0x80000000+1G, 0x1c0000000+1G). Playback needs it: playcont (stream-00f20274, code base
+# 0x4e70000) opens its picture database at 0x572dad0 with 0x5731120(..., heap 0x1df800000,
+# size 0xc000000), which passes the heap to SQLite (0x5790a90 -> sqlite3_config 0x574c7ac,
+# SQLITE_CONFIG_HEAP = 8). memsys3 init 0x5733b1c then writes the first block header at
+# 0x1df800004 (0x5733b60) about 1 s after PLAY. The main image also uses fixed addresses in this
+# channel (0x1d6fc0000, 0x1d70c0000, 0x1d86c0000).
+# As for channel 2, the first 16 KiB granule stays with the 4-byte bus-drain read window at
+# 0x1c0000000 (manifest.d/20-storage.toml).
+[[ram]]
+base = 0x1c0004000
 size = 0x3fffc000
 
 # M-core SRAM: stock 13f7b58 copies flash f01c0000 here before reset release.

@@ -294,24 +294,21 @@ pub fn still_scene() -> &'static Scene {
 
 /// Whether the `XT5_STILL_PATH` environment variable selects the modelled still data path
 /// (`real`): the X-T5 still RAW channel writes the scene as X-Trans samples, RIFP develops it,
-/// RESZ scales it, and [`host_still_422`] no longer supplies the main (larger than 640x480)
-/// JPEG encodes. Unset or any other value keeps the encoder shortcut. Read once per process; a
-/// host input outside the run definition, like `XT5_SCENE`.
+/// RESZ scales it to the main picture and RZL2 to the preview and thumbnail, and
+/// [`host_still_422`] no longer supplies any JPEG encode. Unset or any other value keeps the
+/// encoder shortcut. Read once per process; a host input outside the run definition, like
+/// `XT5_SCENE`.
 pub fn still_path_real() -> bool {
     use std::sync::OnceLock;
     static REAL: OnceLock<bool> = OnceLock::new();
     *REAL.get_or_init(|| {
         let real = std::env::var("XT5_STILL_PATH").is_ok_and(|v| v == "real");
         if real {
-            eprintln!("XT5_STILL_PATH: real (sensor RAW -> RIFP -> RESZ; JPEG shortcut only up to 640x480)");
+            eprintln!("XT5_STILL_PATH: real (sensor RAW -> RIFP -> RESZ / RZL2; no JPEG shortcut)");
         }
         real
     })
 }
-
-/// Largest encode (in pixels) the host scene still supplies with [`still_path_real`]: the
-/// 640x480 preview and 160x120 thumbnail, which come from RZL2 (not modelled).
-pub const STILL_PATH_SHORTCUT_PIXELS: usize = 640 * 480;
 
 /// The whole of `scene` at `width` x `height` as packed 4:2:2 lines of `width * 2` bytes,
 /// without the motion marker. A live scene contributes its newest frame at the time of the
@@ -333,10 +330,15 @@ pub fn render_422(scene: &Scene, width: usize, height: usize) -> Option<Vec<u8>>
 /// 4:2:2; `None` when no scene is set or the size is odd or empty. A live scene gives the
 /// newest frame at the moment of the call, so each JPEG encode is a snapshot of the feed.
 ///
-/// With `XT5_STILL_PATH=real` ([`still_path_real`]) it gives `None` for runs larger than
-/// [`STILL_PATH_SHORTCUT_PIXELS`], so the main encode reads what the modelled develop chain wrote.
+/// With `XT5_STILL_PATH=real` ([`still_path_real`]) it gives `None` for every run, so the main,
+/// preview and thumbnail encodes read what the modelled develop chain wrote.
 pub fn host_still_422(width: usize, height: usize) -> Option<Vec<u8>> {
-    if still_path_real() && width * height > STILL_PATH_SHORTCUT_PIXELS {
+    host_still_422_with(still_path_real(), width, height)
+}
+
+/// [`host_still_422`] with the still path choice given: `real` gives `None`.
+fn host_still_422_with(real: bool, width: usize, height: usize) -> Option<Vec<u8>> {
+    if real {
         return None;
     }
     render_422(host_scene()?, width, height)
@@ -458,5 +460,18 @@ mod tests {
         let filtered = half_422(&bytes, 8, 2, Some([0, 0, 64, 128])).unwrap();
         assert_eq!(filtered, [4, 32, 128, 128, 64, 96, 128, 128]);
         assert!(half_422(&bytes, 8, 2, Some([0, 0, 0, 0])).is_err());
+    }
+
+    /// The modelled still path gives the JPEG encoder no host picture for any encode (main,
+    /// 640x480 preview, 160x120 thumbnail); without it the host scene, if any, is rendered.
+    #[test]
+    fn the_real_still_path_supplies_no_encode_and_the_shortcut_renders_the_scene() {
+        for (width, height) in [(7728, 5152), (640, 480), (160, 120)] {
+            assert_eq!(host_still_422_with(true, width, height), None);
+            assert_eq!(
+                host_still_422_with(false, width, height),
+                host_scene().and_then(|scene| render_422(scene, width, height))
+            );
+        }
     }
 }

@@ -234,23 +234,29 @@ pub fn register_all(
         };
         bus.register(w.base, w.size, Box::new(device))?;
     }
-    // RESZ 0xffd0c000: the completion stub of 55-develop-stubs.toml that also scales with the
-    // still path.
-    for w in windows.iter().filter(|w| w.kind == "imaging-resz") {
-        if w.base != 0xffd0c000 || w.size != 0x1000 {
-            return Err("invalid imaging-resz window".into());
+    // RESZ 0xffd0c000 and RZL2 0xff984000: the completion stubs of 55-develop-stubs.toml that
+    // also scale with the still path.
+    for w in windows.iter().filter(|w| matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2")) {
+        use fujimod_emulator_xp5_imaging::imaging::still;
+        let (layout, base) = match w.kind.as_str() {
+            "imaging-resz" => (&still::RESZ, 0xffd0c000),
+            _ => (&still::RZL2, 0xff984000),
+        };
+        if w.base != base || w.size != 0x1000 {
+            return Err(format!("invalid {} window", w.kind));
         }
         let options: fujimod_emulator_xp5_io::completion_stub::Options =
             toml::Value::Table(w.options.clone())
                 .try_into()
-                .map_err(|e| format!("imaging-resz options: {e}"))?;
+                .map_err(|e| format!("{} options: {e}", w.kind))?;
         // XP5 board time is in nanoseconds.
         let stub =
             fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(w.base, w.size, options, 1000)?;
         bus.register(
             w.base,
             w.size,
-            Box::new(fujimod_emulator_xp5_imaging::imaging::still::Resz::new(
+            Box::new(still::Resz::with_layout(
+                layout,
                 w.base,
                 stub,
                 still_path.then(|| yc_output.clone()),
@@ -353,4 +359,36 @@ fn still_raw16_codes() -> Result<u8, String> {
         }
     }
     Ok(codes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The X-T5 4.31 manifest's RESZ and RZL2 windows register as their scaling stubs.
+    #[test]
+    fn the_xt5_resz_and_rzl2_windows_register() {
+        #[derive(serde::Deserialize)]
+        struct Fragment {
+            device: Vec<DeviceWindow>,
+        }
+        let fragment: Fragment = toml::from_str(include_str!(
+            "../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/55-develop-stubs.toml"
+        ))
+        .unwrap();
+        let windows: Vec<_> = fragment
+            .device
+            .into_iter()
+            .filter(|w| matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2"))
+            .collect();
+        assert_eq!(
+            windows.iter().map(|w| (w.kind.as_str(), w.base)).collect::<Vec<_>>(),
+            [("imaging-resz", 0xffd0c000), ("imaging-rzl2", 0xff984000)]
+        );
+        let mut bus = DeviceGraph::new();
+        register_all(&mut bus, &windows, &fujimod_emulator_devices::xp5::pins::Pins::shared()).unwrap();
+        let mut moved = windows[1].clone();
+        moved.base = 0xff983000;
+        assert!(register_all(&mut DeviceGraph::new(), &[moved], &fujimod_emulator_devices::xp5::pins::Pins::shared()).is_err());
+    }
 }
