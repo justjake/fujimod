@@ -7272,5 +7272,238 @@
         "thanks": []
       }
     }
+  },
+  "feature_links": {
+    "ae_bkt_setting": {
+      "page": "metering"
+    },
+    "autofocus": {
+      "page": "focus",
+      "anchor": "system-changes--autofocus"
+    },
+    "aspect_ratio": {
+      "page": "shape-aspect",
+      "anchor": "shooting-menu--shape-aspect--aspect-ratio"
+    },
+    "bug_reports": {
+      "page": "devtools-bug-reports",
+      "anchor": "set-up--devtools--bug-report-shortcut"
+    },
+    "clarity": {
+      "page": "grain-effect-and-clarity",
+      "anchor": "shooting-menu--clarity"
+    },
+    "color_chrome": {
+      "page": "color",
+      "anchor": "shooting-menu--color-chrome"
+    },
+    "unlocked_controls": {
+      "page": "button-dial-setting"
+    },
+    "custom_settings_bkt": {
+      "page": "custom-settings-bkt",
+      "anchor": "drive--custom-settings-bkt"
+    },
+    "d_range_priority": {
+      "page": "tone",
+      "anchor": "shooting-menu--d-range-priority"
+    },
+    "date_folders": {
+      "page": "sd-card-folders-and-names",
+      "anchor": "set-up--save-data-set-up--date-folders"
+    },
+    "date_stamp": {
+      "page": "film-effects",
+      "anchor": "shooting-menu--film-effects--date-stamp"
+    },
+    "desqueeze": {
+      "page": "shape-aspect",
+      "anchor": "shooting-menu--shape-aspect"
+    },
+    "desqueeze_jpeg": {
+      "page": "shape-aspect",
+      "anchor": "shooting-menu--shape-aspect"
+    },
+    "digital_focal_length": {
+      "page": "the-digital-teleconverter",
+      "anchor": "shooting-menu--digital-tele-conv"
+    },
+    "disposable": {
+      "page": "disposable",
+      "anchor": "shooting-menu--fujimod--disposable"
+    },
+    "f_log": {
+      "page": "movie-recording",
+      "anchor": "shooting-menu--movie-set-up--f-log-recording"
+    },
+    "film_borders": {
+      "page": "film-effects",
+      "anchor": "shooting-menu--film-effects--film-borders"
+    },
+    "film_editor": {
+      "page": "film-editor",
+      "anchor": "shooting-menu--film-editor"
+    },
+    "film_grain": {
+      "page": "grain-effect-and-clarity",
+      "anchor": "shooting-menu--grain-effect"
+    },
+    "film_simulation": {
+      "page": "film-simulation",
+      "anchor": "shooting-menu--film-simulation"
+    },
+    "focus_peaking": {
+      "page": "focus"
+    },
+    "framing_guideline": {
+      "page": "shape-aspect",
+      "anchor": "shooting-menu--shape-aspect--framing-guideline"
+    },
+    "build_overlay": {
+      "page": "devtools-bug-reports",
+      "anchor": "set-up--devtools--build-overlay"
+    },
+    "halation": {
+      "page": "film-effects",
+      "anchor": "shooting-menu--film-effects--halation"
+    },
+    "hardware_divide": {
+      "page": "performance",
+      "anchor": "system-changes--hardware-divide"
+    },
+    "hdmi_output": {
+      "page": "hdmi-output",
+      "anchor": "set-up--hdmi-output"
+    },
+    "hide_films": {
+      "page": "film-simulation",
+      "anchor": "shooting-menu--fujimod--hide-films"
+    },
+    "highlight_metering": {
+      "page": "metering",
+      "anchor": "shooting-menu--photometry"
+    },
+    "hud_layout": {
+      "page": "hud-layout",
+      "anchor": "shooting-menu--fujimod--hud-layout"
+    },
+    "internal_data_backup": {
+      "page": "about-this-version",
+      "anchor": "set-up--fujimod-set-up"
+    },
+    "interval_timer": {
+      "page": "interval-timer-shooting",
+      "anchor": "shooting-menu--interval-timer-shooting"
+    },
+    "jpeg_max": {
+      "page": "image-size-and-image-quality",
+      "anchor": "shooting-menu--image-quality"
+    },
+    "light_leaks": {
+      "page": "film-effects",
+      "anchor": "shooting-menu--film-effects--light-leaks"
+    },
+    "live_view_speedups": {
+      "page": "performance",
+      "anchor": "system-changes--live-view-optimization"
+    },
+    "menu_animations": {
+      "page": "menu-style",
+      "anchor": "set-up--screen-set-up--menu-animations"
+    },
+    "menu_order": {
+      "page": "menu-style",
+      "anchor": "system-changes--menu-order"
+    },
+    "menu_tap": {
+      "page": "touch-screen-setting",
+      "anchor": "set-up--touch-screen-setting"
+    },
+    "menu_theme": {
+      "page": "menu-style",
+      "anchor": "set-up--menu-style"
+    },
+    "monochromatic_color": {
+      "page": "color",
+      "anchor": "shooting-menu--monochromatic-color"
+    },
+    "movie_film": {
+      "page": "movie-recording",
+      "anchor": "shooting-menu--movie-set-up--film-simulation"
+    },
+    "multiple_exposure_control": {
+      "page": "film-effects"
+    },
+    "noise_reduction": {
+      "page": "noise-reduction",
+      "anchor": "shooting-menu--noise-reduction"
+    },
+    "updates": {
+      "page": "about-this-version",
+      "anchor": "set-up--fujimod-set-up"
+    },
+    "overlay_opacity": {
+      "page": "hud-layout",
+      "anchor": "set-up--screen-set-up"
+    },
+    "pixel_map": {
+      "page": "pixel-mapping",
+      "anchor": "shooting-menu--fujimod--pixel-mapping"
+    },
+    "raw_teleconverter": {
+      "page": "the-digital-teleconverter",
+      "anchor": "shooting-menu--digital-tele-conv"
+    },
+    "raw_view": {
+      "page": "button-dial-setting",
+      "anchor": "set-up--button-dial-setting--function-fn-setting--raw-view"
+    },
+    "recipe_exif": {
+      "page": "recipe-in-exif",
+      "anchor": "shooting-menu--fujimod--recipe-in-exif"
+    },
+    "recipes": {
+      "page": "edit-save-custom-setting",
+      "anchor": "shooting-menu--edit-save-custom-setting"
+    },
+    "boot_confirmation": {
+      "page": "boot-setup",
+      "anchor": "system-changes--boot-resilience"
+    },
+    "bootloader_install": {
+      "page": "boot-setup",
+      "anchor": "set-up--fujimod-set-up--boot-setup"
+    },
+    "date_card_name": {
+      "page": "sd-card-folders-and-names",
+      "anchor": "set-up--save-data-set-up--format-card-name"
+    },
+    "snap_focus": {
+      "page": "focus",
+      "anchor": "shooting-menu--mf-snap-focus"
+    },
+    "software_nd": {
+      "page": "software-nd",
+      "anchor": "drive--software-nd"
+    },
+    "surround_view": {
+      "page": "shape-aspect",
+      "anchor": "shooting-menu--shape-aspect--surround-view"
+    },
+    "tone_curve": {
+      "page": "tone",
+      "anchor": "shooting-menu--tone-curve"
+    },
+    "tone_steps": {
+      "page": "tone"
+    },
+    "usb_debugging": {
+      "page": "devtools-bug-reports",
+      "anchor": "set-up--devtools--usb-debugging"
+    },
+    "zone_focus": {
+      "page": "focus",
+      "anchor": "shooting-menu--fujimod--zone-focus"
+    }
   }
 }

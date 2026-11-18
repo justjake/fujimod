@@ -96,6 +96,11 @@ export function conflicting(
 /** Optional card folders and the mod that reads them; other folders are always offered. */
 const folderMods: Readonly<Record<string, string>> = { RECIPES: 'recipes', FILMS: 'card-films' };
 
+/** The recipe catalog distributed with this release. */
+export function recipeCatalog(files: readonly SdCardFile[] = []) {
+  return files.filter((file) => file.path.startsWith('FUJIMOD/RECIPES/'));
+}
+
 /** Whether an optional card file is useful to any of the cameras, by the mod that reads its folder. */
 export function offered(file: SdCardFile, cameras: readonly CardCamera[]) {
   const mod = folderMods[file.path.split('/')[1] ?? ''];

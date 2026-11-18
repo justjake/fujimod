@@ -2,7 +2,7 @@ import { For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import { Portal, type JSX } from '@solidjs/web';
 import { manualPageAt } from '../docs/manual-data';
 import { manualPagePath } from '../docs/manual-routes';
-import { catalog } from '../home/catalog';
+import { catalog, type Credits } from '../home/catalog';
 import { CreditList, Premiere } from '../home/catalog-parts';
 import { fadeLoop } from '../home/fade-loop';
 import { featureMedia, type Media } from '../home/feature-media';
@@ -41,7 +41,8 @@ function CardVideo(props: { clip: Media; range?: [number, number]; fail: () => v
 export function ManualFeatureLink(props: {
   page: string;
   /** The manual menu row's title or anchor. */
-  row: string;
+  row?: string;
+  credits?: Credits;
   card?: string;
   choice?: string;
   children: JSX.Element;
@@ -56,7 +57,10 @@ export function ManualFeatureLink(props: {
   const media = () => (cardId() ? recording(cardId()!) : null);
   const range = () => (props.choice ? media()?.clips[props.choice] : undefined);
   const credits = () =>
-    (props.choice ? card()?.choice_credits[props.choice] : card()?.credits) ?? section()?.credits;
+    props.credits ??
+    (props.choice ? card()?.choice_credits[props.choice] : card()?.credits) ??
+    section()?.credits;
+  const title = () => props.choice ?? section()?.title ?? card()?.title ?? page()?.title;
   const summary = () => {
     const choice = props.choice;
     const entry = card();
@@ -166,7 +170,7 @@ export function ManualFeatureLink(props: {
               panel = element;
             }}
             class="catalog-card on"
-            aria-label={section()?.title ?? card()?.title}
+            aria-label={title()}
             style={{ left: `${position().left}px`, top: `${position().top}px` }}
             onPointerEnter={() => clearTimeout(timer)}
             onPointerLeave={(event) => {
@@ -179,9 +183,7 @@ export function ManualFeatureLink(props: {
             <Show when={card()?.path.join(' › ') || section()?.paths?.[0]?.join(' › ')}>
               {(crumbs) => <div class="catalog-path">{crumbs()}</div>}
             </Show>
-            <div class="catalog-card-title">
-              {props.choice ?? section()?.title ?? card()?.title}
-            </div>
+            <div class="catalog-card-title">{title()}</div>
             <Show when={credits()}>
               {(credit) => (
                 <Show when={credit().premiere}>
