@@ -13,9 +13,24 @@ In this order:
    `/credits`.
 2. Three feature reels side by side: shooting tools, image looks and recipes,
    controls and system. Each is a video above a short description whose
-   feature names link into the manual and show the feature hover card. The
-   first reels cut between existing walkthrough clips; later they are built
-   from walkthrough media.
+   feature names link into the manual and show the feature hover card.
+
+   A reel is one continuous recording of a short scripted story on the
+   emulated camera, not a cut of per-feature walkthroughs. It sets a few
+   settings, takes a picture and shows the result; it never steps through a
+   whole option list. As the story moves to a feature, a caption naming it
+   appears over the video. Captions are timed cues recorded by the reel's
+   walkthrough with the video and drawn by the site over it.
+
+   - Shooting tools: ASPECT RATIO to 65:24, PHOTOMETRY to HIGHLIGHT, IMAGE
+     QUALITY to FINE+RAW, zoom in with the digital teleconverter, shoot, and
+     playback shows the zoomed 65:24 picture.
+   - Image looks and recipes: pick a recipe from the recipe library by name,
+     turn on HALATION under FILM EFFECTS, shoot, and playback shows the look.
+   - Controls and system: switch MENU STYLE to FUJIMOD (back to live view so
+     the style applies, then reopen the menu), assign ISO to the EV dial under
+     UNLOCKED CONTROLS, turn the dial in live view to change ISO, then open
+     CHECK FOR UPDATES.
 3. Two columns: the release notes on the left, a small SD card on the right
    with a checkbox per camera, a Recipes checkbox with a recipe list, and the
    download button. The SD card states that Fujimod lives on the SD card; it
