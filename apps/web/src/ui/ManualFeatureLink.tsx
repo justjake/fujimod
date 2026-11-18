@@ -149,7 +149,9 @@ export function ManualFeatureLink(props: {
           pressed = touch = false;
         }}
         onFocus={() => {
-          if (!pressed) setOpen(true);
+          if (pressed) return;
+          clearTimeout(timer);
+          setOpen(true);
         }}
         onClick={(event) => {
           const tapped = touch || (event.detail > 0 && matchMedia('(hover: none)').matches);

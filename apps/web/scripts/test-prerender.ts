@@ -413,8 +413,18 @@ try {
       await desktopTrigger.hover();
       await page.locator('.catalog-card.on').waitFor();
       await page.mouse.move(0, 0);
-      await page.waitForTimeout(300);
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
+      await page.locator('.catalog-card.on').waitFor({ state: 'detached' });
+
+      // Keyboard focus takes over even if a pointer leave already scheduled dismissal.
+      await desktopTrigger.blur();
+      await desktopTrigger.hover();
+      await page.locator('.catalog-card.on').waitFor();
+      await page.mouse.move(0, 0);
+      await desktopTrigger.focus();
+      await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 300)));
+      assert.equal(await page.locator('.catalog-card.on').count(), 1);
+      await page.keyboard.press('Escape');
+      await page.locator('.catalog-card.on').waitFor({ state: 'detached' });
       // The idle homepage has no camera bar; feedback opens from its URL.
       await page.goto(base + '/?feedback');
       await page.locator('#feedback-dialog[open]').waitFor();
