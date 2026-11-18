@@ -15,6 +15,7 @@ import { localReviewFiles } from './scripts/local-review-files.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { directoryRoute } from './src/directory-route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
+import { prepareSdkPreviews } from './scripts/sdk-previews.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -22,6 +23,7 @@ import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 await prepareDefaultScene();
+prepareSdkPreviews(process.cwd());
 
 // Set these before custom routes can finish a response, including proof pages
 // and runtime mounts that bypass Vite's static-response headers.

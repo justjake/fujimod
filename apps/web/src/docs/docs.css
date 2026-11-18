@@ -60,6 +60,7 @@
 }
 
 .sdk-preview-screen {
+  box-sizing: content-box;
   max-width: 720px;
   overflow: hidden;
   border: 1px solid #333;
