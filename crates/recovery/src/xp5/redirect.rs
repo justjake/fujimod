@@ -1355,6 +1355,340 @@ pub(super) fn bind_os(program: &mut [u8], at: usize, os: &[u64; 8]) -> Result<()
     Ok(())
 }
 
+// ---- Named words of the OS section: a metadata string, changed after the stage's own decode ----
+//
+// The same load as above (`mov w0, #6; bl load`) is bound to a different stub (`exif_stub.S`). It does not
+// compare the decode with a copy from the card and copies nothing: it lets the stage decode, checks each
+// named 32-bit word of the fresh decode against its bound stock value and only if all match writes the new
+// values with the CPU and reads them back. The named words are the 16 bytes of one constant string that the
+// OS copies into the Software field of every Exif block it writes, and the words around them that anchor the
+// decode. The card's file is a small placeholder: the read-only startup needs a file to read, and the loader
+// proves the compressed flash range, the section's row, the stage's call and the table of named words.
+
+/// The stub's parameter block (`exif_stub.S`), the loader's binding of the named words (`exif.h`), and the
+/// table of at most this many named words.
+pub(super) const EXIF_STUB_PARAMS: usize = 296;
+pub(super) const EXIF_BINDING: usize = 296;
+pub(super) const EXIF_WORDS: usize = 8;
+/// The string as the stock OS holds it (15 characters and the NUL: both places that use it copy 15 bytes), and
+/// as the stub makes it. The same length, a NUL in the same place; only the first eight bytes change.
+pub(super) const EXIF_STOCK_TEXT: &[u8; 16] = b"Digital Camera \0";
+pub(super) const EXIF_NEW_TEXT: &[u8; 16] = b"FUJIMOD Camera \0";
+/// `mov w2, #15`, which both of the OS's sites that copy the string execute right before its `adrp`.
+const EXIF_COPY_LENGTH: u32 = 0x5280_01e2;
+/// Words of context named on either side of the string, to anchor the decode (check-only).
+const EXIF_ANCHORS: usize = 2;
+
+/// One named word: its address in the destination, the value the hardware decode of the stock flash must hold
+/// there, and the value it gets (equal to `stock` for a check-only word).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ExifWord {
+    pub address: u64,
+    pub stock: u32,
+    pub new: u32,
+}
+
+/// What the stock reset image and the update say about the OS section's load (`OsPlan`), where the string
+/// is, and the table of named words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct ExifPlan {
+    pub os: OsPlan,
+    /// The address of the string (the window: the only place a word changes).
+    pub window: u64,
+    pub words: Vec<ExifWord>,
+    /// The two code sites (addresses of their `adrp`) that copy the string into the Exif block's Software field.
+    pub sites: [u64; 2],
+}
+
+/// The addresses of the `adrp` words in `head` (loaded at `dst`) that, with the `add` right after them, build
+/// the address `target`, and that are preceded by `mov w2, #15`. Every other kind of reference into
+/// `[target, target + 16)` (a branch, `adr`, literal, data value) is an error: the string must be reached only
+/// that way.
+fn exif_sites(head: &[u8], dst: u64, target: u64) -> Result<Vec<u64>> {
+    let hits = references_into_at(head, dst as usize, target as usize, target as usize + 16, true);
+    require(
+        hits.iter().all(|&(_, kind)| kind == "adrp page"),
+        "The Exif string is reached by something other than an adrp and an add",
+    )?;
+    let mut sites = Vec::new();
+    for at in (4..head.len().saturating_sub(7)).step_by(4) {
+        let w = word(head, at)?;
+        if w & ADRP_MASK != ADRP {
+            continue;
+        }
+        let imm = (((w >> 5) & 0x7_ffff) << 2) | ((w >> 29) & 3);
+        let signed = (i64::from(imm) << 43) >> 43;
+        let page = ((((dst as i64) + at as i64) >> 12) + signed) << 12;
+        if page != (target as i64 & !0xfff) {
+            continue;
+        }
+        let add = word(head, at + 4)?;
+        let rd = w & 31;
+        let is_add = add & 0xffc0_0000 == 0x9100_0000 && (add >> 5) & 31 == rd && add & 31 == rd;
+        if is_add && page as u64 + u64::from((add >> 10) & 0xfff) == target {
+            require(word(head, at - 4)? == EXIF_COPY_LENGTH, "A use of the Exif string does not copy 15 bytes")?;
+            sites.push(dst + at as u64);
+        }
+    }
+    Ok(sites)
+}
+
+/// Find the string in the OS section's decode and name its words.
+pub(super) fn locate_exif(reset: &[u8], inverted: &[u8], bias: usize, ram: &[u8]) -> Result<ExifPlan> {
+    let os = locate_os(reset, inverted, bias, ram)?;
+    let head = extent(ram, os.dst as usize, os.head_bytes)?;
+    let found: Vec<usize> =
+        (0..head.len().saturating_sub(15)).filter(|&at| head[at..at + 16] == EXIF_STOCK_TEXT[..]).collect();
+    require(found.len() == 1, "The Exif string is not in the OS section exactly once")?;
+    let at = found[0];
+    require(
+        at % 4 == 0 && at >= 4 * EXIF_ANCHORS && at + 16 + 4 * EXIF_ANCHORS <= head.len(),
+        "The Exif string is not word aligned inside the section",
+    )?;
+    let window = os.dst + at as u64;
+    let sites = exif_sites(head, os.dst, window)?;
+    require(sites.len() == 2, "The Exif string is not used by exactly two sites")?;
+    let mut words = Vec::new();
+    for n in 0..(4 + 2 * EXIF_ANCHORS) {
+        let offset = at - 4 * EXIF_ANCHORS + 4 * n;
+        let stock = word(head, offset)?;
+        let inside = (at..at + 16).contains(&offset);
+        let new = if inside {
+            u32::from_le_bytes(EXIF_NEW_TEXT[offset - at..offset - at + 4].try_into().unwrap())
+        } else {
+            stock
+        };
+        words.push(ExifWord { address: os.dst + offset as u64, stock, new });
+    }
+    require(words.iter().any(|w| w.stock != w.new), "The Exif string is already the new text")?;
+    Ok(ExifPlan { os, window, words, sites: [sites[0], sites[1]] })
+}
+
+/// The values of the Exif stub's parameter block (`exif_stub.S` documents each).
+pub(super) struct ExifStubValues {
+    pub own_address: u64,
+    pub ret: u64,
+    pub id: u64,
+    pub func: u64,
+    pub dst: u64,
+    pub bytes: u64,
+    pub green: u64,
+    pub red: u64,
+    pub pin: u64,
+    pub pulse: u64,
+    pub gap: u64,
+    pub enable: u64,
+    pub enable_green: u64,
+    pub enable_red: u64,
+    pub mux: u64,
+    pub restore: u64,
+    pub words: Vec<ExifWord>,
+}
+
+/// The stub image with its parameter block filled in. The template's block must be all zero and the
+/// parameters must be where the layout says.
+pub(super) fn fill_exif_stub(template: &[u8], values: &ExifStubValues) -> Result<Vec<u8>> {
+    use super::exif_stub_template as t;
+    let params = t::XP5_EXIF_PARAMS;
+    require(
+        template.len() == t::XP5_EXIF_END
+            && params + EXIF_STUB_PARAMS == template.len()
+            && template[params..].iter().all(|b| *b == 0)
+            && t::XP5_EXIF_P_TABLE + 16 * EXIF_WORDS == t::XP5_EXIF_OUT_STATUS
+            && !values.words.is_empty()
+            && values.words.len() <= EXIF_WORDS,
+        "The Exif stub template changed",
+    )?;
+    let mut image = template.to_vec();
+    for (offset, value) in [
+        (t::XP5_EXIF_P_SELF, values.own_address),
+        (t::XP5_EXIF_P_RETURN, values.ret),
+        (t::XP5_EXIF_P_ID, values.id),
+        (t::XP5_EXIF_P_FUNC, values.func),
+        (t::XP5_EXIF_P_DST, values.dst),
+        (t::XP5_EXIF_P_BYTES, values.bytes),
+        (t::XP5_EXIF_P_GREEN, values.green),
+        (t::XP5_EXIF_P_RED, values.red),
+        (t::XP5_EXIF_P_PIN, values.pin),
+        (t::XP5_EXIF_P_PULSE, values.pulse),
+        (t::XP5_EXIF_P_GAP, values.gap),
+        (t::XP5_EXIF_P_ENABLE, values.enable),
+        (t::XP5_EXIF_P_ENABLE_GREEN, values.enable_green),
+        (t::XP5_EXIF_P_ENABLE_RED, values.enable_red),
+        (t::XP5_EXIF_P_MUX, values.mux),
+        (t::XP5_EXIF_P_RESTORE, values.restore),
+        (t::XP5_EXIF_P_COUNT, values.words.len() as u64),
+    ] {
+        require(offset >= params && offset + 8 <= image.len(), "An Exif stub parameter is outside its block")?;
+        put64(&mut image, offset, value)?;
+    }
+    for (n, w) in values.words.iter().enumerate() {
+        let at = t::XP5_EXIF_P_TABLE + 16 * n;
+        put64(&mut image, at, w.address)?;
+        put64(&mut image, at + 8, u64::from(w.stock) | (u64::from(w.new) << 32))?;
+    }
+    Ok(image)
+}
+
+/// The bindings of an Exif loader: the redirect words (the call's stock and new word, the CRC-32s of the stock and
+/// the patched RAM-0 image, the file and the compressed flash range, the two section tables), the named-word
+/// binding (`setup_sd_exif`, 37 words) and the stub.
+pub(super) struct ExifBinding {
+    pub stub: StubBinding,
+    pub exif: Vec<u64>,
+}
+
+/// Plan the Exif loader's bindings. `file` is the placeholder the read-only startup streams to `destination`,
+/// `reset` the stock reset image, `template` the stub image from its asset.
+pub(super) fn exif_binding(
+    plan: &ExifPlan, file: &[u8], reset: &[u8], inverted: &[u8], bias: usize, aperture: u64, destination: u64,
+    guard_bytes: usize, apply: bool, lamp: &StubLamp, template: &[u8],
+) -> Result<ExifBinding> {
+    let os = &plan.os;
+    require(
+        !file.is_empty()
+            && file.len() <= 0x1_0000
+            && destination % 0x1000 == 0
+            && (READ_ONLY_FLOOR..READ_ONLY_CEILING).contains(&destination)
+            && destination + file.len() as u64 <= READ_ONLY_CEILING,
+        "The placeholder file does not fit the read-only destination",
+    )?;
+    require(
+        os.call_old & BL.1 == BL.0
+            && os.call_site % 4 == 0
+            && os.call_site >= 4
+            && os.call_site + 4 <= guard_bytes
+            && os.load_fn % 4 == 0
+            && os.load_fn + 4 <= guard_bytes,
+        "The reset stage's OS load call is not a bl inside the RAM-0 guard",
+    )?;
+    require(bl_target(reset, os.call_site)? == os.load_fn, "The OS load call does not call the load function")?;
+    require(
+        word(reset, os.call_site - 4)? == OS_SET_ID && word(reset, os.load_fn)? == OS_LOAD[0].0,
+        "The reset stage's OS call does not pass the OS id to a function that starts as the load does",
+    )?;
+    require(
+        plan.words.len() <= EXIF_WORDS
+            && plan.words.windows(2).all(|p| p[0].address < p[1].address)
+            && plan.words.iter().all(|w| {
+                w.address % 4 == 0
+                    && w.address >= os.dst
+                    && w.address + 4 <= os.dst + os.head_bytes as u64
+                    && (w.stock == w.new || (plan.window..plan.window + 16).contains(&w.address))
+            }),
+        "The named words are not ascending words inside the section, changing only inside the string",
+    )?;
+    let offset = sled(extent(reset, 0, guard_bytes)?, template.len())?;
+    require(
+        offset + template.len() + SLED_MARGIN <= guard_bytes && !(offset..offset + template.len()).contains(&os.call_site),
+        "The Exif stub overlaps the call or leaves the RAM-0 guard",
+    )?;
+    let stock = extent(reset, 0, guard_bytes)?;
+    require(
+        lamp.pin < 8
+            && lamp.green_port < 16
+            && lamp.red_port < 16
+            && lamp.green_port != lamp.red_port
+            && lamp.green_port != 3
+            && lamp.red_port != 3,
+        "The Exif stub's lamp is not a usable pair of ports",
+    )?;
+    let comp = extent(inverted, os.flash_offset as usize + bias, os.comp_bytes)?;
+    let image = fill_exif_stub(
+        template,
+        &ExifStubValues {
+            own_address: offset as u64,
+            ret: os.call_site as u64 + 4,
+            id: u64::from(OS_SECTION_ID),
+            func: os.load_fn as u64,
+            dst: os.dst,
+            bytes: os.head_bytes as u64,
+            green: lamp.pio_base + 64 * u64::from(lamp.green_port),
+            red: lamp.pio_base + 64 * u64::from(lamp.red_port),
+            pin: 1u64 << lamp.pin,
+            pulse: OS_PULSE_LOOPS,
+            gap: OS_GAP_LOOPS,
+            enable: lamp.pio_base + 0x500,
+            enable_green: (1u64 << (lamp.green_port + 16)) | (1u64 << lamp.green_port),
+            enable_red: (1u64 << (lamp.red_port + 16)) | (1u64 << lamp.red_port),
+            mux: 3u64 << (2 * lamp.pin + 16),
+            restore: (1u64 << (lamp.pin + 16)) | (1u64 << lamp.pin),
+            words: plan.words.clone(),
+        },
+    )?;
+    let new = bl_word(os.call_site, offset)?;
+    require(new != os.call_old, "The OS call word is the stock word")?;
+    let mut patched = stock.to_vec();
+    patched[offset..offset + image.len()].copy_from_slice(&image);
+    patched[os.call_site..os.call_site + 4].copy_from_slice(&new.to_le_bytes());
+    let mut words = [0u64; 16];
+    words[0] = 1;
+    words[1] = u64::from(apply);
+    words[2] = os.call_site as u64;
+    words[3] = u64::from(os.call_old);
+    words[4] = u64::from(new);
+    words[5] = u64::from(crc32(stock));
+    words[6] = u64::from(crc32(&patched));
+    words[7] = 0; // the file is at offset 0 of the copy
+    words[8] = file.len() as u64;
+    words[9] = aperture + os.flash_offset;
+    words[10] = u64::from(crc32(file));
+    words[11] = os.table_bytes as u64;
+    for (n, &(_, flash)) in os.tables.iter().enumerate() {
+        let table = extent(inverted, flash as usize + bias, os.table_bytes)?;
+        words[12 + n] = aperture + flash;
+        words[14 + n] = u64::from(crc32(table));
+    }
+    let mut exif = vec![0u64; EXIF_BINDING / 8];
+    for (n, v) in [
+        1,
+        aperture,
+        os.comp_bytes as u64,
+        u64::from(crc32(comp)),
+        os.tables[0].0,
+        u64::from(OS_SECTION_ID),
+        os.dst,
+        os.head_bytes as u64,
+        plan.window,
+        16,
+        plan.words.len() as u64,
+        u64::from(crc32(EXIF_STOCK_TEXT)),
+        u64::from(crc32(EXIF_NEW_TEXT)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        exif[n] = v;
+    }
+    for (n, w) in plan.words.iter().enumerate() {
+        exif[13 + 2 * n] = w.address;
+        exif[14 + 2 * n] = u64::from(w.stock) | (u64::from(w.new) << 32);
+    }
+    Ok(ExifBinding {
+        stub: StubBinding {
+            redirect: Binding(words),
+            offset,
+            params_offset: super::exif_stub_template::XP5_EXIF_PARAMS,
+            crc32: crc32(&image),
+            image,
+        },
+        exif,
+    })
+}
+
+/// Write the Exif binding into the loader at `at` after checking that the template is untouched (`abi`
+/// 1, everything else zero: the struct is 296 bytes).
+pub(super) fn bind_exif(program: &mut [u8], at: usize, exif: &[u64]) -> Result<()> {
+    let mut template = vec![0u8; EXIF_BINDING];
+    template[..8].copy_from_slice(&1u64.to_le_bytes());
+    require(exif.len() * 8 == EXIF_BINDING, "The Exif binding has the wrong size")?;
+    require(extent(program, at, EXIF_BINDING)? == template, "XP5 Exif binding template changed")?;
+    for (n, value) in exif.iter().enumerate() {
+        put64(program, at + 8 * n, *value)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(in crate::xp5) mod tests {
     use super::*;
@@ -1961,6 +2295,10 @@ pub(in crate::xp5) mod tests {
     /// A synthetic stock reset image, update and RAM image around the OS load function's words: the
     /// function, its three callers (ids 1, 2 and 6), the two table copies, a compressed OS section.
     pub(in crate::xp5) fn os_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        os_stage_with(bias, &|_| {})
+    }
+    /// `os_stage` with a change to the decoded section's initialized bytes (before they are compressed).
+    pub(in crate::xp5) fn os_stage_with(bias: usize, edit: &dyn Fn(&mut Vec<u8>)) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let mut reset = vec![0u8; 0x1_4000];
         put(&mut reset, 0x1c0, RET).unwrap();
         for at in (0x1c4..0x800).step_by(4) {
@@ -1986,6 +2324,7 @@ pub(in crate::xp5) mod tests {
         for (n, b) in head.iter_mut().enumerate() {
             *b = (n * 13 + 5) as u8;
         }
+        edit(&mut head);
         let mut decoded = head.clone();
         decoded.extend(std::iter::repeat(0u8).take(0x1000));
         let stream = literal_stream(&decoded);
@@ -2156,5 +2495,189 @@ pub(in crate::xp5) mod tests {
             assert_eq!(u64::from_le_bytes(program[0x100 + 8 * n..0x108 + 8 * n].try_into().unwrap()), *w);
         }
         assert!(bind_os(&mut program, 0x100, &words).is_err(), "a bound template is refused");
+    }
+
+    // ---- the Exif string: the named words of the OS section ----
+
+    /// Where the test decode keeps the string, and the two sites that copy it.
+    pub(in crate::xp5) const EXIF_AT: usize = 0x100;
+    const EXIF_SITE_AT: [usize; 2] = [0x400, 0x800];
+
+    /// `os_stage` with the string in the decode and two sites that build its address after `mov w2, #15`.
+    pub(in crate::xp5) fn exif_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        os_stage_with(bias, &|head: &mut Vec<u8>| {
+            head[EXIF_AT..EXIF_AT + 16].copy_from_slice(EXIF_STOCK_TEXT);
+            for at in EXIF_SITE_AT {
+                put(head, at, EXIF_COPY_LENGTH).unwrap();
+                put(head, at + 4, adrp(OS_DST as usize + at + 4, 1, OS_DST + EXIF_AT as u64)).unwrap();
+                put(head, at + 8, 0x9100_0021 | ((((OS_DST as u32 + EXIF_AT as u32) & 0xfff) as u32) << 10)).unwrap();
+            }
+        })
+    }
+
+    #[test]
+    fn the_string_its_two_sites_and_the_named_words_are_found_in_the_decode() {
+        let (reset, update, ram) = exif_stage(BIAS);
+        let plan = locate_exif(&reset, &update, BIAS, &ram).unwrap();
+        assert_eq!(plan.window, OS_DST + EXIF_AT as u64);
+        assert_eq!(plan.sites, [OS_DST + 0x404, OS_DST + 0x804]);
+        // two words of context, the string's four words, two of context: eight words, ascending, four before and after changing nothing
+        assert_eq!(plan.words.len(), 8);
+        assert!(plan.words.windows(2).all(|p| p[1].address == p[0].address + 4));
+        assert_eq!(plan.words[0].address, plan.window - 8);
+        let changed: Vec<&ExifWord> = plan.words.iter().filter(|w| w.stock != w.new).collect();
+        assert_eq!(changed.iter().map(|w| w.address).collect::<Vec<_>>(), [plan.window, plan.window + 4]);
+        assert_eq!(changed.iter().map(|w| (w.stock, w.new)).collect::<Vec<_>>(), [(0x6967_6944, 0x494a_5546), (0x206c_6174, 0x2044_4f4d)]);
+        // the window's bytes, assembled from the table, are the two texts
+        let bytes = |pick: fn(&ExifWord) -> u32| -> Vec<u8> {
+            plan.words[2..6].iter().flat_map(|w| pick(w).to_le_bytes()).collect()
+        };
+        assert_eq!(bytes(|w| w.stock), EXIF_STOCK_TEXT);
+        assert_eq!(bytes(|w| w.new), EXIF_NEW_TEXT);
+        assert_eq!(plan.os, locate_os(&reset, &update, BIAS, &ram).unwrap());
+    }
+
+    #[test]
+    fn the_string_is_refused_where_it_is_not_alone_or_not_reached_the_way_the_proof_needs() {
+        let go = |edit: &dyn Fn(&mut Vec<u8>)| {
+            let (reset, update, ram) = os_stage_with(BIAS, &|head: &mut Vec<u8>| {
+                head[EXIF_AT..EXIF_AT + 16].copy_from_slice(EXIF_STOCK_TEXT);
+                for at in EXIF_SITE_AT {
+                    put(head, at, EXIF_COPY_LENGTH).unwrap();
+                    put(head, at + 4, adrp(OS_DST as usize + at + 4, 1, OS_DST + EXIF_AT as u64)).unwrap();
+                    put(head, at + 8, 0x9100_0021 | ((((OS_DST as u32 + EXIF_AT as u32) & 0xfff) as u32) << 10)).unwrap();
+                }
+                edit(head);
+            });
+            locate_exif(&reset, &update, BIAS, &ram).map(|_| ()).map_err(|e| e.to_string())
+        };
+        assert!(go(&|_| {}).is_ok());
+        // no string
+        assert!(go(&|h| h[EXIF_AT] ^= 1).unwrap_err().contains("exactly once"));
+        // a second copy of the string
+        assert!(go(&|h| h[0x1000..0x1010].copy_from_slice(EXIF_STOCK_TEXT)).unwrap_err().contains("exactly once"));
+        // a pointer to the string in the data (a 64-bit value)
+        assert!(go(&|h| h[0x1100..0x1108].copy_from_slice(&(OS_DST + EXIF_AT as u64 + 4).to_le_bytes()))
+            .unwrap_err()
+            .contains("something other than an adrp"));
+        // a branch into it
+        assert!(go(&|h| put(h, 0x1200, 0x1400_0000 | (((EXIF_AT as u32).wrapping_sub(0x1200)) >> 2 & 0x03ff_ffff)).unwrap())
+            .unwrap_err()
+            .contains("something other than an adrp"));
+        // a site that does not copy 15 bytes
+        assert!(go(&|h| put(h, EXIF_SITE_AT[0], 0x5280_0202).unwrap()).unwrap_err().contains("15 bytes"));
+        // one site only
+        assert!(go(&|h| put(h, EXIF_SITE_AT[1] + 8, 0xd503_201f).unwrap()).unwrap_err().contains("exactly two"));
+        // three sites
+        assert!(go(&|h| {
+            put(h, 0xc00, EXIF_COPY_LENGTH).unwrap();
+            put(h, 0xc04, adrp(OS_DST as usize + 0xc04, 1, OS_DST + EXIF_AT as u64)).unwrap();
+            put(h, 0xc08, 0x9100_0021 | ((((OS_DST as u32 + EXIF_AT as u32) & 0xfff) as u32) << 10)).unwrap();
+        })
+        .unwrap_err()
+        .contains("exactly two"));
+        // a string that is not word aligned
+        assert!(go(&|h| {
+            h[EXIF_AT..EXIF_AT + 16].copy_from_slice(&[0x55; 16]);
+            h[EXIF_AT + 1..EXIF_AT + 17].copy_from_slice(EXIF_STOCK_TEXT);
+        })
+        .is_err());
+    }
+
+    fn exif_template() -> Vec<u8> {
+        super::super::exif_stub_template::IMAGE.to_vec()
+    }
+
+    #[test]
+    fn the_exif_binding_carries_the_call_word_the_stub_bytes_the_table_and_every_crc() {
+        let (reset, update, ram) = exif_stage(BIAS);
+        let plan = locate_exif(&reset, &update, BIAS, &ram).unwrap();
+        let file = vec![0x5au8; 4096];
+        let guard = 0x1_4000;
+        let template = exif_template();
+        let make = |apply: bool, plan: &ExifPlan, file: &[u8], destination: u64, lamp: &StubLamp, template: &[u8]| {
+            exif_binding(plan, file, &reset[..guard], &update, BIAS, 0xf000_0000, destination, guard, apply, lamp, template)
+        };
+        let binding = make(true, &plan, &file, 0x3000_0000, &os_lamp(), &template).unwrap();
+        let redirect = binding.stub.redirect.0;
+        let stub_at = binding.stub.offset;
+        let new = redirect[4] as u32;
+        assert_eq!(new, bl(0x28ac, stub_at));
+        assert_eq!((redirect[2], redirect[3]), (0x28ac, u64::from(plan.os.call_old)));
+        // the file is the placeholder: its length and CRC-32; the compressed range is bound, not the decode
+        assert_eq!((redirect[7], redirect[8], redirect[10]), (0, 4096, u64::from(crc32(&file))));
+        assert_eq!(redirect[9], 0xf000_0000 + OS_FLASH as u64);
+        let mut patched = reset[..guard].to_vec();
+        patched[stub_at..stub_at + binding.stub.image.len()].copy_from_slice(&binding.stub.image);
+        patched[0x28ac..0x28b0].copy_from_slice(&new.to_le_bytes());
+        assert_eq!(redirect[6], u64::from(crc32(&patched)));
+        // the stub's parameter block: the bound facts and the table
+        let word64 = |offset: usize| u64::from_le_bytes(binding.stub.image[offset..offset + 8].try_into().unwrap());
+        use super::super::exif_stub_template as t;
+        assert_eq!(word64(t::XP5_EXIF_P_SELF), stub_at as u64);
+        assert_eq!((word64(t::XP5_EXIF_P_RETURN), word64(t::XP5_EXIF_P_ID), word64(t::XP5_EXIF_P_FUNC)), (0x28b0, 6, OS_FUNCTION as u64));
+        assert_eq!((word64(t::XP5_EXIF_P_DST), word64(t::XP5_EXIF_P_BYTES), word64(t::XP5_EXIF_P_COUNT)), (OS_DST, OS_HEAD as u64, 8));
+        for (n, w) in plan.words.iter().enumerate() {
+            assert_eq!(word64(t::XP5_EXIF_P_TABLE + 16 * n), w.address);
+            assert_eq!(word64(t::XP5_EXIF_P_TABLE + 16 * n + 8), u64::from(w.stock) | (u64::from(w.new) << 32));
+        }
+        assert_eq!(word64(t::XP5_EXIF_OUT_STATUS), 0);
+        // the loader's words: the compressed range, the section, the window, the two window CRC-32s, the table
+        let comp = &update[OS_FLASH + BIAS..OS_FLASH + BIAS + plan.os.comp_bytes];
+        let e = &binding.exif;
+        assert_eq!(e.len(), 37);
+        assert_eq!(
+            e[..13],
+            [1, 0xf000_0000, plan.os.comp_bytes as u64, u64::from(crc32(comp)), 0x4_0000, 6, OS_DST, OS_HEAD as u64, plan.window, 16, 8,
+             u64::from(crc32(EXIF_STOCK_TEXT)), u64::from(crc32(EXIF_NEW_TEXT))]
+        );
+        assert_eq!(e[13], plan.words[0].address);
+        assert!(e[29..].iter().all(|v| *v == 0));
+        // verify-only binds the same words with `apply` clear
+        let verify = make(false, &plan, &file, 0x3000_0000, &os_lamp(), &template).unwrap();
+        assert_eq!(verify.stub.redirect.0[1], 0);
+        assert_eq!(verify.stub.redirect.0[2..], redirect[2..]);
+        assert_eq!(verify.exif, binding.exif);
+        // what it refuses: a destination that does not fit, an empty or a huge file, the same port for both colours,
+        // a template whose parameter block is not zero, a table that changes a word outside the string, or is not ascending
+        assert!(make(true, &plan, &file, 0x3000_0004, &os_lamp(), &template).is_err());
+        assert!(make(true, &plan, &file, 0x1000, &os_lamp(), &template).is_err());
+        assert!(make(true, &plan, &[], 0x3000_0000, &os_lamp(), &template).is_err());
+        assert!(make(true, &plan, &vec![0u8; 0x2_0000], 0x3000_0000, &os_lamp(), &template).is_err());
+        let mut lamp = os_lamp();
+        lamp.red_port = lamp.green_port;
+        assert!(make(true, &plan, &file, 0x3000_0000, &lamp, &template).is_err());
+        let mut dirty = template.clone();
+        let last = dirty.len() - 1;
+        dirty[last] = 1;
+        assert!(make(true, &plan, &file, 0x3000_0000, &os_lamp(), &dirty).is_err());
+        let mut outside = plan.clone();
+        outside.words[0].new ^= 1;
+        assert!(make(true, &outside, &file, 0x3000_0000, &os_lamp(), &template).is_err());
+        let mut unsorted = plan.clone();
+        unsorted.words.swap(0, 1);
+        assert!(make(true, &unsorted, &file, 0x3000_0000, &os_lamp(), &template).is_err());
+        let mut many = plan.clone();
+        many.words.push(ExifWord { address: plan.words[7].address + 4, stock: 0, new: 0 });
+        assert!(make(true, &many, &file, 0x3000_0000, &os_lamp(), &template).is_err());
+        let mut call = plan.clone();
+        call.os.call_old = 0xd503_201f;
+        assert!(make(true, &call, &file, 0x3000_0000, &os_lamp(), &template).is_err());
+    }
+
+    #[test]
+    fn the_exif_binding_is_written_into_a_template_and_only_a_template() {
+        let mut program = vec![0u8; 0x400];
+        program[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        let mut words = vec![0u64; 37];
+        words[0] = 1;
+        words[1] = 0xf000_0000;
+        words[8] = 0x19c_26a8;
+        bind_exif(&mut program, 0x100, &words).unwrap();
+        assert_eq!(u64::from_le_bytes(program[0x108..0x110].try_into().unwrap()), 0xf000_0000);
+        assert!(bind_exif(&mut program, 0x100, &words).is_err(), "a bound template is refused");
+        let mut other = vec![0u8; 0x400];
+        other[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        assert!(bind_exif(&mut other, 0x100, &words[..36]).is_err());
     }
 }

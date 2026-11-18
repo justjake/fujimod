@@ -61,6 +61,9 @@ pub struct StartupOptions {
     /// With `copy_stub` (and not `marker`): check the OS section's compressed load instead of the first
     /// section's copy (`xp5::package_os`).
     pub os: bool,
+    /// With `copy_stub` (and neither `marker` nor `os`): name a few words of the OS section's decode and write them
+    /// after the stage's own load (`xp5::package_exif`).
+    pub exif: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -474,6 +477,10 @@ impl Recipe {
         require(!options.marker || options.copy_stub, "The marker requires the copy stub")?;
         require(!options.os || (options.copy_stub && !options.marker), "The OS stub requires the copy stub and excludes the marker")?;
         require(
+            !options.exif || (options.copy_stub && !options.marker && !options.os),
+            "The Exif stub requires the copy stub and excludes the marker and the OS stub",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -568,7 +575,16 @@ impl Recipe {
                             contract.verify(&ram)?;
                         }
                         redirect_checked = true;
-                        if options.os {
+                        if options.exif {
+                            xp5::package_exif(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.success_hold_seconds,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.os {
                             xp5::package_os(
                                 &inverted,
                                 setup,

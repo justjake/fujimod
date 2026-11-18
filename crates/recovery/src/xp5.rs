@@ -69,6 +69,19 @@ mod os_stub_template {
     include!(concat!(env!("OUT_DIR"), "/xp5_os_stub.rs"));
 }
 
+/// The Exif build: the copy-stub build plus a binding for the named words of the OS section.
+#[allow(dead_code)]
+mod exif_loader_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_exif_loader.rs"));
+}
+
+/// The Exif stub's own image (position independent code and a zero parameter block) and the offsets of
+/// the parameters in it.
+#[allow(dead_code)]
+mod exif_stub_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_exif_stub.rs"));
+}
+
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
 /// loader (`template`); `INTERNAL_FLASH` is the same sources built for a startup that keeps the
 /// installed flash attached (`flash_template`); `READ_ONLY` only reads the RAM image into spare
@@ -100,6 +113,8 @@ struct Loader {
     marker_binding: Option<usize>,
     /// Offset of the OS binding; only the OS build has one.
     os_binding: Option<usize>,
+    /// Offset of the Exif binding; only the Exif build has one.
+    exif_binding: Option<usize>,
 }
 /// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
 /// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
@@ -134,6 +149,7 @@ const CARD: Loader = Loader {
     copy_stub_binding: None,
     marker_binding: None,
     os_binding: None,
+    exif_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -156,6 +172,7 @@ const INTERNAL_FLASH: Loader = Loader {
     copy_stub_binding: None,
     marker_binding: None,
     os_binding: None,
+    exif_binding: None,
 };
 const READ_ONLY: Loader = Loader {
     image: read_only_template::IMAGE,
@@ -178,6 +195,7 @@ const READ_ONLY: Loader = Loader {
     copy_stub_binding: None,
     marker_binding: None,
     os_binding: None,
+    exif_binding: None,
 };
 const CHECKED_REDIRECT: Loader = Loader {
     image: checked_redirect_template::IMAGE,
@@ -200,6 +218,7 @@ const CHECKED_REDIRECT: Loader = Loader {
     copy_stub_binding: None,
     marker_binding: None,
     os_binding: None,
+    exif_binding: None,
 };
 const COPY_STUB: Loader = Loader {
     image: copy_stub_template::IMAGE,
@@ -222,6 +241,7 @@ const COPY_STUB: Loader = Loader {
     copy_stub_binding: Some(copy_stub_template::SETUP_SD_COPY_STUB),
     marker_binding: None,
     os_binding: None,
+    exif_binding: None,
 };
 const MARKER: Loader = Loader {
     image: marker_loader_template::IMAGE,
@@ -244,6 +264,7 @@ const MARKER: Loader = Loader {
     copy_stub_binding: Some(marker_loader_template::SETUP_SD_COPY_STUB),
     marker_binding: Some(marker_loader_template::SETUP_SD_MARKER),
     os_binding: None,
+    exif_binding: None,
 };
 const OS: Loader = Loader {
     image: os_loader_template::IMAGE,
@@ -266,6 +287,30 @@ const OS: Loader = Loader {
     copy_stub_binding: Some(os_loader_template::SETUP_SD_COPY_STUB),
     marker_binding: None,
     os_binding: Some(os_loader_template::SETUP_SD_OS),
+    exif_binding: None,
+};
+const EXIF: Loader = Loader {
+    image: exif_loader_template::IMAGE,
+    prelude_stack_max: exif_loader_template::PRELUDE_STACK_MAX,
+    setup_entry: exif_loader_template::XP5_SETUP_ENTRY,
+    setup_configuration: exif_loader_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: exif_loader_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: exif_loader_template::XP5_SETUP_STACK,
+    setup_stack_top: exif_loader_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: exif_loader_template::SETUP_SD_INITIALIZE,
+    sd_request: exif_loader_template::SETUP_SD_REQUEST,
+    sd_progress: exif_loader_template::SETUP_SD_PROGRESS,
+    sd_board: exif_loader_template::SETUP_SD_BOARD,
+    boot_ready: exif_loader_template::A64_BOOT_READY,
+    boot_zero_gate: exif_loader_template::A64_BOOT_ZERO_GATE,
+    externals: exif_loader_template::EXTERNALS,
+    internal_flash_binding: None,
+    read_only_binding: Some(exif_loader_template::SETUP_SD_READ_ONLY),
+    redirect_binding: Some(exif_loader_template::SETUP_SD_REDIRECT),
+    copy_stub_binding: Some(exif_loader_template::SETUP_SD_COPY_STUB),
+    marker_binding: None,
+    os_binding: None,
+    exif_binding: Some(exif_loader_template::SETUP_SD_EXIF),
 };
 /// The DRAM a read-only startup may fill: the same two numbers as `READ_ONLY_FLOOR` and
 /// `READ_ONLY_CEILING` in the loader source `read_only.h`, which refuses anything else. It is the
@@ -536,7 +581,7 @@ pub(crate) fn package_read_only(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, file: None }),
+        Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, exif: None, file: None }),
     )
 }
 
@@ -603,6 +648,7 @@ pub(crate) fn package_marker(
             stub: Some(binding),
             marker: Some(marker),
             os: None,
+            exif: None,
             file: None,
         }),
     )
@@ -682,7 +728,7 @@ pub(crate) fn package_checked_redirect(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, file: None }),
+        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, exif: None, file: None }),
     )
 }
 
@@ -732,7 +778,75 @@ pub(crate) fn package_copy_stub(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, file: None }),
+        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, exif: None, file: None }),
+    )
+}
+
+/// The placeholder file of the Exif startup. The read-only startup reads one file before it checks the flash and
+/// the OS bytes do not come from the card, so the file carries none: a short note and zeros, one 4 KiB read.
+pub(crate) const EXIF_PLACEHOLDER_BYTES: usize = 4096;
+fn exif_placeholder() -> Vec<u8> {
+    let mut file = b"XP5 startup placeholder: this file carries no firmware bytes. The startup reads one file before it checks the flash.\n".to_vec();
+    file.resize(EXIF_PLACEHOLDER_BYTES, 0);
+    file
+}
+
+/// The OS section's named words, written after the stage's own decode: the stage decodes the section with its
+/// hardware engine as it always does, and a stub (`exif_stub.S`) that the loader writes into dead padding checks
+/// each named word of the fresh decode against its bound stock value and, only if all of them match, writes the
+/// new values with the CPU and reads them back (`redirect.rs`). `ffboot.bin` is a 4 KiB placeholder; the loader
+/// proves the compressed flash range, the section's row, the stage's call and the table of named words before it
+/// writes anything to RAM 0.
+pub(crate) fn package_exif(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    mode: CheckedRedirect,
+) -> Result<Vec<File>> {
+    let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
+    let bias = setup
+        .reset_dat
+        .checked_sub(redirect::RESET_FLASH)
+        .ok_or_else(|| image::Error::Invalid("The reset image precedes its flash offset".into()))?;
+    let reset = extent(&ram, 0, setup.reset_copy_size)?.to_vec();
+    let plan = redirect::locate_exif(&reset, inverted, bias, &ram)?;
+    let end = plan.os.dst as usize + plan.os.head_bytes;
+    require(end <= ram.len(), "The OS section lies outside the RAM image")?;
+    ram.truncate((end + 0xfff) & !0xfff);
+    let file = exif_placeholder();
+    let lamp = &setup.lamp;
+    let redirect::ExifBinding { stub, exif } = redirect::exif_binding(
+        &plan,
+        &file,
+        &reset,
+        inverted,
+        bias,
+        setup.flash.aperture,
+        destination,
+        setup.reset_copy_size,
+        mode == CheckedRedirect::Apply,
+        &redirect::StubLamp {
+            pio_base: lamp.pio_base,
+            green_port: lamp.green_port,
+            red_port: lamp.red_port,
+            pin: lamp.pin,
+        },
+        exif_stub_template::IMAGE,
+    )?;
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_seconds,
+        None,
+        None,
+        Some(ReadOnly {
+            destination,
+            redirect: Some(redirect::Binding(stub.redirect.0)),
+            stub: Some(stub),
+            marker: None,
+            os: None,
+            exif: Some(exif),
+            file: Some(file),
+        }),
     )
 }
 
@@ -790,6 +904,7 @@ pub(crate) fn package_os(
             stub: Some(stub),
             marker: None,
             os: Some(os),
+            exif: None,
             file: Some(head),
         }),
     )
@@ -808,6 +923,8 @@ struct ReadOnly {
     marker: Option<redirect::MarkerPlan>,
     /// The OS build's words of the loader's OS binding.
     os: Option<[u64; 8]>,
+    /// The Exif build's words of the loader's Exif binding.
+    exif: Option<Vec<u64>>,
     /// The file the loader reads, when it is not the RAM image (the OS build's file is the decoded
     /// section alone, which the loader streams to `destination`).
     file: Option<Vec<u8>>,
@@ -957,7 +1074,9 @@ fn package_inner(
     )?;
     let prefix = setup.verify(inverted)?;
     let loader = if let Some(read_only) = &read_only {
-        if read_only.os.is_some() {
+        if read_only.exif.is_some() {
+            &EXIF
+        } else if read_only.os.is_some() {
             &OS
         } else if read_only.marker.is_some() {
             &MARKER
@@ -1129,6 +1248,12 @@ fn package_inner(
                 image::Error::Invalid("This XP5 loader build has no marker binding".into())
             })?;
             redirect::bind_marker(&mut program, at, marker)?;
+        }
+        if let Some(exif) = &read_only.exif {
+            let at = loader.exif_binding.ok_or_else(|| {
+                image::Error::Invalid("This XP5 loader build has no Exif binding".into())
+            })?;
+            redirect::bind_exif(&mut program, at, exif)?;
         }
         if let Some(os) = &read_only.os {
             let at = loader.os_binding.ok_or_else(|| {

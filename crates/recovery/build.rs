@@ -72,6 +72,16 @@ fn main() {
         &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_os"],
     );
     flat_image(&root, &out, "sd-boot-v1-xp5-os-stub", "xp5_os_stub.rs");
+    // The Exif build: the copy-stub build plus a binding for the named words of the OS section, and the
+    // stub's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-exif-loader",
+        "xp5_exif_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_exif"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-exif-stub", "xp5_exif_stub.rs");
 }
 
 /// A position-independent program's image (code, then a zero parameter block) and the offsets of its

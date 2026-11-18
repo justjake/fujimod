@@ -324,7 +324,29 @@ shows the path (orange, then two green pulses or four, five or six red pulses); 
 blinks (verified-only two). It writes nothing but its own block, the lamp pins, the stage's stack and, through
 the stage's functions, the destination; it never writes the flash.
 
-`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-exif-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5)
+binds the same call (the stage's load of its OS section) to a stub that writes **a few named words** of the section's
+decode and nothing else (`StartupOptions::exif`, loader `assets/sd-boot-v1-xp5-exif-loader.generated.{bin,json}`, stub
+`assets/sd-boot-v1-xp5-exif-stub.generated.{bin,json}`). The words are the 16 bytes of one constant string that the OS
+copies into the Software field of the Exif block it writes with every image (`Digital Camera ` becomes `FUJIMOD Camera `: the
+same length, the NUL in the same place; two words change, six check-only words around them anchor the decode). No OS bytes
+come from the card: `ffboot.bin` is a 4 KiB placeholder (a one-line note and zeros) because the read-only startup reads a file
+before it checks the flash. The packager finds the section's load function by its words, finds the string exactly once in the
+decode, checks that exactly two places in the OS build its address (each as an `adrp` and an `add` right after `mov w2, #15`),
+and that nothing else refers to it. The loader proves the section tables and the compressed flash range against bound CRC-32s,
+that the stage's call passes the bound section id, that the flash table's row for the section says what the binding says
+(destination, initialized bytes, flash offset, compressed length), that the named words are ascending, lie inside the section and
+change only inside the 16-byte window, that the window's bytes before and after (assembled from the table) have the bound CRC-32s
+and are fifteen printable characters and a NUL, and every word of the stub's parameter block (including the table). With `--apply`
+it writes the stub into the stage's nop padding and replaces the call by a call to it. The stub runs the stage's own load (the
+hardware decode of the installed flash, unchanged), checks every named word of the fresh decode against its bound stock value,
+and only if all match writes the new values with 32-bit stores and reads them back; on any difference it writes nothing, if a
+store does not read back it writes the stock values again and checks them, and if it cannot restore them it stops with the lamp
+alternating. The lamp shows the path (orange, then three green pulses; red and green in turn four, five or six times; red and green
+for ever); the armed loader shows seven green blinks (verified-only two). It writes nothing but its own block, the lamp pins, the
+stage's stack and the named words; it never writes the flash.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup`, `sd-boot-v1-exif-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per
