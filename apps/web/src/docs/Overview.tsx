@@ -42,12 +42,10 @@ export default function DocsOverview() {
           <p>Documentation for Fujimod firmware developers.</p>
           <For each={sdks}>
             {(sdk) => (
-              <div class="docs-overview-sdk">
-                <h3>
-                  <a href={sdk.href}>{sdk.title}</a>
-                </h3>
+              <a class="docs-overview-sdk" href={sdk.href}>
+                <h3>{sdk.title}</h3>
                 <p>{sdk.description}</p>
-              </div>
+              </a>
             )}
           </For>
         </section>
