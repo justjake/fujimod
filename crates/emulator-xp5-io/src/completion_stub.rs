@@ -208,7 +208,8 @@ impl CompletionStub {
         })
     }
 
-    fn word(&self, offset: u64) -> u32 {
+    /// The current value of the word at `offset` (0 before a write).
+    pub fn word(&self, offset: u64) -> u32 {
         self.state.words.get(&offset).copied().unwrap_or(0)
     }
 

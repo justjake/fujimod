@@ -14,6 +14,9 @@ struct State {
     armed: bool,
     frames: u64,
     deadline: Option<u64>,
+    /// RIFP: the last still-run output (see [`super::still`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    yc_output: Option<super::still::YcPicture>,
 }
 impl State {
     fn r(&self, o: u64) -> u32 {
@@ -103,6 +106,14 @@ pub struct Rifp {
     source_luma: u8,
     /// Bring-up option: unmodeled aligned words read back their last write (in `state.regs`).
     retain_words: bool,
+    /// Opt-in still data path ([`Preview::with_still_path`]).
+    still: Option<StillPath>,
+}
+/// What a RIFP still run reads and shares: the sensor's still RAW and RESZ's view of the
+/// RIFP output.
+pub struct StillPath {
+    pub sensor: fujimod_emulator_sensor_input::sensor::Sensor,
+    pub output: super::still::YcOutput,
 }
 impl Preview {
     pub fn new(rifp: bool, io: Io, options: &toml::Table) -> Result<Self, String> {
@@ -142,6 +153,7 @@ impl Preview {
                 delay,
                 source_luma,
                 retain_words,
+                still: None,
             }));
         }
         let input = InputBuffer::new(
@@ -187,6 +199,14 @@ impl Preview {
         } else {
             input
         }))
+    }
+    /// RIFP: at the end of each queued run with programmed input and output addresses, develop
+    /// or copy the picture (see [`super::still`]).
+    pub fn with_still_path(mut self, still: StillPath) -> Self {
+        if let Self::Rifp(rifp) = &mut self {
+            rifp.still = Some(still);
+        }
+        self
     }
     pub fn with_statistics(mut self, statistics: Statistics) -> Self {
         if let Self::Input(input) = &mut self {
@@ -300,6 +320,9 @@ impl Device for Rifp {
             self.state.generation = self.state.generation.wrapping_add(1);
             self.state.regs.insert(0, 1);
             self.state.regs.insert(0x144, 0);
+            if let Some(still) = &self.still {
+                still.output.set_busy(false);
+            }
         } else if o == 0x14c {
             self.state
                 .regs
@@ -307,6 +330,9 @@ impl Device for Rifp {
         } else {
             self.state.regs.insert(o, v);
             if o == 4 && v & 1 != 0 {
+                if let Some(still) = &self.still {
+                    still.output.set_busy(true);
+                }
                 self.state.armed = true;
                 self.state.generation = self.state.generation.wrapping_add(1);
                 let Some(at) = cx.now().checked_add(self.delay) else {
@@ -333,6 +359,41 @@ impl Device for Rifp {
         }
         self.state.deadline = None;
         self.state.armed = false;
+        if let Some(still) = &self.still {
+            still.output.set_busy(false);
+            let queued = self.io.0.lock().unwrap().r(0x4c) & 1 == 1;
+            let regs = self.state.regs.clone();
+            let r = |o| regs.get(&o).copied().unwrap_or(0);
+            let mut ran = None;
+            if queued && r(0x0c) | r(0x10) & 7 != 0 && r(0x40) | r(0x44) & 7 != 0 {
+                match super::still::rifp_run(cx, r, still.sensor.still_raw()) {
+                    Ok(picture) => {
+                        self.state.yc_output = Some(picture);
+                        still.output.set(Some(picture));
+                        ran = Some(picture);
+                    }
+                    Err(e) => {
+                        cx.fail(e);
+                        return;
+                    }
+                }
+            }
+            if let Some(job) = still.output.take_deferred() {
+                let result = match ran {
+                    Some(picture) => job.scale(cx, Some(picture)),
+                    None => Err(format!(
+                        "RESZ inline start waited for a RIFP run without an output address \
+                         (+0x40 {:#x}, +0x44 {:#x}): a pure inline stream is not modelled",
+                        r(0x40),
+                        r(0x44)
+                    )),
+                };
+                if let Err(e) = result {
+                    cx.fail(e);
+                    return;
+                }
+            }
+        }
         let io = self.io.0.lock().unwrap();
         let address = u64::from(io.r(0x6c)) | (u64::from(io.r(0x70) & 7) << 32);
         let row = io.r(0x7c) & 0x1ffff;
@@ -372,6 +433,9 @@ impl Device for Rifp {
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.state = saved.decode(self.name())?;
+        if let Some(still) = &self.still {
+            still.output.set(self.state.yc_output);
+        }
         Ok(())
     }
     fn save(&self) -> Value {
@@ -384,6 +448,9 @@ impl Device for Rifp {
             return Err("RIFP active/deadline disagree".into());
         }
         self.state = s;
+        if let Some(still) = &self.still {
+            still.output.set(self.state.yc_output);
+        }
         Ok(())
     }
 }

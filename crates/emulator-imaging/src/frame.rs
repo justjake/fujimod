@@ -209,14 +209,23 @@ pub fn render_422_row(
     row_422(&view(scene, frame.as_deref(), width), y, width, height, marker, row);
 }
 
-fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Option<usize>, row: &mut [u8]) {
+/// Calls `out` with the sRGB colour of each pixel `x` of line `y` of `view` at `width` x
+/// `height`.
+fn rgb_line(
+    view: &View<'_>,
+    y: usize,
+    width: usize,
+    height: usize,
+    marker: Option<usize>,
+    mut out: impl FnMut(usize, [u8; 3]),
+) {
     let (w, h) = (width, height);
     let bilinear = match view {
         View::Bilinear(sampler) => Some(sampler.row(y, h)),
         _ => None,
     };
-    let pixel = |x: usize| -> [u8; 3] {
-        match view {
+    for x in 0..w {
+        let pixel = match view {
             View::Bars => {
                 if marker.is_some_and(|m| x.abs_diff(m) < 8) {
                     [235, 235, 235]
@@ -232,16 +241,77 @@ fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Optio
                 [rgb[p], rgb[p + 1], rgb[p + 2]]
             }
             View::Bilinear(_) => bilinear.as_ref().expect("bilinear row")(x),
+        };
+        out(x, pixel);
+    }
+}
+
+fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Option<usize>, row: &mut [u8]) {
+    let mut first = [0; 3];
+    rgb_line(view, y, width, height, marker, |x, pixel| {
+        if x % 2 == 0 {
+            first = ycbcr(pixel);
+            return;
         }
-    };
-    for pair in 0..w / 2 {
-        let (a, b) = (ycbcr(pixel(pair * 2)), ycbcr(pixel(pair * 2 + 1)));
+        let (a, b, pair) = (first, ycbcr(pixel), x / 2);
         row[pair * 4] = a[0].clamp(16, 235) as u8;
         row[pair * 4 + 1] = b[0].clamp(16, 235) as u8;
         row[pair * 4 + 2] = ((a[1] + b[1]) / 2).clamp(16, 240) as u8;
         row[pair * 4 + 3] = ((a[2] + b[2]) / 2).clamp(16, 240) as u8;
-    }
+    });
 }
+
+/// Every line of `scene` at `width` x `height` as sRGB (R, G, B bytes, `width * 3` a line),
+/// top first, passed to `line` with its number. A live scene contributes one frame, the newest
+/// at the time of the call, to the whole picture. No motion marker is drawn.
+pub fn render_rgb_lines(
+    scene: &Scene,
+    width: usize,
+    height: usize,
+    mut line: impl FnMut(usize, &[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    if width == 0 || height == 0 {
+        return Err("empty scene picture".into());
+    }
+    let (frame, scene) = snapshot(scene);
+    let view = view(scene, frame.as_deref(), width);
+    let mut row = vec![0u8; width * 3];
+    for y in 0..height {
+        rgb_line(&view, y, width, height, None, |x, pixel| {
+            row[x * 3..x * 3 + 3].copy_from_slice(&pixel)
+        });
+        line(y, &row)?;
+    }
+    Ok(())
+}
+
+/// The scene of the still data path (sensor RAW of a still capture): the `XT5_SCENE` scene,
+/// or colour bars when none is set.
+pub fn still_scene() -> &'static Scene {
+    static BARS_SCENE: Scene = Scene::Bars;
+    host_scene().unwrap_or(&BARS_SCENE)
+}
+
+/// Whether the `XT5_STILL_PATH` environment variable selects the modelled still data path
+/// (`real`): the X-T5 still RAW channel writes the scene as X-Trans samples, RIFP develops it,
+/// RESZ scales it, and [`host_still_422`] no longer supplies the main (larger than 640x480)
+/// JPEG encodes. Unset or any other value keeps the encoder shortcut. Read once per process; a
+/// host input outside the run definition, like `XT5_SCENE`.
+pub fn still_path_real() -> bool {
+    use std::sync::OnceLock;
+    static REAL: OnceLock<bool> = OnceLock::new();
+    *REAL.get_or_init(|| {
+        let real = std::env::var("XT5_STILL_PATH").is_ok_and(|v| v == "real");
+        if real {
+            eprintln!("XT5_STILL_PATH: real (sensor RAW -> RIFP -> RESZ; JPEG shortcut only up to 640x480)");
+        }
+        real
+    })
+}
+
+/// Largest encode (in pixels) the host scene still supplies with [`still_path_real`]: the
+/// 640x480 preview and 160x120 thumbnail, which come from RZL2 (not modelled).
+pub const STILL_PATH_SHORTCUT_PIXELS: usize = 640 * 480;
 
 /// The whole of `scene` at `width` x `height` as packed 4:2:2 lines of `width * 2` bytes,
 /// without the motion marker. A live scene contributes its newest frame at the time of the
@@ -262,7 +332,13 @@ pub fn render_422(scene: &Scene, width: usize, height: usize) -> Option<Vec<u8>>
 /// The `XT5_SCENE` scene ([`host_scene`]) as a still picture of `width` x `height`, packed
 /// 4:2:2; `None` when no scene is set or the size is odd or empty. A live scene gives the
 /// newest frame at the moment of the call, so each JPEG encode is a snapshot of the feed.
+///
+/// With `XT5_STILL_PATH=real` ([`still_path_real`]) it gives `None` for runs larger than
+/// [`STILL_PATH_SHORTCUT_PIXELS`], so the main encode reads what the modelled develop chain wrote.
 pub fn host_still_422(width: usize, height: usize) -> Option<Vec<u8>> {
+    if still_path_real() && width * height > STILL_PATH_SHORTCUT_PIXELS {
+        return None;
+    }
     render_422(host_scene()?, width, height)
 }
 

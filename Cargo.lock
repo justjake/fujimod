@@ -2560,6 +2560,7 @@ name = "fujimod-emulator-sensor-input"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -2747,6 +2748,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-imaging",
  "fujimod-emulator-sensor-input",
+ "fujimod-emulator-xp5-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",

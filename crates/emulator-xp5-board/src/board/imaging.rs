@@ -61,6 +61,19 @@ pub fn register_all(
         }),
         (0x59, 4),
     );
+    // XT5_STILL_PATH=real: the modelled still data path (sensor RAW -> RIFP -> RESZ), see
+    // fujimod_emulator_xp5_imaging::imaging::still. A host input, like XT5_SCENE.
+    let still_path = fujimod_emulator_imaging::frame::still_path_real();
+    let sensor = if still_path {
+        sensor.with_still_channel(sensor::StillChannel {
+            channel: 1,
+            sixteen_bit_codes: still_raw16_codes()?,
+            scene: fujimod_emulator_imaging::frame::still_scene,
+        })
+    } else {
+        sensor
+    };
+    let yc_output = fujimod_emulator_xp5_imaging::imaging::still::YcOutput::default();
     let ticks = |options: &toml::Table, key: &str| -> Result<u64, String> {
         options
             .get(key)
@@ -196,10 +209,16 @@ pub fn register_all(
                 ),
             }
         } else {
-            Box::new(
-                preview::Preview::new(w.kind == "imaging-rifp", io.clone(), &w.options)?
-                    .with_statistics(statistics.clone()),
-            )
+            let device = preview::Preview::new(w.kind == "imaging-rifp", io.clone(), &w.options)?
+                .with_statistics(statistics.clone());
+            Box::new(if still_path {
+                device.with_still_path(preview::StillPath {
+                    sensor: sensor.clone(),
+                    output: yc_output.clone(),
+                })
+            } else {
+                device
+            })
         };
         bus.register(w.base, w.size, device)?;
     }
@@ -214,6 +233,29 @@ pub fn register_all(
             return Err("invalid imaging table window".into());
         };
         bus.register(w.base, w.size, Box::new(device))?;
+    }
+    // RESZ 0xffd0c000: the completion stub of 55-develop-stubs.toml that also scales with the
+    // still path.
+    for w in windows.iter().filter(|w| w.kind == "imaging-resz") {
+        if w.base != 0xffd0c000 || w.size != 0x1000 {
+            return Err("invalid imaging-resz window".into());
+        }
+        let options: fujimod_emulator_xp5_io::completion_stub::Options =
+            toml::Value::Table(w.options.clone())
+                .try_into()
+                .map_err(|e| format!("imaging-resz options: {e}"))?;
+        // XP5 board time is in nanoseconds.
+        let stub =
+            fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(w.base, w.size, options, 1000)?;
+        bus.register(
+            w.base,
+            w.size,
+            Box::new(fujimod_emulator_xp5_imaging::imaging::still::Resz::new(
+                w.base,
+                stub,
+                still_path.then(|| yc_output.clone()),
+            )),
+        )?;
     }
     for w in windows.iter().filter(|w| w.kind == "imaging-input") {
         if w.base != 0xff946000 || w.size != 0x1000 {
@@ -292,4 +334,23 @@ fn retain_words(options: &toml::Table) -> Result<bool, String> {
             .as_bool()
             .ok_or_else(|| "retain_words must be a boolean".to_string()),
     }
+}
+
+/// Format codes (+0xdc bits 18..16) of the still RAW channel taken as 16-bit containers: code 5
+/// (X-T5 4.31 still capture: pitch 0x3d80 = 7872 x 2 bytes for 7776 samples a line), code 0
+/// (assumed), and the codes `XT5_STILL_RAW16` lists (comma-separated, 0..7), a host input for
+/// bring-up.
+fn still_raw16_codes() -> Result<u8, String> {
+    let mut codes = 1u8 | 1 << 5;
+    for code in std::env::var("XT5_STILL_RAW16").unwrap_or_default().split(',') {
+        let code = code.trim();
+        if code.is_empty() {
+            continue;
+        }
+        match code.parse::<u8>() {
+            Ok(n) if n < 8 => codes |= 1 << n,
+            _ => return Err(format!("XT5_STILL_RAW16: {code} is not a format code 0..7")),
+        }
+    }
+    Ok(codes)
 }

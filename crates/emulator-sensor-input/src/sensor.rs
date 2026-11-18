@@ -22,6 +22,12 @@ pub struct SensorState {
     /// RAW DMA channels that were enabled at the start of the current frame.
     #[serde(default)]
     pub armed: [bool; 2],
+    /// The last picture the still channel ([`StillChannel`]) wrote.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub still_raw: Option<StillRaw>,
+    /// The still channel's destination was programmed and no frame has used it yet.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub still_programmed: bool,
 }
 impl Default for SensorState {
     fn default() -> Self {
@@ -36,6 +42,8 @@ impl Default for SensorState {
             frames: [0; 2],
             last_dma: [(0, 0, 0); 2],
             armed: [false; 2],
+            still_raw: None,
+            still_programmed: false,
         }
     }
 }
@@ -47,11 +55,77 @@ pub struct ImageRoutes {
     /// lines are packed (width x 2 bytes).
     pub line_stride: bool,
 }
+/// A RAW DMA channel that writes the still scene (opt-in, [`Sensor::with_still_channel`]).
+///
+/// X-T5 4.31 RAW DMA unit 3 is channel 1 of the 0xff948000 block (setters 0x1351560,
+/// 0x1352834; unit 2 is channel 0). Its words, relative to the window:
+///
+/// * +0xc0 bit 0 enable, sampled at each frame start as for every channel.
+/// * +0xc4 = start << 16 | samples a line, +0xc8 = start << 16 | lines (0x1351560 writes
+///   u16 [+2] / [+6] in bits 15..0 and [+0] / [+4] in bits 30..16, counts at most 0x4000). The
+///   horizontal/vertical roles follow the X-T3 channel (+0x44 samples, +0x48 lines); the start
+///   fields select the crop of the sensor frame, which a scene does not have, so they are kept
+///   but not applied.
+/// * +0xcc bits 2..0 / +0xd0: destination address bits 34..32 / 31..0.
+/// * +0xd4 bits 2..0 / +0xd8: line pitch in bytes (high / low; the high word must be 0).
+/// * +0xdc bits 18..16: format code 0..5 (from the job config, 0x1352834); bits 15..0 a byte of
+///   the config, not decoded. Only the codes in `sixteen_bit_codes` are modelled, as 14-bit
+///   samples in 16-bit little-endian containers; the others (12-bit packed among them, see
+///   0x2ebeb7c) refuse. X-T5 4.31 still capture programs code 5 with pitch 0x3d80 for 7776
+///   samples (7872 x 2 bytes, an aligned 16-bit stride).
+/// * +0xe0 interrupt enable, +0xe4 status (write one to clear), INTID 163. The ISR 0x1350d94
+///   handles bit 1 and bit 0 alike (both run the unit's frame callback).
+///
+/// Arming. The channel stays enabled through live view (+0xc0 bit 0, 0x13514dc), so the
+/// enable alone does not mark the still frame. A capture programs the unit through
+/// 0x2c69fa4: 0x1352834 (call 0x2c6a068) writes +0xdc, +0xcc/+0xd0 and +0xd4/+0xd8, then
+/// 0x13522dc (call 0x2c6a094) claims the unit, clears +0xe4 (0x1350c6c, 0xf) and, with a
+/// frame callback, enables the frame interrupts in +0xe0 (0x1350f6c at 0x1352420: bits 0, 2,
+/// 3, and bit 1 when +0xf4 bit 0 is set); without one it clears them (0x135238c); 0x13514dc
+/// then sets the enable (0x2c6b1a8). The model therefore writes a frame only when all hold at
+/// its end: the frame began enabled, +0xd0 was written since the last written frame, and
+/// +0xe0 enables bit 0 or bit 1. It then writes the [`StillChannel::scene`] once, line by
+/// line as X-Trans samples, site (0, 0) at the destination
+/// ([`fujimod_emulator_imaging::xtrans::mosaic_line`]), sets +0xe4 bit 1 (bit 0 when +0xe0
+/// enables only bit 0) and raises the line while +0xe0 enables it. Other frames write
+/// nothing and set no status; the next +0xd0 write arms the channel again.
+/// +0xf0 (line-count interrupt) is not modelled.
+#[derive(Clone, Copy)]
+pub struct StillChannel {
+    pub channel: usize,
+    /// Bit n set: format code n is 16-bit containers.
+    pub sixteen_bit_codes: u8,
+    /// The picture the sensor sees.
+    pub scene: fn() -> &'static fujimod_emulator_imaging::frame::Scene,
+}
+/// Where the still channel wrote its last picture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StillRaw {
+    pub address: u64,
+    pub pitch: u64,
+    pub width: u32,
+    pub lines: u32,
+}
 #[derive(Clone)]
-pub struct Sensor(pub Arc<Mutex<SensorState>>, Option<ImageRoutes>, (u16, u8));
+pub struct Sensor(
+    pub Arc<Mutex<SensorState>>,
+    Option<ImageRoutes>,
+    (u16, u8),
+    Option<StillChannel>,
+);
 impl Sensor {
     pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
-        Self(Arc::default(), routes, read_gate)
+        Self(Arc::default(), routes, read_gate, None)
+    }
+    /// Make one RAW DMA channel the still channel (see [`StillChannel`]). Set it before the
+    /// sensor is cloned into its devices.
+    pub fn with_still_channel(mut self, still: StillChannel) -> Self {
+        self.3 = Some(still);
+        self
+    }
+    /// The last picture the still channel wrote, if any.
+    pub fn still_raw(&self) -> Option<StillRaw> {
+        self.0.lock().unwrap().still_raw
     }
     pub fn image_reg(&self, offset: u64) -> u32 {
         self.0
@@ -69,6 +143,9 @@ impl Sensor {
             s.image.insert(offset, old & !(value & 15));
         } else {
             s.image.insert(offset, value);
+        }
+        if self.3.is_some_and(|still| offset == [0x40, 0xc0][still.channel] + 0x10) {
+            s.still_programmed = true;
         }
         let Some(routes) = self.1 else { return };
         if let Some(dma) = routes.dma {
@@ -119,6 +196,9 @@ impl Sensor {
     pub fn frame(&self, cx: &mut Cx<'_>, channel: usize) -> Result<(), String> {
         let Some(routes) = self.1 else { return Ok(()) };
         let Some(dma) = routes.dma else { return Ok(()) };
+        if let Some(still) = self.3.filter(|still| still.channel == channel) {
+            return self.still_frame(cx, still, dma[channel]);
+        }
         let mut s = self.0.lock().unwrap();
         let base = [0x40, 0xc0][channel];
         let armed = std::mem::take(&mut s.armed[channel]);
@@ -167,6 +247,83 @@ impl Sensor {
         s.image.insert(pending, value);
         let enabled = s.image.get(&(base + 0x20)).copied().unwrap_or(0);
         cx.set_irq(dma[channel], value & enabled & 15 != 0);
+        Ok(())
+    }
+    /// The still channel's frame (see [`StillChannel`]).
+    fn still_frame(&self, cx: &mut Cx<'_>, still: StillChannel, irq: u32) -> Result<(), String> {
+        let mut s = self.0.lock().unwrap();
+        let base = [0x40, 0xc0][still.channel];
+        if !std::mem::take(&mut s.armed[still.channel]) || !s.still_programmed {
+            return Ok(());
+        }
+        let reg = |o: u64| s.image.get(&(base + o)).copied().unwrap_or(0);
+        let done = match reg(0x20) & 3 {
+            0 => return Ok(()),
+            1 => 1,
+            _ => 2,
+        };
+        let address = u64::from(reg(0x10)) | (u64::from(reg(0x0c) & 7) << 32);
+        let (width, lines) = (reg(0x04) & 0x7fff, reg(0x08) & 0x7fff);
+        if address == 0 || width == 0 || lines == 0 {
+            return Ok(());
+        }
+        let format = reg(0x1c);
+        let code = format >> 16 & 7;
+        if still.sixteen_bit_codes >> code & 1 == 0 {
+            return Err(format!(
+                "still RAW DMA channel {}: format code {code} (+{:#x} = {format:#x}) is not decoded; \
+                 only codes {:#010b} (bit n = code n, 16-bit containers) are modelled. If code {code} is 16-bit, \
+                 set XT5_STILL_RAW16={code}",
+                still.channel,
+                base + 0x1c,
+                still.sixteen_bit_codes
+            ));
+        }
+        let pitch = u64::from(reg(0x18));
+        let line = u64::from(width) * 2;
+        if reg(0x14) & 7 != 0 || pitch < line || pitch % 2 != 0 {
+            return Err(format!(
+                "still RAW DMA channel {}: pitch {:#x}:{pitch:#x} does not hold {width} 16-bit \
+                 samples (+{:#x} = {:#x}, +{:#x} = {:#x})",
+                still.channel,
+                reg(0x14),
+                base + 4,
+                reg(0x04),
+                base + 8,
+                reg(0x08)
+            ));
+        }
+        if pitch * u64::from(lines - 1) + line > 128 * 1024 * 1024 {
+            return Err("still RAW frame exceeds functional DMA limit".into());
+        }
+        let mut samples = vec![0u8; line as usize];
+        fujimod_emulator_imaging::frame::render_rgb_lines(
+            (still.scene)(),
+            width as usize,
+            lines as usize,
+            |y, rgb| {
+                fujimod_emulator_imaging::xtrans::mosaic_line(rgb, y, &mut samples);
+                cx.ram_write(address + pitch * y as u64, &samples)
+            },
+        )?;
+        s.still_programmed = false;
+        s.frames[still.channel] += 1;
+        s.last_dma[still.channel] = (address, width, lines);
+        s.still_raw = Some(StillRaw {
+            address,
+            pitch,
+            width,
+            lines,
+        });
+        let status = base + 0x24;
+        let value = s.image.get(&status).copied().unwrap_or(0) | done;
+        s.image.insert(status, value);
+        let enabled = s.image.get(&(base + 0x20)).copied().unwrap_or(0);
+        cx.set_irq(irq, value & enabled & 15 != 0);
+        cx.log(&format!(
+            "still RAW DMA channel {}: scene {width}x{lines} X-Trans 16-bit at {address:#x} pitch {pitch:#x}",
+            still.channel
+        ));
         Ok(())
     }
     fn image_supported(&self, offset: u64) -> bool {
@@ -632,6 +789,102 @@ mod tests {
         sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
         assert_eq!(host.ram, vec![0x55; 0x10]);
         assert_eq!(sensor.image_reg(0x64), 0);
+    }
+    fn bars() -> &'static fujimod_emulator_imaging::frame::Scene {
+        static BARS: fujimod_emulator_imaging::frame::Scene =
+            fujimod_emulator_imaging::frame::Scene::Bars;
+        &BARS
+    }
+    #[test]
+    fn the_still_channel_writes_the_scene_once_per_programming_with_frame_interrupts() {
+        let sensor = Sensor::new(
+            Some(ImageRoutes {
+                dma: Some([162, 163]),
+                timing: [166, 164],
+                line_stride: false,
+            }),
+            (0x59, 4),
+        )
+        .with_still_channel(StillChannel {
+            channel: 1,
+            sixteen_bit_codes: 1 << 5,
+            scene: bars,
+        });
+        let mut host = RecordingHost {
+            ram: vec![0x55; 0x200],
+            ram_base: 0x1_0000_0000,
+            ..Default::default()
+        };
+        let write = |host: &mut RecordingHost, offset, value| {
+            sensor.image_write(&mut Cx::new(host, 0, 0, 0), offset, value)
+        };
+        let frame = |host: &mut RecordingHost| {
+            sensor.frame_start(1);
+            sensor.frame(&mut Cx::new(host, 0, 0, 0), 1)
+        };
+        // Live view: the channel is programmed and enabled, but its frame interrupts are off.
+        // 16 samples x 8 lines at pitch 0x30, format code 5 (+0xc4 / +0xc8 carry start fields).
+        for (offset, value) in [
+            (0xdc, 5 << 16 | 0x10),
+            (0xc4, 5 << 16 | 16),
+            (0xc8, 7 << 16 | 8),
+            (0xcc, 1),
+            (0xd0, 0),
+            (0xd8, 0x30),
+            (0xc0, 1),
+        ] {
+            write(&mut host, offset, value);
+        }
+        for _ in 0..3 {
+            frame(&mut host).unwrap();
+        }
+        assert_eq!(host.ram, vec![0x55; 0x200]);
+        assert_eq!(sensor.image_reg(0xe4), 0);
+        assert!(!host.irqs.rev_find(163));
+        // The capture: 0x13522dc enables the frame interrupts (here bits 0..3).
+        write(&mut host, 0xe0, 0xf);
+        frame(&mut host).unwrap();
+        // Bars: the first two pixels are white (235), so every site of them takes its sample.
+        let mut white = [0u8; 4];
+        fujimod_emulator_imaging::xtrans::mosaic_line(&[235; 6], 0, &mut white);
+        assert_eq!(white[..2], white[2..]);
+        assert_eq!(&host.ram[..4], &white);
+        assert_eq!(&host.ram[0x30..0x34], &white);
+        assert_eq!(&host.ram[0x20..0x30], &[0x55; 0x10]);
+        assert_eq!(sensor.image_reg(0xe4), 2);
+        assert!(host.irqs.rev_find(163));
+        assert_eq!(
+            sensor.still_raw(),
+            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x30, width: 16, lines: 8 })
+        );
+        // The ISR clears bit 1 by writing 2. Later frames write nothing until +0xd0 is
+        // programmed again.
+        write(&mut host, 0xe4, 2);
+        assert_eq!(sensor.image_reg(0xe4), 0);
+        assert!(!host.irqs.rev_find(163));
+        host.ram.fill(0x55);
+        frame(&mut host).unwrap();
+        assert_eq!(host.ram, vec![0x55; 0x200]);
+        assert_eq!(sensor.image_reg(0xe4), 0);
+        // With only bit 0 enabled, the done status is bit 0.
+        write(&mut host, 0xe0, 1);
+        write(&mut host, 0xd0, 0);
+        frame(&mut host).unwrap();
+        assert_eq!(&host.ram[..4], &white);
+        assert_eq!(sensor.image_reg(0xe4), 1);
+        // An undecoded format code refuses.
+        write(&mut host, 0xdc, 1 << 16);
+        write(&mut host, 0xd0, 0);
+        let error = frame(&mut host).unwrap_err();
+        assert!(error.contains("format code 1"), "{error}");
+    }
+    trait RevFind {
+        fn rev_find(&self, irq: u32) -> bool;
+    }
+    impl RevFind for Vec<(u32, bool)> {
+        fn rev_find(&self, irq: u32) -> bool {
+            self.iter().rev().find(|(i, _)| *i == irq).is_some_and(|(_, on)| *on)
+        }
     }
     #[test]
     fn raw_dma_line_stride_places_each_line_and_refuses_short_strides() {
