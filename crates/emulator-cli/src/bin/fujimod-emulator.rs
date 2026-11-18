@@ -233,14 +233,25 @@ struct Outcome {
     success: bool,
 }
 
+fn prepare_mod(
+    resolved: &ResolvedConfiguration, model: fujimod_emulator_cpu::Model, manifests: &[String],
+) -> Result<Option<boot::mod_loader::Loaded>, String> {
+    if manifests.is_empty() {
+        return Ok(None);
+    }
+    let firmware = &resolved.reference.firmware;
+    let update = firmware.update.as_ref().ok_or("mod needs a verified firmware update")?;
+    boot::mod_loader::prepare(boot::mod_loader::Target {
+        id: &firmware.id, sha256: &update.sha256, model,
+    }, manifests, |_, _| Ok(())).map(Some)
+}
+
 fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
         &["--application-plan", "--manifest", "--watch-pcs", "--dump", "--hash"],
     )?;
-    if !boot_options.mods.is_empty() {
-        return Err("this run does not declare emulator mod loading".into());
-    }
+    let mut loaded_mod = prepare_mod(&resolved, fujimod_emulator_cpu::Model::CortexR5F, &boot_options.mods)?;
     if let Some(path) = boot_options.path("--scene") {
         let scene: RunScene = serde_json::from_value(boot::host::read_scene(&path)?)
             .map_err(|error| format!("{}: {error}", path.display()))?;
@@ -316,6 +327,7 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
         return Err("--viewer-port requires --output".into());
     }
     let mut patches = boot::patch::Schedule::from_path(boot_options.path("--patch").as_deref(), &[])?;
+    let stubbed = stubs.iter().map(|stub| stub.address).collect::<Vec<_>>();
     let start = session.board.now();
     let mut next_status = status.map(|_| start);
     let mut next_frame = session.board.now();
@@ -323,6 +335,9 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
         |session| {
             let key_deadline = keys.advance(session, start)?;
             let patch_deadline = patches.advance(&session.board, session.board.now(), start, boot::EXR2_TICKS_PER_SECOND)?;
+            if let Some(loaded) = &mut loaded_mod {
+                loaded.advance(&boot::mod_loader::BoardMachine(&session.board), session.board.now(), &stubbed)?;
+            }
             Ok(key_deadline.into_iter().chain(patch_deadline).min())
         },
         |session, status_report| {
@@ -357,10 +372,11 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
     if let Some(path) = boot_options.path("--save-snapshot") {
         boot::save_snapshot(&session, &path)?;
     }
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
-    );
+    let mut receipt = serde_json::to_value(&report).map_err(|error| error.to_string())?;
+    if let Some(loaded) = loaded_mod {
+        receipt["mod"] = loaded.report(&boot::mod_loader::BoardMachine(&session.board));
+    }
+    println!("{}", serde_json::to_string_pretty(&receipt).map_err(|error| error.to_string())?);
     if let Some(path) = screenshot {
         std::fs::write(&path, boot::screenshot(&session)?)
             .map_err(|e| format!("{}: {e}", path.display()))?;
@@ -456,8 +472,8 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             .ok_or_else(|| format!("{} has no declared digital input", edge.name))?;
         Ok((edge.delay, wire, edge.pressed))
     }).collect::<Result<std::collections::VecDeque<_>, String>>()?;
-    if !options.values.is_empty() || !options.mods.is_empty() || !options.preferred_languages.is_empty()
-    {
+    let mut loaded_mod = prepare_mod(&resolved, fujimod_emulator_cpu::Model::CortexA7, &options.mods)?;
+    if !options.values.is_empty() || !options.preferred_languages.is_empty() {
         return Err("application-profile runtime needs supported options and media in its startup plan".into());
     }
     let boot::Opened::Application(mut started) = boot::open(resolved, boot::StartupInputs::Application(request))?
@@ -466,6 +482,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     };
     let stubs = options.stubs.iter().map(|specification| boot::host::parse_stub(specification))
         .collect::<Result<Vec<_>, _>>()?;
+    let stubbed = stubs.iter().map(|stub| stub.address).collect::<Vec<_>>();
     let trace = match &mut started.board {
         boot::application::Board::Xpp(session) => {
             if let Some(path) = load_snapshot {
@@ -512,7 +529,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let mut next_status = status_period.map(|_| start);
     let mut next_frame = output.as_ref().map(|_| start);
     let mut sequences = BTreeMap::new();
-    let state = started.run_with(instructions, duration, |board| {
+    let mut state = started.run_with(instructions, duration, |board| {
         let (counts, now) = board.progress();
         let deadline = |delay| start.saturating_add(boot::host::duration_ticks(delay, board.ticks_per_second));
         let mut next_key = None;
@@ -526,6 +543,9 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             keys.pop_front();
         }
         let next_patch = patches.advance(&board.board, now, start, board.ticks_per_second)?;
+        if let Some(loaded) = &mut loaded_mod {
+            loaded.advance(&board.board, now, &stubbed)?;
+        }
         if next_status.is_some_and(|at| at <= now) {
             eprintln!("FUJIMOD status {}", serde_json::json!({"engine":board.engine,"instructions":counts,"now":now}));
             next_status = status_period.filter(|period| *period != 0).map(|period| now.saturating_add(period));
@@ -557,6 +577,9 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         let shown = started.display_frames();
         let frame = shown.first().ok_or("no active scanout published a frame")?;
         boot::output::Outputs::write_screenshot(&path, frame)?;
+    }
+    if let Some(loaded) = loaded_mod {
+        state["mod"] = loaded.report(&started.board);
     }
     let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
     if let Some(output) = output {

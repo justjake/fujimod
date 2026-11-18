@@ -8,7 +8,6 @@ mod card_image;
 mod display_output;
 pub mod firmware;
 mod manifest;
-mod mod_loader;
 mod open;
 mod rom_start;
 mod run;

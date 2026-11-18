@@ -13,6 +13,8 @@ pub mod media;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod patch;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod mod_loader;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod keys;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;

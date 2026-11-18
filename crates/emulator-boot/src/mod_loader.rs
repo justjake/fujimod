@@ -6,12 +6,23 @@
 //! bytes exist only in the guest RAM of one run.
 //!
 //! The plan and checks run against a `Machine` so the preflight can be tested without an engine.
-use super::manifest::Preload;
-use super::firmware::{Firmware, sha256_hex};
+use crate::host::Memory;
 use fujimod_emulator::board::Board;
-use fujimod_emulator_cpu::{Access, Register, arm64};
+use fujimod_emulator_cpu::{Access, Model, Register, arm, arm64};
+use sha2::{Digest, Sha256};
 use serde_json::{Value, json};
 use std::path::Path;
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+/// The firmware identity and the supported full-boot hook ABI.
+pub struct Target<'a> {
+    pub id: &'a str,
+    pub sha256: &'a str,
+    pub model: Model,
+}
 
 /// A manifest number: an integer, or a string with a `0x` prefix.
 pub(crate) fn number(v: &Value) -> Result<u64, String> {
@@ -39,31 +50,57 @@ pub(crate) fn extent(v: &Value) -> Result<(u64, usize), String> {
 
 
 /// Guest memory and translation inputs, as the loader needs them.
-pub(crate) trait Machine {
-    /// Observational read of guest physical memory.
-    fn read(&self, address: u64, bytes: &mut [u8]) -> Result<(), String>;
-    fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String>;
-    /// Stage-1 translation inputs of every A53 core.
-    fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String>;
+pub trait Machine: Memory {
+    fn arm32_core_count(&self) -> usize { 0 }
+
+    fn arm32_translate(&self, _: usize, _: u64, _: Access) -> Result<u64, String> {
+        Err("ARM32 mod translation is unavailable".into())
+    }
+
+    fn arm32_mmu_enabled(&self, _: usize) -> Result<bool, String> {
+        Err("ARM32 mod MMU status is unavailable".into())
+    }
+
+    /// Stage-1 translation inputs of the AArch64 application cores.
+    fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String> { Ok(Vec::new()) }
 }
 
 /// The shared board; `write_physical` tells every core's translator which code pages changed.
-pub(crate) struct BoardMachine<'a>(pub(crate) &'a Board);
+pub struct BoardMachine<'a>(pub &'a Board);
 
-impl Machine for BoardMachine<'_> {
+impl Memory for BoardMachine<'_> {
     fn read(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         self.0.inspect_physical(address, bytes)
     }
     fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         self.0.write_physical(address, bytes)
     }
+}
+
+impl Machine for BoardMachine<'_> {
+    fn arm32_core_count(&self) -> usize {
+        self.0.instruction_counts().iter().enumerate()
+            .filter(|(core, _)| self.0.cpu(*core).is_ok_and(|cpu| matches!(cpu.model(), Model::CortexA7 | Model::CortexR5F)))
+            .count()
+    }
+
+    fn arm32_translate(&self, core: usize, address: u64, access: Access) -> Result<u64, String> {
+        self.0.cpu(core)?.translate(address, access)
+    }
+
+    fn arm32_mmu_enabled(&self, core: usize) -> Result<bool, String> {
+        let sctlr = arm::Coprocessor { cp: 15, opc1: 0, crn: 1, crm: 0, opc2: 0, secure: 0, wide: false };
+        Ok(self.0.cpu(core)?.coprocessor(sctlr, None)? & 1 != 0)
+    }
+
     fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String> {
         let register = |core: usize, name: &str| {
             self.0
                 .read_register(core, Register::Arm64System(arm64::system_register(name)?))
                 .map_err(|error| format!("core {core} {name}: {error}"))
         };
-        (0..4)
+        (0..self.0.instruction_counts().len())
+            .filter(|core| self.0.cpu(*core).is_ok_and(|cpu| cpu.model() == Model::ArmV8A))
             .map(|core| {
                 Ok((
                     core,
@@ -101,7 +138,7 @@ struct Word {
 
 /// One built mod: its manifest, the checked plan taken from it and the payload bytes.
 #[derive(Debug)]
-pub(crate) struct Loaded {
+pub struct Loaded {
     manifest: Value,
     manifest_sha256: String,
     payloads: Vec<(u64, Vec<u8>)>,
@@ -113,10 +150,14 @@ pub(crate) struct Loaded {
     pending: bool,
     /// (core, SCTLR_EL1.M) as read when the words attached.
     mmu: Vec<(usize, bool)>,
+    aarch64: bool,
 }
 
 /// Reads one built manifest: the single argument is a `manifest.json` or a directory holding one.
-pub(crate) fn prepare(firmware: &Firmware, specs: &[String]) -> Result<Loaded, String> {
+pub fn prepare(
+    target: Target<'_>, specs: &[String],
+    mut validate_original: impl FnMut(u64, u32) -> Result<(), String>,
+) -> Result<Loaded, String> {
     if let [one] = specs {
         let path = Path::new(one);
         let manifest = if path.is_file() && path.file_name().is_some_and(|name| name == "manifest.json") {
@@ -128,30 +169,34 @@ pub(crate) fn prepare(firmware: &Firmware, specs: &[String]) -> Result<Loaded, S
         };
         if let Some(manifest) = manifest {
             let directory = manifest.parent().ok_or("manifest has no directory")?;
-            return read_built(directory, firmware);
+            return read_built(directory, target, &mut validate_original);
         }
     }
     Err("--mod takes one built manifest.json or a directory holding one".into())
 }
 
-fn read_built(directory: &Path, firmware: &Firmware) -> Result<Loaded, String> {
-    let text = std::fs::read(directory.join("manifest.json"))
-        .map_err(|error| format!("{}: {error}", directory.join("manifest.json").display()))?;
+fn read_built(
+    directory: &Path, target: Target<'_>,
+    validate_original: &mut impl FnMut(u64, u32) -> Result<(), String>,
+) -> Result<Loaded, String> {
+    let directory = directory.canonicalize().map_err(|error| error.to_string())?;
+    let text = crate::read(&directory.join("manifest.json"), 16 << 20)?;
     let manifest: Value = serde_json::from_slice(&text).map_err(|error| error.to_string())?;
     let mut payloads = Vec::new();
     for region in array(&manifest, "regions")? {
         let file = region["file"].as_str().ok_or("mod region lacks a file name")?;
-        if Path::new(file).components().count() != 1 {
+        let path = directory.join(file).canonicalize().map_err(|error| format!("{file}: {error}"))?;
+        if Path::new(file).components().count() != 1 || path.parent() != Some(directory.as_path()) {
             return Err("mod region file name must be local".into());
         }
-        let bytes = std::fs::read(directory.join(file)).map_err(|error| format!("{file}: {error}"))?;
         let (address, size) = extent(region)?;
+        let bytes = crate::read(&path, (size as u64).min(64 << 20))?;
         if bytes.len() != size || region["sha256"].as_str() != Some(sha256_hex(&bytes).as_str()) {
             return Err(format!("mod payload {file} differs from its manifest size or hash"));
         }
         payloads.push((address, bytes));
     }
-    Loaded::from_manifest(manifest, sha256_hex(&text), payloads, firmware)
+    Loaded::from_manifest(manifest, sha256_hex(&text), payloads, target, validate_original)
 }
 
 impl Loaded {
@@ -160,20 +205,27 @@ impl Loaded {
         manifest: Value,
         manifest_sha256: String,
         payloads: Vec<(u64, Vec<u8>)>,
-        firmware: &Firmware,
+        target: Target<'_>,
+        mut validate_original: impl FnMut(u64, u32) -> Result<(), String>,
     ) -> Result<Self, String> {
+        let aarch64 = target.model == Model::ArmV8A;
+        let (arch, abi, version) = match target.model {
+            Model::ArmV8A => ("aarch64", "aapcs64-lp64-le", 2),
+            Model::CortexR5F | Model::CortexA7 => ("arm32", "aapcs32-le", 1),
+            Model::CortexM4 => return Err("mods require an application CPU".into()),
+        };
         let identity_ok = manifest["mode"] == "emulator"
-            && manifest["target"] == firmware.id
-            && manifest["arch"] == "aarch64"
-            && manifest["abi"] == "aapcs64-lp64-le"
-            && manifest["hook_record_version"] == 2
-            && manifest["firmware_sha256"] == firmware.source_sha256
+            && manifest["target"] == target.id
+            && manifest["arch"] == arch
+            && manifest["abi"] == abi
+            && manifest["hook_record_version"] == version
+            && manifest["firmware_sha256"] == target.sha256
             && manifest["live_safe"] == false;
         if !identity_ok {
             return Err("mod manifest is not an emulator build of this firmware (mode, target, ABI or hash differ)".into());
         }
         if !array(&manifest, "inits")?.is_empty() {
-            return Err("mod declares an init; X100VI init boundaries are not qualified".into());
+            return Err("mod declares an init; full-boot mod init boundaries must be provided by stock hook words".into());
         }
         let ready = &manifest["load_ready"];
         if !ready.is_object() {
@@ -218,7 +270,7 @@ impl Loaded {
             {
                 return Err(format!("mod word {address:#x} lies inside a mod reservation"));
             }
-            firmware.expect_word(address, old, "mod patch site")?;
+            validate_original(address, old)?;
             words.push(Word {
                 address,
                 old,
@@ -248,15 +300,15 @@ impl Loaded {
             placed: false,
             pending: true,
             mmu: Vec::new(),
+            aarch64,
         })
     }
 
     /// Before the run: the reservations must be free, then the payload goes in and the words wait.
-    pub(crate) fn place(
+    pub fn place(
         &mut self,
         machine: &dyn Machine,
-        firmware: &Firmware,
-        preloads: &[Preload],
+        excluded: &[(u64, u64)],
         protected: &[u64],
     ) -> Result<(), String> {
         if self.placed {
@@ -264,18 +316,8 @@ impl Loaded {
         }
         for &(base, size) in &self.reservations {
             let region = (base, size as u64);
-            if firmware
-                .regions
-                .iter()
-                .any(|r| overlaps(region, (r.address, r.bytes.len() as u64)))
-            {
-                return Err(format!("mod reservation {base:#x}+{size:#x} intersects firmware"));
-            }
-            for preload in preloads {
-                let length = super::manifest::preload_length(preload)?;
-                if overlaps(region, (preload.address, length)) {
-                    return Err(format!("mod reservation {base:#x}+{size:#x} intersects a boot preload"));
-                }
+            if excluded.iter().any(|other| overlaps(region, *other)) {
+                return Err(format!("mod reservation {base:#x}+{size:#x} intersects startup memory"));
             }
             if !is_zero(machine, base, size)? {
                 return Err(format!("mod reservation {base:#x}+{size:#x} is occupied"));
@@ -291,17 +333,34 @@ impl Loaded {
         }
         self.placed = true;
         eprintln!(
-            "FUJIMOD XP5 mod placed: build={} reservations={:x?} words={} attach when {:#x}=={}",
+            "FUJIMOD mod placed: build={} reservations={:x?} words={} attach when {:#x}=={}",
             self.manifest["build_id"], self.reservations, self.words.len(), self.ready.0, self.ready.1
         );
         Ok(())
+    }
+
+    /// Delay placement until an explicitly declared guest readiness word is set.
+    pub fn advance(&mut self, machine: &dyn Machine, now: u64, protected: &[u64]) -> Result<(), String> {
+        if !self.placed {
+            if read_word(machine, self.ready.0)? != self.ready.1 {
+                return Ok(());
+            }
+            self.permissions(machine)?;
+            for word in &self.words {
+                if read_word(machine, word.address)? != word.old {
+                    return Err(format!("mod site {:#x} differs from its original instruction", word.address));
+                }
+            }
+            self.place(machine, &[], protected)?;
+        }
+        self.attach_if_ready(machine, now)
     }
 
     /// Between run slices: once the ready flag holds, check and attach the hook words once. A
     /// failed check or word write refuses the whole attach and leaves every word at its stock
     /// value (words already written are restored). The payload placed earlier stays in guest RAM
     /// on refusal: the caller ends the run on the error.
-    pub(crate) fn attach_if_ready(&mut self, machine: &dyn Machine, now: u64) -> Result<(), String> {
+    pub fn attach_if_ready(&mut self, machine: &dyn Machine, now: u64) -> Result<(), String> {
         if !self.placed {
             return Err("mod is not placed".into());
         }
@@ -346,7 +405,7 @@ impl Loaded {
             .collect();
         for word in &self.words {
             eprintln!(
-                "FUJIMOD XP5 mod attached at {now}: {:#x} {:#010x} -> {:#010x} {} mmu={}",
+                "FUJIMOD mod attached at {now}: {:#x} {:#010x} -> {:#010x} {} mmu={}",
                 word.address,
                 word.old,
                 word.new,
@@ -382,6 +441,29 @@ impl Loaded {
     // tables as they stand when the words attach. A core whose MMU is off (SCTLR_EL1.M = 0, as
     // before it starts) passes trivially, so the result records each core's M bit.
     fn permissions(&self, machine: &dyn Machine) -> Result<Vec<(usize, bool)>, String> {
+        if !self.aarch64 {
+            let cores = machine.arm32_core_count();
+            if cores == 0 {
+                return Err("no ARM32 application core can validate mod placement".into());
+            }
+            let mut mmu = Vec::with_capacity(cores);
+            for core in 0..cores {
+                let enabled = machine.arm32_mmu_enabled(core)?;
+                mmu.push((core, enabled));
+                for &(base, size) in &self.reservations {
+                    let end = base + size as u64;
+                    for page in (base & !4095..end).step_by(4096) {
+                        let address = page.max(base);
+                        for access in [Access::Fetch, Access::Write] {
+                            if machine.arm32_translate(core, address, access)? != address {
+                                return Err(format!("mod reservation at {address:#x} is not identity mapped on core {core}"));
+                            }
+                        }
+                    }
+                }
+            }
+            return Ok(mmu);
+        }
         let mut mmu = Vec::new();
         for (core, state) in machine.translations()? {
             mmu.push((core, state.sctlr & 1 == 1));
@@ -414,7 +496,7 @@ impl Loaded {
 
     /// Mod status for the run record: whether the words attached and every 4- or 8-byte data
     /// symbol of the manifest (the counters) as the guest holds it now.
-    pub(crate) fn report(&self, machine: &dyn Machine) -> Value {
+    pub fn report(&self, machine: &dyn Machine) -> Value {
         let mut counters = serde_json::Map::new();
         for symbol in self.manifest["symbols"].as_array().into_iter().flatten() {
             let size = symbol["size"].as_u64().unwrap_or(0);
@@ -482,7 +564,7 @@ mod tests {
         }
     }
 
-    impl Machine for Mock {
+    impl Memory for Mock {
         fn read(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
             bytes.copy_from_slice(&self.get(address, bytes.len()));
             Ok(())
@@ -494,6 +576,9 @@ mod tests {
             self.set(address, bytes);
             Ok(())
         }
+    }
+
+    impl Machine for Mock {
         fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String> {
             Ok(vec![(0, arm64::TranslationState { sctlr: 0, tcr: 0, ttbr0: 0, ttbr1: 0, pstate: 5 })])
         }
@@ -509,9 +594,9 @@ mod tests {
         (0..40u8).collect()
     }
 
-    fn firmware(sha: &str) -> Firmware {
+    fn firmware(sha: &str) -> crate::xp5::firmware::Firmware {
         let stock = |address| (address, OLD.to_le_bytes().to_vec());
-        Firmware::for_tests("x100vi-131", sha, vec![stock(SITE), stock(SECOND)])
+        crate::xp5::firmware::Firmware::for_tests("x100vi-131", sha, vec![stock(SITE), stock(SECOND)])
     }
 
     fn manifest() -> Value {
@@ -532,8 +617,15 @@ mod tests {
         })
     }
 
+    fn build(value: Value) -> Result<Loaded, String> {
+        let firmware = firmware("ab");
+        Loaded::from_manifest(value, "digest".into(), vec![(0x20_0000, payload())],
+            Target { id: &firmware.id, sha256: &firmware.source_sha256, model: Model::ArmV8A },
+            |address, old| firmware.expect_word(address, old, "mod patch site"))
+    }
+
     fn loaded() -> Loaded {
-        Loaded::from_manifest(manifest(), "digest".into(), vec![(0x20_0000, payload())], &firmware("ab")).unwrap()
+        build(manifest()).unwrap()
     }
 
     /// A placed mod and a machine whose stock words are in place and whose ready flag holds.
@@ -543,14 +635,13 @@ mod tests {
             machine.set(site, &OLD.to_le_bytes());
         }
         let mut mod_ = loaded();
-        mod_.place(&machine, &firmware("ab"), &[], &[]).unwrap();
+        mod_.place(&machine, &[], &[]).unwrap();
         machine.set(READY, &1u32.to_le_bytes());
         (mod_, machine)
     }
 
     #[test]
     fn identity_is_refused_when_it_differs() {
-        let build = |m: Value| Loaded::from_manifest(m, "d".into(), vec![(0x20_0000, payload())], &firmware("ab"));
         assert!(build(manifest()).is_ok());
         for (field, value) in [
             ("mode", json!("runtime")),

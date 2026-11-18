@@ -103,6 +103,11 @@ impl Session {
         self.inner.external_devices(|devices, _| devices.set_scene(scene))
     }
 
+    /// Resolve an application processor address through its stopped MMU view.
+    pub fn translate(&self, core: usize, address: u64, access: Access) -> Result<u64, String> {
+        self.inner.cpu(core)?.translate(address, access)
+    }
+
     pub fn write_patch(&self, address: usize, bytes: &[u8]) -> Result<(), String> {
         self.write(address, bytes)?;
         for cpu in &self.inner.cpus {

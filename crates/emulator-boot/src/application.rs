@@ -77,6 +77,34 @@ impl crate::host::Memory for Board {
     }
 }
 
+impl crate::mod_loader::Machine for Board {
+    fn arm32_core_count(&self) -> usize {
+        match self {
+            Self::Xp4(board) => board.instructions().len(),
+            Self::Xpp(session) => crate::mod_loader::BoardMachine(&session.board).arm32_core_count(),
+        }
+    }
+
+    fn arm32_translate(&self, core: usize, address: u64, access: fujimod_emulator_cpu::Access) -> Result<u64, String> {
+        match self {
+            Self::Xp4(board) => board.translate(core, address, access),
+            Self::Xpp(session) => crate::mod_loader::BoardMachine(&session.board).arm32_translate(core, address, access),
+        }
+    }
+
+    fn arm32_mmu_enabled(&self, core: usize) -> Result<bool, String> {
+        match self {
+            Self::Xp4(board) => {
+                let sctlr = fujimod_emulator_cpu::arm::Coprocessor {
+                    cp: 15, crn: 1, crm: 0, opc1: 0, opc2: 0, wide: false, secure: 0,
+                };
+                Ok(board.coprocessor(core, sctlr, None)? & 1 != 0)
+            }
+            Self::Xpp(session) => crate::mod_loader::BoardMachine(&session.board).arm32_mmu_enabled(core),
+        }
+    }
+}
+
 impl Board {
     pub fn gpio_input(&mut self, port: u8, pin: u8, high: bool) -> Result<(), String> {
         match self {

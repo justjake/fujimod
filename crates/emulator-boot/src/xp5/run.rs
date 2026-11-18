@@ -1,8 +1,9 @@
 //! The XP5 bring-up run: open a session from explicit inputs, drive it in slices and record
 //! the outcome in the run directory.
 use super::{
-    Startup, Started, mod_loader, open as session_open,
+    Startup, Started, open as session_open,
 };
+use crate::mod_loader;
 use crate::host::{parse_gpio, parse_number, parse_poke, parse_stub};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -231,9 +232,18 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let mut fujimod = if mod_specs.is_empty() {
         None
     } else {
-        let mut loaded = mod_loader::prepare(&firmware, &mod_specs)?;
+        let target = mod_loader::Target {
+            id: &firmware.id, sha256: &firmware.source_sha256, model: fujimod_emulator_cpu::Model::ArmV8A,
+        };
+        let mut loaded = mod_loader::prepare(target, &mod_specs,
+            |address, word| firmware.expect_word(address, word, "mod patch site"))?;
+        let mut excluded = firmware.regions.iter().map(|region| (region.address, region.bytes.len() as u64))
+            .collect::<Vec<_>>();
+        for preload in &state.preload {
+            excluded.push((preload.address, super::manifest::preload_length(preload)?));
+        }
         let stubbed: Vec<u64> = callee_stubs.iter().map(|stub| stub.address).collect();
-        loaded.place(&mod_loader::BoardMachine(&session.board), &firmware, &state.preload, &stubbed)?;
+        loaded.place(&mod_loader::BoardMachine(&session.board), &excluded, &stubbed)?;
         Some(loaded)
     };
     for (port, pin, high) in gpio {
