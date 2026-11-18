@@ -1,5 +1,6 @@
 import { focalComponents } from './docs/sdk.generated';
-import { isManualPath, manualPageTitle } from './docs/manual-routes';
+import { manualPageTitle } from './docs/manual-data';
+import { isManualPath } from './docs/manual-routes';
 import { textPagePath, textPages } from './text/routes';
 
 const pages = {
@@ -60,7 +61,7 @@ export function pageMetadata(path: string) {
     };
   }
   const normalized = path.endsWith('/') ? path : path + '/';
-  if (isManualPath(normalized))
+  if (import.meta.env.SSR && isManualPath(normalized))
     return {
       title: `${manualPageTitle(normalized)} · FujiMod`,
       description: 'The FujiMod camera manual.',

@@ -3,7 +3,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Wizard, toolPath } from '../src/dev-tools/routes.ts';
 import { focalComponents } from '../src/docs/sdk.generated.ts';
-import { isManualPath, manualRoutes } from '../src/docs/manual-routes.ts';
+import { manualRoutes } from '../src/docs/manual-data.ts';
+import { isManualPath } from '../src/docs/manual-routes.ts';
 import { textPagePath, textPages } from '../src/text/routes.ts';
 const tools = Object.values(Wizard).map(toolPath);
 const docs = [
@@ -18,7 +19,7 @@ export const routes = [
   '/recovery/',
   '/device/',
   ...Object.keys(textPages),
-  ...manualRoutes,
+  ...manualRoutes(),
   ...docs,
 ];
 /** Render through start mode's production handler, using the same entries as dev and hydration. */
