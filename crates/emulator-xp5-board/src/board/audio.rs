@@ -472,7 +472,7 @@ mod tests {
         assert!(fifo.read(SERIAL + 4, 4).is_err());
     }
 
-    /// The X-T5 4.31 audio fragment opens both devices on this board.
+    /// The X-T5 4.31 audio fragment opens both serial instances and the PL330 on this board.
     #[test]
     fn the_xt5_audio_windows_open() {
         #[derive(serde::Deserialize)]
@@ -487,6 +487,7 @@ mod tests {
         let mut graph = DeviceGraph::new();
         register_all(&mut graph, &fragment.device).unwrap();
         assert!(graph.at(SERIAL).is_ok());
+        assert!(graph.at(0xff991000).is_ok());
         assert!(graph.at(DMA_BASE).is_ok());
         let mut moved = fragment.device.clone();
         moved.retain(|w| w.kind == "audio-serial");

@@ -140,15 +140,7 @@ base = 0xff90e7d0
 size = 0x18
 kind = "write-only-registers"
 
-# Audio block reset. 0x148dd60 (eight state handlers of the `audio` task, table 0x1c11668..)
-# enables a clock, writes 1 to 0xff99101c and waits for it to read 0, with no timeout. A beep or
-# shutter sound is the likely first user; that is a guess. +0x1c reads 0 here.
-[[device]]
-base = 0xff991000
-size = 0x1000
-kind = "bringup-stub"
-[device.options]
-registers = [{ offset = 0x1c, mode = "command" }]
+# Audio serial instance 1 (0xff991000) moved to 62-audio.toml as an `audio-serial` window.
 
 # Tier 3 (capture and develop stages) is left out on purpose: a clean strict stop at the first
 # capture block is easier to model than a hang. Candidate stubs: scratch/mmiogap/49-gap-stubs.toml.
