@@ -11,6 +11,9 @@ pub mod input;
 #[path = "imaging_paf.rs"]
 pub mod paf;
 
+#[path = "imaging_table.rs"]
+pub mod table;
+
 #[path = "imaging_work.rs"]
 pub mod work;
 
