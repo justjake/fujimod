@@ -13,6 +13,7 @@ import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual
 import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
 import { textPagePath } from '../src/text/routes.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
+import type { cycloneDx } from './sbom/bom.ts';
 const root = resolve(process.argv[2] || 'dist/client');
 const chapters = manualChapters();
 const manualPage = chapters[0]?.pages[0];
@@ -191,7 +192,9 @@ try {
         await creditsPage.locator('.credits-recipes a').count(),
         credits.recipeAuthors.reduce((sum, author) => sum + author.recipes.length, 0),
       );
-      const sbom = await (await noJs.request.get(base + '/sbom.json')).json();
+      const sbom: ReturnType<typeof cycloneDx> = await (
+        await noJs.request.get(base + '/sbom.json')
+      ).json();
       const licenseDetails = creditsPage.locator('.credits-license-details');
       assert.equal(await licenseDetails.getAttribute('open'), null);
       assert.equal(await creditsPage.locator('.credits-products li').count(), 3);
@@ -205,6 +208,22 @@ try {
       );
       const components = creditsPage.locator('.credits-components tbody tr');
       assert.equal(await components.count(), sbom.components.length);
+      const sourceUrls = new Set(
+        sbom.components.flatMap(({ externalReferences }) =>
+          externalReferences
+            .filter(({ type }) => type === 'website' || type === 'vcs')
+            .map(({ url }) => url),
+        ),
+      );
+      for (const selector of [
+        '.credits-products a',
+        '.credits-components tbody td:first-child a',
+      ]) {
+        const links = await creditsPage
+          .locator(selector)
+          .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')));
+        assert.deepEqual(new Set(links), sourceUrls);
+      }
       const licenseHref = await components
         .first()
         .locator('a[href^="/licenses/"]')

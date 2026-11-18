@@ -76,6 +76,34 @@ export function mergeComponents(components: Iterable<Component>) {
   return unique;
 }
 
+function externalReferences({ name, version, source, purl }: Component) {
+  const archive = /\.(?:crate|tgz|tar\.(?:gz|xz|bz2|zst)|zip)$/i.test(new URL(source).pathname);
+  let url = source;
+  let type: 'website' | 'vcs' = 'vcs';
+  if (purl?.startsWith('pkg:cargo/')) {
+    url = `https://crates.io/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
+    type = 'website';
+  } else if (purl?.startsWith('pkg:npm/')) {
+    // Keep the scope separator in the public npm URL.
+    url = `https://www.npmjs.com/package/${name}/v/${encodeURIComponent(version)}`;
+    type = 'website';
+  } else if (name === 'FatFs' && version === 'R0.16') {
+    // Zephyr's original R0.16 import matches ChaN's ff.c and ff.h.
+    url = 'https://github.com/zephyrproject-rtos/fatfs/tree/18ad3932f7f18b59abf99cb2f8a6cd5d6746cfe0';
+  } else if (name === 'GNU Arm Toolchain libgcc' && version === '13.2.Rel1') {
+    // GCC revision listed in the Arm GNU Toolchain 13.2.Rel1 release notes.
+    url =
+      'https://gcc.gnu.org/git/?p=gcc.git;a=tree;f=libgcc;hb=452a69cc676d7dbf7e9c9295ad1eb31ead69fa7b';
+  }
+  if (archive && url === source) throw Error(`${name}@${version}: missing upstream package page`);
+  return [
+    ...(archive || (purl && url !== source)
+      ? [{ type: 'distribution' as const, url: source }]
+      : []),
+    { type, url },
+  ];
+}
+
 export function cycloneDx(components: Iterable<Component>) {
   const unique = mergeComponents(components);
   return {
@@ -87,7 +115,7 @@ export function cycloneDx(components: Iterable<Component>) {
     components: [...unique.entries()]
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([ref, component]) => {
-        const { name, version, source, license, purl, texts, products } = component;
+        const { name, version, license, purl, texts, products } = component;
         const text = { contentType: 'text/plain', content: texts.join('\n\n') };
         const single = /^[A-Za-z0-9.+-]+$/.test(license) && !license.startsWith('LicenseRef-');
         return {
@@ -102,7 +130,7 @@ export function cycloneDx(components: Iterable<Component>) {
           ...(!single
             ? { evidence: { licenses: [{ license: { name: 'Upstream license texts', text } }] } }
             : {}),
-          externalReferences: [{ type: purl ? 'distribution' : 'vcs', url: source }],
+          externalReferences: externalReferences(component),
           properties: products.map((value) => ({ name: 'fujimod:product', value })),
         };
       }),
