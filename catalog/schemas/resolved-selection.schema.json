@@ -4723,15 +4723,15 @@
           },
           "type": "array"
         },
-        "drive": {
-          "description": "Drive value applied to the actuator.",
-          "format": "uint32",
+        "run_ticks": {
+          "description": "Motor run time at which these contact states begin.",
+          "format": "uint64",
           "minimum": 0,
           "type": "integer"
         }
       },
       "required": [
-        "drive",
+        "run_ticks",
         "contacts"
       ],
       "type": "object"
@@ -18573,30 +18573,54 @@
         },
         {
           "additionalProperties": false,
-          "description": "A multi-pin contact actuator.",
+          "description": "A motor-driven contact cam with a release latch. The attachment's\ninitial position is its run time at reset.",
           "properties": {
+            "hold_drives": {
+              "description": "Drive values that hold the cam still.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
             "kind": {
               "const": "contact-actuator",
               "type": "string"
             },
+            "latch_overrun_ticks": {
+              "description": "Run time past the latch tolerated before the drive stops.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "positions": {
-              "description": "Supported drive values and resulting contact state.",
+              "description": "Contact states along motor run time, ascending from 0; the last\nis the release latch.",
               "items": {
                 "$ref": "#/$defs/ContactPosition"
               },
               "type": "array"
             },
-            "settle_ticks": {
-              "description": "Time required for a contact transition to settle.",
+            "release_ticks": {
+              "description": "Release input edge to the return to run time 0.",
               "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run_drive": {
+              "description": "Drive value that runs the motor.",
+              "format": "uint32",
               "minimum": 0,
               "type": "integer"
             }
           },
           "required": [
             "kind",
+            "run_drive",
+            "hold_drives",
             "positions",
-            "settle_ticks"
+            "latch_overrun_ticks",
+            "release_ticks"
           ],
           "type": "object"
         },

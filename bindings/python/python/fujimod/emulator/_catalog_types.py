@@ -1204,7 +1204,7 @@ class ConstructionWiring(TypedDict, total=False):
 
 class ContactPosition(TypedDict, total=False):
     contacts: Required[list[bool]]
-    drive: Required[int]
+    run_ticks: Required[int]
 
 
 class ContentIdentity(TypedDict, total=False):
@@ -4008,9 +4008,12 @@ class PartModelVariant0(TypedDict, total=False):
 
 
 class PartModelVariant1(TypedDict, total=False):
+    hold_drives: Required[list[int]]
     kind: Required[Literal["contact-actuator"]]
+    latch_overrun_ticks: Required[int]
     positions: Required[list[ContactPosition]]
-    settle_ticks: Required[int]
+    release_ticks: Required[int]
+    run_drive: Required[int]
 
 
 class PartModelVariant2(TypedDict, total=False):

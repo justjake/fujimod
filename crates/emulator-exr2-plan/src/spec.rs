@@ -332,6 +332,9 @@ pub enum Model {
     ContactActuator {
         options: serde_json::Value,
         gpio: String,
+        /// Logic-level wire whose rising edge releases the cam's latch.
+        #[serde(default)]
+        release: Option<String>,
     },
     #[serde(rename = "exr2-pulse")]
     PulseUnit {
@@ -452,6 +455,10 @@ pub enum Model {
         statistics_grid: Option<String>,
         frame_period: Option<String>,
         edges: String,
+        /// Logic-level wires each comparator output drives: high once it
+        /// fires, low when started again.
+        #[serde(default)]
+        comparator_outputs: [Option<String>; 6],
     },
     OutputChannel {
         options: serde_json::Value,

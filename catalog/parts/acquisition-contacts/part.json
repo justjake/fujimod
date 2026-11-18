@@ -4,30 +4,43 @@
   "id": "acquisition-contacts",
   "model": {
     "kind": "contact-actuator",
+    "run_drive": 1,
+    "hold_drives": [
+      0,
+      3
+    ],
     "positions": [
       {
-        "drive": 0,
-        "contacts": [
-          true,
-          true
-        ]
-      },
-      {
-        "drive": 1,
+        "run_ticks": 0,
         "contacts": [
           false,
           false
         ]
       },
       {
-        "drive": 3,
+        "run_ticks": 330000,
+        "contacts": [
+          false,
+          true
+        ]
+      },
+      {
+        "run_ticks": 525000,
         "contacts": [
           true,
           true
         ]
+      },
+      {
+        "run_ticks": 750000,
+        "contacts": [
+          false,
+          true
+        ]
       }
     ],
-    "settle_ticks": 3000
+    "latch_overrun_ticks": 30000,
+    "release_ticks": 75000
   },
   "attachment": {
     "gpio_interrupts": [
@@ -80,6 +93,6 @@
         "pin": 6
       }
     ],
-    "initial_position": 0
+    "initial_position": 525000
   }
 }
