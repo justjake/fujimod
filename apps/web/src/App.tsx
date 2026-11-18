@@ -15,6 +15,7 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
   : undefined;
 const SdkDocs = lazy(() => import('./docs/Page'));
 const Manual = lazy(() => import('./docs/Manual'));
+const DocsOverview = lazy(() => import('./docs/Overview'));
 const textRoutes = {
   '/safety': lazy(() => import('./text/Safety')),
   '/credits': lazy(() => import('./text/Credits')),
@@ -46,7 +47,9 @@ export default function App() {
         ? Recovery
         : path === '/device/' || path === '/device'
           ? Device
-          : path.startsWith('/docs/sdk/')
+          : path === '/docs/' || path === '/docs'
+            ? DocsOverview
+            : path.startsWith('/docs/sdk/')
             ? SdkDocs
             : isManualPath(path)
               ? Manual

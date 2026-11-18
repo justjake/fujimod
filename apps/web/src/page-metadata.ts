@@ -82,6 +82,12 @@ export function pageMetadata(path: string) {
         'FocalUI component reference.',
       canonical: siteOrigin + normalized,
     };
+  if (normalized === '/docs/')
+    return {
+      title: 'Docs · FujiMod',
+      description: 'The Fujimod camera manual and FocalUI SDK.',
+      canonical: siteOrigin + normalized,
+    };
   if (normalized === '/docs/sdk/focal/')
     return {
       title: 'FocalUI SDK · FujiMod',
