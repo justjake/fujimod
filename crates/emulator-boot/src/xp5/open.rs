@@ -653,6 +653,11 @@ pub(crate) fn open_from(
             RamPlan::Covered => {}
             RamPlan::Promote => execution.ram.push(board::factory::Ram { base: region.base, size }),
         }
+        // Caller RAM wins over a SoC register aperture page under it (the X-T5 maps DRAM channel 2
+        // from 0x80000000, where the SoC profile declares a 4-byte peripheral window). Device windows
+        // are separate and still refuse an overlap.
+        execution.peripherals =
+            carve_out(std::mem::take(&mut execution.peripherals), region.base, region.size);
     }
     for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
         if processor.model != ProcessorModel::CortexA53 {
