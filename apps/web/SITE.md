@@ -81,6 +81,15 @@ Everything under `/docs/` is rendered from generated data files; the website
 code holds no manual text, page lists, chapter order or menu structure. Each
 feature page opens with a short introduction, then a section per menu row.
 
+A page says each fact once. The page's menu path appears once under its
+title, and its cameras once at the top; a section shows cameras only when they
+differ ("X70 only"). The page's own row is not a section: its summary and
+options join the introduction, and its summary is left out when the page has
+an introduction. Sections are titled by the row name alone, with rows inside a
+row nested beneath it. A section shows a path only for a route outside the
+page's menu ("Also in SET-UP › SCREEN SET-UP"). Choices without descriptions
+are one inline list ("ON · OFF").
+
 The menu index (`/docs/manual/menus/`) lists every menu row Fujimod adds or
 changes, in camera menu order, using the same rows and order as the home
 page outline. Each row is a link to its place on the manual page that covers
