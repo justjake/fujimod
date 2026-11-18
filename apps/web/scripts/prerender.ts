@@ -8,6 +8,7 @@ import { isManualPath } from '../src/docs/manual-routes.ts';
 import { textPagePath, textPages } from '../src/text/routes.ts';
 const tools = Object.values(Wizard).map(toolPath);
 const docs = [
+  '/docs/',
   '/docs/sdk/focal/',
   ...focalComponents.map((component) => `/docs/sdk/focal/components/${component.slug}/`),
 ];
@@ -47,6 +48,7 @@ export async function prerender(output = 'dist') {
                 '/bug/': 'class="shell bug-report"',
                 '/recovery/': 'class="shell recovery"',
                 '/device/': 'class="shell device"',
+                '/docs/': 'class="shell docs-overview"',
               }[route];
     if (
       !html.includes('class="site-header"') ||
