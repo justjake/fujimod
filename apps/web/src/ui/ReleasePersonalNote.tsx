@@ -20,20 +20,19 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
         )}
       </Show>
       <p>
-        Today we’re releasing the second version of Fujimod, a firmware modification designed to
-        unlock the full potential of your Fujifilm camera.
+        Today we’re releasing the second version of Fujimod, a firmware modification that unlocks
+        the full potential of your Fujifilm camera.
       </p>
       <p>
-        This release is an early preview of how we’re going to make Fujimod the best camera firmware
-        in the world: packed with creative tools, configured with a slick menu interface on top of
+        It’s an early look at how we’ll make Fujimod the best camera firmware in the world: packed with creative tools, configured with a slick menu interface on top of
         files you can back up and share, fully documented in our <a href={manual}>manual</a>, and
         engineered for <a href="/safety">rapid AI development while keeping your camera safe</a>.
       </p>
       <p>
-        The first version of Fujimod I built alone. In the {note().daysSinceFirstRelease} days since
-        then, <b>I</b> became <b>we</b> as {note().contributorCount} contributors joined the{' '}
+        I built the first version alone. In the {note().daysSinceFirstRelease} days since,{' '}
+        <b>I</b> became <b>we</b>: {note().contributorCount} contributors joined the{' '}
         <a href="https://discord.gg/jWvFPakw7X">Fujihack.org Discord</a> to add features, test
-        changes, and bring Fujimod to new cameras. Thank you{' '}
+        changes and bring Fujimod to new cameras. Thank you,{' '}
         <span class="note-hover">
           <a
             href={credits}
@@ -60,8 +59,8 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
             </a>
           </span>
         </span>{' '}
-        I want to give a big shout out to <a href="https://github.com/heytchap">heytchap</a> for
-        turning the X70 into a mini-X100VI-plus by building film simulations like{' '}
+        Special thanks to <a href="https://github.com/heytchap">heytchap</a> for turning the X70
+        into a mini X100VI-plus with film simulations like{' '}
         <ManualFeatureLink page="film-effects" row="NEGATIVE">
           COLOR NEGATIVE
         </ManualFeatureLink>{' '}
@@ -85,26 +84,24 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
         <ManualFeatureLink page="film-effects" row="HALATION" card="halation_strength_item">
           HALATION
         </ManualFeatureLink>
-        ; <a href="https://github.com/shanecranor">shane</a> +{' '}
-        <a href="https://github.com/chris-rudmin">chris-rudmin</a> for adding our 2nd and 3rd bodies
-        X-E2 and X-E2S and optimizing performance;{' '}
-        <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and anonymous for giving
-        early valuable testing feedback and inspiring us to go farther.
+        ; <a href="https://github.com/shanecranor">shane</a> and{' '}
+        <a href="https://github.com/chris-rudmin">chris-rudmin</a> for bringing up the X-E2 and
+        X-E2S and speeding things up; and{' '}
+        <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and an anonymous tester for
+        early feedback that pushed us further.
       </p>
       <p>
-        In the coming weeks we’ll be focused on maturing the Fujimod platform with support for more
-        bodies and automated nightly releases (delivered by our{' '}
+        Next we’re maturing the platform: more cameras, and nightly releases delivered by our{' '}
         <ManualFeatureLink page="check-for-updates" row="CHECK FOR UPDATES">
           Wi-Fi update system
         </ManualFeatureLink>
-        ).
+        .
       </p>
       <p>
-        Run on your camera without modifying your firmware via{' '}
-        <a href="/#download">SD card dual-boot</a>, or{' '}
-        <a href="/#software">try it first in your web browser</a> via our emulator.{' '}
+        Run it from your <a href="/#download">SD card</a> without changing your camera’s firmware,
+        or <a href="/#software">try it in your browser</a> first.{' '}
         <a href="https://discord.gg/jWvFPakw7X">Join us on Discord</a> to report bugs, request
-        features, or get involved with development.
+        features or help build it.
       </p>
       <p class="note-signature">
         Yours truly,
