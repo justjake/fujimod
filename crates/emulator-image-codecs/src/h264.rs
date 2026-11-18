@@ -248,3 +248,111 @@ pub fn planar_420(width: usize, height: usize, packed: &[u8]) -> Result<Vec<u8>,
     }
     Ok(out)
 }
+
+/// Settings of a [`Direct`] software encoder.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DirectConfig {
+    pub width: usize,
+    pub height: usize,
+    pub frames_per_second: u32,
+    /// Target bits per second; 0 keeps constant QP.
+    pub bitrate: u32,
+    /// IDR interval in frames; 1 codes every picture as an IDR.
+    pub gop: u32,
+    /// H.264 `level_idc` written to the sequence parameter set.
+    pub level_idc: u8,
+}
+
+/// A Constrained Baseline software encoder configured from a hardware register
+/// model's parameters rather than [`Config`]. It takes any even size up to
+/// 4096x2304, so a 1920x1080 picture codes as 1920x1088 with the SPS frame
+/// crop (`frame_crop_bottom_offset` 4) that [`Config::validate`] does not admit.
+/// Each IDR carries its SPS and PPS. The encoder holds reference pictures and
+/// rate-control history that cannot be serialized.
+pub struct Direct {
+    config: DirectConfig,
+    encoder: Box<rusty_h264_encoder::Encoder>,
+}
+impl Direct {
+    pub fn new(config: DirectConfig) -> Result<Self, String> {
+        let DirectConfig { width, height, frames_per_second, bitrate, gop, level_idc } = config;
+        if !(16..=4096).contains(&width)
+            || !(16..=2304).contains(&height)
+            || !width.is_multiple_of(2)
+            || !height.is_multiple_of(2)
+            || !(1..=240).contains(&frames_per_second)
+            || !(1..=1023).contains(&gop)
+            || level_idc == 0
+        {
+            return Err(format!("H.264 direct encoder settings out of range: {config:?}"));
+        }
+        let mut settings = rusty_h264_encoder::EncoderConfig::baseline(width, height);
+        settings.level_idc = level_idc;
+        settings.gop_size = gop;
+        settings.min_keyint = 0;
+        settings.bitrate = bitrate;
+        settings.framerate = frames_per_second as f32;
+        settings.aq_strength = 0.0;
+        settings.i_qp_offset = 0;
+        Ok(Self {
+            config,
+            encoder: Box::new(
+                rusty_h264_encoder::Encoder::new(settings)
+                    .map_err(|e| format!("software H.264 initialization: {e}"))?,
+            ),
+        })
+    }
+    pub fn config(&self) -> DirectConfig {
+        self.config
+    }
+    /// Make the next picture an IDR.
+    pub fn request_keyframe(&mut self) {
+        self.encoder.request_keyframe();
+    }
+    /// Encode one tightly packed I420 picture (Y, then Cb, then Cr) to one
+    /// Annex B access unit.
+    pub fn encode_i420(&mut self, frame: &[u8]) -> Result<Vec<u8>, String> {
+        let (width, height) = (self.config.width, self.config.height);
+        let y = width * height;
+        if frame.len() != y * 3 / 2 {
+            return Err("H.264 planar input size differs".into());
+        }
+        let input = rusty_h264_common::YuvPlanes {
+            width,
+            height,
+            y: &frame[..y],
+            u: &frame[y..y + y / 4],
+            v: &frame[y + y / 4..],
+            stride_y: width,
+            stride_c: width / 2,
+        };
+        self.encoder
+            .encode_planes(&input)
+            .map_err(|e| format!("software H.264 encode: {e}"))
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    /// 1920x1080 codes as 1920x1088 with the SPS crop and decodes at 1080.
+    #[test]
+    fn the_direct_encoder_crops_1080() {
+        let config = super::DirectConfig {
+            width: 1920,
+            height: 1080,
+            frames_per_second: 60,
+            bitrate: 50_000_000,
+            gop: 30,
+            level_idc: 42,
+        };
+        let mut encoder = super::Direct::new(config).unwrap();
+        encoder.request_keyframe();
+        let mut frame = vec![128u8; 1920 * 1080 * 3 / 2];
+        frame[..1920 * 1080].fill(100);
+        let unit = encoder.encode_i420(&frame).unwrap();
+        let picture = super::decode::Decoder::new(&[]).unwrap().decode(&unit).unwrap();
+        let s = picture.sequence;
+        assert_eq!((s.width, s.height, s.coded_width, s.coded_height), (1920, 1080, 1920, 1088));
+        assert!(picture.i420[..1920 * 1080].iter().all(|y| y.abs_diff(100) < 4));
+    }
+}

@@ -8,7 +8,8 @@
 //! shortcut: sensor readout and the develop blocks (PPFP, IIFP, RIFP, RESZ,
 //! RZL2, MIX, RTCH) are completion stubs that write no pixels, so without it
 //! the JPEG source buffer stays zero. The scene is a host input outside the
-//! run definition and the checkpoint.
+//! run definition and the checkpoint. With `XT5_STILL_PATH=real` RIFP, RESZ
+//! and RZL2 are modelled and the shortcut supplies no encode.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_ip::jpeg::{Decoder, Encoder, Registers, WINDOW};
 

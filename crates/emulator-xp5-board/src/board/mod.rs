@@ -17,6 +17,7 @@ use fujimod_emulator_xp5_imaging::serial_sink;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 pub mod clocks;
+pub mod codec;
 pub mod general_dma;
 pub mod i2c;
 pub mod imaging;
@@ -293,6 +294,7 @@ fn register_with_resources(
         "lz" => lz::register(bus, window.base, window.size)?,
         "jpeg-encoder" => jpeg::register(bus, window)?,
         "jpeg-decoder" => jpeg::register_decoder(bus, window)?,
+        "xp5-codec" => codec::register(bus, window)?,
         "panel-spi" => {
             if window.base != 0xff919000 || window.size != 0x1000 {
                 return Err("invalid SPI9 panel window".into());
@@ -599,7 +601,8 @@ pub fn register_all(
             | "imaging-resize"
             | "imaging-statistics"
             | "imaging-paf"
-            | "imaging-resz" => continue,
+            | "imaging-resz"
+            | "imaging-rzl2" => continue,
             "clock-banks" => {
                 let specialized: Vec<u64> = windows
                     .iter()
