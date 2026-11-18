@@ -1701,7 +1701,7 @@ pub(super) fn bind_exif(program: &mut [u8], at: usize, exif: &[u64]) -> Result<(
     Ok(())
 }
 
-// ---- E5b-6: a hook at the entry of one OS function, and a small program in alignment padding ----
+// ---- Hook startup: a hook at the entry of one OS function, and a small program in alignment padding ----
 //
 // The same route as the Exif words above (the stage's load of the OS section is bound to a named-word stub: the
 // decode finishes, every named word is checked against its stock value, and only then are the new values
