@@ -93,6 +93,12 @@ pub struct Input {
     /// single register write and read, read back unchanged.
     #[serde(default)]
     configuration: [u32; 16],
+    /// Full 32-bit word at +0x08 (setter 2f37230, getter 2f37254), read back unchanged.
+    #[serde(default)]
+    word_08: u32,
+    /// 17-bit word at +0x0c: setter 2f37288 and getter 2f372b4 both mask with 0x1ffff.
+    #[serde(default)]
+    word_0c: u32,
 }
 impl Device for Input {
     fn name(&self) -> &'static str {
@@ -108,6 +114,8 @@ impl Device for Input {
         match offset {
             0 => u64::from(self.ready || self.generation == 0),
             4 => u64::from(self.running),
+            8 => u64::from(self.word_08),
+            0xc => u64::from(self.word_0c),
             0x48 => u64::from(self.acknowledge),
             0x140..=0x17c if offset % 4 == 0 => {
                 u64::from(self.configuration[((offset - 0x140) / 4) as usize])
@@ -140,6 +148,10 @@ impl Device for Input {
                 self.deadline = Some(cx.now() + 1_000_000);
                 cx.schedule(self.deadline.unwrap(), self.generation | (1 << 63));
             }
+        } else if size == 4 && offset == 8 {
+            self.word_08 = value as u32;
+        } else if size == 4 && offset == 0xc {
+            self.word_0c = value as u32 & 0x1ffff;
         } else if size == 4 && offset == 0x48 {
             self.acknowledge = value & 1 != 0;
         } else if size == 4 && (0x140..=0x17c).contains(&offset) && offset % 4 == 0 {
@@ -176,7 +188,7 @@ impl Device for Input {
             self.ready = true;
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16]);
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
@@ -206,6 +218,22 @@ mod tests {
         assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4), 1);
         input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4, 0);
         assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4), 0);
+        assert!(!irq(&host, 229));
+    }
+    #[test]
+    fn input_low_words_latch_and_the_17_bit_word_masks() {
+        let mut input = Input::default();
+        let mut host = RecordingHost::default();
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946008, 4, 0xdead_beef);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff94600c, 4, 0xffff_22f8);
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946008, 4),
+            0xdead_beef
+        );
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94600c, 4),
+            0x1_22f8
+        );
         assert!(!irq(&host, 229));
     }
     #[test]
