@@ -28,25 +28,22 @@ function PreviewControls(props: { sendKey: (key: string) => void }) {
     </button>
   );
   return (
-    <details class="sdk-preview-controls">
-      <summary>Camera controls</summary>
-      <div class="sdk-preview-buttons">
-        <PadFace
-          size="panel"
-          part={{ kind: 'pad', marking: { face: ['MENU', 'OK'] } }}
-          renderKey={(action, className, content) =>
-            render(directionKeys.get(action)!, className, content)
-          }
-        />
-        <KeyFace
-          size="panel"
-          part={{ kind: 'key', marking: { face: ['DISP', 'BACK'] } }}
-          renderKey={(_action, className, content) =>
-            render({ key: 'Escape', label: 'DISP/BACK' }, className, content)
-          }
-        />
-      </div>
-    </details>
+    <div class="sdk-preview-buttons" role="group" aria-label="Camera controls">
+      <PadFace
+        size="panel"
+        part={{ kind: 'pad', marking: { face: ['MENU', 'OK'] } }}
+        renderKey={(action, className, content) =>
+          render(directionKeys.get(action)!, className, content)
+        }
+      />
+      <KeyFace
+        size="panel"
+        part={{ kind: 'key', marking: { face: ['DISP', 'BACK'] } }}
+        renderKey={(_action, className, content) =>
+          render({ key: 'Escape', label: 'DISP/BACK' }, className, content)
+        }
+      />
+    </div>
   );
 }
 
@@ -87,13 +84,15 @@ export default function FocalUIPreview(props: { preview: FocalPreview }) {
       <Show
         when={view() === 'source'}
         fallback={
-          <>
+          <div class="sdk-preview-stage">
             <div
               class="sdk-preview-screen"
               style={{ 'aspect-ratio': `${props.preview.width} / ${props.preview.height}` }}
             >
               <iframe
-                ref={(element) => { frame = element; }}
+                ref={(element) => {
+                  frame = element;
+                }}
                 src={props.preview.page}
                 title={props.preview.title}
                 width={props.preview.width}
@@ -102,7 +101,7 @@ export default function FocalUIPreview(props: { preview: FocalPreview }) {
               />
             </div>
             <PreviewControls sendKey={sendKey} />
-          </>
+          </div>
         }
       >
         <pre class="sdk-code sdk-preview-source">
