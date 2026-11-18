@@ -552,6 +552,7 @@ mod tests {
         write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
         for opcode in [0xcc, 0xfd] {
             controller.state.regs[0x40 / 4] = opcode;
+            controller.state.regs[0x50 / 4] = 16;
             controller.begin().unwrap();
             assert_eq!(controller.rx().unwrap(), 16);
         }
