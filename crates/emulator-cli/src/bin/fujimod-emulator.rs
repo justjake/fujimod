@@ -1,5 +1,5 @@
 //! Native boot command; every binary input is selected by path, for every processor generation.
-use fujimod_catalog_configuration::{RunEngine, RunInputs};
+use fujimod_catalog_configuration::{RunEngine, RunInputs, RunScene};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -232,14 +232,35 @@ struct Outcome {
     success: bool,
 }
 
-fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
+fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--application-plan", "--quantum", "--keys", "--scene", "--manifest", "--watch-pcs", "--dump", "--hash", "--gpio", "--poke", "--press"],
+        &["--application-plan", "--manifest", "--watch-pcs", "--dump", "--hash"],
     )?;
-    if !boot_options.mods.is_empty() || !boot_options.pokes.is_empty() {
-        return Err("--mod and --poke do not apply to EXR II runs".into());
+    if !boot_options.mods.is_empty() {
+        return Err("this run does not declare emulator mod loading".into());
     }
+    if let Some(path) = boot_options.path("--scene") {
+        let bytes = std::fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+        let scene: RunScene = serde_json::from_slice(&bytes).map_err(|error| format!("{}: {error}", path.display()))?;
+        if !matches!(scene, RunScene::Exr2(_)) {
+            return Err("selected board requires an EXR II scene".into());
+        }
+        scene.validate()?;
+        resolved.configuration.scene = Some(scene);
+    }
+    if let Some(quantum) = boot_options.text("--quantum")? {
+        resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
+            .quantum = boot::host::parse_quantum(&quantum)?;
+    }
+    let edges = boot::host::parse_keys(boot_options.text("--keys")?.as_deref(),
+        boot_options.text("--press")?.as_deref())?;
+    let automatic_setup = edges.is_empty();
+    let mut keys = boot::keys::Exr2Keys::new(&resolved, edges)?;
+    let gpio = match &resolved.configuration.inputs {
+        Some(RunInputs::Exr2(inputs)) => inputs.gpio.block_id.clone(),
+        _ => return Err("EXR II configuration has no GPIO plan".into()),
+    };
     let clock_seconds_2000 = boot_options
         .text("--clock-seconds-2000")?
         .map(|v| {
@@ -271,6 +292,16 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
         boot::load_snapshot(&mut session, &path)?;
     }
     boot::media::attach(&mut session, boot_options.path("--card-image").as_deref(), &boot_options.sd_files()?)?;
+    if let Some(levels) = boot_options.text("--gpio")? {
+        for level in levels.split(',') {
+            let (port, pin, high) = boot::host::parse_gpio(level)?;
+            session.gpio(&gpio, port, pin, high)?;
+        }
+    }
+    for poke in &boot_options.pokes {
+        let (address, word) = boot::host::parse_poke(poke)?;
+        session.board.write_physical(address, &word.to_le_bytes())?;
+    }
     session.board.set_execution_policy(execution_policy)?;
     let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     let duration = boot_options.duration("--seconds")?;
@@ -287,8 +318,12 @@ fn run_exr2(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<O
     let start = session.board.now();
     let mut next_status = status.map(|_| start);
     let mut next_frame = session.board.now();
-    let report = boot::to_rec_with_actions(&mut session, limit, duration,
-        |session| patches.advance(&session.board, start, boot::EXR2_TICKS_PER_SECOND),
+    let report = boot::to_rec_with_actions(&mut session, limit, duration, automatic_setup,
+        |session| {
+            let key_deadline = keys.advance(session, start)?;
+            let patch_deadline = patches.advance(&session.board, start, boot::EXR2_TICKS_PER_SECOND)?;
+            Ok(key_deadline.into_iter().chain(patch_deadline).min())
+        },
         |session, status_report| {
         let now = session.board.now();
         if next_status.is_some_and(|tick| now >= tick) {

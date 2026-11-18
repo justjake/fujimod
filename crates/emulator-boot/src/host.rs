@@ -102,3 +102,68 @@ pub fn parse_stub(specification: &str) -> Result<fujimod_emulator::board::discov
         value: parse_number(value)?,
     })
 }
+
+/// A physical key transition relative to the current run.
+pub struct KeyEdge {
+    pub delay: Duration,
+    pub name: String,
+    pub pressed: bool,
+}
+
+pub fn parse_keys(script: Option<&str>, presses: Option<&str>) -> Result<Vec<KeyEdge>, String> {
+    let mut edges = Vec::new();
+    for entry in script.unwrap_or_default().split(';').map(str::trim).filter(|entry| !entry.is_empty()) {
+        let (time, name) = entry.split_once(':').ok_or("--keys needs t=SECONDS:KEY")?;
+        let delay = parse_seconds(time.strip_prefix("t=").ok_or("--keys needs t=SECONDS:KEY")?)?;
+        let (name, pressed) = name.strip_prefix('-').map_or((name, true), |name| (name, false));
+        edges.push(KeyEdge { delay, name: key_name(name)?, pressed });
+    }
+    for entry in presses.into_iter().flat_map(|presses| presses.split(',')) {
+        let (time, rest) = entry.trim().split_once(':').ok_or("--press needs TIME_MS:KEY[:HOLD_MS]")?;
+        let (name, hold) = match rest.split_once(':') {
+            Some((name, hold)) => (name, parse_number(hold)?),
+            None => (rest, 150),
+        };
+        if hold == 0 {
+            return Err("--press hold must be positive".into());
+        }
+        let name = key_name(name)?;
+        let start = parse_number(time)?;
+        let end = start.checked_add(hold).ok_or("--press time overflows")?;
+        edges.push(KeyEdge { delay: Duration::from_millis(start), name: name.clone(), pressed: true });
+        edges.push(KeyEdge { delay: Duration::from_millis(end), name, pressed: false });
+    }
+    edges.sort_by_key(|edge| (edge.delay, edge.pressed));
+    Ok(edges)
+}
+
+fn key_name(name: &str) -> Result<String, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("empty input key name".into());
+    }
+    Ok(name.to_owned())
+}
+
+pub fn parse_gpio(spec: &str) -> Result<(u8, u8, bool), String> {
+    let (pin, level) = spec.split_once('=').ok_or("--gpio needs PORT:PIN=0|1")?;
+    let (port, pin) = pin.split_once(':').ok_or("--gpio needs PORT:PIN=0|1")?;
+    let port = port.parse().map_err(|_| "invalid GPIO port")?;
+    let pin = pin.parse().map_err(|_| "invalid GPIO pin")?;
+    let high = match level {
+        "0" => false,
+        "1" => true,
+        _ => return Err("GPIO level must be 0 or 1".into()),
+    };
+    Ok((port, pin, high))
+}
+
+pub fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
+    let (address, value) = spec.split_once('=').ok_or("--poke needs ADDR=U32")?;
+    let address = parse_number(address)?;
+    let value = u32::try_from(parse_number(value)?).map_err(|_| "--poke value exceeds u32")?;
+    if address & 3 != 0 {
+        return Err("--poke address needs 4-byte alignment".into());
+    }
+    Ok((address, value))
+}

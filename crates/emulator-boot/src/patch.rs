@@ -36,6 +36,9 @@ pub(crate) struct Patch {
 
 fn bytes(text: &str) -> Result<Vec<u8>, String> {
     let digits: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    if !digits.is_ascii() {
+        return Err(format!("non-ASCII hex string {text:?}"));
+    }
     if digits.len() % 2 != 0 {
         return Err(format!("odd hex string {text:?}"));
     }

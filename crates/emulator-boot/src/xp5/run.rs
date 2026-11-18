@@ -3,7 +3,7 @@
 use super::{
     Startup, Started, mod_loader, open as session_open,
 };
-use crate::host::{parse_number, parse_seconds as seconds, parse_stub};
+use crate::host::{parse_gpio, parse_number, parse_poke, parse_seconds as seconds, parse_stub};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use serde_json::{Value, json};
@@ -121,44 +121,6 @@ pub struct Run {
     pub output: PathBuf,
 }
 
-fn parse_gpio(spec: &str) -> Result<(usize, usize, bool), String> {
-    let (pin, level) = spec.split_once('=').ok_or("--gpio needs PORT:PIN=0|1")?;
-    let (port, pin) = pin.split_once(':').ok_or("--gpio needs PORT:PIN=0|1")?;
-    let port = port.parse().map_err(|_| "invalid GPIO port")?;
-    let pin = pin.parse().map_err(|_| "invalid GPIO pin")?;
-    let high = match level {
-        "0" => false,
-        "1" => true,
-        _ => return Err("GPIO level must be 0 or 1".into()),
-    };
-    if port >= 20 || pin >= 16 {
-        return Err("XP5 GPIO input is outside the declared pin range".into());
-    }
-    Ok((port, pin, high))
-}
-
-fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
-    let (address, value) = spec.split_once('=').ok_or("--poke needs ADDR=U32")?;
-    let value = u32::try_from(parse_number(value)?).map_err(|_| "--poke value exceeds 32 bits")?;
-    Ok((parse_number(address)?, value))
-}
-
-type Key = fujimod_emulator_xp5_board::session::Key;
-
-fn parse_press(spec: &str) -> Result<[(Duration, Key, bool); 2], String> {
-    let (start, rest) = spec.split_once(':').ok_or("--press needs TIME_MS:KEY[:HOLD_MS]")?;
-    let (key, hold) = match rest.split_once(':') {
-        Some((name, duration)) => (Key::parse(name)?, parse_number(duration)?),
-        None => (Key::parse(rest)?, 150),
-    };
-    if hold == 0 {
-        return Err("--press hold must be positive".into());
-    }
-    let start = parse_number(start)?;
-    let end = start.checked_add(hold).ok_or("--press time overflows")?;
-    Ok([(Duration::from_millis(start), key, true), (Duration::from_millis(end), key, false)])
-}
-
 /// Run the boot described by `run`.
 pub fn run_boot(run: Run) -> Result<Value, String> {
     use std::sync::{
@@ -221,30 +183,12 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let mut patches = crate::patch::Schedule::from_path(
         patch_file.as_deref(), &[0..0x8000_0000, 0xfa20_0000..0xfa30_0000],
     )?;
-    let mut keys = Vec::new();
-    if let Some(script) = &key_script {
-        for entry in script.split(';').filter(|entry| !entry.trim().is_empty()) {
-            let (time, name) = entry
-                .trim()
-                .split_once(':')
-                .ok_or("keys need t=SECONDS:KEY")?;
-            let delay = seconds(time.strip_prefix("t=").ok_or("keys need t=SECONDS:KEY")?)?;
-            let (pressed, name) = name
-                .strip_prefix('-')
-                .map_or((true, name), |name| (false, name));
-            let key = fujimod_emulator_parts_controls::resistor_keys::Key::parse(name)?;
-            keys.push((delay, key, pressed));
-        }
-    }
+    let keys = crate::host::parse_keys(key_script.as_deref(), press.as_deref())?.into_iter()
+        .map(|edge| Ok((edge.delay, Key::parse(&edge.name)?, edge.pressed)))
+        .collect::<Result<Vec<_>, String>>()?;
     let gpio = gpio.as_deref().map(|spec| spec.split(',').map(parse_gpio).collect::<Result<Vec<_>, _>>())
         .transpose()?.unwrap_or_default();
     let pokes = pokes.iter().map(|spec| parse_poke(spec)).collect::<Result<Vec<_>, _>>()?;
-    if let Some(press) = press {
-        for spec in press.split(',') {
-            keys.extend(parse_press(spec)?);
-        }
-    }
-    keys.sort_by_key(|(delay, _, _)| *delay);
     let request = Startup {
         update,
         manifest,
@@ -292,7 +236,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         Some(loaded)
     };
     for (port, pin, high) in gpio {
-        inputs.gpio(&mut session, port, pin, high)?;
+        inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
     }
     for (address, value) in pokes {
         let bytes = value.to_le_bytes();

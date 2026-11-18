@@ -13,6 +13,8 @@ pub mod media;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod patch;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod keys;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
 pub mod host;
@@ -124,7 +126,7 @@ struct Readiness {
     operation_alert_timer: Option<u64>,
 }
 #[derive(Clone)]
-struct FirstStart {
+struct AdcKey {
     key_id: String,
     adc: String,
     channel: usize,
@@ -132,6 +134,11 @@ struct FirstStart {
     calibration_is_pointer: bool,
     lower_offset: u64,
     upper_offset: u64,
+}
+
+#[derive(Clone)]
+struct FirstStart {
+    key: AdcKey,
     hold_ticks: u64,
     settle_ticks: u64,
     max_presses: usize,
@@ -181,6 +188,16 @@ fn first_start_key(
     let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
+    let key = calibrated_key(resolved, inputs, key_id)?;
+    Ok(Some(FirstStart {
+        key,
+        hold_ticks: policy.hold_ticks,
+        settle_ticks: policy.settle_ticks,
+        max_presses: usize::from(policy.max_presses),
+    }))
+}
+
+fn calibrated_key(resolved: &ResolvedConfiguration, inputs: &Exr2RunInputs, key_id: &str) -> Result<AdcKey, String> {
     let facts = resolved
         .reference
         .firmware
@@ -272,7 +289,7 @@ fn first_start_key(
         ConfigurationLocation::Pointer { address } => (address, true),
         ConfigurationLocation::Direct { address } => (address, false),
     };
-    Ok(Some(FirstStart {
+    Ok(AdcKey {
         key_id: key_id.to_owned(),
         adc: inputs.adc.block_id.clone(),
         channel: channel[0],
@@ -280,10 +297,7 @@ fn first_start_key(
         calibration_is_pointer,
         lower_offset: u64::from(*lower),
         upper_offset: u64::from(*upper),
-        hold_ticks: policy.hold_ticks,
-        settle_ticks: policy.settle_ticks,
-        max_presses: usize::from(policy.max_presses),
-    }))
+    })
 }
 
 fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
@@ -596,11 +610,11 @@ impl Prepared {
                     }
                 },
                 "first_start": self.first_start.as_ref().map(|start| json!({
-                    "key_id":start.key_id,
-                    "adc":start.adc,"channel":start.channel,
-                    "calibration_pointer":start.calibration_pointer,
-                    "calibration_is_pointer":start.calibration_is_pointer,
-                    "lower_offset":start.lower_offset,"upper_offset":start.upper_offset,
+                    "key_id":start.key.key_id,
+                    "adc":start.key.adc,"channel":start.key.channel,
+                    "calibration_pointer":start.key.calibration_pointer,
+                    "calibration_is_pointer":start.key.calibration_is_pointer,
+                    "lower_offset":start.key.lower_offset,"upper_offset":start.key.upper_offset,
                     "hold_ticks":start.hold_ticks,"settle_ticks":start.settle_ticks,
                     "max_presses":start.max_presses,
                 })),
@@ -1425,6 +1439,7 @@ type WindowAction<'a> = dyn FnMut(&mut Session) -> Result<Option<u64>, String> +
 struct Driver<'a> {
     limits: host::Limits,
     action: &'a mut WindowAction<'a>,
+    automatic_setup: bool,
 }
 
 impl Driver<'_> {
@@ -1483,36 +1498,41 @@ fn session_prepared(session: &Session) -> Result<Prepared, String> {
     prepare(id, &overlays)
 }
 
-fn press_setup_key(
-    session: &mut Session,
-    spec: &Prepared,
-    s: &FirstStart,
-    driver: &mut Driver<'_>,
-) -> Result<(), String> {
-    let base = if s.calibration_is_pointer {
-        u64::from(word(session, s.calibration_pointer)?)
+fn calibrated_sample(session: &Session, key: &AdcKey) -> Result<u16, String> {
+    let base = if key.calibration_is_pointer {
+        u64::from(word(session, key.calibration_pointer)?)
     } else {
-        s.calibration_pointer
+        key.calibration_pointer
     };
     let half = |offset| -> Result<u16, String> {
         let mut bytes = [0; 2];
         session.board.read_physical(base + offset, &mut bytes)?;
         Ok(u16::from_le_bytes(bytes))
     };
-    let lower = half(s.lower_offset)?;
-    let upper = half(s.upper_offset)?;
+    let lower = half(key.lower_offset)?;
+    let upper = half(key.upper_offset)?;
     if lower >= upper || upper >= 1023 {
-        return Err("first-start key calibration does not describe a pressed ADC interval".into());
+        return Err(format!("{} calibration does not describe a pressed ADC interval", key.key_id));
     }
-    let original = session.adc_samples(&s.adc)?;
+    Ok((lower + upper) / 2)
+}
+
+fn press_setup_key(
+    session: &mut Session,
+    spec: &Prepared,
+    s: &FirstStart,
+    driver: &mut Driver<'_>,
+) -> Result<(), String> {
+    let sample = calibrated_sample(session, &s.key)?;
+    let original = session.adc_samples(&s.key.adc)?;
     let mut pressed = original.clone();
     *pressed
-        .get_mut(s.channel)
-        .ok_or("first-start key ADC channel is absent")? = (lower + upper) / 2;
-    session.set_adc_samples(&s.adc, &pressed)?;
+        .get_mut(s.key.channel)
+        .ok_or("first-start key ADC channel is absent")? = sample;
+    session.set_adc_samples(&s.key.adc, &pressed)?;
     let held = driver.advance_ticks(session, spec, s.hold_ticks);
     // Release even if the instruction budget or a modeled refusal stops the hold.
-    session.set_adc_samples(&s.adc, &original)?;
+    session.set_adc_samples(&s.key.adc, &original)?;
     held?;
     driver.advance_ticks(session, spec, s.settle_ticks)
 }
@@ -1642,7 +1662,7 @@ pub fn to_rec_with(
     duration: Option<std::time::Duration>,
     observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
 ) -> Result<RecReport, String> {
-    to_rec_with_actions(session, instruction_limit, duration, |_| Ok(None), observe_window)
+    to_rec_with_actions(session, instruction_limit, duration, true, |_| Ok(None), observe_window)
 }
 
 /// Run with explicit scheduled host actions before each scheduler window.
@@ -1650,13 +1670,14 @@ pub fn to_rec_with_actions(
     session: &mut Session,
     instruction_limit: u64,
     duration: Option<std::time::Duration>,
+    automatic_setup: bool,
     mut action: impl FnMut(&mut Session) -> Result<Option<u64>, String>,
     mut observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
 ) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
     let limits = host::Limits::new(session, Some(instruction_limit), duration, EXR2_TICKS_PER_SECOND)?;
-    let mut driver = Driver { limits, action: &mut action };
+    let mut driver = Driver { limits, action: &mut action, automatic_setup };
     let result = to_rec_inner(session, &mut driver, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
@@ -1700,7 +1721,7 @@ fn to_rec_inner(
             report.status = "rec".into();
             return Ok(report);
         }
-        let result = if report.ui_mode == spec.observation.setup_mode
+        let result = if driver.automatic_setup && report.ui_mode == spec.observation.setup_mode
             && report.system_mode == 3
             && report.menu_active != 0
             && report.pending_mode == 0
