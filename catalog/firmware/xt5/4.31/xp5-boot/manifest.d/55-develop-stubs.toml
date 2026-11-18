@@ -124,10 +124,16 @@ irq_mask_set_masks = false
 #  +0x110 stop 0x13c0b50: bits 0..3, 8..11 or 16..19 non-zero -> -0xff. Left unwritten.
 #  +0x100 stop polls 0x1489938 until bit 24 and bit 8 read 1 -> constant
 #  +0x00  0x13c023c writes 0; 0x14896b8 polls until bit 0 reads 1 -> constant
+# imaging-rzl2 is this completion stub (same options); with XT5_STILL_PATH=real each start
+# also scales the packed 4:2:2 source (+0xcc/+0xd0, pitch +0xdc, size +0x14, crop +0x18/+0x1c)
+# to the destination (+0xe0/+0xe4, pitch +0xf0, size +0x20), nearest neighbour: the RESZ
+# layout with the address words 4 bytes lower (parameters 0x14896d4 -> 0x13c055c, addresses
+# 0x1489874 -> 0x13c0384). CreateInnerYC (step 0x26) runs it twice: main -> 640x480 preview
+# (id 0x25), preview -> 160x120 thumbnail (id 0x26) (emulator-xp5-imaging imaging_still.rs).
 [[device]]
 base = 0xff984000
 size = 0x1000
-kind = "completion-stub"
+kind = "imaging-rzl2"
 [device.options]
 registers = [
   { offset = 0x00, mode = "constant", value = 0x1 },

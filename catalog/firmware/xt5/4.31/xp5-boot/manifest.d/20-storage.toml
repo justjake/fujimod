@@ -93,6 +93,8 @@ base = 0x80000000
 size = 4
 kind = "discarded-read"
 
+# 0x1c0000000 stays a discarded-read port too (first 16 KiB granule; DRAM channel 3 RAM starts at
+# 0x1c0004000).
 [[device]]
 base = 0x1c0000000
 size = 4
