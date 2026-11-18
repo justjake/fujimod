@@ -35,7 +35,7 @@ function ReelVideo(props: { title: string; media: ReelMedia }) {
 
 function Reel(props: { id: string; title: string; children: JSX.Element }) {
   return (
-    <figure id={props.id} class="home-reel">
+    <figure id={`reel-${props.id}`} class="home-reel">
       <Show when={reelMedia(props.id)} keyed>
         {(media) => <ReelVideo title={props.title} media={media} />}
       </Show>

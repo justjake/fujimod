@@ -59,7 +59,11 @@ for (const engine of [chromium, webkit]) {
         [...sections].sort((a, b) => a - b),
       );
       assert.equal(await page.locator('.catalog-tile,.sd-tree,#features').count(), 0);
-      assert.equal(await page.locator('.home-reel').count(), 3);
+      assert.deepEqual(
+        await page.locator('.home-reel').evaluateAll((figures) => figures.map(({ id }) => id)),
+        ['reel-shooting', 'reel-looks', 'reel-controls'],
+      );
+      assert.equal(await page.locator('#controls').count(), 1);
       const sectionGeometry = await page.locator('.home-release-notes').boundingBox();
       const cardGeometry = await page.locator('.home-download').boundingBox();
       assert.ok(sectionGeometry && cardGeometry);
@@ -122,10 +126,15 @@ for (const engine of [chromium, webkit]) {
       assert.equal(await reelVideos.count(), reels.length);
       if (process.env.FUJIMOD_EXPECT_REELS)
         assert.equal(reels.length, Number(process.env.FUJIMOD_EXPECT_REELS));
+      assert.equal(new Set(reels.map(([, reel]) => reel.still)).size, reels.length);
       for (const [id, reel] of reels) {
-        const figure = page.locator(`#${id}.home-reel`);
+        const figure = page.locator(`#reel-${id}.home-reel`);
         const video = figure.locator('video');
         assert.equal(await video.getAttribute('src'), '/artifacts/docs/' + reel.video);
+        assert.equal(await video.getAttribute('poster'), '/artifacts/docs/' + reel.still);
+        assert.ok(
+          (await page.request.get(new URL('/artifacts/docs/' + reel.still, base).href)).ok(),
+        );
         assert.ok(await video.evaluate((element: HTMLVideoElement) => element.loop));
         await video.evaluate(async (element: HTMLVideoElement) => {
           if (element.readyState < HTMLMediaElement.HAVE_METADATA)
