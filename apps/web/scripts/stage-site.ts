@@ -5,10 +5,12 @@ import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateFeatureMedia, type FeatureMedia } from '../src/home/feature-media.ts';
 import { validateRuntimeApi } from './runtime-api.ts';
+import { parseSdkDocs, sdkDocsFiles, sdkDocsManifest, sdkDocsPath } from './sdk-docs.ts';
 
 export interface SiteInputs {
   runtime: string;
   media: string;
+  sdkDocs: string;
 }
 /** Files of the media for cards the homepage still shows; recordings of removed cards stay behind. */
 export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<string>) {
@@ -158,8 +160,11 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
     const names = featureMediaFiles(media, Object.keys(homepage.cards));
     for (const name of names) await copy(join(inputs.media, name), 'artifacts/docs/' + name);
     await copy(join(inputs.media, 'media.json'), 'artifacts/docs/media.json');
-    await mkdir(target, { recursive: true });
-    for (const directory of ['runtime', 'artifacts']) {
+    const sdkDocs = parseSdkDocs(await readFile(join(inputs.sdkDocs, sdkDocsManifest), 'utf8'));
+    for (const name of sdkDocsFiles(sdkDocs))
+      await copy(join(inputs.sdkDocs, name), `${sdkDocsPath}/${name}`);
+    await mkdir(resolve(target, dirname(sdkDocsPath)), { recursive: true });
+    for (const directory of ['runtime', 'artifacts', sdkDocsPath]) {
       await rm(join(target, directory), { recursive: true, force: true });
       await rename(join(temporary, directory), join(target, directory));
     }
