@@ -11,7 +11,9 @@ use smoltcp::wire::{
     Ipv4Address, Ipv4Packet, TcpPacket, UdpPacket,
 };
 use std::io::{ErrorKind, Read, Write};
-use std::net::{SocketAddr, TcpStream};
+#[cfg(not(target_arch = "wasm32"))]
+use std::net::SocketAddr;
+use std::net::TcpStream;
 
 const DHCP_CLIENT_PORT: u16 = 68;
 const DHCP_SERVER_PORT: u16 = 67;
@@ -21,6 +23,7 @@ const MAX_CONNECTIONS: usize = 8;
 const TCP_WINDOW: u16 = 8192;
 const TCP_MSS: usize = 1024;
 const DHCP_LEASE_SECONDS: u32 = 3600;
+#[cfg(not(target_arch = "wasm32"))]
 const HOST_CONNECT_TIMEOUT_MS: u64 = 200;
 const TCP_RETRANSMIT_MS: u64 = 1000;
 const NTP_UNIX_OFFSET_SECONDS: u64 = 2_208_988_800;
@@ -234,6 +237,7 @@ impl Connection {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn connect_host(port: u16) -> Option<TcpStream> {
     let address: SocketAddr = ([127, 0, 0, 1], port).into();
     let stream = TcpStream::connect_timeout(
@@ -243,6 +247,11 @@ fn connect_host(port: u16) -> Option<TcpStream> {
     .ok()?;
     stream.set_nonblocking(true).ok()?;
     Some(stream)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn connect_host(_port: u16) -> Option<TcpStream> {
+    None
 }
 
 #[derive(Default, Deserialize, Serialize)]
