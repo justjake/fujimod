@@ -4012,6 +4012,7 @@ class PartModelVariant1(TypedDict, total=False):
     kind: Required[Literal["contact-actuator"]]
     latch_overrun_ticks: Required[int]
     positions: Required[list[ContactPosition]]
+    release_drives: Required[list[int]]
     release_ticks: Required[int]
     run_drive: Required[int]
 

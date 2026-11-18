@@ -25,6 +25,9 @@ pub struct Options {
     pub run_drive: u8,
     /// Drive codes that hold the cam still. Any other code refuses.
     pub hold_drives: Vec<u8>,
+    /// Hold drives under which a release input edge releases the latch; the
+    /// other drives keep it latched.
+    pub release_drives: Vec<u8>,
     /// Ascending from run time 0; the last position is the release latch.
     pub positions: Vec<Position>,
     pub initial_run_ticks: u64,
@@ -70,6 +73,10 @@ impl ContactActuator {
                 .hold_drives
                 .iter()
                 .any(|&d| d > 3 || d == options.run_drive)
+            || options
+                .release_drives
+                .iter()
+                .any(|d| !options.hold_drives.contains(d))
             || p.first().is_none_or(|first| first.run_ticks != 0)
             || p.windows(2).any(|w| w[0].run_ticks >= w[1].run_ticks)
             || options.initial_run_ticks > p.last().unwrap().run_ticks
@@ -147,7 +154,13 @@ impl ContactActuator {
             self.set_run(cx, 0)?;
         }
         let level = self.release_level();
-        if level && !self.state.release_level {
+        if level
+            && !self.state.release_level
+            && self
+                .state
+                .drive
+                .is_some_and(|d| self.options.release_drives.contains(&d))
+        {
             if self.state.run < self.latch() || self.state.release_due.is_some() {
                 return Err("contact cam release input outside its latch".into());
             }
@@ -235,7 +248,7 @@ impl Device for ContactActuator {
                 .map_or(self.latch() + self.options.latch_overrun_ticks + 1, |p| {
                     p.run_ticks
                 });
-            self.state.since + (next - self.state.run)
+            self.state.since + next.saturating_sub(self.state.run).max(1)
         });
         motion.into_iter().chain(self.state.release_due).min()
     }
