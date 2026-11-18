@@ -36,12 +36,25 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
         <a href="https://discord.gg/jWvFPakw7X">Fujihack.org Discord</a> to add features, test
         changes, and bring Fujimod to new cameras. Thank you{' '}
         <span class="note-hover">
-          <a href={credits}>everyone!</a>
+          <a
+            href={credits}
+            onClick={(event) => {
+              if (event instanceof PointerEvent && event.pointerType === 'touch') {
+                event.preventDefault();
+                event.currentTarget.focus();
+              }
+            }}
+          >
+            everyone!
+          </a>
           <span class="note-popover note-people">
             <b>Contributors</b>
-            <span class="note-names">
+            <span class="note-names" role="region" aria-label="Contributors" tabindex={0}>
               <For each={note().contributorNames}>{(name) => <span>{name}</span>}</For>
             </span>
+            <a class="note-credits" href={credits}>
+              All credits →
+            </a>
           </span>
         </span>{' '}
         I want to give a big shout out to <a href="https://github.com/heytchap">heytchap</a> for

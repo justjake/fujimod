@@ -25,7 +25,10 @@ test('renders the release date, elapsed days, and names in the credits hover lis
     expect(host.querySelector('time')?.dateTime).toBe('2026-04-02T00:05:00Z');
     expect(host.textContent).toContain('23 days');
     expect(host.textContent).toContain('2 contributors');
-    expect(host.querySelector('a[href="/credits"]')?.textContent).toBe('everyone!');
+    expect(
+      [...host.querySelectorAll('a[href="/credits"]')].map((link) => link.textContent),
+    ).toEqual(['everyone!', 'All credits →']);
+    expect(host.querySelector('.note-names[role="region"]')?.getAttribute('tabindex')).toBe('0');
     expect(
       [...host.querySelectorAll('.note-names > span')].map((name) => name.textContent),
     ).toEqual(['Ada Example', '@zoe']);
