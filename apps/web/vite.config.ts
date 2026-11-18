@@ -252,7 +252,6 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     siteReleaseData(),
-    siteSdkDocs(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SDK_DOCS),
     siteFeatureMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,
@@ -260,6 +259,7 @@ export default defineConfig(({ mode, command }) => ({
     sbomInputs(),
     previewLicenseFiles(),
     isolationHeaders(),
+    siteSdkDocs(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SDK_DOCS),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,

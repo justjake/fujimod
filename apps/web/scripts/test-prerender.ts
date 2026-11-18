@@ -111,6 +111,8 @@ try {
           'Safety',
           'Dev Tools',
           'Recovery',
+          'GitHub',
+          'Discord',
         ]);
         assert.equal(
           await header.getByRole('link', { name: 'Discord' }).getAttribute('href'),
