@@ -2558,6 +2558,119 @@ mod tests {
         assert!(go(&changed, &s, ram.clone(), 0x3000_0000).is_err());
     }
 
+    /// `os_fixture` for the Exif string: the OS stage with the string and its two sites in the decode.
+    fn exif_fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+        let (fixture_data, mut s, _) = fixture();
+        let (reset, mut update, ram_stage) = redirect::tests::exif_stage(0);
+        update[..0x40000].copy_from_slice(&fixture_data[..0x40000]);
+        let mut stock = reset.clone();
+        put64(&mut stock, s.selector, 1).unwrap();
+        update[0x40000..0x40000 + stock.len()].copy_from_slice(&stock);
+        s.reset_copy_size = 0x1_4000;
+        let mut ram = ram_stage.clone();
+        ram[..0x1_4000].copy_from_slice(&stock);
+        put64(&mut ram, s.selector, 0).unwrap();
+        (update, s, ram)
+    }
+
+    #[test]
+    fn the_exif_startup_packages_a_placeholder_file_and_binds_the_crcs_the_table_the_stub_and_the_call() {
+        let (data, s, ram) = exif_fixture();
+        let at = 0xc000 + exif_loader_template::SETUP_SD_REDIRECT;
+        let exif_at = 0xc000 + exif_loader_template::SETUP_SD_EXIF;
+        let stub_at = 0xc000 + exif_loader_template::SETUP_SD_COPY_STUB;
+        for (mode, apply) in [(CheckedRedirect::Apply, 1u64), (CheckedRedirect::VerifyOnly, 0)] {
+            let files = package_exif(&data, &s, ram.clone(), 0, 0x3000_0000, mode).unwrap();
+            assert_eq!(files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["marble_init.bin", "ffboot.bin"]);
+            // the card's file is a short note and zeros: 4 KiB and no OS bytes
+            let file = &files[1].bytes;
+            assert_eq!(file.len(), EXIF_PLACEHOLDER_BYTES);
+            assert!(file.starts_with(b"XP5 startup placeholder"));
+            let note = file.iter().position(|b| *b == b'\n').unwrap();
+            assert!(file[note + 1..].iter().all(|b| *b == 0));
+            let marble = &files[0].bytes;
+            let q = |at: usize, n: usize| u64::from_le_bytes(marble[at + 8 * n..at + 8 * n + 8].try_into().unwrap());
+            assert_eq!((q(at, 0), q(at, 1), q(at, 2)), (1, apply, 0x28ac));
+            assert_eq!((q(at, 7), q(at, 8), q(at, 10)), (0, 4096, u64::from(crate::xp4::crc32(file))));
+            assert_eq!(q(at, 9), 0xf000_0000 + 0x20_0000);
+            // the Exif words: the compressed range's length and CRC-32, the table's address, the id, the section, the window, the count
+            let comp = &data[0x20_0000..0x20_0000 + q(exif_at, 2) as usize];
+            assert_eq!(
+                (q(exif_at, 0), q(exif_at, 1), q(exif_at, 3), q(exif_at, 4), q(exif_at, 5), q(exif_at, 6), q(exif_at, 7)),
+                (1, 0xf000_0000, u64::from(crate::xp4::crc32(comp)), 0x4_0000, 6, redirect::tests::OS_DST, redirect::tests::OS_HEAD as u64)
+            );
+            let window = redirect::tests::OS_DST + redirect::tests::EXIF_AT as u64;
+            assert_eq!((q(exif_at, 8), q(exif_at, 9), q(exif_at, 10)), (window, 16, 8));
+            assert_eq!(q(exif_at, 11), u64::from(crate::xp4::crc32(b"Digital Camera \0")));
+            assert_eq!(q(exif_at, 12), u64::from(crate::xp4::crc32(b"FUJIMOD Camera \0")));
+            assert_eq!(q(exif_at, 13), window - 8);
+            assert!(marble[exif_at + 8 * 29..exif_at + 296].iter().all(|b| *b == 0));
+            assert_eq!(q(stub_at, 1), 0x200);
+            let request = 0xc000 + exif_loader_template::SETUP_SD_REQUEST;
+            assert_eq!((q(request, 1), q(request, 2)), (4096, u64::from(crate::xp4::crc32(file))));
+        }
+        let apply = package_exif(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        let verify = package_exif(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::VerifyOnly).unwrap();
+        assert_eq!(apply[1].bytes, verify[1].bytes);
+        let differing: Vec<usize> = (0..apply[0].bytes.len()).filter(|&n| apply[0].bytes[n] != verify[0].bytes[n]).collect();
+        assert_eq!(differing, [at + 8]);
+        // the Exif loader is a build of its own
+        let os = package_os(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply);
+        assert!(os.is_err() || os.unwrap()[0].bytes != apply[0].bytes);
+    }
+
+    #[test]
+    fn the_exif_startup_refuses_what_it_cannot_prove_or_place() {
+        let (data, s, ram) = exif_fixture();
+        let go = |data: &[u8], s: &Setup, ram: Vec<u8>, destination: u64| {
+            package_exif(data, s, ram, 0, destination, CheckedRedirect::Apply)
+        };
+        assert!(go(&data, &s, ram.clone(), 0x3000_0000).is_ok());
+        assert!(go(&data, &s, ram.clone(), 0x3000_0010).is_err());
+        assert!(go(&data, &s, ram.clone(), 0x1000_0000).is_err());
+        assert!(go(&data, &s, ram.clone(), READ_ONLY_CEILING).is_err());
+        // the card's OS section is not the decode of the flash's compressed bytes
+        let mut changed = ram.clone();
+        changed[redirect::tests::OS_DST as usize + 3] ^= 1;
+        assert!(go(&data, &s, changed, 0x3000_0000).is_err());
+        // the stage's OS call is not where the load function's callers are
+        let mut changed = data.clone();
+        changed[0x40000 + 0x28a8..0x40000 + 0x28ac].copy_from_slice(&0x5280_0020u32.to_le_bytes());
+        assert!(go(&changed, &s, ram.clone(), 0x3000_0000).is_err());
+        // a decode without the string (the plain OS fixture) cannot be named
+        let (plain, plain_setup, plain_ram) = os_fixture();
+        assert!(go(&plain, &plain_setup, plain_ram, 0x3000_0000).is_err());
+    }
+
+    #[test]
+    fn the_exif_loader_asset_keeps_its_four_binding_templates_and_no_other_build_has_the_exif_one() {
+        use exif_loader_template as t;
+        assert_eq!((t::SETUP_SD_REDIRECT % 8, t::SETUP_SD_READ_ONLY % 8, t::SETUP_SD_COPY_STUB % 8, t::SETUP_SD_EXIF % 8), (0, 0, 0, 0));
+        let mut template = vec![0u8; redirect::EXIF_BINDING];
+        template[..8].copy_from_slice(&1u64.to_le_bytes());
+        assert_eq!(&t::IMAGE[t::SETUP_SD_EXIF..t::SETUP_SD_EXIF + template.len()], template);
+        assert_eq!(EXIF.exif_binding, Some(t::SETUP_SD_EXIF));
+        assert_eq!(
+            (CARD.exif_binding, INTERNAL_FLASH.exif_binding, READ_ONLY.exif_binding, CHECKED_REDIRECT.exif_binding, COPY_STUB.exif_binding, MARKER.exif_binding, OS.exif_binding),
+            (None, None, None, None, None, None, None)
+        );
+        for other in [
+            include_str!("../assets/sd-boot-v1-xp5-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-internal-flash-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-read-only-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-checked-redirect-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-copy-stub-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-marker-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-os-loader.generated.json"),
+        ] {
+            assert!(!other.contains("setup_sd_exif"));
+        }
+        assert_ne!(t::IMAGE, os_loader_template::IMAGE);
+        assert_eq!(t::XP5_SETUP_RETURN_BRANCH, os_loader_template::XP5_SETUP_RETURN_BRANCH);
+        // the stub fits the copy stub's binding array
+        assert!(exif_stub_template::IMAGE.len() <= 1024 && exif_stub_template::XP5_EXIF_PARAMS + redirect::EXIF_STUB_PARAMS == exif_stub_template::IMAGE.len());
+    }
+
     #[test]
     fn the_marker_refuses_what_it_cannot_prove_or_place() {
         let (data, s, ram) = marker_fixture();
