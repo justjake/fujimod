@@ -1811,12 +1811,20 @@ pub enum PartModel {
         #[serde(default)]
         zoom: Option<ZoomMechanism>,
     },
-    /// A multi-pin contact actuator.
+    /// A motor-driven contact cam with a release latch. The attachment's
+    /// initial position is its run time at reset.
     ContactActuator {
-        /// Supported drive values and resulting contact state.
+        /// Drive value that runs the motor.
+        run_drive: u32,
+        /// Drive values that hold the cam still.
+        hold_drives: Vec<u32>,
+        /// Contact states along motor run time, ascending from 0; the last
+        /// is the release latch.
         positions: Vec<ContactPosition>,
-        /// Time required for a contact transition to settle.
-        settle_ticks: u64,
+        /// Run time past the latch tolerated before the drive stops.
+        latch_overrun_ticks: u64,
+        /// Release input edge to the return to run time 0.
+        release_ticks: u64,
     },
     /// A serial output endpoint.
     SerialOutput {
@@ -2102,8 +2110,8 @@ pub struct ZoomMechanism {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct ContactPosition {
-    /// Drive value applied to the actuator.
-    pub drive: u32,
+    /// Motor run time at which these contact states begin.
+    pub run_ticks: u64,
     /// Resulting contact states.
     pub contacts: Vec<bool>,
 }
