@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { carrySite, validateSiteAssets } from '../scripts/carry-site.ts';
 import { cameraApi } from '../scripts/runtime-api';
+import { parseSdkDocs, sdkDocsFiles, sdkDocsPath } from '../scripts/sdk-docs.ts';
 
 /** Serve `files` as a deployed site with the `site-assets.json` staging would write. */
 async function deployedSite(files: Record<string, string>, tamper: Record<string, string> = {}) {
@@ -83,6 +84,22 @@ test('carrying a deployed site verifies every asset and the runtime Camera API',
     [`artifacts/docs/${video}`]: 'video',
     [`artifacts/docs/${still}`]: 'still',
   };
+  const sdk = JSON.stringify({
+    schema: 1,
+    components: [
+      {
+        slug: 'group',
+        declarations: [],
+        previews: [{ slug: 'rows', page: '/docs/sdk/focal/group/rows/preview.html' }],
+      },
+    ],
+  });
+  const sdkFiles = Object.fromEntries(
+    sdkDocsFiles(parseSdkDocs(sdk)).map((name) => [
+      `${sdkDocsPath}/${name}`,
+      name === 'manifest.json' ? sdk : name,
+    ]),
+  );
   const root = await mkdtemp(join(tmpdir(), 'carry-site-'));
   const destination = join(root, 'public');
   const tampered = await deployedSite(files, { 'runtime/test-100/camera.wasm': 'wasn' });
@@ -90,20 +107,37 @@ test('carrying a deployed site verifies every asset and the runtime Camera API',
     ...files,
     'runtime/test-100/camera.mjs': 'class Camera {}',
   });
-  const deployed = await deployedSite(files);
+  const deployed = await deployedSite({ ...files, ...sdkFiles });
+  const incompleteSdk = await deployedSite({
+    ...files,
+    [`${sdkDocsPath}/manifest.json`]: sdk,
+  });
+  const beforeSdk = await deployedSite(files);
   try {
     await assert.rejects(carrySite(tampered.origin, destination), /differs from its manifest/);
     await assert.rejects(carrySite(outdated.origin, destination), /Runtime Camera API is missing/);
     await assert.rejects(readFile(join(destination, 'runtime/catalog.json')), /ENOENT/);
-    assert.deepEqual(await carrySite(deployed.origin, destination), { emulators: 1, files: 7 });
-    for (const [path, data] of Object.entries(files))
+    await assert.rejects(
+      carrySite(incompleteSdk.origin, destination),
+      /differ from the SDK manifest/,
+    );
+    assert.deepEqual(await carrySite(deployed.origin, destination), { emulators: 1, files: 14 });
+    for (const [path, data] of Object.entries({ ...files, ...sdkFiles }))
       assert.equal(await readFile(join(destination, path), 'utf8'), data);
     const manifest = JSON.parse(await readFile(join(destination, 'site-assets.json'), 'utf8')) as {
       files: { path: string }[];
     };
-    assert.equal(manifest.files.length, 7);
+    assert.equal(manifest.files.length, 14);
+    assert.deepEqual(await carrySite(beforeSdk.origin, destination), { emulators: 1, files: 7 });
+    await assert.rejects(readFile(join(destination, sdkDocsPath, 'manifest.json')), /ENOENT/);
   } finally {
-    await Promise.all([tampered.close(), outdated.close(), deployed.close()]);
+    await Promise.all([
+      tampered.close(),
+      outdated.close(),
+      deployed.close(),
+      incompleteSdk.close(),
+      beforeSdk.close(),
+    ]);
     await rm(root, { recursive: true, force: true });
   }
 });

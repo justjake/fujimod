@@ -325,7 +325,7 @@ state starts fresh at each cold boot.
 The Web checks workflow runs lint, type checks, tests and the public build when
 started by hand. It does not deploy.
 
-`pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY`
+`pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY --sdk-docs DIRECTORY`
 validates locally generated assets, runs checks and tests, builds the website,
 and uploads it directly to Cloudflare. `--carry-from ORIGIN` reuses a deployed
 site's verified assets instead; the nightly Web deploy workflow uses it. Runtime bundles and feature media remain
