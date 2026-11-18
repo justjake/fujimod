@@ -6,7 +6,10 @@ import { resolve } from 'node:path';
 import { carrySite } from './carry-site.ts';
 import { stageSite } from './stage-site.ts';
 import { sdkDocsManifest, sdkDocsPath } from './sdk-docs.ts';
+// pnpm forwards the optional argument separator to the script.
+const args = process.argv.slice(process.argv[2] === '--' ? 3 : 2);
 const { values } = parseArgs({
+  args,
   options: {
     runtime: { type: 'string' },
     media: { type: 'string' },
