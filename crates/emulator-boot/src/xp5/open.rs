@@ -627,14 +627,28 @@ pub(crate) fn open_from(
         // memory mapping is read-only (host loading bypasses it), so no DMA master can overwrite
         // the ROM or the shadow. Cut by physical range: the M4's local addresses alias the same
         // windows, and the M4 gets no mapping for either window.
-        for (base, size) in mask_rom.then_some((rom_start::ROM_BASE, rom_start::ROM_SIZE as u64))
-            .into_iter().chain([(FLASH_APERTURE_BASE, FLASH_APERTURE_SIZE as u64)])
-        {
-            execution.peripherals = carve_out(std::mem::take(&mut execution.peripherals), base, size);
-            let size = usize::try_from(size).map_err(|_| "region exceeds host address space")?;
-            execution.ram.push(board::factory::Ram { base, size });
+        let entry_memory = if mask_rom {
+            (rom_start::ROM_BASE, rom_start::ROM_SIZE as u64, 5)
+        } else {
+            let boot_sram = reference.soc.memory_regions.iter()
+                .find(|region| region.id == "boot-sram")
+                .ok_or("SD card handoff requires the SoC boot SRAM")?;
+            let RegionSize::Bytes { bytes } = boot_sram.size else {
+                return Err("SD card handoff requires a fixed SRAM extent".into());
+            };
+            (boot_sram.base, bytes, 7)
+        };
+        for (base, bytes, permissions) in [
+            entry_memory,
+            (FLASH_APERTURE_BASE, FLASH_APERTURE_SIZE as u64, 5),
+        ] {
+            execution.peripherals = carve_out(std::mem::take(&mut execution.peripherals), base, bytes);
+            let size = usize::try_from(bytes).map_err(|_| "region exceeds host address space")?;
+            if !execution.ram.iter().any(|ram| ram.base == base && ram.size == size) {
+                execution.ram.push(board::factory::Ram { base, size });
+            }
             execution.dma_mappings.push(board::memory::BusMapping {
-                permissions: 1,
+                permissions: permissions & 3,
                 ..board::memory::BusMapping::ram(base, size)
             });
             for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
@@ -646,7 +660,7 @@ pub(crate) fn open_from(
                     address: base,
                     physical: base,
                     size,
-                    permissions: 5,
+                    permissions,
                 });
             }
         }
