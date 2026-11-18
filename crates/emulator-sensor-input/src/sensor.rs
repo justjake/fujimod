@@ -54,6 +54,9 @@ pub struct ImageRoutes {
     /// Each DMA channel's +0x18 word is its line stride in bytes; otherwise
     /// lines are packed (width x 2 bytes).
     pub line_stride: bool,
+    /// An interrupt line pulsed at every frame start, with no enable or status
+    /// word in the window (see [`Sensor::timing`]).
+    pub frame_start_pulse: Option<u32>,
 }
 /// A RAW DMA channel that writes the still scene (opt-in, [`Sensor::with_still_channel`]).
 ///
@@ -174,6 +177,16 @@ impl Sensor {
         let enabled = s.image.get(&0x140).copied().unwrap_or(0);
         cx.set_irq(routes.timing[0], pending & enabled & 3 != 0);
         cx.set_irq(routes.timing[1], pending & enabled & 12 != 0);
+        // X-T5 4.31: the third vertical-timing line (INTID 165, logical 0x77, VD
+        // callback service id 2 of 0x1530748) has no bit in +0x140/+0x144 (the
+        // service ISRs 0x15304a0/0x153050c ack only bits 0..2) and its callbacks
+        // (0x2ffafa8, 0x3007764, 0x303c9f0) ack nothing, so it is modelled as an
+        // edge at every frame start. Its source is INFERRED from the neighbouring
+        // CCDTG lines 164/166, not decoded from a register.
+        if start && let Some(irq) = routes.frame_start_pulse {
+            cx.set_irq(irq, true);
+            cx.set_irq(irq, false);
+        }
     }
     /// Frame start: a RAW DMA channel samples its enable bit as a frame
     /// begins and transfers exactly the frames that began enabled. A channel
@@ -744,6 +757,7 @@ mod tests {
                 dma: None,
                 timing: [100, 102],
                 line_stride: false,
+                frame_start_pulse: None,
             }),
             (0x51, 8),
         );
@@ -774,12 +788,40 @@ mod tests {
         assert!(host.ram.is_empty());
     }
     #[test]
+    fn frame_start_pulse_is_an_edge_at_every_frame_start_without_enable_or_status() {
+        let sensor = Sensor::new(
+            Some(ImageRoutes {
+                dma: None,
+                timing: [166, 164],
+                line_stride: false,
+                frame_start_pulse: Some(165),
+            }),
+            (0x59, 4),
+        );
+        let mut host = RecordingHost::default();
+        for _ in 0..2 {
+            sensor.timing(&mut Cx::new(&mut host, 0, 0, 0), true);
+            sensor.timing(&mut Cx::new(&mut host, 0, 0, 0), false);
+        }
+        let pulses: Vec<bool> = host
+            .irqs
+            .iter()
+            .filter(|(line, _)| *line == 165)
+            .map(|(_, level)| *level)
+            .collect();
+        // +0x140 is zero: the CCDTG lines stay low, the VD pulse still fires once per start.
+        assert_eq!(pulses, [true, false, true, false]);
+        assert!(host.irqs.iter().filter(|(l, _)| *l != 165).all(|(_, level)| !level));
+        assert_eq!(sensor.image_reg(0x144), 15);
+    }
+    #[test]
     fn raw_dma_transfers_exactly_the_frames_that_start_enabled() {
         let sensor = Sensor::new(
             Some(ImageRoutes {
                 dma: Some([97, 98]),
                 timing: [102, 100],
                 line_stride: false,
+                frame_start_pulse: None,
             }),
             (0x59, 4),
         );
@@ -824,6 +866,7 @@ mod tests {
                 dma: Some([162, 163]),
                 timing: [166, 164],
                 line_stride: false,
+                frame_start_pulse: None,
             }),
             (0x59, 4),
         )
@@ -915,6 +958,7 @@ mod tests {
                 dma: Some([97, 98]),
                 timing: [102, 100],
                 line_stride: true,
+                frame_start_pulse: None,
             }),
             (0x59, 4),
         );
