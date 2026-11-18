@@ -30,9 +30,16 @@
 //!   stream offset, 0}` per NAL goes to `BADR_NALU` + `0x15ebc`, followed by a
 //!   `0x3f` terminator; `0x15ebc` counts the bytes of real entries until the
 //!   driver writes `0x15ea0` = 1.
-//! - `0x15120` (pending) and `0x15124` (raw) both report `0x40001` (bit 18 NALU
-//!   table ready, bits 1..0 = 1 one picture coded) and the interrupt is driven
-//!   while `0x15120 & H264_INT_EN` is non-zero. A write to `0x15120` clears the
+//! - `0x15120` (pending) and `0x15124` (raw) both report bit 18 (NALU table
+//!   ready) after each picture, and the interrupt is driven while
+//!   `0x15120 & H264_INT_EN` is non-zero. Bits 1..0 report a stream bank that
+//!   the picture filled (bit 0 = bank 0, bit 1 = bank 1) and are clear
+//!   otherwise. The completion task calls the driver's bank callback 0x2db5bfc
+//!   for them; recmv then refills that bank (op 0x1a end 0x2db3878 -> CHGBUF
+//!   0x13d1078) and frees the old one at ADD_STREAM (0x2db4518). Reporting a
+//!   full bank on every picture makes recmv rotate its three 64 MiB stream
+//!   buffers per frame; the ring pool then refuses the third allocation and
+//!   every later ADD_STREAM fails, so no stream reaches the card. A write to `0x15120` clears the
 //!   written bits in both words (the ISR writes back the value of `0x15124`).
 //! - A stop (`H264_CMD` bit 14) ends the recording: the encoder is dropped and
 //!   bit 19 (stop done) is reported after `run_ticks`.
@@ -93,10 +100,11 @@ const IMG_LINE_OFS: u64 = 0x1_5f10;
 const PERI_STATUS: u64 = 0x1_5fd0;
 
 /// Status bits of `0x15120`/`0x15124`.
-const ONE_PICTURE: u32 = 1;
+/// Bits 1..0: stream bank 0 / bank 1 filled by this picture.
+const BANK_FULL: u32 = 3;
 const NALU_READY: u32 = 1 << 18;
 const STOP_DONE: u32 = 1 << 19;
-const STATUS_BITS: u32 = ONE_PICTURE | NALU_READY | STOP_DONE;
+const STATUS_BITS: u32 = BANK_FULL | NALU_READY | STOP_DONE;
 const NALU_TERMINATOR: u32 = 0x3f;
 const ENTRY: u32 = 16;
 /// The driver caches at most this many bytes of an SPS and of a PPS (avcC
@@ -145,6 +153,9 @@ pub struct Codec {
     scene: Option<SceneSource>,
     /// The open recording's encoder; refuses checkpoints while present.
     encoder: Option<Direct>,
+    /// Bank-full bits collected while one picture is written; always zero
+    /// between pictures, so it is not part of the device state.
+    filled: u32,
     state: State,
 }
 
@@ -153,7 +164,7 @@ impl Codec {
         if !(32..1020).contains(&irq) || ticks == 0 {
             return Err("invalid XP5 codec interrupt or run_ticks".into());
         }
-        Ok(Self { irq, ticks, scene: None, encoder: None, state: State::default() })
+        Ok(Self { irq, ticks, scene: None, encoder: None, filled: 0, state: State::default() })
     }
     /// Encodes the picture `scene` gives instead of the guest input when it
     /// gives one of the programmed size.
@@ -216,7 +227,9 @@ impl Codec {
     }
 
     /// Code one picture and publish it in the stream banks and NALU table.
-    fn encode(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+    /// Returns the bank-full status bits: bit `n` when the picture reached the
+    /// end of stream bank `n`.
+    fn encode(&mut self, cx: &mut Cx<'_>) -> Result<u32, String> {
         let settings = self.settings();
         if self.word(STR_BUF_MODE) != 0 {
             return Err("STR_BUF_MODE 1 (no NALU table) is not modelled".into());
@@ -258,11 +271,12 @@ impl Codec {
             let entry = [kind, nal.len() as u32 + 4, start as u32, 0];
             cx.ram_write(table + first + u64::from(ENTRY) * index as u64, &words(&entry))?;
         }
+        let filled = std::mem::take(&mut self.filled);
         let end = first + u64::from(ENTRY) * nals.len() as u64;
         cx.ram_write(table + end, &words(&[NALU_TERMINATOR, 0, 0, 0]))?;
         self.state.nalu_bytes = (end as u32) & 0x7ff_ffff;
         self.state.pictures += 1;
-        Ok(())
+        Ok(filled)
     }
 
     /// Write bytes at the stream position, continuing in the other bank at
@@ -277,6 +291,7 @@ impl Codec {
             bytes = &bytes[count..];
             self.state.stream_position += count as u64;
             if self.state.stream_position.is_multiple_of(size) {
+                self.filled |= 1 << self.state.bank;
                 self.state.bank ^= 1;
             }
         }
@@ -479,11 +494,12 @@ impl Device for Codec {
         }
         self.state.due = None;
         if std::mem::take(&mut self.state.encode) {
-            if let Err(error) = self.encode(cx) {
-                return cx.fail(format!("xp5-codec: H.264 encode failed: {error}"));
-            }
-            self.state.pending |= NALU_READY | ONE_PICTURE;
-            self.state.raw |= NALU_READY | ONE_PICTURE;
+            let filled = match self.encode(cx) {
+                Ok(filled) => filled,
+                Err(error) => return cx.fail(format!("xp5-codec: H.264 encode failed: {error}")),
+            };
+            self.state.pending |= NALU_READY | filled;
+            self.state.raw |= NALU_READY | filled;
         }
         if std::mem::take(&mut self.state.stop) {
             if self.encoder.take().is_some() {
@@ -719,7 +735,9 @@ mod tests {
         assert_eq!(get(c, h, 0x1_5fd0), 0);
         let status = get(c, h, H264_STATUS);
         let raw = get(c, h, H264_RAW_STATUS);
-        assert_eq!((status, raw), (0x40001, 0x40001));
+        // Bits 1..0 name the bank this picture filled, if any.
+        let filled = if c.state.bank != bank { 1 << bank } else { 0 };
+        assert_eq!((status, raw), (NALU_READY | filled, NALU_READY | filled));
         assert_eq!((get(c, h, HEVC_STATUS), get(c, h, HEVC_RAW_STATUS)), (0, 0));
         reg(c, h, 0x1_5fd0, 0);
         reg(c, h, H264_STATUS, raw);
