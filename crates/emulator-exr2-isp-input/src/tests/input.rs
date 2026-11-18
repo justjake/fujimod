@@ -96,6 +96,7 @@ fn input_wiring() -> input::Wiring {
         parameters: None,
         memory_outputs: None,
         edges: Default::default(),
+        comparator_outputs: Default::default(),
         start_tick: 0,
     }
 }
@@ -1607,6 +1608,8 @@ fn started_comparators_fire_once_at_their_frame_point_and_release_the_curtains()
     let mut w = input_wiring();
     w.frame_period = Some(Arc::new(Mutex::new(10)));
     w.sensor = Some(sensor);
+    let first = fujimod_emulator_devices::signals::Level::new(true);
+    w.comparator_outputs[0] = Some(first.clone());
     let mut o = input_options();
     o.sensor_period_ticks = Some(100);
     o.clock = Some(fujimod_emulator_imaging::exr2_isp::options::input::Clock {
@@ -1631,12 +1634,16 @@ fn started_comparators_fire_once_at_their_frame_point_and_release_the_curtains()
     ] {
         write(&mut d, &mut h, 0xfff10000 + o, v);
     }
+    // Its output wire falls when started and rises when it fires.
+    assert!(!first.high());
     advance(&mut d, &mut h, 10);
     advance(&mut d, &mut h, 15);
     assert_eq!(read(&mut d, &mut h, 0xfff100c4), 0x8001_0003);
+    assert!(!first.high());
     assert_eq!(wire.lock().unwrap().seconds, 0.);
     advance(&mut d, &mut h, 23);
     assert_eq!(read(&mut d, &mut h, 0xfff100c4), 0x8000_0003);
+    assert!(first.high());
     assert_eq!(read(&mut d, &mut h, 0xfff100d8), 0x8001_0003);
     advance(&mut d, &mut h, 35);
     assert_eq!(read(&mut d, &mut h, 0xfff100d8), 0x8000_0003);

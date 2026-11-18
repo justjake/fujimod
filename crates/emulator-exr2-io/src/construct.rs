@@ -187,9 +187,17 @@ fn gpio_contact_response(builder: Builder<'_>, model: Model) -> Result<Built, St
 
 fn contact_actuator(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     let Builder {
-        windows, resources, ..
+        id,
+        windows,
+        resources,
+        ..
     } = builder;
-    let Model::ContactActuator { options, gpio } = model else {
+    let Model::ContactActuator {
+        options,
+        gpio,
+        release,
+    } = model
+    else {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device({
@@ -204,6 +212,9 @@ fn contact_actuator(builder: Builder<'_>, model: Model) -> Result<Built, String>
                 options,
                 fujimod_emulator_parts_controls::contact_actuator::Wiring {
                     pins: Box::new(resources.pads(&gpio)?),
+                    release: release
+                        .map(|name| Ok::<_, String>(wire!(resources, id, name, LogicLevel)))
+                        .transpose()?,
                 },
             )?,
         )

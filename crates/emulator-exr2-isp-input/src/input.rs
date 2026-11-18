@@ -31,6 +31,8 @@ pub struct Wiring {
     pub parameters: Option<ParameterHandle>,
     pub memory_outputs: Option<MemoryOutputHandle>,
     pub edges: fujimod_emulator_imaging::scene::FramePhases,
+    /// Comparator output wires: high once fired, low when started again.
+    pub comparator_outputs: [Option<fujimod_emulator_devices::signals::Level>; 6],
     pub start_tick: u64,
 }
 #[derive(Serialize, Deserialize)]
@@ -623,10 +625,12 @@ impl ImageInput {
         } else {
             v
         };
-        if let Some(i) = Self::phase(o)
-            && v & 0x10000 == 0
-        {
-            self.state.comparator_due[i] = None;
+        if let Some(i) = Self::phase(o) {
+            if v & 0x10000 == 0 {
+                self.state.comparator_due[i] = None;
+            } else if let Some(output) = &self.wiring.comparator_outputs[i] {
+                output.drive(false);
+            }
         }
         if matches!(o, 0x28 | 0x2c) {
             self.publish_grid()?;
@@ -671,6 +675,9 @@ impl ImageInput {
             };
             self.state.comparator_due[i] = None;
             self.state.r[(0xc4 + i * 0x14) / 4] &= !0x10000;
+            if let Some(output) = &self.wiring.comparator_outputs[i] {
+                output.drive(true);
+            }
             if let Some(sensor) = &mut self.wiring.sensor {
                 sensor.comparator_edge(i, tick)?;
             }

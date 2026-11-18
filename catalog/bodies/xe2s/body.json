@@ -521,6 +521,9 @@
         "attachments": {
           "serial_part": [
             "banked-lens"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
           ]
         },
         "control_bus_order": [
@@ -977,6 +980,9 @@
         "attachments": {
           "serial_part": [
             "banked-lens"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
           ]
         },
         "control_bus_order": [
@@ -1202,6 +1208,9 @@
         "attachments": {
           "serial_part": [
             "banked-lens"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
           ]
         },
         "control_bus_order": [
@@ -1444,6 +1453,9 @@
         "attachments": {
           "serial_part": [
             "banked-lens"
+          ],
+          "contact_actuators": [
+            "acquisition-contacts"
           ]
         },
         "controllers": {
@@ -2176,7 +2188,8 @@
   "parts": [
     "sd-card",
     "banked-lens",
-    "x70-image-sensor"
+    "x70-image-sensor",
+    "acquisition-contacts"
   ],
   "wiring": [
     {

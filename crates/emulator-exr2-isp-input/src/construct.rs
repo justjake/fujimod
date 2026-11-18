@@ -38,6 +38,7 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         statistics_grid,
         frame_period,
         edges,
+        comparator_outputs,
     } = model
     else {
         return Err("constructor called for another model kind".into());
@@ -118,6 +119,15 @@ fn image_input(builder: Builder<'_>, model: Model) -> Result<Built, String> {
                 parameters,
                 memory_outputs,
                 edges: fujimod_emulator_exr2_images::image_wire!(resources, id, edges, PhaseEdges),
+                comparator_outputs: {
+                    let mut outputs: [Option<_>; 6] = Default::default();
+                    for (output, name) in outputs.iter_mut().zip(comparator_outputs) {
+                        if let Some(name) = name {
+                            *output = Some(wire!(resources, id, name, LogicLevel));
+                        }
+                    }
+                    outputs
+                },
                 start_tick,
             },
         )?)
