@@ -306,7 +306,25 @@ CRC-32 at the moment of use and copies the flash's section on any difference. Th
 green, orange on core 0 and returns to the instruction after the hook. The armed loader shows five green blinks
 (verified-only two).
 
-`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
+`sd-boot-v1-os-startup FIRMWARE DAT NEW_DIRECTORY --destination ADDRESS (--verify-only | --apply)` (XP5)
+writes the same two files for the stage's load of its OS section (id 6, stored compressed in the flash and decoded into
+the section's DRAM address by a hardware engine; `StartupOptions::os`, loader
+`assets/sd-boot-v1-xp5-os-loader.generated.{bin,json}`, stub `assets/sd-boot-v1-xp5-os-stub.generated.{bin,json}`).
+`ffboot.bin` is the section's initialized bytes alone (the software decode of the flash's compressed bytes, which the
+packager checks equal to the RAM image's section and zero after them), which the loader streams to `--destination`.
+The packager finds the section's load function by its words (found once, three callers, exactly one of which passes
+the OS id) and refuses the image unless both section tables, the compressed flash range and the decode agree. The
+loader proves the section tables and the compressed flash range against bound CRC-32s and the file against its CRC-32
+(read back from DRAM), and with `--apply` writes a stub into the stage's nop padding and replaces the stage's call
+of the load function by a call to it. At the moment of the call the stub runs the stage's own load (the hardware
+decode of the installed flash, unchanged), compares the decode with the DRAM copy word for word, copies the DRAM copy
+over the destination with the stage's own copy function only if they are equal and compares again; if the copy does
+not verify it decodes again, and if the copy differs from the decode it leaves the decode where it is. The lamp
+shows the path (orange, then two green pulses or four, five or six red pulses); the armed loader shows six green
+blinks (verified-only two). It writes nothing but its own block, the lamp pins, the stage's stack and, through
+the stage's functions, the destination; it never writes the flash.
+
+`sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
 of 1,000,000 four-NOP iterations, allowing up to two billion iterations per

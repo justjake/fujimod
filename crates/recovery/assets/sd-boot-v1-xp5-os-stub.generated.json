@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "image_bytes": 832,
+  "symbols": {
+    "xp5_os_end": 832,
+    "xp5_os_entry": 0,
+    "xp5_os_out_diff1": 808,
+    "xp5_os_out_diff2": 816,
+    "xp5_os_out_result": 824,
+    "xp5_os_out_status": 800,
+    "xp5_os_p_bytes": 688,
+    "xp5_os_p_chunk": 712,
+    "xp5_os_p_copy": 704,
+    "xp5_os_p_dram": 696,
+    "xp5_os_p_dst": 680,
+    "xp5_os_p_enable": 760,
+    "xp5_os_p_enable_green": 768,
+    "xp5_os_p_enable_red": 776,
+    "xp5_os_p_func": 672,
+    "xp5_os_p_gap": 752,
+    "xp5_os_p_green": 720,
+    "xp5_os_p_id": 664,
+    "xp5_os_p_mux": 784,
+    "xp5_os_p_pin": 736,
+    "xp5_os_p_pulse": 744,
+    "xp5_os_p_red": 728,
+    "xp5_os_p_restore": 792,
+    "xp5_os_p_return": 656,
+    "xp5_os_p_self": 648,
+    "xp5_os_params": 648
+  }
+}

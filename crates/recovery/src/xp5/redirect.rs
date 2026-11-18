@@ -924,6 +924,437 @@ pub(super) fn bind_marker(program: &mut [u8], at: usize, marker: &MarkerPlan) ->
     Ok(())
 }
 
+// ---- The OS section ----
+//
+// The stage's second load, the section with id 6 (the OS), is stored compressed: the stage's load
+// function reads the flash range in chunks into a bounce buffer and feeds a decoding engine that
+// writes the decoded section to the section's DRAM address. Nothing about that load changes here.
+// The call of that function (`mov w0, #6; bl load`) is replaced by a `bl` to a stub that the loader
+// writes into dead padding of the stock reset image. The stub calls the load function (so the engine's
+// decode of this unit's flash is in the destination as on a stock boot), compares the decode with the
+// DRAM copy of the section that the card supplied, word for word, and only if they are equal writes
+// the DRAM copy over the destination and compares again. The packager checks, from the update alone,
+// that the stage is the one it expects, that both section tables name the same row for the section,
+// and that the card's bytes are the decode of the flash's compressed bytes by the software decoder
+// (the hardware's own decode is what the stub compares with, on the camera).
+
+/// The OS section's load function: look the row up, raw path (not taken for this section) or the
+/// compressed path through the decoding engine (start, a chunked feed, wait). Every word is checked;
+/// branch and page fields are not (the packager reads the targets it needs from them).
+#[rustfmt::skip]
+const OS_LOAD: [Pat; 63] = [
+    (0xa9bc7bfd, 0xffffffff), // 0x2d50 
+    (0x910003fd, 0xffffffff), // 0x2d54 
+    (0x94000000, 0xfc000000), // 0x2d58 BL
+    (0xb4000000, 0xff00001f), // 0x2d5c cbz/cbnz
+    (0xa90153f3, 0xffffffff), // 0x2d60 
+    (0xaa0003f3, 0xffffffff), // 0x2d64 
+    (0xb9403800, 0xffffffff), // 0x2d68 
+    (0x35000000, 0xff00001f), // 0x2d6c cbz/cbnz
+    (0xf9400674, 0xffffffff), // 0x2d70 
+    (0xb9402a60, 0xffffffff), // 0x2d74 
+    (0x94000000, 0xfc000000), // 0x2d78 BL
+    (0xd2800003, 0xffffffff), // 0x2d7c 
+    (0xb9403262, 0xffffffff), // 0x2d80 
+    (0xaa0003e1, 0xffffffff), // 0x2d84 
+    (0xaa1403e0, 0xffffffff), // 0x2d88 
+    (0x94000000, 0xfc000000), // 0x2d8c BL
+    (0xd2800000, 0xffffffff), // 0x2d90 
+    (0xa94153f3, 0xffffffff), // 0x2d94 
+    (0xa8c47bfd, 0xffffffff), // 0x2d98 
+    (0xd65f03c0, 0xffffffff), // 0x2d9c 
+    (0x14000000, 0xfc000000), // 0x2da0 B
+    (0xa9025bf5, 0xffffffff), // 0x2da4 
+    (0xf9401676, 0xffffffff), // 0x2da8 
+    (0x90000000, 0x9f00001f), // 0x2dac adrp
+    (0xf940a015, 0xffffffff), // 0x2db0 
+    (0xb9403274, 0xffffffff), // 0x2db4 
+    (0xaa1503e1, 0xffffffff), // 0x2db8 
+    (0xf9400660, 0xffffffff), // 0x2dbc 
+    (0x94000000, 0xfc000000), // 0x2dc0 BL
+    (0x12bfffc0, 0xffffffff), // 0x2dc4 
+    (0x6b00029f, 0xffffffff), // 0x2dc8 
+    (0x54000009, 0xff00001f), // 0x2dcc b.cond
+    (0xf9001bf7, 0xffffffff), // 0x2dd0 
+    (0x52a00053, 0xffffffff), // 0x2dd4 
+    (0x2a1303f7, 0xffffffff), // 0x2dd8 
+    (0x2a1603e0, 0xffffffff), // 0x2ddc 
+    (0x94000000, 0xfc000000), // 0x2de0 BL
+    (0xd2800003, 0xffffffff), // 0x2de4 
+    (0x2a1703e2, 0xffffffff), // 0x2de8 
+    (0xaa0003e1, 0xffffffff), // 0x2dec 
+    (0xaa1503e0, 0xffffffff), // 0x2df0 
+    (0x94000000, 0xfc000000), // 0x2df4 BL
+    (0x914082b5, 0xffffffff), // 0x2df8 
+    (0x914082d6, 0xffffffff), // 0x2dfc 
+    (0x2a1303e0, 0xffffffff), // 0x2e00 
+    (0x94000000, 0xfc000000), // 0x2e04 BL
+    (0x11408273, 0xffffffff), // 0x2e08 
+    (0x6b13029f, 0xffffffff), // 0x2e0c 
+    (0x54000002, 0xff00001f), // 0x2e10 b.cond
+    (0xf9401bf7, 0xffffffff), // 0x2e14 
+    (0x72004294, 0xffffffff), // 0x2e18 
+    (0x54000001, 0xff00001f), // 0x2e1c b.cond
+    (0x94000000, 0xfc000000), // 0x2e20 BL
+    (0xa9425bf5, 0xffffffff), // 0x2e24 
+    (0x14000000, 0xfc000000), // 0x2e28 B
+    (0x2a1603e0, 0xffffffff), // 0x2e2c 
+    (0x94000000, 0xfc000000), // 0x2e30 BL
+    (0xd2800003, 0xffffffff), // 0x2e34 
+    (0x2a1403e2, 0xffffffff), // 0x2e38 
+    (0xaa0003e1, 0xffffffff), // 0x2e3c 
+    (0xaa1503e0, 0xffffffff), // 0x2e40 
+    (0x94000000, 0xfc000000), // 0x2e44 BL
+    (0x14000000, 0xfc000000), // 0x2e48 B
+];
+/// Words of the function that the packager reads targets from: the row lookup call, the raw path's
+/// copy call and the compressed path's copy call.
+const OS_LOOKUP_WORD: usize = 2;
+const OS_RAW_COPY_WORD: usize = 15;
+const OS_COMPRESSED_COPY_WORDS: [usize; 2] = [(0x2df4 - 0x2d50) / 4, (0x2e44 - 0x2d50) / 4];
+/// The section the stub is for.
+pub(super) const OS_SECTION_ID: u32 = 6;
+/// `mov w0, #6`, the instruction before the call that is replaced.
+const OS_SET_ID: u32 = 0x5280_0000 | (OS_SECTION_ID << 5);
+/// The bytes the stub's copy function takes per call: the chunk of the stage's own loads.
+pub(super) const OS_CHUNK: u64 = 0x2_0000;
+/// Loop counts of one lamp pulse and one pause of the OS stub: a little over half a second and a
+/// little under half a second at the speed of the stage's code on a camera (about 4.4 M loops per second).
+pub(super) const OS_PULSE_LOOPS: u64 = 3_000_000;
+pub(super) const OS_GAP_LOOPS: u64 = 2_000_000;
+/// The stub's parameter block (`os_stub.S`) and the loader's binding of the OS (`os.h`).
+pub(super) const OS_STUB_PARAMS: usize = 184;
+pub(super) const OS_BINDING: usize = 96;
+
+/// What the stock reset image and the update say about the OS section's load.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct OsPlan {
+    /// RAM-0 byte offset of the call of the load function with the OS id, its stock word, and the load
+    /// function's and the copy function's RAM-0 addresses.
+    pub call_site: usize,
+    pub call_old: u32,
+    pub load_fn: usize,
+    pub copy_fn: usize,
+    /// The section: DRAM address, the decoded bytes the stage initializes (the rest of the engine's
+    /// output is zero), the flash offset and length of the compressed bytes.
+    pub dst: u64,
+    pub head_bytes: usize,
+    pub flash_offset: u64,
+    pub comp_bytes: usize,
+    /// The two section tables the stage may read: RAM address, flash offset; their length.
+    pub tables: [(u64, u64); 2],
+    pub table_bytes: usize,
+}
+
+/// The byte offset in `table` of the row for `id`.
+fn row_at(table: &[u8], table_ram: u64, id: u32) -> Result<usize> {
+    require(table.len() >= 0x100, "A section table is too short")?;
+    let rows = u64::from_le_bytes(table[..8].try_into().unwrap());
+    let first = rows
+        .checked_sub(table_ram)
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|&n| n >= 0x40 && n < table.len())
+        .ok_or_else(|| image::Error::Invalid("A section table's row pointer leaves the table".into()))?;
+    let mut found = None;
+    for at in (first..table.len().saturating_sub(ROW - 1)).step_by(ROW) {
+        let row = word(table, at)?;
+        if row == END {
+            break;
+        }
+        if row == id {
+            require(found.is_none(), "A section table has two rows for the OS section")?;
+            found = Some(at);
+        }
+    }
+    found.ok_or_else(|| image::Error::Invalid("A section table has no row for the OS section".into()))
+}
+
+/// The OS section's row: DRAM address, the decoded bytes it initializes, the bss that follows them,
+/// the flash offset and length of its compressed bytes (the row must say it is compressed).
+fn os_row(table: &[u8], table_ram: u64) -> Result<(u64, u64, u64, u64, usize)> {
+    let at = row_at(table, table_ram, OS_SECTION_ID)?;
+    let q = |o: usize| u64::from_le_bytes(table[at + o..at + o + 8].try_into().unwrap());
+    let (dst, declared, bss) = (q(8), q(16), q(24));
+    let flash = u64::from(word(table, at + 40)?);
+    let size = word(table, at + 48)? as usize;
+    require(word(table, at + 56)? != 0, "The OS section is not stored compressed")?;
+    require(bss == dst + declared, "The OS section's bss does not follow its initialized bytes")?;
+    Ok((dst, declared, bss, flash, size))
+}
+
+/// Find the OS section's load in `reset`, the stock reset image, and check it against the update
+/// (`inverted`, whose flash offset `n` is at `n + bias`) and the card's RAM image `ram`.
+pub(super) fn locate_os(reset: &[u8], inverted: &[u8], bias: usize, ram: &[u8]) -> Result<OsPlan> {
+    let loads = find(reset, &OS_LOAD);
+    require(loads.len() == 1, "The reset stage's OS section load is not found exactly once")?;
+    let load_fn = loads[0];
+    // Its callers load sections with other ids too; exactly one of them passes the OS id.
+    let callers: Vec<usize> = (0..reset.len() - 3)
+        .step_by(4)
+        .filter(|&at| word(reset, at).is_ok_and(|w| w & BL.1 == BL.0) && bl_target(reset, at).ok() == Some(load_fn))
+        .collect();
+    let ours: Vec<usize> = callers
+        .iter()
+        .copied()
+        .filter(|&at| at >= 4 && word(reset, at - 4).is_ok_and(|w| w == OS_SET_ID))
+        .collect();
+    require(
+        callers.len() == 3 && ours.len() == 1,
+        "The reset stage's OS section load has not exactly one caller that passes the OS id (of three)",
+    )?;
+    let call_site = ours[0];
+    let lookup = bl_target(reset, load_fn + 4 * OS_LOOKUP_WORD)?;
+    let copy_fn = bl_target(reset, load_fn + 4 * OS_RAW_COPY_WORD)?;
+    require(
+        OS_COMPRESSED_COPY_WORDS.iter().all(|&w| bl_target(reset, load_fn + 4 * w).ok() == Some(copy_fn)),
+        "The OS section's load calls more than one copy function",
+    )?;
+    // The two table copies call the same copy function, and their destinations are the two tables.
+    let copies = find(reset, &TABLE_COPY);
+    require(copies.len() == 2, "The reset stage's section table copies are not found twice")?;
+    let mut tables = Vec::new();
+    for &at in &copies {
+        require(
+            word(reset, at + 4 * 8)? == 0x5281_0002 && bl_target(reset, at + 4 * 11)? == copy_fn,
+            "A section table copy differs (0x800 length or copy function)",
+        )?;
+        tables.push((page_offset(reset, at)?, page_offset(reset, at + 4 * 4)?));
+    }
+    tables.sort();
+    require(
+        tables.iter().all(|&(ram, flash)| ram % 0x800 == 0 && flash % 0x1000 == 0)
+            && tables[0].0 + 0x800 == tables[1].0
+            && tables[0].1 != tables[1].1,
+        "The section tables are not two adjacent tables of two flash tables",
+    )?;
+    let table_bytes = 0x800;
+    require(lookup % 4 == 0 && lookup + 4 <= reset.len(), "The row lookup is outside the reset image")?;
+    // The OS row is in the main table (the one at RAM 0x40000) only: the other table is the maintenance
+    // table, which names other sections, and with it the stage never reaches the call that is replaced.
+    // Both are read from the flash itself (the update).
+    require(tables[0].0 == 0x4_0000, "The main section table is not at the stage's table address")?;
+    let main = extent(inverted, tables[0].1 as usize + bias, table_bytes)?;
+    let other = extent(inverted, tables[1].1 as usize + bias, table_bytes)?;
+    require(
+        row_at(other, tables[1].0, OS_SECTION_ID).is_err(),
+        "The maintenance section table names the OS section",
+    )?;
+    let (dst, declared, _bss, flash_offset, comp_bytes) = os_row(main, tables[0].0)?;
+    let head_bytes = declared as usize;
+    require(
+        head_bytes != 0 && head_bytes % 16 == 0 && dst % 16 == 0 && comp_bytes % 4 == 0 && comp_bytes != 0,
+        "The OS section's row is not a whole number of 16-byte units",
+    )?;
+    // The cold table in the RAM image is the flash's main one.
+    if let Some(&(table_ram, flash)) = tables.iter().find(|&&(r, _)| r == 0x4_0000) {
+        require(
+            extent(ram, table_ram as usize, table_bytes)? == extent(inverted, flash as usize + bias, table_bytes)?,
+            "The RAM image's section table differs from the flash's",
+        )?;
+    }
+    // The card's decoded section is the software decode of the flash's compressed bytes, and what the
+    // engine writes after it is zero (so the stub need compare no more than the initialized bytes).
+    let compressed = extent(inverted, flash_offset as usize + bias, comp_bytes)?;
+    let decoded = fujimod_firmware::decompress(compressed)?.0;
+    let head = extent(ram, dst as usize, head_bytes)?;
+    require(
+        decoded.len() >= head_bytes && decoded[..head_bytes] == *head,
+        "The RAM image's OS section is not the decode of the flash's compressed bytes",
+    )?;
+    require(decoded[head_bytes..].iter().all(|b| *b == 0), "The decode of the OS section is not zero after its initialized bytes")?;
+    Ok(OsPlan {
+        call_site,
+        call_old: word(reset, call_site)?,
+        load_fn,
+        copy_fn,
+        dst,
+        head_bytes,
+        flash_offset,
+        comp_bytes,
+        tables: [tables[0], tables[1]],
+        table_bytes,
+    })
+}
+
+/// The values of the OS stub's parameter block (`os_stub.S` documents each).
+pub(super) struct OsStubValues {
+    pub own_address: u64,
+    pub ret: u64,
+    pub id: u64,
+    pub func: u64,
+    pub dst: u64,
+    pub bytes: u64,
+    pub dram: u64,
+    pub copy: u64,
+    pub chunk: u64,
+    pub green: u64,
+    pub red: u64,
+    pub pin: u64,
+    pub pulse: u64,
+    pub gap: u64,
+    pub enable: u64,
+    pub enable_green: u64,
+    pub enable_red: u64,
+    pub mux: u64,
+    pub restore: u64,
+}
+
+/// The stub image with its parameter block filled in. The template's block must be all zero and the
+/// parameters must be where the layout says.
+pub(super) fn fill_os_stub(template: &[u8], values: &OsStubValues) -> Result<Vec<u8>> {
+    use super::os_stub_template as t;
+    let params = t::XP5_OS_PARAMS;
+    require(
+        template.len() == t::XP5_OS_END
+            && params + OS_STUB_PARAMS == template.len()
+            && template[params..].iter().all(|b| *b == 0),
+        "The OS stub template changed",
+    )?;
+    let mut image = template.to_vec();
+    for (offset, value) in [
+        (t::XP5_OS_P_SELF, values.own_address),
+        (t::XP5_OS_P_RETURN, values.ret),
+        (t::XP5_OS_P_ID, values.id),
+        (t::XP5_OS_P_FUNC, values.func),
+        (t::XP5_OS_P_DST, values.dst),
+        (t::XP5_OS_P_BYTES, values.bytes),
+        (t::XP5_OS_P_DRAM, values.dram),
+        (t::XP5_OS_P_COPY, values.copy),
+        (t::XP5_OS_P_CHUNK, values.chunk),
+        (t::XP5_OS_P_GREEN, values.green),
+        (t::XP5_OS_P_RED, values.red),
+        (t::XP5_OS_P_PIN, values.pin),
+        (t::XP5_OS_P_PULSE, values.pulse),
+        (t::XP5_OS_P_GAP, values.gap),
+        (t::XP5_OS_P_ENABLE, values.enable),
+        (t::XP5_OS_P_ENABLE_GREEN, values.enable_green),
+        (t::XP5_OS_P_ENABLE_RED, values.enable_red),
+        (t::XP5_OS_P_MUX, values.mux),
+        (t::XP5_OS_P_RESTORE, values.restore),
+    ] {
+        require(offset >= params && offset + 8 <= image.len(), "An OS stub parameter is outside its block")?;
+        put64(&mut image, offset, value)?;
+    }
+    Ok(image)
+}
+
+/// The bindings of an OS loader: the redirect words (the call's stock and new word, the CRC-32s of the
+/// stock and the patched RAM-0 image, the DRAM copy and the compressed flash range, the two section
+/// tables), the OS words (`setup_sd_os`) and the stub.
+pub(super) struct OsBinding {
+    pub stub: StubBinding,
+    pub os: [u64; 8],
+}
+
+/// Plan the OS loader's bindings. `destination` is where the read-only startup streams the file (the
+/// DRAM copy of the section is the whole file: `head`, the section's initialized bytes), `reset` the
+/// stock reset image, `template` the stub image from its asset.
+pub(super) fn os_binding(
+    plan: &OsPlan, head: &[u8], reset: &[u8], inverted: &[u8], bias: usize, aperture: u64, destination: u64,
+    guard_bytes: usize, apply: bool, lamp: &StubLamp, template: &[u8],
+) -> Result<OsBinding> {
+    require(
+        head.len() == plan.head_bytes
+            && destination % 0x1000 == 0
+            && (READ_ONLY_FLOOR..READ_ONLY_CEILING).contains(&destination)
+            && destination + head.len() as u64 <= READ_ONLY_CEILING,
+        "The OS section's DRAM copy does not fit the read-only destination",
+    )?;
+    require(
+        plan.call_old & BL.1 == BL.0 && plan.call_site % 4 == 0 && plan.call_site + 4 <= guard_bytes
+            && plan.copy_fn % 4 == 0 && plan.copy_fn + 4 <= guard_bytes && plan.load_fn % 4 == 0
+            && plan.load_fn + 4 <= guard_bytes,
+        "The reset stage's OS load call is not a bl inside the RAM-0 guard",
+    )?;
+    require(
+        bl_target(reset, plan.call_site)? == plan.load_fn,
+        "The OS load call does not call the load function",
+    )?;
+    let offset = sled(extent(reset, 0, guard_bytes)?, template.len())?;
+    require(
+        offset + template.len() + SLED_MARGIN <= guard_bytes
+            && !(offset..offset + template.len()).contains(&plan.call_site),
+        "The OS stub overlaps the call or leaves the RAM-0 guard",
+    )?;
+    let stock = extent(reset, 0, guard_bytes)?;
+    require(
+        lamp.pin < 8 && lamp.green_port < 16 && lamp.red_port < 16 && lamp.green_port != lamp.red_port
+            && lamp.green_port != 3 && lamp.red_port != 3,
+        "The OS stub's lamp is not a usable pair of ports",
+    )?;
+    let comp = extent(inverted, plan.flash_offset as usize + bias, plan.comp_bytes)?;
+    let image = fill_os_stub(
+        template,
+        &OsStubValues {
+            own_address: offset as u64,
+            ret: plan.call_site as u64 + 4,
+            id: u64::from(OS_SECTION_ID),
+            func: plan.load_fn as u64,
+            dst: plan.dst,
+            bytes: head.len() as u64,
+            dram: destination,
+            copy: plan.copy_fn as u64,
+            chunk: OS_CHUNK,
+            green: lamp.pio_base + 64 * u64::from(lamp.green_port),
+            red: lamp.pio_base + 64 * u64::from(lamp.red_port),
+            pin: 1u64 << lamp.pin,
+            pulse: OS_PULSE_LOOPS,
+            gap: OS_GAP_LOOPS,
+            enable: lamp.pio_base + 0x500,
+            enable_green: (1u64 << (lamp.green_port + 16)) | (1u64 << lamp.green_port),
+            enable_red: (1u64 << (lamp.red_port + 16)) | (1u64 << lamp.red_port),
+            mux: 3u64 << (2 * lamp.pin + 16),
+            restore: (1u64 << (lamp.pin + 16)) | (1u64 << lamp.pin),
+        },
+    )?;
+    let new = bl_word(plan.call_site, offset)?;
+    require(new != plan.call_old, "The OS call word is the stock word")?;
+    let mut patched = stock.to_vec();
+    patched[offset..offset + image.len()].copy_from_slice(&image);
+    patched[plan.call_site..plan.call_site + 4].copy_from_slice(&new.to_le_bytes());
+    let mut words = [0u64; 16];
+    words[0] = 1;
+    words[1] = u64::from(apply);
+    words[2] = plan.call_site as u64;
+    words[3] = u64::from(plan.call_old);
+    words[4] = u64::from(new);
+    words[5] = u64::from(crc32(stock));
+    words[6] = u64::from(crc32(&patched));
+    words[7] = 0; // the DRAM copy is the whole file
+    words[8] = head.len() as u64;
+    words[9] = aperture + plan.flash_offset;
+    words[10] = u64::from(crc32(head));
+    words[11] = plan.table_bytes as u64;
+    for (n, &(_, flash)) in plan.tables.iter().enumerate() {
+        let table = extent(inverted, flash as usize + bias, plan.table_bytes)?;
+        words[12 + n] = aperture + flash;
+        words[14 + n] = u64::from(crc32(table));
+    }
+    let os = [1, plan.comp_bytes as u64, u64::from(crc32(comp)), u64::from(OS_SECTION_ID), plan.dst, plan.copy_fn as u64, OS_CHUNK, 0];
+    Ok(OsBinding {
+        stub: StubBinding {
+            redirect: Binding(words),
+            offset,
+            params_offset: super::os_stub_template::XP5_OS_PARAMS,
+            crc32: crc32(&image),
+            image,
+        },
+        os,
+    })
+}
+
+/// Write the OS binding into the loader at `at` after checking that the template is untouched (`abi`
+/// 1, everything else zero: the struct is 96 bytes).
+pub(super) fn bind_os(program: &mut [u8], at: usize, os: &[u64; 8]) -> Result<()> {
+    let mut template = vec![0u8; OS_BINDING];
+    template[..8].copy_from_slice(&1u64.to_le_bytes());
+    require(extent(program, at, OS_BINDING)? == template, "XP5 OS binding template changed")?;
+    for (n, value) in os.iter().enumerate() {
+        put64(program, at + 8 * n, *value)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 pub(in crate::xp5) mod tests {
     use super::*;
@@ -1484,5 +1915,246 @@ pub(in crate::xp5) mod tests {
         offsets.sort_unstable();
         assert!(offsets.windows(2).all(|w| w[1] == w[0] + 8));
         assert_eq!(offsets[0], marker::XP5_MARKER_PARAMS);
+    }
+
+    // ---- The OS section ----
+
+    const OS_FUNCTION: usize = 0x2d50;
+    const OS_LOOKUP: usize = 0x2f0c;
+    const OS_DST: u64 = 0x4_2000;
+    const OS_HEAD: usize = 0x2000;
+    const OS_FLASH: usize = 0x20_0000;
+
+    /// A compressed stream of the codec's own format that holds `data` as literals only.
+    fn literal_stream(data: &[u8]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for chunk in data.chunks(127) {
+            body.push(chunk.len() as u8);
+            body.extend_from_slice(chunk);
+        }
+        let packed = 20 + body.len();
+        let mut stream = Vec::new();
+        for value in [data.len() as u32, packed as u32, packed.div_ceil(0x4000) as u32, 0x4000, 4] {
+            stream.extend_from_slice(&value.to_le_bytes());
+        }
+        stream.extend_from_slice(&body);
+        stream.resize(stream.len().div_ceil(4) * 4, 0);
+        stream
+    }
+    fn os_table(ram: u64, rows: &[(u32, u64, u64, u64, u32, u32, u32)]) -> Vec<u8> {
+        let mut table = vec![0u8; 0x800];
+        table[..8].copy_from_slice(&(ram + 0x50).to_le_bytes());
+        for (n, &(id, dst, declared, bss, flash, size, flag)) in rows.iter().enumerate() {
+            let at = 0x50 + n * ROW;
+            table[at..at + 4].copy_from_slice(&id.to_le_bytes());
+            table[at + 8..at + 16].copy_from_slice(&dst.to_le_bytes());
+            table[at + 16..at + 24].copy_from_slice(&declared.to_le_bytes());
+            table[at + 24..at + 32].copy_from_slice(&bss.to_le_bytes());
+            table[at + 40..at + 44].copy_from_slice(&flash.to_le_bytes());
+            table[at + 48..at + 52].copy_from_slice(&size.to_le_bytes());
+            table[at + 56..at + 60].copy_from_slice(&flag.to_le_bytes());
+        }
+        let end = 0x50 + rows.len() * ROW;
+        table[end..end + 4].copy_from_slice(&END.to_le_bytes());
+        table
+    }
+    /// A synthetic stock reset image, update and RAM image around the OS load function's words: the
+    /// function, its three callers (ids 1, 2 and 6), the two table copies, a compressed OS section.
+    fn os_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        let mut reset = vec![0u8; 0x1_4000];
+        put(&mut reset, 0x1c0, RET).unwrap();
+        for at in (0x1c4..0x800).step_by(4) {
+            put(&mut reset, at, NOP).unwrap();
+        }
+        put(&mut reset, 0x800, 0x1400_0000).unwrap();
+        put_pattern(&mut reset, OS_FUNCTION, &OS_LOAD);
+        for (word, target) in [
+            (OS_LOOKUP_WORD, OS_LOOKUP),
+            (OS_RAW_COPY_WORD, COPY),
+            (OS_COMPRESSED_COPY_WORDS[0], COPY),
+            (OS_COMPRESSED_COPY_WORDS[1], COPY),
+        ] {
+            put(&mut reset, OS_FUNCTION + 4 * word, bl(OS_FUNCTION + 4 * word, target)).unwrap();
+        }
+        for (at, id) in [(0x28a8, 6u32), (0x28f8, 1), (0x2904, 2)] {
+            put(&mut reset, at, 0x5280_0000 | (id << 5)).unwrap();
+            put(&mut reset, at + 4, bl(at + 4, OS_FUNCTION)).unwrap();
+        }
+        table_copy(&mut reset, MAIN_COPY, 0x4_0000, 0x64_0000);
+        table_copy(&mut reset, ALT_COPY, 0x4_0800, 0x12_0000);
+        let mut head = vec![0u8; OS_HEAD];
+        for (n, b) in head.iter_mut().enumerate() {
+            *b = (n * 13 + 5) as u8;
+        }
+        let mut decoded = head.clone();
+        decoded.extend(std::iter::repeat(0u8).take(0x1000));
+        let stream = literal_stream(&decoded);
+        let mut update = vec![0u8; 0x70_0000 + bias];
+        let main = os_table(
+            0x4_0000,
+            &[
+                (0, 0x8_1000, 0x1000, 0x8_2000, 0xc_0000, 0x1000, 0),
+                (6, OS_DST, OS_HEAD as u64, OS_DST + OS_HEAD as u64, OS_FLASH as u32, stream.len() as u32, 1),
+            ],
+        );
+        let alt = os_table(
+            0x4_0800,
+            &[(0, 0x8_1000, 0x1000, 0x8_2000, 0xc_0000, 0x1000, 0), (1, 0x88_1000, 0, 0xa8_0000, 0x14_0000, 0x1000, 1)],
+        );
+        update[0x64_0000 + bias..0x64_0800 + bias].copy_from_slice(&main);
+        update[0x12_0000 + bias..0x12_0800 + bias].copy_from_slice(&alt);
+        update[OS_FLASH + bias..OS_FLASH + bias + stream.len()].copy_from_slice(&stream);
+        let mut ram = vec![0u8; OS_DST as usize + OS_HEAD];
+        ram[0x4_0000..0x4_0800].copy_from_slice(&main);
+        ram[OS_DST as usize..].copy_from_slice(&head);
+        (reset, update, ram)
+    }
+
+    #[test]
+    fn the_os_load_is_found_by_its_words_and_its_one_caller_with_the_os_id() {
+        let (reset, update, ram) = os_stage(BIAS);
+        let plan = locate_os(&reset, &update, BIAS, &ram).unwrap();
+        assert_eq!(plan.call_site, 0x28ac);
+        assert_eq!(plan.call_old, bl(0x28ac, OS_FUNCTION));
+        assert_eq!((plan.load_fn, plan.copy_fn), (OS_FUNCTION, COPY));
+        assert_eq!((plan.dst, plan.head_bytes, plan.flash_offset), (OS_DST, OS_HEAD, OS_FLASH as u64));
+        assert_eq!(plan.tables, [(0x4_0000, 0x64_0000), (0x4_0800, 0x12_0000)]);
+    }
+
+    #[test]
+    fn the_os_load_is_refused_where_the_stage_or_the_bytes_differ() {
+        let (reset, update, ram) = os_stage(BIAS);
+        let refused = |reset: &[u8], update: &[u8], ram: &[u8], what: &str| {
+            let error = locate_os(reset, update, BIAS, ram).unwrap_err().to_string();
+            assert!(error.contains(what), "{error}");
+        };
+        let mut changed = reset.clone();
+        put(&mut changed, OS_FUNCTION + 4 * 20, 0xd503_201f).unwrap();
+        refused(&changed, &update, &ram, "not found exactly once");
+        // A second caller that passes the OS id.
+        let mut changed = reset.clone();
+        put(&mut changed, 0x28f8, 0x5280_0000 | (6 << 5)).unwrap();
+        refused(&changed, &update, &ram, "exactly one caller");
+        // The card's bytes are not the decode of the flash's compressed bytes.
+        let mut changed = ram.clone();
+        changed[OS_DST as usize + 7] ^= 1;
+        refused(&reset, &update, &changed, "not the decode");
+        // The decode has a non-zero byte after the initialized ones (which the stub does not compare).
+        let mut changed = update.clone();
+        let mut decoded = ram[OS_DST as usize..].to_vec();
+        decoded.extend(std::iter::repeat(0u8).take(0x1000));
+        *decoded.last_mut().unwrap() = 1;
+        let stream = literal_stream(&decoded);
+        changed[OS_FLASH + BIAS..OS_FLASH + BIAS + stream.len()].copy_from_slice(&stream);
+        refused(&reset, &changed, &ram, "not zero");
+        // The maintenance table names the OS section too.
+        let mut changed = update.clone();
+        let alt = os_table(0x4_0800, &[(6, OS_DST, OS_HEAD as u64, OS_DST + OS_HEAD as u64, OS_FLASH as u32, 0x100, 1)]);
+        changed[0x12_0000 + BIAS..0x12_0800 + BIAS].copy_from_slice(&alt);
+        refused(&reset, &changed, &ram, "maintenance");
+        // The row is not compressed.
+        let mut changed = update.clone();
+        let main = os_table(0x4_0000, &[(6, OS_DST, OS_HEAD as u64, OS_DST + OS_HEAD as u64, OS_FLASH as u32, 0x100, 0)]);
+        changed[0x64_0000 + BIAS..0x64_0800 + BIAS].copy_from_slice(&main);
+        refused(&reset, &changed, &ram, "not stored compressed");
+    }
+
+    fn os_lamp() -> StubLamp {
+        StubLamp { pio_base: 0xff90_7000, green_port: 8, red_port: 6, pin: 2 }
+    }
+    /// An OS stub template: zero code, a zero parameter block, laid out as `os_stub.S` lays it out.
+    fn os_template() -> Vec<u8> {
+        super::super::os_stub_template::IMAGE.to_vec()
+    }
+
+    #[test]
+    fn the_os_binding_carries_the_call_word_the_stub_bytes_and_every_crc() {
+        let (reset, update, ram) = os_stage(BIAS);
+        let plan = locate_os(&reset, &update, BIAS, &ram).unwrap();
+        let head = ram[OS_DST as usize..].to_vec();
+        let guard = 0x1_4000;
+        let template = os_template();
+        let binding =
+            os_binding(&plan, &head, &reset[..guard], &update, BIAS, 0xf000_0000, 0x3000_0000, guard, true, &os_lamp(), &template)
+                .unwrap();
+        let redirect = binding.stub.redirect.0;
+        let stub_at = binding.stub.offset;
+        assert_eq!(stub_at % SLED_ALIGN, 0);
+        // The call word is a bl from the call site to the stub, and the stock word was a bl to the load.
+        let new = redirect[4] as u32;
+        assert_eq!(new, bl(0x28ac, stub_at));
+        assert_eq!(redirect[2], 0x28ac);
+        assert_eq!(redirect[3], u64::from(plan.call_old));
+        assert_eq!((redirect[7], redirect[8]), (0, OS_HEAD as u64));
+        assert_eq!(redirect[9], 0xf000_0000 + OS_FLASH as u64);
+        assert_eq!(redirect[10], u64::from(crc32(&head)));
+        // The patched image is the stock image with the stub and the call word and nothing else.
+        let mut patched = reset[..guard].to_vec();
+        patched[stub_at..stub_at + binding.stub.image.len()].copy_from_slice(&binding.stub.image);
+        patched[0x28ac..0x28b0].copy_from_slice(&new.to_le_bytes());
+        assert_eq!(redirect[6], u64::from(crc32(&patched)));
+        assert_ne!(redirect[5], redirect[6]);
+        // The stub's parameter block holds the bound facts.
+        let word64 = |offset: usize| u64::from_le_bytes(binding.stub.image[offset..offset + 8].try_into().unwrap());
+        use super::super::os_stub_template as t;
+        assert_eq!(word64(t::XP5_OS_P_SELF), stub_at as u64);
+        assert_eq!(word64(t::XP5_OS_P_RETURN), 0x28b0);
+        assert_eq!(word64(t::XP5_OS_P_ID), 6);
+        assert_eq!(word64(t::XP5_OS_P_FUNC), OS_FUNCTION as u64);
+        assert_eq!(word64(t::XP5_OS_P_DST), OS_DST);
+        assert_eq!(word64(t::XP5_OS_P_BYTES), OS_HEAD as u64);
+        assert_eq!(word64(t::XP5_OS_P_DRAM), 0x3000_0000);
+        assert_eq!(word64(t::XP5_OS_P_COPY), COPY as u64);
+        assert_eq!(word64(t::XP5_OS_P_CHUNK), OS_CHUNK);
+        assert_eq!(word64(t::XP5_OS_OUT_STATUS), 0);
+        // The loader's OS words: the compressed range's length and CRC-32, the id, the destination.
+        let comp = &update[OS_FLASH + BIAS..OS_FLASH + BIAS + plan.comp_bytes];
+        assert_eq!(binding.os[..7], [1, plan.comp_bytes as u64, u64::from(crc32(comp)), 6, OS_DST, COPY as u64, OS_CHUNK]);
+        // Verify-only binds the same words with `apply` clear.
+        let verify =
+            os_binding(&plan, &head, &reset[..guard], &update, BIAS, 0xf000_0000, 0x3000_0000, guard, false, &os_lamp(), &template)
+                .unwrap();
+        assert_eq!(verify.stub.redirect.0[1], 0);
+        assert_eq!(verify.stub.redirect.0[2..], redirect[2..]);
+    }
+
+    #[test]
+    fn the_os_binding_refuses_what_does_not_fit() {
+        let (reset, update, ram) = os_stage(BIAS);
+        let plan = locate_os(&reset, &update, BIAS, &ram).unwrap();
+        let head = ram[OS_DST as usize..].to_vec();
+        let guard = 0x1_4000;
+        let template = os_template();
+        let go = |plan: &OsPlan, head: &[u8], destination: u64, lamp: &StubLamp| {
+            os_binding(plan, head, &reset[..guard], &update, BIAS, 0xf000_0000, destination, guard, true, lamp, &template)
+        };
+        assert!(go(&plan, &head, 0x3000_0000, &os_lamp()).is_ok());
+        assert!(go(&plan, &head, 0x3000_0004, &os_lamp()).is_err());
+        assert!(go(&plan, &head, 0x1000, &os_lamp()).is_err());
+        assert!(go(&plan, &head[..head.len() - 16], 0x3000_0000, &os_lamp()).is_err());
+        let mut lamp = os_lamp();
+        lamp.red_port = lamp.green_port;
+        assert!(go(&plan, &head, 0x3000_0000, &lamp).is_err());
+        // A call word that is not a bl.
+        let mut changed = plan.clone();
+        changed.call_old = 0xd503_201f;
+        assert!(go(&changed, &head, 0x3000_0000, &os_lamp()).is_err());
+        // A template whose parameter block is not zero.
+        let mut dirty = template.clone();
+        let last = dirty.len() - 1;
+        dirty[last] = 1;
+        assert!(os_binding(&plan, &head, &reset[..guard], &update, BIAS, 0xf000_0000, 0x3000_0000, guard, true, &os_lamp(), &dirty).is_err());
+    }
+
+    #[test]
+    fn the_os_binding_is_written_into_a_template_and_only_a_template() {
+        let mut program = vec![0u8; 0x200];
+        program[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        let words = [1u64, 0x720000, 0xdead_beef, 6, 0x11c1000, 0xa090, 0x20000, 0];
+        bind_os(&mut program, 0x100, &words).unwrap();
+        for (n, w) in words.iter().enumerate() {
+            assert_eq!(u64::from_le_bytes(program[0x100 + 8 * n..0x108 + 8 * n].try_into().unwrap()), *w);
+        }
+        assert!(bind_os(&mut program, 0x100, &words).is_err(), "a bound template is refused");
     }
 }

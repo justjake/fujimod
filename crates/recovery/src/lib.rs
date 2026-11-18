@@ -58,6 +58,9 @@ pub struct StartupOptions {
     /// With `copy_stub`: also change a few named words of the first section (a hook at its entry point and a
     /// short program in its zero padding) through the same checked path (`xp5::package_marker`).
     pub marker: bool,
+    /// With `copy_stub` (and not `marker`): check the OS section's compressed load instead of the first
+    /// section's copy (`xp5::package_os`).
+    pub os: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -469,6 +472,7 @@ impl Recipe {
             "The copy stub requires the checked redirect",
         )?;
         require(!options.marker || options.copy_stub, "The marker requires the copy stub")?;
+        require(!options.os || (options.copy_stub && !options.marker), "The OS stub requires the copy stub and excludes the marker")?;
         require(
             source.len() == self.source_size,
             "Update size differs from recipe",
@@ -564,7 +568,16 @@ impl Recipe {
                             contract.verify(&ram)?;
                         }
                         redirect_checked = true;
-                        if options.marker {
+                        if options.os {
+                            xp5::package_os(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.success_hold_seconds,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.marker {
                             xp5::package_marker(
                                 &inverted,
                                 setup,

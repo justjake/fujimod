@@ -56,6 +56,19 @@ mod marker_image {
     include!(concat!(env!("OUT_DIR"), "/xp5_marker.rs"));
 }
 
+/// The OS build: the copy-stub build plus a binding for the compressed load of the OS section.
+#[allow(dead_code)]
+mod os_loader_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_os_loader.rs"));
+}
+
+/// The OS stub's own image (position independent code and a zero parameter block) and the offsets of
+/// the parameters in it.
+#[allow(dead_code)]
+mod os_stub_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_os_stub.rs"));
+}
+
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
 /// loader (`template`); `INTERNAL_FLASH` is the same sources built for a startup that keeps the
 /// installed flash attached (`flash_template`); `READ_ONLY` only reads the RAM image into spare
@@ -85,6 +98,8 @@ struct Loader {
     copy_stub_binding: Option<usize>,
     /// Offset of the marker binding; only the marker build has one.
     marker_binding: Option<usize>,
+    /// Offset of the OS binding; only the OS build has one.
+    os_binding: Option<usize>,
 }
 /// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
 /// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
@@ -118,6 +133,7 @@ const CARD: Loader = Loader {
     redirect_binding: None,
     copy_stub_binding: None,
     marker_binding: None,
+    os_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -139,6 +155,7 @@ const INTERNAL_FLASH: Loader = Loader {
     redirect_binding: None,
     copy_stub_binding: None,
     marker_binding: None,
+    os_binding: None,
 };
 const READ_ONLY: Loader = Loader {
     image: read_only_template::IMAGE,
@@ -160,6 +177,7 @@ const READ_ONLY: Loader = Loader {
     redirect_binding: None,
     copy_stub_binding: None,
     marker_binding: None,
+    os_binding: None,
 };
 const CHECKED_REDIRECT: Loader = Loader {
     image: checked_redirect_template::IMAGE,
@@ -181,6 +199,7 @@ const CHECKED_REDIRECT: Loader = Loader {
     redirect_binding: Some(checked_redirect_template::SETUP_SD_REDIRECT),
     copy_stub_binding: None,
     marker_binding: None,
+    os_binding: None,
 };
 const COPY_STUB: Loader = Loader {
     image: copy_stub_template::IMAGE,
@@ -202,6 +221,7 @@ const COPY_STUB: Loader = Loader {
     redirect_binding: Some(copy_stub_template::SETUP_SD_REDIRECT),
     copy_stub_binding: Some(copy_stub_template::SETUP_SD_COPY_STUB),
     marker_binding: None,
+    os_binding: None,
 };
 const MARKER: Loader = Loader {
     image: marker_loader_template::IMAGE,
@@ -223,6 +243,29 @@ const MARKER: Loader = Loader {
     redirect_binding: Some(marker_loader_template::SETUP_SD_REDIRECT),
     copy_stub_binding: Some(marker_loader_template::SETUP_SD_COPY_STUB),
     marker_binding: Some(marker_loader_template::SETUP_SD_MARKER),
+    os_binding: None,
+};
+const OS: Loader = Loader {
+    image: os_loader_template::IMAGE,
+    prelude_stack_max: os_loader_template::PRELUDE_STACK_MAX,
+    setup_entry: os_loader_template::XP5_SETUP_ENTRY,
+    setup_configuration: os_loader_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: os_loader_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: os_loader_template::XP5_SETUP_STACK,
+    setup_stack_top: os_loader_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: os_loader_template::SETUP_SD_INITIALIZE,
+    sd_request: os_loader_template::SETUP_SD_REQUEST,
+    sd_progress: os_loader_template::SETUP_SD_PROGRESS,
+    sd_board: os_loader_template::SETUP_SD_BOARD,
+    boot_ready: os_loader_template::A64_BOOT_READY,
+    boot_zero_gate: os_loader_template::A64_BOOT_ZERO_GATE,
+    externals: os_loader_template::EXTERNALS,
+    internal_flash_binding: None,
+    read_only_binding: Some(os_loader_template::SETUP_SD_READ_ONLY),
+    redirect_binding: Some(os_loader_template::SETUP_SD_REDIRECT),
+    copy_stub_binding: Some(os_loader_template::SETUP_SD_COPY_STUB),
+    marker_binding: None,
+    os_binding: Some(os_loader_template::SETUP_SD_OS),
 };
 /// The DRAM a read-only startup may fill: the same two numbers as `READ_ONLY_FLOOR` and
 /// `READ_ONLY_CEILING` in the loader source `read_only.h`, which refuses anything else. It is the
@@ -493,7 +536,7 @@ pub(crate) fn package_read_only(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: None, stub: None, marker: None }),
+        Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, file: None }),
     )
 }
 
@@ -559,6 +602,8 @@ pub(crate) fn package_marker(
             redirect: Some(redirect::Binding(binding.redirect.0)),
             stub: Some(binding),
             marker: Some(marker),
+            os: None,
+            file: None,
         }),
     )
 }
@@ -637,7 +682,7 @@ pub(crate) fn package_checked_redirect(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None }),
+        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, file: None }),
     )
 }
 
@@ -687,7 +732,66 @@ pub(crate) fn package_copy_stub(
         success_hold_seconds,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None }),
+        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, file: None }),
+    )
+}
+
+/// The OS section's load, checked: the stage decodes the section with its hardware engine as it always
+/// does, and a stub (`os_stub.S`) that the loader writes into dead padding compares that decode with the
+/// DRAM copy of the section the card supplied, word for word, writes the copy over the decoded bytes
+/// only if they are equal and compares again, and otherwise leaves (or restores) the decode itself
+/// (`redirect.rs`). `ffboot.bin` is the decoded section's initialized bytes alone, which the loader
+/// streams to `destination`; the loader proves the compressed flash range and the file against the
+/// packager's CRC-32s before it writes anything to RAM 0.
+pub(crate) fn package_os(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_seconds: u32, destination: u64,
+    mode: CheckedRedirect,
+) -> Result<Vec<File>> {
+    let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
+    let bias = setup
+        .reset_dat
+        .checked_sub(redirect::RESET_FLASH)
+        .ok_or_else(|| image::Error::Invalid("The reset image precedes its flash offset".into()))?;
+    let reset = extent(&ram, 0, setup.reset_copy_size)?.to_vec();
+    let plan = redirect::locate_os(&reset, inverted, bias, &ram)?;
+    let end = plan.dst as usize + plan.head_bytes;
+    require(end <= ram.len(), "The OS section lies outside the RAM image")?;
+    let head = extent(&ram, plan.dst as usize, plan.head_bytes)?.to_vec();
+    ram.truncate((end + 0xfff) & !0xfff);
+    let lamp = &setup.lamp;
+    let redirect::OsBinding { stub, os } = redirect::os_binding(
+        &plan,
+        &head,
+        &reset,
+        inverted,
+        bias,
+        setup.flash.aperture,
+        destination,
+        setup.reset_copy_size,
+        mode == CheckedRedirect::Apply,
+        &redirect::StubLamp {
+            pio_base: lamp.pio_base,
+            green_port: lamp.green_port,
+            red_port: lamp.red_port,
+            pin: lamp.pin,
+        },
+        os_stub_template::IMAGE,
+    )?;
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_seconds,
+        None,
+        None,
+        Some(ReadOnly {
+            destination,
+            redirect: Some(redirect::Binding(stub.redirect.0)),
+            stub: Some(stub),
+            marker: None,
+            os: Some(os),
+            file: Some(head),
+        }),
     )
 }
 
@@ -702,6 +806,11 @@ struct ReadOnly {
     stub: Option<redirect::StubBinding>,
     /// The marker of the marker build: the words the loader changes in the DRAM copy of the section.
     marker: Option<redirect::MarkerPlan>,
+    /// The OS build's words of the loader's OS binding.
+    os: Option<[u64; 8]>,
+    /// The file the loader reads, when it is not the RAM image (the OS build's file is the decoded
+    /// section alone, which the loader streams to `destination`).
+    file: Option<Vec<u8>>,
 }
 
 /// How an internal-flash startup differs from a card-resident one.
@@ -848,7 +957,9 @@ fn package_inner(
     )?;
     let prefix = setup.verify(inverted)?;
     let loader = if let Some(read_only) = &read_only {
-        if read_only.marker.is_some() {
+        if read_only.os.is_some() {
+            &OS
+        } else if read_only.marker.is_some() {
             &MARKER
         } else if read_only.stub.is_some() {
             &COPY_STUB
@@ -996,7 +1107,10 @@ fn package_inner(
         bind_internal_flash(&mut program, loader, setup, flash, ram.as_deref(), inverted)?;
     }
     if let Some(read_only) = &read_only {
-        let bytes = ram.as_ref().map_or(0, Vec::len);
+        let bytes = read_only
+            .file
+            .as_ref()
+            .map_or_else(|| ram.as_ref().map_or(0, Vec::len), Vec::len);
         bind_read_only(&mut program, loader, setup, read_only, bytes)?;
         if let Some(binding) = &read_only.redirect {
             let at = loader.redirect_binding.ok_or_else(|| {
@@ -1015,6 +1129,12 @@ fn package_inner(
                 image::Error::Invalid("This XP5 loader build has no marker binding".into())
             })?;
             redirect::bind_marker(&mut program, at, marker)?;
+        }
+        if let Some(os) = &read_only.os {
+            let at = loader.os_binding.ok_or_else(|| {
+                image::Error::Invalid("This XP5 loader build has no OS binding".into())
+            })?;
+            redirect::bind_os(&mut program, at, os)?;
         }
     }
     let restore = loader.setup_return_branch;
@@ -1135,10 +1255,15 @@ fn package_inner(
             extent(&program, request, 40)? == [1u64, 0, 0, 0, 0].map(u64::to_le_bytes).concat(),
             "XP5 request template changed",
         )?;
+        let override_file = read_only.as_ref().and_then(|r| r.file.clone());
+        let (file_len, file_crc) = match &override_file {
+            Some(file) => (file.len(), crate::xp4::crc32(file)),
+            None => (ram.len(), crate::xp4::crc32(&ram)),
+        };
         for (n, value) in [
             1,
-            ram.len() as u64,
-            u64::from(crate::xp4::crc32(&ram)),
+            file_len as u64,
+            u64::from(file_crc),
             100,
             100000,
         ]
@@ -1174,7 +1299,7 @@ fn package_inner(
         } else {
             require(storage.is_none(), "Setup has no card storage binding")?;
         }
-        files.push(File::new("ffboot.bin", ram)?);
+        files.push(File::new("ffboot.bin", override_file.unwrap_or(ram))?);
     }
     require(
         extent(&program, loader.sd_progress, 64)?

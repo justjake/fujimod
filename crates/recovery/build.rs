@@ -62,6 +62,16 @@ fn main() {
         &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_marker"],
     );
     flat_image(&root, &out, "sd-boot-v1-xp5-marker", "xp5_marker.rs");
+    // The OS build: the copy-stub build plus a binding for the OS section's compressed load, and the
+    // stub's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-os-loader",
+        "xp5_os_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_os"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-os-stub", "xp5_os_stub.rs");
 }
 
 /// A position-independent program's image (code, then a zero parameter block) and the offsets of its
