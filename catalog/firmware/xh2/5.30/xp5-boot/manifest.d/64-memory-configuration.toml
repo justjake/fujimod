@@ -1,0 +1,38 @@
+# Memory-parameter banks (the shared `memory-configuration` model, declared as on the
+# X-T5 and X100VI). The register-list writer 0x13afffc(group, mode) takes the list for
+# mode (< 11) and group (< 4) from table 0x18ff130 ([count, list] rows of 16 bytes),
+# stores every [address, value] pair through 0x5de10 and then reads the last address
+# through 0x5de38 until it returns 0 (0x13b0048..0x13b006c). All 44 lists hold 114
+# pairs on one bank 0xfaf05000 + 0x10000 * group: 113 parameter words (+0x000, +0x200,
+# +0x400, +0x500 and +0x800, each 22 words to +0x54, and +0x900..+0x908) followed by
+# 1 to +0x704. The power-up path 0x13af5a0 writes mode 10 to every group whose bit
+# (0x18ff198: 1, 2, 4, 8) is set in 0x18f49f4 (0xf) from 0x13af75c; 0x13af778 and
+# 0x13afbe8 are the other callers. The commit latency is the siblings' functional
+# value, not a camera measurement (UNVERIFIED).
+[[device]]
+base = 0xfaf05000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf15000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf25000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf35000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
