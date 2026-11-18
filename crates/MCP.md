@@ -25,7 +25,7 @@ The same control and observation tools work on a physical camera over USB.
   "find what code handles this button" or "compare stock with FujiMod" are
   recipes in skills, built from the primitives.
 - No batch tool that runs a list of steps in one call.
-- "Boot a build" means the SD boot path: the card built from the image,
+- "Boot a build" means the SD boot path: the SD card built from the image,
   booted through the boot ROM.
 - The work happens on a branch of this repository.
 
@@ -123,12 +123,12 @@ camera.
 | | `camera_close` | Release the camera | yes |
 | Time | `camera_run` | Advance until a condition or a deadline and report which stopped it | waits only |
 | Inputs | `camera_press`, `camera_turn`, `camera_touch` | Operate a physical control | yes |
-| | `camera_set_input` | Drive a hardware input level (GPIO, ADC, card) | no |
+| | `camera_set_input` | Drive a hardware input level (GPIO, ADC, SD card) | no |
 | Observe | `camera_screen` | The current frame as an image | yes |
 | | `camera_state` | UI mode, menu node, cursor, a menu or control reference | yes |
 | | `camera_read_memory` | Bytes at an address or symbol | yes |
 | | `camera_read_registers` | CPU registers of a stopped core | no |
-| | `camera_devices` | Device state: GPIO, serial, HDMI, card, scanout | no |
+| | `camera_devices` | Device state: GPIO, serial, HDMI, SD card, scanout | no |
 | Probes | `probe_arm` | Start a probe: memory access, calls, execution profile, PC trace, bus traffic | no |
 | | `probe_collect` | Stop it and return its records | no |
 | Mutate | `camera_write_memory` | Write bytes, including code, and invalidate translations | to be decided |
@@ -147,19 +147,66 @@ one, so a boot is paid for once per build, not once per server process.
 A portable snapshot (`emulator-session/src/checkpoint/portable.rs`) carries
 the session definition: the run configuration id, overlays, quantum, clock,
 languages, device graph and input identities. It does not carry the
-firmware update or boot ROM, and today it only restores into a session the
-caller has already built from the same inputs
-(`fujimod_emulator_boot::load_snapshot`).
+firmware update or boot ROM, and it only restores into a session built from
+the same inputs (`fujimod_emulator_boot::load_snapshot`). Import refuses
+unless the receiving session's definition, firmware images, execution,
+devices and scene all match.
 
 `camera_open` from a file hides that step. It reads the definition from the
 snapshot header, builds the unexecuted board that definition names, then
 imports and restores the snapshot. The caller supplies the firmware files
-the header identifies, or a directory to find them in by hash. Whether the
-SD card and NAND contents travel in the snapshot is not yet checked.
+the header identifies, or a directory to find them in by hash.
 
-A snapshot written by a board built another way, such as the Python board
-factory in the private repository, has a different definition and is
-refused.
+Measured on X70 1.10 with the release `fujimod-emulator` CLI, on a 4-core
+cloud machine with Mesa's software Vulkan driver:
+
+- A stock boot to REC (`x70-110-rec`) ran 52 million guest instructions in
+  4.2 s of wall time and wrote a 108 MB snapshot.
+- A fresh process restored it in 1.4 s at the same instruction count, with a
+  byte-identical screen. Through the Python binding, building the unexecuted
+  board took 0.65 s and the restore 0.6 s.
+- The restored camera accepted a MENU/OK press through `fujimod.remote`
+  `Camera.from_board` and redrew the screen.
+- A snapshot taken with SD card files attached restored into a board built
+  with the same SD card files and continued running.
+
+A board assembled any other way has a different definition, even when it
+runs the same native device models, and its snapshots are refused.
+
+### SD boot
+
+The `fujimod-emulator` CLI SD boots a FujiMod SD card today, although the
+X70 boot refuses a configuration whose start is `sd_card`
+(`emulator-boot/src/lib.rs`). A ROM-start run expresses the same boot:
+
+```sh
+fujimod-emulator boot --configuration x70-110-rec \
+  --overlay x70-110-browser-camera \
+  --update FPUPDATE.DAT --boot-rom bootrom.bin --camera DIR \
+  --card-file FFBOOT.BIN=PATH --card-file FFSYS.BIN=PATH ... \
+  --gpio 0:10=0,0:11=0 \
+  --keys 't=0.3:-controls-gpio-0-10;t=0.3:-controls-gpio-0-11'
+```
+
+The overlay adds the SD host and its virtual SD card. GPIO 0:10 and 0:11
+are the two buttons held from power-on to select SD boot; the key script
+releases them 0.3 s into the run. With a FujiMod 0.0.2 SD card this reached
+REC after 718 million guest instructions in 2.9 s of wall time; eight guest
+seconds later the FujiMod welcome sheet was on screen.
+
+`camera_open` uses this path. Teaching the boot crate to accept an
+`sd_card` start, mapped onto the same inputs, keeps the button timing in the
+run configuration instead of in each caller.
+
+Two pieces still live outside the boot crate:
+
+- Pressing a control needs the physical contact panel and the contact
+  driver installed on the session (`configure_controls`,
+  `configure_contact_driver`). The catalog boot does not install them, so
+  the module needs a generator for both specifications in this repository.
+- `fujimod.remote` facts for X70 1.10 need the input task layout and the
+  parameter-independent inputs in addition to what the catalog selection
+  provides.
 
 ### Rules
 
@@ -218,14 +265,10 @@ adding `reqwest`.
 
 ## Open questions
 
-1. How a Rust server gets an SD-booted session. `fujimod-emulator-boot`
-   prepares and opens sessions and saves snapshots in Rust. The SD boot the
-   owner means, with its cached post-boot snapshot, is driven today by
-   Python in the private repository. Either the Rust path gains the SD card
-   boot, or `camera_open` accepts a snapshot the existing tooling produced.
-2. How a build is made. The build tools live outside this workspace. The
-   likely answer is that `camera_open` takes a built image or card
-   directory and the agent runs the build itself.
+1. Where the contact panel, contact driver and extra remote facts come
+   from, so the module can press controls on a catalog-built camera.
+2. How a build is made. The likely answer is that `camera_open` takes a
+   built SD card directory and the agent runs the build itself.
 3. Opening a physical camera. Camera runs go through a queue elsewhere, and
    an interactive USB session opened by an agent may not fit it.
 4. Whether guest time is a useful performance measure beyond instruction
