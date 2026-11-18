@@ -2,7 +2,7 @@ import { For, Show } from 'solid-js';
 import { getRequestEvent } from '@solidjs/web';
 import { SiteFrame } from '../ui/SiteFrame';
 import { DocsLayout } from './DocsLayout';
-import { focalComponents, type FocalApiDeclaration, type FocalComponent } from './sdk.generated';
+import { focalComponents, type FocalApiDeclaration, type FocalComponent } from './sdk-data';
 import FocalUIPreview from './FocalUIPreview';
 import { Markdown, highlightC } from './Markdown';
 import './docs.css';

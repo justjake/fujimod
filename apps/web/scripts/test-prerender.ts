@@ -8,13 +8,16 @@ import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
-import { routes } from './prerender.ts';
+import { siteRoutes } from './prerender.ts';
+import { readSdkDocs, sdkDocsPath } from './sdk-docs.ts';
 import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual-data.ts';
 import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
 import { textPagePath } from '../src/text/routes.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
 import type { cycloneDx } from './sbom/bom.ts';
 const root = resolve(process.argv[2] || 'dist/client');
+const routes = siteRoutes(root);
+const sdk = readSdkDocs(resolve(root, sdkDocsPath));
 const chapters = manualChapters();
 const manualPage = chapters[0]?.pages[0];
 assert.ok(manualPage, 'Expected a generated manual page');
@@ -108,6 +111,8 @@ try {
           'Safety',
           'Dev Tools',
           'Recovery',
+          'GitHub',
+          'Discord',
         ]);
         assert.equal(
           await header.getByRole('link', { name: 'Discord' }).getAttribute('href'),
@@ -349,6 +354,17 @@ try {
       );
       await docs.goto(base + '/docs/sdk/focal/');
       assert.equal(await docs.getByRole('navigation', { name: 'FocalUI' }).count(), 1);
+      if (sdk) {
+        for (const component of sdk.components) {
+          const path = `/${sdkDocsPath}/components/${component.slug}/`;
+          const html = await readFile(resolve(root, path.slice(1), 'index.html'), 'utf8');
+          assert.ok(html.includes('class="sdk-component"'), path);
+          for (const preview of component.previews) {
+            assert.ok(html.includes(preview.page), preview.page);
+            assert.equal((await noJs.request.head(base + preview.page)).status(), 200);
+          }
+        }
+      }
       await docs.close();
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
