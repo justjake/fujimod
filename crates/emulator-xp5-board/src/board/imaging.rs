@@ -57,7 +57,9 @@ pub fn register_all(
         Some(sensor::ImageRoutes {
             dma: Some([162, 163]),
             timing: [166, 164],
-            line_stride: false,
+            // +0x18 of each RAW DMA unit is its pitch: still capture programs 0x3d80 for 7776
+            // 16-bit samples, movie live view 11664 for 7776 packed 12-bit samples.
+            line_stride: true,
         }),
         (0x59, 4),
     );
