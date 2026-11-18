@@ -1,0 +1,181 @@
+# X-T5 4.31 still capture, part 3: completion stubs for MIX, TNR, 0xff987000, 0xff977000 and a
+# register-file stub for 0xff981000. Decoded statically from the stock drivers; not checked
+# against hardware, not run.
+#
+# Why these blocks: the strict run (scratch/up/run26.out) stops at the first MIX write
+# (0xffd2200c = 0x78237000, LR 0x2c482ac, +0.297 s, 2 ms after the RIFP ISR of step 0x16).
+# A bl-only walk (depth 14) from every case routine of Recf sequences 3 and 4 reaches no MMIO
+# page in 0xffd20000..0xffd2ffff / 0xff977000..0xff987000 except RTCH, and no MIX driver
+# entry. The MIX driver has two users:
+#   - recfMixProcess 0x2d3bf60 ("recfMixProcess()", MIX_P_S/MIX_S/MIX_E), reached by bl only
+#     from steps 0x15/0x1a (MixYC), 0x64..0x69/0x6b (HDR), 0x77..0x7e (Clarity) and
+#     0x85..0x8a (AdvF). None of these is in sequence 3 or 4.
+#   - 0x2eaeee8 (open 0x2eaef3c, set 0x2eaf3cc, start 0x2eaf3dc; stop/close 0x2eaf5a0), in the
+#     MOVDC software (0x30xxxxx, task registered at 0x306a114 with name "MOVDC" 0x36fc508).
+#     Reached from 0x3069f3c (bl at 0x306a228), 0x304b3ac and 0x3067d3c.
+# So the MIX start most likely comes from MOVDC (display/live-view side), not from a Recf step.
+# This is not proven: a pc-entry on 0x2eaeee8 and 0x2d3bf60 tells which one runs.
+# A bl walk (depth 12) from the 149 code pointers in the MOVDC tables 0x36f8000..0x3708000
+# reaches MIX, TNR 0xffd24000, 0xff987000, 0xff977000, 0xff981000 and RTCH (already stubbed).
+# Only MIX is seen dynamically; the other four are CONDITIONAL (MOVDC paths that live view
+# before the press does not run, else the strict run would have stopped earlier).
+#
+# Register queue: no 0x13c0e54/0x13c0e94 caller targets any page below (regqueue.txt list), so
+# every start is a direct write.
+# All accesses go through the 32-bit helpers 0x5dd28 (write) / 0x5dd50 (read) with constant
+# addresses; no 8/16-bit helper (0x5dd30/0x5dd3c/0x5dd58/0x5dd60) is called in these drivers.
+# INTIDs from the logical IRQ table 0x18ea918: 0x19 -> 213 (MIX), 0x18 -> 218 (TNR),
+# 0x7f -> 175 (0xff987000), 0xbe -> 176 (0xff977000); all level (flag 1).
+#
+# Ownership checked against manifest.toml and manifest.d/*.toml (including 55 and 56): none of
+# these pages is owned (nearest: 0xffd21000 KB, 0xffd27000 RTCH, 0xff976000 imaging-paf,
+# 0xff980000 lz, 0xff982000 imaging-resize, 0xff984000 RZL2).
+#
+# delay_us is functional, not measured.
+
+# MIX (logical 0x19). Driver 0x2c46c20..0x2c494c4, state word 0x3832f60.
+# Open 0x2c47e98: sem 7, clocks 0x13ab5d0(0xf,...), ISR 0x2c4714c on logical 0x19, reset
+#   release 0xff90db08 bit 2 (0x2c47e30). No MIX access.
+# Set 0x2c47ac4 (state 1 or 4 -> 4): 0x2c47184 writes the address words first (+0x0c at
+#   0x2c482a8 = the dynamic stop), then one of six parameter groups by type (+0x08 mode word
+#   0x2c480c4, +0x10..+0x10c), all stored.
+# Start 0x2c47c04 (state 4 -> 2, saves the callback at 0x3832f70):
+#   +0x08  0x2c481b0 reads the mode word back; the address pairs (table 0x30de5f8) are read
+#          back for cache maintenance (0x2c48218 -> 0x14c9914)              -> stored
+#   +0x00  0x2c470f8: 0x2c48024 writes 0, 0x2c4805c polls until bit 0 reads 1 -> constant 1
+#   +0x208 0x2c47b9c / 0x2c47d60 poll until bit 16 AND bit 0 read 1          -> constant
+#   +0x200 0x2c4937c writes 0x51005100 (start) / 0 (stop 0x2c47d60)
+#   +0x204 0x2c49410 writes 0x5000
+#   +0x20c 0x2c4948c writes 1 (start) / 0 (stop 0x2c47dc4) = IRQ enable
+#   +0x04  0x2c4808c writes 1 = START (last write of the start, 0x2c47d50)
+# ISR 0x2c4714c: 0x2c494c4 writes +0x210 = 1 (clear), state 3, calls the callback. The ISR
+#   reads no status word, so the completion bit lives in +0x210 itself.
+[[device]]
+base = 0xffd22000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x208, mode = "constant", value = 0x10001 },
+]
+irq = 213
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x210, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x210, mode = "w1c" }
+irq_mask_offset = 0x20c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# CONDITIONAL: TNR (logical 0x18). Driver 0x2c73414..0x2c757f0, state 0x38334f4.
+# Users: Recf 0x2d3e1ec.. (not in sequence 3/4) and MOVDC 0x2eb08b0/0x2eb0db0/0x2eb0e40/
+# 0x2eb0e60/0x2eb0e78 (from 0x3068fc0 / 0x3069a74).
+# Open 0x2c755b8 (sem 0xa4, clocks, reset release 0xff90db08 bit 5); no TNR access.
+# Set 0x2c74f68 (state 1): +0x08 first, parameters +0x20..+0x2d4, +0x300, +0x304 (stored);
+#   0x2c74f2c (at 0x2c75490): +0x00 write 0, poll until bit 0 reads 1          -> constant 1;
+#   ISR 0x2c74b4c registered on logical 0x18 (0x2c754ac).
+# Start 0x2c74bcc: parameters, +0x30c = 1 (0x2c74aac, IRQ enable), +0x04 = 1 = START
+#   (0x2c73494 at 0x2c74d64, last write).
+# ISR 0x2c74b4c: acts only when state is 2 and +0x314 bit 0 reads 1 (0x2c74b1c); then writes
+#   +0x310 = 1 (0x2c74ae4) and calls the callback 0x38334f8.
+# Stop 0x2c74d74: +0x300 = 0, polls +0x314 until bit 0 reads 0, +0x304 = 0, +0x30c = 0.
+# Close 0x2c75668: +0x00 handshake again, reset assert.
+[[device]]
+base = 0xffd24000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+]
+irq = 218
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x314, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c", status_offset = 0x314, bits = 0x1 }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# CONDITIONAL: 0xff987000 (logical 0x7f). Same register family as RTCH/PPFP.
+# Driver 0x2c631f0..0x2c64230, state 0x3833200. Users: MOVDC 0x2eb67d4 (open),
+# 0x2eb67e8 (close), 0x2eb6b40 (start); 0x1adfb50 (tail call to start).
+# Open 0x2c63228: clocks 0x13ab5d0(0x21,...), reset release 0xff90db10 bit 10,
+#   0x2c63568: +0x00 write 0, poll until bit 0 reads 1                           -> constant 1;
+#   0x2c635a4: +0x34 = 1 (clear).
+# Start 0x2c63350 (state 4): parameters +0x18..+0x174 (stored), ISR 0x2c631f0 on logical 0x7f,
+#   +0x38 = 1 (0x2c636dc, IRQ enable), 0x2c635c4 polls +0x10 until (v & v >> 16) bit 0 = 1
+#   (-> constant 0x10001) then +0x14 |= 0x10001, 0x2c63664 reads the address words
+#   +0x50/+0x54/+0x64/+0x68 (stored) and writes +0x04 = 1 = START.
+# ISR 0x2c631f0: +0x34 = 1, state, callback. No status read; +0x30 is the status by analogy
+#   with RTCH (+0x30 status, +0x34 clear, +0x38 enable).
+# Stop 0x2c63454: +0x14 &= ~0x10001, poll +0x10, +0x00 handshake, +0x38 = 0, +0x34 = 1.
+[[device]]
+base = 0xff987000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x10, mode = "constant", value = 0x10001 },
+]
+irq = 175
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x30, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x34, mode = "w1c", status_offset = 0x30, bits = 0x1 }
+irq_mask_offset = 0x38
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# CONDITIONAL: 0xff977000 (logical 0xbe). Same register family as MIX (+0x300.. control).
+# Driver 0x2c4ac04..0x2c4dcb8, state 0x3832f90. User: 0x2e76e88 (open), 0x2e76e9c (close),
+# 0x2e770cc (set), 0x2e77100 (start), 0x2e77114 (stop), 0x2e7712c (result read), reached from
+# MOVDC 0x306ebc4 > 0x306d008 > 0x306c8f8 > 0x2e77120.
+# Open 0x2c4b194: clocks 0x13ab5d0(0x20,...), reset release (bit 15 of the 0xff90db.. pair).
+# Start 0x2c4b3b8 (state 4 -> 2): ISR 0x2c4b314 on logical 0xbe, then
+#   0x2c4b2c0: +0x00 write 0 (0x2c4c80c), poll until bit 0 reads 1 (0x2c4c844) -> constant 1
+#   0x2c4b34c: +0x300, +0x304 (bit 0 = 1), +0x30c = 1 (0x2c4dbdc, IRQ enable),
+#   +0x04 = 1 = START (0x2c4c874, after drain 0x14c9af8(1)).
+# ISR 0x2c4b314: 0x2c4b2f4 writes +0x310 = 1 (clear), state 3, callback. No status read.
+# Stop 0x2c4b4a8: +0x300/+0x304 read back and cleared, +0x30c = 0, poll +0x308 until bit 16
+#   AND bit 0 read 1 (0x2c4b484..0x2c4b498)                                     -> constant;
+#   +0x00 handshake.
+# 0x2c4b500 reads +0x318/+0x31c/+0x320 (results; 0 when never written).
+[[device]]
+base = 0xff977000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x308, mode = "constant", value = 0x10001 },
+]
+irq = 176
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x310, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c" }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# CONDITIONAL, NOT DECODED: 0xff981000. Plain register file (no start, no irq) so a strict run
+# does not stop on the first access and shows where it really hangs.
+# Driver 0x13c482c..0x13c6bf0 (offsets 0x000..0x858). Reached from MOVDC
+# 0x306b0ec > 0x306ae94 > 0x2eae8e0 > 0x30d4cc4 > 0x30d5770 > 0x30ca930.
+#  +0x000 0x30ca298: 0x13c482c writes 0, then polls until the word reads non-zero -> constant 1
+#  +0x830 0x30ca930 loops on 0x13c6998 until bits 0, 4, 8, 16, 20, 24 all read 1
+#         -> constant 0x01110111 (+0x834 is read but not tested there)
+# The start, status, acknowledge and interrupt of this block are unknown; if a strict run
+# reaches it and then waits, look for the wait loop after 0x30ca9e0 (0x13c4854 writes +0x04).
+[[device]]
+base = 0xff981000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x830, mode = "constant", value = 0x01110111 },
+]
