@@ -25,15 +25,17 @@ export default function DocsOverview() {
             <a href={manualRoot}>Manual</a>
           </h2>
           <p>Learn how to use your Fujimod camera.</p>
-          <ol>
-            <For each={chapters}>
-              {(chapter) => (
-                <li>
-                  <a href={chapter.pages[0]?.href ?? manualRoot}>{chapter.title}</a>
-                </li>
-              )}
-            </For>
-          </ol>
+          <For each={chapters}>
+            {(chapter, index) => (
+              <a class="docs-overview-card" href={chapter.pages[0]?.href ?? manualRoot}>
+                <h3>
+                  <span>{index() + 1}</span>
+                  {chapter.title}
+                </h3>
+                <p>{chapter.pages.map((page) => page.title).join(' · ')}</p>
+              </a>
+            )}
+          </For>
         </section>
         <section>
           <h2>
@@ -42,7 +44,7 @@ export default function DocsOverview() {
           <p>Documentation for Fujimod firmware developers.</p>
           <For each={sdks}>
             {(sdk) => (
-              <a class="docs-overview-sdk" href={sdk.href}>
+              <a class="docs-overview-card" href={sdk.href}>
                 <h3>{sdk.title}</h3>
                 <p>{sdk.description}</p>
               </a>

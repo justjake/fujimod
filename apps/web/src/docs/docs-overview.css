@@ -30,18 +30,10 @@
   color: var(--dim);
   line-height: 1.5;
 }
-.docs-overview ol {
-  margin: 16px 0 0;
-  padding-inline-start: 22px;
-  line-height: 2;
-}
-.docs-overview li a {
-  color: #c7c7cc;
-}
-.docs-overview-sdk {
+.docs-overview-card {
   position: relative;
   display: block;
-  margin-top: 20px;
+  margin-top: 12px;
   padding: 16px 44px 16px 18px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -50,11 +42,11 @@
   text-decoration: none;
   transition: background 0.12s, border-color 0.12s;
 }
-.docs-overview-sdk:hover {
+.docs-overview-card:hover {
   background: #1c1c1e;
   border-color: #48484a;
 }
-.docs-overview-sdk::after {
+.docs-overview-card::after {
   content: '›';
   position: absolute;
   top: 50%;
@@ -63,7 +55,7 @@
   color: var(--dim);
   font-size: 22px;
 }
-.docs-overview-sdk p {
+.docs-overview-card p {
   margin-top: 4px;
 }
 .docs-overview-badge {
@@ -75,4 +67,12 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+.docs-overview h2 + p {
+  margin-bottom: 20px;
+}
+.docs-overview-card h3 span {
+  margin-inline-end: 10px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
 }
