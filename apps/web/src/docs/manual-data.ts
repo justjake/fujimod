@@ -6,6 +6,7 @@ export type ManualSection = {
   title: string;
   anchor: string;
   cameras: readonly string[];
+  path?: readonly string[];
   paths?: readonly (readonly string[])[];
   summary?: string | null;
   options?: readonly { label: string; summary: string | null; credits: Credits | null }[];

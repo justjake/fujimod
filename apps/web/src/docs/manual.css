@@ -27,7 +27,6 @@
 }
 
 .manual-chapters ul,
-.manual-paths,
 .manual-credits,
 .manual-menu-tree ul {
   margin: 0;
@@ -74,23 +73,47 @@
 }
 
 .manual-feature h1 {
-  font-size: 30px;
+  margin: 6px 0 4px;
+  font-size: 34px;
   letter-spacing: 0.02em;
 }
 
-.manual-introduction {
-  margin-bottom: 24px;
+.manual-feature,
+.manual-page-anchor {
+  scroll-margin-top: 16px;
+}
+
+.manual-page-anchor {
+  display: block;
+}
+
+.manual-page-path {
+  margin: 0 0 18px;
+  color: var(--dim);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+.manual-page-path b {
+  color: #f2f2f7;
+  font-weight: 600;
 }
 
 .manual-introduction .sdk-markdown {
-  color: var(--dim);
+  color: #d1d1d6;
+}
+
+.manual-introduction .sdk-markdown p {
+  margin-bottom: 10px;
 }
 
 .manual-entry-links {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 18px;
-  padding-bottom: 12px;
+  margin: 24px 0 8px;
+  padding: 14px 0;
+  border-top: 1px solid var(--docs-line);
   border-bottom: 1px solid var(--docs-line);
   color: var(--dim);
   font-size: 12px;
@@ -99,23 +122,37 @@
 }
 
 .manual-entry {
-  padding: 28px 0 8px;
+  padding: 26px 0 6px;
+  border-bottom: 1px solid #1c1c1e;
   scroll-margin-top: 16px;
 }
 
-.manual-entry h2 {
-  margin: 0 0 6px;
-  font-size: 17px;
+.manual-entry > h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
   letter-spacing: 0.03em;
 }
 
-.manual-entry p {
+.manual-subentry {
+  margin-top: 14px;
+  padding: 2px 0 2px 16px;
+  border-bottom: 0;
+  border-left: 1px solid var(--docs-line);
+}
+
+.manual-subentry > :is(h3, h4, h5, h6) {
+  margin: 10px 0 2px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.manual-summary {
   margin: 0 0 8px;
   color: #c7c7cc;
 }
 
-.manual-paths {
-  margin-bottom: 4px;
+.manual-also {
+  margin: 0 0 6px;
   color: var(--dim);
   font-size: 11px;
   letter-spacing: 0.05em;
@@ -124,8 +161,8 @@
 .manual-options {
   display: grid;
   grid-template-columns: fit-content(42%) minmax(0, 1fr);
-  gap: 6px 20px;
-  margin: 12px 0;
+  gap: 4px 18px;
+  margin: 8px 0 10px;
   font-size: 13px;
 }
 
@@ -146,10 +183,34 @@
   color: var(--dim);
 }
 
-.manual-entry .manual-cameras,
-.manual-credits {
+.manual-choices {
+  margin: 4px 0 10px;
+  color: #d1d1d6;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.manual-cameras,
+.manual-credits,
+.manual-choice-credits,
+.manual-walkthrough {
   color: var(--dim);
   font-size: 12px;
+}
+
+.manual-cameras,
+.manual-clip-title {
+  margin: 0 0 6px;
+}
+
+.manual-walkthrough {
+  margin: 4px 0 8px;
+}
+
+.manual-walkthrough summary {
+  width: fit-content;
+  cursor: pointer;
 }
 
 .manual-credits b {

@@ -75,11 +75,31 @@ try {
         const manual = manualPageAt(route);
         if (manual) {
           const anchors = await page
-            .locator('.manual-entry')
+            .locator('.manual-feature[id], .manual-page-anchor, .manual-entry')
             .evaluateAll((entries) => entries.map((entry) => entry.id));
+          assert.deepEqual(anchors.sort(), manual.sections.map((section) => section.anchor).sort());
+          const top = await page
+            .locator('.manual-feature > .manual-entry')
+            .evaluateAll((rows) => rows.map((row) => '#' + row.id));
           assert.deepEqual(
-            anchors,
-            manual.sections.map((section) => section.anchor),
+            await page
+              .getByRole('navigation', { name: 'On this page' })
+              .getByRole('link')
+              .evaluateAll((links) => links.map((link) => (link as HTMLAnchorElement).hash)),
+            top,
+          );
+          for (const section of manual.sections.filter(
+            (entry) => entry.title === manual.title && entry.path?.length,
+          )) {
+            assert.equal(await page.locator(`.manual-entry[id="${section.anchor}"]`).count(), 0);
+          }
+          assert.deepEqual(
+            await page.locator('.manual-feature > .manual-cameras').allTextContents(),
+            [
+              [...new Set(manual.sections.flatMap((section) => section.cameras))]
+                .sort()
+                .join(' · '),
+            ].filter(Boolean),
           );
         }
         assert.deepEqual(await header.locator('nav a').allTextContents(), [
@@ -295,9 +315,38 @@ try {
         .last()
         .click();
       await docs.waitForURL(base + destination);
-      const paths = await docs.locator(`#${alias.anchor} .manual-paths li`).allTextContents();
-      assert.ok(paths.length > 1);
-      assert.ok(paths.includes([...alias.path, alias.title].join(' › ')));
+      const paths = await docs.locator(`#${alias.anchor} > .manual-also`).allTextContents();
+      assert.ok(paths.includes('Also in ' + alias.path.join(' › ')));
+      const ratio = manualMenuRows.find(
+        (row) => row.page === 'shape-aspect' && row.title === 'ADD RATIO',
+      );
+      assert.ok(ratio);
+      const ratioDestination = `${manualPagePath(ratio.page)}#${ratio.anchor}`;
+      await docs.goto(base + manualMenus);
+      await docs.locator(`.manual-menu-tree a[href="${ratioDestination}"]`).click();
+      await docs.waitForURL(base + ratioDestination);
+      const nestedRatio = docs.locator(`#${ratio.anchor}.manual-subentry`);
+      assert.equal(await nestedRatio.locator('h3').innerText(), 'ADD RATIO');
+      assert.equal(await nestedRatio.evaluate((row) => row.matches(':target')), true);
+      assert.equal(
+        await docs.locator('.manual-page-path').innerText(),
+        'SHOOTING MENU › SHAPE & ASPECT',
+      );
+      const updatePath = manualPagePath('check-for-updates');
+      const updates = manualPageAt(updatePath)!;
+      const ownUpdate = updates.sections.find((entry) => entry.title === updates.title)!;
+      await docs.goto(`${base}${updatePath}#${ownUpdate.anchor}`);
+      assert.equal(await docs.locator('.manual-feature:target h1').innerText(), updates.title);
+      assert.ok(
+        !(await docs.locator('.manual-introduction').innerText()).includes(ownUpdate.summary!),
+      );
+      assert.deepEqual(
+        await docs
+          .getByRole('navigation', { name: 'On this page' })
+          .getByRole('link')
+          .allTextContents(),
+        ['CHECK AGAIN', 'CONNECT WI-FI', 'DOWNLOAD', 'RESTART TO UPDATE'],
+      );
       await docs.goto(base + '/docs/sdk/focal/');
       assert.equal(await docs.getByRole('navigation', { name: 'FocalUI' }).count(), 1);
       await docs.close();
