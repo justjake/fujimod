@@ -9,6 +9,7 @@ import { writeLicenseIndex } from '../scripts/sbom/licenses.ts';
 import { emittedPackageDirectories, npmComponents } from '../scripts/sbom/npm.ts';
 import { vendoredComponents } from '../scripts/sbom/vendor.ts';
 import { linkedCrates } from '../../../bindings/javascript/scripts/linked-crates.ts';
+import { readRuntimeSbom, runtimeSbom, type EmulatorLinks } from '../scripts/sbom/runtime.ts';
 
 test('emitted npm inputs select packages and the lockfile supplies their versions', () => {
   const root = resolve(import.meta.dirname, '../../..');
@@ -44,6 +45,41 @@ test('only nonempty linked Rust objects count, with exact artifact versions', ()
     '       -    8d0cd       2d         /build/libsecond-cccc.rlib(second.cccc-cgu.0.rcgu.o):(next)',
   ].join('\n');
   assert.deepEqual(linkedCrates(map, artifacts), ['/crates/first-1.0.0', '/crates/second-1.0.0']);
+});
+
+test('runtime SBOM requires linker evidence for the exact staged Wasm', () => {
+  const runtime = mkdtempSync(join(tmpdir(), 'fujimod-runtime-sbom-'));
+  try {
+    const bundle = join(runtime, 'camera');
+    mkdirSync(bundle);
+    writeFileSync(
+      join(runtime, 'catalog.json'),
+      JSON.stringify({ firmwares: [{ emulate: { bundle: 'runtime/camera/' } }] }),
+    );
+    writeFileSync(join(bundle, 'wasm.json'), '{}');
+    writeFileSync(join(bundle, 'camera.wasm'), 'abc');
+    const receipt = join(runtime, 'sbom-components.json');
+    writeFileSync(receipt, JSON.stringify({ schema: 2, components: [] }));
+    assert.throws(() => readRuntimeSbom(runtime, receipt), /no Wasm digests/);
+
+    const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+    const bom = { schema: 3, wasm: { 'camera/camera.wasm': sha256 }, components: [] };
+    writeFileSync(receipt, JSON.stringify(bom));
+    assert.deepEqual(readRuntimeSbom(runtime, receipt), bom);
+
+    const module = { sha256, linkedDirectories: [] };
+    const links: EmulatorLinks = {
+      perf: false,
+      rust: '',
+      emscripten: '',
+      modules: { 'camera.wasm': module, 'dmp_webgpu_bg.wasm': module },
+    };
+    writeFileSync(join(bundle, 'camera.wasm'), 'changed');
+    assert.throws(() => readRuntimeSbom(runtime, receipt), /does not match the staged Wasm/);
+    assert.throws(() => runtimeSbom(runtime, runtime, [], links), /No matching linker evidence/);
+  } finally {
+    rmSync(runtime, { recursive: true, force: true });
+  }
 });
 
 test('the WebUSB Wasm graph excludes host-side Rust macros and build tools', () => {

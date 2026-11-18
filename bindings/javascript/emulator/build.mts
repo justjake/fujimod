@@ -523,6 +523,8 @@ export function build(selected: BuildOptions) {
     // This wasm-bindgen module shares a worker with Emscripten, but uses its
     // own non-shared memory and does not need atomics.
     CARGO_ENCODED_RUSTFLAGS: ['-C', 'panic=abort'].join('\x1f'),
+    // Keep dependency object names in the standalone Wasm linker map.
+    CARGO_PROFILE_RELEASE_WEB_LTO: 'off',
   };
   if (selected.incremental) {
     delete webgpuEnv.CARGO_PROFILE_DIST_LTO;
@@ -642,16 +644,27 @@ export function build(selected: BuildOptions) {
     unicorn_dirty: false,
     unicorn_tci_sha256: hash(readFileSync(join(vendor, 'qemu/tcg/tci.c'))),
   };
-  const receiptPath = join(out, 'build.json');
-  writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
   const cameraMap = join(out, 'camera.map');
   writeFileSync(
     join(out, 'linked-crates.json'),
     JSON.stringify({
-      camera: readLinkedCrates(cameraMap, cameraArtifacts),
-      webgpu: readLinkedCrates(webgpuMap, webgpuArtifacts),
+      rust: receipt.rust,
+      emscripten: receipt.emscripten,
+      perf: receipt.perf,
+      modules: {
+        'camera.wasm': {
+          sha256: receipt.wasm_sha256,
+          linkedDirectories: readLinkedCrates(cameraMap, cameraArtifacts),
+        },
+        'dmp_webgpu_bg.wasm': {
+          sha256: hash(readFileSync(join(out, 'dmp_webgpu_bg.wasm'))),
+          linkedDirectories: readLinkedCrates(webgpuMap, webgpuArtifacts),
+        },
+      },
     }) + '\n',
   );
+  const receiptPath = join(out, 'build.json');
+  writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
   rmSync(cameraMap);
   stageRuntimeNotices(out);
   if (selected.stagePackage) stagePackage(out);
