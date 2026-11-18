@@ -252,6 +252,8 @@ pub struct Command {
     pub sensor: Sensor,
     latency_ticks: u64,
     retain_unmodeled: bool,
+    /// End (exclusive) of the window offsets that retain words when `retain_unmodeled` is set.
+    retain_limit: u64,
 }
 impl Command {
     pub fn new(base: u64, sensor: Sensor, latency_ticks: u64) -> Result<Self, String> {
@@ -264,12 +266,21 @@ impl Command {
             sensor,
             latency_ticks,
             retain_unmodeled: false,
+            retain_limit: 0x244,
         })
     }
     /// Let words of the window that have no modeled meaning read back their last write
     /// (zero before one) instead of failing the access.
     pub fn with_retained_words(mut self) -> Self {
         self.retain_unmodeled = true;
+        self
+    }
+    /// Like `with_retained_words`, for every unmodeled word of the 4 KiB window. The X-T5 4.31
+    /// application (0x1354f00..) writes a table of 9-bit coordinate pairs to +0x440..+0x484 and
+    /// uses +0x4c0..+0x4e8; their meaning is unknown, so they only read back their last write.
+    pub fn with_retained_window(mut self) -> Self {
+        self.retain_unmodeled = true;
+        self.retain_limit = 0x1000;
         self
     }
     fn reg(&self, o: u64) -> u32 {
@@ -359,7 +370,7 @@ impl Device for Command {
                     u64::from(self.reg(o))
                 }
             }
-            _ if self.retain_unmodeled && o < 0x244 => u64::from(self.reg(o)),
+            _ if self.retain_unmodeled && o < self.retain_limit => u64::from(self.reg(o)),
             _ => {
                 cx.unmodeled();
                 0
@@ -446,7 +457,7 @@ impl Device for Command {
                     self.state.registers.insert(o, value);
                 }
             }
-            _ if self.retain_unmodeled && o < 0x244 => {
+            _ if self.retain_unmodeled && o < self.retain_limit => {
                 self.state.registers.insert(o, value);
             }
             _ => cx.unmodeled(),

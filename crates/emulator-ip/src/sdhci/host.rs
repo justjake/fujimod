@@ -156,6 +156,10 @@ pub struct SdHost {
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
     cmd8_responses: u64,
+    /// SDH30 vendor words +0x108..=+0x124 (sdhc protocol only). The X-T5 4.31 slot driver
+    /// read-modify-writes +0x124 bit 9 (0x13a8ae0) once a card is present; the meaning is unknown,
+    /// so the words only keep their last 32-bit write.
+    vendor: [u32; 8],
 }
 /// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
 /// default and high speed and whose groups 2-6 offer function 0 only.
@@ -259,6 +263,7 @@ impl SdHost {
             faults: Vec::new(),
             fault_history: Vec::new(),
             cmd8_responses: 0,
+            vendor: [0; 8],
         })
     }
     /// Declare a data CRC failure for later multi-block transfers.
@@ -1056,6 +1061,9 @@ impl SdHost {
                 };
         }
         let offset = address.wrapping_sub(self.options.base) as usize;
+        if let Some(index) = self.vendor_index(offset, size) {
+            return u64::from(self.vendor[index]);
+        }
         if !self.valid(offset, size) {
             cx.unmodeled();
             return 0;
@@ -1114,6 +1122,10 @@ impl SdHost {
                 .is_some_and(|r| r.phase == Phase::Ready && r.transfer == Transfer::PioRead)
         };
         self.fifo.publish(ready);
+    }
+    fn vendor_index(&self, offset: usize, size: u8) -> Option<usize> {
+        (self.options.protocol == Protocol::Sdhc && size == 4 && (0x108..=0x124).contains(&offset) && offset % 4 == 0)
+            .then(|| (offset - 0x108) / 4)
     }
     fn valid(&self, offset: usize, size: u8) -> bool {
         if self.options.protocol == Protocol::Sdhc {
@@ -1302,6 +1314,8 @@ struct Snapshot {
     initialization_fault: InitializationFault,
     #[serde(default)]
     cmd8_responses: u64,
+    #[serde(default, skip_serializing_if = "vendor_clear")]
+    vendor: [u32; 8],
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -1339,6 +1353,8 @@ impl Device for SdHost {
             contacts: u8,
             initialization_fault: InitializationFault,
             cmd8_responses: u64,
+            #[serde(skip_serializing_if = "vendor_clear")]
+            vendor: [u32; 8],
             regs: &'a Registers,
             clocks: &'a Clocks,
             state: State,
@@ -1365,6 +1381,7 @@ impl Device for SdHost {
                 contacts: self.contacts.checkpoint_level(),
                 initialization_fault: self.options.initialization_fault,
                 cmd8_responses: self.cmd8_responses,
+                vendor: self.vendor,
                 regs: &self.regs,
                 clocks: &self.clocks,
                 state: self.state,
@@ -1407,6 +1424,7 @@ impl Device for SdHost {
         self.fifo.restore(&s.fifo, s.fifo_position)?;
         self.card = s.card;
         self.cmd8_responses = s.cmd8_responses;
+        self.vendor = s.vendor;
         self.reads = s.reads;
         self.contacts.restore_level(s.contacts);
         self.regs = s.regs;
@@ -1496,6 +1514,10 @@ impl Device for SdHost {
             return;
         }
         let offset = address.wrapping_sub(self.options.base) as usize;
+        if let Some(index) = self.vendor_index(offset, size) {
+            self.vendor[index] = value as u32;
+            return;
+        }
         if !self.valid(offset, size)
             || value
                 > if size == 4 {
@@ -2413,4 +2435,8 @@ mod tests {
         assert!(h.effects.contains(&Effect::Write(0x40001000, 512)));
         assert_eq!(&h.bytes[0x1000..0x1200], &[0x7b; 512]);
     }
+}
+
+fn vendor_clear(vendor: &[u32; 8]) -> bool {
+    vendor.iter().all(|&word| word == 0)
 }

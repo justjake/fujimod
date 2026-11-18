@@ -23,6 +23,15 @@
 //! X-Processor Pro contract); [`Registers::Declared`] accepts only the
 //! declared words and bits, loads the tables only while a gate bit is set,
 //! masks the interrupt by a declared word and refuses everything else.
+//! [`Registers::Wide`] is the X-Processor 5 block (X-T5 4.31 driver
+//! 0x2c428b8..0x2c42eac): the same words and sequences as the X-Processor 4
+//! driver, with bits 34..32 of the source and destination in +0x140 and
+//! +0x14c, bit 32 of the stream size in +0x98 and the interrupt mask in
+//! +0x28. Its words read back their last write. It is a bring-up contract:
+//! a run always completes with a decodable stream. A size that is not a
+//! multiple of 16x8 is padded by edge replication, a source format (+0x40)
+//! other than the driver's 1 encodes a flat grey picture, and a run without
+//! loaded tables uses flat ones; none of those cases is observed on a camera.
 //!
 //! Decoder (X-Processor Pro contract). Initialization writes 1 to +0x118 and
 //! waits for status bit 16; status +0x04 is write-1-to-clear. A run reads the
@@ -57,7 +66,18 @@ pub const PITCH: u64 = 0x130;
 pub const SOURCE: u64 = 0x100;
 pub const DESTINATION: u64 = 0x10c;
 pub const LIMIT: u64 = 0x110;
+pub const INTERRUPT_MASK: u64 = 0x28;
+pub const FORMAT: u64 = 0x40;
+/// The +0x40 value both the X-T3 and X-T5 drivers program: packed 4:2:2.
+pub const PACKED_422: u32 = 1;
+pub const STREAM_HIGH: u64 = 0x98;
+pub const SOURCE_HIGH: u64 = 0x140;
+pub const DESTINATION_HIGH: u64 = 0x14c;
 const TABLE_WORDS: usize = 32;
+/// Offset of the SOF0 marker in a stream: SOI, DHT (420), DQT (134), DRI (6).
+const SOF: usize = 2 + 420 + 134 + 6;
+const NOTED_FORMAT: u8 = 1;
+const NOTED_TABLES: u8 = 2;
 const MAX_STREAM: usize = 64 * 1024 * 1024;
 
 /// How the encoder treats words other than its run registers.
@@ -67,6 +87,10 @@ pub enum Registers {
     LastWrite,
     /// Only the declared words and bits; everything else refuses.
     Declared(Contract),
+    /// Last-write words with the X-Processor 5 high address words and
+    /// interrupt mask; runs tolerate sizes, formats and missing tables the
+    /// packed 4:2:2 kernel does not take.
+    Wide,
 }
 
 /// The words a processor's driver uses.
@@ -133,6 +157,8 @@ pub struct Encoder {
     irq: u32,
     ticks: u64,
     registers: Registers,
+    /// Diagnostics already logged; not part of the device state.
+    noted: u8,
     state: State,
 }
 impl Encoder {
@@ -155,6 +181,7 @@ impl Encoder {
             irq,
             ticks,
             registers,
+            noted: 0,
             state: State::default(),
         })
     }
@@ -175,15 +202,79 @@ impl Encoder {
     }
     fn contract(&self) -> Option<&Contract> {
         match &self.registers {
-            Registers::LastWrite => None,
+            Registers::LastWrite | Registers::Wide => None,
             Registers::Declared(contract) => Some(contract),
+        }
+    }
+    fn wide(&self) -> bool {
+        matches!(self.registers, Registers::Wide)
+    }
+    /// The word whose [`DONE`] bit masks the completion interrupt.
+    fn mask_word(&self) -> Option<u64> {
+        match &self.registers {
+            Registers::LastWrite => None,
+            Registers::Declared(contract) => Some(contract.interrupt_mask),
+            Registers::Wide => Some(INTERRUPT_MASK),
         }
     }
     fn interrupt(&self) -> bool {
         self.state.status & DONE != 0
-            && self
-                .contract()
-                .is_none_or(|c| self.word(c.interrupt_mask) & DONE == 0)
+            && self.mask_word().is_none_or(|o| self.word(o) & DONE == 0)
+    }
+    /// A buffer address: the low word, and bits 34..32 from `high` under
+    /// the wide contract.
+    fn address(&self, low: u64, high: u64) -> u64 {
+        let high = if self.wide() {
+            u64::from(self.word(high) & 7) << 32
+        } else {
+            0
+        };
+        high | u64::from(self.word(low))
+    }
+    fn note(&mut self, cx: &mut Cx<'_>, bit: u8, line: &str) {
+        if self.noted & bit == 0 {
+            self.noted |= bit;
+            cx.log(line);
+        }
+    }
+    /// The wide contract's source: the window padded to a multiple of 16x8
+    /// by repeating its last pixel pair and line, or flat grey when the
+    /// format is not packed 4:2:2. Returns the padded width and height.
+    fn padded_source(
+        &mut self,
+        cx: &mut Cx<'_>,
+        width: usize,
+        height: usize,
+    ) -> Result<(Vec<u8>, usize, usize), String> {
+        if width < 2 || height == 0 {
+            return Err(format!("JPEG encoder size {width}x{height} is empty"));
+        }
+        let (wide, high) = (width.next_multiple_of(16), height.next_multiple_of(8));
+        let format = self.word(FORMAT);
+        if format != PACKED_422 {
+            let name = self.name;
+            self.note(
+                cx,
+                NOTED_FORMAT,
+                &format!("{name}: source format {format:#x} is not modeled; encoding flat grey"),
+            );
+            return Ok((vec![128; wide * high * 2], wide, high));
+        }
+        let source = self.source(cx, width, height)?;
+        if (wide, high) == (width, height) {
+            return Ok((source, wide, high));
+        }
+        // Whole pixel pairs (Y0 Y1 Cb Cr) kept from each line.
+        let kept = (width & !1) * 2;
+        let mut out = Vec::with_capacity(wide * high * 2);
+        for line in 0..high {
+            let row = &source[line.min(height - 1) * width * 2..][..kept];
+            out.extend_from_slice(row);
+            for _ in 0..(wide * 2 - kept) / 4 {
+                out.extend_from_slice(&row[kept - 4..]);
+            }
+        }
+        Ok((out, wide, high))
     }
     /// The packed source window: `height` lines of `width` pixels from
     /// (x, y) of a picture whose lines are `pitch` pixels apart (0 reads as
@@ -195,7 +286,7 @@ impl Encoder {
             0 => width,
             n => n,
         };
-        let base = u64::from(self.word(SOURCE));
+        let base = self.address(SOURCE, SOURCE_HIGH);
         if pitch == width && x == 0 {
             return cx.ram_bytes(base + (y * pitch * 2) as u64, width * height * 2);
         }
@@ -213,7 +304,18 @@ impl Encoder {
     }
     fn encode(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         let mut codec = Codec::default();
-        codec.tables(&self.state.tables)?;
+        let loaded = self.state.tables.len() == 4 * TABLE_WORDS && !self.state.tables.contains(&0);
+        if self.wide() && !loaded {
+            let name = self.name;
+            self.note(
+                cx,
+                NOTED_TABLES,
+                &format!("{name}: run without loaded quantization tables; using flat 16"),
+            );
+            codec.tables(&[16; 4 * TABLE_WORDS])?;
+        } else {
+            codec.tables(&self.state.tables)?;
+        }
         let size = self.word(SIZE);
         let (width, height) = ((size & 0xffff) as usize, (size >> 16) as usize);
         let restart = self.word(RESTART) as u16;
@@ -221,15 +323,35 @@ impl Encoder {
             0 => MAX_STREAM,
             n => n.min(MAX_STREAM),
         };
-        let source = self.source(cx, width, height)?;
+        let (source, coded_width, coded_height) = if self.wide() {
+            self.padded_source(cx, width, height)?
+        } else {
+            (self.source(cx, width, height)?, width, height)
+        };
         let mut body = Vec::new();
-        codec.encode(&source, width, height, restart, &mut body, MAX_STREAM - 2)?;
+        codec.encode(
+            &source,
+            coded_width,
+            coded_height,
+            restart,
+            &mut body,
+            MAX_STREAM - 2,
+        )?;
         let mut stream = vec![0xff, 0xd8];
         stream.extend_from_slice(&body);
+        if (coded_width, coded_height) != (width, height) {
+            // The frame header carries the programmed size; the scan holds
+            // the padded MCUs, as a baseline stream does for any size.
+            if stream.get(SOF..SOF + 2) != Some(&[0xff, 0xc0]) {
+                return Err("JPEG encoder frame header is not where expected".into());
+            }
+            stream[SOF + 5..SOF + 7].copy_from_slice(&(height as u16).to_be_bytes());
+            stream[SOF + 7..SOF + 9].copy_from_slice(&(width as u16).to_be_bytes());
+        }
         // Only the programmed limit is written; the reported length tells the
         // firmware the stream overflowed.
         cx.ram_write(
-            self.word(DESTINATION).into(),
+            self.address(DESTINATION, DESTINATION_HIGH),
             &stream[..stream.len().min(limit)],
         )?;
         self.state.stream = stream.len() as u32;
@@ -294,6 +416,8 @@ impl Device for Encoder {
         u64::from(match offset {
             STATUS => self.state.status | READY,
             STREAM => self.state.stream,
+            // A stream is at most 64 MiB, so bit 32 of its size is clear.
+            STREAM_HIGH if self.wide() => 0,
             CONTROL => self.word(CONTROL) & !(START | RESET),
             o => self.word(o),
         })
@@ -362,10 +486,7 @@ impl Device for Encoder {
         } else {
             self.state.words.insert(offset, value);
         }
-        if self
-            .contract()
-            .is_some_and(|c| c.interrupt_mask == offset)
-        {
+        if self.mask_word() == Some(offset) {
             let level = self.interrupt();
             cx.set_irq(self.irq, level);
         }
@@ -814,5 +935,193 @@ mod tests {
         );
         let saved = decoder.save();
         Decoder::new("decoder", D, 135, 5).unwrap().restore(&saved).unwrap();
+    }
+
+    mod wide {
+        use super::super::*;
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+        const BASE: u64 = 0xffd1_0000;
+        const IRQ: u32 = 207;
+        /// Above 4 GiB, so the high address words are needed to reach it.
+        const RAM: u64 = 0x1_0000_0000;
+        const SOURCE_AT: u64 = RAM + 0x1000;
+        const STREAM_AT: u64 = RAM + 0x8_0000;
+
+        fn encoder() -> Encoder {
+            Encoder::new("xp5-jpeg-encoder", BASE, IRQ, 10, Registers::Wide).unwrap()
+        }
+        fn host() -> RecordingHost {
+            RecordingHost {
+                ram: vec![0; 1 << 20],
+                ram_base: RAM,
+                ..RecordingHost::default()
+            }
+        }
+        fn write(e: &mut Encoder, h: &mut RecordingHost, offset: u64, value: u32) {
+            let mut cx = Cx::new(h, 0, 0, 0);
+            e.write(&mut cx, BASE + offset, 4, value.into());
+            assert!(cx.refusal().is_none(), "{offset:#x} {value:#x}");
+        }
+        fn read(e: &mut Encoder, h: &mut RecordingHost, offset: u64) -> u32 {
+            let mut cx = Cx::new(h, 0, 0, 0);
+            let value = e.read(&mut cx, BASE + offset, 4) as u32;
+            assert!(cx.refusal().is_none(), "{offset:#x}");
+            value
+        }
+        /// The X-T5 4.31 reset 0x2c42974 and programmer 0x2c42ae0, in their
+        /// write order, for a window of `size` at `origin`.
+        fn program(
+            e: &mut Encoder,
+            h: &mut RecordingHost,
+            size: u32,
+            origin: u32,
+            pitch: u32,
+            tables: bool,
+        ) {
+            write(e, h, 0x118, 1);
+            let status = read(e, h, STATUS);
+            assert_eq!(status & READY, READY);
+            write(e, h, STATUS, status);
+            write(e, h, CONTROL, RESET);
+            assert_eq!(read(e, h, CONTROL), 0);
+            write(e, h, 0x0c, 0x000a_0003);
+            write(e, h, INTERRUPT_MASK, 0x00fd_0000);
+            write(e, h, FORMAT, PACKED_422);
+            write(e, h, PITCH, pitch);
+            write(e, h, WINDOW_ORIGIN, origin);
+            write(e, h, SIZE, size);
+            write(e, h, 0x48, 0);
+            write(e, h, RESTART, 0);
+            write(e, h, SOURCE_HIGH, (SOURCE_AT >> 32) as u32);
+            write(e, h, SOURCE, SOURCE_AT as u32);
+            write(e, h, DESTINATION_HIGH, (STREAM_AT >> 32) as u32);
+            write(e, h, DESTINATION, STREAM_AT as u32);
+            write(e, h, LIMIT, 0x4_0000);
+            write(e, h, 0x11c, 1);
+            write(e, h, 0x120, 0);
+            write(e, h, 0x84, u32::from(tables) << 8);
+            if tables {
+                for _ in 0..TABLE_WORDS {
+                    write(e, h, TABLES, 0x0202_0202);
+                }
+            }
+            write(e, h, 0x84, u32::from(tables));
+        }
+        /// Starts as 0x2c42a30 does and returns the stream of the finished run.
+        fn run(e: &mut Encoder, h: &mut RecordingHost) -> Vec<u8> {
+            let control = read(e, h, CONTROL);
+            write(e, h, CONTROL, control | START);
+            let due = e.next_deadline(h.now).unwrap();
+            h.now = due;
+            let mut cx = Cx::new(h, 0, 0, 0);
+            e.advance(&mut cx);
+            assert_eq!(cx.refusal(), None);
+            assert_eq!(read(e, h, STATUS), READY | DONE);
+            assert_eq!(read(e, h, STREAM_HIGH), 0);
+            let size = read(e, h, STREAM) as usize;
+            let stream = h.bytes(STREAM_AT, size).unwrap();
+            assert_eq!(&stream[..2], &[0xff, 0xd8]);
+            assert_eq!(&stream[size - 2..], &[0xff, 0xd9]);
+            stream
+        }
+        /// Packed 4:2:2 lines of `pitch` pixels: luma 200 inside the window
+        /// `w`x`h` at (`x`, `y`), 20 outside; Cb 100, Cr 160.
+        fn picture(pitch: usize, lines: usize, x: usize, y: usize, w: usize, h: usize) -> Vec<u8> {
+            (0..pitch * lines / 2)
+                .flat_map(|i| {
+                    let (px, py) = (i * 2 % pitch, i * 2 / pitch);
+                    let inside = (x..x + w).contains(&px) && (y..y + h).contains(&py);
+                    let luma = if inside { 200 } else { 20 };
+                    [luma, luma, 100, 160]
+                })
+                .collect()
+        }
+
+        #[test]
+        fn the_driver_sequence_encodes_the_window_and_interrupts() {
+            let mut e = encoder();
+            let mut h = host();
+            let source = picture(48, 32, 8, 4, 32, 16);
+            h.ram[0x1000..0x1000 + source.len()].copy_from_slice(&source);
+            program(&mut e, &mut h, 16 << 16 | 32, 4 << 16 | 8, 48, true);
+            let stream = run(&mut e, &mut h);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, true)));
+            let (ycc, width, height) = decode(&stream, 64, 64).unwrap();
+            assert_eq!((width, height), (32, 16));
+            for pixel in ycc.chunks(3) {
+                assert!(pixel[0].abs_diff(200) <= 3, "{pixel:?}");
+                assert!(pixel[1].abs_diff(100) <= 3 && pixel[2].abs_diff(160) <= 3);
+            }
+            // The handler 0x2c428b8 writes the status back.
+            let status = read(&mut e, &mut h, STATUS);
+            write(&mut e, &mut h, STATUS, status);
+            assert_eq!(read(&mut e, &mut h, STATUS), READY);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, false)));
+            let saved = e.save();
+            let mut other = encoder();
+            other.restore(&saved).unwrap();
+            assert_eq!(read(&mut other, &mut h, STREAM) as usize, stream.len());
+        }
+
+        #[test]
+        fn the_mask_word_holds_the_interrupt_low() {
+            let mut e = encoder();
+            let mut h = host();
+            let source = picture(32, 16, 0, 0, 32, 16);
+            h.ram[0x1000..0x1000 + source.len()].copy_from_slice(&source);
+            program(&mut e, &mut h, 16 << 16 | 32, 0, 32, true);
+            write(&mut e, &mut h, INTERRUPT_MASK, 0x00fd_0000 | DONE);
+            run(&mut e, &mut h);
+            assert!(h.irqs.iter().all(|&(_, level)| !level));
+            write(&mut e, &mut h, INTERRUPT_MASK, 0x00fd_0000);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, true)));
+        }
+
+        #[test]
+        fn a_size_off_the_block_grid_keeps_its_frame_size() {
+            let mut e = encoder();
+            let mut h = host();
+            let source = picture(40, 20, 0, 0, 40, 20);
+            h.ram[0x1000..0x1000 + source.len()].copy_from_slice(&source);
+            program(&mut e, &mut h, 20 << 16 | 40, 0, 40, true);
+            let stream = run(&mut e, &mut h);
+            let (ycc, width, height) = decode(&stream, 64, 64).unwrap();
+            assert_eq!((width, height), (40, 20));
+            assert!(ycc.chunks(3).all(|p| p[0].abs_diff(200) <= 3), "padding leaked");
+        }
+
+        #[test]
+        fn an_unknown_format_or_missing_tables_still_gives_a_stream() {
+            let mut e = encoder();
+            let mut h = host();
+            // No table load, and a format the driver never programs. The
+            // source address is outside RAM, so a read of it would fail.
+            program(&mut e, &mut h, 16 << 16 | 32, 0, 32, false);
+            write(&mut e, &mut h, FORMAT, 2);
+            write(&mut e, &mut h, SOURCE_HIGH, 7);
+            let stream = run(&mut e, &mut h);
+            let (ycc, width, height) = decode(&stream, 64, 64).unwrap();
+            assert_eq!((width, height), (32, 16));
+            assert!(ycc.iter().all(|&v| v.abs_diff(128) <= 1));
+        }
+
+        #[test]
+        fn a_stream_longer_than_the_limit_reports_its_length() {
+            let mut e = encoder();
+            let mut h = host();
+            let source: Vec<u8> = (0..32 * 16 * 2).map(|i| (i * 97 % 251) as u8).collect();
+            h.ram[0x1000..0x1000 + source.len()].copy_from_slice(&source);
+            program(&mut e, &mut h, 16 << 16 | 32, 0, 32, true);
+            write(&mut e, &mut h, LIMIT, 0x40);
+            let control = read(&mut e, &mut h, CONTROL);
+            write(&mut e, &mut h, CONTROL, control | START);
+            h.now = 10;
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            e.advance(&mut cx);
+            assert_eq!(cx.refusal(), None);
+            assert!(read(&mut e, &mut h, STREAM) > 0x40);
+            assert!(h.bytes(STREAM_AT + 0x40, 16).unwrap().iter().all(|&b| b == 0));
+        }
     }
 }

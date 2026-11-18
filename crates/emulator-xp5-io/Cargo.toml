@@ -20,6 +20,7 @@ fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
 fujimod-emulator-parts-controls.workspace = true
+toml = "1.1"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

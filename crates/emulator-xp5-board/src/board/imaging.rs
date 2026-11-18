@@ -77,11 +77,19 @@ pub fn register_all(
         bus.register(
             window.base,
             window.size,
-            Box::new(sensor::Command::new(
-                window.base,
-                sensor.clone(),
-                ticks(&window.options, "command_latency_us")?,
-            )?),
+            Box::new({
+                let command = sensor::Command::new(
+                    window.base,
+                    sensor.clone(),
+                    ticks(&window.options, "command_latency_us")?,
+                )?;
+                // Bring-up option: unmodeled words of the window keep their last write.
+                if window.options.get("retain_words").and_then(|v| v.as_bool()).unwrap_or(false) {
+                    command.with_retained_window()
+                } else {
+                    command
+                }
+            }),
         )?;
     }
     for window in windows
@@ -141,7 +149,14 @@ pub fn register_all(
         }
     }
     let io = preview::Io::default();
-    let statistics = statistics::Statistics::new(STATISTICS_BASE, STATISTICS_BANK_SIZE)?;
+    // Without an imaging-statistics window (X-T5 4.31: 0xff800000 is boot SRAM in the SoC profile) the
+    // AE statistics banks are written into guest memory, where the stock code reads them.
+    let has_statistics_window = windows.iter().any(|w| w.kind == "imaging-statistics");
+    let statistics = if has_statistics_window {
+        statistics::Statistics::new(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
+    } else {
+        statistics::Statistics::in_memory(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
+    };
     for w in windows.iter().filter(|w| w.kind == "imaging-statistics") {
         if w.base != STATISTICS_BASE || w.size != (STATISTICS_BANK_SIZE * 2) as u64 {
             return Err("invalid statistics SRAM window".into());
@@ -163,7 +178,23 @@ pub fn register_all(
             return Err("invalid preview/RIFP window".into());
         }
         let device: Box<dyn fujimod_emulator_devices::Device> = if w.kind == "imaging-rifp-io" {
-            Box::new(io.clone())
+            // Register-list DMA (see preview::Io): ticks from START to its done status.
+            // Opt-in; a command-image scene adds source_luma to this window too.
+            if w.options.keys().any(|key| !matches!(key.as_str(), "queue_completion_us" | "source_luma")) {
+                return Err("unknown imaging-rifp-io option".into());
+            }
+            match w.options.get("queue_completion_us") {
+                None => Box::new(io.clone()),
+                Some(value) => Box::new(
+                    io.clone().with_queue_completion_ticks(
+                        value
+                            .as_integer()
+                            .and_then(|n| u64::try_from(n).ok())
+                            .and_then(|n| n.checked_mul(1000))
+                            .ok_or("imaging-rifp-io queue_completion_us must be a bounded count")?,
+                    ),
+                ),
+            }
         } else {
             Box::new(
                 preview::Preview::new(w.kind == "imaging-rifp", io.clone(), &w.options)?
@@ -188,7 +219,22 @@ pub fn register_all(
         if w.base != 0xff946000 || w.size != 0x1000 {
             return Err("invalid input-engine window".into());
         }
-        bus.register(w.base, w.size, Box::new(input::Input::default()))?;
+        let device = input::Input::default();
+        let device = if retain_words(&w.options)? {
+            device.with_retained_words()
+        } else {
+            device
+        };
+        // Option `idle_status`: word 15 reads as the engine's idle status (see `Input`).
+        let device = match w.options.get("idle_status") {
+            None => device,
+            Some(value) => match value.as_bool() {
+                Some(true) => device.with_idle_status(),
+                Some(false) => device,
+                None => return Err("idle_status must be a boolean".into()),
+            },
+        };
+        bus.register(w.base, w.size, Box::new(device))?;
     }
     for w in windows.iter().filter(|w| {
         matches!(
@@ -215,13 +261,35 @@ pub fn register_all(
             )?,
             _ => work::Work::resize(w.base, number("completion_us")?)?,
         };
+        let work = if retain_words(&w.options)? {
+            work.with_retained_words()
+        } else {
+            work
+        };
         bus.register(w.base, w.size, Box::new(work))?;
     }
     for w in windows.iter().filter(|w| w.kind == "imaging-paf") {
         if w.base != 0xff976000 || w.size != 0x1000 {
             return Err("invalid PAF window".into());
         }
-        bus.register(w.base, w.size, Box::new(paf::Paf::default()))?;
+        let device = paf::Paf::default();
+        let device = if retain_words(&w.options)? {
+            device.with_retained_words()
+        } else {
+            device
+        };
+        bus.register(w.base, w.size, Box::new(device))?;
     }
     Ok(())
+}
+
+/// Bring-up option `retain_words`: unmodeled aligned words of the window read back their last
+/// write instead of stopping as unmodeled. Off unless the manifest sets it.
+fn retain_words(options: &toml::Table) -> Result<bool, String> {
+    match options.get("retain_words") {
+        None => Ok(false),
+        Some(value) => value
+            .as_bool()
+            .ok_or_else(|| "retain_words must be a boolean".to_string()),
+    }
 }

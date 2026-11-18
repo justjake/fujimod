@@ -783,6 +783,7 @@ impl Bus {
         let mut supported = false;
         let mut reason = None;
         let mut continuation = None;
+        let mut posted = Vec::new();
         if let Some(id) = index {
             let publication = self.publication_before(id);
             let started = fujimod_perf::device(
@@ -820,12 +821,16 @@ impl Bus {
                 if !supported {
                     reason = cx.refusal().map(String::from);
                 }
+                posted = cx.take_posted_writes();
                 drop(cx);
                 if !supported && self.mode == Mode::Discovery {
                     phase = "continuation";
                     let mut cx = Cx::new(host, cpu, pc, id);
                     continuation =
                         device.discovery_access(&mut cx, address, size, value.map(|v| v & mask));
+                    if !cx.take_posted_writes().is_empty() {
+                        cx.fail("a discovery continuation cannot issue bus-master MMIO writes");
+                    }
                     if !Self::outcome(&mut cx)? {
                         reason = Some(format!(
                             "{}; continuation refused: {}",
@@ -863,6 +868,9 @@ impl Bus {
             };
             if supported || continuation.is_some() {
                 self.wake_dependents(host, id)?;
+            }
+            if supported {
+                self.perform_posted(host, pc, posted)?;
             }
         }
         if !supported {
@@ -940,6 +948,7 @@ impl Bus {
         } else if due {
             w.device.advance(&mut cx);
         }
+        let posted = cx.take_posted_writes();
         // Keep the device's stated reason for an unmodeled event or deadline.
         let detail = cx.take_refusal();
         let outcome = if cx.is_unmodeled() {
@@ -977,7 +986,28 @@ impl Bus {
             )?;
             return Ok(());
         }
-        self.wake_dependents(host, device)
+        self.wake_dependents(host, device)?;
+        self.perform_posted(host, 0, posted)
+    }
+    /// Bus-master MMIO writes a device queued with `Cx::post_mmio_write`, performed in
+    /// order as host-side accesses (CPU `usize::MAX`, the causing PC when known).
+    fn perform_posted(
+        &mut self,
+        host: &mut dyn Host,
+        pc: u64,
+        posted: Vec<fujimod_emulator_devices::PostedWrite>,
+    ) -> Result<(), String> {
+        for write in posted {
+            self.access(
+                host,
+                usize::MAX,
+                pc,
+                write.address,
+                write.size,
+                Some(write.value),
+            )?;
+        }
+        Ok(())
     }
     pub fn take_host_requests(&mut self) -> Vec<(usize, HostRequest)> {
         self.windows
@@ -1012,6 +1042,9 @@ impl Bus {
         let result = self.windows[device]
             .device
             .complete_host_request(&mut cx, id, result);
+        if !cx.take_posted_writes().is_empty() {
+            cx.fail("a host request completion cannot issue bus-master MMIO writes");
+        }
         let outcome = Self::outcome(&mut cx);
         drop(cx);
         self.publication_after(device, publication);
@@ -1051,6 +1084,9 @@ impl Bus {
                         fujimod_perf::DevicePhase::Dependency,
                     );
                     self.windows[id].device.advance(&mut cx);
+                    if !cx.take_posted_writes().is_empty() {
+                        cx.fail("a dependency wakeup cannot issue bus-master MMIO writes");
+                    }
                     let outcome = Self::outcome(&mut cx);
                     drop(cx);
                     drop(started);
@@ -1270,6 +1306,48 @@ mod tests {
         fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, value: u64) {
             self.0 = value;
         }
+    }
+
+    /// A bus master that, on any write, queues two writes to another window.
+    struct Master;
+    impl Device for Master {
+        fn name(&self) -> &'static str {
+            "master"
+        }
+        fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            0
+        }
+        fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, value: u64) {
+            cx.post_mmio_write(0x2000, 4, value);
+            cx.post_mmio_write(0x2000, 4, value + 1);
+        }
+    }
+
+    #[test]
+    fn posted_mmio_writes_reach_their_target_in_order_after_the_access() {
+        let mut bus = Bus::new(Mode::Strict);
+        bus.register(0x1000, 4, Box::new(Master)).unwrap();
+        let target = bus.register(0x2000, 4, Box::new(Register(0))).unwrap();
+        bus.observe_transactions(Some(8));
+        bus.access(&mut Services, 0, 0x40, 0x1000, 4, Some(5)).unwrap();
+        assert_eq!(bus.device::<Register>(target).unwrap().0, 6);
+        let (rows, _) = bus.transactions();
+        let order: Vec<_> = rows.iter().map(|t| (t.cpu, t.address, t.value)).collect();
+        // The nested writes complete before the causing access is logged.
+        assert_eq!(
+            order,
+            [(usize::MAX, 0x2000, 5), (usize::MAX, 0x2000, 6), (0, 0x1000, 5)]
+        );
+    }
+
+    #[test]
+    fn a_posted_write_to_an_unowned_address_stops_strict_execution() {
+        let mut bus = Bus::new(Mode::Strict);
+        bus.register(0x1000, 4, Box::new(Master)).unwrap();
+        let error = bus
+            .access(&mut Services, 0, 0x40, 0x1000, 4, Some(5))
+            .unwrap_err();
+        assert!(error.contains("0x2000"), "{error}");
     }
 
     struct Transport {

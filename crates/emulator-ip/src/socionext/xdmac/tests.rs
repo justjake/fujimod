@@ -391,3 +391,72 @@ fn full_burst_shape_copies_like_the_unburst_shape() {
     assert_eq!(&h.ram[72..104], &(8..40).collect::<Vec<u8>>());
     assert_eq!(read(&mut d, &mut h, BASE + 0x30), 8);
 }
+
+struct Pattern;
+impl fujimod_emulator_devices::dma::ReadSource for Pattern {
+    fn read(&self, offset: u64, out: &mut [u8]) -> Result<(), String> {
+        for (i, byte) in out.iter_mut().enumerate() {
+            *byte = 0xc0 ^ (offset as u8).wrapping_add(i as u8);
+        }
+        Ok(())
+    }
+}
+const WINDOW: u64 = 0x4000;
+fn window_pair(routing: SharedRouting) -> Pair {
+    pair(routing, BTreeMap::new()).with_read_windows(vec![ReadWindow {
+        base: WINDOW,
+        size: 0x100,
+        source: Arc::new(Pattern),
+    }])
+}
+fn start_software(d: &mut Pair, h: &mut RecordingHost, source: u64, destination: u64) {
+    configure(d, h, 0, source, destination, [0x30f00; 2], 32);
+    write(d, h, BASE, ENABLE as u64);
+    write(d, h, BASE + 0x28, (ENABLE | SOFTWARE | 0x100000 | 3) as u64);
+}
+#[test]
+fn memory_copy_reads_a_device_backed_window_where_the_bus_has_no_ram() {
+    let routing = Arc::new(Mutex::new(Routing::default()));
+    routing.lock().unwrap().set_request(0, 63).unwrap();
+    let mut d = window_pair(routing);
+    let mut h = RecordingHost {
+        ram: vec![0; 128],
+        ..Default::default()
+    };
+    start_software(&mut d, &mut h, WINDOW + 0x10, 64);
+    for _ in 0..4 {
+        advance(&mut d, &mut h);
+    }
+    let expected: Vec<u8> = (0x10..0x30u8).map(|o| 0xc0 ^ o).collect();
+    assert_eq!(&h.ram[64..96], &expected);
+    assert_eq!(read(&mut d, &mut h, BASE + 0x30), 8);
+}
+#[test]
+fn ram_keeps_precedence_over_a_read_window_and_window_writes_refuse() {
+    let routing = Arc::new(Mutex::new(Routing::default()));
+    routing.lock().unwrap().set_request(0, 63).unwrap();
+    // RAM that shadows the window answers first, as a ROM start's aperture shadow does.
+    let mut d = window_pair(routing.clone());
+    let mut h = RecordingHost {
+        ram: (0..64).collect(),
+        ram_base: WINDOW,
+        ..Default::default()
+    };
+    start_software(&mut d, &mut h, WINDOW, WINDOW + 32);
+    for _ in 0..4 {
+        advance(&mut d, &mut h);
+    }
+    assert_eq!(&h.ram[32..64], &(0..32).collect::<Vec<u8>>());
+    // Without RAM there, a copy into the window refuses and moves nothing.
+    let mut d = window_pair(routing);
+    let mut h = RecordingHost {
+        ram: vec![0; 128],
+        ..Default::default()
+    };
+    start_software(&mut d, &mut h, 0, WINDOW + 0x20);
+    let mut cx = Cx::new(&mut h, 0, 0, 0);
+    d.advance(&mut cx);
+    let refusal = cx.refusal().expect("a DMA write into a read-only window refuses");
+    assert!(refusal.contains("read-only device memory"), "{refusal}");
+    assert_eq!(read(&mut d, &mut h, BASE + 0x30) & 8, 0);
+}
