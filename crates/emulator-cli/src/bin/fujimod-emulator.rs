@@ -1,5 +1,5 @@
 //! Native boot command; every binary input is selected by path, for every processor generation.
-use fujimod_catalog_configuration::{RunEngine, RunInputs, RunScene};
+use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -253,13 +253,7 @@ fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Resu
     )?;
     let mut loaded_mod = prepare_mod(&resolved, fujimod_emulator_cpu::Model::CortexR5F, &boot_options.mods)?;
     if let Some(path) = boot_options.path("--scene") {
-        let scene: RunScene = serde_json::from_value(boot::host::read_scene(&path)?)
-            .map_err(|error| format!("{}: {error}", path.display()))?;
-        if !matches!(scene, RunScene::Exr2(_)) {
-            return Err("selected board requires an EXR II scene".into());
-        }
-        scene.validate()?;
-        resolved.configuration.scene = Some(scene);
+        boot::host::set_exr2_scene(&mut resolved, &path)?;
     }
     if let Some(quantum) = boot_options.text("--quantum")? {
         resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?

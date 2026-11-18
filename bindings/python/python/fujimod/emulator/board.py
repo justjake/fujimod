@@ -231,6 +231,9 @@ class Board:
         overlays: Sequence[str] = (),
         update: str | PathLike[str],
         boot_rom: str | PathLike[str] | None = None,
+        card_image: str | PathLike[str] | None = None,
+        card_files: Mapping[str, str | PathLike[str]] | None = None,
+        scene: str | PathLike[str] | None = None,
         nand: str | PathLike[str] | None = None,
         settings: str | PathLike[str] | None = None,
         clock_seconds_2000: int | None = None,
@@ -256,6 +259,8 @@ class Board:
 
         ``update`` is required. ROM starts require ``boot_rom``. XP4 and
         X-Processor Pro runs accept startup files through ``application_plan``.
+        ``card_image`` and ``card_files`` supply explicit SD card media.
+        ``scene`` loads the selected board's scene document.
         ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
         is inferred from the selected configuration.
@@ -290,6 +295,16 @@ class Board:
             raise ValueError("overlays must contain unique catalog identities")
         update = cls._input_path(update, "update")
         boot_rom = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
+        card_image = None if card_image is None else cls._input_path(card_image, "card_image")
+        scene = None if scene is None else cls._input_path(scene, "scene")
+        if card_files is not None and not isinstance(card_files, Mapping):
+            raise TypeError("card_files must map SD card file names to paths")
+        selected_files = [
+            (name, cls._input_path(path, "SD card file"))
+            for name, path in (card_files or {}).items()
+        ]
+        if any(type(name) is not str or not name for name, _ in selected_files):
+            raise TypeError("card_files keys must be nonempty strings")
         manifest = None if manifest is None else cls._input_path(manifest, "manifest")
         if application_plan is not None:
             application_plan = cls._input_path(application_plan, "application_plan")
@@ -322,6 +337,9 @@ class Board:
             overlays=selected_overlays,
             update=update,
             boot_rom=boot_rom,
+            card_image=card_image,
+            card_files=selected_files,
+            scene=scene,
             nand=nand,
             settings=settings,
             clock_seconds_2000=clock_seconds_2000,

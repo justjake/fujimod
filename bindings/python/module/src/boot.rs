@@ -37,15 +37,18 @@ impl Boot for CatalogBoot {
                 return Err("application-profile inputs belong in the startup plan".into());
             }
             let plan = inputs.application_plan.ok_or("application startup needs an application plan")?;
-            let boot::Opened::Application(started) = boot::open(resolved, boot::StartupInputs::Application(
+            let boot::Opened::Application(mut started) = boot::open(resolved, boot::StartupInputs::Application(
                 boot::application::Startup {
                     update: inputs.update, plan, discovery: inputs.discovery, quantum: inputs.quantum,
-                    card_image: None,
-                    card_files: Vec::new(),
+                    card_image: inputs.card_image,
+                    card_files: inputs.card_files,
                 },
             ))? else {
                 return Err("application startup returned another processor generation".into());
             };
+            if let Some(path) = inputs.scene {
+                started.board.set_scene(&boot::host::read_scene(&path)?)?;
+            }
             return match started.board {
                 boot::application::Board::Xp4(session) => fujimod_python_xp4::adopt(*session, started.quantum)
                     .map(Opened::Xp4).map_err(|error| error.to_string()),
@@ -66,7 +69,8 @@ impl Boot for CatalogBoot {
             }
             let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
                 update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
-                card_image: None, card_files: vec![], scene: None, output: None, viewer_port: None,
+                card_image: inputs.card_image, card_files: inputs.card_files, scene: inputs.scene,
+                output: None, viewer_port: None,
                 mode, quantum: inputs.quantum,
             }))? else {
                 return Err("XP5 startup returned another processor generation".into());
@@ -74,8 +78,18 @@ impl Boot for CatalogBoot {
             let (session, inputs, read_limit) = started.into_session();
             return Ok(Opened::Xp5 {session, inputs, read_limit});
         }
-        if inputs.manifest.is_some() || inputs.quantum.is_some() {
-            return Err("XP5 startup settings do not apply to this configuration".into());
+        if inputs.manifest.is_some() {
+            return Err("a boot manifest requires an XP5 run configuration".into());
+        }
+        if let Some(quantum) = inputs.quantum {
+            if quantum == 0 {
+                return Err("processor quantum must be positive".into());
+            }
+            resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
+                .quantum = quantum;
+        }
+        if let Some(path) = inputs.scene {
+            boot::host::set_exr2_scene(&mut resolved, &path)?;
         }
         let access_point = inputs
             .access_point
@@ -99,7 +113,10 @@ impl Boot for CatalogBoot {
             access_point,
             capability_reply,
         };
-        boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2().map(Opened::Graph)
+        let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2()?;
+        #[cfg(not(target_arch = "wasm32"))]
+        boot::media::attach(&mut session, inputs.card_image.as_deref(), &inputs.card_files)?;
+        Ok(Opened::Graph(session))
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

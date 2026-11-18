@@ -23,6 +23,21 @@ pub fn read_scene(path: &std::path::Path) -> Result<serde_json::Value, String> {
         .map_err(|error| format!("{}: {error}", path.display()))
 }
 
+pub fn set_exr2_scene(
+    resolved: &mut fujimod_catalog_resolution::ResolvedConfiguration,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    use fujimod_catalog_configuration::RunScene;
+    let scene: RunScene = serde_json::from_value(read_scene(path)?)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    if !matches!(scene, RunScene::Exr2(_)) {
+        return Err("selected board requires an EXR II scene".into());
+    }
+    scene.validate()?;
+    resolved.configuration.scene = Some(scene);
+    Ok(())
+}
+
 pub fn duration_ticks(duration: Duration, ticks_per_second: u64) -> u64 {
     (duration.as_nanos().saturating_mul(u128::from(ticks_per_second)) / 1_000_000_000)
         .min(u128::from(u64::MAX)) as u64
