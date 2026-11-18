@@ -1,7 +1,11 @@
 import { focalComponents } from './docs/sdk.generated';
-import { manualPageTitle } from './docs/manual-data';
 import { isManualPath } from './docs/manual-routes';
 import { textPagePath, textPages } from './text/routes';
+
+// The head is rendered on the server. Keep the manual data out of the shared client entry.
+const manualPageTitle = import.meta.env.SSR
+  ? (await import('./docs/manual-data')).manualPageTitle
+  : undefined;
 
 const pages = {
   '/': {
@@ -61,7 +65,7 @@ export function pageMetadata(path: string) {
     };
   }
   const normalized = path.endsWith('/') ? path : path + '/';
-  if (import.meta.env.SSR && isManualPath(normalized))
+  if (manualPageTitle && isManualPath(normalized))
     return {
       title: `${manualPageTitle(normalized)} · FujiMod`,
       description: 'The FujiMod camera manual.',
