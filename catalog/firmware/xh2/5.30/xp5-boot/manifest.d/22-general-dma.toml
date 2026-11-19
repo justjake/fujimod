@@ -1,0 +1,20 @@
+# General DMA (the SoC's `dma`, `dma-address-high` and `dma-routes` blocks). The reset
+# routine 0x1390dd0 sets bit 28 of the first word of each of the eight banks
+# 0xff930000..0xff937000, then writes the global words 0xff90e56c..0xff90e578.
+# companion_irq_base = 83 is the SoC's declared companion line base for bank 0.
+[[device]]
+base = 0xff930000
+size = 0x8000
+kind = "general-dma"
+[device.options]
+companion_irq_base = 83
+
+[[device]]
+base = 0xff90e748
+size = 0x40
+kind = "dma-address-high"
+
+[[device]]
+base = 0xff90e500
+size = 0x20
+kind = "dma-request-routing"
