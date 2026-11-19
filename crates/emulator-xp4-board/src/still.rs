@@ -151,8 +151,11 @@
 //! 0x422000): which color the firmware programs for the movie is not
 //! modeled. [`Engine::firmware_white_balance`] (opt-in, on top) first scales
 //! each channel by the tone page's channel gains (+0x088, +0x08c) relative
-//! to declared reference gains, read when the pass ends
-//! ([`FirmwareColor::with_white_balance`]).
+//! to declared reference gains, and [`Engine::firmware_luma_bands`] (opt-in,
+//! on top) scales the chroma by the YCbCr page's luma bands
+//! (+0x258..+0x26c), both read when the pass ends
+//! ([`FirmwareColor::with_white_balance`],
+//! [`FirmwareColor::with_luma_bands`]).
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_xpp::development::{
     FirmwareColor, YcLayout, develop, develop_firmware, scaled_line, size, step, y0l2_sample,
@@ -715,6 +718,8 @@ pub struct Engine {
     /// ... and with the tone page's white balance relative to these declared
     /// reference (R, G, B) gains.
     firmware_white_balance: Option<[u32; 3]>,
+    /// ... and with the YCbCr page's luma bands.
+    firmware_luma_bands: bool,
     state: State,
 }
 
@@ -733,6 +738,7 @@ impl Engine {
             contract,
             firmware_color: false,
             firmware_white_balance: None,
+            firmware_luma_bands: false,
             state: State::default(),
         })
     }
@@ -788,6 +794,18 @@ impl Engine {
             return Err(format!("{name} reference white-balance gain is zero"));
         }
         self.firmware_white_balance = Some(reference);
+        Ok(self)
+    }
+    /// A firmware-color RECC also scales the chroma of its still bands by
+    /// the luma bands of its YCbCr page (opt-in, see the module notes).
+    pub fn firmware_luma_bands(mut self) -> Result<Self, String> {
+        if !self.firmware_color {
+            return Err(format!(
+                "{} luma bands need the firmware color",
+                self.contract.name
+            ));
+        }
+        self.firmware_luma_bands = true;
         Ok(self)
     }
     /// The words of the parameter page at `page`, by their offset in it.
@@ -886,13 +904,16 @@ impl Engine {
                 let bytes = cx.ram_bytes(source, length as usize)?;
                 let (pitch, lines, width) = (pitch as usize, lines as usize, width as usize);
                 let rows = if self.firmware_color {
-                    let tone = self.page_words(0x4000);
-                    let mut color = FirmwareColor::from_words(&tone, &self.page_words(0x5000))
+                    let (tone, ycbcr) = (self.page_words(0x4000), self.page_words(0x5000));
+                    let mut color = FirmwareColor::from_words(&tone, &ycbcr)
                         .map_err(|e| format!("{name}: {e}"))?;
                     if let Some(reference) = self.firmware_white_balance {
                         color = color
                             .with_white_balance(&tone, reference)
                             .map_err(|e| format!("{name}: {e}"))?;
+                    }
+                    if self.firmware_luma_bands {
+                        color = color.with_luma_bands(&ycbcr);
                     }
                     develop_firmware(&bytes, pitch, lines, width, phase, &color)?
                 } else {
@@ -2188,6 +2209,60 @@ mod tests {
             .firmware_white_balance([9149, 0, 9309])
             .err();
         assert!(error.is_some_and(|e| e.contains("is zero")));
+    }
+
+    /// With the luma bands, a band develops with the bands its YCbCr page
+    /// holds when the pass ends.
+    #[test]
+    fn a_luma_banded_recc_develops_its_bands_with_its_programmed_bands() {
+        let raw = raw_samples();
+        let (tone, ycbcr) = color_pages();
+        // PROVIA's bounds and bands (slope low, gain high).
+        let bands = [
+            (0x258, 64 | 128 << 8 | 192 << 16 | 230 << 24),
+            (0x25c, 208 << 16 | 128),
+            (0x260, 224 << 16 | 64),
+            (0x264, 256 << 16),
+            (0x268, 304 << 16 | (-64_i32 as u32 & 0x7ff)),
+            (0x26c, 476 << 16 | (-256_i32 as u32 & 0x7ff)),
+        ];
+        let mut programmed: BTreeMap<u64, u32> = ycbcr.iter().copied().collect();
+        programmed.extend(bands);
+        let color =
+            FirmwareColor::from_words(&tone.iter().copied().collect(), &programmed).unwrap();
+        let plain = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        let color = color.with_luma_bands(&programmed);
+        let banded = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        assert_ne!(banded, plain);
+        let banding = || firmware_color_recc().firmware_luma_bands().unwrap();
+        // Bands programmed: the banded band. Bands absent, or the option
+        // absent: the plain firmware color.
+        for (mut e, written, rows) in [
+            (banding(), true, &banded),
+            (banding(), false, &plain),
+            (firmware_color_recc(), true, &plain),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            h.ram[..16 * 64].copy_from_slice(&raw);
+            program_color_pages(&mut e, &mut h);
+            if written {
+                for (o, v) in bands {
+                    let mut cx = Cx::new(&mut h, 0, 0, 0);
+                    e.write(&mut cx, RECC + 0x5000 + o, 4, v.into());
+                }
+            }
+            assert_eq!(recc_pass(&mut e, &mut h, &band(0)), None);
+            for (y, row) in rows.iter().enumerate() {
+                let at = 0x1000 + (2 + y) * 48 + 8;
+                assert_eq!(h.ram[at..at + 24], row[..], "band line {y}");
+            }
+        }
+        // The option needs the firmware color.
+        let error = developing_recc().firmware_luma_bands().err();
+        assert!(error.is_some_and(|e| e.contains("need the firmware color")));
     }
 
     #[test]
