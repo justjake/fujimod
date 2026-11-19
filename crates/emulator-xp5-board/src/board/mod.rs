@@ -573,6 +573,7 @@ pub fn register_all(
             | "imaging-rifp"
             | "imaging-rifp-io"
             | "imaging-preview"
+            | "imaging-buffer"
             | "imaging-input"
             | "imaging-reset"
             | "movdc"

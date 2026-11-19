@@ -29,6 +29,12 @@ base = 0xff944000
 size = 0x1000
 kind = "imaging-phy"
 
+# Input-buffer (IBUF) setters and start/stop routines: plain words and one ready bit.
+[[device]]
+base = 0xff945000
+size = 0x1000
+kind = "imaging-buffer"
+
 # Input-engine reset/ready gate used by native imgdc startup.
 [[device]]
 base = 0xff946000

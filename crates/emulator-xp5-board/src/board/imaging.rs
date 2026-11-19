@@ -3,6 +3,7 @@ use fujimod_emulator_devices::graph::DeviceGraph;
 use fujimod_emulator_devices::graph::DeviceWindow;
 use fujimod_emulator_sensor_input::statistics;
 use fujimod_emulator_sensor_input::{sensor, slvs};
+use fujimod_emulator_xp5_imaging::imaging::buffer;
 use fujimod_emulator_xp5_imaging::imaging::focus;
 use fujimod_emulator_xp5_imaging::imaging::input;
 use fujimod_emulator_xp5_imaging::imaging::iris;
@@ -170,6 +171,12 @@ pub fn register_all(
             )
         };
         bus.register(w.base, w.size, device)?;
+    }
+    for w in windows.iter().filter(|w| w.kind == "imaging-buffer") {
+        if w.base != buffer::BASE || w.size != 0x1000 {
+            return Err("invalid input-buffer window".into());
+        }
+        bus.register(w.base, w.size, Box::new(buffer::Buffer::default()))?;
     }
     for w in windows.iter().filter(|w| w.kind == "imaging-input") {
         if w.base != 0xff946000 || w.size != 0x1000 {
