@@ -1,20 +1,21 @@
 import { Show, createSignal } from 'solid-js';
 
 import { DesignFrame } from '../../../design/looks';
-import { CameraKeys, Fit, KeyHint, type CameraKey } from '../../../design/screen';
+import { CameraKeys, CameraScreen, Fit, KeyHint, States, type CameraKey } from '../../../design/screen';
 import { SiteFrame } from '../../../ui/SiteFrame';
 import {
   Editor as SettingsEditor,
   FILMS,
   INITIAL,
-  RecipeStates,
+  SETTINGS_STATES,
   apply,
   onKey,
   type EditorState,
 } from './custom-settings';
 import {
   Editor as FilmEditor,
-  FilmStates,
+  FILM_STATES,
+  FilmScreen,
   Picture,
   RAIL,
   SCROLLER,
@@ -82,7 +83,7 @@ function App() {
   return (
     <>
       <Fit>
-        <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
+        <CameraScreen>
           <div
             class="absolute inset-0"
             style={{
@@ -111,7 +112,7 @@ function App() {
               chrome={{ opacity: open() ? 1 : 0, transition: `opacity 200ms ${open() ? '200ms' : '0ms'}` }}
             />
           </div>
-        </div>
+        </CameraScreen>
       </Fit>
       <CameraKeys send={send} />
     </>
@@ -125,9 +126,8 @@ export default function CustomSettingsEditorPage() {
     <SiteFrame class="design-page">
       <DesignFrame title="Custom settings editor">
         <App />
-        <RecipeStates />
-        <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">Film editor</h2>
-        <FilmStates />
+        <States title="Custom settings editor" states={SETTINGS_STATES} render={(state) => <SettingsEditor state={state} />} />
+        <States title="Film editor" states={FILM_STATES} render={(start) => <FilmScreen start={start} />} />
       </DesignFrame>
     </SiteFrame>
   );

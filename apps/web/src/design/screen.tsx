@@ -1,4 +1,4 @@
-import { Show, createSignal, onSettled } from 'solid-js';
+import { For, Show, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { ACCENT, GLASS, SMALL } from './materials';
@@ -82,5 +82,42 @@ export function KeyHint(props: { glyph: string; label?: string; tap?: () => void
         <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{props.label}</span>
       </Show>
     </button>
+  );
+}
+
+/** A glass card over the picture: names, values and notes, and fly-out bodies. */
+export function Card(props: { class?: string; style?: JSX.CSSProperties; children: JSX.Element }) {
+  return (
+    <div class={`rounded-[12px] font-semibold ${props.class ?? ''}`} style={{ ...GLASS, ...props.style }}>
+      {props.children}
+    </div>
+  );
+}
+
+/** A prototype's review states: each under its title, linkable by its id. */
+export function States<T>(props: { title: string; states: { id: string; title: string; state: T }[]; render: (state: T) => JSX.Element }) {
+  return (
+    <>
+      <h2 class="mt-[40px] text-[22px] font-semibold">{props.title}</h2>
+      <For each={props.states}>
+        {(entry) => (
+          <section id={entry.id} class="mt-[28px]">
+            <h3 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h3>
+            <Fit>
+              <CameraScreen>{props.render(entry.state)}</CameraScreen>
+            </Fit>
+          </section>
+        )}
+      </For>
+    </>
+  );
+}
+
+/** The camera's 720 by 480 screen. The chosen look's materials apply inside it. */
+export function CameraScreen(props: { style?: JSX.CSSProperties; children: JSX.Element }) {
+  return (
+    <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans text-white select-none" style={props.style}>
+      {props.children}
+    </div>
   );
 }

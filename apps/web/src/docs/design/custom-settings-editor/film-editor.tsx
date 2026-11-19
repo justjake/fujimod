@@ -1,5 +1,6 @@
 import PHOTO from '../../../engine/assets/default-scene.png';
-import { filmArtwork, stockArtwork } from '../../../design/artwork';
+import { Artwork, Monogram, filmArtwork, stockArtwork } from '../../../design/artwork';
+import { Button, Scroller, Section } from '../../../design/column';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
@@ -356,96 +357,8 @@ const BAND_NAMES = ['BLACKS', 'SHADOWS', 'MIDTONES', 'HIGHLIGHTS', 'WHITES'];
 
 /* ---- Controls --------------------------------------------------------------------- */
 
-function Ruler(props: {
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  width: number;
-  focused: boolean;
-  changed: boolean;
-  set: (value: number) => void;
-  /** A gradient under the ticks showing what the scale does. */
-  track?: string;
-}) {
-  const spacing = 34;
-  const index = () => (props.value - props.min) / props.step;
-  const count = () => Math.round((props.max - props.min) / props.step) + 1;
-  const zero = () => (0 - props.min) / props.step;
-  const origin = () => props.width / 2 - index() * spacing;
-  const color = () => (props.changed ? ACCENT : '#fff');
-  let drag: { x: number; value: number } | undefined;
-  return (
-    <div
-      class="relative h-full overflow-hidden"
-      style={{
-        width: `${props.width}px`,
-        'touch-action': 'pan-y',
-        'mask-image': 'linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent)',
-      }}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        drag = { x: e.clientX, value: props.value };
-      }}
-      onPointerMove={(e) => {
-        if (!drag) return;
-        const box = e.currentTarget.getBoundingClientRect();
-        const scale = e.currentTarget.offsetWidth / box.width;
-        const steps = Math.round(((drag.x - e.clientX) * scale) / spacing);
-        props.set(Math.max(props.min, Math.min(props.max, drag.value + steps * props.step)));
-      }}
-      onPointerUp={() => (drag = undefined)}
-      onPointerCancel={() => (drag = undefined)}
-    >
-      <Show when={props.track}>
-        {(track) => <div class="absolute inset-x-0 bottom-[5px] h-[9px] rounded-full opacity-80" style={{ background: track() }} />}
-      </Show>
-      <div class="absolute inset-y-0 left-0 transition-transform duration-150 ease-out" style={{ transform: `translateX(${origin()}px)` }}>
-        <For each={Array.from({ length: count() }, (_, i) => i)}>
-          {(i) => {
-            const lit = () => (i >= Math.min(zero(), index()) && i <= Math.max(zero(), index()) && index() !== zero());
-            return (
-              <span
-                class="absolute bottom-[5px] -translate-x-1/2"
-                style={{
-                  left: `${i * spacing}px`,
-                  width: '2px',
-                  height: `${i === zero() ? 14 : 9}px`,
-                  background: lit() ? ACCENT : 'rgb(255 255 255 / 0.55)',
-                }}
-              />
-            );
-          }}
-        </For>
-      </div>
-      <span
-        class={`absolute top-[3px] -translate-x-1/2 font-semibold tabular-nums ${SMALL}`}
-        style={{ left: `${props.width / 2}px`, color: color() }}
-      >
-        {signed(props.value)}
-      </span>
-      <span class="absolute bottom-[4px] h-[17px] w-[3px] -translate-x-1/2 rounded-full" style={{ left: `${props.width / 2}px`, background: color() }} />
-    </div>
-  );
-}
 
 /** A labeled row: name on the left, the control in its track on the right. */
-function Row(props: { name: string; focused: boolean; width: number; nameWidth?: number; children: JSX.Element; onClick?: () => void }) {
-  const nameWidth = () => props.nameWidth ?? 146;
-  return (
-    <div class="flex h-[57px] items-center gap-[8px]" style={{ width: `${props.width}px` }} onClick={() => props.onClick?.()}>
-      <span
-        class={`shrink-0 font-light tracking-[0.06em] ${SMALL}`}
-        style={{ width: `${nameWidth()}px`, color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.72)' }}
-      >
-        {props.name}
-      </span>
-      <div class="h-[47px] grow overflow-hidden" style={TRACK(props.focused)}>
-        {props.children}
-      </div>
-    </div>
-  );
-}
 
 function curvePath(f: Film, w: number, h: number): string {
   const hs = handles(f);
@@ -969,44 +882,14 @@ const ICON_COLUMNS = 6;
 const BASE_ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-std', 'eterna', 'classic-neg'];
 
 function FilmIcon(props: { slug: string; size: number; color: string }) {
-  const src = props.slug.startsWith('text:') ? undefined : filmArtwork(props.slug);
-  if (src === undefined && !props.slug.startsWith('text:'))
-    return <FilmIcon slug={`text:${props.slug.slice(0, 2).toUpperCase()}`} size={props.size} color={props.color} />;
-  if (props.slug.startsWith('text:')) {
-    const code = props.slug.slice(5) || 'Aa';
-    const em = props.size * [0.5, 0.5, 0.46, 0.36, 0.28][code.length];
-    return (
-      <span
-        class="flex shrink-0 items-center justify-center rounded-[18%] font-bold"
-        style={{
-          width: `${props.size}px`,
-          height: `${props.size}px`,
-          'box-shadow': `inset 0 0 0 ${props.size / 12}px ${props.color}`,
-          color: props.color,
-          'font-size': `${em}px`,
-          'font-variant': 'small-caps',
-          'font-stretch': 'condensed',
-          'letter-spacing': '-0.02em',
-          'text-transform': 'none',
-          opacity: props.slug === 'text:' ? 0.6 : 1,
-        }}
-      >
-        {code}
-      </span>
-    );
-  }
+  const text = () => (props.slug.startsWith('text:') ? props.slug.slice(5) : undefined);
+  const monogram = () => <Monogram text={text() ?? props.slug.slice(0, 2).toUpperCase()} size={props.size} color={props.color} />;
   return (
-    <span
-      class="block shrink-0"
-      style={{
-        width: `${props.size}px`,
-        height: `${props.size}px`,
-        background: props.color,
-        'mask-image': `url(${src})`,
-        'mask-size': 'contain',
-        'mask-repeat': 'no-repeat',
-        'mask-position': 'center',
-      }}
+    <Artwork
+      src={text() === undefined ? filmArtwork(props.slug) : undefined}
+      size={props.size}
+      color={props.color}
+      fallback={monogram()}
     />
   );
 }
@@ -2008,62 +1891,57 @@ export function Editor(props: {
       <Show when={s().numbers}>
         <NumbersSheet s={s()} update={update} />
       </Show>
-      <div
+      <Scroller
         ref={(element) => (scroller = element)}
-        class="absolute inset-y-0 overflow-y-auto overscroll-contain px-[6px]"
-        style={{ ...COLUMN, left: `${RAIL}px`, width: `${SCROLLER}px`, 'scrollbar-width': 'none', visibility: s().numbers ? 'hidden' : undefined }}
+        class="absolute inset-y-0 px-[6px]"
+        style={{ left: `${RAIL}px`, width: `${SCROLLER}px`, visibility: s().numbers ? 'hidden' : undefined }}
         onScroll={spy}
       >
-        <section ref={(element) => (sections.film = element)} class="pt-[8px] pb-[14px]">
+        <Section ref={(element) => (sections.film = element)} first>
           <div class="mb-[8px] flex gap-[8px]">
-          <button
-            type="button"
-            class="flex size-[57px] shrink-0 items-center justify-center"
-            style={TRACK(s().area === 'icon')}
-            onClick={() => update(openPicker({ ...s(), area: 'icon', railOn: null, header: false, inside: false }, { kind: 'icon' }))}
-          >
-            <FilmIcon slug={s().icon} size={40} color="#fff" />
-          </button>
-          <div
-            class="flex h-[57px] min-w-0 grow items-center gap-[10px] px-[10px]"
-            style={TRACK(s().area === 'name')}
-            onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false, keyboard: typing(s().name, 'name') })}
-          >
-            <div class="flex min-w-0 grow flex-col gap-[5px]">
-              <span class={`truncate font-semibold ${TEXT}`}>{s().name}</span>
-              <Show when={s().from}>
-                <span class="text-[16px] leading-none text-white/60">from {s().from}</span>
-              </Show>
+            <button
+              type="button"
+              class="flex size-[57px] shrink-0 items-center justify-center"
+              style={TRACK(s().area === 'icon')}
+              onClick={() => update(openPicker({ ...s(), area: 'icon', railOn: null, header: false, inside: false }, { kind: 'icon' }))}
+            >
+              <FilmIcon slug={s().icon} size={40} color="#fff" />
+            </button>
+            <div
+              class="flex h-[57px] min-w-0 grow items-center gap-[10px] px-[10px]"
+              style={TRACK(s().area === 'name')}
+              onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false, keyboard: typing(s().name, 'name') })}
+            >
+              <div class="flex min-w-0 grow flex-col gap-[5px]">
+                <span class={`truncate font-semibold ${TEXT}`}>{s().name}</span>
+                <Show when={s().from}>
+                  <span class="text-[16px] leading-none text-white/60">from {s().from}</span>
+                </Show>
+              </div>
+              <svg width="24" height="24" viewBox="0 0 24 24" class="shrink-0 opacity-70">
+                <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" />
+              </svg>
             </div>
-            <svg width="24" height="24" viewBox="0 0 24 24" class="shrink-0 opacity-70">
-              <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" />
-            </svg>
-          </div>
           </div>
           <div class="flex gap-[8px]">
             <For each={[['save', 'SAVE'], ['saveas', 'SAVE AS NEW'], ['open', 'OPEN']] as ['save' | 'saveas' | 'open', string][]}>
-              {([area, label]) => {
-                const idle = () => area === 'save' && same(s().film, s().opened);
-                return (
-                  <button
-                    type="button"
-                    class={`flex h-[47px] items-center justify-center px-[10px] font-semibold whitespace-nowrap ${SMALL} ${area === 'saveas' ? 'grow' : 'grow basis-0'}`}
-                    style={{ ...TRACK(s().area === area), ...(idle() ? { color: 'rgb(255 255 255 / 0.35)' } : {}) }}
-                    onClick={() => {
-                      const next = { ...s(), area, railOn: null, header: false, inside: false };
-                      update(area === 'open' ? openPicker(next, { kind: 'open' }) : area === 'save' ? save(next) : { ...next, keyboard: typing(nextName(s().name), 'saveas') });
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              }}
+              {([area, label]) => (
+                <Button
+                  label={label}
+                  class={area === 'saveas' ? 'grow' : 'grow basis-0'}
+                  focused={s().area === area}
+                  idle={area === 'save' && same(s().film, s().opened)}
+                  onClick={() => {
+                    const next = { ...s(), area, railOn: null, header: false, inside: false };
+                    update(area === 'open' ? openPicker(next, { kind: 'open' }) : area === 'save' ? save(next) : { ...next, keyboard: typing(nextName(s().name), 'saveas') });
+                  }}
+                />
+              )}
             </For>
           </div>
-        </section>
+        </Section>
         <Show when={s().crop > 0}>
-          <section ref={(element) => (sections.raw = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
-            <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>RAW CONVERSION</div>
+          <Section ref={(element) => (sections.raw = element)} title="RAW CONVERSION">
             <div
               class="mb-[8px] flex h-[57px] items-center gap-[10px] px-[10px]"
               style={TRACK(s().area === 'strip')}
@@ -2077,14 +1955,12 @@ export function Editor(props: {
                 {s().crop}/{RAWS.length}
               </span>
             </div>
-            <button
-              type="button"
-              class={`mb-[8px] flex h-[47px] w-full items-center justify-center rounded-[12px] font-semibold ${SMALL}`}
-              style={TRACK(s().area === 'reflect')}
+            <Button
+              label="REFLECT SHOOTING COND."
+              class="mb-[8px] w-full"
+              focused={s().area === 'reflect'}
               onClick={() => update({ ...s(), area: 'reflect', railOn: null, header: false, inside: false, raw: RAW_DEFAULT, custom: true })}
-            >
-              REFLECT SHOOTING COND.
-            </button>
+            />
             <div class="mb-[8px] flex flex-col gap-[4px]">
               <For each={RAW_OPTIONS}>
                 {(o, k) => (
@@ -2104,59 +1980,43 @@ export function Editor(props: {
                 )}
               </For>
             </div>
-            <button
-              type="button"
-              class={`flex h-[47px] w-full items-center justify-center rounded-[12px] font-semibold ${SMALL}`}
-              style={{
-                ...TRACK(s().area === 'create'),
-                ...(s().created === s().crop ? { background: ACCENT } : {}),
-              }}
+            <Button
+              label={s().created === s().crop ? 'CREATED' : 'CREATE'}
+              class="w-full"
+              focused={s().area === 'create'}
+              accent={s().created === s().crop}
               onClick={() => update({ ...s(), area: 'create', railOn: null, header: false, inside: false, created: s().crop })}
-            >
-              {s().created === s().crop ? 'CREATED' : 'CREATE'}
-            </button>
-          </section>
+            />
+          </Section>
         </Show>
-        <section ref={(element) => (sections.custom = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
-          <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>CUSTOM SETTING</div>
-          <div
-            class="flex h-[47px] items-center gap-[4px] px-[5px]"
-            style={TRACK(s().area === 'custom')}
-            onPointerDown={() => update({ ...s(), area: 'custom', railOn: null, header: false, inside: false })}
-          >
-            <For each={[false, true]}>
-              {(on) => (
-                <button
-                  type="button"
-                  class={`flex h-[37px] grow items-center justify-center rounded-[10px] font-medium ${SMALL}`}
-                  style={s().custom === on ? { background: '#fff', color: '#000' } : { color: 'rgb(255 255 255 / 0.6)' }}
-                  onClick={() => update({ ...s(), custom: on, area: 'custom' })}
-                >
-                  {on ? 'ON' : 'OFF'}
-                </button>
-              )}
-            </For>
-          </div>
+        <Section ref={(element) => (sections.custom = element)} title="CUSTOM SETTING">
+          <Choice
+            items={['OFF', 'ON']}
+            value={s().custom ? 1 : 0}
+            width={CONTENT}
+            focused={s().area === 'custom'}
+            onFocus={() => update({ ...s(), area: 'custom', railOn: null, header: false, inside: false })}
+            pick={(v) => update({ ...s(), custom: v === 1, area: 'custom' })}
+          />
           <div class="mt-[10px] flex flex-wrap gap-x-[14px] gap-y-[8px] px-[6px]" style={{ opacity: s().custom ? 1 : 0.4 }}>
             <For each={RECIPE_ROWS.slice(1)}>
               {(row) => (
                 <span class="flex items-center gap-[4px]">
-                  <StockIcon id={row.icon} color="rgb(255 255 255 / 0.8)" size={28} />
+                  <Artwork src={stockArtwork(row.icon)} class="size-[28px]" color="rgb(255 255 255 / 0.8)" />
                   <span class="text-[18px] leading-none tabular-nums">{row.value ?? signed(row.level ?? 0)}</span>
                 </span>
               )}
             </For>
           </div>
-        </section>
+        </Section>
         <For each={TOOLS}>
           {(tool) => {
             const from = () => groupSource(s().film, tool);
             return (
-              <section ref={(element) => (sections[tool] = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
-                <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
-                  <span class={`grow font-semibold tracking-[0.02em] ${TEXT} ${tool === 'tone' ? '' : 'whitespace-nowrap'}`} style={{ 'font-size': tool === 'tone' ? '21px' : undefined }}>
-                    {TOOL_NAMES[tool]}
-                  </span>
+              <Section
+                ref={(element) => (sections[tool] = element)}
+                title={TOOL_NAMES[tool]}
+                accessory={
                   <button
                     type="button"
                     class={`flex h-[36px] shrink-0 items-center gap-[6px] rounded-[10px] pr-[8px] pl-[10px] whitespace-nowrap text-[18px] leading-none font-medium`}
@@ -2169,7 +2029,8 @@ export function Editor(props: {
                     {from() === undefined ? 'EDITED' : BASES[from() as number].name}
                     <Chevron dir="down" size={14} />
                   </button>
-                </div>
+                }
+              >
                 <Show when={tool === 'curve'}>
                   <div ref={(element) => (rows[0] = element)} class="relative rounded-[14px] p-[2px]" style={frame(0)} onPointerDown={() => focusControl(0)}>
                     <button
@@ -2246,12 +2107,12 @@ export function Editor(props: {
                 <Show when={tool === 'channels'}>
                   <For each={CHANNEL_SCALES}>{(c, k) => scaleRow(index('channels', k()), c, CONTENT, 146)}</For>
                 </Show>
-              </section>
+              </Section>
             );
           }}
         </For>
         <div class="h-[300px]" />
-      </div>
+      </Scroller>
       </div>
 
       <Show when={s().full}>
@@ -2375,7 +2236,7 @@ export function useHistogram() {
 function Screen(props: { state: () => State; set: (s: State) => void }) {
   const histogram = useHistogram();
   return (
-    <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
+    <>
       <Picture
         film={props.state().film}
         custom={props.state().custom}
@@ -2387,7 +2248,7 @@ function Screen(props: { state: () => State; set: (s: State) => void }) {
         })()}
       />
       <Editor s={props.state()} set={props.set} histogram={histogram()} />
-    </div>
+    </>
   );
 }
 
@@ -2409,29 +2270,11 @@ const RECIPE_ROWS: RecipeRow[] = [
 ];
 
 
-function StockIcon(props: { id: number; color: string; size?: number }) {
-  const src = stockArtwork(props.id);
-  if (src === undefined) return <span class="block shrink-0" style={{ width: `${props.size ?? 38}px` }} />;
-  return (
-    <span
-      class="block shrink-0"
-      style={{
-        width: `${props.size ?? 38}px`,
-        height: `${props.size ?? 38}px`,
-        background: props.color,
-        'mask-image': `url(${src})`,
-        'mask-size': 'contain',
-        'mask-repeat': 'no-repeat',
-        'mask-position': 'center',
-      }}
-    />
-  );
-}
 
 
 /* ---- Review ------------------------------------------------------------------------- */
 
-const STATES: { id: string; title: string; state: State }[] = [
+export const FILM_STATES: { id: string; title: string; state: State }[] = [
   { id: 'film', title: 'The film: name, save, save as new, open', state: initial({ area: 'save' }) },
   { id: 'save-as', title: 'Save as new: name the copy', state: initial({ area: 'saveas', keyboard: { ...typing(nextName('NEW FILM'), 'saveas'), focus: 4 } }) },
   { id: 'raw-options', title: 'RAW conversion options', state: initial({ crop: 3, area: 'push', raw: [6, 1, 0, 0, 0, 0], scrollTo: 'raw' }) },
@@ -2452,29 +2295,9 @@ const STATES: { id: string; title: string; state: State }[] = [
   ...STRIP_STYLES.map(([strip, name]) => ({ id: `raw-${strip}`, title: `RAW files: ${name.toLowerCase()}`, state: initial({ crop: 3, area: 'strip', strip }) })),
 ];
 
-function Static(props: { start: State }) {
+/** A review state, live: its keys still work. */
+export function FilmScreen(props: { start: State }) {
   const [state, setState] = createSignal<State>(props.start);
-  return (
-    <Fit>
-      <Screen state={state} set={setState} />
-    </Fit>
-  );
+  return <Screen state={state} set={setState} />;
 }
 
-
-
-
-
-/** The film editor's review states, one screen each. */
-export function FilmStates() {
-  return (
-    <For each={STATES}>
-      {(entry) => (
-        <section id={entry.id} class="mt-[28px]">
-          <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
-          <Static start={entry.state} />
-        </section>
-      )}
-    </For>
-  );
-}
