@@ -445,8 +445,11 @@ function Dial(props: {
   set: (value: number) => void;
   onFocus?: () => void;
 }) {
-  const SPACING = 26;
   const count = () => Math.round((props.max - props.min) / props.step) + 1;
+  /* Ticks every step, as far apart as the step count allows; a labeled major
+     tick every few steps, counted from zero. */
+  const SPACING = count() <= 11 ? 30 : count() <= 21 ? 20 : 15;
+  const MAJOR = SPACING >= 30 ? 2 : SPACING >= 20 ? 4 : 5;
   const indexOf = (v: number) => (v - props.min) / props.step;
   const zero = () => indexOf(0);
   /** The scale's position in steps while held or coasting; settled otherwise. */
@@ -496,7 +499,7 @@ function Dial(props: {
   const scaleOf = (el: Element) => (el as HTMLElement).offsetWidth / el.getBoundingClientRect().width;
   return (
     <div
-      class="relative h-[57px] overflow-hidden select-none"
+      class="relative h-[84px] overflow-hidden select-none"
       style={{ width: `${props.width}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
       onPointerDown={(e) => {
         stop();
@@ -541,44 +544,40 @@ function Dial(props: {
         if (active()) settle();
       }}
     >
-      <span class={`absolute top-[8px] left-[12px] font-light tracking-[0.06em] ${SMALL}`} style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.72)' }}>
+      <span class="absolute top-[8px] left-[12px] text-[16px] leading-none tracking-[0.06em]" style={{ color: props.focused || active() ? 'rgb(255 255 255 / 0.85)' : 'rgb(255 255 255 / 0.6)' }}>
         {props.name}
       </span>
-      <span
-        class="absolute top-[5px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100"
-        style={{ color: color(), 'font-size': '23px', 'line-height': '26px', transform: active() ? 'scale(1.3)' : 'none' }}
-      >
+      <span class="absolute top-[26px] left-[12px] origin-left font-semibold tabular-nums transition-transform duration-100" style={{ color: color(), 'font-size': '24px', 'line-height': '24px', transform: active() ? 'scale(1.15)' : 'none' }}>
         {signed(props.value)}
       </span>
-      <div
-        class="absolute inset-x-0 bottom-0 h-[32px]"
-        style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent)' }}
-      >
-        <Show when={props.track}>{(track) => <div class="absolute inset-x-[8px] bottom-[4px] h-[4px] rounded-full opacity-70" style={{ background: track() }} />}</Show>
-        <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out' }}>
-          <For each={Array.from({ length: count() }, (_, i) => i)}>
-            {(i) => {
-              const near = () => Math.max(0, 1 - Math.abs(i - shown()) / 3);
-              const between = () => i >= Math.min(zero(), shown()) && i <= Math.max(zero(), shown()) && Math.round(shown()) !== zero();
-              const major = () => i === zero() || (i - zero()) % 5 === 0;
-              return (
-                <span
-                  class="absolute bottom-[10px] -translate-x-1/2 rounded-full"
-                  style={{
-                    left: `${i * SPACING}px`,
-                    width: '2px',
-                    height: `${(major() ? 12 : 7) + (active() ? near() * 4 : 0)}px`,
-                    background: between() ? ACCENT : `rgb(255 255 255 / ${0.4 + (active() ? near() * 0.6 : 0)})`,
-                  }}
-                />
-              );
-            }}
-          </For>
+      {/* The scale: a recessed strip along the bottom, the track's colors on
+          its bottom edge, labels over the major ticks, the mark at the center. */}
+      <div class="absolute inset-x-0 bottom-0 h-[34px]" style={{ background: 'rgb(0 0 0 / 0.24)', 'box-shadow': 'inset 0 1px 0 rgb(0 0 0 / 0.3)' }}>
+        <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
+          <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out' }}>
+            <For each={Array.from({ length: count() }, (_, i) => i)}>
+              {(i) => {
+                const major = () => (i - Math.round(zero())) % MAJOR === 0;
+                const near = () => (active() ? Math.max(0, 1 - Math.abs(i - shown()) / 2.5) : 0);
+                return (
+                  <>
+                    <Show when={major()}>
+                      <span class="absolute top-[3px] -translate-x-1/2 text-[12px] leading-none tabular-nums" style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
+                        {signed(props.min + i * props.step)}
+                      </span>
+                    </Show>
+                    <span
+                      class="absolute bottom-[6px] w-[2px] -translate-x-1/2"
+                      style={{ left: `${i * SPACING}px`, height: `${major() ? 11 : 7}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
+                    />
+                  </>
+                );
+              }}
+            </For>
+          </div>
         </div>
-        <span
-          class="absolute bottom-[10px] w-[4px] -translate-x-1/2 rounded-full transition-[height] duration-100"
-          style={{ left: `${props.width / 2}px`, height: active() ? '20px' : '16px', background: color(), 'box-shadow': '0 0 0 1.5px rgb(0 0 0 / 0.5)' }}
-        />
+        <Show when={props.track}>{(track) => <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />}</Show>
+        <span class="absolute bottom-[4px] w-[3px] -translate-x-1/2 transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '19px' : '15px', background: color() }} />
       </div>
     </div>
   );
