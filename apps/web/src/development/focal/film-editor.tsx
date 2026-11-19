@@ -446,6 +446,72 @@ function Ruler(props: {
   );
 }
 
+/* A choice row, the recipe column's strip in the slider card's frame: the name
+   on the top line, the choices as words in the recessed strip below. The
+   chosen word is a white plate with black ink; the others fade with their
+   distance from it. The strip slides to keep the chosen word in the middle,
+   with a chevron at an end that has more past it. A tap on a word chooses it;
+   LEFT, RIGHT and the dial step. */
+function Choice(props: { name: string; items: readonly string[]; value: number; width: number; focused: boolean; pick: (i: number) => void; onFocus?: () => void }) {
+  let track: HTMLDivElement | undefined;
+  const [offset, setOffset] = createSignal(0);
+  const [ends, setEnds] = createSignal<[boolean, boolean]>([false, false]);
+  createEffect(
+    () => [props.value, props.width, props.items] as const,
+    ([value, width]) => {
+      requestAnimationFrame(() => {
+        const cells = track ? (Array.from(track.children) as HTMLElement[]) : [];
+        const chosen = cells[value];
+        if (!track || !chosen) return;
+        const max = Math.max(0, track.scrollWidth - width);
+        const next = Math.max(0, Math.min(max, chosen.offsetLeft + chosen.offsetWidth / 2 - width / 2));
+        setOffset(next);
+        setEnds([next > 0, next < max]);
+      });
+    },
+  );
+  return (
+    <div class="relative h-[76px] overflow-hidden select-none" style={{ width: `${props.width}px`, ...TRACK(props.focused) }} onPointerDown={() => props.onFocus?.()}>
+      <span class="absolute top-[7px] left-[12px] text-[17px] leading-[20px] tracking-[0.06em]" style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
+        {props.name}
+      </span>
+      <div class="absolute inset-x-0 bottom-0 h-[44px] overflow-hidden" style={{ background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge)' }}>
+        <div
+          ref={(element) => (track = element)}
+          class="absolute inset-y-0 left-0 flex items-stretch gap-[4px] px-[6px] py-[5px] transition-transform duration-150 ease-out"
+          style={{ transform: `translateX(${-offset()}px)` }}
+        >
+          <For each={[...props.items]}>
+            {(item, i) => {
+              const chosen = () => i() === props.value;
+              const fade = () => Math.max(0.35, 0.85 - Math.abs(i() - props.value) * 0.15);
+              return (
+                <button
+                  type="button"
+                  class={`flex shrink-0 items-center justify-center rounded-[9px] px-[12px] font-medium whitespace-nowrap ${SMALL}`}
+                  style={chosen() ? { background: '#fff', color: '#000' } : { color: `rgb(255 255 255 / ${fade()})` }}
+                  onClick={() => props.pick(i())}
+                >
+                  {item}
+                </button>
+              );
+            }}
+          </For>
+        </div>
+        <For each={[0, 1] as const}>
+          {(side) => (
+            <Show when={ends()[side]}>
+              <span class="pointer-events-none absolute inset-y-0 flex items-center px-[3px] text-white/80" style={{ [side ? 'right' : 'left']: '0', background: `linear-gradient(to ${side ? 'left' : 'right'}, rgb(0 0 0 / 0.55), transparent)` }}>
+                <Chevron dir={side ? 'right' : 'left'} size={14} />
+              </span>
+            </Show>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 /* A slider row, as the camera's command dials and the recipe column's rulers
    behave: the whole row is the track; the name and value sit on its top line
    and a scale of ticks runs across its full width under a fixed center mark.
@@ -2297,37 +2363,19 @@ function Editor(props: {
             <div class="mb-[8px] flex flex-col gap-[4px]">
               <For each={RAW_OPTIONS}>
                 {(o, k) => (
-                  <div
-                    class="flex h-[57px] items-center gap-[6px] pr-[6px] pl-[12px]"
-                    style={TRACK(s().area === o.key)}
-                    onPointerDown={() => update({ ...s(), area: o.key, railOn: null, header: false, inside: false })}
-                  >
-                    <div class="flex min-w-0 grow flex-col gap-[5px]">
-                      <span class="truncate text-[15px] leading-none tracking-[0.02em] text-white/60">{o.name}</span>
-                      <span class={`font-medium ${SMALL}`}>{o.values[s().raw[k()]]}</span>
-                    </div>
-                    <For each={[-1, 1]}>
-                      {(d) => {
-                        const at = () => s().raw[k()] + d;
-                        const ok = () => at() >= 0 && at() < o.values.length;
-                        return (
-                          <button
-                            type="button"
-                            class="flex size-[40px] items-center justify-center"
-                            style={{ color: ok() ? '#fff' : 'rgb(255 255 255 / 0.2)' }}
-                            onClick={() => {
-                              if (!ok()) return;
-                              const raw = [...s().raw];
-                              raw[k()] = at();
-                              update({ ...s(), raw, area: o.key });
-                            }}
-                          >
-                            <Chevron dir={d < 0 ? 'left' : 'right'} size={18} />
-                          </button>
-                        );
-                      }}
-                    </For>
-                  </div>
+                  <Choice
+                    name={o.name}
+                    items={o.values}
+                    value={s().raw[k()]}
+                    width={CONTENT}
+                    focused={s().area === o.key}
+                    onFocus={() => update({ ...s(), area: o.key, railOn: null, header: false, inside: false })}
+                    pick={(v) => {
+                      const raw = [...s().raw];
+                      raw[k()] = v;
+                      update({ ...s(), raw, area: o.key });
+                    }}
+                  />
                 )}
               </For>
             </div>
