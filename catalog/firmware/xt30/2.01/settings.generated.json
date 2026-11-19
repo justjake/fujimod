@@ -52,6 +52,20 @@
               1
             ],
             "basis": "Stock writer 0x011124d0 stamps update version bytes here."
+          },
+          {
+            "offset": 620,
+            "bytes": [
+              4
+            ],
+            "basis": "First-start marker settings_preset_loaded: setting 1 getter 0xfe5c8c reads store 0x178; the stock value here is what a body holds once that step is complete."
+          },
+          {
+            "offset": 3756,
+            "bytes": [
+              1
+            ],
+            "basis": "First-start marker app_introduction_done: setting 8 getter 0xfee808 reads store 0xdb8; the stock value here is what a body holds once that step is complete."
           }
         ]
       },
@@ -131,6 +145,18 @@
             "basis": "Explicit stock auxiliary reset 0x00ff3ac4: zero fill then default text copy."
           }
         ]
+      },
+      "format": {
+        "block": 1016,
+        "bytes": 16,
+        "defaults": {
+          "address": 21652056,
+          "size": 8,
+          "sha256": "ec243aa91cf1dcd155864e695f721f7dd309c6edbd142b36a340718d5c4f5f72"
+        },
+        "defaults_offset": 0,
+        "parity_offset": 8,
+        "fields": []
       }
     },
     "derived_fields": [
