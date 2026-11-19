@@ -27,12 +27,6 @@ enum Input {
     Normalized(NormalizedRgb),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-enum Response {
-    Physical(Calibration),
-    Normalized(NormalizedRgb),
-}
-
 /// The live front end's fixed gain between the sensor readout the statistics
 /// measure and the image it hands the film stage (Q10; 3.78x, within 0.1 EV of
 /// the 12-bit live readout's factor of four). An X70 in REC shows its preview
@@ -103,30 +97,37 @@ impl Renderer {
     pub fn physical(&self) -> bool {
         matches!(self.input, Input::Physical { .. })
     }
-    fn response(&self) -> Response {
-        match self.input {
-            Input::Physical { calibration, .. } => Response::Physical(calibration),
-            Input::Normalized(calibration) => Response::Normalized(calibration),
-        }
-    }
     pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
-            "radiometric-renderer",
-            &(self.response(), self.projection.as_ref().map(|p| p.spec())),
-        )
+        use fujimod_emulator_devices::checkpoint::Checkpoint;
+        match self.input {
+            Input::Physical { calibration, .. } => Checkpoint::encode(
+                "radiometric-renderer",
+                &(calibration, self.projection.as_ref().map(|p| p.spec())),
+            ),
+            Input::Normalized(calibration) => {
+                Checkpoint::encode("normalized-rgb-renderer", &calibration)
+            }
+        }
     }
     pub fn validate_checkpoint(
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let (calibration, projection): (Response, Option<fujimod_emulator_imaging::optics::Spec>) =
-            saved.decode("radiometric-renderer")?;
-        if calibration != self.response()
-            || projection.as_ref() != self.projection.as_ref().map(|p| p.spec())
-            || !saved.blobs().is_empty()
-            || !saved.children().is_empty()
-        {
-            return Err("radiometric renderer checkpoint calibration differs".into());
+        let matches = match self.input {
+            Input::Physical { calibration, .. } => {
+                let (stored, projection): (
+                    Calibration,
+                    Option<fujimod_emulator_imaging::optics::Spec>,
+                ) = saved.decode("radiometric-renderer")?;
+                stored == calibration
+                    && projection.as_ref() == self.projection.as_ref().map(|p| p.spec())
+            }
+            Input::Normalized(calibration) => {
+                saved.decode::<NormalizedRgb>("normalized-rgb-renderer")? == calibration
+            }
+        };
+        if !matches || !saved.blobs().is_empty() || !saved.children().is_empty() {
+            return Err("renderer checkpoint response differs".into());
         }
         Ok(())
     }
@@ -139,7 +140,12 @@ impl Renderer {
         Ok(())
     }
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"response":self.response(),"projection":self.projection.as_ref().map(|p|p.spec())})
+        match self.input {
+            Input::Physical { calibration, .. } => serde_json::json!({
+                "calibration":calibration,"projection":self.projection.as_ref().map(|p|p.spec())
+            }),
+            Input::Normalized(calibration) => serde_json::json!({"normalized_rgb":calibration}),
+        }
     }
     pub fn capture(&mut self) -> Result<Option<Arc<Image>>, String> {
         let mut exposure = match &self.input {
