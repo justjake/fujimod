@@ -24,11 +24,12 @@ number arrays. Write it to a separate binary file and reference that file by pat
 
 ## Checkouts and commits
 
-When FujiMod is checked out inside another repository, follow that
-repository's commit workflow. Otherwise work on a topic branch and open a pull
-request against `main`. In a checkout several agents share, commit with
-`mise run commit -- -m "Describe the change" PATHS...` (`scripts/git/commit.py`)
-rather than staging by hand.
+Work on a topic branch and open a pull request against `main`; nothing is
+committed to `main` directly. Push after every commit so no work stays only on
+one machine, and rebase onto `origin/main` often
+(`python scripts/git/sync.py --onto main`). In a checkout several agents share,
+commit with `mise run commit -- -m "Describe the change" PATHS...`
+(`scripts/git/commit.py`) rather than staging by hand.
 
 GitHub Actions workflows run only on `workflow_dispatch`, started by a person.
 Do not add `push`, `pull_request`, `schedule` or other automatic triggers.
