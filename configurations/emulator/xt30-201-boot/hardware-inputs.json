@@ -67,13 +67,14 @@
             "5": 0,
             "6": 0,
             "16": 0,
+            "24": 165,
             "32": 0,
             "34": 0,
             "35": 0
           },
           "rtc_ticks_per_second": 54000000,
           "ambient_celsius": 25,
-          "basis": "Declared virtual startup inputs for a bounded application-boot scenario.",
+          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 keeps the headphone bits clear and reports the battery-only power-source class.",
           "rtc_basis": "Virtual unset RTC. The counter advances from guest ticks after a stock start command."
         }
       },
