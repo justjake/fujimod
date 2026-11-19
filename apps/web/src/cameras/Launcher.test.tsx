@@ -85,6 +85,7 @@ function mount(
 ) {
   const [entries] = createSignal(options.selected ? [firmware] : []);
   const [selected, select] = createSignal(options.selected ? firmware.sha256 : undefined);
+  const get = vi.fn(async () => firmware);
   const run = vi.fn(),
     download = vi.fn(async () => {}),
     add = vi.fn(async () => {}),
@@ -99,6 +100,7 @@ function mount(
     error: () => '',
     select,
     add,
+    get,
     remove,
   };
   const host = document.createElement('div');
@@ -121,24 +123,28 @@ function mount(
     host,
   );
   flush();
-  return { host, run, download };
+  return { host, run, download, get };
 }
-test('empty state has four disabled actions, a firmware gate, shared picker and inline Moddable badge', () => {
-  const { host } = mount();
-  expect(host.querySelector('.release-gate')?.textContent).toBe('Add base firmware to continue');
+test('camera selection enables Run before importing firmware', async () => {
+  const { host, run, get } = mount();
+  expect(host.querySelector('.release-gate')).toBeNull();
+  expect(host.querySelector('.downloads')).toBeNull();
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label=Camera]')!;
+  expect(select.value).toBe('x70');
   const actions = host.querySelectorAll<HTMLButtonElement>('.release-hit');
-  expect(actions).toHaveLength(4);
-  expect([...actions].every((button) => button.disabled)).toBe(true);
-  expect(host.querySelectorAll('.launcher-row > .i')).toHaveLength(0);
-  expect(host.querySelector('.release-notes, .release-heading')).toBeNull();
-  expect(host.querySelector('.file-drop-highlighted')).not.toBeNull();
-  expect(host.querySelector('#firmware-file')).not.toBeNull();
-  expect([...host.querySelectorAll('.downloads-model')].map((node) => node.textContent)).toEqual([
-    'X70Moddable',
-    'X-T10',
-    'X-M1',
-  ]);
-  expect(host.querySelector('.downloads-camera-tag')).toBeNull();
+  expect([...actions].map((button) => button.disabled)).toEqual([true, false, false, false]);
+  actions[2].click();
+  await vi.waitFor(() => expect(run).toHaveBeenCalledWith(firmware, true, false));
+  expect(get).toHaveBeenCalledWith(supported[2].firmware);
+});
+test('failed automatic downloads show an error and do not start a camera', async () => {
+  const { host, run, get } = mount();
+  get.mockRejectedValueOnce(Error('Mirror unavailable'));
+  host.querySelectorAll<HTMLButtonElement>('.release-hit')[3].click();
+  await vi.waitFor(() =>
+    expect(host.querySelector('[role=status]')?.textContent).toBe('Mirror unavailable'),
+  );
+  expect(run).not.toHaveBeenCalled();
 });
 test('selected firmware gates downloads independently from emulator support', () => {
   const { host, run } = mount({ selected: true });
@@ -183,18 +189,16 @@ test('busy actions cannot run or start fresh', () => {
     ),
   ).toBe(true);
 });
-test('search filters a long list without breaking processor labels', () => {
-  const { host } = mount({
-    bodies: Array.from({ length: 50 }, (_, n) => support(`X-T${n + 1}`, `t${n}`)),
-  });
-  const search = host.querySelector<HTMLInputElement>('input[type=search]')!;
-  search.value = 'x-t40';
-  search.dispatchEvent(new InputEvent('input', { bubbles: true }));
+test('changing the selected camera changes emulator availability without importing files', () => {
+  const { host, get } = mount();
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label=Camera]')!;
+  select.value = 'xt4';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
   flush();
-  expect(host.querySelectorAll('.downloads-camera')).toHaveLength(1);
-  expect(host.querySelector('.downloads-model')?.textContent).toBe('X-T40');
-  search.value = 'gfx';
-  search.dispatchEvent(new InputEvent('input', { bubbles: true }));
-  flush();
-  expect(host.querySelector('.downloads-empty')?.textContent).toContain('gfx');
+  expect(
+    [...host.querySelectorAll<HTMLButtonElement>('.release-hit')].every(
+      (button) => button.disabled,
+    ),
+  ).toBe(true);
+  expect(get).not.toHaveBeenCalled();
 });
