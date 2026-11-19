@@ -399,6 +399,11 @@ impl Device for Rifp {
             let regs = self.state.regs.clone();
             let r = |o| regs.get(&o).copied().unwrap_or(0);
             let mut ran = None;
+            // The still channel picture this run's input is in: the HDR exposures are three
+            // pictures, developed after the last one was written.
+            let raw = still
+                .sensor
+                .still_raw_at(u64::from(r(0x0c)) | u64::from(r(0x10) & 7) << 32, u64::from(r(0x1c)));
             // RCIZ (drive-mode BKT): a queued run without an output address streams its
             // output into the inline RESZ start that waits for it (still module notes).
             if still.develop
@@ -408,7 +413,7 @@ impl Device for Rifp {
                 && r(0x40) | r(0x44) & 7 == 0
                 && let Some(job) = still.output.take_deferred()
                 && let Err(e) =
-                    super::still::rifp_into_resz(cx, r, still.sensor.still_raw(), &job)
+                    super::still::rifp_into_resz(cx, r, raw, &job)
             {
                 cx.fail(e);
                 return;
@@ -419,7 +424,7 @@ impl Device for Rifp {
                 && r(0x0c) | r(0x10) & 7 != 0
                 && r(0x40) | r(0x44) & 7 != 0
             {
-                match super::still::rifp_run(cx, r, still.sensor.still_raw()) {
+                match super::still::rifp_run(cx, r, raw) {
                     Ok(picture) => {
                         self.state.yc_output = Some(picture);
                         still.output.set(Some(picture));
