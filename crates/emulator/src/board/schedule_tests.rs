@@ -399,6 +399,81 @@ fn passive_pc_witnesses_do_not_change_cpu_phase_devices_or_time() {
     }
 }
 
+/// Core 0 runs `mov r0,#0x3000; mov r1,#0x5a; strb r1,[r0,#5]; str r1,[r0,#0x10];
+/// strh r1,[r0,#4]; b .` under a write watch on 0x3004..0x3006.
+fn store_board() -> Board {
+    let (board, _) = board(false);
+    let code: Vec<u8> = [0xe3a00a03u32, 0xe3a0105a, 0xe5c01005, 0xe5801010, 0xe1c010b4, 0xeafffffe]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+    board.write_memory(0, 0x1000, &code).unwrap();
+    board
+}
+
+#[test]
+fn write_watch_reports_overlapping_stores_and_host_writes_without_changing_execution() {
+    use super::write_watch::{WriteNote, WriteSource};
+    let mut plain = store_board();
+    plain.run_for_instructions(6, 50).unwrap();
+    let mut watched = store_board();
+    assert!(watched.watch_writes(&[(0x3004, 0)]).is_err());
+    watched.watch_writes(&[(0x3004, 2)]).unwrap();
+    watched.run_for_instructions(6, 50).unwrap();
+    assert_eq!(plain.state(), watched.state());
+    let (notes, dropped) = watched.take_write_notes();
+    assert_eq!(dropped, 0);
+    let core = |pc, address, size, value: &[u8], old: &[u8]| (WriteSource::Core(0), Some(pc), address, size, value.to_vec(), old.to_vec());
+    assert_eq!(
+        notes.iter().map(|n| (n.source, n.pc, n.address, n.size, n.value.clone(), n.old.clone())).collect::<Vec<_>>(),
+        // The word store at 0x3010 is outside the range.
+        [core(0x1008, 0x3005, 1, &[0x5a], &[0]), core(0x1010, 0x3004, 2, &[0x5a, 0], &[0, 0x5a])]
+    );
+    assert!(notes[0].lr.is_some());
+    assert_eq!(notes[0].line(1).split(" lr ").next().unwrap(), "core 0 pc 0x1008");
+    assert!(notes[1].line(1).contains("addr 0x3004 size 2 value 0x005a old 0x5a00 at"), "{}", notes[1].line(1));
+    assert!(notes[0].tick <= notes[1].tick);
+    assert!(watched.take_write_notes().0.is_empty());
+    watched.write_physical(0x3000, &[7; 8]).unwrap();
+    let (notes, _) = watched.take_write_notes();
+    assert_eq!(
+        notes,
+        [WriteNote {
+            source: WriteSource::Host,
+            pc: None,
+            lr: None,
+            address: 0x3004,
+            size: 2,
+            span: Some((0x3000, 8)),
+            value: vec![7, 7],
+            old: vec![0x5a, 0],
+            tick: watched.now(),
+        }]
+    );
+    assert!(notes[0].line(1).starts_with("host addr 0x3004 size 2 (of write 0x3000 size 8) value 0x0707 old 0x005a"));
+}
+
+#[test]
+fn write_watch_ranges_merge_and_clip_overlaps() {
+    let watch = super::write_watch::Watch::new(&[(0x20, 4), (0x10, 4), (0x14, 2)]).unwrap();
+    assert_eq!(watch.overlap(0x0, 0x10), None);
+    assert_eq!(watch.overlap(0x13, 4), Some((0x13, 0x16)));
+    assert_eq!(watch.overlap(0x16, 0xa), None);
+    assert_eq!(watch.overlap(0x0, 0x100), Some((0x10, 0x24)));
+    assert_eq!(watch.overlap(0x23, 1), Some((0x23, 0x24)));
+    assert!(super::write_watch::Watch::new(&[(u64::MAX, 2)]).is_err());
+    // A DMA write into a bus view at 0x8000 of backing 0x0 is matched on the physical address.
+    let backing = Backing::aligned_zeros(0x1000, 4096).unwrap();
+    let memory = memory::Memory::new(vec![(0, backing)], vec![memory::BusMapping { address: 0x8000, physical: 0, size: 0x1000, permissions: 3 }]).unwrap();
+    memory.watch_transfer(super::write_watch::WriteSource::Dma, 0x8010, &[1; 8], 5);
+    *memory.write_watch.borrow_mut() = Some(watch);
+    memory.watch_transfer(super::write_watch::WriteSource::Dma, 0x8010, &[1; 8], 5);
+    let notes = memory.write_watch.borrow_mut().as_mut().unwrap().notes.clone();
+    assert_eq!(notes.len(), 1);
+    assert_eq!((notes[0].address, notes[0].size, notes[0].span), (0x10, 6, Some((0x10, 8))));
+    assert_eq!(notes[0].line(5), "DMA addr 0x10 size 6 (of write 0x10 size 8) value [01 01 01 01 01 01] old [00 00 00 00 00 00] at 1.000000 s (tick 5)");
+}
+
 #[test]
 fn quiescent_observes_released_processors_without_advancing_time() {
     let (mut board, _) = board(true);

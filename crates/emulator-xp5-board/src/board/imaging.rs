@@ -352,7 +352,8 @@ fn retain_words(options: &toml::Table) -> Result<bool, String> {
 /// Format codes (+0xdc bits 18..16) of the still RAW channel taken as 16-bit containers: code 5
 /// (X-T5 4.31 still capture: pitch 0x3d80 = 7872 x 2 bytes for 7776 samples a line), code 0
 /// (assumed), and the codes `XT5_STILL_RAW16` lists (comma-separated, 0..7), a host input for
-/// bring-up.
+/// bring-up. A pitch of 1.5 up to 2 bytes a sample (0x2d90 for 7776 samples after a MOVIE ->
+/// STILL switch) is packed 12-bit whatever the code; see `sensor::StillChannel`.
 fn still_raw16_codes() -> Result<u8, String> {
     let mut codes = 1u8 | 1 << 5;
     for code in std::env::var("XT5_STILL_RAW16").unwrap_or_default().split(',') {

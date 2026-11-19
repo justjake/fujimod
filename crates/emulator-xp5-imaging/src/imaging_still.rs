@@ -20,7 +20,10 @@
 //! * ConvertToYC: an input inside the RAW the still channel wrote last, at its pitch, is
 //!   developed with the declared X-Trans law ([`fujimod_emulator_imaging::xtrans`]). The tile
 //!   site of the first input sample follows from its offset in that RAW (site (0, 0) at the
-//!   RAW origin), so a band or a column stripe of the picture develops like the whole.
+//!   RAW origin), so a band or a column stripe of the picture develops like the whole. An input
+//!   pitch from 1.5 up to (not including) 2 bytes a sample reads packed 12-bit samples (two in
+//!   three bytes, the still channel's packed lines), scaled to the law's 14-bit range; the
+//!   input must then start on a sample pair.
 //! * PostYC (any other input): the input is a packed 4:2:2 picture, copied.
 //!
 //! Either way output pixel (x, y) takes input (crop x + x * crop width / output width, crop y +
@@ -307,6 +310,14 @@ pub fn rifp_run(
     let (input, pitch) = (address(0x0c, 0x10), word(0x1c) as usize);
     let (output, out_pitch) = (address(0x40, 0x44), (word(0x50) & 0xfffff) as usize);
     let (width, lines) = pixels_lines(word(0x20));
+    let develop = raw.filter(|r| {
+        r.pitch as usize == pitch
+            && input >= r.address
+            && input < r.address + r.pitch * u64::from(r.lines)
+    });
+    // An input in the still RAW takes its layout; any other input with a pitch of 1.5 up to
+    // (not including) 2 bytes a sample would be packed 12-bit RAW (see the module notes).
+    let packed12 = develop.map_or(2 * pitch >= 3 * width && pitch < 2 * width, |r| r.packed12);
     let origin = pixels_lines(word(0x24));
     let crop = match pixels_lines(word(0x28)) {
         (0, _) | (_, 0) => (width.saturating_sub(origin.0), lines.saturating_sub(origin.1)),
@@ -334,28 +345,43 @@ pub fn rifp_run(
         || out.0 < 2
         || out.0 % 2 != 0
         || out_pitch < 2 * out.0
-        || pitch < 2 * width
+        || (!packed12 && pitch < 2 * width)
     {
         return Err(format!("{} is outside the modelled layout", geometry()));
     }
-    let bytes = cx.ram_bytes(input, pitch * (lines - 1) + 2 * width)?;
-    let develop = raw.filter(|r| {
-        r.pitch as usize == pitch
-            && input >= r.address
-            && input < r.address + r.pitch * u64::from(r.lines)
-    });
+    let line = if packed12 { xtrans::packed12_bytes(width) } else { 2 * width };
+    if packed12 && pitch < line {
+        return Err(format!("{} is outside the modelled layout", geometry()));
+    }
+    let bytes = cx.ram_bytes(input, pitch * (lines - 1) + line)?;
+    if packed12 && develop.is_none() {
+        return Err(format!(
+            "{}: a packed 12-bit input pitch outside the still channel's packed RAW is not modelled",
+            geometry()
+        ));
+    }
     let write = |cx: &mut Cx<'_>, y: usize, line: &[u8]| {
         cx.ram_write(output + (y * out_pitch) as u64, line)
     };
     if let Some(r) = develop {
         let offset = input - r.address;
-        let phase = (
-            (offset / r.pitch % 6) as usize,
-            (offset % r.pitch / 2 % 6) as usize,
-        );
-        let raw = xtrans::Raw::new(&bytes, pitch, width, lines, phase)
-            .map_err(|e| format!("{}: {e}", geometry()))?;
-        cx.log(&format!("{} develops RAW at site {phase:?}", geometry()));
+        let column = offset % r.pitch;
+        if packed12 && column % 3 != 0 {
+            return Err(format!("{}: packed 12-bit input starts inside a sample pair", geometry()));
+        }
+        let sample = if packed12 { column / 3 * 2 } else { column / 2 };
+        let phase = ((offset / r.pitch % 6) as usize, (sample % 6) as usize);
+        let raw = if packed12 {
+            xtrans::Raw::packed12(&bytes, pitch, width, lines, phase)
+        } else {
+            xtrans::Raw::new(&bytes, pitch, width, lines, phase)
+        }
+        .map_err(|e| format!("{}: {e}", geometry()))?;
+        cx.log(&format!(
+            "{} develops {} RAW at site {phase:?}",
+            geometry(),
+            if packed12 { "packed 12-bit" } else { "16-bit" }
+        ));
         for y in 0..out.1 {
             let line = xtrans::develop_422_line(&raw, origin.1 + y * crop.1 / out.1, out.0, |x| {
                 origin.0 + x * crop.0 / out.0
@@ -551,6 +577,7 @@ mod tests {
             pitch: 64,
             width: 24,
             lines: 12,
+            packed12: false,
         };
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         let picture = rifp_run(&mut cx, rifp_words(RAM, RAM + 0x1000), Some(raw)).unwrap();
@@ -578,6 +605,60 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         let short = |o| if o == 0x1c { 32 } else { words(o) };
         assert!(rifp_run(&mut cx, short, Some(raw)).is_err());
+    }
+
+    /// Packed 12-bit RAW (pitch 40 for 24 samples, 1.5 bytes a sample plus padding): a flat
+    /// colour develops to its JFIF YCbCr, from the RAW origin and from a column stripe that
+    /// starts on a sample pair; a stripe inside a pair and a packed input outside the RAW refuse.
+    #[test]
+    fn a_rifp_run_develops_packed_12_bit_raw() {
+        let colour = [40u8, 180, 90];
+        let (width, pitch) = (24, 40);
+        let mut ram = vec![0u8; 0x4000];
+        let mut samples = vec![0u8; 2 * width];
+        for y in 0..12 {
+            xtrans::mosaic_line(&colour.repeat(width), y, &mut samples);
+            xtrans::pack12_line(&samples, &mut ram[y * pitch..y * pitch + 36]);
+        }
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
+        let raw = StillRaw {
+            address: RAM,
+            pitch: pitch as u64,
+            width: width as u32,
+            lines: 12,
+            packed12: true,
+        };
+        let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
+        let words = rifp_words(RAM, RAM + 0x1000);
+        let packed = |o| if o == 0x1c { pitch as u32 } else { words(o) };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), packed, Some(raw)).unwrap();
+        for line in 0..12 {
+            let at = 0x1000 + line * 48;
+            assert_eq!(&host.ram[at..at + 48], [y, y, cb, cr].repeat(12).as_slice());
+        }
+        // A 12-sample stripe from sample 6 (byte 9).
+        let words = rifp_words(RAM + 9, RAM + 0x2000);
+        let stripe = |o| match o {
+            0x1c => pitch as u32,
+            0x20 => 12 << 16 | 12,
+            o => words(o),
+        };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), stripe, Some(raw)).unwrap();
+        assert_eq!(&host.ram[0x2000..0x2000 + 24], [y, y, cb, cr].repeat(6).as_slice());
+        let words = rifp_words(RAM + 10, RAM + 0x2000);
+        let inside = |o| match o {
+            0x1c => pitch as u32,
+            0x20 => 12 << 16 | 12,
+            o => words(o),
+        };
+        assert!(rifp_run(&mut Cx::new(&mut host, 0, 0, 0), inside, Some(raw)).is_err());
+        let words = rifp_words(RAM + 0x3000, RAM + 0x2000);
+        let outside = |o| if o == 0x1c { pitch as u32 } else { words(o) };
+        assert!(rifp_run(&mut Cx::new(&mut host, 0, 0, 0), outside, Some(raw)).is_err());
     }
 
     fn resz() -> Resz {
@@ -681,6 +762,7 @@ mod tests {
             pitch: 64,
             width: 24,
             lines: 12,
+            packed12: false,
         });
         let shared = YcOutput::default();
         let mut io = Io::default();

@@ -80,6 +80,8 @@ pub struct Memory {
     pub(super) observation: RefCell<Option<std::rc::Weak<RefCell<super::observation::Records>>>>,
     pub(super) preservation:
         RefCell<Option<std::rc::Weak<RefCell<super::preservation::PreservationRecords>>>>,
+    /// Passive `--watch-writes` ranges and notes; outside checkpoints and board state.
+    pub(super) write_watch: RefCell<Option<super::write_watch::Watch>>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Checkpoint {
@@ -402,6 +404,7 @@ impl Memory {
             observation: Default::default(),
             preservation: Default::default(),
             continuation: Default::default(),
+            write_watch: Default::default(),
         })
     }
     pub(super) fn clear_preservation(
@@ -564,6 +567,13 @@ impl Memory {
         }
         self.observe_transfer("host-read", address, expected.len());
         Ok(equal)
+    }
+    /// The physical (address, bytes) pieces of a bus range; an unmapped piece ends the list.
+    pub(super) fn physical_spans(&self, address: u64, bytes: usize) -> Vec<(u64, usize)> {
+        match self.chunks(address, bytes, Access::Host) {
+            Ok(chunks) => chunks.map_while(Result::ok).map(|(physical, _, len)| (physical, len)).collect(),
+            Err(_) => vec![],
+        }
     }
     pub(super) fn read_dma(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         self.read(address, bytes, Access::Read)?;
