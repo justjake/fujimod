@@ -4,8 +4,8 @@
 use fujimod_emulator_devices::capability::StatisticsCadence;
 use fujimod_emulator_devices::parts::pins::{InputPins, Selection};
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_imaging::scene::clocked::Options;
 use fujimod_emulator_image_formation::{exposure::ExposedFrame, radiometric::Image};
+use fujimod_emulator_imaging::scene::clocked::Options;
 use fujimod_emulator_imaging::scene::frames::{ImageSource, Pixels};
 use fujimod_emulator_imaging::scene::{
     FrameCadence, FrameEdge, FramePhases, ImageFrames, SensorFramesHandle, StatisticsFrames,
@@ -56,7 +56,11 @@ impl ClockedFrames {
             (None, None) => None,
             _ => return Err("optical frames require both a declared law and focus wire".into()),
         };
-        if wiring.sensor_clock.is_some() && wiring.renderer.is_none() {
+        let physical_renderer = wiring
+            .renderer
+            .as_ref()
+            .is_some_and(fujimod_emulator_image_formation::radiometric::Renderer::physical);
+        if wiring.sensor_clock.is_some() && !physical_renderer {
             return Err("physical frame clock requires its sensor renderer".into());
         }
         if (phase.is_some() && wiring.sensor_clock.is_some())
@@ -67,7 +71,7 @@ impl ClockedFrames {
                     .into(),
             );
         }
-        if wiring.renderer.is_some() {
+        if physical_renderer {
             wiring.images.use_sensor();
         }
         if let Some((pins, selection)) = &wiring.activity {
@@ -158,7 +162,12 @@ impl ClockedFrames {
     }
 }
 impl fujimod_emulator_devices::capability::FrameSource for ClockedFrames {
-    fn configure(&mut self, period: u64, cadence: StatisticsCadence, now: u64) -> Result<(), String> {
+    fn configure(
+        &mut self,
+        period: u64,
+        cadence: StatisticsCadence,
+        now: u64,
+    ) -> Result<(), String> {
         ClockedFrames::configure(self, period, cadence, now)
     }
     fn frame_state(&self) -> serde_json::Value {
@@ -166,7 +175,9 @@ impl fujimod_emulator_devices::capability::FrameSource for ClockedFrames {
     }
     fn frame_exposure(&self) -> Result<Option<(u64, f64, f64)>, String> {
         let image = self.images.0.lock().map_err(|_| "image frame poisoned")?;
-        let Some(exposure) = image.radiance.as_deref() else { return Ok(None) };
+        let Some(exposure) = image.radiance.as_deref() else {
+            return Ok(None);
+        };
         let exposure = ExposedFrame::of(exposure)?.exposure;
         Ok(Some((self.frames, exposure.seconds, exposure.analog_gain)))
     }
@@ -179,7 +190,9 @@ impl fujimod_emulator_devices::capability::FrameSource for ClockedFrames {
     }
 }
 impl Device for ClockedFrames {
-    fn frame_source(&self) -> Option<&(dyn fujimod_emulator_devices::capability::FrameSource + 'static)> {
+    fn frame_source(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::FrameSource + 'static)> {
         Some(self)
     }
     fn frame_source_mut(
@@ -217,7 +230,10 @@ impl Device for ClockedFrames {
         )?
         .with_children(children))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (
             clock,
             _,
@@ -277,7 +293,10 @@ impl Device for ClockedFrames {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (
             clock,
@@ -433,8 +452,7 @@ impl Device for ClockedFrames {
             tick: edge.tick,
         };
         let mut image = self.images.0.lock().unwrap();
-        let changed = image.prepared.is_some()
-            || !matches!(image.source, ImageSource::External);
+        let changed = image.prepared.is_some() || !matches!(image.source, ImageSource::External);
         if let Some(pixels) = image.prepared.take() {
             image.pixels = Pixels::Packed(pixels);
         }
@@ -445,7 +463,9 @@ impl Device for ClockedFrames {
             };
             match renderer.capture() {
                 Ok(Some(frame)) => {
-                    image.radiance = Some(Arc::new(frame.exposure.clone()));
+                    image.radiance = renderer
+                        .physical()
+                        .then(|| Arc::new(frame.exposure.clone()) as Arc<_>);
                     image.pixels = Pixels::Sensor(frame);
                 }
                 Ok(None) => image.radiance = None,
