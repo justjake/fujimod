@@ -1064,8 +1064,8 @@ const DESIGNS: Record<DesignId, Design> = {
 
 /* ---- Layout ------------------------------------------------------------------ */
 
-/** Eleven rows fill the 480-pixel screen without scrolling. */
-const ROW = 43;
+/** The menu pages' row height. */
+const ROW = 57;
 const ICON_CELL = 52;
 /** The icon column, before the stroke that starts each row's drawer. */
 const ICON_COLUMN = 58;
@@ -1515,7 +1515,7 @@ function RulerSlider(props: SliderProps & { ruler: Ruler; width: number }) {
             const lit = () => at >= low() && at <= high() && high() > low();
             return (
               <span
-                class="absolute bottom-[6px] -translate-x-1/2 transition-colors duration-150"
+                class="absolute bottom-[calc(50%-16px)] -translate-x-1/2 transition-colors duration-150"
                 style={{
                   left: `${at * spacing()}px`,
                   width: major ? '2px' : '1px',
@@ -1531,7 +1531,7 @@ function RulerSlider(props: SliderProps & { ruler: Ruler; width: number }) {
             <Show when={i() !== props.value && ruler().label}>
               {(color) => (
                 <span
-                  class={`absolute top-[4px] -translate-x-1/2 leading-none tabular-nums ${ruler().font}`}
+                  class={`absolute top-[calc(50%-15px)] -translate-x-1/2 leading-none tabular-nums ${ruler().font}`}
                   style={{ left: `${i() * spacing()}px`, color: color() }}
                 >
                   {fmt(step)}
@@ -1542,13 +1542,13 @@ function RulerSlider(props: SliderProps & { ruler: Ruler; width: number }) {
         </For>
       </div>
       <span
-        class="absolute top-[2px] -translate-x-1/2 text-[16px] leading-none font-semibold tabular-nums transition-[left] duration-150 ease-out"
+        class="absolute top-[calc(50%-17px)] -translate-x-1/2 text-[16px] leading-none font-semibold tabular-nums transition-[left] duration-150 ease-out"
         style={{ left: `${origin() + props.value * spacing()}px`, color: ruler().chosen(mark()) }}
       >
         {fmt(props.setting.steps[props.value])}
       </span>
       <span
-        class="absolute bottom-[3px] h-[20px] w-[3px] -translate-x-1/2 rounded-full transition-[left] duration-150 ease-out"
+        class="absolute bottom-[calc(50%-19px)] h-[20px] w-[3px] -translate-x-1/2 rounded-full transition-[left] duration-150 ease-out"
         style={{ left: `${origin() + props.value * spacing()}px`, background: ruler().chosen(mark()) }}
       />
     </div>
