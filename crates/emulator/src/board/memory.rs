@@ -537,6 +537,23 @@ impl Memory {
         self.observe_transfer("host-read", address, bytes.len());
         Ok(())
     }
+    pub(super) fn host_bytes_equal(&self, address: u64, expected: &[u8]) -> Result<bool, String> {
+        let mut offset = 0;
+        let mut equal = true;
+        for chunk in self.chunks(address, expected.len(), Access::Host)? {
+            let (_, pointer, len) = chunk?;
+            // Physical backing is readable for the lifetime of the validated
+            // chunk and processors are stopped during host display capture.
+            let actual = unsafe { std::slice::from_raw_parts(pointer.as_ptr(), len) };
+            if actual != &expected[offset..offset + len] {
+                equal = false;
+                break;
+            }
+            offset += len;
+        }
+        self.observe_transfer("host-read", address, expected.len());
+        Ok(equal)
+    }
     pub(super) fn read_dma(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         self.read(address, bytes, Access::Read)?;
         self.observe_transfer("model-bus-read", address, bytes.len());

@@ -13,18 +13,18 @@ impl Session {
     ) -> Result<Option<std::sync::Arc<Frame>>, String> {
         self.board
             .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| {
-                let key = serde_json::to_vec(&scanout.metadata()).map_err(|e| e.to_string())?;
                 let mut caches = self.recording_frames.borrow_mut();
                 let cache = caches
                     .entry((name.to_owned(), instance, diagnostics))
                     .or_default();
                 cache.capture(
-                    key,
+                    scanout.metadata(),
                     |address, count| {
                         let mut bytes = vec![0; count];
                         self.board.read_physical(address, &mut bytes)?;
                         Ok(bytes)
                     },
+                    |address, expected| self.board.physical_bytes_equal(address, expected),
                     |read| {
                         scanout
                             .frame(

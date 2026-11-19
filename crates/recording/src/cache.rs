@@ -3,17 +3,17 @@
 //! instruction, driver state, clock, acknowledgement or checkpoint is consulted.
 use crate::frame::Result;
 
-pub struct CaptureCache<T> {
-    key: Vec<u8>,
+pub struct CaptureCache<K, T> {
+    key: Option<K>,
     reads: Vec<(u64, Vec<u8>)>,
     frame: Option<T>,
     pub hits: u64,
     pub renders: u64,
 }
-impl<T> Default for CaptureCache<T> {
+impl<K, T> Default for CaptureCache<K, T> {
     fn default() -> Self {
         Self {
-            key: Vec::new(),
+            key: None,
             reads: Vec::new(),
             frame: None,
             hits: 0,
@@ -21,18 +21,19 @@ impl<T> Default for CaptureCache<T> {
         }
     }
 }
-impl<T: Clone> CaptureCache<T> {
-    pub fn capture<R, F>(&mut self, key: Vec<u8>, mut read: R, render: F) -> Result<T>
+impl<K: PartialEq, T: Clone> CaptureCache<K, T> {
+    pub fn capture<R, C, F>(&mut self, key: K, mut read: R, mut compare: C, render: F) -> Result<T>
     where
         R: FnMut(u64, usize) -> Result<Vec<u8>>,
+        C: FnMut(u64, &[u8]) -> Result<bool>,
         F: FnOnce(&mut dyn FnMut(u64, usize) -> Result<Vec<u8>>) -> Result<T>,
     {
-        if self.key == key
+        if self.key.as_ref() == Some(&key)
             && let Some(frame) = self.frame.as_ref()
         {
             let mut same = true;
             for (address, bytes) in &self.reads {
-                if read(*address, bytes.len())? != *bytes {
+                if !compare(*address, bytes)? {
                     same = false;
                     break;
                 }
@@ -48,7 +49,7 @@ impl<T: Clone> CaptureCache<T> {
             reads.push((address, bytes.clone()));
             Ok(bytes)
         })?;
-        self.key = key;
+        self.key = Some(key);
         self.reads = reads;
         self.frame = Some(frame.clone());
         self.renders += 1;

@@ -70,14 +70,19 @@ fn remote_and_emulator_rgb_share_the_same_capture_and_png() {
 }
 #[test]
 fn captured_bytes_and_device_key_invalidate_without_any_guest_execution() {
-    let mut cache = CaptureCache::<Vec<u8>>::default();
+    let mut cache = CaptureCache::default();
     let ram = RefCell::new(vec![1, 2, 3]);
     let renders = Cell::new(0);
+    let copies = Cell::new(0);
     let mut sample = |key| {
         cache
             .capture(
                 vec![key],
-                |_, _| Ok(ram.borrow().clone()),
+                |_, _| {
+                    copies.set(copies.get() + 1);
+                    Ok(ram.borrow().clone())
+                },
+                |_, expected| Ok(ram.borrow().as_slice() == expected),
                 |read| {
                     renders.set(renders.get() + 1);
                     read(0x1000, 3)
@@ -88,6 +93,7 @@ fn captured_bytes_and_device_key_invalidate_without_any_guest_execution() {
     assert_eq!(sample(1), vec![1, 2, 3]);
     assert_eq!(sample(1), vec![1, 2, 3]);
     assert_eq!(renders.get(), 1);
+    assert_eq!(copies.get(), 1);
     ram.borrow_mut()[0] = 9;
     assert_eq!(sample(1), vec![9, 2, 3]);
     assert_eq!(renders.get(), 2);
@@ -98,22 +104,24 @@ fn captured_bytes_and_device_key_invalidate_without_any_guest_execution() {
     assert_eq!(sample(1), vec![1, 2, 3]);
     assert_eq!(renders.get(), 4);
     assert_eq!(cache.hits, 1);
+    assert_eq!(copies.get(), 4);
 }
 #[test]
 fn failed_captures_never_become_cached_successes() {
-    let mut cache = CaptureCache::<u8>::default();
+    let mut cache = CaptureCache::default();
     assert!(
         cache
             .capture(
                 vec![1],
                 |_, _| Ok(vec![]),
+                |_, _| Ok(true),
                 |_| Err("unsupported pixels".into())
             )
             .is_err()
     );
     assert_eq!(
         cache
-            .capture(vec![1], |_, _| Ok(vec![]), |_| Ok(7))
+            .capture(vec![1], |_, _| Ok(vec![]), |_, _| Ok(true), |_| Ok(7))
             .unwrap(),
         7
     );
