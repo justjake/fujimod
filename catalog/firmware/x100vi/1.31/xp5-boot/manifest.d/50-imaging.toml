@@ -35,6 +35,19 @@ base = 0xff945000
 size = 0x1000
 kind = "imaging-buffer"
 
+# Table window: write-only words plus one status word at +0xb30. The status word reads zero; its
+# meaning and silicon reset value are unverified (no capture). Its only reader discards it.
+[[device]]
+base = 0xff96c000
+size = 0x1000
+kind = "imaging-table"
+
+# Write-only table window, same device; no word is read.
+[[device]]
+base = 0xff96e000
+size = 0x1000
+kind = "imaging-table"
+
 # Input-engine reset/ready gate used by native imgdc startup.
 [[device]]
 base = 0xff946000
