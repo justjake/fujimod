@@ -15,6 +15,7 @@ import { localReviewFiles } from './scripts/local-review-files.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { directoryRoute } from './src/directory-route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
+import { siteSdkDocs } from './scripts/sdk-docs.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -258,6 +259,7 @@ export default defineConfig(({ mode, command }) => ({
     sbomInputs(),
     previewLicenseFiles(),
     isolationHeaders(),
+    siteSdkDocs(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SDK_DOCS),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,
