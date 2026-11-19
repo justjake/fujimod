@@ -443,11 +443,11 @@ function App() {
   onSettled(() => {
     setMounted(true);
   });
-  const views: [string, string, (st: State) => JSX.Element, number?][] = [
-    ['Vectorscope', 'Drag a dot: around the circle is hue, out from the center is saturation. The dashed triangle is where the primaries started; dots are the picture’s colors.', (st) => <Vectorscope s={st} set={set} />],
-    ['COLOR as a wheel', 'The 2×2: drag the handle around to turn every hue, outward for more saturation.', (st) => <ChromaWheel s={st} set={set} />],
-    ['Broadcast linear matrix', 'The six numbers a Sony or Ikegami PAINT menu shows, from the same edit (×100).', (st) => <LinearMatrix s={st} />],
-    ['RGB mixer', 'The same matrix as Resolve’s RGB Mixer shows it.', (st) => <Mixer s={st} />],
+  const views: [string, string, () => JSX.Element][] = [
+    ['Vectorscope', 'Drag a dot: around the circle is hue, out from the center is saturation. The dashed triangle is where the primaries started; dots are the picture’s colors.', () => <Vectorscope s={s()} set={set} />],
+    ['COLOR as a wheel', 'The 2×2: drag the handle around to turn every hue, outward for more saturation.', () => <ChromaWheel s={s()} set={set} />],
+    ['Broadcast linear matrix', 'The six numbers a Sony or Ikegami PAINT menu shows, from the same edit (×100).', () => <LinearMatrix s={s()} />],
+    ['RGB mixer', 'The same matrix as Resolve’s RGB Mixer shows it.', () => <Mixer s={s()} />],
   ];
   return (
     <div class="mx-auto max-w-[760px] px-[16px] pb-[48px] text-[#ddd]">
@@ -462,7 +462,7 @@ function App() {
             <section class="mt-[28px]">
               <h2 class="text-[20px] font-semibold text-white">{name}</h2>
               <p class="mb-[10px] text-white/60">{note}</p>
-              <Screen s={s()}>{view(s())}</Screen>
+              <Screen s={s()}>{view()}</Screen>
             </section>
           )}
         </For>
