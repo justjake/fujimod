@@ -13,7 +13,7 @@ const previewAssets = [
   'preview.page.js',
   'preview.wasm',
   'preview.wasm.js',
-  'focal-renderer.js',
+  'focal-runtime.js',
   'web_glyphs.js',
 ];
 
