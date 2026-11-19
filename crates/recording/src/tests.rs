@@ -153,8 +153,12 @@ fn optional_video_shares_rendering_and_annotates_only_changed_frames() {
     let image = frame(40);
     r.frame(image.clone(), 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();
+    assert!(r.clean_overlay.is_none());
+    assert!(r.annotated.is_none());
     r.input("menu_ok_button", true, 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();
+    assert!(r.clean_overlay.is_none());
+    assert!(r.annotated.is_some());
     r.input("menu_ok_button", false, 0.).unwrap();
     r.still(image.clone(), 0.5).unwrap();
     r.finish().unwrap();
@@ -410,8 +414,12 @@ fn touches_mark_both_videos() {
     r.frame(frame(0), 0.).unwrap();
     r.touch(TouchPhase::Start, 160., 120., 0.).unwrap();
     r.frame(frame(0), 0.3).unwrap();
+    assert!(r.clean_overlay.is_some());
+    assert!(r.annotated.is_none());
     r.touch(TouchPhase::End, 160., 120., 0.3).unwrap();
     r.frame(frame(0), 1.).unwrap();
+    assert!(r.clean_overlay.is_none());
+    assert!(r.annotated.is_none());
     r.finish().unwrap();
     let decode = |name: &str| {
         let result = std::process::Command::new("ffmpeg")

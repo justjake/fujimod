@@ -57,8 +57,8 @@ pub struct Recorder {
     encoders: Option<Encoders>,
     size: Option<(u32, u32)>,
     fitted: Option<Frame>,
-    touched: Vec<u8>,
-    annotated: Vec<u8>,
+    clean_overlay: Option<Vec<u8>>,
+    annotated: Option<Vec<u8>>,
     labels: Vec<(String, u8)>,
     marks: Vec<Mark>,
     has_poster: bool,
@@ -102,8 +102,8 @@ impl Recorder {
             encoders: None,
             size: None,
             fitted: None,
-            touched: Vec::new(),
-            annotated: Vec::new(),
+            clean_overlay: None,
+            annotated: None,
             labels: Vec::new(),
             marks: Vec::new(),
             has_poster: false,
@@ -418,28 +418,39 @@ impl Recorder {
             || marks != self.marks
         {
             let start = Instant::now();
-            let mut canvas = Canvas::from_rgb(fitted.pixels(), fitted.width(), fitted.height());
-            if let Some(panel) = &self.card_panel {
-                let shake = panel.formatting.map_or((0., 0.), |start| {
-                    let t = (self.frames - start) as f32 / self.fps as f32;
-                    ((t * 81.7).sin() * 4., (t * 107.3).sin() * 2.5)
-                });
-                card_panel::draw(
-                    &mut canvas,
-                    &panel.panel,
-                    panel.motion.value(self.frames, self.fps),
-                    shake,
-                );
-            }
-            if let Some(panel) = &self.display_panel {
-                panel.draw(&mut canvas, self.frames, self.fps)?;
+            let card = self.card_panel.as_ref().and_then(|panel| {
+                let visibility = panel.motion.value(self.frames, self.fps);
+                (visibility > 0.).then_some((panel, visibility))
+            });
+            let display = self
+                .display_panel
+                .as_ref()
+                .filter(|panel| panel.motion.value(self.frames, self.fps) > 0.);
+            let has_clean_overlay = card.is_some() || display.is_some() || !marks.is_empty();
+            let mut canvas = (has_clean_overlay || !labels.is_empty())
+                .then(|| Canvas::from_rgb(fitted.pixels(), fitted.width(), fitted.height()));
+            self.clean_overlay = None;
+            self.annotated = None;
+            if let Some(canvas) = &mut canvas {
+                if let Some((panel, visibility)) = card {
+                    let shake = panel.formatting.map_or((0., 0.), |start| {
+                        let t = (self.frames - start) as f32 / self.fps as f32;
+                        ((t * 81.7).sin() * 4., (t * 107.3).sin() * 2.5)
+                    });
+                    card_panel::draw(canvas, &panel.panel, visibility, shake);
+                }
+                if let Some(panel) = display {
+                    panel.draw(canvas, self.frames, self.fps)?;
+                }
+                // Both videos show touches; only the annotated one shows badges.
+                touches::draw_on(canvas, &marks);
+                self.clean_overlay = has_clean_overlay.then(|| canvas.rgb());
+                if !labels.is_empty() {
+                    badges::draw_on(canvas, &labels);
+                    self.annotated = Some(canvas.rgb());
+                }
             }
             self.overlays_changed = animating;
-            // Both videos show touches; only the annotated one shows badges.
-            touches::draw_on(&mut canvas, &marks);
-            self.touched = canvas.rgb();
-            badges::draw_on(&mut canvas, &labels);
-            self.annotated = canvas.rgb();
             self.metrics.annotation_seconds += start.elapsed().as_secs_f64();
             self.metrics.annotated_frames += 1;
             self.labels = labels;
@@ -448,11 +459,12 @@ impl Recorder {
         if self.encoders.is_none() {
             self.encoders = Some(Encoders::open(&self.output, fitted, self.fps)?);
         }
-        let elapsed = self
-            .encoders
-            .as_mut()
-            .unwrap()
-            .write(&self.annotated, &self.touched)?;
+        let clean = self
+            .clean_overlay
+            .as_deref()
+            .unwrap_or_else(|| fitted.pixels());
+        let annotated = self.annotated.as_deref().unwrap_or(clean);
+        let elapsed = self.encoders.as_mut().unwrap().write(annotated, clean)?;
         for (total, part) in self.metrics.encoder_write_seconds.iter_mut().zip(elapsed) {
             *total += part;
         }
