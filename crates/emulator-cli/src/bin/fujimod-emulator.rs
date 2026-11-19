@@ -23,16 +23,17 @@ Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH.\n\
 XP5 loader starts put the card in slot 1 and write changed sectors back into IMAGE at the end of the run.\n\
---manifest FILE, --watch-pcs ADDR[,ADDR...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
+--manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,ADDR:LEN...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 XP5 --gpio also takes PORT:PIN=0|1@MS: the level applies MS guest milliseconds after the run starts.\n\
+XP5 --watch-writes logs each CPU store, DMA and host write into the physical ranges to stderr (needs --engine unicorn).\n\
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 38] = [
+const VALUED: [&str; 39] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -62,6 +63,7 @@ const VALUED: [&str; 38] = [
     "--manifest",
     "--application-plan",
     "--watch-pcs",
+    "--watch-writes",
     "--pc-trace",
     "--pc-trace-limit",
     "--dump",
@@ -253,7 +255,7 @@ fn prepare_mod(
 fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--application-plan", "--manifest", "--watch-pcs", "--dump", "--hash"],
+        &["--application-plan", "--manifest", "--watch-pcs", "--watch-writes", "--dump", "--hash"],
     )?;
     let mut loaded_mod = prepare_mod(&resolved, fujimod_emulator_cpu::Model::CortexR5F, &boot_options.mods)?;
     if let Some(path) = boot_options.path("--scene") {
@@ -401,6 +403,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         save_snapshot: boot_options.path("--save-snapshot"),
         manifest: boot_options.path("--manifest"),
         watch_pcs: boot_options.text("--watch-pcs")?,
+        watch_writes: boot_options.text("--watch-writes")?,
         pc_trace,
         screenshot: boot_options.path("--screenshot"),
         viewer_port: boot_options.viewer_port()?,

@@ -28,6 +28,7 @@ mod observation_tests;
 #[cfg(test)]
 mod preservation_tests;
 mod observe;
+pub mod write_watch;
 mod schedule;
 mod state;
 #[cfg(test)]
@@ -726,6 +727,12 @@ impl Board {
     pub fn write_physical(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
         state.code_run = None;
+        self.physical_memory.watch_transfer(
+            write_watch::WriteSource::Host,
+            address,
+            bytes,
+            state.timeline.now(),
+        );
         self.physical_memory
             .write_host(&self.cpus, &state.exclusive, address, bytes)
     }
@@ -2097,6 +2104,8 @@ impl Host for Services<'_> {
         }
         *self.code_run = None;
         self.memory
+            .watch_transfer(write_watch::WriteSource::Dma, address, bytes, self.timeline.now());
+        self.memory
             .write_dma(self.cpus, self.exclusive, address, bytes)
     }
     fn scanout(
@@ -2230,7 +2239,7 @@ unsafe fn written(
     _: fujimod_emulator_cpu::Access,
     address: u64,
     size: i32,
-    _: i64,
+    value: i64,
     data: *mut c_void,
 ) {
     let b = unsafe { &*data.cast::<Binding>() };
@@ -2244,6 +2253,9 @@ unsafe fn written(
             .and_then(|size| {
                 let address =
                     cpus[b.core].translate(address, fujimod_emulator_cpu::Access::Write)?;
+                if state.memory.watching_writes() {
+                    write_watch::observe_store(&state, &*cpus[b.core], b.core, address, size, value);
+                }
                 if state.mprofile[b.core]
                     .as_ref()
                     .is_some_and(|p| p.writes_an_alias(address, size))

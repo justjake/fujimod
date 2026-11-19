@@ -158,6 +158,8 @@ pub struct Run {
     pub update: PathBuf,
     pub manifest: Option<PathBuf>,
     pub watch_pcs: Option<String>,
+    /// Physical ranges `ADDR:LEN[,ADDR:LEN...]` whose writes are logged to stderr.
+    pub watch_writes: Option<String>,
     pub pc_trace: Option<crate::TraceOutput>,
     pub screenshot: Option<PathBuf>,
     pub viewer_port: Option<u16>,
@@ -216,6 +218,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         update,
         manifest,
         watch_pcs,
+        watch_writes,
         pc_trace,
         screenshot,
         viewer_port,
@@ -261,6 +264,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .collect::<Result<Vec<_>, _>>()?;
     watch_pcs.sort_unstable();
     watch_pcs.dedup();
+    let watch_writes = parse_ranges("--watch-writes", &watch_writes.unwrap_or_default().replace(',', ";"))?;
     let dumps = parse_dumps(dump.as_deref().unwrap_or_default())?;
     let hashes = parse_ranges("--hash", hash.as_deref().unwrap_or_default())?;
     let mut patches = crate::patch::Schedule::from_path(
@@ -286,7 +290,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     }
     // A stable sort keeps the written order of levels that share a time.
     timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
-    // XT5_WATCH_AFTER_MS=N arms the --watch-pcs witnesses only after N ms of guest time from the
+    // XT5_WATCH_AFTER_MS=N arms the --watch-pcs witnesses and --watch-writes ranges only after N ms of guest time from the
     // run start, so the log shows the first hits after an event (a key press), not earlier ones.
     let watch_after_ms = match std::env::var("XT5_WATCH_AFTER_MS") {
         Ok(value) => Some(value.trim().parse::<u64>()
@@ -343,6 +347,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     session.board.set_execution_policy(policy)?;
     if watch_after_ms.is_none() {
         session.board.watch_pcs(&watch_pcs)?;
+        session.board.watch_writes(&watch_writes)?;
     }
     let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     // Emulator-only FujiMod (--mod): built and placed before the run, hook words attached between
@@ -445,6 +450,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             {
                 watch_after = None;
                 session.board.watch_pcs(&watch_pcs)?;
+                session.board.watch_writes(&watch_writes)?;
                 eprintln!("FUJIMOD XP5 watch-pcs armed at {after_ms} ms (tick {now})");
             }
             // Stop the slice at the next scheduled host action, so it applies at its guest time.
@@ -459,6 +465,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             for line in session.board.take_console() {
                 println!("{line}");
             }
+            print_write_notes(&session.board, ticks_per_second);
             for frame in session.board.take_frames() {
                 outputs.frame(frame)?;
             }
@@ -535,6 +542,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         limits.stop_reason(&session).unwrap_or(crate::host::StopReason::Other)
     };
     eprintln!("FUJIMOD XP5 end: {}", stop_reason.name());
+    print_write_notes(&session.board, ticks_per_second);
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
@@ -603,6 +611,17 @@ fn parse_ranges(option: &str, spec: &str) -> Result<Vec<(u64, u64)>, String> {
         }
         Ok((address, length))
     }).collect()
+}
+
+/// Print the `--watch-writes` notes recorded since the last call.
+fn print_write_notes(board: &fujimod_emulator::board::Board, ticks_per_second: u64) {
+    let (notes, dropped) = board.take_write_notes();
+    for note in notes {
+        eprintln!("FUJIMOD XP5 write: {}", note.line(ticks_per_second));
+    }
+    if dropped > 0 {
+        eprintln!("FUJIMOD XP5 write: {dropped} more watched writes were not recorded (note bound)");
+    }
 }
 
 fn parse_dumps(spec: &str) -> Result<Vec<(u64, usize)>, String> {
