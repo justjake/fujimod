@@ -1,0 +1,18 @@
+[package]
+name = "fujimod-mcp-core"
+description = "MCP server hub: tool modules that can be compiled in and activated independently"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-workspace-hack.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rmcp.workspace = true
