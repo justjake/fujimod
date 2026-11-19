@@ -87,8 +87,13 @@ pub(super) fn open_startup(
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
     let mut runtime_files = Vec::new();
-    let rom = if matches!(start, RunStart::Rom | RunStart::SdCard) {
+    let rom = if matches!(start, RunStart::Rom | RunStart::SdCard | RunStart::Setup) {
         let start = match (rom_path.as_deref(), start) {
+            (None, RunStart::Setup) => {
+                let handoff = rom_start::SetupHandoff::for_firmware(&firmware_id)
+                    .ok_or("this firmware declares no setup-stage start")??;
+                rom_start::RomStart::from_setup_handoff(handoff)?
+            }
             (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?,
             (None, RunStart::SdCard) => {
                 let handoff = rom_start::Handoff::for_firmware(&firmware_id)
