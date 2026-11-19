@@ -27,10 +27,6 @@ ninja = "1.13.2"
 description = "Commit chosen paths or hunks to the checked-out branch and push"
 run = "python scripts/git/commit.py"
 
-[tasks.land]
-description = "Land an approved worktree's branch on main as a fast-forward"
-run = "python scripts/git/land.py"
-
 [tasks.hooks-install]
 description = "Install the worktree guard and LFS Git hooks"
 run = "python scripts/git/install_hooks.py"
