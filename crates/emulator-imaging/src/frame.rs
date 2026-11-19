@@ -387,10 +387,127 @@ fn host_still_422_with(real: bool, width: usize, height: usize) -> Option<Vec<u8
     render_422(host_scene()?, width, height)
 }
 
-/// Host-supplied virtual scene for a packed 4:2:2 output, selected by the `XT5_SCENE` environment
+/// Memory layout of a YCbCr DMA output picture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum YuvLayout {
+    /// One plane, Y0, Y1, Cb, Cr per horizontal pixel pair: `width * 2` bytes a line.
+    Packed422,
+    /// 8-bit two-plane 4:2:0 (NV12): a Y plane of one byte a pixel at the output address, and
+    /// at `chroma` an interleaved Cb, Cr plane with one pair per 2x2 pixel block, `width` bytes
+    /// a line and `ceil(height / 2)` lines, `chroma_stride` bytes apart.
+    TwoPlane420 { chroma: u64, chroma_stride: u32 },
+}
+
+/// Largest modeled output width and height, and the largest total of programmed plane bytes.
+const MAX_SIDE: u32 = 8192;
+const MAX_BYTES: u64 = 128 * 1024 * 1024;
+
+/// Checks a `width` x `height` output in `layout` with luma (or packed) `stride` at `address`
+/// against the modeled bounds. The error names the whole geometry.
+fn check_geometry(address: u64, width: u32, height: u32, stride: u32, layout: YuvLayout) -> Result<(), String> {
+    let sides = width != 0 && width & 1 == 0 && height != 0 && width <= MAX_SIDE && height <= MAX_SIDE;
+    let luma_bytes = u64::from(stride) * u64::from(height);
+    let (fits, chroma_end) = match layout {
+        YuvLayout::Packed422 => (sides && stride >= width * 2 && luma_bytes <= MAX_BYTES, Some(0)),
+        YuvLayout::TwoPlane420 { chroma, chroma_stride } => {
+            let chroma_bytes = u64::from(chroma_stride) * u64::from(height.div_ceil(2));
+            (
+                sides
+                    && chroma != 0
+                    && stride >= width
+                    && chroma_stride >= width
+                    && luma_bytes + chroma_bytes <= MAX_BYTES,
+                chroma.checked_add(chroma_bytes),
+            )
+        }
+    };
+    let describe = || match layout {
+        YuvLayout::Packed422 => format!("{width}x{height} stride {stride:#x} at {address:#x}"),
+        YuvLayout::TwoPlane420 { chroma, chroma_stride } => format!(
+            "{width}x{height} two-plane 4:2:0 luma stride {stride:#x} at {address:#x}, \
+             chroma stride {chroma_stride:#x} at {chroma:#x}"
+        ),
+    };
+    if !fits {
+        return Err(format!("scene geometry exceeds modeled bounds: {}", describe()));
+    }
+    if address.checked_add(luma_bytes).is_none() || chroma_end.is_none() {
+        return Err(format!("YUV DMA address overflow: {}", describe()));
+    }
+    Ok(())
+}
+
+/// Writes packed 4:2:2 lines (Y0, Y1, Cb, Cr; `emit` order, top first) as two-plane 4:2:0:
+/// the Y bytes of each line to the luma plane, and the Cb, Cr of each pair of lines, averaged
+/// (rounding up, like the codec's packed-to-I420 conversion), to one chroma line. The last
+/// line of an odd height is its own pair.
+struct TwoPlaneWriter {
+    address: u64,
+    stride: u32,
+    chroma: u64,
+    chroma_stride: u32,
+    height: usize,
+    even: Vec<u8>,
+    line: Vec<u8>,
+}
+impl TwoPlaneWriter {
+    fn new(address: u64, stride: u32, chroma: u64, chroma_stride: u32, width: usize, height: usize) -> Self {
+        Self { address, stride, chroma, chroma_stride, height, even: vec![0; width * 2], line: vec![0; width] }
+    }
+    fn row(&mut self, cx: &mut Cx<'_>, y: usize, packed: &[u8]) -> Result<(), String> {
+        for (pair, px) in packed.chunks_exact(4).enumerate() {
+            self.line[pair * 2] = px[0];
+            self.line[pair * 2 + 1] = px[1];
+        }
+        cx.ram_write(self.address + y as u64 * u64::from(self.stride), &self.line)?;
+        if y.is_multiple_of(2) {
+            self.even.copy_from_slice(packed);
+            if y + 1 < self.height {
+                return Ok(());
+            }
+        }
+        for (pair, (a, b)) in self.even.chunks_exact(4).zip(packed.chunks_exact(4)).enumerate() {
+            self.line[pair * 2] = (u16::from(a[2]) + u16::from(b[2])).div_ceil(2) as u8;
+            self.line[pair * 2 + 1] = (u16::from(a[3]) + u16::from(b[3])).div_ceil(2) as u8;
+        }
+        cx.ram_write(self.chroma + (y / 2) as u64 * u64::from(self.chroma_stride), &self.line)
+    }
+}
+
+/// The declared flat source ([`paint`]) in any [`YuvLayout`]: a packed 4:2:2 output goes
+/// through [`paint`] unchanged; a two-plane 4:2:0 output gets Y = `luma` and Cb = Cr = 128.
+pub fn paint_layout(
+    cx: &mut Cx<'_>,
+    address: u64,
+    width: u32,
+    height: u32,
+    stride: u32,
+    layout: YuvLayout,
+    luma: u8,
+) -> Result<(), String> {
+    let YuvLayout::TwoPlane420 { chroma, chroma_stride } = layout else {
+        return paint(cx, address, width, height, stride, luma);
+    };
+    if !(16..=235).contains(&luma) {
+        return Err("fixed YUV source luma is outside 16..=235".into());
+    }
+    check_geometry(address, width, height, stride, layout)?;
+    let y_line = vec![luma; width as usize];
+    for y in 0..u64::from(height) {
+        cx.ram_write(address + y * u64::from(stride), &y_line)?;
+    }
+    let c_line = vec![128; width as usize];
+    for y in 0..u64::from(height.div_ceil(2)) {
+        cx.ram_write(chroma + y * u64::from(chroma_stride), &c_line)?;
+    }
+    Ok(())
+}
+
+/// Host-supplied virtual scene for a YCbCr output, selected by the `XT5_SCENE` environment
 /// variable ([`host_scene`]). Colour bars carry a marker that moves with `frame`; a BMP is scaled
-/// (nearest neighbour) to the output; a live scene's newest frame is scaled bilinearly. The
-/// layout matches [`paint`]: Y0,Y1,Cb,Cr per pixel pair.
+/// (nearest neighbour) to the output; a live scene's newest frame is scaled bilinearly. A packed
+/// 4:2:2 output matches [`paint`]: Y0,Y1,Cb,Cr per pixel pair. A two-plane 4:2:0 output gets
+/// the same picture as a Y plane and a Cb,Cr plane ([`YuvLayout::TwoPlane420`]).
 /// Returns `false` when no scene is set, so the caller paints its declared flat source.
 pub fn paint_scene(
     cx: &mut Cx<'_>,
@@ -398,29 +515,24 @@ pub fn paint_scene(
     width: u32,
     height: u32,
     stride: u32,
+    layout: YuvLayout,
     frame: u64,
 ) -> Result<bool, String> {
     let Some(scene) = host_scene() else { return Ok(false) };
-    if width == 0
-        || width & 1 != 0
-        || height == 0
-        || width > 4096
-        || height > 4096
-        || stride < width * 2
-        || u64::from(stride) * u64::from(height) > 32 * 1024 * 1024
-    {
-        return Err("scene geometry exceeds modeled bounds".into());
-    }
-    address
-        .checked_add(u64::from(stride) * u64::from(height))
-        .ok_or("YUV DMA address overflow")?;
+    check_geometry(address, width, height, stride, layout)?;
     let (w, h) = (width as usize, height as usize);
     let marker = (frame % w as u64) as usize * 8 % w;
     let (live, scene) = snapshot(scene);
     let view = view(scene, live.as_deref(), w);
-    rows_422(&view, w, h, Some(marker), |y, row| {
-        cx.ram_write(address + y as u64 * u64::from(stride), row)
-    })?;
+    match layout {
+        YuvLayout::Packed422 => rows_422(&view, w, h, Some(marker), |y, row| {
+            cx.ram_write(address + y as u64 * u64::from(stride), row)
+        })?,
+        YuvLayout::TwoPlane420 { chroma, chroma_stride } => {
+            let mut writer = TwoPlaneWriter::new(address, stride, chroma, chroma_stride, w, h);
+            rows_422(&view, w, h, Some(marker), |y, row| writer.row(cx, y, row))?
+        }
+    }
     Ok(true)
 }
 
@@ -546,6 +658,62 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// X-T5 FHD movie MOVDC channel 2 (1920x1080, stride 0xc00) fits as two-plane 4:2:0 but
+    /// not as packed 4:2:2, and every refusal names the geometry.
+    #[test]
+    fn two_plane_geometry_accepts_the_fhd_movie_output_and_names_refusals() {
+        let two_plane = YuvLayout::TwoPlane420 { chroma: 0x1_cdf0_f000, chroma_stride: 0xc00 };
+        assert_eq!(check_geometry(0x9c24_3000, 1920, 1080, 0xc00, two_plane), Ok(()));
+        let packed = check_geometry(0x9c24_3000, 1920, 1080, 0xc00, YuvLayout::Packed422).unwrap_err();
+        assert!(packed.contains("1920x1080 stride 0xc00 at 0x9c243000"), "{packed}");
+        assert_eq!(check_geometry(0x9c24_3000, 960, 640, 0x780, YuvLayout::Packed422), Ok(()));
+        for (width, height, stride, chroma, chroma_stride) in [
+            (1920, 1080, 1918, 0x1000, 0xc00),
+            (1920, 1080, 0xc00, 0x1000, 1918),
+            (1920, 1080, 0xc00, 0, 0xc00),
+            (8194, 2, 0x4000, 0x1000, 0x4000),
+            (8192, 8192, 0x4000, 0x1000, 0x4000),
+            (1919, 1080, 0xc00, 0x1000, 0xc00),
+        ] {
+            let layout = YuvLayout::TwoPlane420 { chroma, chroma_stride };
+            let error = check_geometry(0x1000, width, height, stride, layout).unwrap_err();
+            assert!(error.contains(&format!("{width}x{height} two-plane 4:2:0")), "{error}");
+        }
+        let overflow = YuvLayout::TwoPlane420 { chroma: u64::MAX - 8, chroma_stride: 16 };
+        assert!(check_geometry(0x1000, 16, 4, 16, overflow).unwrap_err().contains("overflow"));
+    }
+
+    /// The two-plane writer gives the packed lines' Y bytes and, per pair of lines, their
+    /// Cb,Cr averaged rounding up; an odd last line is its own pair.
+    #[test]
+    fn two_plane_writer_splits_packed_lines_into_luma_and_half_height_chroma() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        const BASE: u64 = 0x1000;
+        let (width, height, stride, chroma_stride) = (8usize, 5usize, 12u32, 16u32);
+        let chroma = BASE + 0x100;
+        let mut host = RecordingHost { ram_base: BASE, ram: vec![0x55; 0x200], ..Default::default() };
+        let lines: Vec<Vec<u8>> = (0..height as u8)
+            .map(|y| (0..width as u8 / 2).flat_map(|p| [y * 10 + p, y * 10 + p + 1, 100 + y, 200 - y]).collect())
+            .collect();
+        let mut writer = TwoPlaneWriter::new(BASE, stride, chroma, chroma_stride, width, height);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (y, line) in lines.iter().enumerate() {
+            writer.row(&mut cx, y, line).unwrap();
+        }
+        for (y, line) in lines.iter().enumerate() {
+            let at = y * stride as usize;
+            let luma: Vec<u8> = line.chunks_exact(4).flat_map(|p| [p[0], p[1]]).collect();
+            assert_eq!(&host.ram[at..at + width], &luma[..], "luma line {y}");
+            assert!(host.ram[at + width..at + stride as usize].iter().all(|v| *v == 0x55));
+        }
+        for (row, (cb, cr)) in [(101, 200), (103, 198), (104, 196)].into_iter().enumerate() {
+            let at = 0x100 + row * chroma_stride as usize;
+            assert_eq!(&host.ram[at..at + width], &[cb, cr].repeat(width / 2)[..], "chroma line {row}");
+            assert!(host.ram[at + width..at + chroma_stride as usize].iter().all(|v| *v == 0x55));
+        }
+        assert!(host.ram[0x100 + 3 * chroma_stride as usize..].iter().all(|v| *v == 0x55));
     }
 
     /// The modelled still path gives the JPEG encoder no host picture for any encode (main,
