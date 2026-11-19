@@ -1,3 +1,5 @@
+import type { Firmware } from '../catalog';
+import { fetchFirmware } from './fetch-firmware';
 import { createSignal, onSettled } from 'solid-js';
 import { initialize } from 'fujimod';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
@@ -35,6 +37,28 @@ export function createFirmwareLibrary(identifyFile?: (file: File) => Promise<Ide
       setSelected(entry.sha256);
     } catch (caught) {
       report(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function get(firmware: Firmware): Promise<LibraryFirmware> {
+    const saved = entries().find((entry) => entry.sha256 === firmware.sha256);
+    if (saved) {
+      setSelected(saved.sha256);
+      return saved;
+    }
+    if (busy()) throw Error('Firmware import is already in progress.');
+    setBusy(true);
+    setError('');
+    try {
+      const file = await fetchFirmware(firmware);
+      const entry = await store.addFirmware(file, firmware);
+      await refresh();
+      setSelected(entry.sha256);
+      return entry;
+    } catch (caught) {
+      report(caught);
+      throw caught;
     } finally {
       setBusy(false);
     }
@@ -80,7 +104,19 @@ export function createFirmwareLibrary(identifyFile?: (file: File) => Promise<Ide
       document.removeEventListener('visibilitychange', visible);
     };
   });
-  return { store, entries, selected, chosen, ready, busy, error, select: setSelected, add, remove };
+  return {
+    store,
+    entries,
+    selected,
+    chosen,
+    ready,
+    busy,
+    error,
+    select: setSelected,
+    add,
+    get,
+    remove,
+  };
 }
 export interface FirmwareLibrary {
   store: CameraStore;
@@ -92,5 +128,6 @@ export interface FirmwareLibrary {
   error(): string;
   select(sha256: string | undefined): void;
   add(file?: File): Promise<void>;
+  get(firmware: Firmware): Promise<LibraryFirmware>;
   remove(sha256: string): Promise<void>;
 }
