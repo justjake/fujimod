@@ -9,7 +9,7 @@ import math
 import os
 import sys
 import types
-from collections.abc import Callable, Generator, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -409,9 +409,13 @@ class Guide[C: RecordingCamera]:
         self._hero = hero
         self._card_overlay: CardOverlay | None = None
 
+    def _saved_report(self) -> Mapping[str, object]:
+        """The report to serialize. The run keeps using its live observations."""
+        return self.report
+
     def save(self) -> None:
         temporary = self.output / ".guide.json.tmp"
-        temporary.write_text(json.dumps(self.report, separators=(",", ":")) + "\n")
+        temporary.write_text(json.dumps(dict(self._saved_report()), separators=(",", ":")) + "\n")
         os.replace(temporary, self.output / "guide.json")
 
     def _overlay_event(self, event: dict[str, object]) -> None:
