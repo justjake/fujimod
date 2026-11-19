@@ -676,6 +676,29 @@ pub fn build(
             }
         )
     });
+    let media_development = spec.nodes.iter().any(|node| {
+        matches!(&node.model, Model::RegisterBlock {
+            work: Some(BlockWork::Develop { profile, .. }), ..
+        } if profile == crate::development::FILM_MEDIA_PROFILE)
+    });
+    let readout_port = if media_development {
+        let readouts = spec.nodes.iter().filter(|node| {
+            matches!(
+                &node.model,
+                Model::ImagingControl {
+                    readout: Some(_),
+                    sensor_frame: Some(_),
+                    ..
+                }
+            )
+        });
+        if readouts.count() != 1 {
+            return Err("Media development needs one sensor DMA port".into());
+        }
+        Some(imaging::ReadoutPort::default())
+    } else {
+        None
+    };
     // The statistics scene-light scale (`statistics::Engine::set_scene_light`),
     // shared with the live-view film that draws the same light.
     let scene_light =
@@ -922,10 +945,18 @@ pub fn build(
                     } else {
                         crate::development::PROFILE
                     };
-                    if profile != expected {
+                    let media = reads_color && profile == crate::development::FILM_MEDIA_PROFILE;
+                    if profile != expected && !media {
                         return Err(format!("unknown still development profile {profile}"));
                     }
                     model = model.with_work(law)?;
+                    if media && matches!(law, blocks::Work::Develop { .. }) {
+                        model = model.with_readout_port(
+                            readout_port
+                                .clone()
+                                .ok_or("Media development needs one sensor DMA port")?,
+                        );
+                    }
                     if let (
                         blocks::Work::Develop { .. },
                         Some((_, words, reference, tone, tone_words)),
@@ -1236,10 +1267,12 @@ pub fn build(
                         if let Some(r) = readout {
                             control = control.with_readout(r)?;
                         }
-                        let control = match sensor_frame {
-                            Some(profile) => control.with_sensor_frame(&profile)?,
-                            None => control,
-                        };
+                        if let Some(profile) = sensor_frame {
+                            control = control.with_sensor_frame(&profile)?;
+                            if let Some(port) = &readout_port {
+                                control = control.with_readout_port(port.clone());
+                            }
+                        }
                         let control = match sensor_image {
                             Some(image) => control.with_sensor_image(
                                 image.width,
