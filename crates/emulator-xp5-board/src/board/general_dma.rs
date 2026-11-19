@@ -16,16 +16,25 @@ pub fn owns(kind: &str) -> bool {
         "pl022" | "general-dma" | "dma-address-high" | "dma-request-routing"
     )
 }
+/// A companion-side SSP instance. The DMA request pair and the companion interrupt line
+/// are board facts a declaration may lack: without the pair a DMA request for the
+/// instance has no connected peripheral and refuses, and without the line a raised
+/// interrupt refuses.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SerialWiring {
     source_hz: u64,
     ticks_per_second: u64,
-    receive_request: u8,
-    transmit_request: u8,
-    companion_irq_line: u32,
+    #[serde(default)]
+    receive_request: Option<u8>,
+    #[serde(default)]
+    transmit_request: Option<u8>,
+    #[serde(default)]
+    companion_irq_line: Option<u32>,
     wire: WireInput,
 }
+/// SSP instances 0..9 of the SoC (`spi0`..`spi9`), one 4 KiB window each.
+const SSP_INSTANCES: std::ops::Range<u64> = 0xff910000..0xff91a000;
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum WireInput {
@@ -69,17 +78,26 @@ pub fn register_all(
     let mut connections = BTreeMap::new();
     let mut serials = vec![];
     for w in windows.iter().filter(|w| w.kind == "pl022") {
-        if w.base != 0xff911000 || w.size != 0x1000 {
+        if !SSP_INSTANCES.contains(&w.base) || w.base & 0xfff != 0 || w.size != 0x1000 {
             return Err("invalid XP5 PL022 window".into());
         }
         let wiring: SerialWiring = options(w)?;
-        if wiring.receive_request >= 63
-            || wiring.transmit_request >= 63
-            || wiring.receive_request == wiring.transmit_request
-        {
-            return Err("invalid XP5 serial DMA request wiring".into());
-        }
-        let core = companion.ok_or("PL022 IRQ wiring requires the companion")?;
+        let requests = match (wiring.receive_request, wiring.transmit_request) {
+            (Some(receive), Some(transmit))
+                if receive < 63 && transmit < 63 && receive != transmit =>
+            {
+                vec![(receive, Direction::Receive), (transmit, Direction::Transmit)]
+            }
+            (None, None) => vec![],
+            _ => return Err("invalid XP5 serial DMA request wiring".into()),
+        };
+        let interrupts = match wiring.companion_irq_line {
+            Some(line) => vec![InterruptLine::Core {
+                core: companion.ok_or("PL022 IRQ wiring requires the companion")?,
+                line,
+            }],
+            None => vec![],
+        };
         let wire: Box<dyn Wire> = match wiring.wire {
             WireInput::Unconnected => Box::new(Unconnected),
             WireInput::InputLevel { high } => Box::new(InputLevel(high)),
@@ -93,17 +111,11 @@ pub fn register_all(
                 source_hz: wiring.source_hz,
                 ticks_per_second: wiring.ticks_per_second,
             },
-            vec![InterruptLine::Core {
-                core,
-                line: wiring.companion_irq_line,
-            }],
+            interrupts,
             wire,
         )?;
         let port = serial.port();
-        for (request, direction) in [
-            (wiring.receive_request, Direction::Receive),
-            (wiring.transmit_request, Direction::Transmit),
-        ] {
+        for (request, direction) in requests {
             if connections
                 .insert(
                     request,
