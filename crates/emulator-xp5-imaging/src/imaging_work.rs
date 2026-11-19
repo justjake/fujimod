@@ -197,9 +197,15 @@ impl Work {
             // size words (height<<16 | 15-bit width) chosen by the setter's selector.
             // Every other word the first gate's setters, getters and read-modify-write
             // helpers address below +0x800 is a plain read-back word (PLAIN_RESET_WORDS).
+            // The second gate (0xff973000) latches only the words its setters
+            // write with a freshly computed value (+8 mode, +c/+10 size, +38 and
+            // +40 selectors). +30 is polled by its stop routine, +3c arms its
+            // interrupt, and +14..+2c/+34 are only read by a debug snapshot;
+            // none of those is modeled.
             Kind::Reset => {
                 matches!(o, 0 | 4)
                     || (self.base == 0xff950000 && PLAIN_RESET_WORDS.iter().any(|r| r.contains(&o)))
+                    || (self.base == 0xff973000 && SECOND_GATE_PLAIN_WORDS.contains(&o))
             }
             Kind::Resize => matches!(
                 o,
@@ -246,6 +252,9 @@ impl Work {
         }
     }
 }
+/// Word offsets of the second reset gate that only latch a written value.
+/// Power-on values are unverified (read as zero).
+const SECOND_GATE_PLAIN_WORDS: &[u64] = &[0x08, 0x0c, 0x10, 0x38, 0x40];
 /// Word offsets (4-byte aligned) of the first reset gate that only latch a value.
 const PLAIN_RESET_WORDS: &[std::ops::RangeInclusive<u64>] = &[
     0x08..=0x58,
@@ -643,6 +652,26 @@ mod reset_size_tests {
         let mut other = Work::reset(0xff973000).unwrap();
         other.write(&mut cx, 0xff97301c, 4, 1);
         assert!(cx.refusal().is_some());
+    }
+
+    #[test]
+    fn second_reset_gate_keeps_the_plain_words_and_refuses_the_polled_and_snapshot_words() {
+        let mut work = Work::reset(0xff973000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        for (i, o) in [0x08, 0x0c, 0x10, 0x38, 0x40].into_iter().enumerate() {
+            assert_eq!(work.read(&mut cx, 0xff973000 + o, 4), 0);
+            let v = 3 + i as u64;
+            work.write(&mut cx, 0xff973000 + o, 4, v);
+            assert_eq!(work.read(&mut cx, 0xff973000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        for o in [0x14u64, 0x30, 0x3c, 0x44] {
+            let mut host = RecordingHost::default();
+            let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+            work.write(&mut cx, 0xff973000 + o, 4, 1);
+            assert!(cx.refusal().is_some());
+        }
     }
 
     #[test]
