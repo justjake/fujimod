@@ -68,13 +68,14 @@
             "6": 0,
             "16": 0,
             "24": 165,
+            "27": 0,
             "32": 0,
             "34": 0,
             "35": 0
           },
           "rtc_ticks_per_second": 54000000,
           "ambient_celsius": 25,
-          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 keeps the headphone bits clear and reports the battery-only power-source class.",
+          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 keeps the headphone bits clear and reports the battery-only power-source class. Selector 27 declares the battery monitor's raw sample word as zero: the firmware reads it once per five-phase poll at 0109ad3c and stores it at 0150b692, which no main-image function reads, so any word is inert and no measured value exists.",
           "rtc_basis": "Virtual unset RTC. The counter advances from guest ticks after a stock start command."
         }
       },
