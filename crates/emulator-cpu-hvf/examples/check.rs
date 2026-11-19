@@ -528,6 +528,82 @@ fn main() -> Result<(), String> {
     cpu.invalidate_code(Some((0x10300, 0x10308)))?;
     cpu.set_execution_policy(ExecutionPolicy::Exact)?;
     println!("PASS: asynchronous MMIO load completed once");
+    // An interactive vCPU answers a device-published clocked read on its own
+    // thread at its guest clock; a declined read and every exact-mode read
+    // reach the device callback.
+    {
+        use std::sync::{
+            Arc, Mutex,
+            atomic::{AtomicU64, Ordering},
+        };
+        let calls = Arc::new(AtomicU64::new(0));
+        let ticks = Arc::new(Mutex::new(Vec::new()));
+        let (counter, seen) = (calls.clone(), ticks.clone());
+        let status = FastMmioRead::clocked_u32(
+            0xc,
+            Arc::new(move |tick| {
+                seen.lock().unwrap().push(tick);
+                (counter.fetch_add(1, Ordering::Relaxed) < 1000).then_some(0x10)
+            }),
+        );
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8900000,
+                0x1000,
+                Mmio {
+                    read,
+                    write,
+                    data: (&mut io as *mut Io<'_>).cast(),
+                },
+                vec![status],
+            )?;
+        }
+        // Poll status bit 4 until clear, then spin.
+        code(&cpu, 0x10320, &[0xb9400c20, 0x3727ffe0, 0x14000000]);
+        cpu.invalidate_code(Some((0x10320, 0x1032c)))?;
+        set(&cpu, Register::X(1), 0x8900000);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+        cpu.set_guest_clock(Clock {
+            now: 1_000_000,
+            phase: 0,
+            ratio: timeline::Ratio::new(1, 1)?,
+        })?;
+        let before = io.reads.len();
+        let fast_run = cpu
+            .start_run(Run {
+                begin: 0x10320,
+                until: None,
+                watchdog_us: 2_000_000,
+                instructions: Some(20_000_000),
+            })
+            .map_err(|e| e.to_string())?;
+        loop {
+            match cpu.poll_run(fast_run).map_err(|e| e.to_string())? {
+                RunStatus::Running => thread::yield_now(),
+                RunStatus::CallbackPending => cpu
+                    .service_pending_callback(fast_run)
+                    .map_err(|e| e.to_string())?,
+                RunStatus::Complete(result) => {
+                    result.map_err(|e| e.to_string())?;
+                    break;
+                }
+            }
+        }
+        assert_eq!(io.reads.split_off(before), vec![(0xc, 4)]);
+        assert_eq!(calls.load(Ordering::Relaxed), 1001);
+        assert_eq!(get(&cpu, Register::X(0)), 0x8c);
+        assert_eq!(get(&cpu, Register::Pc), 0x10328);
+        let ticks = ticks.lock().unwrap().clone();
+        assert!(ticks.first().is_some_and(|&tick| tick >= 1_000_000));
+        assert!(ticks.windows(2).all(|pair| pair[0] <= pair[1]));
+        cpu.set_execution_policy(ExecutionPolicy::Exact)?;
+        run(&cpu, 0x10320, 1).unwrap();
+        assert_eq!(io.reads.split_off(before), vec![(0xc, 4)]);
+        assert_eq!(calls.load(Ordering::Relaxed), 1001);
+        cpu.unmap(0x8900000, 0x1000)?;
+        set(&cpu, Register::X(1), 0x8000000);
+    }
+    println!("PASS: interactive clocked MMIO reads stay on the vCPU");
     // Signed loads, post-index writeback and pairs use the shared decoder.
     code(&cpu, 0x10320, &[0x39800020]);
     run(&cpu, 0x10320, 1).unwrap();
@@ -770,7 +846,7 @@ fn main() -> Result<(), String> {
         .instruction_progress()
         .expect("Interactive progress is measured");
     assert!((INTERACTIVE_BUDGET_NS * 3 / 4..=INTERACTIVE_BUDGET_NS * 5 / 4)
-        .contains(&progress));
+        .contains(&progress), "interactive progress {progress}ns");
     let estimated_instructions = get(&cpu, Register::X(0)) * 2;
     let estimated_rate = estimated_instructions as f64 * 1_000_000_000.0 / progress as f64;
     assert!(

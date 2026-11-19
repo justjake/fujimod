@@ -190,7 +190,17 @@ impl Work {
             return false;
         }
         match self.kind {
-            Kind::Reset => matches!(o, 0 | 4),
+            // +24: input-buffer size (height<<16 | width, width/height
+            // bound-checked by the writer before it stores them); only the
+            // first gate is written with it. +10: read-modify-write control
+            // word whose bit 16 the first gate's setter sets or clears. +14/+18: window
+            // size words (height<<16 | 15-bit width) chosen by the setter's selector.
+            // Every other word the first gate's setters, getters and read-modify-write
+            // helpers address below +0x800 is a plain read-back word (PLAIN_RESET_WORDS).
+            Kind::Reset => {
+                matches!(o, 0 | 4)
+                    || (self.base == 0xff950000 && PLAIN_RESET_WORDS.iter().any(|r| r.contains(&o)))
+            }
             Kind::Resize => matches!(
                 o,
                 0 | 4
@@ -236,6 +246,32 @@ impl Work {
         }
     }
 }
+/// Word offsets (4-byte aligned) of the first reset gate that only latch a value.
+const PLAIN_RESET_WORDS: &[std::ops::RangeInclusive<u64>] = &[
+    0x0c..=0x58,
+    0x98..=0x98,
+    0xdc..=0xdc,
+    0xfc..=0xfc,
+    0x13c..=0x13c,
+    0x17c..=0x17c,
+    0x1bc..=0x1bc,
+    0x1fc..=0x1fc,
+    0x23c..=0x23c,
+    0x27c..=0x27c,
+    0x2bc..=0x2bc,
+    0x2fc..=0x308,
+    0x328..=0x328,
+    0x368..=0x368,
+    0x3a8..=0x3a8,
+    0x3e8..=0x3e8,
+    0x428..=0x428,
+    0x468..=0x468,
+    0x4a8..=0x4a8,
+    0x4e8..=0x4e8,
+    0x528..=0x57c,
+    0x5f0..=0x638,
+    0x670..=0x7ac,
+];
 impl Device for Work {
     fn name(&self) -> &'static str {
         match self.kind {
@@ -446,6 +482,43 @@ mod tests {
 }
 
 #[cfg(test)]
+mod reset_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    const BASE: u64 = 0xff950000;
+    #[test]
+    fn reset_gate_reports_ready_after_its_deadline_and_keeps_the_enable_word() {
+        let mut work = Work::reset(BASE).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE, 4), 1);
+        work.write(&mut cx, BASE, 4, 0);
+        assert_eq!(work.read(&mut cx, BASE, 4), 0);
+        assert!(cx.refusal().is_none());
+        host.now = 100_000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE, 4), 1);
+        // Read-modify-write of +4 bit 0 in both directions.
+        let word = work.read(&mut cx, BASE + 4, 4);
+        work.write(&mut cx, BASE + 4, 4, word | 1);
+        assert_eq!(work.read(&mut cx, BASE + 4, 4), 1);
+        let word = work.read(&mut cx, BASE + 4, 4);
+        work.write(&mut cx, BASE + 4, 4, word & !1);
+        assert_eq!(work.read(&mut cx, BASE + 4, 4), 0);
+        assert!(cx.refusal().is_none());
+        assert!(host.irqs.is_empty());
+    }
+    #[test]
+    fn reset_gate_refuses_the_rest_of_the_block() {
+        let mut work = Work::reset(BASE).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        work.read(&mut cx, BASE + 8, 4);
+        assert!(cx.refusal().is_some());
+    }
+}
+
+#[cfg(test)]
 mod resize_tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
@@ -511,5 +584,50 @@ mod resize_tests {
         assert!(host.ram[0x1000..0x1100].iter().all(|v| *v == 0x55));
         assert_eq!(work.save()["state"]["frames"], 2);
         assert_eq!(host.irqs.last(), Some(&(200, false)));
+    }
+}
+
+#[cfg(test)]
+mod reset_size_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    #[test]
+    fn first_reset_gate_keeps_the_programmed_input_buffer_size() {
+        let mut work = Work::reset(0xff950000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        work.write(&mut cx, 0xff950024, 4, 0x1680f24);
+        assert!(cx.refusal().is_none());
+        assert_eq!(work.read(&mut cx, 0xff950024, 4), 0x1680f24);
+        work.write(&mut cx, 0xff950010, 4, 0x10000);
+        assert_eq!(work.read(&mut cx, 0xff950010, 4), 0x10000);
+        for (o, v) in [(0xff950014, 0x00500080), (0xff950018, 0x00200040)] {
+            work.write(&mut cx, o, 4, v);
+            assert_eq!(work.read(&mut cx, o, 4), v);
+        }
+        let mut other = Work::reset(0xff973000).unwrap();
+        other.write(&mut cx, 0xff973024, 4, 1);
+        assert!(cx.refusal().is_some());
+    }
+
+    #[test]
+    fn first_reset_gate_keeps_the_remaining_configuration_words() {
+        let mut work = Work::reset(0xff950000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        let offsets = [0x0c, 0x1c, 0x20, 0x28, 0x2c, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58, 0x98, 0x2bc, 0x328, 0x57c, 0x5f0, 0x7a8, 0x7ac];
+        for (i, o) in offsets.into_iter().enumerate() {
+            let v = 0x420012 + i as u64;
+            work.write(&mut cx, 0xff950000 + o, 4, v);
+            assert_eq!(work.read(&mut cx, 0xff950000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        work.write(&mut cx, 0xff950008, 4, 1);
+        assert!(cx.refusal().is_some());
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        let mut other = Work::reset(0xff973000).unwrap();
+        other.write(&mut cx, 0xff97301c, 4, 1);
+        assert!(cx.refusal().is_some());
     }
 }

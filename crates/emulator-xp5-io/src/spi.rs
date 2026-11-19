@@ -3,9 +3,15 @@
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::xp5::pins::SharedPins;
 use fujimod_emulator_parts_io::serial::{Endpoint, Frame};
+use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Status while a word is shifting: busy, no FIFO flags.
+const STATUS_BUSY: u32 = 0x10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -253,8 +259,17 @@ pub struct Spi {
     pins: SharedPins,
     source_hz: u64,
     attachments: Vec<Attachment>,
+    /// Guest tick of the shifting word's last clock edge, 0 when idle. It
+    /// publishes the status register's busy interval: until that edge the
+    /// status reads busy whatever the guest does, so an interactive CPU may
+    /// answer polls without the owner. It is derived from `state.pending`.
+    shifting_until: Arc<AtomicU64>,
 }
 impl Spi {
+    fn publish(&self) {
+        let at = self.state.pending.as_ref().map_or(0, |p| p.at);
+        self.shifting_until.store(at, Ordering::Release);
+    }
     fn validate_state(&self, decoded: &State) -> Result<(), String> {
         if decoded
             .last_endpoint
@@ -302,6 +317,7 @@ impl Spi {
             pins,
             source_hz,
             attachments,
+            shifting_until: Arc::new(AtomicU64::new(0)),
         })
     }
     fn frame(&self, word: u16) -> Frame {
@@ -363,6 +379,7 @@ impl Spi {
             cs_epoch: epoch,
             word: frame.word,
         });
+        self.publish();
         cx.schedule(at, self.state.generation);
         Ok(())
     }
@@ -383,7 +400,7 @@ impl Device for Spi {
             8 => self.state.rx.take().unwrap_or(0) as u64,
             0xc => {
                 if self.state.pending.is_some() {
-                    0x10
+                    STATUS_BUSY.into()
                 } else {
                     3 | (u64::from(self.state.rx.is_some()) << 2)
                 }
@@ -464,6 +481,7 @@ impl Device for Spi {
         let reply = self.attachments[p.endpoint].endpoint.transfer(frame, p.at);
         self.state.pending = None;
         self.state.rx = Some(reply);
+        self.publish();
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.pending.as_ref().map(|p| p.at)
@@ -480,6 +498,24 @@ impl Device for Spi {
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         size == 4 && address == self.base + 0xc
+    }
+    /// The status register while a word shifts. A shift completes only at
+    /// its scheduled clock edge, so before that tick the register reads
+    /// busy with no other effect; at or after it the read declines and the
+    /// ordinary read settles the word.
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let address = self.base + 0xc;
+        if address < window_base || address + 4 > window_base.saturating_add(window_size) {
+            return Vec::new();
+        }
+        let shifting_until = self.shifting_until.clone();
+        vec![FastReadWord::clocked_u32(
+            address - window_base,
+            Arc::new(move |tick| {
+                let at = shifting_until.load(Ordering::Acquire);
+                (tick < at).then_some(STATUS_BUSY)
+            }),
+        )]
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let selects: Vec<_> = self.attachments.iter().map(|part| part.select).collect();
@@ -501,6 +537,7 @@ impl Device for Spi {
             part.endpoint.restore_checkpoint(checkpoint)?;
         }
         self.state = state;
+        self.publish();
         Ok(())
     }
     fn save(&self) -> Value {
@@ -539,6 +576,7 @@ impl Device for Spi {
             a.endpoint.restore(&s["state"])?;
         }
         self.state = decoded;
+        self.publish();
         Ok(())
     }
 }
@@ -734,6 +772,48 @@ mod tests {
         spi.advance(&mut cx);
         assert!(cx.refusal().unwrap().contains("chip select changed"));
         assert_eq!(spi.save(), before);
+    }
+    fn published_status(spi: &Spi) -> Arc<dyn Fn(u64) -> Option<u32> + Send + Sync> {
+        use fujimod_emulator_devices::bus::FastReadValue;
+        match spi.fast_reads(BASE, 0x1000).as_slice() {
+            [FastReadWord { offset: 0xc, value: FastReadValue::ClockedU32(read) }] => read.clone(),
+            _ => panic!("SPI publishes only its status register"),
+        }
+    }
+    #[test]
+    fn published_status_reads_busy_on_guest_time_until_the_last_clock_edge() {
+        let (mut spi, mut gpio, mut host) = fixture(false);
+        assert!(spi.fast_reads(BASE + 0x10, 0xff0).is_empty());
+        let status = published_status(&spi);
+        // Idle and finished words keep their FIFO flags on the ordinary read.
+        assert_eq!(status(0), None);
+        pins(&mut gpio, &mut host, false, true);
+        setup(&mut spi, &mut host, 15 | (3 << 8), 6);
+        write(&mut spi, &mut host, 8, 0x2280);
+        let at = spi.next_deadline(0).unwrap();
+        assert_eq!(at, 8_000);
+        // Polling the published value has no effect and agrees with the
+        // register at every tick before the edge, however often it is read.
+        let saved = spi.save();
+        for tick in [0, 1, at / 2, at - 1] {
+            for _ in 0..3 {
+                assert_eq!(status(tick), Some(STATUS_BUSY));
+            }
+            host.now = tick;
+            assert_eq!(spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0xc, 4), 0x10);
+        }
+        assert_eq!(spi.save(), saved);
+        // At the edge the published read declines; the ordinary read
+        // settles the word and reports the received data.
+        assert_eq!(status(at), None);
+        let (mut restored, _, _) = fixture(false);
+        let restored_status = published_status(&restored);
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored_status(at - 1), Some(STATUS_BUSY));
+        host.now = at;
+        assert_eq!(spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0xc, 4), 7);
+        assert_eq!(status(at - 1), None);
+        assert_eq!(status(0), None);
     }
     #[test]
     fn pending_checkpoint_preserves_clock_phase_and_endpoint_state() {
