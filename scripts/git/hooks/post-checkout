@@ -16,6 +16,6 @@ fi
 cd "$common" && git worktree remove --force "$worktree"
 printf >&2 '\n%s\n%s\n%s\n\n' \
   "New worktrees are refused; removed $worktree." \
-  "Work on a topic branch in a slot: mise run slot -- acquire --topic NAME --owner PURPOSE" \
+  "Use a slot instead: mise run slot -- acquire --topic NAME --owner PURPOSE" \
   "When a person asked for this worktree, set FUJIMOD_WORKTREE_APPROVED to the reason."
 exit 1
