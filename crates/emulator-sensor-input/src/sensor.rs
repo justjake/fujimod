@@ -4,6 +4,8 @@ use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use fujimod_emulator_imaging::exposure::{Exposure, ExposureHandle};
+use fujimod_emulator_imaging::xtrans;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -117,6 +119,16 @@ pub struct ImageRoutes {
 /// enables only bit 0) and raises the line while +0xe0 enables it. Other frames write
 /// nothing and set no status; the next +0xd0 write arms the channel again.
 /// +0xf0 (line-count interrupt) is not modelled.
+///
+/// Levels. The samples follow the X-T5 sensor response
+/// ([`fujimod_emulator_imaging::xtrans::Response::xt5`]): black 1024, the colour gains of the
+/// X-T5 daylight white balance, and the exposure of the sensor's [`ExposureHandle`]
+/// ([`Sensor::exposure`]) at the end of the frame, which the picture keeps
+/// ([`StillRaw::exposure`]) so each frame of a multi-frame capture develops with its own.
+/// With `optical_black`, a 16-bit frame larger than twice the margins holds the scene only
+/// in its active area: the first `optical_black.0` samples of every line and the first
+/// `optical_black.1` lines are optical black (1024), and the scene is rendered at the size of
+/// the rest, site (0, 0) still at the destination.
 #[derive(Clone, Copy)]
 pub struct StillChannel {
     pub channel: usize,
@@ -124,9 +136,13 @@ pub struct StillChannel {
     pub sixteen_bit_codes: u8,
     /// The picture the sensor sees.
     pub scene: fn() -> &'static fujimod_emulator_imaging::frame::Scene,
+    /// Optical black margins (samples on the left, lines on top) of a 16-bit frame. X-T5
+    /// 4.31: still capture writes 7776x5250 and RIFP develops 7752x5184 from sample 24 of line
+    /// 66 (input 0xbb10d1e0 in the RAW at 0xbb00f6b0, pitch 0x3d80), so (24, 66).
+    pub optical_black: (u32, u32),
 }
 /// Where the still channel wrote its last picture.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct StillRaw {
     pub address: u64,
     pub pitch: u64,
@@ -135,6 +151,32 @@ pub struct StillRaw {
     /// Packed 12-bit lines (two samples in three bytes) instead of 16-bit containers.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub packed12: bool,
+    /// X-Trans tile site (line, sample) of the first sample: (0, 0) for a still channel
+    /// picture; a RIFP RAW-to-RAW copy of a crop keeps the crop's site.
+    #[serde(default, skip_serializing_if = "is_origin")]
+    pub phase: (u8, u8),
+    /// Exposure relative to the reference ([`Exposure::relative`]) the samples were taken at.
+    #[serde(default = "unit_exposure")]
+    pub exposure: f64,
+}
+fn is_origin(phase: &(u8, u8)) -> bool {
+    *phase == (0, 0)
+}
+fn unit_exposure() -> f64 {
+    1.
+}
+impl Default for StillRaw {
+    fn default() -> Self {
+        Self {
+            address: 0,
+            pitch: 0,
+            width: 0,
+            lines: 0,
+            packed12: false,
+            phase: (0, 0),
+            exposure: 1.,
+        }
+    }
 }
 /// Still channel pictures kept besides the last one ([`SensorState::earlier_still_raws`]).
 pub const EARLIER_STILL_RAWS: usize = 7;
@@ -157,10 +199,26 @@ pub struct Sensor(
     Option<ImageRoutes>,
     (u16, u8),
     Option<StillChannel>,
+    ExposureHandle,
 );
 impl Sensor {
     pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
-        Self(Arc::default(), routes, read_gate, None)
+        Self(Arc::default(), routes, read_gate, None, ExposureHandle::default())
+    }
+    /// The exposure the sensor's programming selects ([`Command`] updates it from the gain
+    /// registers, see [`exposure_of`]); shared with every clone, so other models (statistics,
+    /// live view) can read it.
+    pub fn exposure(&self) -> ExposureHandle {
+        self.4.clone()
+    }
+    /// The exposure relative to the reference ([`Exposure::relative`]).
+    pub fn relative_exposure(&self) -> f64 {
+        self.4.lock().map_or(1., |e| e.relative())
+    }
+    /// Record a picture another block derived from a still channel picture (a RIFP RAW-to-RAW
+    /// copy), so later readers of its address develop it like a still channel picture.
+    pub fn record_derived_raw(&self, picture: StillRaw) {
+        self.0.lock().unwrap().record_still_raw(picture);
     }
     /// Make one RAW DMA channel the still channel (see [`StillChannel`]). Set it before the
     /// sensor is cloned into its devices.
@@ -381,16 +439,30 @@ impl Sensor {
         if pitch * u64::from(lines - 1) + line > 128 * 1024 * 1024 {
             return Err("still RAW frame exceeds functional DMA limit".into());
         }
+        let exposure = self.relative_exposure();
+        let lut = xtrans::Response::xt5(exposure).mosaic_lut();
+        let (left, top) = match still.optical_black {
+            (left, top) if !packed12 && width > 2 * left && lines > 2 * top => {
+                (left as usize, top as usize)
+            }
+            _ => (0, 0),
+        };
         let mut samples = vec![0u8; samples_bytes];
+        let black = xtrans::BLACK.to_le_bytes().repeat(width as usize);
+        for y in 0..top {
+            cx.ram_write(address + pitch * y as u64, &black)?;
+        }
+        samples[..2 * left].copy_from_slice(&black[..2 * left]);
         let mut packed = vec![0u8; if packed12 { line as usize } else { 0 }];
         fujimod_emulator_imaging::frame::render_rgb_lines(
             (still.scene)(),
-            width as usize,
-            lines as usize,
+            width as usize - left,
+            lines as usize - top,
             |y, rgb| {
-                fujimod_emulator_imaging::xtrans::mosaic_line(rgb, y, &mut samples);
+                let y = y + top;
+                xtrans::mosaic_line_with(rgb, (y, left), &mut samples[2 * left..], &lut);
                 let bytes = if packed12 {
-                    fujimod_emulator_imaging::xtrans::pack12_line(&samples, &mut packed);
+                    xtrans::pack12_line(&samples, &mut packed);
                     &packed
                 } else {
                     &samples
@@ -407,6 +479,8 @@ impl Sensor {
             width,
             lines,
             packed12,
+            phase: (0, 0),
+            exposure,
         };
         s.record_still_raw(picture);
         let status = base + 0x24;
@@ -416,7 +490,7 @@ impl Sensor {
         cx.set_irq(irq, value & enabled & 15 != 0);
         cx.log(&format!(
             "still RAW DMA channel {}: scene {width}x{lines} X-Trans {} at {address:#x} pitch {pitch:#x} \
-             (format code {code})",
+             (format code {code}), exposure {exposure:.3} x reference, optical black {left} samples / {top} lines",
             still.channel,
             if packed12 { "packed 12-bit" } else { "16-bit" }
         ));
@@ -528,6 +602,38 @@ fn channel(o: u64) -> Option<u64> {
         .contains(&o)
         .then(|| (o - CHANNEL_BASE) / CHANNEL_STRIDE * CHANNEL_STRIDE + CHANNEL_BASE)
 }
+/// Analog gain of a 12-bit gain code: 4095 / (4095 - code), the law of the X-Trans sensor
+/// family (fujimod `emulator-parts-sensor` xtrans16). `None` for a code of 4095 or more.
+pub fn analog_gain(code: u16) -> Option<f64> {
+    (code < 4095).then(|| 4095. / f64::from(4095 - code))
+}
+
+/// The two 12-bit gain codes of the X-T5 4.31 sensor: registers 0x38 (bits 7..0) / 0x39
+/// (bits 11..8) and 0x3a / 0x3b. Stock 0x3029b58 writes them in that order (codes from
+/// 0x302e1dc), then 0xbb, 0x37 and flushes.
+pub fn gain_codes(registers: &BTreeMap<u16, u8>) -> [u16; 2] {
+    let r = |a: u16| u16::from(registers.get(&a).copied().unwrap_or(0));
+    [r(0x38) | (r(0x39) & 0xf) << 8, r(0x3a) | (r(0x3b) & 0xf) << 8]
+}
+
+/// The exposure the sensor registers select. Gain: the first code of [`gain_codes`] (a code
+/// of 0 is unity gain). Shutter: not decoded (candidates are registers 0x29..0x2e and the
+/// live AE APEX words; see [`Command`]), so the integration time is the reference's
+/// ([`Exposure::REFERENCE`]): the exposure follows the gain alone.
+pub fn exposure_of(registers: &BTreeMap<u16, u8>) -> Exposure {
+    let [code, _] = gain_codes(registers);
+    Exposure {
+        seconds: Exposure::REFERENCE.seconds,
+        analog_gain: analog_gain(code).unwrap_or(1.),
+    }
+}
+
+/// Guest address of the live AE APEX words (0x4b73ff0 + 0x540..+0x54c, stored by
+/// 0x300df88..0x300dfb4), a shutter candidate that [`Command`] logs.
+const AE_APEX: u64 = 0x4b73ff0 + 0x540;
+/// Lines of `sensor exposure:` before the log goes quiet.
+const EXPOSURE_LOG_LIMIT: u32 = 200;
+
 pub struct Command {
     base: u64,
     state: State,
@@ -536,6 +642,8 @@ pub struct Command {
     retain_unmodeled: bool,
     /// End (exclusive) of the window offsets that retain words when `retain_unmodeled` is set.
     retain_limit: u64,
+    /// The last `sensor exposure:` line's content and the lines logged so far.
+    exposure_log: (String, u32),
 }
 impl Command {
     pub fn new(base: u64, sensor: Sensor, latency_ticks: u64) -> Result<Self, String> {
@@ -549,7 +657,47 @@ impl Command {
             latency_ticks,
             retain_unmodeled: false,
             retain_limit: 0x244,
+            exposure_log: (String::new(), 0),
         })
+    }
+    /// Set the sensor's exposure ([`Sensor::exposure`]) from its registers ([`exposure_of`])
+    /// and, when the gain codes, the shutter candidate registers (0x29..0x2e), the frame
+    /// timing registers (0x16..0x19) or the live AE APEX words changed, log them as
+    /// `sensor exposure: ...` so a run shows which candidate follows the AE.
+    fn update_exposure(&mut self, cx: &mut Cx<'_>, registers: &BTreeMap<u16, u8>) {
+        let exposure = exposure_of(registers);
+        if let Ok(mut handle) = self.sensor.4.lock() {
+            *handle = exposure;
+        }
+        let r = |a: u16| registers.get(&a).copied().unwrap_or(0);
+        let hex = |range: std::ops::RangeInclusive<u16>| {
+            range.map(|a| format!("{:02x}", r(a))).collect::<Vec<_>>().join(" ")
+        };
+        let apex = cx.ram_bytes(AE_APEX, 12).map_or_else(
+            |_| "unreadable".to_string(),
+            |b| b.iter().map(|v| format!("{v:02x}")).collect::<Vec<_>>().join(""),
+        );
+        let [first, second] = gain_codes(registers);
+        let line = format!(
+            "gain codes 0x38/0x39 {first:#05x} 0x3a/0x3b {second:#05x} -> analog gain {:.3}, \
+             E/E_ref {:.3} (shutter not decoded; candidates 0x29..0x2e = {}, frame 0x16..0x19 = {}, \
+             AE APEX [{AE_APEX:#x}..+0xc] = {apex})",
+            exposure.analog_gain,
+            exposure.relative(),
+            hex(0x29..=0x2e),
+            hex(0x16..=0x19),
+        );
+        if line == self.exposure_log.0 {
+            return;
+        }
+        self.exposure_log.1 = self.exposure_log.1.saturating_add(1);
+        if self.exposure_log.1 <= EXPOSURE_LOG_LIMIT {
+            cx.log(&format!("sensor exposure: {line}"));
+        }
+        if self.exposure_log.1 == EXPOSURE_LOG_LIMIT {
+            cx.log("sensor exposure: further changes are not logged");
+        }
+        self.exposure_log.0 = line;
     }
     /// Let words of the window that have no modeled meaning read back their last write
     /// (zero before one) instead of failing the access.
@@ -767,13 +915,16 @@ impl Device for Command {
         let Some(packets) = self.state.pending.take() else {
             return;
         };
-        let mut sensor = self.sensor.0.lock().unwrap();
+        let sensor_state = self.sensor.0.clone();
+        let mut sensor = sensor_state.lock().unwrap();
+        let mut wrote = false;
         for packet in packets {
             let address = u16::from_be_bytes([packet[1], packet[2]]);
             sensor.commands += 1;
             if packet[0] == 0x81 {
                 sensor.registers.insert(address, packet[3]);
                 sensor.writes += 1;
+                wrote = true;
             } else {
                 let (gate, mask) = self.sensor.2;
                 if sensor.registers.get(&gate).copied().unwrap_or(0) & mask == 0 {
@@ -795,6 +946,11 @@ impl Device for Command {
             }
         }
         self.state.registers.insert(0x204, 0);
+        if wrote {
+            let registers = sensor.registers.clone();
+            drop(sensor);
+            self.update_exposure(cx, &registers);
+        }
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let sensor = self.sensor.0.lock().unwrap();
@@ -809,8 +965,9 @@ impl Device for Command {
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let (command, sensor) = saved.decode(self.name())?;
+        let (command, sensor): (State, SensorState) = saved.decode(self.name())?;
         self.state = command;
+        *self.sensor.4.lock().unwrap() = exposure_of(&sensor.registers);
         *self.sensor.0.lock().unwrap() = sensor;
         Ok(())
     }
@@ -830,6 +987,8 @@ impl Device for Command {
             return Err("sensor pending/deadline disagree".into());
         }
         self.state = state;
+        let sensor: SensorState = sensor;
+        *self.sensor.4.lock().unwrap() = exposure_of(&sensor.registers);
         *self.sensor.0.lock().unwrap() = sensor;
         self.latency_ticks = latency;
         Ok(())
@@ -852,6 +1011,7 @@ mod tests {
             width: 7776,
             lines: 5250,
             packed12: false,
+            ..Default::default()
         };
         let sensor = Sensor::new(None, (0, 0));
         for address in [0xbb00f6b0, 0x1_fb00f690, 0xb600f6a0] {
@@ -871,6 +1031,96 @@ mod tests {
         let state = sensor.0.lock().unwrap();
         assert_eq!(state.earlier_still_raws.len(), EARLIER_STILL_RAWS);
         assert_eq!(state.earlier_still_raws[EARLIER_STILL_RAWS - 1], picture(0x2_8000_0000));
+    }
+    /// Gain register writes set the shared exposure (gain 4095 / (4095 - code), first code);
+    /// a snapshot restore recomputes it from the registers.
+    #[test]
+    fn gain_writes_set_the_sensor_exposure() {
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor.clone(), 10).unwrap();
+        // Code 0x800 on both pairs: 4095 / 2047 = 2.0005.
+        let packets: Vec<u8> = [(0x38u16, 0x00u8), (0x39, 0x08), (0x3a, 0x00), (0x3b, 0x08)]
+            .iter()
+            .flat_map(|&(r, v)| [0x81, (r >> 8) as u8, r as u8, v, 0, 0, 0, 0])
+            .collect();
+        let mut host = RecordingHost { ram: packets.clone(), ram_base: 0x1000, ..Default::default() };
+        assert_eq!(sensor.relative_exposure(), 1.);
+        for (offset, value) in [(0x208, 0x10404), (0x20c, 0), (0x210, 0x1000), (0x218, 8), (0x204, 1)] {
+            command.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff948000 + offset, 4, value);
+        }
+        host.now = 1000;
+        command.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(gain_codes(&sensor.0.lock().unwrap().registers), [0x800, 0x800]);
+        assert!((sensor.relative_exposure() - 4095. / 2047.).abs() < 1e-9);
+        assert_eq!(analog_gain(0), Some(1.));
+        assert_eq!(analog_gain(4095), None);
+        let saved = command.checkpoint().unwrap();
+        *sensor.exposure().lock().unwrap() = Exposure::default();
+        sensor.0.lock().unwrap().registers.insert(0x39, 0);
+        command.restore_checkpoint(&saved).unwrap();
+        assert!((sensor.relative_exposure() - 4095. / 2047.).abs() < 1e-9);
+    }
+    /// A 16-bit still frame holds optical black (1024) in its margins and the scene, at the
+    /// active size, from the margin on; the exposure at the frame end scales the samples and
+    /// stays with the picture.
+    #[test]
+    fn the_still_channel_writes_optical_black_and_latches_the_exposure() {
+        let sensor = Sensor::new(
+            Some(ImageRoutes { dma: Some([162, 163]), timing: [166, 164], line_stride: true, frame_start_pulse: None }),
+            (0x59, 4),
+        )
+        .with_still_channel(StillChannel {
+            channel: 1,
+            sixteen_bit_codes: 1 << 5,
+            scene: bars,
+            optical_black: (6, 6),
+        });
+        let (width, lines, pitch) = (24usize, 18usize, 0x40usize);
+        let mut host = RecordingHost { ram: vec![0x55; pitch * lines], ram_base: 0x2000_0000, ..Default::default() };
+        let capture = |host: &mut RecordingHost| {
+            for (offset, value) in [
+                (0xdc, 5 << 16),
+                (0xc4, width as u32),
+                (0xc8, lines as u32),
+                (0xcc, 0),
+                (0xd0, 0x2000_0000),
+                (0xd4, 0),
+                (0xd8, pitch as u32),
+                (0xe0, 2),
+                (0xc0, 1),
+            ] {
+                sensor.image_write(&mut Cx::new(host, 0, 0, 0), offset, value);
+            }
+            sensor.frame_start(1);
+            sensor.frame(&mut Cx::new(host, 0, 0, 0), 1).unwrap();
+        };
+        capture(&mut host);
+        let sample = |host: &RecordingHost, y: usize, x: usize| {
+            u16::from_le_bytes([host.ram[y * pitch + 2 * x], host.ram[y * pitch + 2 * x + 1]])
+        };
+        for y in 0..lines {
+            for x in 0..width {
+                let v = sample(&host, y, x);
+                assert!(v <= xtrans::WHITE, "({x}, {y}) {v}");
+                if y < 6 || x < 6 {
+                    assert_eq!(v, xtrans::BLACK, "optical black ({x}, {y})");
+                }
+            }
+        }
+        // The active area starts with the scene's first pixel (white bar, sRGB 235) at site
+        // (6, 6) = (0, 0): red.
+        let lut = xtrans::Response::xt5(1.).mosaic_lut();
+        assert_eq!(sample(&host, 6, 6), lut.0[0][235]);
+        assert_eq!(sample(&host, 7, 6), lut.0[1][235]);
+        assert_eq!(sensor.still_raw().unwrap().exposure, 1.);
+        // Twice the exposure: twice the signal above black.
+        *sensor.exposure().lock().unwrap() = Exposure { seconds: 1. / 125., analog_gain: 2. };
+        let before = sample(&host, 7, 6) - xtrans::BLACK;
+        capture(&mut host);
+        let after = sample(&host, 7, 6) - xtrans::BLACK;
+        assert!(after.abs_diff(2 * before) <= 1, "{before} -> {after}");
+        assert_eq!(sensor.still_raw().unwrap().exposure, 2.);
+        assert_eq!(sample(&host, 0, 0), xtrans::BLACK);
     }
     #[test]
     fn timing_input_causes_ack_without_granting_raw_dma_support() {
@@ -1030,6 +1280,7 @@ mod tests {
             channel: 1,
             sixteen_bit_codes: 1 << 5,
             scene: bars,
+            optical_black: (0, 0),
         });
         let mut host = RecordingHost {
             ram: vec![0x55; 0x200],
@@ -1065,18 +1316,23 @@ mod tests {
         // The capture: 0x13522dc enables the frame interrupts (here bits 0..3).
         write(&mut host, 0xe0, 0xf);
         frame(&mut host).unwrap();
-        // Bars: the first two pixels are white (235), so every site of them takes its sample.
-        let mut white = [0u8; 4];
-        fujimod_emulator_imaging::xtrans::mosaic_line(&[235; 6], 0, &mut white);
-        assert_eq!(white[..2], white[2..]);
+        // Bars: the first two pixels are white (235), so every site of them takes its sample
+        // with the X-T5 response at the reference exposure (red and blue on line 0, green on
+        // line 1).
+        let lut = xtrans::Response::xt5(1.).mosaic_lut();
+        let (mut white, mut white1) = ([0u8; 4], [0u8; 4]);
+        xtrans::mosaic_line_with(&[235; 6], (0, 0), &mut white, &lut);
+        xtrans::mosaic_line_with(&[235; 6], (1, 0), &mut white1, &lut);
+        assert_ne!(white[..2], white[2..]);
+        assert_eq!(white1[..2], white1[2..]);
         assert_eq!(&host.ram[..4], &white);
-        assert_eq!(&host.ram[0x30..0x34], &white);
+        assert_eq!(&host.ram[0x30..0x34], &white1);
         assert_eq!(&host.ram[0x20..0x30], &[0x55; 0x10]);
         assert_eq!(sensor.image_reg(0xe4), 2);
         assert!(host.irqs.rev_find(163));
         assert_eq!(
             sensor.still_raw(),
-            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x30, width: 16, lines: 8, packed12: false })
+            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x30, width: 16, lines: 8, packed12: false, ..Default::default() })
         );
         // The ISR clears bit 1 by writing 2. Later frames write nothing until +0xd0 is
         // programmed again.
@@ -1101,14 +1357,15 @@ mod tests {
         write(&mut host, 0xd8, 0x18);
         write(&mut host, 0xd0, 0);
         frame(&mut host).unwrap();
-        let mut packed = [0u8; 3];
+        let (mut packed, mut packed1) = ([0u8; 3], [0u8; 3]);
         fujimod_emulator_imaging::xtrans::pack12_line(&white, &mut packed);
+        fujimod_emulator_imaging::xtrans::pack12_line(&white1, &mut packed1);
         assert_eq!(&host.ram[..3], &packed);
-        assert_eq!(&host.ram[0x18..0x1b], &packed);
+        assert_eq!(&host.ram[0x18..0x1b], &packed1);
         assert_eq!(&host.ram[0xc0..], &[0x55; 0x140]);
         assert_eq!(
             sensor.still_raw(),
-            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x18, width: 16, lines: 8, packed12: true })
+            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x18, width: 16, lines: 8, packed12: true, ..Default::default() })
         );
         // A pitch below 1.5 bytes a sample refuses.
         write(&mut host, 0xdc, 5 << 16);

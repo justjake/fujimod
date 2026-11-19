@@ -1,0 +1,51 @@
+# Lens mount: serial controller instance 0 (PL022 at ff910000) and the virtual X-mount lens.
+#
+# Bus (static, 4.31): the lens task opens SSP client descriptor 17 (0x18e7f10; open 0x13ec3a8):
+# instance 0, 8-bit frames, prescaler 0x20, DMA mode. The base is (instance + 0xff910) << 12
+# (0x137c394). The DMA request pair for instance 0 is receive 0 / transmit 1 (0x18e7b30), served by
+# general-DMA bank 1 (0xff931000): descriptor 0x18e9660 #0 {channel 2, request 0} and #1 {channel 3,
+# request 1}; their completions are A53 INTIDs 239/240 (a53_irq_base 237 in 22-general-dma.toml).
+# The open writes IMSC = 0xf, so the controller interrupt needs a line: logical interrupt
+# 0x18e8258[0] = 0x1c, record 0x18ea918 + 0x1c * 16 = INTID 36, edge. Whether that table is indexed by
+# controller instance is inferred, not verified; the lens path completes on DMA, not on this line.
+# source_hz: the same unverified 48 MHz root as the companion controller (60-mcore.toml).
+#
+# Connector (lens driver 0x13f22f8, 0x13f2c84; see the decode notes in scratch/lens/REPORT.md):
+# - detect 0.11 low = attached (key scanner row 101, UI code 0x33);
+# - sense pads 10.0/10.1/10.2 must read 1/0/1 (pattern A, an X-mount lens) before power;
+# - supplies: the driver latches 15.9 at detect start and 15.10 when the pattern passes;
+# - ready 14.1: high before power; the driver selects pad function 3 and then waits for
+#   INTID 131 (selector 0x9d, ready low) after power, and later for INTID 115 (selectors 0x9b/0x9c,
+#   ready high). The first lens startup polls INTID 131 pending for about 10 ms (LENSFAST) before it
+#   falls back to the edge wait (LENSSLOW).
+# The ready waveform (low startup_us after both supplies, high busy_us later, low during each focus or
+# aperture move) and every timing are inferred, not measured. The lens identity and status words are
+# invented scenario values (crates/emulator-parts-lens/src/x_mount_model.rs).
+#
+# Lens selection: `lens` is the default ("xf18-55", "prime" or "none"). The environment variable
+# XT5_LENS=none|xf18-55|prime overrides it for one run; XT5_LENS_READY=STARTUP_US,BUSY_US overrides the
+# ready timing. Snapshots record the selection: a snapshot saved with one lens does not load with another.
+[[device]]
+base = 0xff910000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+receive_request = 0
+transmit_request = 1
+gic_line = 36
+[device.options.wire]
+kind = "x-mount-lens"
+lens = "xf18-55"
+detect = { port = 0, pin = 11 }
+sense = [{ port = 10, pin = 0 }, { port = 10, pin = 1 }, { port = 10, pin = 2 }]
+sense_unpowered = [true, false, true]
+supplies = [{ port = 15, pin = 9 }, { port = 15, pin = 10 }]
+ready = { port = 14, pin = 1 }
+ready_mux = 3
+ready_low_line = 131
+ready_high_line = 115
+startup_us = 2000
+busy_us = 50000
+operation_us = 1000

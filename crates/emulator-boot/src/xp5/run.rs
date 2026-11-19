@@ -88,17 +88,29 @@ fn shared_boot_summary(
 
 
 /// One physical input requested through the frame viewer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum ViewerInput {
     /// A key of the body's key model.
     Key(Key),
     /// The shutter release: half (S1) or full (S2) press.
     Shutter { full: bool },
+    /// A dial or switch position (viewer `POST /set`, sent as `SET CONTROL=POSITION`).
+    Set { control: String, position: String },
 }
 
 impl ViewerInput {
-    /// Validate a viewer key name. The names are the `--press` key names.
+    /// Validate a viewer key name. The names are the `--press` key names; `SET CONTROL=POSITION`
+    /// is a position change in the `--set` syntax, without a time.
     fn parse(name: &str) -> Result<Self, String> {
+        if let Some(setting) = name.strip_prefix("SET ") {
+            let mut changes = crate::host::parse_settings(setting)?;
+            return match (changes.pop(), changes.is_empty()) {
+                (Some(change), true) if change.at_ms == 0 && !setting.contains('@') => {
+                    Ok(Self::Set { control: change.control, position: change.position })
+                }
+                _ => Err("viewer position changes take one CONTROL=POSITION and no time".into()),
+            };
+        }
         Ok(match Key::parse(name)? {
             Key::ShutterHalf => Self::Shutter { full: false },
             Key::ShutterFull => Self::Shutter { full: true },
@@ -131,6 +143,7 @@ fn apply_viewer_input(
 ) -> Result<(), String> {
     match input {
         ViewerInput::Key(key) => inputs.key(session, now, key, pressed),
+        ViewerInput::Set { control, position } => inputs.set_position(session, now, &control, &position),
         ViewerInput::Shutter { full } => {
             let key = if full { Key::ShutterFull } else { Key::ShutterHalf };
             if inputs.key(session, now, key, pressed).is_ok() {
@@ -178,6 +191,10 @@ pub struct Run {
     pub gpio: Option<String>,
     pub pokes: Vec<String>,
     pub press: Option<String>,
+    /// Timed dial and switch positions: `CONTROL=POSITION[@MS][,...]`.
+    pub settings: Option<String>,
+    /// Named camera settings of the user profile the loader start boots with.
+    pub camera_settings: std::collections::BTreeMap<String, String>,
     /// Route unmodeled register accesses to the bus instead of stopping.
     pub discovery: bool,
     /// Discovery callee stubs: `NAME@ADDRESS=VALUE`.
@@ -231,6 +248,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         gpio: gpio_spec,
         pokes,
         press,
+        settings,
+        camera_settings,
         discovery,
         stubs,
         patch_file,
@@ -273,6 +292,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let keys = crate::host::parse_keys(key_script.as_deref(), press.as_deref())?.into_iter()
         .map(|edge| Ok((edge.delay, Key::parse(&edge.name)?, edge.pressed)))
         .collect::<Result<Vec<_>, String>>()?;
+    let settings = crate::host::parse_settings(settings.as_deref().unwrap_or_default())?;
     // `PORT:PIN=LEVEL` applies before the run; `PORT:PIN=LEVEL@MS` applies MS milliseconds of
     // guest time after the run starts (after a snapshot load, like `--press`). The X-T5 shutter
     // release has no key name: half press is `0:0=0@MS`, full press `0:1=0@MS`, release `=1@MS`.
@@ -323,6 +343,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         viewer_keys: viewer_port.map(|_| viewer_key_handler(viewer_queue.clone())),
         mode,
         quantum: quantum_override,
+        camera_settings,
     };
     let crate::Opened::Xp5(started) =
         crate::open(configuration, crate::StartupInputs::Xp5(request))?
@@ -383,6 +404,10 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let millisecond_tick = |ms: u64| {
         start.saturating_add(crate::host::duration_ticks(std::time::Duration::from_millis(ms), ticks_per_second))
     };
+    for change in settings {
+        inputs.set_position(&mut session, millisecond_tick(change.at_ms), &change.control, &change.position)?;
+        eprintln!("FUJIMOD XP5 set: {}={} at {} ms", change.control, change.position, change.at_ms);
+    }
     let mut timed_gpio: std::collections::VecDeque<_> = timed_gpio.into_iter()
         .map(|(at_ms, level)| (millisecond_tick(at_ms), at_ms, level))
         .collect();
@@ -438,7 +463,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                 .drain(..)
                 .collect();
             for request in requested {
-                if let Err(error) = apply_viewer_input(&inputs, session, now, &mut viewer_shutter, request) {
+                if let Err(error) = apply_viewer_input(&inputs, session, now, &mut viewer_shutter, request.clone()) {
                     // A key the body does not wire is the user's request failing, not the run's.
                     eprintln!("FUJIMOD XP5 viewer key {request:?}: {error}");
                 } else {
@@ -692,6 +717,36 @@ mod tests {
         assert_eq!(ViewerInput::parse("PLAY"), Ok(ViewerInput::Key(Key::Play)));
         assert_eq!(ViewerInput::parse("REAR+"), Ok(ViewerInput::Key(Key::RearPlus)));
         assert!(ViewerInput::parse("POWER").is_err());
+        assert_eq!(ViewerInput::parse("AEL"), Ok(ViewerInput::Key(Key::AeLock)));
+        assert_eq!(ViewerInput::parse("FRONT_PUSH"), Ok(ViewerInput::Key(Key::FrontPush)));
+        assert_eq!(
+            ViewerInput::parse("SET iso=800"),
+            Ok(ViewerInput::Set { control: "iso".into(), position: "800".into() })
+        );
+        assert!(ViewerInput::parse("SET iso=800@10").is_err());
+        assert!(ViewerInput::parse("SET iso=800,ss=A").is_err());
+        assert!(ViewerInput::parse("SET iso").is_err());
+    }
+
+    #[test]
+    fn new_control_key_names_parse() {
+        for (name, key) in [
+            ("AEL", Key::AeLock),
+            ("AFON", Key::AfOn),
+            ("STICK_UL", Key::StickUpLeft),
+            ("STICK_UR", Key::StickUpRight),
+            ("STICK_DL", Key::StickDownLeft),
+            ("STICK_DR", Key::StickDownRight),
+            ("REAR_PUSH", Key::RearPush),
+            ("FRONT_PUSH", Key::FrontPush),
+            ("REAR+", Key::RearPlus),
+            ("FRONT-", Key::FrontMinus),
+        ] {
+            assert_eq!(Key::parse(name), Ok(key), "{name}");
+        }
+        let edges = crate::host::parse_keys(None, Some("100:REAR+,200:AEL:300")).unwrap();
+        let names: Vec<_> = edges.iter().map(|edge| (edge.delay.as_millis(), edge.name.as_str(), edge.pressed)).collect();
+        assert_eq!(names, [(100, "REAR+", true), (200, "AEL", true), (250, "REAR+", false), (500, "AEL", false)]);
     }
 
     #[test]

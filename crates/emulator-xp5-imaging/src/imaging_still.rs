@@ -15,15 +15,29 @@
 //!   crop origin on; a zero output size takes the crop size;
 //! * +0x40 / +0x44 output address, +0x50 output pitch in bytes; packed 4:2:2 (Y0 Y1 Cb Cr).
 //!
-//! The mode word +0x08 is not decoded, so the run's input decides what it does:
+//! The mode word +0x08 is decoded only for bit 2, RAW output ([`RIFP_MODE_RAW_OUTPUT`]); otherwise
+//! the run's input decides what it does:
 //!
+//! * RAW-to-RAW ([`rifp_raw_copy`]): a run whose mode sets bit 2 and whose input is inside a
+//!   still RAW copies the crop's 16-bit samples (packed 12-bit input is unpacked to 14 bits)
+//!   to its output, at the output pitch, and the output becomes a derived still RAW
+//!   ([`StillRaw`] with the crop's tile site and the source's exposure), which later runs
+//!   develop like a still channel picture. X-T5 4.31 FINE+RAW (run90): the first run has mode
+//!   0x11220004, input 0xbb10d1e0 (the still RAW at 0xbb00f6b0, from sample 24 of line 66),
+//!   7752x5184 to 0x6e30d1c0 pitch 0x3d80; that buffer is the RAF payload and the input of the
+//!   two develop runs (mode 0x11221000) to the main and preview pictures. JPEG-only captures
+//!   develop straight from the still RAW with mode 0x11220000 (run101, run106; HDR run105 too),
+//!   drive-mode BKT with 0x10220010 (RCIZ, run103, run107), and the HDR merge copy is
+//!   0x10002002.
 //! * ConvertToYC: an input inside the RAW the still channel wrote last, at its pitch, is
 //!   developed with the declared X-Trans law ([`fujimod_emulator_imaging::xtrans`]). The tile
 //!   site of the first input sample follows from its offset in that RAW (site (0, 0) at the
 //!   RAW origin), so a band or a column stripe of the picture develops like the whole. An input
 //!   pitch from 1.5 up to (not including) 2 bytes a sample reads packed 12-bit samples (two in
 //!   three bytes, the still channel's packed lines), scaled to the law's 14-bit range; the
-//!   input must then start on a sample pair.
+//!   input must then start on a sample pair. Development inverts the X-T5 sensor response at
+//!   the picture's exposure ([`fujimod_emulator_imaging::xtrans::Response::xt5`]), so the
+//!   output does not depend on the colour gains or, until it clips, on the exposure.
 //! * PostYC (any other input): the input is a packed 4:2:2 picture, copied.
 //!
 //! Either way output pixel (x, y) takes input (crop x + x * crop width / output width, crop y +
@@ -574,6 +588,93 @@ pub fn rifp_run(
     })
 }
 
+/// Mode word (+0x08) bit of a RIFP run that writes RAW samples instead of developing them (see
+/// the module notes).
+pub const RIFP_MODE_RAW_OUTPUT: u32 = 1 << 2;
+
+/// One RIFP RAW-to-RAW run (see the module notes): when the mode sets
+/// [`RIFP_MODE_RAW_OUTPUT`], the run has an output address and its input is inside `raw`, copy
+/// the crop's samples (14-bit, in 16-bit little-endian containers) to the output and return
+/// the derived still RAW; otherwise `None` (the run is developed or copied as before).
+pub fn rifp_raw_copy(
+    cx: &mut Cx<'_>,
+    word: impl Fn(u64) -> u32,
+    raw: Option<StillRaw>,
+) -> Result<Option<StillRaw>, String> {
+    let address = |low, high| u64::from(word(low)) | (u64::from(word(high) & 7) << 32);
+    let (input, pitch) = (address(0x0c, 0x10), word(0x1c) as usize);
+    let output = address(0x40, 0x44);
+    let out_pitch = (word(0x50) & 0xfffff) as usize;
+    let Some(r) = raw.filter(|r| {
+        word(0x08) & RIFP_MODE_RAW_OUTPUT != 0
+            && output != 0
+            && r.pitch as usize == pitch
+            && input >= r.address
+            && input < r.address + r.pitch * u64::from(r.lines)
+    }) else {
+        return Ok(None);
+    };
+    let ((width, lines), origin, crop, out) = rifp_window(&word);
+    let geometry = format!(
+        "RIFP RAW-to-RAW run: input {input:#x} pitch {pitch:#x} size {width}x{lines}, crop {crop:?} \
+         at {origin:?}, output {out:?} at {output:#x} pitch {out_pitch:#x} (+0x08 mode {:#x})",
+        word(0x08)
+    );
+    let line = if r.packed12 { xtrans::packed12_bytes(width) } else { 2 * width };
+    if width == 0
+        || lines == 0
+        || crop.0 == 0
+        || crop.1 == 0
+        || origin.0 + crop.0 > width
+        || origin.1 + crop.1 > lines
+        || out != crop
+        || out_pitch < 2 * out.0
+        || pitch < line
+    {
+        return Err(format!("{geometry} is outside the modelled layout (a RAW copy does not scale)"));
+    }
+    let offset = input - r.address;
+    let column = offset % r.pitch;
+    if r.packed12 && column % 3 != 0 {
+        return Err(format!("{geometry}: packed 12-bit input starts inside a sample pair"));
+    }
+    let sample = if r.packed12 { column / 3 * 2 } else { column / 2 };
+    let phase = (
+        (usize::from(r.phase.0) + (offset / r.pitch) as usize) % 6,
+        (usize::from(r.phase.1) + sample as usize) % 6,
+    );
+    let bytes = cx.ram_bytes(input, pitch * (lines - 1) + line)?;
+    let window = if r.packed12 {
+        xtrans::Raw::packed12(&bytes, pitch, width, lines, phase)
+    } else {
+        xtrans::Raw::new(&bytes, pitch, width, lines, phase)
+    }
+    .map_err(|e| format!("{geometry}: {e}"))?;
+    let mut samples = vec![0u8; 2 * out.0];
+    for y in 0..out.1 {
+        for (x, container) in samples.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            *container = window.sample_at(origin.0 + x, origin.1 + y).to_le_bytes();
+        }
+        cx.ram_write(output + (y * out_pitch) as u64, &samples)?;
+    }
+    let derived = StillRaw {
+        address: output,
+        pitch: out_pitch as u64,
+        width: out.0 as u32,
+        lines: out.1 as u32,
+        packed12: false,
+        phase: (((phase.0 + origin.1) % 6) as u8, ((phase.1 + origin.0) % 6) as u8),
+        exposure: r.exposure,
+    };
+    cx.log(&format!(
+        "{geometry} copies {} RAW at site {phase:?}: derived 16-bit RAW at site {:?}, exposure {:.3} x reference",
+        if r.packed12 { "packed 12-bit" } else { "16-bit" },
+        derived.phase,
+        derived.exposure
+    ));
+    Ok(Some(derived))
+}
+
 /// One RIFP still run without an output address (RCIZ, see the module notes): its output lines
 /// go straight into the inline RESZ `job` that waits for it, which scales them to its
 /// destination. Nothing else is written.
@@ -673,17 +774,22 @@ fn rifp_lines(
             return Err(format!("{}: packed 12-bit input starts inside a sample pair", geometry()));
         }
         let sample = if packed12 { column / 3 * 2 } else { column / 2 };
-        let phase = ((offset / r.pitch % 6) as usize, (sample % 6) as usize);
+        let phase = (
+            (usize::from(r.phase.0) + (offset / r.pitch) as usize) % 6,
+            (usize::from(r.phase.1) + sample as usize) % 6,
+        );
         let raw = if packed12 {
             xtrans::Raw::packed12(&bytes, pitch, width, lines, phase)
         } else {
             xtrans::Raw::new(&bytes, pitch, width, lines, phase)
         }
-        .map_err(|e| format!("{}: {e}", geometry()))?;
+        .map_err(|e| format!("{}: {e}", geometry()))?
+        .with_response(xtrans::Response::xt5(r.exposure));
         cx.log(&format!(
-            "{} develops {} RAW at site {phase:?}",
+            "{} develops {} RAW at site {phase:?}, exposure {:.3} x reference",
             geometry(),
-            if packed12 { "packed 12-bit" } else { "16-bit" }
+            if packed12 { "packed 12-bit" } else { "16-bit" },
+            r.exposure
         ));
         for y in 0..out.1 {
             let line = xtrans::develop_422_line(&raw, origin.1 + y * crop.1 / out.1, out.0, |x| {
@@ -892,7 +998,7 @@ mod tests {
         let colour = [40u8, 180, 90];
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line(&colour.repeat(24), y, &mut ram[y * 64..y * 64 + 48]);
+            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &xtrans::Response::xt5(1.).mosaic_lut());
         }
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -905,6 +1011,7 @@ mod tests {
             width: 24,
             lines: 12,
             packed12: false,
+            ..Default::default()
         };
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         let picture = rifp_run(&mut cx, rifp_words(RAM, RAM + 0x1000), Some(raw)).unwrap();
@@ -935,6 +1042,72 @@ mod tests {
         assert!(rifp_run(&mut cx, short, Some(raw)).is_err());
     }
 
+    /// A RAW-output run (mode bit 2) copies the crop's samples unchanged (14-bit) and returns
+    /// a derived RAW with the crop's site and the source exposure; developing the derived RAW
+    /// gives the colour. Without the mode bit, or with an input outside the RAW, it does nothing.
+    #[test]
+    fn a_raw_output_run_copies_14_bit_samples_to_a_derived_raw() {
+        let colour = [40u8, 180, 90];
+        let response = xtrans::Response::xt5(1.5);
+        let mut ram = vec![0u8; 0x4000];
+        for y in 0..12 {
+            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &response.mosaic_lut());
+        }
+        // Saturated and above-range samples stay as they are (at most 14 bits from the sensor).
+        ram[2 * 64 + 14..2 * 64 + 16].copy_from_slice(&xtrans::WHITE.to_le_bytes());
+        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
+        let raw = StillRaw { address: RAM, pitch: 64, width: 24, lines: 12, exposure: 1.5, ..Default::default() };
+        // Input from sample 1 of line 2 (site (2, 1)); crop 12x6 at (6, 0); output pitch 32.
+        let words = rifp_words(RAM + 2 * 64 + 2, RAM + 0x1000);
+        let word = |o| match o {
+            0x08 => 0x1122_0004,
+            0x20 => 10 << 16 | 18,
+            0x24 => 6,
+            0x28 => 6 << 16 | 12,
+            0x2c => 6 << 16 | 12,
+            0x50 => 32,
+            o => words(o),
+        };
+        assert_eq!(rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), |o| if o == 8 { 0x1122_0000 } else { word(o) }, Some(raw)).unwrap(), None);
+        let derived = rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), word, Some(raw)).unwrap().unwrap();
+        assert_eq!(
+            derived,
+            StillRaw { address: RAM + 0x1000, pitch: 32, width: 12, lines: 6, phase: (2, 1), exposure: 1.5, ..Default::default() }
+        );
+        for y in 0..6 {
+            for x in 0..12 {
+                let at = 0x1000 + y * 32 + 2 * x;
+                let from = (2 + y) * 64 + 2 * (1 + 6 + x);
+                let sample = u16::from_le_bytes([host.ram[at], host.ram[at + 1]]);
+                assert_eq!(&host.ram[at..at + 2], &host.ram[from..from + 2], "({x}, {y})");
+                assert!(sample <= xtrans::WHITE && sample >= xtrans::BLACK);
+            }
+        }
+        assert_eq!(u16::from_le_bytes([host.ram[0x1000], host.ram[0x1001]]), xtrans::WHITE);
+        // The derived RAW develops like a still channel picture at its own site.
+        host.ram.copy_within(2 * 64 + 2..2 * 64 + 4, 2 * 64 + 14);
+        let derived = rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), word, Some(raw)).unwrap().unwrap();
+        let develop_words = rifp_words(RAM + 0x1000, RAM + 0x2000);
+        let develop = |o| match o {
+            0x1c => 32,
+            0x20 => 6 << 16 | 12,
+            0x50 => 24,
+            o => develop_words(o),
+        };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), develop, Some(derived)).unwrap();
+        let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
+        for line in 0..6 {
+            let at = 0x2000 + line * 24;
+            assert_eq!(&host.ram[at..at + 24], [y, y, cb, cr].repeat(6).as_slice(), "line {line}");
+        }
+        // A scaling RAW copy refuses; an input outside the RAW is not a RAW copy.
+        let scaled = |o| if o == 0x2c { 3 << 16 | 6 } else { word(o) };
+        assert!(rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), scaled, Some(raw)).is_err());
+        let outside = rifp_words(RAM + 0x3000, RAM + 0x1000);
+        let outside = |o| if o == 8 { 4 } else { outside(o) };
+        assert_eq!(rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), outside, Some(raw)).unwrap(), None);
+    }
+
     /// Packed 12-bit RAW (pitch 40 for 24 samples, 1.5 bytes a sample plus padding): a flat
     /// colour develops to its JFIF YCbCr, from the RAW origin and from a column stripe that
     /// starts on a sample pair; a stripe inside a pair and a packed input outside the RAW refuse.
@@ -945,7 +1118,7 @@ mod tests {
         let mut ram = vec![0u8; 0x4000];
         let mut samples = vec![0u8; 2 * width];
         for y in 0..12 {
-            xtrans::mosaic_line(&colour.repeat(width), y, &mut samples);
+            xtrans::mosaic_line_with(&colour.repeat(width), (y, 0), &mut samples, &xtrans::Response::xt5(1.).mosaic_lut());
             xtrans::pack12_line(&samples, &mut ram[y * pitch..y * pitch + 36]);
         }
         let mut host = RecordingHost {
@@ -959,6 +1132,7 @@ mod tests {
             width: width as u32,
             lines: 12,
             packed12: true,
+            ..Default::default()
         };
         let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
         let words = rifp_words(RAM, RAM + 0x1000);
@@ -1144,7 +1318,7 @@ mod tests {
         let colour = [30u8, 140, 220];
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line(&colour.repeat(24), y, &mut ram[y * 64..y * 64 + 48]);
+            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &xtrans::Response::xt5(1.).mosaic_lut());
         }
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -1158,6 +1332,7 @@ mod tests {
             width: 24,
             lines: 12,
             packed12: false,
+            ..Default::default()
         });
         let shared = YcOutput::default();
         let mut io = Io::default();
@@ -1233,7 +1408,7 @@ mod tests {
         let colour = [200u8, 60, 120];
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line(&colour.repeat(24), y, &mut ram[y * 64..y * 64 + 48]);
+            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &xtrans::Response::xt5(1.).mosaic_lut());
         }
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -1247,6 +1422,7 @@ mod tests {
             width: 24,
             lines: 12,
             packed12: false,
+            ..Default::default()
         });
         let shared = YcOutput::default();
         let mut io = Io::default();

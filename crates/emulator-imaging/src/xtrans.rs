@@ -10,6 +10,17 @@
 //!   nearest site of each color, the response is inverted to sRGB and encoded as BT.601
 //!   full-range (JFIF) YCbCr, the pixel pair's chroma averaged.
 //!
+//! Colour response and exposure ([`Response`]). The declared law above is
+//! [`Response::NEUTRAL`]: every colour spans [`BLACK`]..[`WHITE`] for sRGB 0..255. A model of
+//! a real sensor uses [`Response::xt5`]: `raw_c = BLACK + clamp(L_c x k_c x E x S, 0,
+//! WHITE - BLACK)`, where `L_c` is the linear scene value of colour `c`, `k_c` the colour gain
+//! ([`XT5_COLOUR_GAIN`], from the X-T5 WB_GRBLevelsStandard daylight entry 302 647 460: the
+//! green sites collect the most light), `E` the exposure relative to the reference
+//! ([`crate::exposure::Exposure::relative`]) and `S` ([`XT5_SCENE_WHITE`]) puts scene white one
+//! stop below clipping at the reference exposure. Development with the same response divides by
+//! `k_c x E x S`, so a picture that does not clip develops back to the scene (the JPEG stays
+//! neutral) while the RAW samples carry the colour response and the exposure.
+//!
 //! The law is the X-Processor Pro's declared still law (`fujimod_emulator_xpp::development::
 //! develop`, profile `xpp-declared-xtrans-nearest-srgb-jfif-422-v1`, and the sensor response
 //! of `fujimod_emulator_xpp::imaging`) restated here so XP5 models can use it without the XPP
@@ -30,6 +41,102 @@ pub const XTRANS: [[u8; 6]; 6] = [
 pub const BLACK: u16 = 1024;
 /// Declared sample of sRGB white (the 14-bit maximum).
 pub const WHITE: u16 = 16383;
+
+/// Colour gains `k_c` (red, green, blue) of the X-T5 sensor model: the reciprocals of the
+/// daylight white-balance multipliers 647 / 302 (red) and 460 / 302 (blue) over green 302.
+pub const XT5_COLOUR_GAIN: [f64; 3] = [302. / 647., 1., 302. / 460.];
+/// Signal of linear scene white (before colour gain and exposure) in the X-T5 sensor model:
+/// half the range above black, so white is one stop below clipping at the reference exposure.
+pub const XT5_SCENE_WHITE: f64 = 0.5 * (WHITE - BLACK) as f64;
+
+/// A sensor colour response and exposure (see the module notes): colour `c` at linear scene
+/// level `L` gives sample `BLACK + clamp(L x colour_gain[c] x exposure x white, 0, WHITE -
+/// BLACK)`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Response {
+    pub colour_gain: [f64; 3],
+    /// Exposure relative to the reference ([`crate::exposure::Exposure::relative`]).
+    pub exposure: f64,
+    /// Signal of linear scene white at unit colour gain and reference exposure.
+    pub white: f64,
+}
+impl Response {
+    /// The declared law: every colour spans [`BLACK`]..[`WHITE`].
+    pub const NEUTRAL: Self = Self {
+        colour_gain: [1.; 3],
+        exposure: 1.,
+        white: (WHITE - BLACK) as f64,
+    };
+    /// The X-T5 sensor model at `exposure` (relative to the reference).
+    pub fn xt5(exposure: f64) -> Self {
+        Self {
+            colour_gain: XT5_COLOUR_GAIN,
+            exposure: if exposure.is_finite() && exposure > 0. { exposure } else { 1. },
+            white: XT5_SCENE_WHITE,
+        }
+    }
+    fn is_neutral(&self) -> bool {
+        *self == Self::NEUTRAL
+    }
+    /// Signal of linear level 1 of colour `c`.
+    fn scale(&self, c: usize) -> f64 {
+        self.colour_gain[c] * self.exposure * self.white
+    }
+    /// Sample of linear scene level `linear` of colour `c` (clipped to [`WHITE`]).
+    pub fn sample(&self, c: usize, linear: f64) -> u16 {
+        BLACK + (linear * self.scale(c)).round().clamp(0., f64::from(WHITE - BLACK)) as u16
+    }
+    /// Linear scene level of sample `sample` of colour `c` (not clamped).
+    pub fn linear(&self, c: usize, sample: u16) -> f64 {
+        (f64::from(sample) - f64::from(BLACK)) / self.scale(c)
+    }
+    /// The sample of each sRGB byte for each colour ([`mosaic_line_with`]).
+    pub fn mosaic_lut(&self) -> MosaicLut {
+        if self.is_neutral() {
+            return MosaicLut([*response(); 3]);
+        }
+        let linear = linear_lut();
+        MosaicLut(std::array::from_fn(|c| std::array::from_fn(|v| self.sample(c, linear[v]))))
+    }
+    /// The sRGB byte of each sample for each colour ([`Raw::with_response`]).
+    fn inverse_lut(&self) -> Box<[Vec<u8>; 3]> {
+        Box::new(std::array::from_fn(|c| {
+            (0..=u16::MAX)
+                .map(|sample| srgb_byte(self.linear(c, sample)))
+                .collect()
+        }))
+    }
+}
+
+/// Samples of each sRGB byte for each colour (red, green, blue) of one [`Response`].
+pub struct MosaicLut(pub [[u16; 256]; 3]);
+
+/// Linear level of each sRGB byte.
+fn linear_lut() -> &'static [f64; 256] {
+    static LUT: OnceLock<[f64; 256]> = OnceLock::new();
+    LUT.get_or_init(|| std::array::from_fn(|v| srgb_to_linear(v as u8)))
+}
+
+/// Linear level of an sRGB byte.
+pub fn srgb_to_linear(v: u8) -> f64 {
+    let srgb = f64::from(v) / 255.;
+    if srgb <= 0.04045 {
+        srgb / 12.92
+    } else {
+        ((srgb + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// sRGB byte of a linear level (clamped to 0..1).
+pub fn srgb_byte(linear: f64) -> u8 {
+    let linear = linear.clamp(0., 1.);
+    let srgb = if linear <= 0.0031308 {
+        linear * 12.92
+    } else {
+        1.055 * linear.powf(1. / 2.4) - 0.055
+    };
+    (srgb * 255.).round() as u8
+}
 
 /// Sample of each sRGB byte.
 fn response() -> &'static [u16; 256] {
@@ -95,15 +202,32 @@ fn nearest() -> &'static [[[(i64, i64); 3]; 6]; 6] {
 /// Line `line` of a mosaic whose first sample is tile site (0, 0): `rgb` holds `width` sRGB
 /// pixels (3 bytes each), `out` receives `width` little-endian 16-bit samples.
 pub fn mosaic_line(rgb: &[u8], line: usize, out: &mut [u8]) {
-    let (lut, sites) = (response(), &XTRANS[line % 6]);
-    for (x, (sample, pixel)) in out
+    let lut = response();
+    mosaic_line_sites(rgb, (line, 0), out, |_, v| lut[usize::from(v)]);
+}
+
+/// [`mosaic_line`] with a response's samples (`lut`, [`Response::mosaic_lut`]) and whose first
+/// sample is tile site `site` (line, sample).
+pub fn mosaic_line_with(rgb: &[u8], site: (usize, usize), out: &mut [u8], lut: &MosaicLut) {
+    mosaic_line_sites(rgb, site, out, |c, v| lut.0[c][usize::from(v)]);
+}
+
+fn mosaic_line_sites(
+    rgb: &[u8],
+    (line, column): (usize, usize),
+    out: &mut [u8],
+    sample: impl Fn(usize, u8) -> u16,
+) {
+    let sites = &XTRANS[line % 6];
+    for (x, (container, pixel)) in out
         .as_chunks_mut::<2>()
         .0
         .iter_mut()
         .zip(rgb.as_chunks::<3>().0)
         .enumerate()
     {
-        *sample = lut[usize::from(pixel[usize::from(sites[x % 6])])].to_le_bytes();
+        let c = usize::from(sites[(x + column) % 6]);
+        *container = sample(c, pixel[c]).to_le_bytes();
     }
 }
 
@@ -163,6 +287,9 @@ pub struct Raw<'a> {
     lines: usize,
     phase: (usize, usize),
     packed12: bool,
+    /// The sRGB byte of each sample for each colour ([`Raw::with_response`]); `None` is the
+    /// declared law's.
+    inverse: Option<Box<[Vec<u8>; 3]>>,
 }
 
 impl<'a> Raw<'a> {
@@ -183,7 +310,7 @@ impl<'a> Raw<'a> {
                 bytes.len()
             ));
         }
-        Ok(Self { bytes, pitch, width, lines, phase, packed12: false })
+        Ok(Self { bytes, pitch, width, lines, phase, packed12: false, inverse: None })
     }
     /// A window of packed 12-bit samples ([`pack12_line`]); otherwise as [`Raw::new`].
     pub fn packed12(
@@ -200,10 +327,20 @@ impl<'a> Raw<'a> {
                 bytes.len()
             ));
         }
-        Ok(Self { bytes, pitch, width, lines, phase, packed12: true })
+        Ok(Self { bytes, pitch, width, lines, phase, packed12: true, inverse: None })
+    }
+    /// Develop with `response` (divide by its colour gains and exposure) instead of the
+    /// declared law.
+    pub fn with_response(mut self, response: Response) -> Self {
+        self.inverse = (!response.is_neutral()).then(|| response.inverse_lut());
+        self
     }
     pub fn width(&self) -> usize {
         self.width
+    }
+    /// The 14-bit sample at sample `x` of line `y` (packed 12-bit samples scaled to 14 bits).
+    pub fn sample_at(&self, x: usize, y: usize) -> u16 {
+        self.sample(y as i64, x as i64)
     }
     pub fn lines(&self) -> usize {
         self.lines
@@ -229,8 +366,9 @@ impl<'a> Raw<'a> {
     /// sRGB of the pixel at sample `x` of line `y`, from the nearest site of each color.
     pub fn rgb(&self, x: usize, y: usize) -> [u8; 3] {
         let site = &nearest()[(y + self.phase.0) % 6][(x + self.phase.1) % 6];
-        let inverse = inverse_response();
+        let neutral = inverse_response();
         [0, 1, 2].map(|c| {
+            let inverse = self.inverse.as_ref().map_or(neutral, |lut| &lut[c][..]);
             inverse[usize::from(self.sample(y as i64 + site[c].0, x as i64 + site[c].1))]
         })
     }
@@ -325,6 +463,76 @@ mod tests {
         for v in [0u8, 1, 17, 128, 254, 255] {
             assert_eq!(inverse_response()[usize::from(response()[usize::from(v)])], v);
         }
+    }
+
+    /// Every sRGB byte survives the X-T5 response at and above the reference exposure, at
+    /// every site colour; below it, the coarser red steps keep it within one step.
+    #[test]
+    fn every_byte_round_trips_through_the_xt5_response() {
+        for (exposure, tolerance) in [(1., 0), (1.134, 0), (1.9, 0), (0.5, 1)] {
+            let response = Response::xt5(exposure);
+            let (lut, inverse) = (response.mosaic_lut(), response.inverse_lut());
+            for c in 0..3 {
+                for v in 0..=255u8 {
+                    let back = inverse[c][usize::from(lut.0[c][usize::from(v)])];
+                    assert!(
+                        back.abs_diff(v) <= tolerance,
+                        "exposure {exposure} colour {c} byte {v} -> {back}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Scene white sits one stop below clipping on green at the reference exposure; red and
+    /// blue take their colour gains; black is the pedestal; two stops more clip white.
+    #[test]
+    fn the_xt5_response_scales_by_colour_gain_and_exposure() {
+        let lut = Response::xt5(1.).mosaic_lut();
+        assert_eq!(lut.0.map(|c| c[0]), [BLACK; 3]);
+        assert_eq!(lut.0[1][255], BLACK + 7680);
+        assert_eq!(lut.0[0][255], BLACK + (XT5_SCENE_WHITE * 302. / 647.).round() as u16);
+        assert_eq!(lut.0[2][255], BLACK + (XT5_SCENE_WHITE * 302. / 460.).round() as u16);
+        let doubled = Response::xt5(2.).mosaic_lut();
+        for c in 0..3 {
+            for v in [64usize, 128, 200] {
+                let (one, two) = (lut.0[c][v] - BLACK, doubled.0[c][v] - BLACK);
+                assert!(two.abs_diff(2 * one) <= 1, "colour {c} byte {v}: {one} -> {two}");
+            }
+        }
+        assert_eq!(Response::xt5(4.).mosaic_lut().0[1][255], WHITE);
+        assert_eq!(Response::xt5(f64::NAN), Response::xt5(1.));
+    }
+
+    /// A flat colour mosaiced with the X-T5 response at an offset site develops back exactly
+    /// with the same response, and the neutral law's mosaic is unchanged.
+    #[test]
+    fn a_flat_colour_round_trips_through_the_xt5_response() {
+        let (width, lines, pitch) = (24, 12, 64);
+        let colour = [200u8, 100, 30];
+        let rgb = colour.repeat(width);
+        let response = Response::xt5(1.25);
+        let lut = response.mosaic_lut();
+        let mut bytes = vec![0u8; pitch * lines];
+        for y in 0..lines {
+            mosaic_line_with(&rgb, (y + 2, 3), &mut bytes[y * pitch..y * pitch + 2 * width], &lut);
+        }
+        // Site (2, 3) is green, (2, 5) red, (3, 3) red, (2, 2) blue.
+        let at = |y: usize, x: usize| u16::from_le_bytes([bytes[y * pitch + 2 * x], bytes[y * pitch + 2 * x + 1]]);
+        assert_eq!(at(0, 0), lut.0[1][100]);
+        assert_eq!(at(0, 2), lut.0[0][200]);
+        assert_eq!(at(1, 0), lut.0[0][200]);
+        assert!(at(0, 0) < 7680 + BLACK);
+        let raw = Raw::new(&bytes, pitch, width, lines, (2, 3)).unwrap().with_response(response);
+        for y in 0..lines {
+            for x in 0..width {
+                assert_eq!(raw.rgb(x, y), colour, "pixel ({x}, {y})");
+            }
+        }
+        let (mut neutral, mut with) = ([0u8; 48], [0u8; 48]);
+        mosaic_line(&rgb, 4, &mut neutral);
+        mosaic_line_with(&rgb, (4, 0), &mut with, &Response::NEUTRAL.mosaic_lut());
+        assert_eq!(neutral, with);
     }
 
     #[test]

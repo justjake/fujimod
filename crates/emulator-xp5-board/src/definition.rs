@@ -250,6 +250,7 @@ impl Definition {
                 .into_iter()
                 .map(Display::config)
                 .collect::<Result<_, _>>()?,
+            pwm: Default::default(),
         };
         boot::open(boot::OpenOptions {
             definition,

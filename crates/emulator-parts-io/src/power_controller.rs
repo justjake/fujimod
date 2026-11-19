@@ -93,6 +93,11 @@ impl PowerController {
     pub fn reset_transfer(&mut self) {
         self.position = 0;
     }
+    /// Byte position within the current four-byte transfer; 0 means the next
+    /// byte is a command.
+    pub fn transfer_position(&self) -> usize {
+        self.position
+    }
     /// Seconds since 2000-01-01, advanced by the VM clock. Invalid/unset
     /// profiles retain bit1 clear until a calendar is committed.
     pub fn configure_rtc(&mut self, seconds: u32, valid: bool) {

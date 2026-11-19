@@ -266,6 +266,18 @@ fn rows_422(
     width: usize,
     height: usize,
     marker: Option<usize>,
+    emit: impl FnMut(usize, &[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    rows_422_mapped(view, width, height, marker, None, emit)
+}
+
+/// [`rows_422`] with every sRGB byte mapped through `map` first ([`exposure_map`]).
+fn rows_422_mapped(
+    view: &View<'_>,
+    width: usize,
+    height: usize,
+    marker: Option<usize>,
+    map: Option<&[u8; 256]>,
     mut emit: impl FnMut(usize, &[u8]) -> Result<(), String>,
 ) -> Result<(), String> {
     let mut row = vec![0u8; width * 2];
@@ -273,7 +285,7 @@ fn rows_422(
     for y in 0..height {
         let key = row_key(view, y, height);
         if key.is_none() || key != previous {
-            row_422(view, y, width, height, marker, &mut row);
+            row_422_mapped(view, y, width, height, marker, map, &mut row);
         }
         previous = key;
         emit(y, &row)?;
@@ -282,8 +294,24 @@ fn rows_422(
 }
 
 fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Option<usize>, row: &mut [u8]) {
+    row_422_mapped(view, y, width, height, marker, None, row);
+}
+
+fn row_422_mapped(
+    view: &View<'_>,
+    y: usize,
+    width: usize,
+    height: usize,
+    marker: Option<usize>,
+    map: Option<&[u8; 256]>,
+    row: &mut [u8],
+) {
     let mut first = [0; 3];
     rgb_line(view, y, width, height, marker, |x, pixel| {
+        let pixel = match map {
+            Some(map) => pixel.map(|v| map[usize::from(v)]),
+            None => pixel,
+        };
         if x % 2 == 0 {
             first = ycbcr(pixel);
             return;
@@ -294,6 +322,17 @@ fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Optio
         row[pair * 4 + 2] = ((a[1] + b[1]) / 2).clamp(16, 240) as u8;
         row[pair * 4 + 3] = ((a[2] + b[2]) / 2).clamp(16, 240) as u8;
     });
+}
+
+/// The sRGB byte of each sRGB byte after its linear level is scaled by `exposure` (relative to
+/// the reference, [`crate::exposure::Exposure::relative`]) and clipped at white; `None` at the
+/// reference exposure (no change).
+pub fn exposure_map(exposure: f64) -> Option<[u8; 256]> {
+    use crate::xtrans::{srgb_byte, srgb_to_linear};
+    if !exposure.is_finite() || exposure <= 0. || exposure == 1. {
+        return None;
+    }
+    Some(std::array::from_fn(|v| srgb_byte(srgb_to_linear(v as u8) * exposure)))
 }
 
 /// Every line of `scene` at `width` x `height` as sRGB (R, G, B bytes, `width * 3` a line),
@@ -537,19 +576,37 @@ pub fn paint_scene(
     layout: YuvLayout,
     frame: u64,
 ) -> Result<bool, String> {
+    paint_scene_exposed(cx, address, width, height, stride, layout, frame, 1.)
+}
+
+/// [`paint_scene`] with the scene's linear levels scaled by `exposure` (relative to the
+/// reference exposure, [`crate::exposure::Exposure::relative`]) and clipped at white: the live
+/// view of a sensor whose exposure follows the firmware's programming.
+#[allow(clippy::too_many_arguments)]
+pub fn paint_scene_exposed(
+    cx: &mut Cx<'_>,
+    address: u64,
+    width: u32,
+    height: u32,
+    stride: u32,
+    layout: YuvLayout,
+    frame: u64,
+    exposure: f64,
+) -> Result<bool, String> {
     let Some(scene) = host_scene() else { return Ok(false) };
     check_geometry(address, width, height, stride, layout)?;
     let (w, h) = (width as usize, height as usize);
     let marker = (frame % w as u64) as usize * 8 % w;
     let (live, scene) = snapshot(scene);
     let view = view(scene, live.as_deref(), w);
+    let map = exposure_map(exposure);
     match layout {
-        YuvLayout::Packed422 => rows_422(&view, w, h, Some(marker), |y, row| {
+        YuvLayout::Packed422 => rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| {
             cx.ram_write(address + y as u64 * u64::from(stride), row)
         })?,
         YuvLayout::TwoPlane420 { chroma, chroma_stride } => {
             let mut writer = TwoPlaneWriter::new(address, stride, chroma, chroma_stride, w, h);
-            rows_422(&view, w, h, Some(marker), |y, row| writer.row(cx, y, row))?
+            rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| writer.row(cx, y, row))?
         }
     }
     Ok(true)
@@ -619,6 +676,30 @@ pub fn half_422(
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// The live-view exposure map is the identity at the reference, brightens linear levels
+    /// in proportion above it and clips white.
+    #[test]
+    fn the_exposure_map_scales_linear_levels_and_clips() {
+        assert!(exposure_map(1.).is_none());
+        assert!(exposure_map(0.).is_none());
+        let double = exposure_map(2.).unwrap();
+        assert_eq!((double[0], double[255]), (0, 255));
+        // sRGB 128 is linear 0.216; doubled 0.431 is sRGB 176.
+        assert_eq!(double[128], 176);
+        assert_eq!(double[200], 255);
+        let half = exposure_map(0.5).unwrap();
+        assert_eq!(half[255], 188);
+        let mut a = vec![0u8; 16];
+        let view = View::Bars;
+        rows_422_mapped(&view, 8, 1, None, Some(&std::array::from_fn(|v| v as u8)), |_, row| {
+            a.copy_from_slice(row);
+            Ok(())
+        })
+        .unwrap();
+        let mut b = vec![0u8; 16];
+        row_422(&view, 0, 8, 1, None, &mut b);
+        assert_eq!(a, b);
+    }
     #[test]
     fn half_sampling_keeps_channels_and_applies_programmed_normalized_weights() {
         let mut bytes = Vec::new();

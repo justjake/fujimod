@@ -154,6 +154,7 @@ fn devices_and_resources(
         companion,
         storage: None,
         displays: BTreeMap::new(),
+        pwm: Default::default(),
     };
     if let Some(card) = card_image {
         // A raw card image (`--card-image`) replaces the formatted volume of slot 1, in the ROM
@@ -503,6 +504,7 @@ pub(crate) fn open_from(
     rom: Option<&RomStart>,
     loader_card: Option<&super::loader_card::LoaderCard>,
     viewer_keys: Option<crate::frame_viewer::KeyHandler>,
+    profile: Option<&super::profile::Placed>,
 ) -> Result<Opened, String> {
     let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
     let rom_state;
@@ -904,6 +906,16 @@ pub(crate) fn open_from(
     if windows.is_empty() {
         return Err("X100VI caller boot manifest has no device windows".into());
     }
+    if let Some(profile) = profile {
+        // The user profile's journal records, in the NOR session overlay like any later
+        // program, so snapshots carry them.
+        let storage = resources.storage.as_ref().ok_or("a user profile needs NOR flash storage")?;
+        for (offset, bytes) in &profile.records {
+            for (at, byte) in (*offset..).zip(bytes) {
+                storage.seed(at, *byte)?;
+            }
+        }
+    }
     let mut images = initial_images(firmware, state)?;
     if let Some(Entry::MaskRom(bytes)) = rom.map(|rom| &rom.entry) {
         images.push(MemoryImage {
@@ -936,6 +948,9 @@ pub(crate) fn open_from(
         "boot_wiring_sha256": wiring_sha256,
         "update_sha256": firmware.source_sha256
     });
+    if let (Some(profile), Some(object)) = (profile, definition.as_object_mut()) {
+        object.insert("camera_settings".into(), json!(profile.requested));
+    }
     // A manifest DRAM override changes the machine, so it is part of the run's identity.
     if let (Some(dram), Some(object)) = (&state.dram, definition.as_object_mut()) {
         object.insert(

@@ -418,7 +418,29 @@ impl Device for Rifp {
                 cx.fail(e);
                 return;
             }
+            // A RAW-output run (FINE+RAW): copy the RAW crop; the output becomes a derived
+            // still RAW that the following develop runs read.
+            let mut copied = false;
             if still.develop
+                && still.movie_run(&self.io, r).is_none()
+                && queued
+                && r(0x0c) | r(0x10) & 7 != 0
+                && r(0x40) | r(0x44) & 7 != 0
+            {
+                match super::still::rifp_raw_copy(cx, r, raw) {
+                    Ok(Some(derived)) => {
+                        still.sensor.record_derived_raw(derived);
+                        copied = true;
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        cx.fail(e);
+                        return;
+                    }
+                }
+            }
+            if still.develop
+                && !copied
                 && still.movie_run(&self.io, r).is_none()
                 && queued
                 && r(0x0c) | r(0x10) & 7 != 0
