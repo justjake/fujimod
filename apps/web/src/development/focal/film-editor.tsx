@@ -967,13 +967,27 @@ const ROWS_A: { tool: Tool; control?: Control }[] = [
 ];
 const COLUMN_A = 360;
 
-function LayoutA(props: { s: State; set: (s: State) => void; histogram: number[] }) {
+function LayoutA(props: { s: State; set: (s: State) => void; histogram: number[]; title?: { name: string; from?: string }; opaque?: boolean }) {
   const s = () => props.s;
-  const scroll = () => Math.max(0, Math.min(ROWS_A.length * 57 - 480 + 8, (s().control - 3) * 57));
+  const head = () => (props.title ? 56 : 0);
+  const scroll = () => Math.max(0, Math.min(ROWS_A.length * 57 + head() - 480 + 8, (s().control - 3) * 57));
   return (
     <>
-      <div class="absolute inset-y-0 left-0 overflow-hidden" style={{ ...COLUMN, width: `${COLUMN_A}px` }}>
+      <div
+        class="absolute inset-y-0 left-0 overflow-hidden"
+        style={{ ...COLUMN, ...(props.opaque ? { background: 'rgb(26 26 28 / 0.96)' } : {}), width: `${COLUMN_A}px` }}
+      >
         <div class="transition-transform duration-150" style={{ transform: `translateY(${4 - scroll()}px)` }}>
+          <Show when={props.title}>
+            {(title) => (
+              <div class="flex h-[56px] items-baseline gap-[10px] px-[12px] pt-[14px]" style={{ 'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.16)' }}>
+                <span class={`font-semibold ${TEXT}`}>{title().name}</span>
+                <Show when={title().from}>
+                  <span class={`text-white/60 ${SMALL}`}>{title().from}</span>
+                </Show>
+              </div>
+            )}
+          </Show>
           <For each={ROWS_A}>
             {(row, i) => {
               const focused = () => (s().open ? !row.control && row.tool === s().open : s().control === i());
@@ -1319,6 +1333,163 @@ function LayoutD(props: { s: State; set: (s: State) => void; histogram: number[]
   );
 }
 
+/* ---- From the recipe editor ------------------------------------------------------- */
+
+/* The recipe editor's FILM SIMULATION row opens the film editor with the
+   key WB SHIFT uses. A built-in film opens as a new film copied from it; a
+   card film opens as itself. The film editor is a column too, so it
+   presents as a sheet from the left edge: the recipe column recedes and
+   dims, and peeks out from behind its right edge. BACK at the film
+   editor's top level returns. */
+
+const STOCK = '/review/stock-icons/x70-110';
+const stockIcon = (id: number) => `${STOCK}/ff${id.toString(16).padStart(6, '0')}.svg`;
+const RECIPE_WIDTH = 280;
+const PEEK = 48;
+
+type RecipeRow = { name: string; icon: number; value?: string; level?: number };
+const RECIPE_ROWS: RecipeRow[] = [
+  { name: 'FILM SIMULATION', icon: 0x5f3 },
+  { name: 'WHITE BALANCE', icon: 0x609, value: 'Auto' },
+  { name: 'DYNAMIC RANGE', icon: 0x5f1, value: 'DR100' },
+  { name: 'HIGHLIGHT TONE', icon: 0x5f6, level: 1 },
+  { name: 'SHADOW TONE', icon: 0x607, level: -1 },
+  { name: 'COLOR', icon: 0x5f0, level: 0 },
+  { name: 'SHARPNESS', icon: 0x605, level: 0 },
+  { name: 'NOISE REDUCTION', icon: 0x603, level: -2 },
+];
+
+function StockIcon(props: { id: number; color: string }) {
+  return (
+    <span
+      class="block size-[38px]"
+      style={{
+        background: props.color,
+        'mask-image': `url(${stockIcon(props.id)})`,
+        'mask-size': 'contain',
+        'mask-repeat': 'no-repeat',
+        'mask-position': 'center',
+      }}
+    />
+  );
+}
+
+function RecipeColumn(props: { focus: number; film: string; changed: boolean }) {
+  return (
+    <div class="absolute inset-y-0 left-0 overflow-hidden pt-[4px]" style={{ ...COLUMN, width: `${RECIPE_WIDTH}px` }}>
+      <For each={RECIPE_ROWS}>
+        {(row, i) => {
+          const focused = () => props.focus === i();
+          return (
+            <div class="flex h-[57px] items-center gap-[4px] pr-[6px] pl-[10px]">
+              <StockIcon id={row.icon} color={focused() ? '#fff' : 'rgb(255 255 255 / 0.72)'} />
+              <div class="ml-[8px] flex h-[47px] grow items-center justify-center" style={TRACK(focused())}>
+                <Show
+                  when={row.level === undefined}
+                  fallback={<Ruler value={row.level ?? 0} min={-2} max={2} step={1} width={208} focused={focused()} changed={false} set={() => undefined} />}
+                >
+                  <span
+                    class={`flex h-[37px] items-center rounded-[10px] px-[12px] font-medium whitespace-nowrap ${SMALL}`}
+                    style={{ background: i() === 0 && props.changed ? ACCENT : '#fff', color: i() === 0 && props.changed ? '#fff' : '#000' }}
+                  >
+                    {i() === 0 ? props.film : row.value}
+                  </span>
+                </Show>
+              </div>
+            </div>
+          );
+        }}
+      </For>
+    </div>
+  );
+}
+
+interface RecipeState {
+  focus: number;
+  presented: boolean;
+  /** The recipe's film is a card film, edited as itself. */
+  card: boolean;
+  saved: boolean;
+  editor: State;
+}
+
+function recipeKey(r: RecipeState, key: string): RecipeState | undefined {
+  if (r.presented) {
+    const next = keyA(r.editor, key);
+    if (next) return { ...r, editor: next };
+    if (key === 'Escape' || key === 'Backspace')
+      return { ...r, presented: false, saved: r.saved || JSON.stringify(r.editor.film) !== JSON.stringify(r.editor.opened) };
+    return undefined;
+  }
+  if (key === 'ArrowUp' && r.focus > 0) return { ...r, focus: r.focus - 1 };
+  if (key === 'ArrowDown' && r.focus < RECIPE_ROWS.length - 1) return { ...r, focus: r.focus + 1 };
+  if (key === 's' && r.focus === 0) return { ...r, presented: true };
+  return undefined;
+}
+
+const CARD_FILM = 'MY FILM 1';
+
+function RecipeScreen(props: { start: RecipeState }) {
+  const [r, setR] = createSignal<RecipeState>(props.start);
+  const [histogram, setHistogram] = createSignal<number[]>([]);
+  onSettled(() => {
+    void source().then((src) => setHistogram(src.histogram));
+  });
+  const filmName = () => (r().card ? CARD_FILM : r().saved ? 'NEW FILM 1' : 'Classic Chrome');
+  const spring = 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms cubic-bezier(0.22, 1, 0.36, 1)';
+  /** The recipe column's right edge peeks past the sheet's. */
+  const pushed = () => COLUMN_A + PEEK - RECIPE_WIDTH * 0.92;
+  return (
+    <div
+      tabindex="0"
+      class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans outline-none select-none"
+      onKeyDown={(e) => {
+        const next = recipeKey(r(), e.key);
+        if (next) {
+          e.preventDefault();
+          setR(next);
+        }
+      }}
+    >
+      <Picture film={r().presented || r().saved ? r().editor.film : START} />
+      <div
+        class="absolute inset-0 origin-left"
+        style={{
+          transition: spring,
+          transform: r().presented ? `translateX(${pushed()}px) translateY(${480 * 0.03}px) scale(0.92)` : 'none',
+        }}
+      >
+        <RecipeColumn focus={r().focus} film={filmName()} changed={r().saved && !r().card} />
+        <div
+          class="pointer-events-none absolute inset-y-0 left-0 rounded-[10px] bg-black"
+          style={{ width: `${RECIPE_WIDTH}px`, opacity: r().presented ? 0.4 : 0, transition: spring }}
+        />
+      </div>
+      <Show when={!r().presented}>
+        <Legend hints={r().focus === 0 ? [['▲', 'EDIT FILM'], ['◀▶', 'FILM']] : [['◀▶', 'ADJUST']]} />
+      </Show>
+      <div
+        class="absolute inset-0"
+        style={{
+          transform: r().presented ? 'none' : `translateX(-${COLUMN_A + 24}px)`,
+          'pointer-events': r().presented ? 'auto' : 'none',
+          visibility: r().presented ? 'visible' : 'hidden',
+          transition: `${spring}, visibility 0s linear ${r().presented ? '0ms' : '420ms'}`,
+        }}
+      >
+        <div class="absolute inset-y-0 left-0" style={{ width: `${COLUMN_A}px`, 'box-shadow': '8px 0 24px rgb(0 0 0 / 0.45)' }} />
+        <LayoutA
+          s={r().editor}
+          set={(editor) => setR({ ...r(), editor })}
+          histogram={histogram()}
+          title={r().card ? { name: CARD_FILM } : { name: 'NEW FILM', from: 'from Classic Chrome' }}
+          opaque
+        />
+      </div>
+    </div>
+  );
+}
+
 /* ---- Screens and review ----------------------------------------------------------- */
 
 type LayoutId = 'a' | 'b' | 'c' | 'd';
@@ -1376,11 +1547,27 @@ const STATES: { id: string; layout: LayoutId; title: string; state: State }[] = 
   { id: 'd-picture', layout: 'd', title: 'D · On the picture: touch a tone, drag it', state: initial({ film: EDITED, knot: 6, picked: { x: 520, y: 150, u: US[6] + 0.01 } }) },
 ];
 
+const RECIPE_STATES: { id: string; title: string; state: RecipeState }[] = [
+  { id: 'r-row', title: 'Recipe editor · FILM SIMULATION row (press S for the ▲ key)', state: { focus: 0, presented: false, card: false, saved: false, editor: initial({ control: 1 }) } },
+  { id: 'r-new', title: 'Recipe editor · a built-in film opens as a new film', state: { focus: 0, presented: true, card: false, saved: false, editor: initial({ control: 1 }) } },
+  { id: 'r-card', title: 'Recipe editor · a card film opens as itself', state: { focus: 0, presented: true, card: true, saved: false, editor: initial({ film: EDITED, opened: EDITED, control: 1 }) } },
+];
+
 function Review() {
   return (
     <div class="min-h-dvh touch-manipulation bg-[#111] p-[16px] font-sans text-[15px] text-[#ddd]">
       <h1 class="mb-[6px] text-[22px] font-semibold">Film editor</h1>
       <p class="mb-[8px] max-w-[720px] text-[#999]">Each screen is live: click it, then use the arrow keys, Enter (OK) and Escape (BACK), or drag with the mouse or a finger.</p>
+      <For each={RECIPE_STATES}>
+        {(entry) => (
+          <section id={entry.id} class="mt-[28px]">
+            <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
+            <Fit>
+              <RecipeScreen start={entry.state} />
+            </Fit>
+          </section>
+        )}
+      </For>
       <For each={STATES}>
         {(entry) => (
           <section id={entry.id} class="mt-[28px]">
