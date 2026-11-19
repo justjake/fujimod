@@ -14,6 +14,31 @@
 //!   address -> +c8/+cc; one stride -> +d0 for both planes. It requires both addresses
 //!   8-byte aligned and below 0x7fffffff0, and the stride a multiple of 4.
 //!
+//! MOVRSZ (X-T5 4.31 0xff982000, driver 0x2c4419c..0x2c44e64, logical IRQ 0x6e = INTID 200).
+//! The parameter block of set 0x2c44264 (static evidence) programs:
+//! * +08 bit 24 and +44 (0x2c445b0): horizontal seven-tap filter, +44 = w0 << 24 | w1 << 16 |
+//!   w2 << 8 | w3, taps w0 w1 w2 w3 w2 w1 w0, required sum 256.
+//! * +08 bit 20 and +40 (0x2c44670): vertical five-tap filter, +40 = v0 << 16 | v1 << 8 | v2
+//!   (7 bits each), taps v0 v1 v2 v1 v0, required sum 128.
+//! * +08 bit 16 and +3c bits 9..0 (0x2c44744), +64 (0x2c447d0): not decoded, refused when used.
+//! * +08 bits 5..4 output class (0..2), bits 1..0 input class (0..2), bit 8 a flag
+//!   (0x2c4481c). The pixel count must be a multiple of 16 for output class 0, of 32 for class 1.
+//!   Source +10/+14 (bits 34..32 / 31..0), input stride +18, size +1c = lines << 16 | pixels
+//!   (counts), destination +30/+34, output stride +38, +48 bits 9..0 = 0x200.
+//! * Start 0x2c44ba4: +4c/+50 bit 16, then +04 bit 0. Status +58, clear +5c (ISR 0x2c44164),
+//!   enable +60. Stop 0x2c4439c polls +54 until (v & v >> 16) bit 0.
+//!
+//! Output class 0 with input class 0 is the half-size packed 4:2:2 of live view (horizontal
+//! filter only). Output class 1 is half-size 8-bit luma: the HDR alignment pyramid
+//! (recfPrProcess 0x2d3d414, steps 0x59..0x5c, setup 0x2d31d48). Its first level reads the
+//! packed 4:2:2 frame (input class 0, both filters; X-T5 4.31 HDR: +08 0x1100010, 7744x5152,
+//! strides 0x3c80); the next levels read the previous 8-bit level (input class 1, call at
+//! 0x2d32174) inside one buffer. The pyramid table at 0x2d31f94 halves each level (bytes / 2
+//! rounded up to 32, lines / 2 rounded up to 2), which is what makes class 1 a half-size,
+//! one-byte-per-pixel output [inferred]. The model takes output pixel (x, y) from input (2x, 2y)
+//! after the enabled filters (horizontal first, rounded to 8 bits, then vertical), edges
+//! clamped.
+//!
 //! IBUF (X-T5 4.31 0xff945000, driver 0x138a8dc..0x138ba9c, DMA mask 0x40000 of 0x2c6af44 /
 //! 0x2c6ce5c). Static evidence:
 //! * +0x00 bit 0: ready. Close (0x138b604) and open (0x138b9e0) clear it through 0x138a970(0) and
@@ -213,6 +238,14 @@ impl Work {
             if !frame::paint_scene(cx, address, width, height, stride, layout, self.state.frames)? {
                 frame::paint_layout(cx, address, width, height, stride, layout, luma)?;
             }
+        } else if self.state.r(8) & 0x30 == 0x10 {
+            // Output class 1 (+08 bits 5..4): half-size 8-bit luma (module notes).
+            self.luma_half(cx)?;
+            for offset in [0x4c, 0x50] {
+                self.state
+                    .regs
+                    .insert(offset, self.state.r(offset) & !0x10000);
+            }
         } else {
             // Half-size packed422: consume the actual programmed input. The
             // supported horizontal filter uses the normalized seven-tap
@@ -271,6 +304,91 @@ impl Work {
         self.state.frames += 1;
         self.state.pending |= 1;
         self.irq(cx);
+        Ok(())
+    }
+    /// MOVRSZ output class 1: half-size 8-bit luma from packed 4:2:2 or 8-bit luma input, with
+    /// the optional seven-tap horizontal (+08 bit 24, +44) and five-tap vertical (+08 bit 20,
+    /// +40) filters (module notes).
+    fn luma_half(&self, cx: &mut Cx<'_>) -> Result<(), String> {
+        let r = |o| self.state.r(o);
+        let control = r(8);
+        let (width, height) = ((r(0x1c) & 0xffff) as usize, (r(0x1c) >> 16) as usize);
+        let (input_stride, output_stride) = (r(0x18) as usize, r(0x38) as usize);
+        let source = (u64::from(r(0x10) & 7) << 32) | u64::from(r(0x14));
+        let address = (u64::from(r(0x30) & 7) << 32) | u64::from(r(0x34));
+        // Input class (+08 bits 1..0): 0 packed 4:2:2, 1 8-bit luma.
+        let bytes = if control & 3 == 0 { 2 } else { 1 };
+        let h = r(0x44).to_be_bytes();
+        let v = [(r(0x40) >> 16) & 0x7f, (r(0x40) >> 8) & 0x7f, r(0x40) & 0x7f];
+        let horizontal = (control & 0x0100_0000 != 0).then_some([h[0], h[1], h[2], h[3], h[2], h[1], h[0]]);
+        let vertical = (control & 0x0010_0000 != 0).then_some([v[0], v[1], v[2], v[1], v[0]]);
+        if control & !0x0110_0031 != 0
+            || horizontal.is_some_and(|t| t.iter().map(|&w| u32::from(w)).sum::<u32>() != 256)
+            || vertical.is_some_and(|t| t.iter().sum::<u32>() != 128)
+            || !(0x20..=0xfff0).contains(&width)
+            || width % 32 != 0
+            || !(2..=0xfffa).contains(&height)
+            || height % 2 != 0
+            || input_stride < width * bytes
+            || output_stride < width / 2
+            || input_stride % 8 != 0
+            || output_stride % 8 != 0
+            || r(0x10) > 7
+            || r(0x30) > 7
+            || source == 0
+            || address == 0
+        {
+            return Err(format!(
+                "unsupported MOVRSZ mode/geometry: control={control:#x} size={:#x} input_stride={input_stride:#x} \
+                 output_stride={output_stride:#x} source={source:#x} destination={address:#x} +40={:#x} +44={:#x}",
+                r(0x1c),
+                r(0x40),
+                r(0x44)
+            ));
+        }
+        cx.log(&format!(
+            "MOVRSZ: half-size 8-bit luma {}x{height} -> {}x{} from {} at {source:#x} (stride {input_stride:#x}) \
+             to {address:#x} (stride {output_stride:#x}), horizontal filter {horizontal:?}, vertical filter {vertical:?}",
+            width,
+            width / 2,
+            height / 2,
+            if bytes == 2 { "packed 4:2:2" } else { "8-bit luma" },
+        ));
+        let mut line = vec![0; width * bytes];
+        let mut rows = Vec::with_capacity(height * width / 2);
+        for y in 0..height {
+            cx.ram_read(source + (y * input_stride) as u64, &mut line)?;
+            let luma = |x: usize| if bytes == 2 { line[x / 2 * 4 + x % 2] } else { line[x] };
+            rows.extend((0..width / 2).map(|x| match horizontal {
+                None => luma(2 * x),
+                Some(taps) => {
+                    let sum: u32 = taps
+                        .iter()
+                        .enumerate()
+                        .map(|(t, &w)| u32::from(w) * u32::from(luma((2 * x + t).saturating_sub(3).min(width - 1))))
+                        .sum();
+                    ((sum + 128) >> 8) as u8
+                }
+            }));
+        }
+        let half = width / 2;
+        let mut output = vec![0; half];
+        for y in 0..height / 2 {
+            for (x, pixel) in output.iter_mut().enumerate() {
+                *pixel = match vertical {
+                    None => rows[2 * y * half + x],
+                    Some(taps) => {
+                        let sum: u32 = taps
+                            .iter()
+                            .enumerate()
+                            .map(|(t, &w)| w * u32::from(rows[(2 * y + t).saturating_sub(2).min(height - 1) * half + x]))
+                            .sum();
+                        ((sum + 64) >> 7) as u8
+                    }
+                };
+            }
+            cx.ram_write(address + (y * output_stride) as u64, &output)?;
+        }
         Ok(())
     }
     fn known(&self, o: u64) -> bool {
@@ -875,6 +993,76 @@ mod resize_tests {
         assert!(host.ram[0x1000..0x1100].iter().all(|v| *v == 0x55));
         assert_eq!(work.save()["state"]["frames"], 2);
         assert_eq!(host.irqs.last(), Some(&(200, false)));
+    }
+
+    /// Output class 1 (+08 bits 5..4 = 1): half-size 8-bit luma, as the X-T5 4.31 HDR
+    /// alignment pyramid programs it, from packed 4:2:2 and from 8-bit luma, with and without
+    /// the filters, at a source and destination above 4 GiB.
+    #[test]
+    fn luma_half_resize_takes_every_other_luma_sample_through_the_filters() {
+        const RAM: u64 = 0x1_0000_0000;
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram: vec![0x80; 0x4000],
+            ..Default::default()
+        };
+        let luma = |x: usize, y: usize| (x + 8 * y) as u8;
+        for y in 0..4 {
+            for x in 0..32 {
+                host.ram[y * 64 + x / 2 * 4 + x % 2] = luma(x, y);
+                host.ram[0x1000 + y * 32 + x] = luma(x, y);
+            }
+        }
+        let mut work = Work::resize(BASE, 1000).unwrap();
+        let run = |work: &mut Work, host: &mut RecordingHost, words: &[(u64, u64)]| {
+            host.ram[0x2000..0x2040].fill(0xee);
+            let mut cx = Cx::new(host, 0, 0, 0);
+            work.write(&mut cx, BASE + 0x5c, 4, 1);
+            for &(o, v) in [
+                (0x10, 1),
+                (0x14, 0),
+                (0x18, 64),
+                (0x1c, (4 << 16) | 32),
+                (0x30, 1),
+                (0x34, 0x2000),
+                (0x38, 24),
+                (0x40, 0),
+                (0x44, 0),
+            ]
+            .iter()
+            .chain(words)
+            {
+                work.write(&mut cx, BASE + o, 4, v);
+            }
+            work.write(&mut cx, BASE + 4, 4, 1);
+            host.now += 1_000_000;
+            let mut cx = Cx::new(host, 0, 0, 0);
+            work.advance(&mut cx);
+            cx.refusal().map(str::to_owned)
+        };
+        let rows = |host: &RecordingHost| [0, 1].map(|y| host.ram[0x2000 + y * 24..][..16].to_vec());
+        // No filter: input (2x, 2y); the destination stride gap is left alone.
+        assert_eq!(run(&mut work, &mut host, &[(8, 0x10)]), None);
+        assert_eq!(rows(&host), [0, 1].map(|y| (0..16).map(|x| luma(2 * x, 2 * y)).collect::<Vec<_>>()));
+        assert_eq!(host.ram[0x2000 + 16], 0xee);
+        // 8-bit luma input (class 1, stride 32): the same picture.
+        assert_eq!(run(&mut work, &mut host, &[(8, 0x11), (0x14, 0x1000), (0x18, 32)]), None);
+        assert_eq!(rows(&host), [0, 1].map(|y| (0..16).map(|x| luma(2 * x, 2 * y)).collect::<Vec<_>>()));
+        // Both filters (+44 taps 0 0 64 128 64 0 0, +40 taps 0 32 64 32 0) on the ramp: exact
+        // inside, the clamped top edge pulls line 0 up by 2.
+        assert_eq!(run(&mut work, &mut host, &[(8, 0x1100010), (0x44, 0x40 << 8 | 0x80), (0x40, 32 << 8 | 64)]), None);
+        assert_eq!(rows(&host), [2, 16].map(|base| (0..16).map(|x| (2 * x + base) as u8).collect::<Vec<_>>()));
+        // A filter that is not normalized, the undecoded +3c function (bit 16) and a pixel count
+        // that is not a multiple of 32 refuse.
+        for words in [
+            vec![(8, 0x1000010), (0x44, 0x80)],
+            vec![(8, 0x10010)],
+            vec![(8, 0x10), (0x1c, (4 << 16) | 48)],
+        ] {
+            let refusal = run(&mut work, &mut host, &words).expect("a refusal");
+            assert!(refusal.contains("unsupported MOVRSZ mode"), "{refusal}");
+            work = Work::resize(BASE, 1000).unwrap();
+        }
     }
 }
 

@@ -25,3 +25,6 @@ pub const STATISTICS_BANK_SIZE: usize = 0x75a0;
 
 #[path = "imaging_still.rs"]
 pub mod still;
+
+#[path = "imaging_movie.rs"]
+pub mod movie;

@@ -68,7 +68,7 @@ irq_mask_offset = 0x20c
 irq_mask_bit = 0
 irq_mask_set_masks = false
 
-# CONDITIONAL: TNR (logical 0x18). Driver 0x2c73414..0x2c757f0, state 0x38334f4.
+# TNR (logical 0x18); conditional for stills. Driver 0x2c73414..0x2c757f0, state 0x38334f4.
 # Users: Recf 0x2d3e1ec.. (not in sequence 3/4) and MOVDC 0x2eb08b0/0x2eb0db0/0x2eb0e40/
 # 0x2eb0e60/0x2eb0e78 (from 0x3068fc0 / 0x3069a74).
 # Open 0x2c755b8 (sem 0xa4, clocks, reset release 0xff90db08 bit 5); no TNR access.
@@ -81,10 +81,16 @@ irq_mask_set_masks = false
 #   +0x310 = 1 (0x2c74ae4) and calls the callback 0x38334f8.
 # Stop 0x2c74d74: +0x300 = 0, polls +0x314 until bit 0 reads 0, +0x304 = 0, +0x30c = 0.
 # Close 0x2c75668: +0x00 handshake again, reset assert.
+# Movie recording (X-T5 4.31 FHD, run93): TNR runs once a frame (recmvbk op 10, 0x2d138e8) and
+# writes the H.264 encoder input: current +0x20/+0x28 (the RESZ two-plane output), reference
+# +0x30/+0x38 (the previous output), output +0x50/+0x58, pitches +0x60..+0x7c, size +0x80 =
+# lines << 16 | pixels. kind imaging-tnr is this completion stub (same options); with
+# XT5_MOVIE_PATH=real each start also copies the current picture to the output (emulator-xp5-imaging
+# imaging_movie.rs).
 [[device]]
 base = 0xffd24000
 size = 0x1000
-kind = "completion-stub"
+kind = "imaging-tnr"
 [device.options]
 registers = [
   { offset = 0x000, mode = "constant", value = 0x1 },

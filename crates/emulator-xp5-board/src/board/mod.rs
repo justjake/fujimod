@@ -253,6 +253,33 @@ fn register_with_resources(
                 )?),
             )?;
         }
+        "imaging-tnr" => {
+            // TNR 0xffd24000: the completion stub that, with XT5_MOVIE_PATH=real, also copies
+            // the current picture to the encoder input (emulator-xp5-imaging imaging_movie.rs).
+            // Registered here, in manifest order, so the device graph matches snapshots taken
+            // when the window was a plain completion stub.
+            if window.base != 0xffd24000 || window.size != 0x1000 {
+                return Err("invalid imaging-tnr window".into());
+            }
+            let options: fujimod_emulator_xp5_io::completion_stub::Options =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("imaging-tnr options: {e}"))?;
+            let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+                window.base,
+                window.size,
+                options,
+                1000,
+            )?;
+            let tnr = fujimod_emulator_xp5_imaging::imaging::movie::Tnr::new(stub);
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(if fujimod_emulator_imaging::frame::movie_path_real() {
+                    tnr.with_movie_path()
+                } else {
+                    tnr
+                }),
+            )?;
+        }
         "write-only-registers" => {
             if !window.options.is_empty() {
                 return Err("write-only-registers takes no options".into());
