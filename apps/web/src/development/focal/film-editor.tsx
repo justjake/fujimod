@@ -2205,28 +2205,8 @@ function Static(props: { start: State }) {
 /* Materials: each look names how every role is drawn (the column, the rail,
    rows and their focus, chips, panels, the keyboard), not just two colors. */
 const LOOKS = {
-  glass: `
-    --m-blur: blur(14px) saturate(1.3);
-    --m-column: rgb(22 22 24 / 0.6); --m-column-edge: inset -1px 0 0 rgb(255 255 255 / 0.22);
-    --m-rail: rgb(18 18 20 / 0.82); --m-panel: rgb(30 30 32 / 0.9);
-    --m-chip: rgb(22 22 24 / 0.62); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 0 0 1px rgb(255 255 255 / 0.1);
-    --m-track: rgb(255 255 255 / 0.06); --m-track-edge: none;
-    --m-focus: rgb(255 255 255 / 0.17); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.14);
-    --m-divider: inset 0 1px 0 rgb(255 255 255 / 0.16);
-    --m-accent: #7d3fc2; --m-confirm: #0a6bdc;
-    --m-title: rgb(0 0 0 / 0.62); --m-text-area: rgb(22 22 24 / 0.5); --m-tray: rgb(28 28 30 / 0.84);
-    --m-key: rgb(255 255 255 / 0.3); --m-key-special: rgb(255 255 255 / 0.12); --m-key-edge: none; --m-key-focus: inset 0 0 0 3px #fff;`,
-  'glass-strong': `
-    --m-blur: blur(18px) saturate(1.2);
-    --m-column: rgb(14 14 16 / 0.74); --m-column-edge: inset -1px 0 0 rgb(255 255 255 / 0.4);
-    --m-rail: rgb(10 10 12 / 0.9); --m-panel: rgb(20 20 22 / 0.94);
-    --m-chip: rgb(14 14 16 / 0.78); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.22);
-    --m-track: rgb(255 255 255 / 0.09); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.1);
-    --m-focus: rgb(255 255 255 / 0.24); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 0 0 2px rgb(255 255 255 / 0.55);
-    --m-divider: inset 0 1px 0 rgb(255 255 255 / 0.28);
-    --m-accent: #8f4fe0; --m-confirm: #1474e6;
-    --m-title: rgb(0 0 0 / 0.75); --m-text-area: rgb(14 14 16 / 0.66); --m-tray: rgb(18 18 20 / 0.9);
-    --m-key: rgb(255 255 255 / 0.34); --m-key-special: rgb(255 255 255 / 0.16); --m-key-edge: inset 0 1px 0 rgb(255 255 255 / 0.25); --m-key-focus: inset 0 0 0 3px #fff;`,
+  /* Drawn from its two dials: glassVars. */
+  glass: '',
   contrast: `
     --m-blur: none;
     --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
@@ -2251,10 +2231,35 @@ const LOOKS = {
     --m-key: #3a3a3a; --m-key-special: #222; --m-key-edge: none; --m-key-focus: inset 0 -5px 0 #c8232c;`,
 };
 type Look = keyof typeof LOOKS;
-const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['glass-strong', 'Stronger glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
+const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
+
+/* Glass has two dials, as Liquid Glass does: OPACITY (how much of the photo
+   shows through) and CONTRAST (how bright edges, focus and dividers are). 0 and
+   0 is the lightest glass; the Glass look's defaults sit just under halfway. */
+function glassVars(opacity: number, contrast: number): string {
+  const mix = (a: number, b: number, t: number) => +(a + (b - a) * t).toFixed(3);
+  const fill = (a: number) => mix(a, Math.min(0.97, a + 0.3), opacity);
+  const edge = (a: number) => mix(a, Math.min(1, a * 2.2), contrast);
+  return `
+    --m-blur: blur(${mix(12, 20, opacity)}px) saturate(1.25);
+    --m-column: rgb(${mix(22, 12, opacity)} ${mix(22, 12, opacity)} ${mix(24, 14, opacity)} / ${fill(0.5)});
+    --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
+    --m-rail: rgb(16 16 18 / ${fill(0.72)}); --m-panel: rgb(26 26 28 / ${fill(0.84)});
+    --m-chip: rgb(20 20 22 / ${fill(0.52)});
+    --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
+    --m-track: rgb(255 255 255 / ${mix(0.05, 0.1, contrast)}); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / ${mix(0, 0.12, contrast)});
+    --m-focus: rgb(255 255 255 / ${mix(0.15, 0.26, contrast)});
+    --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.3)}), inset 0 0 0 ${contrast > 0.5 ? 2 : 1}px rgb(255 255 255 / ${edge(0.12) + contrast * 0.3});
+    --m-divider: inset 0 1px 0 rgb(255 255 255 / ${edge(0.14)});
+    --m-accent: ${contrast > 0.5 ? '#8f4fe0' : '#7d3fc2'}; --m-confirm: #0a6bdc;
+    --m-title: rgb(0 0 0 / ${fill(0.55)}); --m-text-area: rgb(20 20 22 / ${fill(0.42)}); --m-tray: rgb(26 26 28 / ${fill(0.76)});
+    --m-key: rgb(255 255 255 / ${mix(0.28, 0.36, contrast)}); --m-key-special: rgb(255 255 255 / ${mix(0.1, 0.17, contrast)});
+    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;`;
+}
+const GLASS_DEFAULT = { opacity: 0.35, contrast: 0.6 };
 
 const STYLE_OPTIONS = `
-${(Object.keys(LOOKS) as Look[]).map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
+${(Object.keys(LOOKS) as Look[]).filter((k) => k !== 'glass').map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
 .fm-look-fujimod .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
 .fm-look-fujimod .fm-screen rect { rx: 0; ry: 0; }
 .fm-square .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
@@ -2281,11 +2286,14 @@ function Review() {
   const [rounded, setRounded] = createSignal(true);
   const [upper, setUpper] = createSignal(false);
   const [look, setLook] = createSignal<Look>('glass');
+  const [opacity, setOpacity] = createSignal(GLASS_DEFAULT.opacity);
+  const [contrast, setContrast] = createSignal(GLASS_DEFAULT.contrast);
   return (
     <div
       class={`min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd] ${rounded() ? '' : 'fm-square'} ${upper() ? 'fm-upper' : ''} fm-look-${look()}`}
     >
       <style>{STYLE_OPTIONS}</style>
+      <style>{`.fm-look-glass .fm-screen {${glassVars(opacity(), contrast())} }`}</style>
       <h1 class="mb-[12px] text-[22px] font-semibold">Film editor</h1>
       <div class="mb-[14px] flex flex-wrap gap-[8px]">
         <Toggle label="Rounded corners" on={rounded()} set={setRounded} />
@@ -2306,6 +2314,19 @@ function Review() {
           )}
         </For>
       </div>
+      <Show when={look() === 'glass'}>
+        <div class="mb-[14px] flex max-w-[720px] flex-col gap-[6px]">
+          <For each={[['Opacity', opacity, setOpacity], ['Contrast', contrast, setContrast]] as [string, () => number, (v: number) => void][]}>
+            {([label, get, set]) => (
+              <label class="flex h-[44px] items-center gap-[12px] text-[16px] font-semibold text-white">
+                <span class="w-[84px]">{label}</span>
+                <input type="range" min="0" max="100" value={Math.round(get() * 100)} class="h-[44px] grow accent-white" onInput={(e) => set(Number(e.currentTarget.value) / 100)} />
+                <span class="w-[40px] text-right tabular-nums">{Math.round(get() * 100)}</span>
+              </label>
+            )}
+          </For>
+        </div>
+      </Show>
       <Live start={initial({ film: START })} />
       <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">From the recipe editor</h2>
       <Presented />
