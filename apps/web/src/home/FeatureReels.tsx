@@ -81,11 +81,7 @@ export function FeatureReels(props: { recipeCount: number }) {
         .
       </Reel>
       <Reel id="controls" title="Controls + system">
-        Choose the Fujimod{' '}
-        <Link page="menu-style" row="MENU STYLE">
-          MENU STYLE
-        </Link>
-        , put ISO on the{' '}
+        Put ISO on the{' '}
         <Link page="button-dial-setting" row="EV DIAL">
           EV DIAL
         </Link>
