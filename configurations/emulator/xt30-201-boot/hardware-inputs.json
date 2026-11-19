@@ -68,13 +68,14 @@
             "6": 0,
             "16": 0,
             "24": 165,
+            "27": 0,
             "32": 0,
             "34": 0,
             "35": 0
           },
           "rtc_ticks_per_second": 54000000,
           "ambient_celsius": 25,
-          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 is the retained word observed on a stock X-T30. Bits 2-4 read 0b001, so the headphone callback's predicate (status & 0x1c) == 0x0c is false (headphones absent), and bits 0-1 read 1, a class the power-source consumer accepts; the physical meaning of that class is unmeasured.",
+          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 is the retained word observed on a stock X-T30. Bits 2-4 read 0b001, so the headphone callback's predicate (status & 0x1c) == 0x0c is false (headphones absent), and bits 0-1 read 1, a class the power-source consumer accepts; the physical meaning of that class is unmeasured. Selector 27 declares the battery monitor's raw sample word as zero: the firmware reads it once per five-phase poll at 0109ad3c and stores it at 0150b692, which no main-image function reads, so any word is inert and no measured value exists.",
           "rtc_basis": "Virtual unset RTC. The counter advances from guest ticks after a stock start command."
         }
       },

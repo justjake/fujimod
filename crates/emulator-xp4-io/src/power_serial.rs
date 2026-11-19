@@ -5,6 +5,11 @@
 //! the raw accessory status word. Its consumers test bits 2-4 for the headphone
 //! state and bits 0-1 for the power-source class, so the pair is modeled as a
 //! command plus one declared status input instead of a retained register.
+//!
+//! Selector 27 is the battery monitor's raw sample. X-T30 2.01 reads it once per
+//! five-phase poll (application `0x0109ad3c`) and stores the word at
+//! `0x0150b692`; no main-image function reads that back, so the sample is a
+//! declared read-only input like the ADC and status words.
 use crate::{rtc::Counter, spi::Input};
 use fujimod_emulator_ip::socionext::gpio::SharedPins;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
@@ -14,6 +19,8 @@ use std::collections::BTreeMap;
 const ACCESSORY_COMMAND_REGISTER: u8 = 23;
 /// Accessory status word selector; read-only and declared by the profile.
 const ACCESSORY_STATUS_REGISTER: u8 = 24;
+/// Battery monitor raw sample selector; read-only and declared by the profile.
+const BATTERY_SAMPLE_REGISTER: u8 = 27;
 /// The one observed accessory status command: request a status sample.
 const ACCESSORY_STATUS_REQUEST: u16 = 0x0400;
 /// Direct stop/load/start law over the shared counter.
@@ -100,8 +107,9 @@ impl PowerSerial {
             || inputs
                 .keys()
                 // 24: declared accessory status word
+                // 27: declared battery monitor raw sample
                 // 48..=55: initial contents of the retained profile registers
-                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35 | 48..=55))
+                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | BATTERY_SAMPLE_REGISTER | 32 | 34 | 35 | 48..=55))
             || [0, 1, 2, 3, 32, 34, 35]
                 .iter()
                 .any(|n| !inputs.contains_key(n))
@@ -291,6 +299,8 @@ impl Input for PowerSerial {
                         .or_else(|| self.inputs.get(&register))
                         .unwrap_or(&0);
                 } else if let Some(v) = self.inputs.get(&register) {
+                    // Declared read-only words: the accessory status, the battery
+                    // sample and the ADC/status inputs. Nothing is retained.
                     self.response = *v;
                 } else {
                     return Err(format!("Unsupported power SPI read register{register}"));
@@ -604,6 +614,45 @@ mod tests {
         peer.exchange(8, 0x80, 0).unwrap();
         assert!(peer.exchange(8, 0, 0).is_err());
         assert!(cx.refusal().is_none());
+    }
+
+    #[test]
+    fn declared_battery_sample_is_read_only_and_unretained() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        let make = |sample: Option<u16>| {
+            let mut inputs: BTreeMap<u8, u16> =
+                [(0, 0), (1, 0), (2, 0), (3, 512), (24, 0xa5), (32, 0), (34, 0), (35, 0)].into();
+            if let Some(sample) = sample {
+                inputs.insert(BATTERY_SAMPLE_REGISTER, sample);
+            }
+            PowerSerial::new(pins.clone(), 12, 5, true, false, inputs, 54_000_000, None).unwrap()
+        };
+        let mut host = Clock;
+        let mut cx = Cx::new(&mut host, 3, 0, 0);
+        gpio.write(&mut cx, BASE + 12 * 64, 4, (1 << 21) | (1 << 5));
+        assert!(make(None).exchange(8, 0x6c, 0).is_err());
+        for sample in [0u16, 0x1234, 0xffff] {
+            let mut peer = make(Some(sample));
+            let declared = peer.save();
+            assert_eq!(peer.exchange(8, 0x6c, 0).unwrap(), 0);
+            let partial = peer.save();
+            assert_eq!(peer.exchange(8, 0x10, 1).unwrap(), sample >> 8);
+            assert_eq!(peer.exchange(8, 0x34, 2).unwrap(), sample & 255);
+            assert_eq!(peer.save()["registers"], json!([]));
+            assert_eq!(peer.save()["inputs"], declared["inputs"]);
+            let mut resumed = make(Some(sample));
+            resumed.restore(&partial).unwrap();
+            assert_eq!(resumed.exchange(8, 0x10, 1).unwrap(), sample >> 8);
+            assert_eq!(resumed.exchange(8, 0x34, 2).unwrap(), sample & 255);
+            assert_eq!(resumed.save(), peer.save());
+            assert!(make(Some(sample)).exchange(8, 0x6d, 0).is_err());
+            let mut absent = make(None);
+            assert!(absent.exchange(8, 0x6c, 0).is_err());
+            let before = absent.save();
+            assert!(absent.restore(&declared).is_err());
+            assert_eq!(absent.save(), before);
+        }
     }
 
     #[test]
