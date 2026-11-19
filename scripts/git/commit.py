@@ -14,7 +14,8 @@ files from Git and leaves them on disk; add an ignore rule so they stay out.
 
 Commits go on a topic branch: the tool refuses to commit on ``main`` (land
 work there through a pull request) and in a checkout whose branch is
-detached.
+detached. ``--allow-main`` is for an unattended service the owner has allowed
+to commit straight to ``main``.
 
 The commit is built in a private index on the checked-out branch's HEAD, after
 ``sync.py`` brings that branch to its ``origin`` counterpart, merging origin's
@@ -51,6 +52,7 @@ class Arguments(argparse.Namespace):
     ignored: bool
     allow_bulk: bool
     untrack: list[str]
+    allow_main: bool
     paths: list[str]
 
 
@@ -235,6 +237,11 @@ def main() -> None:
         metavar="PATH",
         help="remove PATH from Git but keep it on disk (repeatable)",
     )
+    parser.add_argument(
+        "--allow-main",
+        action="store_true",
+        help="commit on main (only for services the owner allowed to)",
+    )
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(namespace=Arguments())
     if not args.paths and not args.patch and not args.untrack:
@@ -243,7 +250,8 @@ def main() -> None:
     patch = args.patch.resolve() if args.patch else None
     try:
         repository = Repository(GitRepository.toplevel(args.repo))
-        refuse_protected(repository)
+        if not args.allow_main:
+            refuse_protected(repository)
         result = repository.commit(
             args.paths,
             patch,
