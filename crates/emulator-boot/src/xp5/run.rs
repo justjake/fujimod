@@ -4,13 +4,21 @@ use super::{
     Startup, Started, open as session_open,
 };
 use crate::mod_loader;
-use crate::host::{parse_gpio, parse_number, parse_poke, parse_stub};
+use crate::host::{parse_gpio, parse_number, parse_stub, parse_timed_poke};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_parts_controls::key_input::Key;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+/// Write one little-endian word for --poke: a physical address first, else CPU0's virtual view.
+fn poke_word(board: &fujimod_emulator::board::Board, address: u64, value: u32) -> Result<(), String> {
+    let bytes = value.to_le_bytes();
+    board.write_physical(address, &bytes)
+        .or_else(|_| board.write_memory(0, address, &bytes))
+        .map_err(|error| format!("poke {address:#x}: {error}"))
+}
 
 fn shared_boot_summary(
     state: &Value,
@@ -286,7 +294,18 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             .filter(|ms| *ms > 0),
         Err(_) => None,
     };
-    let pokes = pokes.iter().map(|spec| parse_poke(spec)).collect::<Result<Vec<_>, _>>()?;
+    // `ADDR=U32` writes before the run; `ADDR=U32@MS` writes MS guest milliseconds after the run
+    // starts, scheduled like a timed --gpio level.
+    let mut timed_pokes = Vec::new();
+    let mut untimed_pokes = Vec::new();
+    for spec in &pokes {
+        match parse_timed_poke(spec)? {
+            (Some(at_ms), address, value) => timed_pokes.push((at_ms, (address, value))),
+            (None, address, value) => untimed_pokes.push((address, value)),
+        }
+    }
+    timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
+    let pokes = untimed_pokes;
     let viewer_queue = ViewerQueue::default();
     let request = Startup {
         update,
@@ -349,10 +368,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
     }
     for (address, value) in pokes {
-        let bytes = value.to_le_bytes();
-        session.board.write_physical(address, &bytes)
-            .or_else(|_| session.board.write_memory(0, address, &bytes))
-            .map_err(|error| format!("poke {address:#x}: {error}"))?;
+        poke_word(&session.board, address, value)?;
     }
     let start = session.board.now();
     for (delay, key, pressed) in keys {
@@ -364,6 +380,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     };
     let mut timed_gpio: std::collections::VecDeque<_> = timed_gpio.into_iter()
         .map(|(at_ms, level)| (millisecond_tick(at_ms), at_ms, level))
+        .collect();
+    let mut timed_pokes: std::collections::VecDeque<_> = timed_pokes.into_iter()
+        .map(|(at_ms, write)| (millisecond_tick(at_ms), at_ms, write))
         .collect();
     let mut watch_after = watch_after_ms.map(|ms| (millisecond_tick(ms), ms));
     let mut viewer_shutter = [false; 2];
@@ -401,6 +420,14 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                 inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
                 eprintln!("FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})", u8::from(high));
             }
+            while let Some(&(at, at_ms, (address, value))) = timed_pokes.front() {
+                if at > now {
+                    break;
+                }
+                timed_pokes.pop_front();
+                poke_word(&session.board, address, value)?;
+                eprintln!("FUJIMOD XP5 poke: {address:#x}={value:#x} at {at_ms} ms (tick {now})");
+            }
             let requested: Vec<_> = viewer_queue.lock()
                 .map_err(|_| "viewer key queue is poisoned".to_string())?
                 .drain(..)
@@ -421,7 +448,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                 eprintln!("FUJIMOD XP5 watch-pcs armed at {after_ms} ms (tick {now})");
             }
             // Stop the slice at the next scheduled host action, so it applies at its guest time.
-            let until = [next_patch, timed_gpio.front().map(|item| item.0), watch_after.map(|item| item.0)]
+            let until = [next_patch, timed_gpio.front().map(|item| item.0), timed_pokes.front().map(|item| item.0),
+                watch_after.map(|item| item.0)]
                 .into_iter()
                 .flatten()
                 .fold(now.saturating_add(slice), u64::min);
