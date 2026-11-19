@@ -102,5 +102,9 @@ fn main() {
         println!("cargo:rustc-link-lib=m");
         println!("cargo:rustc-link-lib=pthread");
     }
+    // GCC lowers Unicorn's 16-byte atomics to libatomic calls on Linux.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo:rustc-link-lib=atomic");
+    }
     println!("cargo:rerun-if-changed=../vendor/unicorn");
 }

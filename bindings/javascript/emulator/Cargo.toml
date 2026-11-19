@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 doctest = false
@@ -15,6 +16,7 @@ crate-type = ["staticlib", "rlib"]
 perf = ["fujimod-emulator/perf"]
 
 [dependencies]
+fujimod-catalog-configuration.workspace = true
 fujimod-framebuffer.workspace = true
 fujimod-emulator-session.workspace = true
 fujimod-emulator-exr2-resources.workspace = true

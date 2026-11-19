@@ -258,10 +258,16 @@ pub enum DeviceWorkCounter {
     JpegStarts,
     JpegMcus,
     JpegBytes,
+    SceneBinnedCalls,
+    SceneBinnedPixels,
+    MeasurementWindowsCalls,
+    MeasurementWindowPixels,
+    PreparedEncodes,
+    PreparedEncodePixels,
 }
 
 impl DeviceWorkCounter {
-    pub const COUNT: usize = 13;
+    pub const COUNT: usize = 19;
     pub const ALL: [Self; Self::COUNT] = [
         Self::GpuCommandStarts,
         Self::GpuReadbackBatches,
@@ -276,6 +282,12 @@ impl DeviceWorkCounter {
         Self::JpegStarts,
         Self::JpegMcus,
         Self::JpegBytes,
+        Self::SceneBinnedCalls,
+        Self::SceneBinnedPixels,
+        Self::MeasurementWindowsCalls,
+        Self::MeasurementWindowPixels,
+        Self::PreparedEncodes,
+        Self::PreparedEncodePixels,
     ];
 
     pub fn index(self) -> usize {
@@ -293,6 +305,12 @@ impl DeviceWorkCounter {
             Self::JpegStarts => 10,
             Self::JpegMcus => 11,
             Self::JpegBytes => 12,
+            Self::SceneBinnedCalls => 13,
+            Self::SceneBinnedPixels => 14,
+            Self::MeasurementWindowsCalls => 15,
+            Self::MeasurementWindowPixels => 16,
+            Self::PreparedEncodes => 17,
+            Self::PreparedEncodePixels => 18,
         }
     }
 
@@ -311,6 +329,12 @@ impl DeviceWorkCounter {
             Self::JpegStarts => "jpeg_starts",
             Self::JpegMcus => "jpeg_mcus",
             Self::JpegBytes => "jpeg_bytes",
+            Self::SceneBinnedCalls => "scene_binned_calls",
+            Self::SceneBinnedPixels => "scene_binned_pixels",
+            Self::MeasurementWindowsCalls => "measurement_windows_calls",
+            Self::MeasurementWindowPixels => "measurement_window_pixels",
+            Self::PreparedEncodes => "prepared_encodes",
+            Self::PreparedEncodePixels => "prepared_encode_pixels",
         }
     }
 }

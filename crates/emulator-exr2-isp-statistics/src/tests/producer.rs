@@ -66,6 +66,10 @@ fn producer_with_metering(
             histogram: hist,
             external_statistics: false,
             diagnostic_reads: true,
+            base: 0xfff18000,
+            parameter_base: 0xfff28000,
+            irq: 0x2e,
+            mode_layout: Default::default(),
         },
         producer::Wiring {
             grid: None,
@@ -147,6 +151,10 @@ fn producer_with_raster_banks() -> (
             histogram: false,
             external_statistics: false,
             diagnostic_reads: true,
+            base: 0xfff18000,
+            parameter_base: 0xfff28000,
+            irq: 0x2e,
+            mode_layout: Default::default(),
         },
         producer::Wiring {
             grid: None,
@@ -330,6 +338,10 @@ fn external_statistics_preserve_a_span_overlapping_the_histogram_destination() {
             histogram: true,
             external_statistics: true,
             diagnostic_reads: true,
+            base: 0xfff18000,
+            parameter_base: 0xfff28000,
+            irq: 0x2e,
+            mode_layout: Default::default(),
         },
         producer::Wiring {
             grid: None,
@@ -724,4 +736,96 @@ fn raster_worker_finishes_while_masked_but_discards_stopped_transfers() {
         serde_json::Value::Null
     );
     fujimod_emulator_devices::work::configure(0).unwrap();
+}
+
+#[test]
+fn producer_windows_and_completion_line_are_options() {
+    // EXR Processor Pro (X-Pro1) has the same producer registers at FFF22000, its parameter bank at FFF34000 and
+    // raises interrupt source 0x27 when a transfer completes.
+    let images = ImageFrames::from_pixels(ImageLayout { width: 4, height: 2, stride: 8 }, vec![5; 16]).unwrap();
+    let frames = StatisticsFrames::new(vec![StatisticsSpan { destination: 0, offset: 0, bytes: vec![3; 4] }]).unwrap();
+    let routes = routes(0x27);
+    let mut d = Block18000::new(
+        fujimod_emulator_imaging::exr2_isp::options::producer::Options {
+            pixels_per_tick: None,
+            contrast: None,
+            metering: None,
+            clock: fujimod_emulator_imaging::exr2_isp::dma::Clock::Fixed { ticks: 5 },
+            ack_ticks: 2,
+            stop_ticks: 3,
+            histogram: false,
+            external_statistics: false,
+            diagnostic_reads: true,
+            base: 0xfff22000,
+            parameter_base: 0xfff34000,
+            irq: 0x27,
+            mode_layout: fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro,
+        },
+        producer::Wiring { grid: None, frames: frames.clone(), images: images.clone(), routes },
+    )
+    .unwrap();
+    assert!(d.pollable(0xfff22890, 4));
+    assert!(d.pollable(0xfff34000, 4));
+    assert!(!d.pollable(0xfff18890, 4));
+    assert!(!d.pollable(0xfff28000, 4));
+    let mut m = Memory::default();
+    // Values the X-Pro1 3.82 driver writes in its own register layout.
+    for (address, value) in [
+        (0xfff22600, 0x11),
+        (0xfff22310, 0x27102710),
+        (0xfff22314, 0x27102710),
+        (0xfff22010, 0),
+        (0xfff34008, 0x03ff03ff),
+        (0xfff34048, 0x022b012e),
+        (0xfff3404c, 0x020e012e),
+        (0xfff34000, 0x01030001),
+    ] {
+        write(&mut d, &mut m, address, value);
+    }
+    for i in 0..9 {
+        write(&mut d, &mut m, 0xfff22500 + i * 4, 0x4000 + i * 0x4000);
+    }
+    for (o, v) in [
+        (0x524, 0x200),
+        (0x88c, 0),
+        (0x8f4, 1),
+        (0x8a0, 0x80003000u32),
+        (0x8f8, 0),
+        (0x8c4, 2),
+        (0x8f8, 0x10000000),
+        (0x884, 1),
+        (4, 0x33173317),
+    ] {
+        write(&mut d, &mut m, 0xfff22000 + o, v as u64);
+    }
+    advance(&mut d, &mut m, 2);
+    images.publish(FrameEdge { index: 1, tick: 10 }, &[5; 16]).unwrap();
+    frames.publish(FrameEdge { index: 1, tick: 10 }).unwrap();
+    advance(&mut d, &mut m, 10);
+    assert!(m.effects.is_empty());
+    advance(&mut d, &mut m, 15);
+    assert_eq!(m.effects, [Effect::Dma(0x4000, 4), Effect::Irq(0, 0x27)]);
+}
+
+#[test]
+fn exr_pro_layout_refuses_parameter_bank_arithmetic() {
+    let images = ImageFrames::from_pixels(ImageLayout { width: 4, height: 2, stride: 8 }, vec![5; 16]).unwrap();
+    let frames = StatisticsFrames::new(vec![]).unwrap();
+    let options = fujimod_emulator_imaging::exr2_isp::options::producer::Options {
+        pixels_per_tick: None,
+        contrast: None,
+        metering: Some(fujimod_emulator_imaging::exr2_isp::options::metering::Arithmetic::RgbCellMeans12),
+        clock: fujimod_emulator_imaging::exr2_isp::dma::Clock::Fixed { ticks: 5 },
+        ack_ticks: 2,
+        stop_ticks: 3,
+        histogram: true,
+        external_statistics: false,
+        diagnostic_reads: true,
+        base: 0xfff22000,
+        parameter_base: 0xfff34000,
+        irq: 0x27,
+        mode_layout: fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro,
+    };
+    let wiring = producer::Wiring { grid: None, frames, images, routes: routes(0x27) };
+    assert!(Block18000::new(options, wiring).is_err());
 }

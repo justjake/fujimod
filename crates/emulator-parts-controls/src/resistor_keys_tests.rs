@@ -115,6 +115,11 @@ fn shutter_sequence_and_dial_return_use_edge_time_not_service_frequency() {
     let saved = batched.save();
     assert!(batched.restore(&Value::Null).is_err());
     assert_eq!(batched.save(), saved);
+    let checkpoint = batched.checkpoint().unwrap();
+    let (restored, _) = input();
+    restored.validate_checkpoint(&checkpoint).unwrap();
+    restored.restore_checkpoint(&checkpoint).unwrap();
+    assert_eq!(restored.save(), saved);
 }
 #[test]
 fn keys_outside_the_resistor_layout_are_refused() {

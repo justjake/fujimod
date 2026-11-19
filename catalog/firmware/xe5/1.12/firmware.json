@@ -20,7 +20,7 @@
   "entry_labels": {
    "0x15fb874": "camera-app (C) entry",
    "0x2dc4fa4": "recording app (D) entry",
-   "0x9926c": "EL1 handoff"
+   "0x992bc": "EL1 handoff"
   },
   "loader_validation": null,
   "image_sections": [
@@ -91,7 +91,7 @@
     "cpu": [
      {
       "id": 0,
-      "pc": 627308,
+      "pc": 627388,
       "cpsr": 964,
       "running": true,
       "regs": {
@@ -112,9 +112,9 @@
      },
      {
       "id": 1,
-      "pc": 627308,
+      "pc": 627388,
       "cpsr": 964,
-      "running": false,
+      "running": true,
       "regs": {
        "x19": 1,
        "x20": 23050356,
@@ -133,9 +133,9 @@
      },
      {
       "id": 2,
-      "pc": 627308,
+      "pc": 627388,
       "cpsr": 964,
-      "running": false,
+      "running": true,
       "regs": {
        "x19": 2,
        "x20": 23050356,
@@ -154,9 +154,9 @@
      },
      {
       "id": 3,
-      "pc": 627308,
+      "pc": 627388,
       "cpsr": 964,
-      "running": false,
+      "running": true,
       "regs": {
        "x19": 3,
        "x20": 23050356,

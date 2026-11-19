@@ -6,7 +6,12 @@ use fujimod_framebuffer::{
 /// Selected by the processor graph; no implicit pixel-format fallback.
 #[derive(Clone, Copy)]
 pub enum Picture {
-    Bgra8888Straight,
+    /// Memory bytes alpha, blue, green, red; straight alpha over the video.
+    /// An X-T3 5.11 shows the ARGB word 0xff2080e0 stored by the CPU as pink
+    /// (2026-11-11), and 0xff000000 and 0x80000000 not at all
+    /// while 0xff101010 only tints the live view (aspect ratio bands,
+    /// 2026-11-12): the lowest byte is alpha and the highest red.
+    Abgr8888Straight,
 }
 /// Explicit linear video transport; hardware packing is not inferred from RAM.
 #[derive(Clone, Copy)]
@@ -31,7 +36,13 @@ impl Decoder<'_> {
         }
         Ok((word & mask, word >> 16))
     }
-    fn plane(&self, video: bool, width: u32, height: u32) -> Result<Plane, String> {
+    /// `None`: the layer's window lies outside the active area. The X-T3 5.11
+    /// returns from the 1280x960 viewfinder to the 720x480 rear screen by
+    /// re-timing the output and enabling the picture layer while that layer
+    /// still holds the viewfinder's 1280x960 window; its next present writes
+    /// the 720x480 window. What the panel shows for such a frame is not
+    /// modeled, so no frame is published for it.
+    fn plane(&self, video: bool, width: u32, height: u32) -> Result<Option<Plane>, String> {
         let (address, stride, geometry, order) = if video {
             if self.video.is_none() || self.r(0x164) > 3 || self.r(0x16c) & !0xfff != 0 {
                 return Err("Unsupported XP4 LCDC video transport/address/packing".into());
@@ -54,7 +65,7 @@ impl Decoder<'_> {
             if self.r(0x50) & !0xfff != 0x10000 {
                 return Err("Unsupported XP4 LCDC raw picture mode".into());
             }
-            (source, (self.r(0x50) & 0xfff) * 4, 0x54, PixelOrder::Bgra)
+            (source, (self.r(0x50) & 0xfff) * 4, 0x54, PixelOrder::Abgr)
         };
         if self.r(geometry + 0x10) != 0 || self.r(geometry + 0x14) != 0 {
             return Err("Unsupported XP4 LCDC picture crop or fractional phase".into());
@@ -71,14 +82,15 @@ impl Decoder<'_> {
             || dy == 0
             || address == 0
             || address & 3 != 0
-            || x + w > width
-            || y + h > height
             || (((w - 1) * dx) >> 12) >= sw
             || (((h - 1) * dy) >> 12) >= sh
         {
             return Err("Invalid XP4 LCDC picture geometry/address".into());
         }
-        Ok(Plane {
+        if x + w > width || y + h > height {
+            return Ok(None);
+        }
+        Ok(Some(Plane {
             address,
             stride,
             source_x: 0,
@@ -91,7 +103,7 @@ impl Decoder<'_> {
             work_width: w,
             work_height: h,
             order,
-        })
+        }))
     }
 }
 pub fn decode(
@@ -120,9 +132,12 @@ pub fn decode(
     let mut layers = vec![];
     for (bit, video) in [(4, true), (12, false)] {
         if enable & (1 << bit) != 0 {
+            let Some(plane) = d.plane(video, width, height)? else {
+                return Ok(None);
+            };
             layers.push(Layer {
                 id: bit.to_string(),
-                plane: d.plane(video, width, height)?,
+                plane,
             });
         }
     }
@@ -153,18 +168,104 @@ mod tests {
         ] {
             regs[o / 4] = v;
         }
-        let out = decode(&regs, Some(Picture::Bgra8888Straight), None)
+        let out = decode(&regs, Some(Picture::Abgr8888Straight), None)
             .unwrap()
             .unwrap();
         assert_eq!(out.layers[0].id, "12");
         let rgba = out
             .render(|a, n| {
                 assert_eq!((a, n), (16, 8));
-                Ok(vec![30, 20, 10, 255, 50, 40, 30, 255])
+                Ok(vec![255, 30, 20, 10, 255, 50, 40, 30])
             })
             .unwrap();
         assert_eq!(&rgba[..8], &[10, 20, 30, 255, 10, 20, 30, 255]);
         regs[8 / 4] |= 2;
-        assert!(decode(&regs, Some(Picture::Bgra8888Straight), None).is_err());
+        assert!(decode(&regs, Some(Picture::Abgr8888Straight), None).is_err());
+    }
+    /// Strict X-T3 5.11 board, VIEW MODE from EVF ONLY back to the rear screen
+    /// (2026-11-12, stock firmware without mods): the output is
+    /// re-timed to 720x480 and the picture layer enabled while the layer still
+    /// holds the viewfinder's 1280x960 window. No frame is published for it;
+    /// the 720x480 window the next present writes is scanned again.
+    #[test]
+    fn a_layer_window_left_from_the_viewfinder_publishes_no_frame() {
+        let mut regs = vec![0; REGISTER_BYTES / 4];
+        for (o, v) in [
+            (4, 1),
+            (8, 0x11000),
+            (0x14, 0x302d0),
+            (0x20, 0x201e0),
+            (0x44, 0x4bfd000),
+            (0x4c, 0x4bfd000),
+            (0x50, 0x10500),
+            (0x54, 0x3c00500),
+            (0x5c, 0x3c00500),
+            (0x60, 0x10001000),
+        ] {
+            regs[o / 4] = v;
+        }
+        let picture = Some(Picture::Abgr8888Straight);
+        assert!(decode(&regs, picture, None).unwrap().is_none());
+        regs[0x50 / 4] = 0x102d0;
+        regs[0x54 / 4] = 0x1e002d0;
+        regs[0x5c / 4] = 0x1e002d0;
+        let out = decode(&regs, picture, None).unwrap().unwrap();
+        assert_eq!((out.width, out.height, out.layers.len()), (720, 480, 1));
+        regs[0x60 / 4] = 0;
+        assert!(decode(&regs, picture, None).is_err());
+    }
+    /// Camera runs on an X-T3 5.11: CPU words stored in the LCD picture
+    /// plane over the REC live view. A test rectangle (2026-11-11) showed ARGB
+    /// 0xff2080e0 as solid pink; aspect ratio bands drawn by a mod
+    /// (2026-11-12) left 0xff000000 and 0x80000000 bands invisible
+    /// and drew 0xff101010 bands as a faint tint, not black.
+    #[test]
+    fn cpu_argb_words_show_as_the_camera_showed_them_over_the_live_view() {
+        let mut regs = vec![0; REGISTER_BYTES / 4];
+        for (o, v) in [
+            (4, 1),
+            (8, 0x1010),
+            (0x14, 4),
+            (0x20, 1),
+            (0x44, 16),
+            (0x4c, 16),
+            (0x50, 0x10004),
+            (0x54, 0x10004),
+            (0x5c, 0x10004),
+            (0x60, 0x10001000),
+            (0x168, 0x100),
+            (0x16c, 1),
+            (0x170, 0x10004),
+            (0x178, 0x10004),
+            (0x17c, 0x10001000),
+        ] {
+            regs[o / 4] = v;
+        }
+        let out = decode(
+            &regs,
+            Some(Picture::Abgr8888Straight),
+            Some(Video::YyCbCr422),
+        )
+        .unwrap()
+        .unwrap();
+        let words: [u32; 4] = [0xff2080e0, 0xff000000, 0x80000000, 0xff101010];
+        let rgba = out
+            .render(|a, n| {
+                Ok(if a == 16 {
+                    words.iter().flat_map(|w| w.to_le_bytes()).collect()
+                } else {
+                    // Gray live view: luma 128 with neutral chroma.
+                    [128, 128, 128, 128].repeat(n / 4)
+                })
+            })
+            .unwrap();
+        let pixel = |i: usize| [rgba[4 * i], rgba[4 * i + 1], rgba[4 * i + 2]];
+        let gray = pixel(1);
+        assert!(gray[0] > 100 && gray[0] == gray[1] && gray[1] == gray[2]);
+        let pink = pixel(0);
+        assert!(pink[0] > 220 && pink[2] > 100 && pink[1] < 60, "{pink:?}");
+        assert_eq!(pixel(2), gray);
+        let tint = pixel(3);
+        assert!(tint[0] > gray[0] && tint[1] < gray[1] && tint[1] > gray[1] - 20, "{tint:?}");
     }
 }

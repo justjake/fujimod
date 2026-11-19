@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from pre_push_cargo_check import (
+    WASM_TARGET,
+    cargo_check_command,
     is_rust_input,
     select_browser_wasm_packages,
     select_touched_crates,
@@ -117,4 +119,15 @@ def test_workspace_manifest_change_does_not_wasm_check_unicorn_sys(
         "fujimod-javascript",
         "fujimod-usb",
         "fujimod-usb-proxy",
+    ]
+
+
+def test_wasm_check_covers_only_libraries() -> None:
+    packages = [{"name": "fujimod-usb"}]
+    assert cargo_check_command(packages) == [
+        "cargo", "check", "--locked", "--package", "fujimod-usb"
+    ]
+    assert cargo_check_command(packages, WASM_TARGET) == [
+        "cargo", "check", "--locked", "--target", WASM_TARGET, "--lib",
+        "--package", "fujimod-usb",
     ]

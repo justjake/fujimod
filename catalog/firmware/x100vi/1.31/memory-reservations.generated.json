@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "x100vi-131-memory-reservations",
+  "firmware_id": "x100vi-131",
+  "dram_size": 268435456,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 43577096,
+      "size": 2097152
+    },
+    {
+      "name": "font_library",
+      "address": 133816320,
+      "size": 1048576
+    },
+    {
+      "name": "language_fonts",
+      "address": 17174528,
+      "size": 1441792
+    }
+  ],
+  "locator_failures": []
+}

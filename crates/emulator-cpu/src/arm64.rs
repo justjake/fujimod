@@ -1,5 +1,41 @@
 //! AArch64 architectural mechanisms, independent of a host execution backend.
-use super::Access;
+use super::{Access, Register};
+
+/// Resolve a register name used by AArch64 sessions or their ARM32 companions.
+pub fn register(name: &str) -> Result<Register, String> {
+    match name {
+        "pc" => Ok(Register::Pc),
+        "sp" => Ok(Register::Sp),
+        "pstate" => Ok(Register::Pstate),
+        "fpcr" => Ok(Register::Fpcr),
+        "fpsr" => Ok(Register::Fpsr),
+        _ => {
+            if let Some(r) = name
+                .strip_prefix('x')
+                .and_then(|n| n.parse::<u8>().ok())
+                .filter(|n| *n <= 30)
+            {
+                return Ok(Register::X(r));
+            }
+            if let Some(r) = name
+                .strip_prefix('r')
+                .and_then(|n| n.parse::<u8>().ok())
+                .filter(|n| *n <= 15)
+            {
+                return Ok(Register::Arm32(super::arm::Register::R(r)));
+            }
+            if let Some(r) = name
+                .strip_prefix("sys:")
+                .and_then(|n| u16::from_str_radix(n.trim_start_matches("0x"), 16).ok())
+            {
+                return Ok(Register::Arm64System(
+                    super::arm::SystemRegister::from_encoding(r),
+                ));
+            }
+            Ok(Register::Arm64System(system_register(name)?))
+        }
+    }
+}
 
 /// Named architectural registers used by checked handoffs and inspection.
 pub fn system_register(name: &str) -> Result<super::arm::SystemRegister, String> {
@@ -588,6 +624,20 @@ mod translation_tests {
     }
 }
 
+#[cfg(test)]
+mod framework_tests {
+    use super::framework_instruction;
+    #[test]
+    fn higher_exception_level_gic_registers_are_framework_instructions() {
+        // MSR/MRS ICC_SRE_EL2 and ICC_IGRPEN1_EL3 with x0, and ICC_SRE_EL3 as the control.
+        for word in [0xd51cc9a0u32, 0xd53cc9a0, 0xd51ecce0, 0xd53ecce0, 0xd51ecca0] {
+            assert!(framework_instruction(word), "{word:#010x}");
+        }
+        // TTBR0_EL1 is not one.
+        assert!(!framework_instruction(0xd5182000));
+    }
+}
+
 /// A-profile framework boundaries, independent of firmware or device maps.
 pub fn framework_instruction(word: u32) -> bool {
     if word & 0xffd00000 == 0xd5100000 {
@@ -597,7 +647,10 @@ pub fn framework_instruction(word: u32) -> bool {
             || r.crn == 14
             || r.crn == 15
             || encoding == 0xc230
+            // ICC_SRE_EL2 and ICC_SRE_EL3, ICC_IGRPEN1_EL3.
+            || encoding == 0xe64d
             || encoding == 0xf665
+            || encoding == 0xf667
             || (r.op0 == 3 && r.op1 == 0 && r.crn == 12 && (8..=15).contains(&r.crm))
     } else {
         matches!(word, 0xd503205f | 0xd503207f | 0xd503209f | 0xd50320bf)

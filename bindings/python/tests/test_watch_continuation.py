@@ -56,6 +56,7 @@ def test_native_store_stop_finishes_the_store_before_the_next_instruction(quantu
             'range_index': 0,
             'range': [0x12000, 0x12004],
             'address': 0x12000,
+            'core': 0,
             'change_confirmed': True,
         }
         assert machine.instructions == 2

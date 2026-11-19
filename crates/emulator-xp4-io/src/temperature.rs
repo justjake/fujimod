@@ -55,6 +55,32 @@ impl Temperature {
         }
     }
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SavedTemperature { raw: i16, ticks: u64, state: State }
+
+impl Temperature {
+    fn validate_savedtemperature(&self, saved: &SavedTemperature) -> Result<(), String> {
+        let s = &saved.state;
+        if saved.raw != self.raw
+            || saved.ticks != self.ticks
+            || s.regs[0] > 1
+            || s.regs[1] > 1
+            || s.regs[2] > 3
+            || s.regs[4] > 15
+            || s.regs[6] != 15
+            || s.regs[8] > 1
+            || s.regs[9] > 0xfff
+            || s.regs[12..16].iter().any(|v| *v > 0xfff)
+            || s.regs[16] > 255
+            || (s.deadline.is_some() && (s.regs[0] == 0 || s.regs[1] == 0))
+        {
+            return Err("Invalid XP4 temperature checkpoint or changed physical input".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Temperature {
     fn name(&self) -> &'static str {
         "xp4-temperature"
@@ -127,23 +153,21 @@ impl Device for Temperature {
     fn save(&self) -> Value {
         serde_json::json!({"raw":self.raw,"millicelsius":i32::from(self.raw)*125,"ticks":self.ticks,"sensor":self.state})
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedTemperature { raw: self.raw, ticks: self.ticks, state: self.state.clone() })
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_savedtemperature(&data.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let saved: SavedTemperature = data.decode(self.name())?;
+        self.validate_savedtemperature(&saved)?;
+        self.state = saved.state;
+        Ok(())
+    }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         let s: State = serde_json::from_value(v["sensor"].clone()).map_err(|e| e.to_string())?;
-        if v["raw"] != self.raw
-            || v["ticks"] != self.ticks
-            || s.regs[0] > 1
-            || s.regs[1] > 1
-            || s.regs[2] > 3
-            || s.regs[4] > 15
-            || s.regs[6] != 15
-            || s.regs[8] > 1
-            || s.regs[9] > 0xfff
-            || s.regs[12..16].iter().any(|v| *v > 0xfff)
-            || s.regs[16] > 255
-            || (s.deadline.is_some() && (s.regs[0] == 0 || s.regs[1] == 0))
-        {
-            return Err("Invalid XP4 temperature checkpoint or changed physical input".into());
-        }
+        self.validate_savedtemperature(&SavedTemperature { raw: v["raw"].as_i64().and_then(|raw| i16::try_from(raw).ok()).ok_or("invalid temperature input")?, ticks: v["ticks"].as_u64().unwrap_or_default(), state: s.clone() })?;
         self.state = s;
         Ok(())
     }

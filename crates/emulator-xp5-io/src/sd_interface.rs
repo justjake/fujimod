@@ -3,6 +3,7 @@
 //! Stopped clocks and alternate inputs refuse. Divider encodings follow the
 //! Marble bridge driver in Fujifilm's published Linux sources:
 //! https://dl.fujifilm-x.com/support/oss/x100vi/ff230002.tar.gz
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,6 +13,14 @@ struct State {
     selection: bool,
     divider: u8,
     ports: u32,
+}
+impl State {
+    fn validate(&self) -> Result<(), String> {
+        if self.ports & !0xff0101 != 0 || self.divider > 3 {
+            return Err("Invalid SD interface checkpoint".into());
+        }
+        Ok(())
+    }
 }
 pub struct Interface {
     base: u64,
@@ -63,11 +72,28 @@ impl Device for Interface {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.ports & !0xff0101 != 0 || state.divider > 3 {
-            return Err("Invalid SD interface checkpoint".into());
-        }
+        state.validate()?;
         self.state = state;
         Ok(())
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(&self, checkpoint: &Checkpoint) -> Result<(), String> {
+        checkpoint.decode::<State>(self.name())?.validate()
+    }
+    fn restore_checkpoint(&mut self, checkpoint: &Checkpoint) -> Result<(), String> {
+        let state = checkpoint.decode::<State>(self.name())?;
+        state.validate()?;
+        self.state = state;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(serde_json::json!({
+            "selection": self.state.selection,
+            "divider": self.state.divider,
+            "ports": self.state.ports,
+        }))
     }
 }
 #[cfg(test)]
@@ -86,6 +112,11 @@ mod tests {
         assert_eq!(device.read(&mut cx, 0xff9b01e0, 4), 0);
         assert_eq!(device.read(&mut cx, 0xff9b01e4, 4), 0xff0101);
         device.restore(&saved).unwrap();
+        assert_eq!(device.save(), saved);
+        let checkpoint = device.checkpoint().unwrap();
+        device.write(&mut cx, 0xff9b01e0, 4, 0);
+        device.validate_checkpoint(&checkpoint).unwrap();
+        device.restore_checkpoint(&checkpoint).unwrap();
         assert_eq!(device.save(), saved);
     }
     #[test]

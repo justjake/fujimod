@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
+license.workspace = true
 
 [lib]
 doctest = false
@@ -28,5 +29,6 @@ path = "examples/check.rs"
 unsafe_op_in_unsafe_fn = "deny"
 
 [dev-dependencies]
+fujimod-catalog-configuration.workspace = true
 fujimod-emulator-xp5-io = { path = "../../crates/emulator-xp5-io" }
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }

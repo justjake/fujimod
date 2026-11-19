@@ -29,6 +29,8 @@ pub enum Error {
     },
     #[error(transparent)]
     Proxy(#[from] fujimod_usb_proxy::Error),
+    #[error(transparent)]
+    WebRtc(#[from] fujimod_webrtc::Error),
     #[error("USB device access failed: {0}")]
     Usb(#[from] nusb::Error),
     #[error("emulator resource {operation:?} failed: {source}")]

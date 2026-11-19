@@ -2,6 +2,7 @@
 //! No synthetic acceleration, FIFO samples, data-ready or interrupt is supplied.
 //! Software reset commits atomically with its register write on the guest wire;
 //! internal reset latency and the exact silicon identity are unmeasured.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -97,6 +98,22 @@ impl Endpoint for Registers {
             self.state.address = Some(address.wrapping_add(1));
         }
         response as u16
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode(self.name())?;
+        if state.address.is_some_and(|a| a > 0x7f) || state.registers[0x12] & !0x74 != 0
+            || state.registers[1] != 0 || state.registers[0xd] != 0 {
+            return Err("invalid LSM6DS checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         json!(self.state)

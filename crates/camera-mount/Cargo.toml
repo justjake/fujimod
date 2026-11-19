@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 description = "Camera SD files, read-only live memory and internal storage as a mounted filesystem"
 
 [dependencies]
@@ -36,6 +37,10 @@ nusb = { workspace = true, features = ["smol"] }
 [[bin]]
 name = "fujimod-usb-agent"
 path = "src/agent.rs"
+
+[[bin]]
+name = "fujimod-card"
+path = "src/card.rs"
 
 
 [target.'cfg(target_os = "macos")'.dependencies]

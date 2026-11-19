@@ -40,8 +40,11 @@ impl State {
             let r = arm::SystemRegister::from_encoding(encoding);
             let framework = fujimod_emulator_cpu::arm64::framework_instruction(word);
             if framework {
-                if encoding == 0xf665 && pstate & 12 != 12 {
-                    return Err("ICC_SRE_EL3 requires EL3".into());
+                if matches!(encoding, 0xf665 | 0xf667) && pstate & 12 != 12 {
+                    return Err("ICC_SRE_EL3 and ICC_IGRPEN1_EL3 require EL3".into());
+                }
+                if encoding == 0xe64d && pstate & 12 < 8 {
+                    return Err("ICC_SRE_EL2 requires EL2 or EL3".into());
                 }
                 if pstate & 12 == 0 {
                     return Err("AArch64 EL0 framework register access is unsupported".into());
@@ -77,6 +80,7 @@ impl State {
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         Board, InterruptMap, InterruptRegisters, aprofile,
@@ -122,7 +126,7 @@ mod tests {
         };
         let mut board = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn),
+                factory::Options::new(RunEngine::Unicorn),
                 Bus::new(Mode::Strict),
                 Some(interrupts),
             )
@@ -252,7 +256,7 @@ mod tests {
             }
             let mut board = graph
                 .build(
-                    factory::Options::new(factory::Engine::Unicorn),
+                    factory::Options::new(RunEngine::Unicorn),
                     Bus::new(Mode::Strict),
                     Some(InterruptMap {
                         gic: Box::new(Gic::new(vec![0, 1, 2, 3], 128).unwrap()),

@@ -7,6 +7,21 @@ pub(super) struct Shading {
     gains: Vec<u16>,
 }
 
+pub(super) struct GainTable {
+    width: usize,
+    gains: Box<[u16]>,
+}
+
+impl GainTable {
+    #[inline(always)]
+    /// # Safety
+    /// `x` and `y` must be inside the dimensions passed to [`Shading::table`].
+    pub unsafe fn at(&self, x: usize, y: usize) -> u16 {
+        // SAFETY: upheld by the caller.
+        unsafe { *self.gains.get_unchecked(y * self.width + x) }
+    }
+}
+
 impl Shading {
     pub fn from_registers(r: impl Fn(usize) -> u32) -> Result<Option<Self>, String> {
         if r(0) & 0x10 == 0 {
@@ -64,6 +79,22 @@ impl Shading {
         let radius = (dx * dx + dy * dy) as u64;
         let s = ((radius * self.scale) << self.shift).saturating_sub(1 << 21);
         self.gains[((s >> 20) as usize).min(9 * 1024)]
+    }
+
+    /// Materialize one gain per source sample. Still rendering reads three
+    /// neighboring positions for every output pixel, so computing this table
+    /// once avoids repeating the same radius and segment lookup.
+    pub fn table(&self, width: usize, height: usize) -> GainTable {
+        let mut gains = Vec::with_capacity(width * height);
+        for y in 0..height {
+            for x in 0..width {
+                gains.push(self.gain(x, y));
+            }
+        }
+        GainTable {
+            width,
+            gains: gains.into_boxed_slice(),
+        }
     }
 }
 
@@ -140,6 +171,17 @@ mod tests {
                 }
             }
             assert_eq!(hash, expected);
+        }
+    }
+    #[test]
+    fn materialized_table_preserves_each_source_sample_gain() {
+        let r = registers(2, 2, 486);
+        let s = Shading::from_registers(|o| r[o / 4]).unwrap().unwrap();
+        let table = s.table(37, 23);
+        for y in 0..23 {
+            for x in 0..37 {
+                assert_eq!(unsafe { table.at(x, y) }, s.gain(x, y));
+            }
         }
     }
     #[test]

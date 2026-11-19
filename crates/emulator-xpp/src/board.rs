@@ -1,8 +1,9 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
+use fujimod_catalog_configuration::RunEngine;
 use crate::{
-    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, jpeg, keys,
-    lens, power, resets, sd, serial, shutter, statistics, sync, timer,
+    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, keys,
+    lens, power, resets, sd, serial, shutter, statistics, sync, timer, touch_xt20,
 };
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
@@ -14,6 +15,7 @@ use fujimod_emulator_devices::{
     graph::{DeviceGraph, Mapping},
     signals::Level,
 };
+use fujimod_emulator_ip::jpeg;
 use fujimod_emulator_ip_arm::{gicv2, pl330};
 use serde::Deserialize;
 use serde_json::Value;
@@ -311,6 +313,11 @@ pub enum Model {
         options: fujimod_emulator_ip::dw_i2c::Options,
         parts: Value,
     },
+    Xt20TouchI2c {
+        options: fujimod_emulator_ip::dw_i2c::Options,
+        parts: Value,
+        touch: touch_xt20::Options,
+    },
     DisplayOutput {
         #[serde(default)]
         handshake_ticks: Option<u64>,
@@ -410,6 +417,29 @@ pub struct Built {
     pub inputs: Vec<(String, Level, usize)>,
     pub contacts: BTreeMap<String, fujimod_emulator_devices::parts::card_contacts::Contacts>,
     pub encoders: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
+}
+impl Built {
+    /// Adopt the planned device nodes and control wires in the shared session.
+    pub fn into_session(self, definition: Value) -> Result<fujimod_emulator_session::Session, String> {
+        use fujimod_emulator_exr2_resources::{Resources, Wire};
+        let mut resources = Resources { encoders: self.encoders, ..Default::default() };
+        for (name, level, node) in self.inputs {
+            if resources.wires.insert(name.clone(), Wire::LogicLevel(level)).is_some() {
+                return Err("repeated X-Processor Pro physical input".into());
+            }
+            resources.users.entry(name).or_default().insert(node);
+        }
+        Ok(fujimod_emulator_session::Session {
+            definition, board: self.board, controls: None, contact_driver: None, resources,
+            nodes: self.nodes, contacts: self.contacts, power_cycle: None, window_action: None, recording_frames: Default::default(),
+        })
+    }
+}
+/// Drive a named application GPIO bank through its modeled external pins.
+pub fn gpio_input(session: &mut fujimod_emulator_session::Session, port: u8, pin: u8, high: bool) -> Result<(), String> {
+    session.board.edit_device(session.node("gpio")?, |gpio: &mut fujimod_emulator_ip::socionext::gpio::Gpio| {
+        gpio.set_input(usize::from(port), usize::from(pin), high)
+    })
 }
 struct Source(Arc<flash::Aperture>);
 impl pl330::Source for Source {
@@ -560,6 +590,7 @@ pub fn build(
     spec: Spec,
     assets: &BTreeMap<String, Vec<u8>>,
     mode: Mode,
+    engine: RunEngine,
 ) -> Result<Built, String> {
     let cores = graph.processors.len();
     if spec.cpus.len() != cores
@@ -1060,7 +1091,13 @@ pub fn build(
             } => devices.register(
                 base,
                 jpeg::WINDOW,
-                Box::new(jpeg::Encoder::new(base, irq, run_ticks)?),
+                Box::new(jpeg::Encoder::new(
+                    "xpp-jpeg-encoder",
+                    base,
+                    irq,
+                    run_ticks,
+                    jpeg::Registers::LastWrite,
+                )?),
             )?,
             Model::JpegDecoder {
                 base,
@@ -1069,7 +1106,12 @@ pub fn build(
             } => devices.register(
                 base,
                 jpeg::WINDOW,
-                Box::new(jpeg::Decoder::new(base, irq, run_ticks)?),
+                Box::new(jpeg::Decoder::new(
+                    "xpp-jpeg-decoder",
+                    base,
+                    irq,
+                    run_ticks,
+                )?),
             )?,
             Model::H264 {
                 base,
@@ -1123,6 +1165,18 @@ pub fn build(
                     Box::new(fujimod_emulator_ip::dw_i2c::Controller::new(
                         options,
                         i2c::Parts::new(serde_json::from_value(parts).map_err(|e| e.to_string())?)?,
+                    )?),
+                )?
+            }
+            Model::Xt20TouchI2c { options, parts, touch } => {
+                let base = options.base;
+                devices.register(
+                    base,
+                    fujimod_emulator_ip::dw_i2c::WINDOW,
+                    Box::new(touch_xt20::Xt20TouchI2c::new(
+                        options,
+                        serde_json::from_value(parts).map_err(|e| e.to_string())?,
+                        touch,
                     )?),
                 )?
             }
@@ -1287,7 +1341,11 @@ pub fn build(
             Model::Renderer { base, irq } => devices.register(
                 base,
                 0x3000,
-                Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq)?),
+                Box::new(fujimod_emulator_ip_dmp::smaph::Renderer::new(
+                    base,
+                    irq,
+                    fujimod_emulator_ip_dmp::smaph::PixmapReadback::RotatesChannels,
+                )?),
             )?,
             Model::Shutter {
                 mode,
@@ -1411,7 +1469,7 @@ pub fn build(
         },
     };
     let mut board = graph.build(
-        factory::Options::new(factory::Engine::Unicorn),
+        factory::Options::new(engine),
         Bus::from_graph(mode, devices)?,
         Some(interrupts),
     )?;
@@ -1459,7 +1517,7 @@ mod tests {
             "nodes": nodes
         }))
         .map_err(|e| e.to_string())?;
-        build(graph(), spec, &BTreeMap::new(), Mode::Strict)
+        build(graph(), spec, &BTreeMap::new(), Mode::Strict, RunEngine::Unicorn)
     }
 
     #[test]
@@ -1482,7 +1540,7 @@ mod tests {
         }))
         .unwrap();
         let assets = BTreeMap::from([("flash".to_string(), vec![0xff; 0x1000])]);
-        let mut built = build(graph_at(0x200), spec, &assets, Mode::Strict).unwrap();
+        let mut built = build(graph_at(0x200), spec, &assets, Mode::Strict, RunEngine::Unicorn).unwrap();
         // CPU stores: audio +0x20 = 0x11223344, then DMAGO channel 0 with the
         // program at 0x100, then spin.
         let stub: [u8; 0x60] = [
@@ -1526,7 +1584,7 @@ mod tests {
             ]
         }))
         .unwrap();
-        let mut built = build(graph_at(0x200), spec, &BTreeMap::new(), Mode::Strict).unwrap();
+        let mut built = build(graph_at(0x200), spec, &BTreeMap::new(), Mode::Strict, RunEngine::Unicorn).unwrap();
         let id = built.nodes["h264"];
         let registers = built.nodes["movie-registers"];
         let mut packed = Vec::with_capacity(16 * 16 * 2);

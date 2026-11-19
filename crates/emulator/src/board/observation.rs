@@ -11,14 +11,34 @@ use std::{
     rc::{Rc, Weak},
 };
 type Span = (u64, u64);
+pub const MAX_INSTRUCTION_POINTS: usize = 16_384;
 #[derive(Default)]
 pub struct Records {
     ranges: Vec<Span>,
     limit: usize,
-    rows: Vec<Value>,
+    // Each record is kept as its serialized JSON object: a bound of millions of
+    // records stays near 300 bytes each instead of a multi-kilobyte `Value` map.
+    rows: Vec<Box<str>>,
     violation: Option<String>,
+    // CPU accesses whose program counter lies in one of these spans are not
+    // recorded (a caller that discards its own code's accesses anyway).
+    excluded_pcs: Vec<Span>,
 }
 impl Records {
+    /// Stop recording CPU accesses made by instructions inside `spans`.
+    pub fn exclude_pcs(&mut self, spans: Vec<Span>) -> Result<(), String> {
+        if spans.iter().any(|&(lo, hi)| lo >= hi) {
+            return Err("Memory watch PC exclusion needs non-empty spans".into());
+        }
+        self.excluded_pcs = union(spans);
+        Ok(())
+    }
+    fn pc_excluded(&self, pc: u64) -> bool {
+        let index = self.excluded_pcs.partition_point(|&(_, hi)| hi <= pc);
+        self.excluded_pcs
+            .get(index)
+            .is_some_and(|&(lo, _)| lo <= pc)
+    }
     fn overlaps(&self, address: u64, bytes: u64) -> bool {
         let end = address.saturating_add(bytes);
         let index = self.ranges.partition_point(|&(_, hi)| hi <= address);
@@ -34,19 +54,39 @@ impl Records {
                 self.limit
             ));
         } else {
-            self.rows.push(row);
+            self.rows.push(row.to_string().into_boxed_str());
         }
     }
     pub(super) fn transfer(&mut self, source: &str, physical: u64, address: u64, bytes: usize) {
         if self.overlaps(physical, bytes as u64) {
             self.push(
                 json!({"source":source,"physical":physical,"address":address,
-                "size":bytes,"core":null,"pc":null,"instructions":null,"tick":null}),
+                "size":bytes,"core":null,"pc":null,"sp":null,"instructions":null,"tick":null}),
             );
         }
     }
     pub fn state(&self) -> Value {
-        json!({"enabled":true,"ranges":self.ranges,"records":self.rows,"violation":self.violation})
+        serde_json::from_str(&self.state_json(None)).expect("memory watch state is valid JSON")
+    }
+    /// Serialize the state without building `Value`s for the records.
+    /// `violation` is reported when the watch itself recorded none.
+    pub fn state_json(&self, violation: Option<&str>) -> String {
+        let violation = self.violation.as_deref().or(violation);
+        let size = self.rows.iter().map(|row| row.len() + 1).sum::<usize>();
+        let mut out = String::with_capacity(size + 256);
+        out.push_str(r#"{"enabled":true,"ranges":"#);
+        out.push_str(&json!(self.ranges).to_string());
+        out.push_str(r#","records":["#);
+        for (index, row) in self.rows.iter().enumerate() {
+            if index > 0 {
+                out.push(',');
+            }
+            out.push_str(row);
+        }
+        out.push_str(r#"],"violation":"#);
+        out.push_str(&json!(violation).to_string());
+        out.push('}');
+        out
     }
 }
 pub struct MemoryWatch {
@@ -107,6 +147,10 @@ impl MemoryContext {
         };
         let mut records = self.records.borrow_mut();
         if !records.overlaps(physical, size) {
+            return Ok(());
+        }
+        let pc = scalar(&*cpu, Register::Pc)?;
+        if records.pc_excluded(pc) {
             return Ok(());
         }
         // Only an R-profile core can hide physical RAM behind a private TCM
@@ -193,13 +237,21 @@ impl MemoryContext {
         records.push(
             json!({"sample":sample,"sample_path":sample_path,"source":source,"address":address,"physical":physical,"size":size,
             "value":value,"before":before,"byte_order":byte_order,
-            "core":self.core,"pc":scalar(&*cpu,Register::Pc)?,
+            "core":self.core,"pc":pc,"sp":stack_pointer(&*cpu)?,
             "instructions":instructions,"tick":tick}),
         );
         Ok(())
     }
     fn fail(&self, error: String) {
         self.records.borrow_mut().violation.get_or_insert(error);
+    }
+}
+/// The executing mode's stack pointer: an A/R-profile core reports its banked
+/// `r13`; other models report the architectural stack pointer.
+fn stack_pointer(cpu: &dyn Cpu) -> Result<u64, String> {
+    match cpu.model() {
+        Model::CortexR5F | Model::CortexA7 => scalar(cpu, Register::Arm32(arm::Register::R(13))),
+        _ => scalar(cpu, Register::Sp),
     }
 }
 unsafe fn access(access: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
@@ -481,6 +533,111 @@ impl Board {
     }
 }
 
+/// One architectural instruction entry in scheduler order.
+#[derive(serde::Serialize)]
+pub struct PcEntry {
+    pub core: usize,
+    pub pc: u64,
+    pub size: u32,
+}
+
+#[derive(serde::Serialize)]
+pub struct PcEntries {
+    pub entries: Vec<PcEntry>,
+    pub omitted: u64,
+}
+
+/// Bounded storage shared by instruction observers.
+pub struct PcRecorder {
+    limit: usize,
+    records: PcEntries,
+}
+
+impl PcRecorder {
+    pub fn new(limit: usize) -> Result<Self, String> {
+        if limit == 0 || limit > 10_000_000 {
+            return Err("PC trace needs a bound between 1 and 10000000 entries".into());
+        }
+        Ok(Self { limit, records: PcEntries { entries: Vec::new(), omitted: 0 } })
+    }
+
+    pub fn record(&mut self, core: usize, pc: u64, size: u32) {
+        if self.records.entries.len() < self.limit {
+            self.records.entries.push(PcEntry { core, pc, size });
+        } else {
+            self.records.omitted = self.records.omitted.saturating_add(1);
+        }
+    }
+
+    pub fn take(&mut self) -> PcEntries {
+        std::mem::replace(&mut self.records, PcEntries { entries: Vec::new(), omitted: 0 })
+    }
+}
+
+struct TraceHook {
+    cpu: Weak<dyn Cpu>,
+    hook: HookId,
+    context: Box<TraceContext>,
+}
+struct TraceContext {
+    core: usize,
+    records: Rc<RefCell<PcRecorder>>,
+}
+
+/// Collect a bounded prefix of consecutive instruction entries. Hook ownership
+/// is tied to this value. Dropping it releases the instrumentation.
+pub struct PcTrace {
+    records: Rc<RefCell<PcRecorder>>,
+    hooks: Vec<TraceHook>,
+}
+
+unsafe fn trace_pc(pc: u64, size: u32, context: *mut c_void) {
+    let context = unsafe { &*context.cast::<TraceContext>() };
+    context.records.borrow_mut().record(context.core, pc, size);
+}
+
+impl PcTrace {
+    pub fn take(mut self) -> PcEntries {
+        self.detach();
+        self.records.borrow_mut().take()
+    }
+
+    fn detach(&mut self) {
+        for TraceHook { cpu, hook, context } in self.hooks.drain(..) {
+            if cpu.upgrade().is_some_and(|cpu| cpu.remove_hook(hook).is_err()) {
+                // The CPU still owns a callback pointing at this context.
+                Box::leak(context);
+            }
+        }
+    }
+}
+
+impl Drop for PcTrace {
+    fn drop(&mut self) {
+        self.detach();
+    }
+}
+
+impl Board {
+    pub fn trace_pcs(&self, limit: usize) -> Result<PcTrace, String> {
+        if self.execution_policy() != fujimod_emulator_cpu::ExecutionPolicy::Exact {
+            return Err("PC tracing requires exact execution policy".into());
+        }
+        let records = Rc::new(RefCell::new(PcRecorder::new(limit)?));
+        let mut trace = PcTrace { records, hooks: Vec::new() };
+        for (core, cpu) in self.cpus.iter().enumerate() {
+            let mut context = Box::new(TraceContext { core, records: trace.records.clone() });
+            let hook = unsafe { cpu.install_hook(Hook::Instruction {
+                callback: trace_pc,
+                data: (&mut *context as *mut TraceContext).cast(),
+                range: HookRange::All,
+            }) }?;
+            trace.hooks.push(TraceHook { cpu: Rc::downgrade(cpu), hook, context });
+        }
+        Ok(trace)
+    }
+}
+
 /// Repeated entry observations stop before the selected instruction. Resume
 /// executes that instruction once, even when it is itself a loop target.
 pub(super) struct EntryPoints {
@@ -512,7 +669,6 @@ pub struct InstructionPoints {
     /// the translated code of its page both times.
     hooks: BTreeMap<u64, HookId>,
 }
-const INSTRUCTION_POINTS: usize = 4096;
 unsafe fn instruction(pc: u64, _: u32, data: *mut c_void) {
     let points = unsafe { &*data.cast::<InstructionPoints>() };
     if points.entry.hit(pc)
@@ -584,15 +740,17 @@ impl Board {
         mut addresses: Vec<u64>,
     ) -> Result<(), String> {
         let cpu = self.cpu(core)?;
-        if addresses.len() > INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
+        if addresses.len() > MAX_INSTRUCTION_POINTS || addresses.iter().any(|pc| pc & 1 != 0) {
             return Err("Instruction points require bounded aligned addresses".into());
         }
         addresses.sort_unstable();
         addresses.dedup();
         // A skip belongs to the stop it resumes from. Once its address leaves
-        // the active set it would otherwise swallow that address's next hit.
+        // the active set, or the host has moved the core elsewhere, it would
+        // otherwise swallow that address's next hit.
         if let Some(pc) = points.entry.skip.get()
-            && addresses.binary_search(&pc).is_err()
+            && (addresses.binary_search(&pc).is_err()
+                || self.read_register(core, Register::Pc)? != pc)
         {
             points.entry.skip.set(None);
         }
@@ -604,7 +762,7 @@ impl Board {
             .iter()
             .filter(|pc| !points.hooks.contains_key(pc))
             .count();
-        if points.hooks.len() + added > INSTRUCTION_POINTS {
+        if points.hooks.len() + added > MAX_INSTRUCTION_POINTS {
             let inactive = points
                 .hooks
                 .keys()

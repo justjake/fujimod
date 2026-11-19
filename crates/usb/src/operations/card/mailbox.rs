@@ -13,6 +13,10 @@ pub(super) struct Mailbox<'a> {
     operations: u32,
     source: Option<u32>,
     pub(super) trigger: Option<super::QueryTrigger>,
+    /// `path()` just found the service idle; only host writes follow it.
+    idle_known: bool,
+    /// Time spent waiting for the camera to complete helper operations.
+    pub(super) waited: Duration,
 }
 impl Mailbox<'_> {
     pub(super) fn location(&self) -> u32 {
@@ -43,16 +47,18 @@ impl Mailbox<'_> {
         )?;
         self.host.write(at, raw).await
     }
-    async fn idle(&mut self) -> Result<()> {
+    /// Check the service is idle; the result's last field is the open handle.
+    async fn idle(&mut self) -> Result<[u32; 7]> {
         let state = self.snapshot().await?;
         require(
             state[0] == self.operations && state[1] == 0 && state[2] != 1,
             "File service busy or another operation intervened",
-        )
+        )?;
+        Ok(state)
     }
-    async fn snapshot(&mut self) -> Result<[u32; 6]> {
+    async fn snapshot(&mut self) -> Result<[u32; 7]> {
         let mut fields = [
-            self.p[7], self.p[1], self.p[2], self.p[8], self.p[3], self.p[4],
+            self.p[7], self.p[1], self.p[2], self.p[8], self.p[3], self.p[4], self.p[9],
         ];
         for field in &mut fields {
             *field = self.address(*field, 4)?;
@@ -113,7 +119,9 @@ impl Mailbox<'_> {
     }
     async fn command_status(&mut self, op: u32, size: u32) -> Result<(u32, u32)> {
         require(size <= 0xffffff, "File-service argument too large")?;
-        self.idle().await?;
+        if !std::mem::take(&mut self.idle_known) {
+            self.idle().await?;
+        }
         self.write(self.p[1], &words(&[op | size << 8])).await?;
         if let Some(trigger) = self.trigger {
             use crate::ff80::commands::diagnostic::DiagnosticTag;
@@ -133,7 +141,8 @@ impl Mailbox<'_> {
             )?;
             call.invoke(self.host.session, self.host.limits).await?;
         }
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let started = Instant::now();
+        let deadline = started + Duration::from_secs(30);
         loop {
             let snapshot = self.snapshot().await?;
             let request = snapshot[1];
@@ -144,6 +153,7 @@ impl Mailbox<'_> {
                     "File-service operation ownership changed",
                 )?;
                 self.operations = self.operations.wrapping_add(1);
+                self.waited += started.elapsed();
                 let status = snapshot[4];
                 require(
                     state == 2 || state == 3,
@@ -158,26 +168,23 @@ impl Mailbox<'_> {
             futures_timer::Delay::new(Duration::from_millis(10)).await;
         }
     }
-    async fn open_update(&mut self, path: &str) -> Result<()> {
+    /// Returns true when create mode was needed for a zero-length file.
+    async fn open_update(&mut self, path: &str) -> Result<bool> {
         // Append-open on a zero-length FAT file can accept a missing tail and
         // link the first allocated cluster through reserved FAT entry zero.
         // Create mode gives the first write a fresh writable stream instead.
+        // The listing is of this exact path, so any single empty entry is this
+        // file; never fall through to append mode for it.
         let entries = self.list(path).await?;
-        if entries.len() == 1
-            && entries[0].bytes == 0
-            && path
-                .rsplit('\\')
-                .next()
-                .is_some_and(|name| entries[0].name.eq_ignore_ascii_case(name))
-        {
+        if entries.len() == 1 && entries[0].bytes == 0 {
             self.path(path).await?;
             self.command(9, 0).await?;
-            return Ok(());
+            return Ok(true);
         }
         self.path(path).await?;
         let (status, _) = self.command_status(5, 0).await?;
         if status == 0 {
-            return Ok(());
+            return Ok(false);
         }
         // Some append-mode implementations refuse an empty file with no tail
         // cluster. A completed refusal leaves no handle. Verify its live size
@@ -187,7 +194,7 @@ impl Mailbox<'_> {
             if entries.len() == 1 && entries[0].bytes == 0 {
                 self.path(path).await?;
                 self.command(9, 0).await?;
-                return Ok(());
+                return Ok(true);
             }
         }
         Err(fail(format!(
@@ -195,12 +202,10 @@ impl Mailbox<'_> {
         )))
     }
     async fn path(&mut self, p: &str) -> Result<()> {
-        self.idle().await?;
-        require(
-            self.word(self.p[9]).await? == u32::MAX,
-            "Another file is open",
-        )?;
-        self.write(self.p[5], &[p.as_bytes(), b"\0"].concat()).await
+        require(self.idle().await?[6] == u32::MAX, "Another file is open")?;
+        self.write(self.p[5], &[p.as_bytes(), b"\0"].concat()).await?;
+        self.idle_known = true;
+        Ok(())
     }
     async fn list(&mut self, pattern: &str) -> Result<Vec<Entry>> {
         require(
@@ -235,8 +240,8 @@ impl Mailbox<'_> {
         Ok(())
     }
     pub(super) async fn finish(&mut self) -> Result<()> {
-        self.idle().await?;
-        if self.word(self.p[9]).await? != u32::MAX {
+        self.idle_known = false;
+        if self.idle().await?[6] != u32::MAX {
             self.command(4, 0).await?;
         }
         if let Some(source) = self.source {
@@ -294,10 +299,43 @@ impl Mailbox<'_> {
             }
             Request::Shrink { path, size } => {
                 self.require_mount_abi()?;
+                let entries = self.list(&path).await?;
+                require(
+                    entries.len() == 1,
+                    "Shrink requires exactly one existing file",
+                )?;
+                require(size <= entries[0].bytes, "Shrink cannot extend a file")?;
+                if size == entries[0].bytes {
+                    return Ok(Response::Done);
+                }
+                require(
+                    size <= self.capacity,
+                    "Shrink target exceeds the helper buffer",
+                )?;
+                self.path(&path).await?;
+                self.command(1, 0).await?;
+                let mut data = Vec::with_capacity(size as usize);
+                while data.len() < size as usize {
+                    let count = (size as usize - data.len())
+                        .min(self.capacity as usize)
+                        .try_into()
+                        .map_err(|_| Error::InvalidLength)?;
+                    let read = self.command(2, count).await?;
+                    require(read != 0 && read <= count, "Short shrink-prefix read")?;
+                    data.extend(self.read(self.p[6], read).await?);
+                }
+                self.command(3, 0).await?;
+                self.path(&path).await?;
+                self.command(7, 0).await?;
+                self.path(&path).await?;
+                self.command(9, 0).await?;
+                self.command(3, 0).await?;
                 self.path(&path).await?;
                 self.open_update(&path).await?;
-                self.write(self.p[6], &size.to_le_bytes()).await?;
-                self.command(12, 0).await?;
+                self.write(self.p[6], &data).await?;
+                let written = self.command(6, size).await?;
+                require(written == size, "Short shrink-prefix rewrite")?;
+                self.command(3, 0).await?;
                 Ok(Response::Done)
             }
             Request::Create { path } => {
@@ -340,8 +378,13 @@ impl Mailbox<'_> {
             Request::WriteAt { path, offset, data } => {
                 self.require_mount_abi()?;
                 self.path(&path).await?;
-                self.open_update(&path).await?;
-                self.seek(offset).await?;
+                let created = self.open_update(&path).await?;
+                // A newly created zero-length file has no cluster to seek in.
+                // Existing files must seek even to offset zero because append
+                // mode leaves the stock file position at EOF.
+                if !created || offset != 0 {
+                    self.seek(offset).await?;
+                }
                 self.source = Some(self.word(self.p[10]).await?);
                 self.host.put(self.address(self.p[10], 4)?, 0).await?;
                 for raw in data.chunks(self.capacity as usize) {
@@ -437,6 +480,8 @@ pub(super) async fn prepare<'a>(
         operations: 0,
         source: None,
         trigger: None,
+        idle_known: false,
+        waited: Duration::ZERO,
     };
     let matches = |raw: &[u8]| {
         u32_at(raw, 0) == 0x314c4946

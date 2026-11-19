@@ -29,6 +29,14 @@ impl BusMapping {
         self.address + self.size as u64
     }
 }
+fn containing_region(
+    regions: impl Iterator<Item = (u64, u64)>,
+    address: u64,
+) -> Option<(u64, u64)> {
+    regions
+        .into_iter()
+        .find(|&(base, end)| base <= address && address < end)
+}
 pub(super) fn validate_mappings(
     mappings: &[BusMapping],
     regions: &[(u64, u64)],
@@ -50,11 +58,9 @@ pub(super) fn validate_mappings(
         let end = map.physical + map.size as u64;
         let mut cursor = map.physical;
         while cursor < end {
-            let (_, next) = regions
-                .iter()
-                .find(|&&(lo, hi)| lo <= cursor && cursor < hi)
+            let (_, next) = containing_region(regions.iter().copied(), cursor)
                 .ok_or("physical bus mapping has no complete backing")?;
-            cursor = end.min(*next);
+            cursor = end.min(next);
         }
     }
     Ok(())
@@ -403,6 +409,72 @@ impl Memory {
     pub(super) fn regions(&self) -> &[(u64, Backing)] {
         &self.regions
     }
+    pub(super) fn backing_chunks(
+        &self,
+        address: u64,
+        size: usize,
+    ) -> Result<Vec<(u64, NonNull<u8>, usize)>, String> {
+        let end = address
+            .checked_add(size as u64)
+            .ok_or("physical backing access overflow")?;
+        let mut cursor = address;
+        let mut chunks = Vec::new();
+        while cursor < end {
+            let (base, region_end) = containing_region(
+                self.regions
+                    .iter()
+                    .map(|(base, backing)| (*base, *base + backing.len() as u64)),
+                cursor,
+            )
+            .ok_or("physical backing range is unavailable")?;
+            let backing = &self
+                .regions
+                .iter()
+                .find(|(start, _)| *start == base)
+                .unwrap()
+                .1;
+            let len = (end.min(region_end) - cursor) as usize;
+            let pointer =
+                NonNull::new(unsafe { backing.as_ptr().add((cursor - base) as usize) }).unwrap();
+            chunks.push((cursor, pointer, len));
+            cursor += len as u64;
+        }
+        Ok(chunks)
+    }
+    pub(super) fn read_backing(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        let mut offset = 0;
+        for (_, pointer, len) in self.backing_chunks(address, bytes.len())? {
+            unsafe {
+                std::ptr::copy_nonoverlapping(pointer.as_ptr(), bytes.as_mut_ptr().add(offset), len)
+            };
+            offset += len;
+        }
+        Ok(())
+    }
+    pub(super) fn write_backing(
+        &self,
+        cpus: &[Rc<dyn Cpu>],
+        domain: &exclusive::Shared,
+        address: u64,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        let mut offset = 0;
+        for (physical, pointer, len) in self.backing_chunks(address, bytes.len())? {
+            self.mark(pointer, len)?;
+            unsafe {
+                std::ptr::copy_nonoverlapping(bytes.as_ptr().add(offset), pointer.as_ptr(), len);
+                for cpu in cpus {
+                    cpu.backing_written(physical, pointer, len)?;
+                }
+            }
+            domain
+                .lock()
+                .map_err(|_| "exclusive monitors poisoned")?
+                .written(Some((physical, len)))?;
+            offset += len;
+        }
+        Ok(())
+    }
     pub(super) fn replace_views(&self, replacements: &[BusMapping]) -> Result<(), String> {
         let mut mappings = self.mappings.borrow_mut();
         // Geometry and backing were validated for every choice before execution.
@@ -536,7 +608,7 @@ impl Memory {
             for (physical, _, len) in self.chunks(address, bytes.len(), Access::Host)?.flatten() {
                 stops
                     .borrow_mut()
-                    .store(physical, &bytes[offset..offset + len]);
+                    .store(None, physical, &bytes[offset..offset + len]);
                 offset += len;
             }
         }

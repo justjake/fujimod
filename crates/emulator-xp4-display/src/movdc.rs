@@ -5,7 +5,7 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct State {
     regs: Vec<u32>,
     reset_deadline: Option<u64>,
@@ -119,6 +119,28 @@ impl Movdc {
         )
     }
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SavedMovdc { base: u64, irq: u32, reset_ticks: u64, period_ticks: u64, luma: u8, state: State }
+
+impl Movdc {
+    fn validate_savedmovdc(&self, saved: &SavedMovdc) -> Result<(), String> {
+        let s = &saved.state;
+        if (saved.base, saved.irq, saved.reset_ticks, saved.period_ticks, saved.luma)
+                != (self.base, self.irq, self.reset_ticks, self.period_ticks, self.luma)
+            || s.regs.len() != 0x10c / 4
+            || s.regs[1] > 1
+            || s.frame_deadline.is_some()
+                != (s.regs[1] == 1
+                    && s.regs[0xd4 / 4] & 0x10000000 != 0
+                    && s.reset_deadline.is_none())
+        {
+            return Err("Invalid XP4 MOVDC checkpoint".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Movdc {
     fn name(&self) -> &'static str {
         if self.base == 0xfff72000 {
@@ -130,9 +152,14 @@ impl Device for Movdc {
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);
         let offset = address.wrapping_sub(self.base);
-        if size != 4 || !Self::known(offset) {
+        if size != 4 || offset & 3 != 0 || offset >= 0x10c {
             cx.unmodeled();
-            return 0; // +e0's two 5-bit counters are unresolved.
+            return 0;
+        }
+        if !Self::known(offset) {
+            // ISP, crop and counter words (+e0's two 5-bit counters are unresolved) keep their
+            // last write and drive nothing.
+            return u64::from(self.r(offset as usize));
         }
         match offset {
             0 => u64::from(self.state.reset_deadline.is_none()),
@@ -143,11 +170,15 @@ impl Device for Movdc {
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         self.advance(cx);
         let offset = address.wrapping_sub(self.base);
-        if size != 4 || !Self::known(offset) {
+        if size != 4 || offset & 3 != 0 || offset >= 0x10c {
             cx.unmodeled();
             return;
         }
         let value = value as u32;
+        if !Self::known(offset) {
+            self.state.regs[offset as usize / 4] = value;
+            return;
+        }
         match offset {
             0 => {
                 if value != 0 {
@@ -209,17 +240,21 @@ impl Device for Movdc {
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedMovdc { base: self.base, irq: self.irq, reset_ticks: self.reset_ticks, period_ticks: self.period_ticks, luma: self.luma, state: self.state.clone() })
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_savedmovdc(&data.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let saved: SavedMovdc = data.decode(self.name())?;
+        self.validate_savedmovdc(&saved)?;
+        self.state = saved.state;
+        Ok(())
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let s: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if s.regs.len() != 0x10c / 4
-            || s.regs[1] > 1
-            || s.frame_deadline.is_some()
-                != (s.regs[1] == 1
-                    && s.regs[0xd4 / 4] & 0x10000000 != 0
-                    && s.reset_deadline.is_none())
-        {
-            return Err("Invalid XP4 MOVDC checkpoint".into());
-        }
+        self.validate_savedmovdc(&SavedMovdc { base: self.base, irq: self.irq, reset_ticks: self.reset_ticks, period_ticks: self.period_ticks, luma: self.luma, state: s.clone() })?;
         self.state = s;
         Ok(())
     }
@@ -379,14 +414,13 @@ mod tests {
         }
     }
     #[test]
-    fn unselected_modes_refuse_before_dma_or_completion() {
+    fn unmodeled_words_are_retained_and_unselected_modes_still_refuse_at_completion() {
         let (mut d, mut h) = setup(0, 0x10030001);
         for offset in [0x20, 0x40, 0xe0, 0xe4, 0x100] {
-            let before = d.save();
             let mut cx = Cx::new(&mut h, 0, 0, 0);
             d.write(&mut cx, 0xfff73000 + offset, 4, 0x1234);
-            assert!(cx.is_unmodeled());
-            assert_eq!(d.save(), before);
+            assert!(!cx.is_unmodeled());
+            assert_eq!(d.read(&mut cx, 0xfff73000 + offset, 4), 0x1234);
         }
         h.now = 33;
         let mut cx = Cx::new(&mut h, 0, 0, 0);

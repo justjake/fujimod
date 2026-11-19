@@ -27,7 +27,6 @@
         "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
         "movrsz_ticks": 50000,
         "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
-        "secondary_bus_profile": "usbcharge-disconnected-pwic-startup-tagged",
         "settings": "default",
         "rectangle_profile": "xm1-150-declared-luma-rectangle-overlay-unmeasured"
       },

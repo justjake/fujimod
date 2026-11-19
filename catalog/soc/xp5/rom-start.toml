@@ -1,0 +1,80 @@
+# Devices a ROM start adds to the default boot manifest (the boot manifest and its .d fragments).
+# The default boot enters at the EL1t loader hand-off and never runs the mask ROM, stage one or
+# stock setup, so it needs none of these.
+
+# The stock setup's first control write: 0xff800114 calls the word writer 0xff80dfb8 with
+# 0xfe000000 = 1 right after the ICE BOOT cookie check (step 2 of the stock setup). The store returns on the camera. Its physical
+# meaning is unresolved, and nothing is known to read it back (a read on the X-M5 returned 0). It
+# is modeled as a store-only latch; a read of it stays an unmodeled access and refuses.
+[[device]]
+base = 0xfe000000
+size = 4
+kind = "write-only-registers"
+
+# DDR controller status the stock setup polls before training: 0xfaf07780 reads non-zero once
+# 0xfaf07680 is written (the poll helper 0xff80dc24 checks offset 0x7800 & 1 == 1 on each of the
+# four controllers 0xfaf00000..0xfaf30000), and 0xfaf07784's low byte is a result code (0 = ok).
+# The values follow FujiMod's X-T5 bring-up runner ("stage0's
+# memory-controller setup"). They are scripted answers, not a model: the register behavior is
+# unknown, and the poll offsets here come from run 1794558509019-19175 and its pc-entry records.
+[[device]]
+base = 0xfaf07000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf17000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+
+# DDR PHY register space. The stock setup reads back hundreds of PHY registers per PHY through
+# halfword loads at 0xfb000000 / 0xfb400000 + 2 * APB index (the table at flash 0xf0012510, read in
+# a loop at 0xff800cac; first fault at 0xfb240032 = APB 0x120019). The default manifest backs only
+# the first 0x1a0000 bytes of each PHY (firmware images and the message RAM); the rest of each
+# PHY's 4 MiB register file is plain memory here: a store reads back, nothing is modeled.
+[[ram]]
+base = 0xfb1a4000
+size = 0x25c000
+
+[[ram]]
+base = 0xfb5a4000
+size = 0x25c000
+
+# Power controller (SPI controller 0xff910000, select GPIO 12.10): the registers stage one of the
+# reset image reads. Core 1 polls register 0x00 until bit 15 reads set (the poll at 0x3894 of the
+# reset image calls the register reader 0x36f4 and tests the sign of the high byte), then reads
+# register 0x10 and folds its bits into the wake-cause byte at hardware-info +0x150
+# (0x38e8..0x3914: bit0->0, bit1->1, bit4->2, bit6->3, bit2->4, bit5->7). The part's reset
+# value for register 0 is 0x0200 (a model default); bit 15 is added. Register 0x10 = 0x10 makes
+# bit 2 of +0x150 the only one set, which is the value the default manifest preloads at 0x19120
+# ("physical power-switch bit2"). Both are scripted values, not measurements: X-T5's bring-up
+# runner uses 0x8202 and 0x0002 for its stage-one poll. Keys are hexadecimal register numbers.
+[power_controller_registers]
+"0" = 0x8200
+"10" = 0x10
+
+# The stock OS driver (0x14912cc) drives a card it finds through interrupts, where the default
+# manifest has no card and so declares no line. SD slot 0 is INTID 262 on the XP5 SoC: X-T5's
+# bring-up runner wires its slot-1 host at 0xff9b0000 to 262, and X100VI 1.31 runs the same driver
+# build. Inferred, not read from the X100VI image.
+[[window_options]]
+base = 0xff9b0000
+set = { irq = 262 }

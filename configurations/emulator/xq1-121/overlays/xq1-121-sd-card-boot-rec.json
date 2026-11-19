@@ -28,7 +28,6 @@
         "movrsz_profile": "declared-packed-yycbcr-pyramid-unmeasured",
         "movrsz_ticks": 50000,
         "producer_data_profile": "xm1-150-declared-continuous-statistics-scene-unmeasured",
-        "secondary_bus_profile": "usbcharge-disconnected-pwic-startup-tagged",
         "settings": "default",
         "sd_card_profile": "declared-blank-sdhc-default-speed-unmeasured",
         "sd_card_present": true

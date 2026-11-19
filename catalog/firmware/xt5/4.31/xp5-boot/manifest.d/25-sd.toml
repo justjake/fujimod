@@ -1,0 +1,72 @@
+# SD slots 0 and 1. The stock driver (0x13a636c, caller 0x13a65f4) addresses
+# instance n at 0xff9b0000 + (n << 14) and each port p of it at
+# + (p << 13) + (p ? 0x200 : 0) (0x13a75fc, 0x13a6dbc, 0x13a8040), so every
+# instance holds two SDHCI register files for one slot
+#   +0x0000  port 0, the UHS-I SDH30 host (vendor registers 0x100..0x124), and
+#            its register-selection words at +0x1e0/+0x1e4 (0x13a80e0);
+#   +0x2000  the UHS-II PHY control block (0x13a8174, 0x13a6e7c, 0x13a6f74);
+#   +0x2200  port 1, an SDHCI 4 UHS-II register file (present state bits 30/31,
+#            host control 2 bit 8, capabilities bit 35: 0x13a67b0, 0x13a7fc4,
+#            0x13a6e20, 0x13a838c).
+# The driver tries port 1 first; without UHS-II interface detection it powers
+# the PHY down and uses port 0. Card presence is the [[sd]] run input in
+# xt5-431.toml.
+#
+# Session assumptions, not camera measurements (camera-needs.md, 1.14):
+# transfer_ticks, clock_ticks and rca; ram_bytes is the run's DRAM address-space
+# limit. capabilities sets only bit 35 (UHS-II support), the only capability bit
+# the driver reads; the X-T5 has two UHS-II slots. The other bits are unknown.
+# No interrupt line is declared: the boot polls, and an asserted interrupt
+# refuses.
+
+[[device]]
+base = 0xff9b0000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b0000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+ram_bytes = 0x40000000
+
+[[device]]
+base = 0xff9b01e0
+size = 8
+kind = "sd-interface"
+
+[[device]]
+base = 0xff9b2000
+size = 0x300
+kind = "sdhci-uhs2"
+[device.options]
+slot = 0xff9b0000
+capabilities = 0x800000000
+clock_ticks = 1000
+
+[[device]]
+base = 0xff9b4000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b4000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+ram_bytes = 0x40000000
+
+[[device]]
+base = 0xff9b41e0
+size = 8
+kind = "sd-interface"
+
+[[device]]
+base = 0xff9b6000
+size = 0x300
+kind = "sdhci-uhs2"
+[device.options]
+slot = 0xff9b4000
+capabilities = 0x800000000
+clock_ticks = 1000

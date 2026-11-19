@@ -1,6 +1,6 @@
 //! Explicit execution experiment. Never selected by a device or counted as a boot.
 use super::{Board, bus::Mode};
-use fujimod_emulator_cpu::{Cpu, Hook, HookRange, Model, Register};
+use fujimod_emulator_cpu::{Cpu, Hook, HookRange, Model, Register, arm};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -62,24 +62,29 @@ unsafe fn substitute_callee(address: u64, _: u32, data: *mut c_void) {
         context.record_failure("discovery substitution names an absent processor");
         return;
     };
+    let (result, return_address, width) = if cpu.model() == Model::ArmV8A {
+        (Register::X(0), Register::X(30), 8)
+    } else {
+        (Register::Arm32(arm::Register::R(0)), Register::Arm32(arm::Register::R(14)), 4)
+    };
     let mut link = [0; 8];
-    if let Err(error) = cpu.read_register(Register::X(30), &mut link) {
-        context.record_failure(format!("read return address: {error}"));
-        return;
-    }
-    if let Err(error) = cpu.write_register(Register::X(0), &context.spec.value.to_le_bytes()) {
-        context.record_failure(format!("write return value: {error}"));
-        return;
-    }
-    if let Err(error) = cpu.write_register(Register::Pc, &link) {
-        context.record_failure(format!("return from substituted routine: {error}"));
+    let redirect = (|| {
+        if cpu.read_register(return_address, &mut link[..width])? != width {
+            return Err("callee return address width differs".into());
+        }
+        cpu.write_register(result, &context.spec.value.to_le_bytes()[..width])?;
+        cpu.write_register(Register::Pc, &link[..width])
+    })();
+    if let Err(error) = redirect {
+        context.record_failure(error);
+        let _ = cpu.stop();
         return;
     }
     context.hits.fetch_add(1, Ordering::Relaxed);
 }
 
 impl Board {
-    /// Install explicit AArch64 callee substitutions on a discovery board.
+    /// Install explicit callee substitutions on a discovery board.
     /// The instruction hook redirects to the caller's return address; it does
     /// not inspect instruction bytes or infer a routine from program state.
     pub fn install_discovery_callee_stubs(&mut self, stubs: &[CalleeStub]) -> Result<(), String> {
@@ -91,12 +96,18 @@ impl Board {
         }
         if stubs.len() + self.discovery_stub_contexts.len() > 4096
             || stubs.iter().any(|stub| {
-                stub.address & 3 != 0
-                    || stub.core >= self.cpus.len()
-                    || self.cpus[stub.core].model() != Model::ArmV8A
+                let Some(cpu) = self.cpus.get(stub.core) else { return true; };
+                match cpu.model() {
+                    Model::ArmV8A => stub.address & 3 != 0,
+                    Model::CortexR5F | Model::CortexA7 => {
+                        stub.address & 1 != 0 || u32::try_from(stub.address).is_err()
+                            || u32::try_from(stub.value).is_err()
+                    }
+                    Model::CortexM4 => true,
+                }
             })
         {
-            return Err("discovery callee substitutions require aligned AArch64 entries".into());
+            return Err("discovery callee substitution address or value does not fit the selected processor".into());
         }
         let mut unique = BTreeSet::new();
         for context in &self.discovery_stub_contexts {

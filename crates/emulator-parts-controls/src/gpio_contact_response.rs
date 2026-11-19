@@ -238,6 +238,7 @@ mod tests {
                         high: false,
                     },
                 ],
+                high_port_input_levels: None,
             },
             GpioWiring {
                 irqs: vec![

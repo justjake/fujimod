@@ -23,7 +23,7 @@ struct State {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Saved {
+struct SavedPhy {
     config: Config,
     state: State,
 }
@@ -53,6 +53,22 @@ impl Phy {
         (size == 4 && matches!(offset, 0 | 4 | 0x400)).then_some(offset)
     }
 }
+
+impl Phy {
+    fn validate_savedphy(&self, saved: &SavedPhy) -> Result<(), String> {
+        let s = &saved.state;
+        if saved.config != self.config
+            || s.control & !CONTROL != 0
+            || s.parallel & !0x70 != 0
+            || s.control & WRITE != 0
+                && s.registers[(s.control >> 8 & 31) as usize] != s.control as u8
+        {
+            return Err("Invalid USB PHY checkpoint or changed physical input".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Phy {
     fn name(&self) -> &'static str {
         "xp4-usb-phy"
@@ -102,23 +118,27 @@ impl Device for Phy {
         }
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::to_value(Saved {
+        serde_json::to_value(SavedPhy {
             config: self.config,
             state: self.state.clone(),
         })
         .unwrap()
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedPhy { config: self.config, state: self.state.clone() })
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_savedphy(&data.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let saved: SavedPhy = data.decode(self.name())?;
+        self.validate_savedphy(&saved)?;
+        self.state = saved.state;
+        Ok(())
+    }
     fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
-        let saved: Saved = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let s = &saved.state;
-        if saved.config != self.config
-            || s.control & !CONTROL != 0
-            || s.parallel & !0x70 != 0
-            || s.control & WRITE != 0
-                && s.registers[(s.control >> 8 & 31) as usize] != s.control as u8
-        {
-            return Err("Invalid USB PHY checkpoint or changed physical input".into());
-        }
+        let saved: SavedPhy = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.validate_savedphy(&saved)?;
         self.state = saved.state;
         Ok(())
     }

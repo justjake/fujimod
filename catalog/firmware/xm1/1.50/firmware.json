@@ -17,20 +17,8 @@
   },
   "installation": {
     "flash_offset": 604,
-    "entry_labels": {
-      "0x69cdf8": "application entry",
-      "0x1800": "primary loader",
-      "0x11800": "secondary loader",
-      "0x40020": "primary kernel",
-      "0xd0020": "secondary kernel"
-    },
-    "loader_validation": {
-      "entry": 6934008,
-      "sections": [
-        "stream-0016025c",
-        "stream-002c025c"
-      ]
-    },
+    "entry_labels": {},
+    "loader_validation": null,
     "image_sections": [
       {
         "name": "kernel0",

@@ -8,6 +8,7 @@ fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, TestHost) {
         gpio::Options {
             input_levels: levels,
             output_levels: vec![],
+            high_port_input_levels: None,
         },
         gpio::Wiring {
             irqs: vec![

@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 test = false
@@ -21,6 +22,8 @@ fujimod-catalog-firmware-identity.workspace = true
 fujimod-firmware.workspace = true
 fujimod-recovery.workspace = true
 fujimod-runtime-install.workspace = true
+fujimod-camera-mount = { path = "../../../crates/camera-mount" }
+fujimod-catalog.workspace = true
 serde_json.workspace = true
 fujimod-usb.workspace = true
 fujimod-workflows.workspace = true

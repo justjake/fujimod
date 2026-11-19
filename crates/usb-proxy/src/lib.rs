@@ -3,7 +3,7 @@
 mod client;
 pub mod pipeline;
 pub mod protocol;
-pub use client::{Client, Outcome, Progress, RemoteDevice};
+pub use client::{Client, Outcome, RemoteDevice};
 pub use protocol::{
     Completion, Device, Endpoint, Interface, Message, Operation, Recipient, RequestType, Setup,
 };
@@ -13,15 +13,19 @@ pub use protocol::{
 pub struct Error(pub String);
 pub type Result<T> = std::result::Result<T, Error>;
 
+impl From<fujimod_webrtc::Error> for Error {
+    fn from(error: fujimod_webrtc::Error) -> Self {
+        Self(error.to_string())
+    }
+}
+
+/// Every USB message fits in one WebRTC message.
+const _: () = assert!(protocol::MAX_MESSAGE <= fujimod_webrtc::MAX_MESSAGE);
+
 #[cfg(all(feature = "relay", unix))]
 pub mod dev_shares;
 #[cfg(all(feature = "relay", not(target_arch = "wasm32")))]
 pub mod relay;
 
-mod peer;
-pub use peer::CandidatePolicy;
-#[cfg(not(target_arch = "wasm32"))]
-pub use peer::{HostEvent, HostRoom, PeerSocket};
-pub mod share;
-#[cfg(all(feature = "relay", not(target_arch = "wasm32")))]
-mod signaling;
+#[cfg(target_arch = "wasm32")]
+mod browser_peer;

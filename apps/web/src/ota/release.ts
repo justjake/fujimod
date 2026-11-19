@@ -74,11 +74,12 @@ export function validateOtaRelease(value: unknown, firmware: string): SdBootV2Re
 }
 
 export async function loadOtaRelease(
-  base: string | URL,
+  assetBase: string | URL,
   firmware: string,
   fetcher: typeof fetch = fetch,
 ): Promise<SdBootV2Release> {
-  const response = await fetcher(new URL(`/ota/${encodeURIComponent(firmware)}/latest.json`, base));
+  const asset = new URL(encodeURIComponent(`${firmware}-latest.json`), assetBase);
+  const response = await fetcher(asset);
   const unavailable = Error(`The ${firmware} release files are unavailable.`);
   if (!response.ok || !response.headers.get('content-type')?.includes('json')) throw unavailable;
   return validateOtaRelease(

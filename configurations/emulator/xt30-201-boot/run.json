@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "xt30-201-boot",
+  "purpose": "rom_boot",
+  "body_id": "xt30",
+  "firmware_id": "xt30-201",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": null,
+  "overlays": [],
+  "dram_address_space": {
+    "limit_bytes": 1073741824,
+    "basis": "Synthetic application-test address space; installed DRAM capacity is unknown."
+  },
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp4",
+      "body_profile_id": "xt30-boot"
+    },
+    "hardware_inputs_id": "xt30-201-boot"
+  }
+}

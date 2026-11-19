@@ -1,0 +1,71 @@
+# Companion mailbox (status/cause 0x1/0x20 raise A53 INTID 142,
+# releases it; its section is copied into the SRAM RAM region at 0xfa200000.
+[[device]]
+base = 0xff90e100
+size = 0x24
+kind = "interprocessor-mailbox"
+
+# Companion serial controller at ff911000 (transmit DMA channel 10 fa24b1b4 ->
+# The first exchange (09, then 01 01) is the BIS configuration sequence of the
+# X100VI M-core: same command bytes, same select line (port 11 pin 5, active
+# low) and the same LSM6DS-class chip select (port 11 pin 3); see
+# parts are the existing explicit models; revision nibbles and idle MISO are
+# scenario inputs, not X-T5 measurements. UNVERIFIED on the X-T5: DMA request
+# numbers 2/3 and NVIC line 99 are the X100VI session's values (same SoC). The
+# X-T5 M-core programs channel configurations 0x209011 (tx) and 0x309011 (rx), whose
+# lane factors 2/3 the model checks, but no code writes the request numbers for these
+# channels; slot 99 of the M-core handler table holds a stub (k = 6) of unknown purpose.
+# Channel 11 completing on IRQ94 (83 + 11) is consistent with the README's IRQ94
+# handler. source_hz: the Linux DTB has a 48 MHz root clock but does not say which
+# clock feeds the SSP blocks (hvf-board.md, "Values that are inherited or unverified").
+[[device]]
+base = 0xff911000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+receive_request = 2
+transmit_request = 3
+companion_irq_line = 99
+[device.options.wire]
+kind = "gpio-selected"
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 11
+pin = 5
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "bis-configuration-registers"
+revision = [0, 0]
+idle_high = false
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 11
+pin = 3
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "lsm6ds-configuration-registers"
+
+# Input-capture banks (five channels at ff928000, three at ff929000, stride 0x20).
+# The X-T5 companion writes ff928040 and streams fa234adc -> ff928044 on general
+# register at 0xff928000 + 2*0x20 + 4. UNVERIFIED: request lane 32 is the X100VI value;
+# no store of it was found in the X-T5 M-core image or the A53 DMA driver callers.
+[[device]]
+base = 0xff928000
+size = 0x1000
+kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 2, request = 32 }]
+[[device]]
+base = 0xff929000
+size = 0x1000
+kind = "input-capture"
+
+# USB cable/jig connection status in bit 0: 0x14f61d8 latches it and posts event
+# 0x3047 when set, 0x2bfcd0c reads it with 0xffc0c70c. The default input is
+# disconnected, as on the X100VI.
+[[device]]
+base = 0xff90e300
+size = 4
+kind = "usb-connection-status"

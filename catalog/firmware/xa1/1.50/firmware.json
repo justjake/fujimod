@@ -8,7 +8,68 @@
     "size": 38405148,
     "sha256": "999afd6396cfaed54134a708326ed9a75d319bea2fac85133e66525cde540754"
   },
-  "boot_rom": null,
-  "installation": null,
+  "boot_rom": {
+    "content": {
+      "size": 16384,
+      "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be"
+    },
+    "address": 2147483648
+  },
+  "installation": {
+    "flash_offset": 604,
+    "entry_labels": {},
+    "loader_validation": null,
+    "image_sections": [
+      {
+        "name": "kernel0",
+        "address": 262144,
+        "size": 56032,
+        "sha256": "21366ffff7cebc6176b8a8125bf3a9974835a51070a58ea325f7eed8aabd8882",
+        "native_flash_offset": 524288
+      },
+      {
+        "name": "kernel1",
+        "address": 851968,
+        "size": 55968,
+        "sha256": "8fb0c322a22443a3783cdab9071db17212a5629f6375646218ac1e043dc672ec",
+        "native_flash_offset": 655360
+      },
+      {
+        "name": "stream-0016025c",
+        "address": 6407168,
+        "size": 2631656,
+        "sha256": "443caa12a281b58496ba10c467b39a00e1bddd88d8bdb1f8f67b141b426c6e92",
+        "native_flash_offset": 1441792
+      },
+      {
+        "name": "stream-002c025c",
+        "address": 12523968,
+        "size": 5178496,
+        "sha256": "a257cc8425d82df1ae39e38fca173485f5b4303a886ba35f4bfc1e3345ada503",
+        "native_flash_offset": 2883584
+      },
+      {
+        "name": "overlay44",
+        "address": 17825792,
+        "size": 705952,
+        "sha256": "c2c53f7fc4c07213b0157c28bbc2a7d5333ba47724771d0dfac2c4db45925606",
+        "native_flash_offset": 5898240
+      },
+      {
+        "name": "overlay46",
+        "address": 18612224,
+        "size": 117920,
+        "sha256": "3557420dfdd1b0fb0e26a671f082b21d2cf3f8eb420ce789019dd8829ddf945b",
+        "native_flash_offset": 6684672
+      },
+      {
+        "name": "overlay47",
+        "address": 18743296,
+        "size": 2532832,
+        "sha256": "3f94f4eecf10d17a371f56329382be4e65afe4d5b791511bcd5ec92369115e99",
+        "native_flash_offset": 6815744
+      }
+    ]
+  },
   "generated_facts": null
 }

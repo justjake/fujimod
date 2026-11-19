@@ -36,6 +36,15 @@ pub trait Controls: Send {
     fn edge_at_raw_readout_end(&self) -> bool {
         false
     }
+    /// Guest ticks for a span of sensor pixel clocks, when the sensor drives
+    /// a frame clock. Receiver comparators place their points with it.
+    fn pixel_clock_ticks(&self, _clocks: u64) -> Option<u64> {
+        None
+    }
+    /// A receiver comparator output fired at this guest tick.
+    fn comparator_edge(&mut self, _output: usize, _tick: u64) -> Result<(), String> {
+        Ok(())
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -168,6 +177,12 @@ impl Sensor {
     }
     pub fn edge_at_raw_readout_end(&self) -> bool {
         self.controls.as_ref().is_some_and(|c| c.edge_at_raw_readout_end())
+    }
+    pub fn pixel_clock_ticks(&self, clocks: u64) -> Option<u64> {
+        self.controls.as_ref().and_then(|c| c.pixel_clock_ticks(clocks))
+    }
+    pub fn comparator_edge(&mut self, output: usize, tick: u64) -> Result<(), String> {
+        self.controls.as_mut().map_or(Ok(()), |c| c.comparator_edge(output, tick))
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {
         self.controls.as_mut().map_or(Ok(()), |c| c.command(bytes))
@@ -429,6 +444,52 @@ impl FrozenReadout {
         let packing = self.packing;
         debug_assert!(rows.start <= rows.end && rows.end <= height);
         debug_assert_eq!(out.len(), packing.row_bytes(width) * rows.len());
+        if let Some(([sample_left, sample_top], samples)) = &self.samples
+            && *sample_left <= left
+            && *sample_top <= top
+            && left + width <= sample_left + samples.columns.len()
+            && top + rows.end <= sample_top + samples.rows.len()
+        {
+            for (local_y, y) in rows.enumerate() {
+                let y = top + y;
+                let row = samples.rows[y - sample_top];
+                for x in (0..width).step_by(2) {
+                    let color = self.cfa.color(left + x, y);
+                    let a = self.black.saturating_add(unsafe {
+                        samples.channel_unchecked(
+                            row,
+                            samples.columns[left + x - sample_left],
+                            color,
+                        )
+                    });
+                    let color = self.cfa.color(left + x + 1, y);
+                    let b = self.black.saturating_add(unsafe {
+                        samples.channel_unchecked(
+                            row,
+                            samples.columns[left + x + 1 - sample_left],
+                            color,
+                        )
+                    });
+                    match packing {
+                        Packing::U16 => {
+                            let i = (local_y * width + x) * 2;
+                            out[i..i + 2].copy_from_slice(&a.to_le_bytes());
+                            out[i + 2..i + 4].copy_from_slice(&b.to_le_bytes());
+                        }
+                        Packing::Packed12 => {
+                            let (a, b) = (a.min(4095), b.min(4095));
+                            let i = (local_y * width + x) * 3 / 2;
+                            out[i..i + 3].copy_from_slice(&[
+                                a as u8,
+                                ((a >> 8) | (b << 4)) as u8,
+                                (b >> 4) as u8,
+                            ]);
+                        }
+                    }
+                }
+            }
+            return;
+        }
         let f = &self.frame;
         let sample = |x: usize, y: usize| {
             if let Some(([left, top], samples)) = &self.samples {
@@ -610,6 +671,7 @@ mod tests {
                             rolling_references: vec![],
                             mode_change_frames: 0,
                             preview_field: None,
+                            curtains: None,
                         },
                         wire.clone(),
                         iris.clone(),

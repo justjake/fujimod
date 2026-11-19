@@ -174,18 +174,107 @@
           "active_level": false
         }
       ]
+    },
+    {
+      "id": "xt30-boot-flash",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "xt30-boot-power-bus",
+      "kind": "power-control",
+      "signals": []
+    },
+    {
+      "id": "xt30-boot-power-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 5,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "xt30-thermal-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 2,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "xt30-thermal-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 4,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "xt30-thermal-10",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 10,
+          "threshold": null
+        }
+      ]
     }
   ],
-  "parts": [],
-  "wiring": [],
+  "parts": [
+    "xt30-boot-nor",
+    "xt30-boot-power",
+    "xt30-boot-sensor"
+  ],
+  "wiring": [
+    {
+      "source_id": "serial-flash",
+      "target_id": "xt30-boot-nor",
+      "signal": "storage"
+    },
+    {
+      "source_id": "spi1",
+      "target_id": "xt30-boot-power",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "xt30-boot-sensor",
+      "target_id": "imaging-receiver",
+      "signal": "image_data"
+    }
+  ],
   "hardware": {
-    "serial_attachments": [],
+    "serial_attachments": [
+      {
+        "part_id": "xt30-boot-power",
+        "controller_id": "spi1",
+        "connection_id": "xt30-boot-power-bus",
+        "select_connection_id": "xt30-boot-power-select"
+      }
+    ],
     "gpio_feedback": [],
     "keypad_samples": {},
-    "thermal_connection_ids": [],
+    "thermal_connection_ids": [
+      "xt30-thermal-2",
+      "xt30-thermal-4",
+      "xt30-thermal-10"
+    ],
     "profiles": {
       "xt30-discovery": {
         "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
+      },
+      "xt30-boot": {
+        "dram_basis": "Run-level virtual memory bound; installed capacity is unknown."
       }
     }
   }

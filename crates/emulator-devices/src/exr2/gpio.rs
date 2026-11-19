@@ -77,6 +77,10 @@ pub struct InitialOutput {
 pub struct Options {
     pub input_levels: [u32; 16],
     pub output_levels: Vec<InitialOutput>,
+    /// Static input-status words of ports 16 and 17, on a SoC that has them (EXR Pro's loader copies ports 0..16
+    /// into its power-on snapshot). Without them those words stay unmodeled. External changes are not supported.
+    #[serde(default)]
+    pub high_port_input_levels: Option<[u32; 2]>,
 }
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -227,6 +231,7 @@ impl Pins for Pads {
 }
 pub struct Gpio {
     pads: Pads,
+    high_port_inputs: bool,
 }
 impl Gpio {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
@@ -253,6 +258,10 @@ impl Gpio {
         for (port, word) in options.input_levels.into_iter().enumerate() {
             s.registers[port][5] = word;
         }
+        if let Some(words) = options.high_port_input_levels {
+            s.registers[16][5] = words[0];
+            s.registers[17][5] = words[1];
+        }
         for output in options.output_levels {
             output.pin.validate()?;
             let port = output.pin.port as usize;
@@ -270,12 +279,13 @@ impl Gpio {
                 state: Arc::new(Mutex::new(s)),
                 irqs: Arc::new(wiring.irqs),
             },
+            high_port_inputs: options.high_port_input_levels.is_some(),
         })
     }
     pub fn pads(&self) -> Pads {
         self.pads.clone()
     }
-    fn locate(address: u64, size: u8) -> Option<(usize, usize)> {
+    fn locate(address: u64, size: u8, high_port_inputs: bool) -> Option<(usize, usize)> {
         let offset = address.checked_sub(BASE)?;
         let (port, word) = ((offset / 0x40) as usize, ((offset % 0x40) / 4) as usize);
         (size == 4
@@ -283,7 +293,7 @@ impl Gpio {
             && offset % 4 == 0
             && port < 18
             && offset % 0x40 < 0x20
-            && (port < 16 || word != 5))
+            && (port < 16 || word != 5 || high_port_inputs))
             .then_some((port, word))
     }
 }
@@ -312,7 +322,7 @@ impl Device for Gpio {
         "gpio"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        let Some((port, word)) = Self::locate(address, size) else {
+        let Some((port, word)) = Self::locate(address, size, self.high_port_inputs) else {
             cx.unmodeled();
             return 0;
         };
@@ -324,7 +334,7 @@ impl Device for Gpio {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        let Some((port, word)) = Self::locate(address, size) else {
+        let Some((port, word)) = Self::locate(address, size, self.high_port_inputs) else {
             cx.unmodeled();
             return;
         };
@@ -348,7 +358,7 @@ impl Device for Gpio {
         }
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
-        Self::locate(address, size).is_some()
+        Self::locate(address, size, self.high_port_inputs).is_some()
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         (!self.pads.state.lock().unwrap().pending.is_empty()).then_some(now)
@@ -378,6 +388,7 @@ mod tests {
         Options {
             input_levels: [0xffff; 16],
             output_levels: vec![],
+            high_port_input_levels: None,
         }
     }
     #[test]
@@ -423,8 +434,9 @@ mod tests {
         let mut cx = host.cx();
         gpio.write(&mut cx, BASE + 0x14, 4, 0);
         assert_eq!(cx.refusal(), Some("GPIO input status is read-only"));
-        assert!(Gpio::locate(BASE + 16 * 0x40 + 0x14, 4).is_none());
-        assert!(Gpio::locate(BASE + (1 << 40), 4).is_none());
+        assert!(Gpio::locate(BASE + 16 * 0x40 + 0x14, 4, false).is_none());
+        assert!(Gpio::locate(BASE + 16 * 0x40 + 0x14, 4, true).is_some());
+        assert!(Gpio::locate(BASE + (1 << 40), 4, true).is_none());
     }
     #[test]
     fn external_requests_wait_for_guest_work_and_part_edges_use_the_same_pads() {

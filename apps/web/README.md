@@ -6,7 +6,7 @@ worker CPU captures, Wasm symbols, instruction rates and repeatable timing.
 This app lives in `apps/web/` of the FujiMod repository. Run the commands
 below from that directory.
 
-Try camera firmware and build SD boot v1 files in your browser. Firmware is
+Try camera firmware and build an SD boot v2 SD card in your browser. Firmware is
 identified by its complete SHA-256 and never uploaded. The web app is developed
 on review branches; `main` is deployed nightly and by hand ([DEPLOYMENT.md](DEPLOYMENT.md)).
 
@@ -45,6 +45,12 @@ generated entries and hashed build assets. `node scripts/test-development.ts`
 checks mobile Chromium and WebKit against a running development server, including
 a retained stale unversioned page response, repeated visits, and working inputs.
 Set `FUJIMOD_WEB_URL` to check another development endpoint.
+
+`node scripts/test-homepage.ts` checks the 0.1.0 preview in desktop
+and mobile Chromium and WebKit. It exercises feature search, detail cards,
+release notes and camera selection, and verifies a browser-built SD card
+download against every declared asset hash. Screenshots go to
+`build/homepage/`; set `FUJIMOD_REVIEW_OUTPUT` to choose another directory.
 
 ## Camera sign-in
 
@@ -319,7 +325,7 @@ state starts fresh at each cold boot.
 The Web checks workflow runs lint, type checks, tests and the public build when
 started by hand. It does not deploy.
 
-`pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY`
+`pnpm run deploy -- --runtime DIRECTORY --media DIRECTORY --sdk-docs DIRECTORY`
 validates locally generated assets, runs checks and tests, builds the website,
 and uploads it directly to Cloudflare. `--carry-from ORIGIN` reuses a deployed
 site's verified assets instead; the nightly Web deploy workflow uses it. Runtime bundles and feature media remain
@@ -419,3 +425,20 @@ and logs. The ZIP’s `report.json` is saved alongside it for direct inspection.
 Dev Tools includes binary USB traces. Unavailable snapshots are recorded
 explicitly. Inspection snapshots preserve the captured boundary and are not resume
 points. Release builds keep the browser download and GitHub issue workflow.
+
+### Software bill of materials
+
+The web build writes `client/sbom.json` under its output directory. This
+CycloneDX 1.6 document includes the locked production dependency graph, packages
+that contribute files to the web bundle, the WebUSB Wasm dependencies, and the
+provenance supplied with any staged runtime assets. The `fujimod:product`
+property identifies each product that ships a component. The license expression
+is in `licenses`; full notices for multi-license expressions are in
+`evidence.licenses`.
+
+Keep vendored source metadata in `upstream.json` beside the build target that
+uses it. Each record identifies the source revision and its local license
+files. A source with a verified Git submodule can inherit the pin and URL from
+the gitlink and `.gitmodules`. Runtime staging includes `sbom-components.json`
+in the hashed site asset manifest so carry-forward deployments preserve the
+licenses for the exact runtime being reused.

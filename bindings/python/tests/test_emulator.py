@@ -23,6 +23,7 @@ from fujimod.emulator.board import Session, _boot_report
 
 NATIVE_EXPORTS = frozenset({
     "prepare_configuration",
+    "arm64_register",
     "load_input_assets",
     "NativeError",
     "Board",
@@ -80,7 +81,7 @@ NATIVE_EXPORTS = frozenset({
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 54
+    assert len(NATIVE_EXPORTS) == 55
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
@@ -247,6 +248,14 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.Monk
             "clock_seconds_2000": None,
             "preferred_languages": [],
             "camera": None,
+            "access_point": None,
+            "capability_reply": None,
+            "engine": None,
+            "manifest": None,
+            "application_plan": None,
+            "discovery": False,
+            "quantum": None,
+            "instruction_rate": None,
         }
     ]
     board.close()

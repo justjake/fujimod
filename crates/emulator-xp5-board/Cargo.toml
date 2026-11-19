@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 doctest = false
@@ -19,7 +20,7 @@ fujimod-catalog-configuration.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-emulator.workspace = true
-fujimod-emulator-boot.workspace = true
+fujimod-emulator-board-graph.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-sensor-input.workspace = true

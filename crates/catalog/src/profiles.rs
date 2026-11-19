@@ -538,6 +538,20 @@ pub struct Shutter {
     pub closing_delay_seconds: Vec<Vec<f64>>,
 }
 
+/// Declared focal-plane curtain facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareCurtains"))]
+pub struct Curtains {
+    /// Image-input comparator output that releases the first curtain.
+    pub first_output: u64,
+    /// Image-input comparator output that releases the second curtain.
+    pub second_output: u64,
+    /// Light added to the interval between the two comparator edges, seconds.
+    pub light_offset_seconds: f64,
+}
+
 /// Declared radiometry facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -546,16 +560,21 @@ pub struct Shutter {
 pub struct Radiometry {
     /// Declared pixel clock hz.
     pub pixel_clock_hz: u64,
-    /// Declared projection.
-    pub projection: Projection,
+    /// Declared lens projection; absent when no lens is mounted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projection: Option<Projection>,
     /// Declared rolling references.
     pub rolling_references: Vec<RollingReference>,
     /// Invalid readouts while a sensor drive-mode change acquires sync.
     pub mode_change_frames: u8,
     /// Declared saturation lux seconds.
     pub saturation_lux_seconds: f64,
-    /// Declared shutter.
-    pub shutter: Shutter,
+    /// Declared leaf shutter; absent for a focal-plane body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shutter: Option<Shutter>,
+    /// Declared focal-plane curtains; absent for a leaf-shutter body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub curtains: Option<Curtains>,
     /// Declared shutter output.
     pub shutter_output: u64,
     /// Declared ticks per second.
@@ -1283,6 +1302,20 @@ pub struct XppUsb {
     pub transaction_ticks: u64,
 }
 
+/// XP4 USB PHY programming port, separate from the device controller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareUsbPhy"))]
+pub struct UsbPhy {
+    /// Declared base of the indexed control, parallel and readback words.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Declared size.
+    pub size: u64,
+}
+
 /// X-Processor Pro power control: supply hold and power domains.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1343,6 +1376,37 @@ pub struct XppSdHost {
     pub size: u64,
     /// Ticks of one command or data transfer.
     pub transfer_ticks: u64,
+}
+
+/// X-Processor 4 SD host: one standard SDHCI register bank at the window base.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSdHost"))]
+pub struct SdHost {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Capabilities register (+0x40).
+    pub capabilities: u32,
+    /// Capabilities 2 register (+0x44).
+    pub capabilities_2: u32,
+    /// Ticks for the internal clock to report stable.
+    pub clock_ticks: u64,
+    /// Interrupt line of the SDHCI status, when it is known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_route: Option<u32>,
+    /// Declared size.
+    pub size: u64,
+    /// Slot status halfword (+0xfc) and host controller version (+0xfe).
+    pub slot_and_version: u32,
+    /// Ticks of one command or data transfer.
+    pub transfer_ticks: u64,
+    /// Offsets of vendor words beyond the standard bank that read back their
+    /// last write.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vendor_offsets: Vec<u64>,
 }
 
 /// X-Processor Pro reset and gate controls; SD channel reset lines.
@@ -1665,6 +1729,10 @@ pub struct ImagingRegisters {
     pub input_buffer: InputBuffer,
     /// Declared normal irqs.
     pub normal_irqs: Vec<u64>,
+    /// Completion interrupt lines of the two RAW read-out DMA channels
+    /// (command window +0x40 and +0xc0). Left out, the channels refuse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_dma_irqs: Option<Vec<u64>>,
     /// Declared receiver base.
     pub receiver_base: u64,
     /// Declared reset ticks.
@@ -1983,6 +2051,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro SD channel.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xpp_sd: Option<XppSdHost>,
+    /// Declared X-Processor 4 SD hosts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sd_hosts: Vec<SdHost>,
     /// Declared X-Processor Pro reset and gate controls.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_gates: Option<ResetGates>,
@@ -2001,6 +2072,9 @@ pub struct RegisterLayouts {
     /// Declared X-Processor Pro USB device controller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xpp_usb: Option<XppUsb>,
+    /// Declared XP4 USB PHY programming port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usb_phy: Option<UsbPhy>,
     /// Declared interrupts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Interrupts>,
@@ -2367,6 +2441,8 @@ pub enum DeviceKind {
     RawConversionRegisters,
     /// Raw Statistics Control.
     RawStatisticsControl,
+    /// SATA host controller register block.
+    SataHost,
     /// Shared still processor with body-declared CFA.
     StillProcessor,
     /// S P I1 Serial Bus.

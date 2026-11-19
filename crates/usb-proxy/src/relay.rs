@@ -87,7 +87,7 @@ pub fn router(token: String, origins: Vec<String>) -> Result<Router> {
         .route("/usb-proxy/bindings/{*path}", get(binding_asset))
         .route("/usb-proxy/ws", get(upgrade))
         .with_state(relay)
-        .merge(crate::signaling::router()))
+        .merge(fujimod_webrtc::signaling::router()))
 }
 // Generated bindings are served beside the relay bundle. Keeping them as build
 // artifacts avoids a dependency cycle between the Wasm SDK and this crate.

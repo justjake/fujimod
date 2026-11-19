@@ -63,8 +63,16 @@ impl Scene {
     /// Integrate linear scene cells over each readout pixel before optical
     /// filtering. Integer overlap weights preserve a flat field exactly.
     pub fn binned(&self, dimensions: [usize; 2]) -> Self {
+        fujimod_perf::add_work(fujimod_perf::DeviceWorkCounter::SceneBinnedCalls, 1);
+        fujimod_perf::add_work(
+            fujimod_perf::DeviceWorkCounter::SceneBinnedPixels,
+            (dimensions[0] * dimensions[1]) as u64,
+        );
         let [width, height] = dimensions;
         let [sw, sh] = self.dimensions;
+        if sw % width == 0 && sh % height == 0 {
+            return self.binned_integer(dimensions, [sw / width, sh / height]);
+        }
         // Overlap weights of each readout column, shared by every row.
         struct Column {
             first: usize,
@@ -126,6 +134,43 @@ impl Scene {
             }
             let mut sum = [0u32; 3];
             for (out, color) in out[1..].iter_mut().zip(&colors) {
+                for c in 0..3 {
+                    sum[c] += ((color[c] + area / 2) / area) as u32;
+                }
+                *out = sum;
+            }
+        }
+        Self {
+            frame: self.frame.clone(),
+            dimensions,
+            prefix,
+            sites: None,
+        }
+    }
+
+    /// Integer source/output ratios cover the still and metering grids. Each
+    /// output sample is the exact rectangular mean, so source-row prefixes can
+    /// accumulate the rectangle directly instead of evaluating overlap weights.
+    fn binned_integer(&self, dimensions: [usize; 2], scale: [usize; 2]) -> Self {
+        let [width, height] = dimensions;
+        let [sx, sy] = scale;
+        let area = (sx * sy) as u64;
+        let mut prefix = vec![[0u32; 3]; (width + 1) * height];
+        let mut row_prefix = Vec::new();
+        for (y, out) in prefix.chunks_exact_mut(width + 1).enumerate() {
+            let mut colors = vec![[0u64; 3]; width];
+            for source_y in y * sy..(y + 1) * sy {
+                let row = self.row_prefix(source_y, &mut row_prefix);
+                for (x, color) in colors.iter_mut().enumerate() {
+                    let left = row[x * sx];
+                    let right = row[(x + 1) * sx];
+                    for c in 0..3 {
+                        color[c] += u64::from(right[c] - left[c]);
+                    }
+                }
+            }
+            let mut sum = [0u32; 3];
+            for (out, color) in out[1..].iter_mut().zip(colors) {
                 for c in 0..3 {
                     sum[c] += ((color[c] + area / 2) / area) as u32;
                 }

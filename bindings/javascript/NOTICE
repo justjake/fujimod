@@ -1,3 +1,5 @@
+FujiMod is distributed under the GNU General Public License, version 2.
+
 FujiMod ff80 protocol adaptations use the MIT-licensed fffw reference.
 
 The generated emulator runtime includes Unicorn Engine. Unicorn Engine is

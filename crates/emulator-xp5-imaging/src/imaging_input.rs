@@ -60,6 +60,7 @@ impl Device for Phy {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.deadline
     }
+    fujimod_emulator_devices::checkpoint_fields!(regs: BTreeMap<u64, u32>, generation: u64, deadline: Option<u64>);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
@@ -159,6 +160,7 @@ impl Device for Input {
             self.ready = true;
         }
     }
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }

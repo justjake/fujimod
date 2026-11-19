@@ -7,6 +7,7 @@
 //! retained per command word, in the order it was sent; no register
 //! auto-increment is assumed. A read is refused because the part's reply is not
 //! known. MISO during writes is an explicit pin input, not a reply.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -124,6 +125,22 @@ impl Endpoint for CommandRegisters {
         } else {
             0
         }
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &(&self.wiring, &self.state))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (wiring, state): (Wiring, State) = saved.decode(self.name())?;
+        if wiring != self.wiring || (!self.consistent(&state)) {
+            return Err("invalid serial command register checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_, state): (Wiring, State) = saved.decode(self.name())?;
+        self.state = state;
+        Ok(())
     }
     fn save(&self) -> Value {
         json!({"wiring":self.wiring,"registers":self.state})

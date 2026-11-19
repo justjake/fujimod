@@ -2,10 +2,11 @@
 //! 10a09fc clocks a 24-bit frame; 10a1d40 supplies the six-bit register address.
 use crate::{rtc::Counter, spi::Input};
 use fujimod_emulator_ip::socionext::gpio::SharedPins;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 /// Direct stop/load/start law over the shared counter.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 struct Rtc(Counter);
 impl Rtc {
@@ -87,7 +88,8 @@ impl PowerSerial {
             || pin >= 16
             || inputs
                 .keys()
-                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35))
+                // 48..=55: initial contents of the retained profile registers
+                .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35 | 48..=55))
             || [0, 1, 2, 3, 32, 34, 35]
                 .iter()
                 .any(|n| !inputs.contains_key(n))
@@ -147,6 +149,82 @@ impl PowerSerial {
         matches!(register, 2 | 13 | 14 | 18 | 20 | 32 | 34 | 35 | 37 | 38 | 48..=55)
     }
 }
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PowerState {
+    #[serde(default)]
+    command_output: Option<ExactCommandOutput>,
+    #[serde(default)]
+    accepted_output: Option<AcceptedOutput>,
+    kind: String,
+    port: usize,
+    pin: usize,
+    active_high: bool,
+    idle: bool,
+    inputs: BTreeMap<u8, u16>,
+    registers: Vec<(bool, u8, u16)>,
+    phase: u8,
+    header: u8,
+    high: u8,
+    response: u16,
+    edge: u64,
+    rtc: Rtc,
+}
+
+impl PowerSerial {
+    fn capture(&self) -> PowerState {
+        PowerState {
+            kind: "power-registers".into(), port: self.port, pin: self.pin, active_high: self.active_high,
+            idle: self.idle, inputs: self.inputs.clone(),
+            registers: self.registers.iter().map(|(&(bank, register), &value)| (bank, register, value)).collect(),
+            command_output: self.command_output.clone(), accepted_output: self.accepted_output.clone(),
+            phase: self.phase, header: self.header, high: self.high, response: self.response,
+            edge: self.edge, rtc: self.rtc.clone(),
+        }
+    }
+
+    fn validate(&self, state: &PowerState) -> Result<BTreeMap<(bool, u8), u16>, String> {
+        let registers: BTreeMap<_, _> = state
+            .registers
+            .iter()
+            .map(|(b, r, v)| ((*b, *r), *v))
+            .collect();
+        if state.phase != 0 && (!self.admitted_header(state.header)
+                || state.header & 1 != 0 && state.response != 0)
+            || state.command_output != self.command_output
+            || state.accepted_output.as_ref().is_some_and(|o| o.count == 0 || Some(&o.command) != self.command_output.as_ref())
+            || state.kind != "power-registers"
+            || state.port != self.port
+            || state.pin != self.pin
+            || state.active_high != self.active_high
+            || state.idle != self.idle
+            || state.inputs != self.inputs
+            || state.rtc.0.ticks_per_second != self.rtc.0.ticks_per_second
+            || state.phase > 2
+            || registers.len() != state.registers.len()
+            || registers
+                .keys()
+                .any(|(_, r)| !Self::writable(*r) || [32, 34, 35].contains(r))
+        {
+            return Err("Invalid power SPI checkpoint or physical input".into());
+        }
+        Ok(registers)
+    }
+
+    fn apply(&mut self, state: PowerState) -> Result<(), String> {
+        let registers = self.validate(&state)?;
+        self.accepted_output = state.accepted_output;
+        self.registers = registers;
+        self.phase = state.phase;
+        self.header = state.header;
+        self.high = state.high;
+        self.response = state.response;
+        self.edge = state.edge;
+        self.rtc = state.rtc;
+        Ok(())
+    }
+}
+
 impl Input for PowerSerial {
     fn exchange(&mut self, bits: u32, tx: u16, tick: u64) -> Result<u16, String> {
         let (level, edge) = self.pins.lock().unwrap().output(self.port, self.pin);
@@ -246,62 +324,18 @@ impl Input for PowerSerial {
         "command_output":self.command_output,"accepted_output":self.accepted_output,
         "phase":self.phase,"header":self.header,"high":self.high,"response":self.response,"edge":self.edge,"rtc":self.rtc})
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode("xp4-spi-power", &self.capture())
+    }
+    fn validate_checkpoint(&self, data: &Checkpoint) -> Result<(), String> {
+        let state: PowerState = data.decode("xp4-spi-power")?;
+        self.validate(&state).map(|_| ())
+    }
+    fn restore_checkpoint(&mut self, data: &Checkpoint) -> Result<(), String> {
+        self.apply(data.decode("xp4-spi-power")?)
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        #[derive(serde::Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct State {
-            #[serde(default)]
-            command_output: Option<ExactCommandOutput>,
-            #[serde(default)]
-            accepted_output: Option<AcceptedOutput>,
-            kind: String,
-            port: usize,
-            pin: usize,
-            active_high: bool,
-            idle: bool,
-            inputs: BTreeMap<u8, u16>,
-            registers: Vec<(bool, u8, u16)>,
-            phase: u8,
-            header: u8,
-            high: u8,
-            response: u16,
-            edge: u64,
-            rtc: Rtc,
-        }
-        let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let registers: BTreeMap<_, _> = state
-            .registers
-            .iter()
-            .map(|(b, r, v)| ((*b, *r), *v))
-            .collect();
-        if state.phase != 0 && (!self.admitted_header(state.header)
-                || state.header & 1 != 0 && state.response != 0)
-            || state.command_output != self.command_output
-            || state.accepted_output.as_ref().is_some_and(|o| o.count == 0 || Some(&o.command) != self.command_output.as_ref())
-            || state.kind != "power-registers"
-            || state.port != self.port
-            || state.pin != self.pin
-            || state.active_high != self.active_high
-            || state.idle != self.idle
-            || state.inputs != self.inputs
-            || state.rtc.0.ticks_per_second != self.rtc.0.ticks_per_second
-            || state.phase > 2
-            || registers.len() != state.registers.len()
-            || registers
-                .keys()
-                .any(|(_, r)| !Self::writable(*r) || [32, 34, 35].contains(r))
-        {
-            return Err("Invalid power SPI checkpoint or physical input".into());
-        }
-        self.accepted_output = state.accepted_output;
-        self.registers = registers;
-        self.phase = state.phase;
-        self.header = state.header;
-        self.high = state.high;
-        self.response = state.response;
-        self.edge = state.edge;
-        self.rtc = state.rtc;
-        Ok(())
+        self.apply(serde_json::from_value(value.clone()).map_err(|error| error.to_string())?)
     }
 }
 

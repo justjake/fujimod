@@ -2,6 +2,7 @@
   "name": "@fujimod/emulator-ui",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-2.0-only",
   "type": "module",
   "exports": {
     "./EmulatorWorkspace": "./src/EmulatorWorkspace.tsx",

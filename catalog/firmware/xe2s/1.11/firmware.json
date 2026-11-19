@@ -17,21 +17,8 @@
   },
   "installation": {
     "flash_offset": 604,
-    "entry_labels": {
-      "0x93dca4": "application entry",
-      "0x1800": "primary loader",
-      "0x11800": "secondary loader",
-      "0x40020": "primary kernel",
-      "0xd0020": "secondary kernel",
-      "0x93e1f0": "application INIT"
-    },
-    "loader_validation": {
-      "entry": 9690276,
-      "sections": [
-        "stream-0016025c",
-        "stream-0032025c"
-      ]
-    },
+    "entry_labels": {},
+    "loader_validation": null,
     "image_sections": [
       {
         "name": "kernel0",

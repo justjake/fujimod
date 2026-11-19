@@ -90,12 +90,13 @@ impl Lcdc {
         active: bool,
         source: u64,
         format: Option<&str>,
+        layers: usize,
     ) -> Result<(), String> {
         cx.output_status(
             self.output(),
             serde_json::json!({
                 "enabled": self.r(4) == 1, "active": active,
-                "format": format,
+                "format": format, "layers": layers,
                 "source": format!("0x{source:x}"), "sequence": self.state.sequence,
                 "width": self.r(0x14) & 0x3fff, "height": self.r(0x20) & 0x1fff,
                 "tick": cx.now(), "capture": "active-picture-phase",
@@ -106,12 +107,12 @@ impl Lcdc {
         if self.picture.is_none() && self.video.is_none() {
             return Ok(());
         }
-        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None)};
+        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None,0)};
         let (width,height)=(output.width,output.height);
         let planes:Vec<_>=output.layers.iter().map(|layer|layer.plane).collect();
         let top=planes.last().unwrap();
         let source=top.address;
-        let format=if top.order==PixelOrder::YyCbCr{"yycbcr422"}else{"bgra8888-straight"};
+        let format=if top.order==PixelOrder::YyCbCr{"yycbcr422"}else{"abgr8888-straight"};
         let rgba=output.render(|a,n|cx.ram_bytes(a,n))?;
         if self.state.last_image.as_ref() != Some(&(width, height, rgba.clone())) {
             self.state.sequence += 1;
@@ -124,7 +125,7 @@ impl Lcdc {
             height,
             rgba,
         })?;
-        self.status(cx, true, source, Some(format))
+        self.status(cx, true, source, Some(format), planes.len())
     }
     fn register(offset: u64) -> bool {
         matches!(
@@ -135,6 +136,55 @@ impl Lcdc {
             || (0x400..=0x514).contains(&offset)
     }
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SavedLcdc {
+    base: u64,
+    ticks_per_pixel: u64,
+    irqs: [u32; 2],
+    regs: Vec<u32>,
+    deadline: Option<u64>,
+    phase: usize,
+    frames: u64,
+    sequence: u64,
+    image_size: Option<(u32, u32)>,
+}
+
+impl SavedLcdc {
+    fn decode(display: &Lcdc, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<State, String> {
+        let saved: Self = data.decode(display.name())?;
+        if (saved.base, saved.ticks_per_pixel, saved.irqs) != (display.base, display.ticks_per_pixel, display.irqs)
+            || data.blobs().len() != usize::from(saved.image_size.is_some())
+        {
+            return Err("XP4 LCDC checkpoint wiring differs".into());
+        }
+        let last_image = saved.image_size.map(|(width, height)| {
+            let length = usize::try_from(u64::from(width) * u64::from(height)).ok().and_then(|n| n.checked_mul(4));
+            if length != Some(data.blobs()[0].len()) {
+                return Err("XP4 LCDC checkpoint image size differs".to_owned());
+            }
+            Ok((width, height, data.blobs()[0].to_vec()))
+        }).transpose()?;
+        Ok(State {
+            regs: saved.regs, deadline: saved.deadline, phase: saved.phase,
+            frames: saved.frames, sequence: saved.sequence, last_image,
+        })
+    }
+}
+
+impl Lcdc {
+    fn validate_state(&self, s: &State) -> Result<(), String> {
+        if s.regs.len() != 0x604 / 4
+            || s.phase > 1
+            || s.regs[1] > 1
+            || s.deadline.is_some() != (s.regs[1] == 1)
+        {
+            return Err("Invalid XP4 LCDC timing checkpoint".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Lcdc {
     fn name(&self) -> &'static str {
         if self.base == 0xfff7a000 {
@@ -200,7 +250,7 @@ impl Device for Lcdc {
         self.state.regs[offset as usize / 4] = value;
         if offset == 4
             && value == 0
-            && let Err(error) = self.status(cx, false, 0, None)
+            && let Err(error) = self.status(cx, false, 0, None, 0)
         {
             cx.fail(error);
         }
@@ -244,18 +294,32 @@ impl Device for Lcdc {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.deadline
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        let image = self.state.last_image.as_ref();
+        let saved = SavedLcdc {
+            base: self.base, ticks_per_pixel: self.ticks_per_pixel, irqs: self.irqs,
+            regs: self.state.regs.clone(), deadline: self.state.deadline, phase: self.state.phase,
+            frames: self.state.frames, sequence: self.state.sequence,
+            image_size: image.map(|(width, height, _)| (*width, *height)),
+        };
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &saved)?
+            .with_blobs(image.into_iter().map(|(_, _, bytes)| std::sync::Arc::from(bytes.as_slice())).collect()))
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_state(&SavedLcdc::decode(self, data)?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let state = SavedLcdc::decode(self, data)?;
+        self.validate_state(&state)?;
+        self.state = state;
+        Ok(())
+    }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let s: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if s.regs.len() != 0x604 / 4
-            || s.phase > 1
-            || s.regs[1] > 1
-            || s.deadline.is_some() != (s.regs[1] == 1)
-        {
-            return Err("Invalid XP4 LCDC timing checkpoint".into());
-        }
+        self.validate_state(&s)?;
         self.state = s;
         Ok(())
     }
@@ -362,7 +426,7 @@ mod tests {
             0xfffa9000,
             2,
             [117, 118],
-            Some(Picture::Bgra8888Straight),
+            Some(Picture::Abgr8888Straight),
             None,
         )
         .unwrap();
@@ -370,7 +434,7 @@ mod tests {
             ram: vec![0; 64],
             ..Clock::default()
         };
-        h.ram[16..24].copy_from_slice(&[30, 20, 10, 255, 100, 80, 60, 128]);
+        h.ram[16..24].copy_from_slice(&[255, 30, 20, 10, 128, 100, 80, 60]);
         // Two source pixels scaled horizontally by 2, over opaque black.
         for (offset, value) in [
             (0x10, 8),
@@ -425,7 +489,7 @@ mod tests {
             0xfffa9000,
             2,
             [117, 118],
-            Some(Picture::Bgra8888Straight),
+            Some(Picture::Abgr8888Straight),
             None,
         )
         .unwrap();

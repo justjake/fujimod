@@ -13,6 +13,7 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 pub struct Xp4Session {
     inner: Session,
+    catalog_quantum: Option<usize>,
     handler: Rc<RefCell<Option<Py<PyAny>>>>,
     observer: InstructionObserver,
 }
@@ -30,11 +31,16 @@ impl Xp4Session {
         definition: &str,
         storage_image: Option<Vec<u8>>,
         card_files: Vec<(String, Vec<u8>)>,
+        card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     ) -> PyResult<Self> {
         let definition: Definition = serde_json::from_str(definition)
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        let inner = Session::new(definition, storage_image, card_files)
+        let inner = Session::new_with_media(definition, storage_image, card_files, card_media)
             .map_err(fujimod_python_base::error)?;
+        Self::from_session(inner, None)
+    }
+
+    pub fn from_session(inner: Session, catalog_quantum: Option<usize>) -> PyResult<Self> {
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
         let observer: InstructionObserver = Rc::new(move |core, address| {
@@ -53,7 +59,7 @@ impl Xp4Session {
         });
         inner.set_instruction_observer(Some(observer.clone()))
             .map_err(fujimod_python_base::error)?;
-        Ok(Self { inner, handler, observer })
+        Ok(Self { inner, catalog_quantum, handler, observer })
     }
     pub fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         if let Ok(handler) = self.handler.try_borrow()
@@ -127,7 +133,7 @@ impl Xp4Session {
             .map(|saved| fujimod_python_base::observation::snapshot(py, &saved))
             .transpose()
     }
-    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize) -> ());
+    forward!(memory_watch_begin(ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> ());
     forward!(memory_watch_end() -> ());
     pub fn memory_watch_enabled(&self) -> bool {
         self.inner.memory_watch_enabled()
@@ -182,11 +188,13 @@ impl Xp4Session {
         Ok(PyBytes::new(py, &bytes))
     }
     forward!(run(core: usize, budget: usize) -> ());
+    forward!(run_to(core: usize, budget: usize, target: u64) -> ());
     pub fn idle(&self) -> bool {
         self.inner.idle()
     }
     forward!(set_adc_input(channel: usize, sample: u16) -> ());
     forward!(set_gpio_input(port: usize, pin: usize, high: bool) -> ());
+    forward!(turn_dial(name: &str, edges: i32) -> ());
     forward!(set_usb_connected(connected: bool) -> ());
     forward!(usb_bus_reset() -> ());
     forward!(usb_transaction(physical_endpoint: usize, setup: bool, out: Option<Vec<u8>>) -> u64);
@@ -237,6 +245,9 @@ impl Xp4Session {
 }
 
 impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
+    fn catalog_quantum(&self) -> Option<usize> {
+        self.catalog_quantum
+    }
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()> {
         Xp4Session::run_board(self, limit, quantum)
     }
@@ -297,8 +308,8 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
             quota_per_edge,
         )
     }
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()> {
-        Xp4Session::memory_watch_begin(self, ranges, limit)
+    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()> {
+        Xp4Session::memory_watch_begin(self, ranges, limit, writes_only)
     }
     fn memory_watch_end(&self) -> PyResult<()> {
         Xp4Session::memory_watch_end(self)
@@ -312,11 +323,17 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     fn run(&self, core: usize, budget: usize) -> PyResult<()> {
         Xp4Session::run(self, core, budget)
     }
+    fn run_to(&self, core: usize, budget: usize, target: u64) -> PyResult<()> {
+        Xp4Session::run_to(self, core, budget, target)
+    }
     fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()> {
         Xp4Session::set_adc_input(self, channel, sample)
     }
     fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()> {
         Xp4Session::set_gpio_input(self, port, pin, high)
+    }
+    fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()> {
+        Xp4Session::turn_dial(self, name, edges)
     }
     fn set_usb_connected(&self, connected: bool) -> PyResult<()> {
         Xp4Session::set_usb_connected(self, connected)
@@ -430,6 +447,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn interventions(&self) -> Vec<fujimod_python_base::discovery::Intervention> {
         Xp4Session::interventions(self)
+    }
+    fn card_medium(&self, host: usize) -> PyResult<fujimod_emulator_devices::parts::sd_card::Card> {
+        self.inner.card_medium(host).map_err(fujimod_python_base::error)
     }
 }
 

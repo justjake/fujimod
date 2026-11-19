@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 pub struct Summary {
     pub width: u16,
     pub height: u16,
+    /// Exif IFD tag (as `0xa001`, ColorSpace) to its value, for one-value integer tags.
+    pub exif: BTreeMap<String, i64>,
     /// MakerNote tag (as `0x1401`) to its value, for one-value integer tags.
     pub maker_note: BTreeMap<String, i64>,
 }
@@ -60,7 +62,9 @@ pub fn inspect(jpeg: &[u8]) -> Result<Summary, String> {
     for segment in segments(jpeg) {
         let (marker, body) = segment?;
         match marker {
-            0xe1 if body.starts_with(b"Exif\0\0") => out.maker_note = maker_note(&body[6..]),
+            0xe1 if body.starts_with(b"Exif\0\0") => {
+                (out.exif, out.maker_note) = exif_tags(&body[6..])
+            }
             // Baseline, extended or progressive frame header.
             0xc0..=0xc2 if body.len() >= 5 => {
                 out.height = u16::from_be_bytes([body[1], body[2]]);
@@ -129,56 +133,57 @@ pub fn exif_iso(jpeg: &[u8]) -> Option<u32> {
     None
 }
 
-fn maker_note(tiff: &[u8]) -> BTreeMap<String, i64> {
-    let little = tiff.starts_with(b"II");
-    let exif = Tiff {
-        bytes: tiff,
-        little,
-    };
-    let find = |t: &Tiff, ifd: usize, tag: u16| t.entries(ifd).into_iter().find(|e| e.0 == tag);
-    let Some(ifd0) = exif.u32(4) else {
-        return BTreeMap::new();
-    };
-    let Some((.., exif_at)) = find(&exif, ifd0 as usize, 0x8769) else {
-        return BTreeMap::new();
-    };
-    let Some(exif_ifd) = exif.u32(exif_at) else {
-        return BTreeMap::new();
-    };
-    let Some((_, _, count, note_at)) = find(&exif, exif_ifd as usize, 0x927c) else {
-        return BTreeMap::new();
-    };
-    let Some(start) = exif.u32(note_at) else {
-        return BTreeMap::new();
-    };
-    let Some(note) = tiff.get(start as usize..start as usize + count as usize) else {
-        return BTreeMap::new();
-    };
-    // "FUJIFILM", then the IFD offset; offsets are relative to the note and little-endian.
-    if !note.starts_with(b"FUJIFILM") {
-        return BTreeMap::new();
-    }
-    let fuji = Tiff {
-        bytes: note,
-        little: true,
-    };
-    let Some(ifd) = fuji.u32(8) else {
-        return BTreeMap::new();
-    };
-    fuji.entries(ifd as usize)
+/// One-value integer tags of an IFD, keyed `0x1401`.
+fn scalars(t: &Tiff, ifd: usize) -> BTreeMap<String, i64> {
+    t.entries(ifd)
         .into_iter()
         .filter(|e| e.2 == 1)
         .filter_map(|(tag, kind, _, at)| {
             let value = match kind {
-                3 => fuji.u16(at)? as i64,
-                4 => fuji.u32(at)? as i64,
-                8 => fuji.u16(at)? as i16 as i64,
-                9 => fuji.u32(at)? as i32 as i64,
+                3 => t.u16(at)? as i64,
+                4 => t.u32(at)? as i64,
+                8 => t.u16(at)? as i16 as i64,
+                9 => t.u32(at)? as i32 as i64,
                 _ => return None,
             };
             Some((format!("{tag:#06x}"), value))
         })
         .collect()
+}
+
+/// The Exif IFD's and the Fujifilm MakerNote's scalar tags.
+fn exif_tags(tiff: &[u8]) -> (BTreeMap<String, i64>, BTreeMap<String, i64>) {
+    let exif = Tiff {
+        bytes: tiff,
+        little: tiff.starts_with(b"II"),
+    };
+    let find = |ifd: usize, tag: u16| exif.entries(ifd).into_iter().find(|e| e.0 == tag);
+    let Some(exif_ifd) = exif
+        .u32(4)
+        .and_then(|ifd0| find(ifd0 as usize, 0x8769))
+        .and_then(|(.., at)| exif.u32(at))
+    else {
+        return Default::default();
+    };
+    let tags = scalars(&exif, exif_ifd as usize);
+    // "FUJIFILM", then the IFD offset; offsets are relative to the note and little-endian.
+    let note = find(exif_ifd as usize, 0x927c).and_then(|(_, _, count, at)| {
+        let start = exif.u32(at)? as usize;
+        tiff.get(start..start + count as usize)
+    });
+    let maker_note = match note {
+        Some(note) if note.starts_with(b"FUJIFILM") => {
+            let fuji = Tiff {
+                bytes: note,
+                little: true,
+            };
+            fuji.u32(8)
+                .map(|ifd| scalars(&fuji, ifd as usize))
+                .unwrap_or_default()
+        }
+        _ => BTreeMap::new(),
+    };
+    (tags, maker_note)
 }
 
 /// A minimal JPEG with an Exif ISO and Fujifilm MakerNote, for tests.
@@ -232,6 +237,7 @@ mod tests {
         assert_eq!((s.width, s.height), (6240, 4160));
         assert_eq!(s.maker_note["0x1401"], 0x700);
         assert_eq!(s.maker_note["0x1047"], 32);
+        assert_eq!(s.exif["0x8827"], 400);
         assert!(inspect(b"not a jpeg").is_err());
         assert_eq!(exif_iso(&jpeg), Some(400));
         // Fill bytes before a marker and a standalone marker are skipped.

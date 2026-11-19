@@ -1,0 +1,67 @@
+# Cold OS boot: reconstructed EL3 -> EL1t handoff at 0x9920c.
+version = 1
+firmware = "x100vi-131"
+load_firmware = true
+
+# Device windows: x100vi-131.d/*.toml, merged in filename order.
+
+[[ram]]
+base = 0
+size = 0x40000000 # Stock low Normal map; cfg0x7508000, frames0x8473000, RTOS pools.
+
+# Linux DRAM366MiB plus virtio/IPC/shared arenas through0x68000000.
+# 0x30c86b0 gives the explicit subranges; all SoC devices remain at0xfa/0xff.
+[[ram]]
+base = 0x40000000
+size = 0x28000000
+
+# The firmware uses DRAM up to 0x80000000, not the catalog body's 0x68000000: the subject-detection
+# 0x68000000 read now lands in DRAM, as in the X-T5 runner. The body's drain peripheral moves
+# onto 0x80000000 only so that it does not overlap the new RAM.
+[dram]
+limit = 0x80000000
+bus_drain = 0x80000000
+
+[[ram]]
+base = 0x68000000
+size = 0x18000000
+
+# DDR PHY register and firmware space, two PHYs of 0x1a0000 bytes (the X-T5 runner gives its DDR
+# PHY RAM the same extents: "DDR PHY register/firmware space").
+# The first half-press (S1) writes the second PHY's mailbox at 0xfb5a0000 and makes a DMA access at
+# 0xfb4a0000 (one run each); a device window cannot receive the DMA. The first PHY (0xfb000000 RAM,
+# 0xfb1a0000 stub) is X-T5 parity, not observed on the X100VI: in the runs checked its stub saw no
+# write and no read of the polled status word, and the RAM keeps no access log.
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# BIS/M-profile local SRAM: stock14d3f14 copies section5 before c928[21] release.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+# Inherited SCTLR (MMU off), D/A masks and MPIDRs are assumptions.
+# Stock replaces SP_EL0/SP_EL1 before calling C, builds its MMU map,
+# then invokes the normal section6 entry in x20. x21 names the reset
+# hardware-info buffer, initialized above for the normal virtual-board profile.

@@ -168,6 +168,15 @@ fn size(v: i32) -> usize {
     (32 - v.unsigned_abs().leading_zeros()) as usize
 }
 
+#[inline(always)]
+fn quantize(value: i32, quantum: i32) -> i32 {
+    if value == 0 {
+        0
+    } else {
+        (value + quantum / 2).div_euclid(quantum)
+    }
+}
+
 #[derive(Clone)]
 pub struct Codec {
     dc: [Huffman; 2],
@@ -254,18 +263,17 @@ impl Codec {
     ) -> Result<(), String> {
         let table = usize::from(component != 0);
         let f = fdct(pixels);
-        let q: [i32; 64] = std::array::from_fn(|i| {
-            (f[i] + self.quant[table][i] / 2).div_euclid(self.quant[table][i])
-        });
-        let diff = q[0] - *predictor;
+        let quant = &self.quant[table];
+        let dc = quantize(f[0], quant[0]);
+        let diff = dc - *predictor;
         if size(diff) > 11 {
             return Err("JPEG DC exceeds baseline magnitude".into());
         }
-        *predictor = q[0];
+        *predictor = dc;
         w.symbol(&self.dc[table], size(diff), diff)?;
         let mut zeros = 0;
         for &i in &ZIGZAG[1..] {
-            let v = q[i];
+            let v = quantize(f[i], quant[i]);
             if v == 0 {
                 zeros += 1;
             } else {
@@ -364,7 +372,9 @@ impl Codec {
                             i % 8 * 2
                         };
                     let at = (y * width + x) / 2 * 4 + if c == 0 { x % 2 } else { c + 1 };
-                    source[at] as i32 - 128
+                    // SAFETY: validation fixes `width * height * 2` bytes and
+                    // the block lanes stay inside that packed 4:2:2 raster.
+                    unsafe { *source.get_unchecked(at) as i32 - 128 }
                 });
                 self.block(&mut w, pixels, c, &mut prev[c])?;
             }

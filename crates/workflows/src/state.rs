@@ -45,35 +45,33 @@ pub async fn dump(
         done += bytes;
         progress(done, total)
     };
-    // The state catalog explicitly authorizes additional apertures, including
-    // boot ROM outside DRAM. Do not infer readability from a bulk capacity.
-    let mut facts = bulk.clone();
-    let mut start = facts.window.address;
-    let mut end = start + facts.window.size;
+    // The E1 source reaches only the DRAM window: a source address outside it
+    // wraps into DRAM. Other regions (boot ROM) use direct memory reads.
     for region in &state.regions {
-        let range = BulkRange {
+        super::bulk::memory_range(BulkRange {
             address: region.address,
             size: region.size,
-        };
-        super::bulk::memory_range(range)?;
-        start = start.min(region.address);
-        end = end.max(region.address + region.size);
+        })?;
     }
-    facts.window = BulkRange {
-        address: start,
-        size: end - start,
-    };
-    super::bulk::memory_range(facts.window)?;
-    let mut reader = bulk::Qualified::prepare(session, &facts, limits).await?;
+    let facts = bulk;
+    let mut reader = bulk::Qualified::prepare(session, facts, limits).await?;
     let outcome = async {
         for region in &state.regions {
             let range = BulkRange {
                 address: region.address,
                 size: region.size,
             };
-            let data = reader.read_progress(range, &mut advance).await?;
+            let direct = !bulk.window.contains(range);
+            let mut read = async |reader: &mut bulk::Qualified<'_>| {
+                if direct {
+                    reader.read_direct_progress(range, &mut advance).await
+                } else {
+                    reader.read_progress(range, &mut advance).await
+                }
+            };
+            let data = read(&mut reader).await?;
             if region.constant {
-                if reader.read_progress(range, &mut advance).await? != data {
+                if read(&mut reader).await? != data {
                     return Err(bulk::BulkError::Check(format!(
                         "Constant state region {} changed between reads",
                         region.name

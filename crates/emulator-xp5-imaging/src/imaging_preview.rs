@@ -1,5 +1,6 @@
 //! XP5 preview input-buffer and RIFP processor maps.
 use fujimod_emulator_sensor_input::{input_buffer::{InputBuffer, Output, Wiring}, statistics::{Planes, Statistics}};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -143,6 +144,21 @@ impl Device for Preview {
             Self::Rifp(v) => v.next_deadline(now),
         }
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        match self {
+            Self::Input(input) => input.checkpoint(),
+            Self::Rifp(rifp) => rifp.checkpoint(),
+        }
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        match self {
+            Self::Input(input) => input.validate_checkpoint(saved),
+            Self::Rifp(rifp) => rifp.validate_checkpoint(saved),
+        }
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.device().restore_checkpoint(saved)
+    }
     fn save(&self) -> Value {
         match self {
             Self::Input(v) => v.save(),
@@ -254,6 +270,21 @@ impl Device for Rifp {
         self.state.frames += 1;
         self.irq(cx);
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode(self.name())?;
+        if state.armed != state.deadline.is_some() {
+            return Err("RIFP active/deadline disagree".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode(self.name())?;
+        Ok(())
+    }
     fn save(&self) -> Value {
         serde_json::json!({"state":self.state})
     }
@@ -287,6 +318,16 @@ impl Device for Io {
             return;
         }
         self.0.lock().unwrap().regs.insert(o, v as u32);
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &*self.0.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode::<State>(self.name()).map(|_| ())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        *self.0.lock().unwrap() = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::to_value(&*self.0.lock().unwrap()).unwrap()

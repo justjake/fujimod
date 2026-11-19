@@ -20,15 +20,16 @@ ninja = "1.13.2"
 "conda:ffmpeg" = "9.0.2"
 "conda:protobuf" = "7.36.2"
 "cargo:cargo-hakari" = "0.9.39"
+"cargo:cargo-sweep" = "0.8.0"
 "cargo:cargo-llvm-cov" = "0.9.1"
 
 [tasks.commit]
 description = "Commit chosen paths or hunks to the checked-out branch and push"
 run = "python scripts/git/commit.py"
 
-[tasks.land]
-description = "Land an approved worktree's branch on main as a fast-forward"
-run = "python scripts/git/land.py"
+[tasks.rebase]
+description = "Rebase the topic branch onto its pull request's base (main without one) and push with --force-with-lease"
+run = "python scripts/git/rebase.py"
 
 [tasks.hooks-install]
 description = "Install the worktree guard and LFS Git hooks"

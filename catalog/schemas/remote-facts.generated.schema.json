@@ -243,15 +243,162 @@
       ],
       "type": "object"
     },
+    "BindingActionChoice": {
+      "description": "An action offered in a binding picker.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A declared action with its registry identity.",
+          "properties": {
+            "action_id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "declared",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "action_id",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A legacy action identified by its saved binding identity.",
+          "properties": {
+            "binding_id": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "legacy",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "binding_id",
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BindingApply": {
+      "additionalProperties": false,
+      "description": "Accepted binding-choice writer and its compiled menu owners.",
+      "properties": {
+        "callback": {
+          "description": "Linked callback entry.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "controls": {
+          "description": "Control IDs and their selected choice records.",
+          "items": {
+            "$ref": "#/$defs/BindingApplyControl"
+          },
+          "type": "array"
+        },
+        "function_action": {
+          "description": "Generated action ID for the computed function picker; zero when absent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "function_owner": {
+          "description": "Record that owns the compiled function choices.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "callback",
+        "function_owner",
+        "function_action",
+        "controls"
+      ],
+      "type": "object"
+    },
+    "BindingApplyControl": {
+      "additionalProperties": false,
+      "description": "Compiled row and choice owners for one control ID.",
+      "properties": {
+        "choice_owner": {
+          "description": "Record whose choices are committed for the control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "control": {
+          "description": "Control ID accepted by the writer.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "function_item": {
+          "description": "High 16-bit item handle carried by the composite function action ID;\nzero when absent.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_owner": {
+          "description": "Menu row representing the control.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "control",
+        "row_owner",
+        "choice_owner",
+        "function_item"
+      ],
+      "type": "object"
+    },
     "BindingChoices": {
       "additionalProperties": false,
       "description": "Exact binding picker owners.",
       "properties": {
+        "accepted_apply": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BindingApply"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Accepted writer and control owners for compiled function choices."
+        },
         "count": {
           "description": "Selectable count.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "mod_actions": {
+          "description": "Action identities in their selectable order.",
+          "items": {
+            "$ref": "#/$defs/BindingActionChoice"
+          },
+          "type": "array"
         },
         "mod_owners": {
           "description": "Curated mod owners.",
@@ -275,7 +422,8 @@
       "required": [
         "count",
         "native_owners",
-        "mod_owners"
+        "mod_owners",
+        "mod_actions"
       ],
       "type": "object"
     },
@@ -619,6 +767,17 @@
             "$ref": "#/$defs/BuildMemory"
           },
           "type": "array"
+        },
+        "menu_tree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MenuTreeCatalog"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Static declarations served by the unified menu-tree provider."
         },
         "owner_constants": {
           "additionalProperties": {
@@ -2687,7 +2846,7 @@
       "type": "object"
     },
     "InputBinding": {
-      "description": "An explicit binding in one of two distinct firmware input vocabularies.",
+      "description": "A debug key, native input name, or exact located scanner-row identity.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -2724,6 +2883,25 @@
           "required": [
             "kind",
             "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Stable identity of a located scanner row, even when it has no command name.",
+          "properties": {
+            "kind": {
+              "const": "scanner_row",
+              "type": "string"
+            },
+            "row": {
+              "description": "Generated scanner row identity, such as `row-69`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "row"
           ],
           "type": "object"
         }
@@ -3027,6 +3205,25 @@
         }
       ]
     },
+    "LinkedChoice": {
+      "additionalProperties": false,
+      "description": "One declared choice slot of a linked-choice row.",
+      "properties": {
+        "label": {
+          "description": "The choice's caption.",
+          "type": "string"
+        },
+        "linked": {
+          "description": "Whether the build links the object that offers this choice.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "linked"
+      ],
+      "type": "object"
+    },
     "LinkedSymbol": {
       "additionalProperties": false,
       "description": "Linked symbol identity.",
@@ -3305,6 +3502,13 @@
         "label_text": {
           "description": "Declared label.",
           "type": "string"
+        },
+        "linked_choices": {
+          "description": "Every declared slot of a row whose choices exist only when another\nlinked object does, in slot order, and whether this build links it.",
+          "items": {
+            "$ref": "#/$defs/LinkedChoice"
+          },
+          "type": "array"
         },
         "mod": {
           "description": "Owning_mod.",
@@ -3639,6 +3843,161 @@
         "q_grid"
       ],
       "type": "object"
+    },
+    "MenuTreeAttachment": {
+      "additionalProperties": false,
+      "description": "A declared root's placement in a stock menu.",
+      "properties": {
+        "anchor": {
+          "description": "Stock menu anchor.",
+          "type": "string"
+        },
+        "order": {
+          "description": "Order among roots at this anchor and placement.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "place": {
+          "$ref": "#/$defs/MenuTreePlace",
+          "description": "How the root is placed at the anchor."
+        },
+        "record": {
+          "description": "Existing record symbol when the mod supplies one.",
+          "type": "string"
+        },
+        "root": {
+          "description": "Declared root path.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "anchor",
+        "place",
+        "order",
+        "record"
+      ],
+      "type": "object"
+    },
+    "MenuTreeCatalog": {
+      "additionalProperties": false,
+      "description": "Static FM_MENU declarations used by the compiled menu-tree provider.",
+      "properties": {
+        "attachments": {
+          "description": "Declared roots attached at stock menu anchors.",
+          "items": {
+            "$ref": "#/$defs/MenuTreeAttachment"
+          },
+          "type": "array"
+        },
+        "nodes": {
+          "description": "Declared tree nodes in provider order.",
+          "items": {
+            "$ref": "#/$defs/MenuTreeNode"
+          },
+          "type": "array"
+        },
+        "schema": {
+          "description": "Format version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema",
+        "nodes",
+        "attachments"
+      ],
+      "type": "object"
+    },
+    "MenuTreeNode": {
+      "additionalProperties": false,
+      "description": "One declared node and its stable owner/path identity.",
+      "properties": {
+        "action": {
+          "description": "Action named by a VALUE or COMMAND node, when present.",
+          "type": "string"
+        },
+        "id": {
+          "description": "Number assigned by the menu declaration generator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "identity": {
+          "description": "Stable owner/name identity.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/MenuTreeNodeKind",
+          "description": "Declared menu-node kind."
+        },
+        "label_text": {
+          "description": "Static label literal, or empty when the provider supplies it at runtime.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Name within its declaring tree, including its path from that tree's root.",
+          "type": "string"
+        },
+        "order": {
+          "description": "Position among the node's siblings or attached roots.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "owner": {
+          "description": "Owning mod or library.",
+          "type": "string"
+        },
+        "parent": {
+          "description": "Declared parent node path; none for roots attached to a stock anchor.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target": {
+          "description": "Node path named by a LINK node, when present.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "identity",
+        "owner",
+        "id",
+        "kind",
+        "label_text",
+        "order",
+        "action",
+        "target"
+      ],
+      "type": "object"
+    },
+    "MenuTreeNodeKind": {
+      "description": "FM_MENU node kinds.",
+      "enum": [
+        "PAGE",
+        "GROUP",
+        "VALUE",
+        "COMMAND",
+        "INFO",
+        "LINK",
+        "ROWS"
+      ],
+      "type": "string"
+    },
+    "MenuTreePlace": {
+      "description": "Placement of a declared tree at a stock menu anchor.",
+      "enum": [
+        "in",
+        "after",
+        "replace"
+      ],
+      "type": "string"
     },
     "ModeBusy": {
       "additionalProperties": false,
@@ -4109,6 +4468,65 @@
         "bgra8888"
       ],
       "type": "string"
+    },
+    "QfnActionBinding": {
+      "additionalProperties": false,
+      "description": "A compiled action binding and the menu items that project its action.",
+      "properties": {
+        "action_id": {
+          "description": "Registry identity of the action.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "assignments": {
+          "description": "Destinations supported by this binding.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "binding": {
+          "description": "Native Q/Fn binding object.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "choice_capacity": {
+          "description": "Maximum compiled choice capacity.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_owners": {
+          "description": "Menu item identities that project this action.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Saved action name.",
+          "type": "string"
+        },
+        "owner": {
+          "description": "Generic menu owner.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "owner",
+        "binding",
+        "action_id",
+        "name",
+        "assignments",
+        "choice_capacity",
+        "menu_owners"
+      ],
+      "type": "object"
     },
     "QfnLayout": {
       "additionalProperties": false,
@@ -4770,6 +5188,18 @@
       "additionalProperties": false,
       "description": "Build-time validated observation layouts and coverage.",
       "properties": {
+        "action_choice_owners": {
+          "additionalProperties": false,
+          "description": "Choice-owner addresses keyed by declared action identity.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
         "binding": {
           "anyOf": [
             {
@@ -4860,6 +5290,13 @@
           ],
           "description": "Qfn layout."
         },
+        "qfn_action_bindings": {
+          "description": "Declared picker and quick action bindings with their menu owners.",
+          "items": {
+            "$ref": "#/$defs/QfnActionBinding"
+          },
+          "type": "array"
+        },
         "requirements": {
           "description": "Required surface observations.",
           "items": {
@@ -4902,7 +5339,9 @@
       },
       "required": [
         "choice_sets",
+        "action_choice_owners",
         "binding_choices",
+        "qfn_action_bindings",
         "canvas_hosts",
         "requirements",
         "option_requirements",

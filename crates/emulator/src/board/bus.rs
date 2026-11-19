@@ -170,21 +170,22 @@ impl Bus {
         if !self.pending_pcs.is_empty() {
             return Err("keyframe requires completed discovery PC recording".into());
         }
-        let devices = self
-            .windows
-            .iter()
-            .enumerate()
-            .map(|(id, node)| {
-                let mut state = node
-                    .device
-                    .checkpoint()
-                    .map_err(|e| format!("device {id} ({}): {e}", node.device.name()))?;
-                if let Some(old) = previous.and_then(|p| p.devices.get(id)) {
-                    state.share_unchanged(old);
+        let mut devices = Vec::with_capacity(self.windows.len());
+        let mut errors = Vec::new();
+        for (id, node) in self.windows.iter().enumerate() {
+            match node.device.checkpoint() {
+                Ok(mut state) => {
+                    if let Some(old) = previous.and_then(|saved| saved.devices.get(id)) {
+                        state.share_unchanged(old);
+                    }
+                    devices.push(state);
                 }
-                Ok(state)
-            })
-            .collect::<Result<Vec<_>, String>>()?;
+                Err(error) => errors.push(format!("device {id} ({}): {error}", node.device.name())),
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors.join("; "));
+        }
         Ok(Checkpoint {
             devices,
             windows: self

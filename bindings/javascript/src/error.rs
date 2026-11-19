@@ -133,6 +133,7 @@ pub fn error(source: usb::Error) -> JsValue {
         usb::Error::DeviceStatus { .. } => ErrorKind::DeviceStatus,
         usb::Error::Protocol(_) => ErrorKind::Protocol,
         usb::Error::Proxy(_)
+        | usb::Error::WebRtc(_)
         | usb::Error::Transfer { .. }
         | usb::Error::Timeout(_)
         | usb::Error::ShortTransfer { .. }

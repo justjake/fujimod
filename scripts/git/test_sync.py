@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from commit import Failure, Repository
-from sync import load_conflicts, resolve, sync
+from sync import follows_superproject, load_conflicts, rebase, resolve, sync
 
 
 def run(*arguments: str, cwd: Path) -> str:
@@ -181,9 +181,80 @@ def test_a_pinned_submodule_follows_the_new_pin_unless_it_holds_work(
     pin(pins[1])
     sync(Repository(shared))
     assert run("git", "rev-parse", "HEAD", cwd=shared / "lib").strip() == pins[1]
+    assert follows_superproject(Repository(shared / "lib"))
+    assert not follows_superproject(Repository(shared))
 
     (shared / "lib" / "v.txt").write_text("local work")
     pin(pins[2])
     sync(Repository(shared))
     assert run("git", "rev-parse", "HEAD", cwd=shared / "lib").strip() == pins[1]
     assert (shared / "lib" / "v.txt").read_text() == "local work"
+
+
+def topic(shared: Path, name: str = "someone/topic") -> str:
+    run("git", "switch", "-q", "-c", name, cwd=shared)
+    return name
+
+
+def test_onto_rebases_a_topic_carries_edits_and_pushes(
+    repos: tuple[Path, Path, Path],
+) -> None:
+    remote, shared, other = repos
+    name = topic(shared)
+    (shared / "b.txt").write_text("mine\n")
+    run("git", "commit", "-qam", "mine", cwd=shared)
+    run("git", "push", "-q", "origin", name, cwd=shared)
+    (shared / "a.txt").write_text("ONE\ntwo\nthree\nfour\nfive\n")
+    main = push(other, {"a.txt": "one\ntwo\nthree\nfour\nFIVE\n"})
+    rebased = rebase(Repository(shared), "main")
+    assert rebased.replayed == 1 and rebased.pushed
+    assert run("git", "rev-parse", name, cwd=remote).strip() == rebased.head
+    assert run("git", "rev-parse", "HEAD^", cwd=shared).strip() == main
+    assert run("git", "log", "-1", "--format=%s", cwd=shared).strip() == "mine"
+    assert (shared / "a.txt").read_text() == "ONE\ntwo\nthree\nfour\nFIVE\n"
+    assert run("git", "status", "--porcelain", cwd=shared) == " M a.txt\n"
+
+
+def test_onto_pushes_a_new_topic_and_stops_on_a_conflict(
+    repos: tuple[Path, Path, Path],
+) -> None:
+    remote, shared, other = repos
+    name = topic(shared)
+    (shared / "b.txt").write_text("mine\n")
+    run("git", "commit", "-qam", "mine", cwd=shared)
+    rebased = rebase(Repository(shared), "main")
+    assert rebased.pushed and rebased.replayed == 0
+    assert run("git", "rev-parse", name, cwd=remote).strip() == rebased.head
+    push(other, {"b.txt": "theirs\n"})
+    with pytest.raises(Failure, match="does not apply"):
+        rebase(Repository(shared), "main")
+    assert run("git", "rev-parse", "HEAD", cwd=shared).strip() == rebased.head
+    assert (shared / "b.txt").read_text() == "mine\n"
+
+
+def test_onto_refuses_the_base_branch(repos: tuple[Path, Path, Path]) -> None:
+    _, shared, _ = repos
+    with pytest.raises(Failure, match="base branch"):
+        rebase(Repository(shared), "main")
+
+
+def test_onto_drops_commits_of_a_stacked_base_that_landed_by_rebase(
+    repos: tuple[Path, Path, Path],
+) -> None:
+    remote, shared, other = repos
+    run("git", "switch", "-q", "-c", "someone/base", cwd=shared)
+    (shared / "b.txt").write_text("base\n")
+    run("git", "commit", "-qam", "base change", cwd=shared)
+    run("git", "switch", "-q", "-c", "someone/stacked", cwd=shared)
+    (shared / "gone.txt").write_text("stacked\n")
+    run("git", "commit", "-qam", "stacked change", cwd=shared)
+    # The base lands on main by rebase: same change, new commit, after other work.
+    push(other, {"a.txt": "one\ntwo\nthree\nfour\nFIVE\n"})
+    push(other, {"b.txt": "base\n"})
+    rebased = rebase(Repository(shared), "main")
+    assert (rebased.replayed, rebased.dropped) == (1, 1)
+    assert run("git", "log", "--format=%s", "origin/main..HEAD", cwd=shared).split("\n")[0] == (
+        "stacked change"
+    )
+    assert run("git", "rev-list", "--count", "origin/main..HEAD", cwd=shared).strip() == "1"
+    assert run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head

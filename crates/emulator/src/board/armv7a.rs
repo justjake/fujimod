@@ -198,6 +198,7 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},
@@ -223,7 +224,7 @@ mod tests {
         })).unwrap();
         let mut board = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,
@@ -306,7 +307,7 @@ mod tests {
         .unwrap();
         let mut b = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,
@@ -364,7 +365,7 @@ mod tests {
         .unwrap();
         let mut b = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,
@@ -420,8 +421,17 @@ mod tests {
         b.run_for_instructions(100, 10).unwrap();
         assert_eq!(points.event(), Some(0));
         assert_eq!(b.instruction_counts(), [15]);
+        // A stop whose core the host moved elsewhere before resuming leaves no
+        // skip behind to swallow that address's next hit.
+        b.write_register(0, Register::Pc, 4).unwrap();
+        b.instruction_points_update(0, &mut points, vec![0])
+            .unwrap();
+        b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(points.event(), Some(0));
+        assert_eq!(b.instruction_counts(), [17]);
+        assert_eq!(b.read_register(0, Register::Pc).unwrap(), 0);
         b.instruction_points_end(0, &mut points).unwrap();
         b.run_for_instructions(3, 10).unwrap();
-        assert_eq!(b.instruction_counts(), [18]);
+        assert_eq!(b.instruction_counts(), [20]);
     }
 }

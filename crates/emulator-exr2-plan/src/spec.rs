@@ -361,6 +361,9 @@ pub enum Model {
     #[serde(rename = "exr-command-gpu")]
     ExrCommandGpu {
         options: fujimod_emulator_devices::exr::command_gpu::Options,
+        /// Completion interrupt output for lists that ask for one.
+        #[serde(default)]
+        irq: Option<InterruptLine>,
     },
     #[serde(rename = "exr-display-pipe")]
     ExrDisplayPipe {
@@ -401,6 +404,9 @@ pub enum Model {
         present: bool,
         protected: bool,
         irq: InterruptLine,
+    },
+    SataHost {
+        options: fujimod_emulator_devices::exr2::sata_host::Options,
     },
     SdioHost {
         options: serde_json::Value,
@@ -566,6 +572,7 @@ impl Model {
             Model::HdmiSink { .. } => "hdmi-sink",
             Model::SerialAudio { .. } => "serial-audio",
             Model::SdHost { .. } => "sd-host",
+            Model::SataHost { .. } => "sata-host",
             Model::SdioHost { .. } => "sdio-host",
             Model::UsbEndpoints { .. } => "usb-endpoints",
             Model::ImageInput { .. } => "image-input",

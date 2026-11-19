@@ -25,6 +25,7 @@ fn setup() -> (XMountLens, gpio::Gpio, irq::InterruptController, TestHost) {
         gpio::Options {
             input_levels: levels,
             output_levels: vec![],
+            high_port_input_levels: None,
         },
         gpio::Wiring { irqs: vec![] },
     )
@@ -260,7 +261,8 @@ fn serial_pad_loss_refuses_and_checkpoint_wiring_validation_is_atomic() {
     host.now = 101;
     write(&mut gpio, &mut host, gpio::BASE + 2 * 64, 0x10000000);
     advance(&mut lens, &mut host, 101);
-    assert!(
+    // The byte cut off by the power loss receives the undriven line.
+    assert_eq!(
         port.finish(
             token,
             Frame {
@@ -270,8 +272,8 @@ fn serial_pad_loss_refuses_and_checkpoint_wiring_validation_is_atomic() {
             },
             102
         )
-        .unwrap_err()
-        .contains("lost power")
+        .unwrap(),
+        0xff
     );
 }
 

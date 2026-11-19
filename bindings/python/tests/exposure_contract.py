@@ -1,7 +1,8 @@
 """Native/Pyodide contract for adjustment status, exposure and packet commands."""
 
-from contract_assertions import expect
 from fujimod.usb import app80
+
+from .contract_assertions import expect
 
 
 def check_exposure_values() -> bool:

@@ -1,0 +1,147 @@
+.catalog-icon {
+  --icon-column: 1.556;
+  width: calc(var(--w) * var(--icon-size));
+  height: calc(var(--h) * var(--icon-size));
+  margin-inline: calc((var(--icon-column) - var(--w)) / 2 * var(--icon-size));
+  vertical-align: calc((1cap - var(--h) * var(--icon-size)) / 2);
+  translate: 0 calc((1cap - var(--h) * var(--icon-size)) / 4);
+  flex: none;
+  overflow: visible;
+  color: #eee;
+  fill: currentColor;
+}
+.catalog-path {
+  margin: 0 0 3px;
+  font-size: 11px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  color: var(--faint);
+}
+.catalog-card .catalog-path {
+  color: var(--dim);
+}
+.catalog-premiere {
+  --icon-size: 1.5cap;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #eee;
+}
+.catalog-premiere .catalog-icon {
+  margin-inline: 0;
+}
+/* INSPIRED BY and THANKS: icon in a hanging column, so wrapped lines align with the text. */
+.catalog-credits {
+  --icon-size: 1.5cap;
+  --credit-indent: calc(1.556 * var(--icon-size) + 0.45em);
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--dim);
+}
+.catalog-credits li {
+  padding-left: var(--credit-indent);
+  text-indent: calc(-1 * var(--credit-indent));
+}
+.catalog-credits li + li {
+  margin-top: 1px;
+}
+.catalog-credits .catalog-icon {
+  margin-left: calc((1.556 - var(--w)) / 2 * var(--icon-size));
+  margin-right: calc((1.556 - var(--w)) / 2 * var(--icon-size) + 0.45em);
+}
+.catalog-credits b {
+  color: #eee;
+}
+.catalog-credits a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.catalog-credits a:hover,
+.catalog-credits a:focus-visible {
+  color: var(--blue);
+  border-color: currentColor;
+}
+.catalog-card {
+  position: fixed;
+  z-index: 20;
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  width: min(340px, calc(100vw - 16px));
+  padding: 14px 16px 10px;
+  background: var(--key2);
+  color: #eee;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 60%);
+}
+.catalog-card > :last-child {
+  margin-bottom: 0;
+}
+.catalog-card-video {
+  display: block;
+  width: calc(100% + 32px);
+  margin: -14px -16px 12px;
+  aspect-ratio: 3 / 2;
+  object-fit: contain;
+  background: #000;
+  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 13px 13px 0 0;
+}
+.catalog-card-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.catalog-card p {
+  font-size: 14px;
+  margin: 0 0 6px;
+  line-height: 1.35;
+}
+.catalog-card .catalog-premiere {
+  margin: 0 0 6px;
+}
+.catalog-card .catalog-credits {
+  margin: 0 0 6px;
+}
+.catalog-card-heading {
+  margin: 10px 0 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #ccc;
+}
+.catalog-card-related {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  line-height: 1.4;
+  font-size: 12px;
+  color: var(--dim);
+}
+.catalog-card-related b {
+  color: #eee;
+}
+
+.manual-feature-link {
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+.catalog-card-manual {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.catalog-card-video {
+  transition: opacity 350ms ease;
+}
+.catalog-card-video[data-fade] {
+  opacity: 0;
+}

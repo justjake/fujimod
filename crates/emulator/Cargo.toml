@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
+license.workspace = true
 
 [lib]
 doctest = false
@@ -14,6 +15,7 @@ crate-type = ["rlib"]
 perf = ["fujimod-perf/perf"]
 
 [dependencies]
+fujimod-catalog-configuration.workspace = true
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }

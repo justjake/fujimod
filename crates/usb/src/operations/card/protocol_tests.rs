@@ -635,6 +635,54 @@ fn refused_update_recreates_only_a_confirmed_empty_file() {
         }
     })
 }
+
+#[test]
+fn shrink_rewrites_a_bounded_prefix_instead_of_leaving_tail_clusters() {
+    block_on(async {
+        let camera = camera();
+        {
+            let mut c = camera.lock().unwrap();
+            c.files.insert("A:\\OLD.BIN".into(), vec![1, 2]);
+            c.write(
+                0x40000,
+                &words(&[
+                    0x314c4946, 3, 123, 0x40100, 0x40104, 0x40108, 0x4010c, 0x40110, 0x40200,
+                    0x41000, 0x40114, 0x40118, 0x4011c, 0x40120, 1, 0,
+                ]),
+            );
+            c.put(0x40100, 64);
+            c.put(0x4011c, u32::MAX);
+        }
+        let mut p = profile();
+        p.mechanism = Mechanism::Mailbox {
+            search_address: 0x40000,
+            search_bytes: 0x4000,
+            address_alias: 0,
+            build: Some(123),
+        };
+        let mut session = peer_session(Endpoint(camera.clone()), 8192, None)
+            .await
+            .unwrap();
+        execute(
+            &mut session,
+            limits(),
+            &p,
+            Request::Shrink {
+                path: "A:\\OLD.BIN".into(),
+                size: 1,
+            },
+        )
+        .await
+        .unwrap();
+        let c = camera.lock().unwrap();
+        assert_eq!(c.files["A:\\OLD.BIN"], vec![1]);
+        assert!(c.opened.is_none());
+        for operation in [1, 2, 3, 7, 9, 6] {
+            assert!(c.mailbox_operations.contains(&operation));
+        }
+        assert!(!c.mailbox_operations.contains(&12));
+    })
+}
 fn restored(c: &Camera) {
     assert_eq!(c.word(SLOT), 0x8000);
     assert_eq!(c.read(REQUEST, 36), vec![0; 36]);

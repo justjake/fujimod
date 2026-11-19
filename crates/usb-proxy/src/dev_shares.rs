@@ -2,7 +2,6 @@
 //! registers its standard share link here over a WebSocket; while that socket
 //! stays open the link is one 0600 JSON file in a private directory, which
 //! host tools read directly. Nothing serves the directory back over HTTP.
-use crate::share::Ticket;
 use axum::{
     Router,
     extract::{
@@ -13,6 +12,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
 };
+use fujimod_webrtc::share::Ticket;
 use serde_json::{Value, json};
 use std::{
     io::Write,

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xe4-201",
+  "body_id": "xe4",
+  "version": "2.01",
+  "update": {
+    "size": 50136328,
+    "sha256": "ce80e4a88f0fffff998d3144ef51411d8285d16c06e4791c89cd36823769f8c2"
+  },
+  "boot_rom": null,
+  "installation": null,
+  "generated_facts": null
+}

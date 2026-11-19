@@ -1,4 +1,4 @@
-from exposure_contract import check_exposure_values
+from .exposure_contract import check_exposure_values
 
 
 def test_exposure_values() -> None:

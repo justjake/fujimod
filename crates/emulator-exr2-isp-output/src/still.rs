@@ -48,8 +48,15 @@ impl StillProcessor {
     /// indexing is not derivable: X30 lens correction not modeled. The words
     /// are retained and the block is an identity pass-through. X70 1.10 leaves
     /// bits 16..17 clear and never writes this window.
+    ///
+    /// 0x04..0x34 are the spatial filter stages' range-checked configuration
+    /// words (two 14-bit fields at 0x04, a 14-bit value at 0x08, two bytes at
+    /// 0x0c, dimensions at 0x10, byte rows at 0x14..0x18 and a parameter table
+    /// at 0x1c..0x34), written when the develop request enables those stages,
+    /// as X-E2S 1.11 still captures do. Spatial filtering is not modeled, so
+    /// the words are retained and not applied, like 0xb4..0xf8.
     fn valid(o: usize) -> bool {
-        matches!(o,0|0xb4..=0xf8|0x100..=0x10fc|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
+        matches!(o,0..=0x34|0xb4..=0xf8|0x100..=0x10fc|0x1400..=0x4bfc|0x8000..=0x805c|0x10000..=0x100fc|0x11000..=0x11ffc|0x14000..=0x160fc)
     }
     fn start(&mut self, cx: &Cx<'_>, control: u32) -> Result<(), String> {
         let r = |o: usize| self.r[(0x10000 + o) / 4];
@@ -83,8 +90,11 @@ impl StillProcessor {
         {
             return Err("still processor RAW/output geometry overlaps or has an odd width".into());
         }
-        // RAW writeback uses the third window and its own address/pitch. The
-        // declared spatial approximation preserves these latched U16 samples;
+        // RAW writeback uses the third window and its own address/pitch, in
+        // the source's sample packing (0x08 bit 8): its pitch register 0x4c
+        // counts samples like 0x44, and the window trails the source by eight
+        // rows plus 32 samples (64 bytes U16, 48 bytes packed 12-bit). The
+        // declared spatial approximation preserves these latched samples;
         // RAW denoising and defect correction are not modeled. Backward,
         // sample-aligned overlap supports the register-programmed sliding window.
         let raw_output = if control == 3 {
@@ -92,18 +102,17 @@ impl StillProcessor {
                 address: r(0x60) as u64,
                 width: (r(0x40) >> 16) as usize,
                 height: (r(0x40) & 65535) as usize,
-                pitch: 2 * r(0x4c) as usize,
+                pitch: packing.row_bytes(r(0x4c) as usize),
             };
-            raster.validate(raster.width * 2)?;
-            if !matches!(packing, Packing::U16)
-                || raster.width != src.width
+            raster.validate(packing.row_bytes(raster.width))?;
+            if raster.width != src.width
                 || raster.height != src.height
                 || raster.pitch > 32768
                 || !raster.address.is_multiple_of(2)
                 || !src.address.is_multiple_of(2)
                 || dst.overlaps(raster)?
             {
-                return Err("still RAW writeback requires matching U16 dimensions and separate color output".into());
+                return Err("still RAW writeback requires the source's dimensions and separate color output".into());
             }
             if src.overlaps(raster)? {
                 let source = physical(src.address, src.pitch * src.height)?;
@@ -134,6 +143,9 @@ impl StillProcessor {
         ];
         let exposure = (self.r[0x8058 / 4] & 4095) as u16;
         let shading = crate::shading::Shading::from_registers(|o| self.r[(0x8000 + o) / 4])?;
+        let shading_gains = shading
+            .as_ref()
+            .map(|shading| shading.table(src.width, src.height));
         self.film
             .update(|o| self.r[(0x14000 + still_offset(o).unwrap()) / 4])?;
         self.film.hue = HueStage::from_still(|o| self.r[(0x14000 + o) / 4]);
@@ -153,7 +165,7 @@ impl StillProcessor {
             .prepare_deferred(cx.now(), self.delay, dst, dst.width * 2)?;
         if let Some(raster) = raw_output {
             self.raw_dma
-                .prepare_deferred(cx.now(), self.delay, raster, raster.width * 2)?;
+                .prepare_deferred(cx.now(), self.delay, raster, packing.row_bytes(raster.width))?;
         }
         let raw = RawView {
             bytes: &self.source,
@@ -177,11 +189,12 @@ impl StillProcessor {
         }
         if let Some(raster) = raw_output {
             let source = self.source.clone();
+            let row = packing.row_bytes(raster.width);
             self.raw_dma.pixels.defer(move |mut out| {
-                out.resize(raster.width * raster.height * 2, 0);
+                out.resize(row * raster.height, 0);
                 for y in 0..raster.height {
-                    out[y * raster.width * 2..(y + 1) * raster.width * 2]
-                        .copy_from_slice(&source[y * src.pitch..y * src.pitch + raster.width * 2]);
+                    out[y * row..(y + 1) * row]
+                        .copy_from_slice(&source[y * src.pitch..y * src.pitch + row]);
                 }
                 out
             });
@@ -205,7 +218,11 @@ impl StillProcessor {
                     black.unwrap() as u16,
                     gains,
                     exposure,
-                    |x, y| shading.as_ref().map_or(2048, |s| s.gain(x, y)),
+                    |x, y| {
+                        shading_gains
+                            .as_ref()
+                            .map_or(2048, |gains| unsafe { gains.at(x, y) })
+                    },
                     crop,
                     dst.width,
                     dst.height,
@@ -266,9 +283,21 @@ impl Device for StillProcessor {
             self.r[o / 4] = v as u32 | 0x10001;
             return;
         }
+        // START's low bits select the pass's outputs: bit 0 the color window
+        // at 0x58/0x38, bit 1 the RAW writeback window at 0x60/0x40. Bit 4
+        // replaces bit 0 with a second main-window output kind; with bit 1
+        // (0x12) the firmware writes the RAW back in place and programs the
+        // main window as one row of one-byte samples. That output's content
+        // is not derivable from register programming, so 0x12 refuses.
         if o == 0x10004 {
+            if v & 0x10 != 0 {
+                cx.fail(format!(
+                    "still processor START {v:#x}: bit 4 main-window output is unmodeled"
+                ));
+                return;
+            }
             if !matches!(v, 1 | 3) {
-                cx.fail(format!("unknown still processor START {v:#x}"));
+                cx.fail(format!("unmodeled still processor START {v:#x}"));
                 return;
             }
             if let Err(e) = self.start(cx, v as u32) {

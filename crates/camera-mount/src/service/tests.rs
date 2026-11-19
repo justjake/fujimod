@@ -21,6 +21,8 @@ struct State {
     frees: usize,
     refuse_init: bool,
     maximum_allocation: Option<u32>,
+    /// ff80 memory reads, memory writes and queries received.
+    commands: [usize; 3],
 }
 impl State {
     fn put(&mut self, at: u32, raw: &[u8]) {
@@ -69,6 +71,8 @@ impl Peer for Device {
                 let at = w(28);
                 let n = w(32);
                 s.reply = raw[..36].to_vec();
+                let k = if w(16) == 2 { 0 } else { 1 };
+                s.commands[k] += 1;
                 match w(16) {
                     2 => {
                         let bytes = s.bytes(at, n);
@@ -80,6 +84,7 @@ impl Peer for Device {
             }
             0x450006 => {
                 let entry = s.word(0x300c);
+                s.commands[2] += 1;
                 s.reply = raw.to_vec();
                 match entry {
                     0x6080 => match s.word(0x4004) {
@@ -285,5 +290,29 @@ fn changed_code_or_outstanding_storage_never_frees_the_helper() {
                 assert_ne!(session.state(), SessionState::Ready);
             }
         }
+    });
+}
+
+/// Each ff80 command costs a camera round trip (12-18 ms on an X-E2S), so the
+/// five cache-maintenance calls share one borrowed sequence and published
+/// bytes are verified once, through their uncached alias. Unbatched, install
+/// sent 296 commands and release 154.
+#[test]
+fn install_and_release_batch_their_camera_commands() {
+    block_on(async {
+        let (state, facts, bulk, limits) = fixture();
+        state.lock().unwrap().maximum_allocation = Some(BUFFER + (1 << 20) + 32);
+        let mut session = peer_session(Device(state.clone()), 1 << 20, None)
+            .await
+            .unwrap();
+        let service = Service::install(&mut session, limits, &bulk, &facts)
+            .await
+            .unwrap();
+        let install = std::mem::take(&mut state.lock().unwrap().commands);
+        service.release(&mut session, limits).await.unwrap();
+        let release = state.lock().unwrap().commands;
+        assert_eq!(install, [106, 72, 20], "install [reads, writes, queries]");
+        assert_eq!(release, [57, 30, 11], "release [reads, writes, queries]");
+        restored(&state.lock().unwrap());
     });
 }

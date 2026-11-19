@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "xs20-330-memory-reservations",
+  "firmware_id": "xs20-330",
+  "dram_size": 134217728,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 41002920,
+      "size": 2097152
+    },
+    {
+      "name": "font_library",
+      "address": 126476288,
+      "size": 1048576
+    },
+    {
+      "name": "language_fonts",
+      "address": 16121856,
+      "size": 1441792
+    }
+  ],
+  "locator_failures": []
+}

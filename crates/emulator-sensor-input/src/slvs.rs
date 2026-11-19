@@ -264,6 +264,9 @@ impl Device for Receiver {
                 if self.wiring.timing_output {
                     self.sensor.timing(cx, true);
                 }
+                for &channel in &self.wiring.output_channels {
+                    self.sensor.frame_start(channel);
+                }
                 for link in 0..self.links() {
                     if self.enabled(link) {
                         let cause = 0x108 + link as u64 * 0x100;
@@ -282,6 +285,8 @@ impl Device for Receiver {
             }
         }
     }
+    // The sensor command device retains the shared sensor state.
+    fujimod_emulator_devices::checkpoint_fields!(state: State, period_ticks: u64, active_ticks: u64);
     fn save(&self) -> Value {
         serde_json::json!({"state":self.state,"period_ticks":self.period_ticks,"active_ticks":self.active_ticks})
     }
@@ -386,6 +391,7 @@ mod tests {
             Some(super::super::sensor::ImageRoutes {
                 dma: Some([162, 163]),
                 timing: [166, 164],
+                line_stride: false,
             }),
             (0x59, 4),
         );

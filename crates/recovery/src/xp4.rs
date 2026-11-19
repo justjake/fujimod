@@ -3,7 +3,25 @@ use crate::image::{self, Edit, Plan, Result, extent, hash, put, require, word};
 use serde::{Deserialize, Serialize};
 const FLASH_APERTURE_BYTES: u64 = 0x08000000;
 pub mod preload;
+pub mod sd_card_fast_read;
 mod sd_loader;
+
+/// How FFINIT reads FFBOOT. An X-T3 (5.11) reached live view in about 5 s
+/// with `Fast` and a bound packed FFBOOT stage, against about 35 s to the
+/// green LED with `Rom` (2026-11-10); other bodies are untested.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SdCardRead {
+    /// One boot ROM file read of the whole file (camera-proven).
+    #[default]
+    Rom,
+    /// The boot ROM reads the first 4 KiB; CMD18 with SDMA reads the rest,
+    /// at high speed when the SD card switches, with the CRC32 overlapping
+    /// the read and the boot ROM read as the fallback. The I-cache is on for
+    /// the load, and FFINIT performs a bound packed FFBOOT stage itself
+    /// (`Recipe::bind_sd_card_packed_stage`).
+    Fast,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -70,7 +88,7 @@ pub fn package(
         .ok_or_else(|| image::Error::Invalid("Missing XP4 preloaded data map".into()))?;
     let data = preload.install(inverted, &plan, setup.dat_offset, &mut ram)?;
     crate::green_led::preserve_loader_green(recipe, source, &mut ram)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, SdCardRead::Rom)?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -79,7 +97,9 @@ pub fn package(
 }
 
 /// The recovery card: the full-image cold pair with the green lamp held on
-/// by the stock loader's GPIO table. This card booted an X-Pro3 from SD.
+/// by the stock loader's GPIO table. This card booted an X-Pro3 from SD
+/// with `SdCardRead::Rom`.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn sd_card_recovery(
     recipe: &crate::Recipe,
     source: &[u8],
@@ -88,11 +108,12 @@ pub(super) fn sd_card_recovery(
     cold: &ColdStart,
     setup: &Setup,
     api: &FileApi,
+    read: SdCardRead,
 ) -> Result<Vec<image::File>> {
     let plan = cold_plan(inverted, plan, cold)?;
     let mut ram = image::transform(inverted, &plan)?;
     crate::green_led::preserve_loader_green(recipe, source, &mut ram)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, read)?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -109,7 +130,7 @@ pub(super) fn rescue_baseline(
 ) -> Result<Vec<image::File>> {
     let plan = cold_plan(inverted, plan, cold)?;
     let ram = image::transform(inverted, &plan)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None)?;
+    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, SdCardRead::Rom)?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -254,6 +275,7 @@ pub fn ffinit(
     payload: &[u8],
     base: u32,
     workspace_override: Option<u32>,
+    read: SdCardRead,
 ) -> Result<Vec<u8>> {
     let asset = &sd_loader::LAYOUT.ffinit;
     let symbols = &asset.symbols;
@@ -383,6 +405,10 @@ pub fn ffinit(
         .and_then(|n| u32::try_from(n).ok())
         .ok_or_else(|| image::Error::Invalid("Payload workspace overflow".into()))?;
     let workspace = workspace_override.unwrap_or(workspace);
+    let fast = match read {
+        SdCardRead::Rom => None,
+        SdCardRead::Fast => Some(sd_card_fast_read::placement(base)?),
+    };
     for (index, value) in [
         0,
         payload.len() as u32,
@@ -390,7 +416,7 @@ pub fn ffinit(
         workspace,
         api.mount,
         api.open,
-        api.read,
+        fast.map_or(api.read, |p| p.read),
         api.close,
         data_address,
     ]
@@ -501,13 +527,42 @@ pub fn ffinit(
         0xa0,
         region + symbols["ffinit_dram_ready"] as u32,
     )?;
+    if fast.is_some() {
+        let config = region + symbols["ffinit_config"] as u32;
+        // A template function extends to the next template symbol.
+        let function = |name: &str| -> Result<std::ops::Range<u32>> {
+            let start = symbols[name];
+            let end = symbols
+                .values()
+                .copied()
+                .filter(|&offset| offset > start)
+                .min()
+                .ok_or_else(|| image::Error::Invalid(format!("{name} has no end")))?;
+            Ok(region + start as u32..region + end as u32)
+        };
+        sd_card_fast_read::install(
+            &mut output,
+            base,
+            code.len(),
+            &sd_card_fast_read::Bindings {
+                rom_read: api.read,
+                workspace,
+                crc_table: region + symbols["ffinit_crc_table"] as u32,
+                expected_crc32: config + 8,
+                template_crc32: region + symbols["ffinit_crc32"] as u32,
+                ffinit_load: function("ffinit_load")?,
+                ffinit_dram_ready: function("ffinit_dram_ready")?,
+                ffinit_enter_ram: region + symbols["ffinit_enter_ram"] as u32,
+            },
+        )?;
+    }
     Ok(output)
 }
 
 #[cfg(test)]
 mod tests;
 
-pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
+pub fn layout(setup: &Setup, api: &FileApi, base: u32, read: SdCardRead) -> Result<serde_json::Value> {
     let asset = &sd_loader::LAYOUT.ffinit;
     let symbols = &asset.symbols;
     let text = asset.text.bytes();
@@ -529,5 +584,14 @@ pub fn layout(setup: &Setup, api: &FileApi, base: u32) -> serde_json::Value {
         "ffinit_crc32":region+symbols["ffinit_crc32"] as u32,
         "ffinit_halt":region+symbols["ffinit_halt"] as u32
     });
-    serde_json::json!({"load_address":base,"code_region":region,"stack_top":(api.workspace-api.load_address+base)&!0xfff,"symbols":symbols,"sections":[{"name":".text","offset":0,"size":text.len()}]})
+    let mut layout = serde_json::json!({"load_address":base,"code_region":region,"stack_top":(api.workspace-api.load_address+base)&!0xfff,"symbols":symbols,"sections":[{"name":".text","offset":0,"size":text.len()}],"sd_card_read":read});
+    if read == SdCardRead::Fast {
+        let placed = sd_card_fast_read::placement(base)?;
+        layout["sd_card_fast_read"] = serde_json::json!({
+            "read": placed.read, "crc32": placed.crc32, "config": placed.config,
+            "status": placed.status, "entry": placed.entry, "enter_ram": placed.enter_ram,
+            "host": sd_card_fast_read::TOPAZ_SD_HOST,
+        });
+    }
+    Ok(layout)
 }

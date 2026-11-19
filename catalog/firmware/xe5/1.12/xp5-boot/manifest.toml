@@ -1,0 +1,8 @@
+version = 1
+firmware = "xe5-112"
+load_firmware = true
+
+# The XP5 device tree maps Linux DRAM and shared arenas below 0x67f00000.
+[[ram]]
+base = 0
+size = 0x67f00000

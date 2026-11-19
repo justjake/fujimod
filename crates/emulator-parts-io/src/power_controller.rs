@@ -1,6 +1,7 @@
 //! Four-byte, MSB-first power-controller protocol with explicit checksum and
 //! register effects.
 //! This is an emulated register file, not an identified external PMIC.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 
 impl super::serial::Endpoint for PowerController {
@@ -20,6 +21,21 @@ impl super::serial::Endpoint for PowerController {
     fn transfer(&mut self, frame: super::serial::Frame, now_ns: u64) -> u16 {
         self.advance(now_ns);
         self.exchange(frame.word as u8).into()
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), self)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: Self = saved.decode(self.name())?;
+        if state.registers.len() != 128 || state.position >= 4 {
+            return Err("invalid power controller checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        *self = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap()
@@ -246,6 +262,21 @@ impl crate::i2c::Registers for FuelGauge {
     }
     fn read(&mut self, register: u8) -> Result<u8, String> {
         FuelGauge::read(self, register)
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), self)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: Self = saved.decode(self.name())?;
+        if state.registers.len() != 256 || state.known.len() != 256 {
+            return Err("invalid fuel-gauge checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        *self = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> serde_json::Value {
         serde_json::to_value(self).unwrap()

@@ -13,8 +13,16 @@
   "card_slot": null,
   "control_bus_chips": [],
   "connections": [],
-  "parts": [],
-  "wiring": [],
+  "parts": [
+    "xs20-serial-nor"
+  ],
+  "wiring": [
+    {
+      "source_id": "flash",
+      "target_id": "xs20-serial-nor",
+      "signal": "storage"
+    }
+  ],
   "hardware": {
     "serial_attachments": [],
     "gpio_feedback": [],

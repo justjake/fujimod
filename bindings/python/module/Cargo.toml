@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [lib]
 name = "_native"
@@ -29,10 +30,13 @@ emulator = [
 ]
 
 [dependencies]
+fujimod-catalog-resolution.workspace = true
+fujimod-catalog-configuration.workspace = true
+fujimod-emulator.workspace = true
 fujimod-emulator-models.workspace = true
 fujimod-python-catalog = { path = "../catalog" }
 fujimod-python-base = { path = "../base", optional = true }
-fujimod-emulator-boot = { workspace = true, optional = true }
+fujimod-emulator-boot = { workspace = true, optional = true, features = ["xp5-startup"] }
 fujimod-emulator-session = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 fujimod-python-emulator = { path = "../emulator", optional = true }

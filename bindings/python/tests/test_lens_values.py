@@ -1,4 +1,4 @@
-from lens_contract import check_lens_values
+from .lens_contract import check_lens_values
 
 
 def test_lens_values() -> None:

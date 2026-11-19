@@ -165,7 +165,7 @@ async def test_stale_mailbox_keeps_publication_lease():
 
 
 async def test_preparation_upload_and_readback_use_script():
-    from test_usb_callback import command, control, read
+    from .test_usb_callback import command, control, read
     E = testing.Exchange
     placed = image().relocate(0x2000)
     data = bytes(placed.data)

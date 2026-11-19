@@ -21,6 +21,7 @@ fn model() -> Model {
             Options {
                 input_levels: [0xffff; 16],
                 output_levels: vec![],
+                high_port_input_levels: None,
             },
             Wiring { irqs: vec![] },
         )

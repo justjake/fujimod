@@ -35,6 +35,8 @@ export interface SdCardFile {
   processor?: string;
   title?: string;
   author?: string;
+  /** The recipe or film's published source page. */
+  source?: string;
 }
 export interface PatchIndex {
   schema: 2;
@@ -49,6 +51,13 @@ const hash = /^[0-9a-f]{64}$/;
 const shortName = '[A-Z0-9_~-]{1,8}(?:\\.[A-Z0-9_~-]{1,3})?';
 /** Card paths use the 8.3 names the camera's file system reads. */
 export const sdCardPath = new RegExp(`^(?:${shortName}/)*${shortName}$`);
+const httpsUrl = (value: unknown) => {
+  try {
+    return typeof value === 'string' && new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 const optionalText = (value: unknown) =>
   value === undefined || (typeof value === 'string' && value.length > 0 && value.length < 200);
 function validateCard(value: unknown): SdCardFile[] {
@@ -65,7 +74,8 @@ function validateCard(value: unknown): SdCardFile[] {
       !hash.test(file.sha256) ||
       !Number.isSafeInteger(file.bytes) ||
       file.bytes < 0 ||
-      ![file.processor, file.title, file.author].every(optionalText)
+      ![file.processor, file.title, file.author].every(optionalText) ||
+      (file.source !== undefined && !httpsUrl(file.source))
     )
       throw new Error('A release card file is invalid.');
     const key = `${file.processor ?? ''}\n${file.path}`;

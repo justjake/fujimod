@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x100vi-131-rom-start",
+  "configuration_id": "x100vi-131",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "rom"
+    }
+  }
+}
