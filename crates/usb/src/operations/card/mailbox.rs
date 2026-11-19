@@ -13,6 +13,10 @@ pub(super) struct Mailbox<'a> {
     operations: u32,
     source: Option<u32>,
     pub(super) trigger: Option<super::QueryTrigger>,
+    /// `path()` just found the service idle; only host writes follow it.
+    idle_known: bool,
+    /// Time spent waiting for the camera to complete helper operations.
+    pub(super) waited: Duration,
 }
 impl Mailbox<'_> {
     pub(super) fn location(&self) -> u32 {
@@ -43,16 +47,18 @@ impl Mailbox<'_> {
         )?;
         self.host.write(at, raw).await
     }
-    async fn idle(&mut self) -> Result<()> {
+    /// Check the service is idle; the result's last field is the open handle.
+    async fn idle(&mut self) -> Result<[u32; 7]> {
         let state = self.snapshot().await?;
         require(
             state[0] == self.operations && state[1] == 0 && state[2] != 1,
             "File service busy or another operation intervened",
-        )
+        )?;
+        Ok(state)
     }
-    async fn snapshot(&mut self) -> Result<[u32; 6]> {
+    async fn snapshot(&mut self) -> Result<[u32; 7]> {
         let mut fields = [
-            self.p[7], self.p[1], self.p[2], self.p[8], self.p[3], self.p[4],
+            self.p[7], self.p[1], self.p[2], self.p[8], self.p[3], self.p[4], self.p[9],
         ];
         for field in &mut fields {
             *field = self.address(*field, 4)?;
@@ -113,7 +119,9 @@ impl Mailbox<'_> {
     }
     async fn command_status(&mut self, op: u32, size: u32) -> Result<(u32, u32)> {
         require(size <= 0xffffff, "File-service argument too large")?;
-        self.idle().await?;
+        if !std::mem::take(&mut self.idle_known) {
+            self.idle().await?;
+        }
         self.write(self.p[1], &words(&[op | size << 8])).await?;
         if let Some(trigger) = self.trigger {
             use crate::ff80::commands::diagnostic::DiagnosticTag;
@@ -133,7 +141,8 @@ impl Mailbox<'_> {
             )?;
             call.invoke(self.host.session, self.host.limits).await?;
         }
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let started = Instant::now();
+        let deadline = started + Duration::from_secs(30);
         loop {
             let snapshot = self.snapshot().await?;
             let request = snapshot[1];
@@ -144,6 +153,7 @@ impl Mailbox<'_> {
                     "File-service operation ownership changed",
                 )?;
                 self.operations = self.operations.wrapping_add(1);
+                self.waited += started.elapsed();
                 let status = snapshot[4];
                 require(
                     state == 2 || state == 3,
@@ -192,12 +202,10 @@ impl Mailbox<'_> {
         )))
     }
     async fn path(&mut self, p: &str) -> Result<()> {
-        self.idle().await?;
-        require(
-            self.word(self.p[9]).await? == u32::MAX,
-            "Another file is open",
-        )?;
-        self.write(self.p[5], &[p.as_bytes(), b"\0"].concat()).await
+        require(self.idle().await?[6] == u32::MAX, "Another file is open")?;
+        self.write(self.p[5], &[p.as_bytes(), b"\0"].concat()).await?;
+        self.idle_known = true;
+        Ok(())
     }
     async fn list(&mut self, pattern: &str) -> Result<Vec<Entry>> {
         require(
@@ -232,8 +240,8 @@ impl Mailbox<'_> {
         Ok(())
     }
     pub(super) async fn finish(&mut self) -> Result<()> {
-        self.idle().await?;
-        if self.word(self.p[9]).await? != u32::MAX {
+        self.idle_known = false;
+        if self.idle().await?[6] != u32::MAX {
             self.command(4, 0).await?;
         }
         if let Some(source) = self.source {
@@ -472,6 +480,8 @@ pub(super) async fn prepare<'a>(
         operations: 0,
         source: None,
         trigger: None,
+        idle_known: false,
+        waited: Duration::ZERO,
     };
     let matches = |raw: &[u8]| {
         u32_at(raw, 0) == 0x314c4946

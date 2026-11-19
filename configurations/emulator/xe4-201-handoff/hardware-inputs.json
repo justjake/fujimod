@@ -236,7 +236,7 @@
             "0": 64511,
             "14": 0,
             "2": 0,
-            "25": 0,
+            "25": 16,
             "29": 65535,
             "3": 520,
             "30": 65535,
@@ -272,7 +272,7 @@
             44,
             45
           ],
-          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured. Register 16 is declared 4 as in the X-T3 virtual cold-boot input and a successful X-E4 loader run; the physical X-E4 value is unmeasured. Register 18 is virtual volatile storage for the observed loader write 0x0097, without a physical power effect. Registers 42\u201345 initialize to zero as observed with declared virtual inputs. Register 25 accepts a zero disable write following the X-S10 profile; its physical effect is not measured."
+          "basis": "Declared virtual X-E4 startup inputs; physical SPI levels and power-controller register values are not measured. Register 16 is declared 4 as in the X-T3 virtual cold-boot input and a successful X-E4 loader run; the physical X-E4 value is unmeasured. Register 18 is virtual volatile storage for the observed loader write 0x0097, without a physical power effect. Registers 42\u201345 initialize to zero as observed with declared virtual inputs. The firmware tests register 25 bits 0x30 for USB power status. This virtual input declares 0x10 continuously, including when a virtual host attaches; the physical register value is unmeasured. Register 25 accepts a zero disable write following the X-S10 profile; its physical effect is not measured."
         }
       },
       "4": {

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stageSite, runtimeBundleFiles } from '../scripts/stage-site.ts';
+import { parseSdkDocs, sdkDocsFiles, sdkDocsPath } from '../scripts/sdk-docs.ts';
 import type { Catalog } from '../src/catalog';
 import { cameraApi, validateRuntimeApi } from '../scripts/runtime-api';
 
@@ -52,7 +53,8 @@ test('local preparation gates qualification and stages complete runtime bundles'
     await mkdir(join(destination, 'runtime'), { recursive: true });
     await writeFile(join(destination, 'runtime/catalog.json'), 'installed');
     await mkdir(join(runtime, 'test-100'), { recursive: true });
-    const inputs = { runtime, media: join(root, 'media') };
+    const inputs = { runtime, media: join(root, 'media'), sdkDocs: join(root, 'sdk') };
+    await writeFile(join(runtime, 'sbom-components.json'), '[]');
     await writeFile(join(runtime, 'catalog.json'), JSON.stringify({ schema: 1, firmwares: [] }));
     await assert.rejects(stageSite(inputs, destination), /requires runnable emulators/);
     await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
@@ -149,8 +151,27 @@ test('local preparation gates qualification and stages complete runtime bundles'
       await writeFile(join(runtime, 'test-100-usb', name), 'usb ' + name);
     await writeFile(join(runtime, 'test-100-usb/camera.mjs'), loader);
     await writeFile(join(runtime, 'test-100-usb/wasm.json'), '{"construction":"session"}');
+    const sdk = JSON.stringify({
+      schema: 1,
+      components: [
+        {
+          slug: 'group',
+          declarations: [],
+          previews: [{ slug: 'rows', page: '/docs/sdk/focal/group/rows/preview.html' }],
+        },
+      ],
+    });
+    await mkdir(join(inputs.sdkDocs, 'group/rows'), { recursive: true });
+    await writeFile(join(inputs.sdkDocs, 'manifest.json'), sdk);
+    await assert.rejects(stageSite(inputs, destination), /preview.html/);
+    assert.equal(await readFile(join(destination, 'runtime/catalog.json'), 'utf8'), 'installed');
+    const sdkFiles = sdkDocsFiles(parseSdkDocs(sdk));
+    for (const name of sdkFiles.slice(1)) await writeFile(join(inputs.sdkDocs, name), name);
     await stageSite(inputs, destination);
     for (const [name, expected] of [
+      [`${sdkDocsPath}/manifest.json`, sdk],
+      [`${sdkDocsPath}/group/rows/preview.wasm`, 'group/rows/preview.wasm'],
+      ['runtime/sbom-components.json', '[]'],
       ['runtime/test-100/service-workflow.generated.json', '{"schema":1}'],
       ['runtime/physical-100/service-workflow.generated.json', '{"schema":1,"physical":true}'],
       ['runtime/test-100/licenses/COPYING.txt', 'license'],
@@ -169,23 +190,23 @@ test('local preparation gates qualification and stages complete runtime bundles'
     assert.ok(
       manifest.files.some((file) => file.path === 'runtime/test-100-usb/licenses/COPYING.txt'),
     );
+    assert.ok(manifest.files.some((file) => file.path === 'runtime/sbom-components.json'));
+    for (const name of sdkFiles)
+      assert.ok(manifest.files.some((file) => file.path === `${sdkDocsPath}/${name}`));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
 test('prepared runtime staging follows declared cold input filenames and refuses traversal', () => {
-  assert.deepEqual(
-    runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: false }),
-    [
-      'camera.wasm',
-      'camera.mjs',
-      'wasm.json',
-      'runtime-NOTICES.txt',
-      'dmp_webgpu.js',
-      'dmp_webgpu_bg.wasm',
-    ],
-  );
+  assert.deepEqual(runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: false }), [
+    'camera.wasm',
+    'camera.mjs',
+    'wasm.json',
+    'runtime-NOTICES.txt',
+    'dmp_webgpu.js',
+    'dmp_webgpu_bg.wasm',
+  ]);
   assert.throws(
     () => runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: 'webgpu' }),
     /invalid DMP renderer selection/,

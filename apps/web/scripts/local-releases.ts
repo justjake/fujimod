@@ -16,7 +16,7 @@ interface LocalReleaseOptions {
 export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.NextHandleFunction {
   return async (request, response, next) => {
     const path = new URL(request.url || '/', 'http://localhost').pathname;
-    if (!path.startsWith('/releases/')) return next();
+    if (path === '/releases/' || !path.startsWith('/releases/')) return next();
     response.setHeader('Cache-Control', 'no-store');
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       response.statusCode = 405;
@@ -84,7 +84,12 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
         } else if (cardAssets.has(route.file)) {
           data = await readFile(resolve(options.card!, route.file));
         } else if (options.notes && route.file === index.notes?.name) {
-          data = await readFile(resolve(options.notes, `${index.release}.md`));
+          try {
+            data = await readFile(resolve(options.notes, `${index.release}.md`));
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+            data = await readFile(resolve(options.artifacts, route.file));
+          }
         } else {
           data = await readFile(resolve(options.artifacts, route.file));
         }

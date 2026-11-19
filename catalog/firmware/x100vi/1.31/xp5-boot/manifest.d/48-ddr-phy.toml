@@ -1,0 +1,25 @@
+# DDR PHY mailbox pages, above the two PHY RAM regions of the manifest (0xfb000000 and 0xfb400000,
+# 0x1a0000 bytes each). Only the second PHY has been seen on the X100VI: the first half-press (S1)
+# writes its mailbox (a 16-bit store at 0xfb5a0000, PC 0x9ed6c, LR 0x14a680c, 20.0 s) and a DMA
+# access lands at 0xfb4a0000 (one run each). The first PHY (RAM at 0xfb000000, stub at 0xfb1a0000)
+# is X-T5 parity and was not observed on the X100VI: in runs 1794517684003-507446 and
+# 1794518632901-508466 its stub saw no write and no read of +0x08, and RAM accesses are not logged.
+# The register values follow the X-T5 runner (the stubs next to
+# "DDR PHY mailbox polled by stage0"): status word +0x08 reads 0, then 1, and message word
+# +0x64 reads 7. They come from the X-T5's boot-time training polls and are unexercised on the
+# X100VI: +0x08 was never read in those runs (the toggle's phase stayed empty on both stubs), and a
+# read of the constant +0x64 leaves no trace, so whether the S1 operating-point change polls these
+# words is not known. FujiMod's bring-up register file stands in; it is not a model.
+[[device]]
+base = 0xfb1a0000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+
+[[device]]
+base = 0xfb5a0000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]

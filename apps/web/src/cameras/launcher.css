@@ -17,24 +17,7 @@
   gap: 18px;
   min-width: 0;
 }
-.launcher-firmware > .downloads {
-  position: relative;
-  flex: 1;
-  min-height: 276px;
-  --downloads-top: 24px;
-}
-.launcher-firmware > .downloads:has(.downloads-search) {
-  min-height: 322px;
-  --downloads-top: 70px;
-}
-.launcher-firmware .downloads-table {
-  position: absolute;
-  inset: var(--downloads-top) 0 0;
-  height: auto;
-  min-height: 252px;
-  max-height: none;
-}
-.release-panel {
+.launcher-actions {
   display: flex;
   flex-direction: column;
   align-self: start;
@@ -44,69 +27,24 @@
   background: rgb(18 18 20 / 90%);
   overflow: hidden;
 }
-.release-heading {
+.launcher-camera {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #3a3a3c;
-}
-.release-heading h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 650;
-}
-.release-heading time {
-  color: var(--dim);
-  font-size: 13px;
-  white-space: nowrap;
-}
-.release-notes {
-  height: 488px;
-  padding: 16px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  font-size: 14px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-.release-notes h4 {
-  margin: 0 0 4px;
-  font-size: inherit;
-}
-.release-notes p,
-.release-notes ul,
-.release-notes ol {
-  margin: 0 0 14px;
-}
-.release-notes ul,
-.release-notes ol {
-  padding-left: 18px;
-}
-.release-notes > :last-child {
-  margin-bottom: 0;
-}
-.release-notes a {
-  color: #64d2ff;
-}
-.release-notes pre {
-  overflow-x: auto;
-}
-.release-gate {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
   padding: 14px 16px;
-  border-top: 1px solid #3a3a3c;
-  background: rgb(10 132 255 / 8%);
-  color: #c8dcf5;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  color: var(--dim);
 }
-.release-gate .i {
-  color: #0a84ff;
+.launcher-camera select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #3a3a3c;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #1c1c1e;
+  color: white;
+  font: inherit;
+  font-size: 16px;
 }
 .release-action {
   position: relative;
@@ -282,18 +220,6 @@
     background: none;
   }
   .stage.idle .ghost {
-    display: none;
-  }
-  .release-notes {
-    height: auto;
-  }
-  .launcher-firmware .downloads-table {
-    position: static;
-    height: 252px;
-    flex: none;
-  }
-  .launcher-empty .release-gate,
-  .launcher-empty .release-actions {
     display: none;
   }
 }

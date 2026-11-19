@@ -41,9 +41,14 @@ members = [
   "crates/emulator",
   "crates/perf",
   "crates/emulator-boot",
+  "crates/emulator-board-graph",
   "crates/emulator-session",
   "crates/emulator-cli",
-  "crates/xt5-bringup",
+  "crates/catalog-wiring",
+  "crates/emulator-controls",
+  "crates/mcp-core",
+  "crates/mcp-camera",
+  "crates/mcp",
   "crates/emulator-cpu",
   "crates/emulator-cpu-hvf",
   "crates/emulator-cpu-unicorn",
@@ -64,6 +69,7 @@ members = [
   "crates/emulator-exr2-isp-face",
   "crates/emulator-exr2-isp-input",
   "crates/emulator-xp4-io",
+  "crates/emulator-xp4-video",
   "crates/emulator-xp4-system",
   "crates/emulator-xp4-display",
   "crates/emulator-xp4-storage",
@@ -171,6 +177,7 @@ fujimod-catalog-service = { path = "crates/catalog-service", version = "0.1.0" }
 fujimod-catalog-settings = { path = "crates/catalog-settings", version = "0.1.0" }
 fujimod-emulator = { path = "crates/emulator", version = "0.1.0" }
 fujimod-perf = { path = "crates/perf", version = "0.1.0" }
+fujimod-emulator-board-graph = { path = "crates/emulator-board-graph", version = "0.1.0" }
 fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
 fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
@@ -190,6 +197,7 @@ fujimod-emulator-exr2-isp-testing = { path = "crates/emulator-exr2-isp-testing",
 fujimod-emulator-exr2-isp-face = { path = "crates/emulator-exr2-isp-face", version = "0.1.0" }
 fujimod-emulator-exr2-isp-input = { path = "crates/emulator-exr2-isp-input", version = "0.1.0" }
 fujimod-emulator-xp4-io = { path = "crates/emulator-xp4-io", version = "0.1.0" }
+fujimod-emulator-xp4-video = { path = "crates/emulator-xp4-video", version = "0.1.0" }
 fujimod-emulator-xp4-system = { path = "crates/emulator-xp4-system", version = "0.1.0" }
 fujimod-emulator-xp4-display = { path = "crates/emulator-xp4-display", version = "0.1.0" }
 fujimod-emulator-xp4-storage = { path = "crates/emulator-xp4-storage", version = "0.1.0" }
@@ -233,6 +241,13 @@ fujimod-firmware = { path = "crates/firmware", version = "0.1.0" }
 fujimod-settings = { path = "crates/settings", version = "0.1.0" }
 fujimod-emulator-cpu-hvf = { path = "crates/emulator-cpu-hvf", version = "0.1.0" }
 fujimod-workspace-hack = { path = "crates/workspace-hack", version = "0.1.0" }
+fujimod-catalog-wiring = { path = "crates/catalog-wiring", version = "0.1.0" }
+fujimod-emulator-controls = { path = "crates/emulator-controls", version = "0.1.0" }
+fujimod-mcp-core = { path = "crates/mcp-core", version = "0.1.0" }
+fujimod-mcp-camera = { path = "crates/mcp-camera", version = "0.1.0" }
+rmcp = "3.11"
+tokio = "1"
+base64 = "0.23"
 serde = "1"
 serde_json = "1"
 schemars = "1.2.3"
@@ -282,8 +297,8 @@ strip = "none"
 [profile.release.package."*"]
 opt-level = 3
 
-# Published artifacts only (wheels, the web emulator): ThinLTO.
-[profile.dist]
+# The web builds (wasm targets only, so it never shares artifacts with native release): ThinLTO.
+[profile.release-web]
 inherits = "release"
 opt-level = 3
 lto = "thin"

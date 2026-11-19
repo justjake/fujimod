@@ -216,7 +216,8 @@ pub struct Board {
     #[allow(clippy::vec_box)]
     bindings: Vec<Box<Binding>>,
     hooks: Vec<(usize, HookId)>,
-    mmio: Vec<(usize, u64, usize)>,
+    /// Native MMIO maps as (core, address, bytes, physical base).
+    mmio: Vec<(usize, u64, usize, u64)>,
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     interactive_windows: Cell<u64>,
     interactive_host_duration_ns: Cell<u128>,
@@ -578,6 +579,11 @@ impl Board {
     pub fn mappings(&self) -> &[factory::MemoryMap] {
         &self.mappings
     }
+    /// Processor address views dispatched through the device bus, as
+    /// (core, address, bytes, physical base).
+    pub fn mmio_mappings(&self) -> &[(usize, u64, usize, u64)] {
+        &self.mmio
+    }
     pub fn now(&self) -> u64 {
         self.state.borrow().timeline.now()
     }
@@ -689,6 +695,26 @@ impl Board {
     /// set: the bytes are observed, but stores to them do not end a wait.
     pub fn inspect_physical(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         self.physical_memory.read_host(address, bytes)
+    }
+    /// Inspect a declared backing address independently of bus mappings.
+    pub fn inspect_backing(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        self.physical_memory.read_backing(address, bytes)
+    }
+    /// Validate a complete backing range without reading or modifying it.
+    pub fn validate_backing(&self, address: u64, size: usize) -> Result<(), String> {
+        self.physical_memory
+            .backing_chunks(address, size)
+            .map(|_| ())
+    }
+    /// Restore backing bytes into an unexecuted epoch without changing bus mappings.
+    pub fn restore_backing(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        if !self.epoch_is_unexecuted() {
+            return Err("backing restore requires an unexecuted epoch".into());
+        }
+        let mut state = self.state.borrow_mut();
+        state.code_run = None;
+        self.physical_memory
+            .write_backing(&self.cpus, &state.exclusive, address, bytes)
     }
     pub fn write_physical(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
@@ -855,7 +881,7 @@ impl Board {
             cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
         }
         self.bindings.push(binding);
-        self.mmio.push((core, address, bytes));
+        self.mmio.push((core, address, bytes, physical));
         Ok(())
     }
     /// Observe guest ticks every 100,000 executed instructions, at existing scheduler
@@ -1284,6 +1310,10 @@ impl Board {
         }
         Ok(())
     }
+    /// Observe the latest scanouts without draining the board's output queue.
+    pub fn display_frames(&self) -> Vec<fujimod_emulator_devices::graphics::scanout::Frame> {
+        self.state.borrow().frames.values().cloned().collect()
+    }
     pub fn take_frames(&mut self) -> Vec<fujimod_emulator_devices::graphics::scanout::Frame> {
         std::mem::take(&mut self.state.borrow_mut().frames)
             .into_values()
@@ -1310,7 +1340,7 @@ impl Drop for Board {
         for (core, hook) in self.hooks.drain(..) {
             let _ = self.cpus[core].remove_hook(hook);
         }
-        for (core, base, bytes) in self.mmio.drain(..) {
+        for (core, base, bytes, _) in self.mmio.drain(..) {
             let _ = self.cpus[core].unmap(base, bytes);
         }
     }

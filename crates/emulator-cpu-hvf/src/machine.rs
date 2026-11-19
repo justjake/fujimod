@@ -166,6 +166,20 @@ impl Machine {
             Some(allocation),
         )
     }
+    pub fn alias_owned(
+        &self, address: u64, source: u64, bytes: usize, permissions: u32,
+    ) -> Result<(), String> {
+        let source_end = Self::range(source, bytes)?;
+        let (pointer, allocation) = {
+            let maps = self.maps.lock().map_err(|_| "HVF maps poisoned")?;
+            let (&base, mapping) = maps.range(..=source).next_back()
+                .filter(|(_, mapping)| source_end <= mapping.end)
+                .ok_or("alias requires one contiguous mapped source range")?;
+            let allocation = mapping._allocation.clone().ok_or("alias requires VM-owned backing")?;
+            (mapping.pointer + (source - base) as usize, allocation)
+        };
+        self.map_owned(address, bytes, permissions, pointer, Some(allocation))
+    }
     pub fn regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self
             .maps

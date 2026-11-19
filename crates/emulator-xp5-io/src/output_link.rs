@@ -41,6 +41,7 @@ impl Device for Link {
     fn pollable(&self, address: u64, size: u8) -> bool {
         size == 4 && address == BASE
     }
+    fujimod_emulator_devices::checkpoint_fields!(regs: [u32; 7]);
     fn save(&self) -> Value {
         serde_json::json!(self.regs)
     }

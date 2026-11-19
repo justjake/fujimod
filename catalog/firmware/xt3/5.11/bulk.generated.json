@@ -13,8 +13,8 @@
     "capacity": 65536
   },
   "window": {
-    "address": 13631488,
-    "size": 35651584
+    "address": 1048576,
+    "size": 48234496
   },
   "code_checks": [
     {
@@ -107,8 +107,8 @@
       "ranges": [
         {
           "name": "firmware",
-          "address": 13631488,
-          "size": 35651584
+          "address": 1048576,
+          "size": 48234496
         }
       ]
     }

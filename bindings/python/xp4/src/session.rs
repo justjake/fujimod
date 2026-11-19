@@ -13,6 +13,7 @@ use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 pub struct Xp4Session {
     inner: Session,
+    catalog_quantum: Option<usize>,
     handler: Rc<RefCell<Option<Py<PyAny>>>>,
     observer: InstructionObserver,
 }
@@ -36,6 +37,10 @@ impl Xp4Session {
             .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
         let inner = Session::new_with_media(definition, storage_image, card_files, card_media)
             .map_err(fujimod_python_base::error)?;
+        Self::from_session(inner, None)
+    }
+
+    pub fn from_session(inner: Session, catalog_quantum: Option<usize>) -> PyResult<Self> {
         let handler = Rc::new(RefCell::new(None::<Py<PyAny>>));
         let observer = handler.clone();
         let observer: InstructionObserver = Rc::new(move |core, address| {
@@ -54,7 +59,7 @@ impl Xp4Session {
         });
         inner.set_instruction_observer(Some(observer.clone()))
             .map_err(fujimod_python_base::error)?;
-        Ok(Self { inner, handler, observer })
+        Ok(Self { inner, catalog_quantum, handler, observer })
     }
     pub fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         if let Ok(handler) = self.handler.try_borrow()
@@ -183,6 +188,7 @@ impl Xp4Session {
         Ok(PyBytes::new(py, &bytes))
     }
     forward!(run(core: usize, budget: usize) -> ());
+    forward!(run_to(core: usize, budget: usize, target: u64) -> ());
     pub fn idle(&self) -> bool {
         self.inner.idle()
     }
@@ -239,6 +245,9 @@ impl Xp4Session {
 }
 
 impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
+    fn catalog_quantum(&self) -> Option<usize> {
+        self.catalog_quantum
+    }
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()> {
         Xp4Session::run_board(self, limit, quantum)
     }
@@ -313,6 +322,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn run(&self, core: usize, budget: usize) -> PyResult<()> {
         Xp4Session::run(self, core, budget)
+    }
+    fn run_to(&self, core: usize, budget: usize, target: u64) -> PyResult<()> {
+        Xp4Session::run_to(self, core, budget, target)
     }
     fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()> {
         Xp4Session::set_adc_input(self, channel, sample)

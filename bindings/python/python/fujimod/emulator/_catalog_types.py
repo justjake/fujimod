@@ -4305,6 +4305,7 @@ class ProfileFieldSourceVariant3(TypedDict, total=False):
 class ProfileRecord(TypedDict, total=False):
     block: Required[int]
     bytes: Required[int]
+    copies: NotRequired[int | None]
     defaults: Required[UpdateRange]
     defaults_offset: Required[int]
     fields: Required[list[SettingsField]]
@@ -5583,6 +5584,7 @@ class SettingsProfile(TypedDict, total=False):
     derived_fields: NotRequired[list[ProfileField]]
     header: Required[UpdateRange]
     loader_offset: NotRequired[int | None]
+    power_register: NotRequired[int | None]
     records: Required[dict[str, ProfileRecord]]
 
 

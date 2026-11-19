@@ -733,6 +733,26 @@ fn worker_raw_readout_retains_latched_frames_padding_deadline_ack_and_restore() 
     fujimod_emulator_devices::work::configure(0).unwrap();
 }
 #[test]
+fn raw_channel_can_be_enabled_before_its_input_window_is_programmed() {
+    let (mut d, mut h, _) = raw_window_input(false);
+    write(&mut d, &mut h, 0xfff10014, 0);
+    write(&mut d, &mut h, 0xfff10018, 0);
+    advance(&mut d, &mut h, 10);
+    assert!(h.irqs.is_empty());
+    assert!(h.ram[0x8000..0x8008].iter().all(|&byte| byte == 0xa5));
+    assert!(d.save()[0]["dma"]["deadline"].is_null());
+
+    write(&mut d, &mut h, 0xfff10014, 0x10003);
+    write(&mut d, &mut h, 0xfff10018, 0x10001);
+    advance(&mut d, &mut h, 20);
+    advance(&mut d, &mut h, 25);
+    assert_eq!(
+        &h.ram[0x8000..0x8008],
+        &[0x10, 1, 0x20, 1, 0x30, 1, 0x40, 1]
+    );
+}
+
+#[test]
 fn raw_dma_refuses_out_of_raster_windows_and_unmodeled_transport_selections() {
     for (offset, value, reason) in [
         (0x24, 3, "bounded input window"), // Odd active width cannot form packed pairs.

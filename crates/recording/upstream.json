@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Inter",
+    "version": "4.1",
+    "source": "https://github.com/rsms/inter/releases/tag/v4.1",
+    "license": "OFL-1.1",
+    "files": ["assets/fonts/Inter-LICENSE.txt"]
+  }
+]

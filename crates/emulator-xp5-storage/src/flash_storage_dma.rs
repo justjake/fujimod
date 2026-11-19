@@ -252,6 +252,7 @@ impl Device for Dma {
         self.state.pending |= 1 << n;
         self.irq(cx);
     }
+    fujimod_emulator_devices::checkpoint_fields!(state: State);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }

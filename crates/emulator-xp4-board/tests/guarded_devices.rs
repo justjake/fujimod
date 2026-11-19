@@ -52,6 +52,53 @@ fn program(session: &Session, code: &[u32], policy: Value) {
 }
 
 #[test]
+fn paired_nor_read_requires_an_explicit_complete_doubleword_policy() {
+    const SOURCE: u64 = 0xf0000020;
+    for (width, source, success) in [
+        (8, SOURCE, true),
+        (4, SOURCE, false),
+        (8, SOURCE + 4, false),
+        (8, SOURCE + 8, false),
+    ] {
+        let session = session();
+        let mut code = vec![];
+        mov32(&mut code, 0, source as u32);
+        code.push(0xe1c020d0); // ldrd r2,r3,[r0]
+        mov32(&mut code, 0, 0x4000);
+        code.extend([0xe5802000, 0xe5803004, 0xe12fff1e]);
+        session.write(0x4000, &[0xa5; 8]).unwrap();
+        program(
+            &session,
+            &code,
+            json!({"mmio": [{
+            "start": SOURCE, "end": SOURCE + 8, "width": width,
+            "read": true, "write": false
+        }], "model_readable": [], "model_writable": []}),
+        );
+        session.run(0, 64).unwrap();
+        let observed = session.driver_guard_state().unwrap();
+        let mut output = [0; 8];
+        session.read(0x4000, &mut output).unwrap();
+        if success {
+            assert!(
+                observed.returned && observed.failure.is_none(),
+                "{:?}",
+                observed.failure
+            );
+            assert_eq!(output, [0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27]);
+            assert_eq!(
+                observed.mmio_accesses,
+                vec![(SOURCE, 4, false), (SOURCE + 4, 4, false)]
+            );
+        } else {
+            assert!(!observed.returned && observed.failure.is_some());
+            assert_eq!(output, [0xa5; 8]);
+            assert!(observed.mmio_accesses.is_empty());
+        }
+    }
+}
+
+#[test]
 fn halfword_exclusive_writes_are_recorded_only_on_success_and_respect_the_bound() {
     let run = |session: &Session| {
         // Software-emulated exclusives redirect the CPU; resume the same guard.

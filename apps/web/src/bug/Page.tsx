@@ -6,7 +6,7 @@ import { FileList } from '@fujimod/emulator-ui/ui/file-list';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { FileDrop } from '../ui/file-drop';
-import { SiteHeader } from '../ui/site-header';
+import { SiteFrame } from '../ui/SiteFrame';
 import { ContributeDialog } from '../files/ContributeDialog';
 import { uploadReport, type UploadReport, type UploadReceipt } from './upload';
 import { reportPlatform, type ReportPlatform } from './file-guide';
@@ -26,8 +26,6 @@ import type { DeviceFileEntry } from '../device-files';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { prepareDownload } from './download';
 import { ReportUsb, type CameraChoice, type ReportConnection } from './usb';
-import '../home/site.css';
-import '../navigation.css';
 import './style.css';
 export default function BugReport(props: {
   connection?: ReportConnection;
@@ -253,8 +251,7 @@ export default function BugReport(props: {
     <Show
       when={devTools()}
       fallback={
-        <div class="shell bug-report">
-          <SiteHeader root="../" />
+        <SiteFrame class="bug-report">
           <main>
             <Show when={link()}>
               {(value) => (
@@ -562,7 +559,7 @@ export default function BugReport(props: {
               <p role="alert">{error()}</p>
             </Show>
           </main>
-        </div>
+        </SiteFrame>
       }
     >
       <DevTools model={untrack(() => props.devToolsModel)} supported={supported} />

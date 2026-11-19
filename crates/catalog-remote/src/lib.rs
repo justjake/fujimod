@@ -594,6 +594,90 @@ pub struct BuildMenuManifest {
     pub owner_constants: BTreeMap<String, u32>,
     /// Compiler-derived coverage and observation metadata.
     pub walkthrough: WalkthroughMetadata,
+    /// Static declarations served by the unified menu-tree provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub menu_tree: Option<MenuTreeCatalog>,
+}
+
+/// Static FM_MENU declarations used by the compiled menu-tree provider.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MenuTreeCatalog {
+    /// Format version.
+    pub schema: u32,
+    /// Declared tree nodes in provider order.
+    pub nodes: Vec<MenuTreeNode>,
+    /// Declared roots attached at stock menu anchors.
+    pub attachments: Vec<MenuTreeAttachment>,
+}
+
+/// One declared node and its stable owner/path identity.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MenuTreeNode {
+    /// Name within its declaring tree, including its path from that tree's root.
+    pub name: String,
+    /// Stable owner/name identity.
+    pub identity: String,
+    /// Owning mod or library.
+    pub owner: String,
+    /// Number assigned by the menu declaration generator.
+    pub id: u32,
+    /// Declared menu-node kind.
+    pub kind: MenuTreeNodeKind,
+    /// Static label literal, or empty when the provider supplies it at runtime.
+    pub label_text: String,
+    /// Declared parent node path; none for roots attached to a stock anchor.
+    pub parent: Option<String>,
+    /// Position among the node's siblings or attached roots.
+    pub order: u32,
+    /// Action named by a VALUE or COMMAND node, when present.
+    pub action: String,
+    /// Node path named by a LINK node, when present.
+    pub target: String,
+}
+
+/// FM_MENU node kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MenuTreeNodeKind {
+    Page,
+    Group,
+    Value,
+    Command,
+    Info,
+    Link,
+    Rows,
+}
+
+/// A declared root's placement in a stock menu.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct MenuTreeAttachment {
+    /// Declared root path.
+    pub root: String,
+    /// Stock menu anchor.
+    pub anchor: String,
+    /// How the root is placed at the anchor.
+    pub place: MenuTreePlace,
+    /// Order among roots at this anchor and placement.
+    pub order: u32,
+    /// Existing record symbol when the mod supplies one.
+    pub record: String,
+}
+
+/// Placement of a declared tree at a stock menu anchor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum MenuTreePlace {
+    In,
+    After,
+    Replace,
 }
 
 /// A build output bound to this manifest.
@@ -838,8 +922,12 @@ pub struct WalkthroughMetadata {
     pub canvas: Option<CanvasLayout>,
     /// Shared choice storage identities.
     pub choice_sets: BTreeMap<String, String>,
+    /// Choice-owner addresses keyed by declared action identity.
+    pub action_choice_owners: BTreeMap<u32, u64>,
     /// Exact binding picker enrollment.
     pub binding_choices: BTreeMap<u64, BindingChoices>,
+    /// Declared picker and quick action bindings with their menu owners.
+    pub qfn_action_bindings: Vec<QfnActionBinding>,
     /// Enrolled host screen identities.
     pub canvas_hosts: BTreeMap<u64, CanvasHost>,
     /// Required surface observations.
@@ -848,6 +936,27 @@ pub struct WalkthroughMetadata {
     pub option_requirements: Vec<(String, u32)>,
     /// Required screen observations.
     pub screen_requirements: Vec<(String, String, u32)>,
+}
+
+/// A compiled action binding and the menu items that project its action.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct QfnActionBinding {
+    /// Generic menu owner.
+    pub owner: u64,
+    /// Native Q/Fn binding object.
+    pub binding: u64,
+    /// Registry identity of the action.
+    pub action_id: u32,
+    /// Saved action name.
+    pub name: String,
+    /// Destinations supported by this binding.
+    pub assignments: u32,
+    /// Maximum compiled choice capacity.
+    pub choice_capacity: u32,
+    /// Menu item identities that project this action.
+    pub menu_owners: Vec<u64>,
 }
 
 /// Compiler-produced DeclarationLayout offsets.
@@ -991,6 +1100,53 @@ pub struct BindingChoices {
     pub native_owners: Vec<u64>,
     /// Curated mod owners.
     pub mod_owners: Vec<u64>,
+    /// Action identities in their selectable order.
+    pub mod_actions: Vec<BindingActionChoice>,
+    /// Accepted writer and control owners for compiled function choices.
+    #[serde(default)]
+    pub accepted_apply: Option<BindingApply>,
+}
+
+/// Accepted binding-choice writer and its compiled menu owners.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BindingApply {
+    /// Linked callback entry.
+    pub callback: u32,
+    /// Record that owns the compiled function choices.
+    pub function_owner: u64,
+    /// Generated action ID for the computed function picker; zero when absent.
+    pub function_action: u32,
+    /// Control IDs and their selected choice records.
+    pub controls: Vec<BindingApplyControl>,
+}
+
+/// Compiled row and choice owners for one control ID.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BindingApplyControl {
+    /// Control ID accepted by the writer.
+    pub control: u32,
+    /// Menu row representing the control.
+    pub row_owner: u64,
+    /// Record whose choices are committed for the control.
+    pub choice_owner: u64,
+    /// High 16-bit item handle carried by the composite function action ID;
+    /// zero when absent.
+    pub function_item: u32,
+}
+
+/// An action offered in a binding picker.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum BindingActionChoice {
+    /// A declared action with its registry identity.
+    Declared { action_id: u32, name: String },
+    /// A legacy action identified by its saved binding identity.
+    Legacy { binding_id: u32, name: String },
 }
 
 /// Declared canvas screen identities.

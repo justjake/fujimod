@@ -50,13 +50,23 @@ async fn read(
     )
     .await
 }
+/// Write without a readback, for bytes a later read of their uncached alias
+/// verifies after the cache synchronization that publishes them.
+async fn put(
+    session: &mut Session,
+    limits: DebugMemoryLimits,
+    address: u32,
+    raw: &[u8],
+) -> Result<()> {
+    memory::write_range(session, Address(address), raw, limits).await
+}
 async fn write(
     session: &mut Session,
     limits: DebugMemoryLimits,
     address: u32,
     raw: &[u8],
 ) -> Result<()> {
-    memory::write_range(session, Address(address), raw, limits).await?;
+    put(session, limits, address, raw).await?;
     require(
         read(session, limits, address, raw.len() as u32).await? == raw,
         "Owned service write readback differs",
@@ -69,6 +79,41 @@ struct Query {
     outputs: u32,
 }
 impl Query {
+    /// Run `calls` as one borrowed sequence: one guard and restoration, one
+    /// host wait. Each call is (entry, argument, output, void).
+    async fn calls(
+        &self,
+        session: &mut Session,
+        limits: DebugMemoryLimits,
+        calls: &[(u32, u32, [u32; 2], bool)],
+    ) -> Result<Vec<Vec<u8>>> {
+        let saved = read(session, limits, self.outputs, 8).await?;
+        let mut batch = BorrowedQueries::new(
+            Address(self.slot),
+            Address(self.stock),
+            Address(self.outputs),
+            saved,
+        )?;
+        for &(entry, argument, output, void) in calls {
+            let statuses = if void {
+                vec![(0, 0), (1, 0xffff)]
+            } else {
+                vec![(0, 0)]
+            };
+            batch.call(
+                Address(entry),
+                DiagnosticTag::Research(argument),
+                statuses,
+                words(&output),
+            )?;
+        }
+        Ok(batch
+            .invoke(session, limits)
+            .await?
+            .into_iter()
+            .map(|(_, output)| output)
+            .collect())
+    }
     async fn call(
         &self,
         session: &mut Session,
@@ -78,63 +123,32 @@ impl Query {
         output: [u32; 2],
         void: bool,
     ) -> Result<Vec<u8>> {
-        let saved = read(session, limits, self.outputs, 8).await?;
-        let mut call = BorrowedQueries::new(
-            Address(self.slot),
-            Address(self.stock),
-            Address(self.outputs),
-            saved,
-        )?;
-        let statuses = if void {
-            vec![(0, 0), (1, 0xffff)]
-        } else {
-            vec![(0, 0)]
-        };
-        call.call(
-            Address(entry),
-            DiagnosticTag::Research(argument),
-            statuses,
-            words(&output),
-        )?;
-        Ok(call.invoke(session, limits).await?.remove(0).1)
+        Ok(self
+            .calls(session, limits, &[(entry, argument, output, void)])
+            .await?
+            .remove(0))
     }
+    /// Clean, barrier, invalidate, barrier, instruction barrier: each is safe
+    /// to run whatever the previous one returned, so they share one sequence.
     async fn sync(
         &self,
         session: &mut Session,
         limits: DebugMemoryLimits,
         facts: &QueryService,
     ) -> Result<()> {
-        self.call(session, limits, facts.cache_clean, 0, [0, 0], true)
-            .await?;
-        self.call(
+        let barrier = (facts.barrier, self.outputs, [self.outputs + 4, 0], true);
+        self.calls(
             session,
             limits,
-            facts.barrier,
-            self.outputs,
-            [self.outputs + 4, 0],
-            true,
+            &[
+                (facts.cache_clean, 0, [0, 0], true),
+                barrier,
+                (facts.instruction_invalidate, 0, [0, 0], false),
+                barrier,
+                (facts.instruction_barrier, 0, [0, 0], false),
+            ],
         )
         .await?;
-        self.call(
-            session,
-            limits,
-            facts.instruction_invalidate,
-            0,
-            [0, 0],
-            false,
-        )
-        .await?;
-        self.call(
-            session,
-            limits,
-            facts.barrier,
-            self.outputs,
-            [self.outputs + 4, 0],
-            true,
-        )
-        .await?;
-        self.call(session, limits, facts.instruction_barrier, 0, [0, 0], false)
-            .await?;
         Ok(())
     }
 }
@@ -276,7 +290,7 @@ impl Service {
         stub.resize(32, 0);
         let mut raw = None;
         let result = async {
-            write(session, limits, bootstrap, &stub).await?;
+            put(session, limits, bootstrap, &stub).await?;
             query.sync(session, limits, facts).await?;
             require(
                 read(session, limits, bootstrap | ALIAS, 32).await? == stub,
@@ -333,7 +347,7 @@ impl Service {
                 )?;
             }
             let base = (allocated + 31) & !31;
-            write(session, limits, base, IMAGE).await?;
+            put(session, limits, base, IMAGE).await?;
             let shared = (base + SHARED) | ALIAS;
             let mut data = vec![0u8; 512];
             let api = [
@@ -360,7 +374,7 @@ impl Service {
             data[164..244].copy_from_slice(&words(&facts.functions));
             // Initialize through the cacheable view, then publish the complete
             // allocation before any callback uses its uncached shared view.
-            write(session, limits, base + SHARED, &data).await?;
+            put(session, limits, base + SHARED, &data).await?;
             query.sync(session, limits, facts).await?;
             require(
                 read(session, limits, shared, data.len() as u32).await? == data,

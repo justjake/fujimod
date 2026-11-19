@@ -1,5 +1,6 @@
 //! Bounded Motorola-master PL022 transport (ARM DDI 0194H).
 //! FIFO/request state and serial clock edges are independent of executing code.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::{Direction, Port, Request, SharedPort};
 use fujimod_emulator_parts_io::serial::{Frame, Wire};
@@ -302,6 +303,51 @@ pub struct Controller {
     interrupts: Vec<InterruptLine>,
 }
 impl Controller {
+    fn validate_state(
+        &self, e: &Engine, clock: Clock, interrupts: Vec<InterruptLine>, base: Option<u64>,
+        state: &State,
+    ) -> Result<(), String> {
+        if clock != e.clock
+            || interrupts != self.interrupts
+            || base != Some(self.base)
+            || state.tx.len() > DEPTH
+            || state.rx.len() > DEPTH
+            || state.control & 0x30 != 0
+            || state.enable & !0xb != 0
+            || state.divider & 1 != 0
+            || state.mask & !15 != 0
+            || state.dma & !3 != 0
+            || state.pending.as_ref().is_some_and(|p| {
+                !(4..=16).contains(&p.frame.bits) || p.frame.mode > 3 || state.enable & 2 == 0
+            })
+            || state.pending.is_some() && state.divider < 2
+            || state.pending.is_some() != state.clock_chain.is_some()
+            || !state.rx.is_empty() && state.enable & 2 == 0
+            || state.idle_since.is_some() && (state.pending.is_some() || state.rx.is_empty())
+            || state.timeout && (state.rx.is_empty() || state.pending.is_some())
+            || state
+                .requests
+                .iter()
+                .zip(Engine::request_levels(&state))
+                .any(|(r, level)| r.since().is_some() != level)
+        {
+            return Err("invalid PL022 checkpoint state or wiring".into());
+        }
+        if let Some(pending) = &state.pending {
+            let (origin, cycles) = state.clock_chain.unwrap();
+            if cycles == 0
+                || e.at(origin, cycles)? != pending.at
+                || pending.frame.bits != (state.control & 15) as u8 + 1
+                || pending.frame.mode != ((state.control >> 6) & 3) as u8
+                || pending.frame.word > u16::MAX >> (16 - pending.frame.bits)
+                || pending.token.is_none() != (state.enable & 1 != 0)
+            {
+                return Err("invalid PL022 pending frame".into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn new(
         base: u64,
         clock: Clock,
@@ -393,6 +439,33 @@ impl Device for Controller {
         self.offset(address, size)
             .is_some_and(|o| matches!(o, 0 | 4 | 0xc | 0x10 | 0x14 | 0x18 | 0x1c | 0x24))
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
+        Ok(Checkpoint::encode(self.name(), &(e.clock, self.base, &self.interrupts, &e.state))?
+            .with_children(vec![e.wire.checkpoint()?]))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (clock, base, interrupts, state): (Clock, u64, Vec<InterruptLine>, State) =
+            saved.decode(self.name())?;
+        let [wire] = saved.children() else { return Err("PL022 snapshot lacks wire state".into()); };
+        let e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
+        self.validate_state(&e, clock, interrupts, Some(base), &state)?;
+        e.wire.validate_checkpoint(wire)?;
+        if let Some((token, frame)) = state.pending.as_ref().and_then(|pending| {
+            Some((pending.token?, pending.frame))
+        }) {
+            e.wire.validate_pending(wire, token, frame)?;
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_, _, _, state): (Clock, u64, Vec<InterruptLine>, State) = saved.decode(self.name())?;
+        let mut e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
+        e.wire.restore_checkpoint(&saved.children()[0])?;
+        e.state = state;
+        Ok(())
+    }
     fn save(&self) -> Value {
         let e = self.engine.lock().unwrap();
         json!({"clock":e.clock,"base":self.base,"interrupts":self.interrupts,"state":e.state,"wire":e.wire.save()})
@@ -405,44 +478,7 @@ impl Device for Controller {
         let state: State =
             serde_json::from_value(value["state"].clone()).map_err(|e| e.to_string())?;
         let mut e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
-        if clock != e.clock
-            || interrupts != self.interrupts
-            || value["base"].as_u64() != Some(self.base)
-            || state.tx.len() > DEPTH
-            || state.rx.len() > DEPTH
-            || state.control & 0x30 != 0
-            || state.enable & !0xb != 0
-            || state.divider & 1 != 0
-            || state.mask & !15 != 0
-            || state.dma & !3 != 0
-            || state.pending.as_ref().is_some_and(|p| {
-                !(4..=16).contains(&p.frame.bits) || p.frame.mode > 3 || state.enable & 2 == 0
-            })
-            || state.pending.is_some() && state.divider < 2
-            || state.pending.is_some() != state.clock_chain.is_some()
-            || !state.rx.is_empty() && state.enable & 2 == 0
-            || state.idle_since.is_some() && (state.pending.is_some() || state.rx.is_empty())
-            || state.timeout && (state.rx.is_empty() || state.pending.is_some())
-            || state
-                .requests
-                .iter()
-                .zip(Engine::request_levels(&state))
-                .any(|(r, level)| r.since().is_some() != level)
-        {
-            return Err("invalid PL022 checkpoint state or wiring".into());
-        }
-        if let Some(pending) = &state.pending {
-            let (origin, cycles) = state.clock_chain.unwrap();
-            if cycles == 0
-                || e.at(origin, cycles)? != pending.at
-                || pending.frame.bits != (state.control & 15) as u8 + 1
-                || pending.frame.mode != ((state.control >> 6) & 3) as u8
-                || pending.frame.word > u16::MAX >> (16 - pending.frame.bits)
-                || pending.token.is_none() != (state.enable & 1 != 0)
-            {
-                return Err("invalid PL022 pending frame".into());
-            }
-        }
+        self.validate_state(&e, clock, interrupts, value["base"].as_u64(), &state)?;
         e.wire.restore(&value["wire"])?;
         e.state = state;
         Ok(())

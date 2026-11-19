@@ -1,8 +1,9 @@
 //! Memory watch on A-profile processors: every record is decided on the
 //! physical address the processor used, so stores through any MMU alias of a
 //! watched range are recorded and stores outside it are not.
+use fujimod_catalog_configuration::RunEngine;
 use super::bus::{Bus, Mode};
-use super::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+use super::factory::{Graph, MemoryMap, Options, Processor, Ram};
 use super::memory::BusMapping;
 use super::*;
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
@@ -42,7 +43,7 @@ fn a7_graph() -> Graph {
 fn a7_board() -> Board {
     let mut board = a7_graph()
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
             Bus::new(Mode::Strict),
             None,
         )
@@ -357,7 +358,7 @@ fn a7_watch_records_a_board_alias_window_with_the_canonical_physical_address() {
     });
     let mut board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
             Bus::new(Mode::Strict),
             None,
         )
@@ -509,7 +510,7 @@ fn r5f_board() -> Board {
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
     .build(
-        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
         Bus::new(Mode::Strict),
         None,
     )
@@ -577,7 +578,7 @@ fn watch_refuses_processors_it_cannot_observe() {
     graph.processors[0].registers = vec![(Register::Pstate, 0x3c5)];
     let board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
             Bus::new(Mode::Strict),
             None,
         )
@@ -587,6 +588,31 @@ fn watch_refuses_processors_it_cannot_observe() {
         .err()
         .expect("an unobservable processor must be refused");
     assert!(error.contains("R5F or A7"), "{error}");
+}
+
+#[test]
+fn range_digest_reports_the_hash_and_the_nonzero_page_runs_of_bus_memory() {
+    use sha2::{Digest, Sha256};
+    let board = a7_board();
+    board.write_physical(0x2000, &[1, 2, 3]).unwrap();
+    board.write_physical(0x5000, &[0xff]).unwrap();
+    board.write_physical(0x6fff, &[7]).unwrap();
+    let digest = board.range_digest(0x1000, 0x8000);
+    let mut expected = vec![0u8; 0x8000];
+    expected[0x1000..0x1003].copy_from_slice(&[1, 2, 3]);
+    expected[0x4000] = 0xff;
+    expected[0x5fff] = 7;
+    let hex: String = Sha256::digest(&expected).iter().map(|b| format!("{b:02x}")).collect();
+    assert_eq!(digest["sha256"], hex);
+    assert_eq!(digest["nonzero_pages_4k"], 3);
+    assert_eq!(digest["nonzero_runs"], serde_json::json!([[0x2000, 0x3000], [0x5000, 0x7000]]));
+    assert_eq!(digest["nonzero_runs_not_listed"], 0);
+    // All zero reads as no pages; the digest is of the whole range.
+    let zero = board.range_digest(0x100000, 0x4000);
+    assert_eq!((&zero["nonzero_pages_4k"], &zero["nonzero_runs"]), (&0.into(), &serde_json::json!([])));
+    // A range without complete backing reports the error and no hash.
+    let missing = board.range_digest(0x3ff000, 0x2000);
+    assert!(missing.get("error").is_some() && missing.get("sha256").is_none(), "{missing}");
 }
 
 /// Measurement, not a test: `cargo test -p fujimod-emulator --lib
@@ -665,7 +691,7 @@ fn a7_watch_cost_measurement() {
 #[test]
 fn fresh_epoch_preserves_host_time_and_instruction_totals() {
     let mut board = a7_graph().build(
-        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20)
+        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20)
             .with_epoch(9000, vec![321]),
         Bus::new(Mode::Strict), None,
     ).unwrap();
@@ -682,7 +708,7 @@ fn fresh_epoch_preserves_host_time_and_instruction_totals() {
     assert!(board.epoch_is_unexecuted());
     assert_eq!(board.instruction_counts(), [321]);
     assert!(a7_graph().build(
-        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20)
+        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20)
             .with_epoch(9000, vec![1, 2]),
         Bus::new(Mode::Strict), None,
     ).is_err());
@@ -717,7 +743,7 @@ fn supply_off_deadline_stops_execution_and_only_power_time_can_advance() {
     bus.attach(Box::new(SupplyOff { due: Some(8) }));
     bus.attach(Box::new(LateDma));
     let mut board = a7_graph().build(
-        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
         bus, None,
     ).unwrap();
     words(&board, CODE, &[0xeafffffe]);
@@ -749,7 +775,7 @@ fn connected_clock_removes_power_at_the_guest_hold_deadline() {
     bus.register(clock::BASE, 0x100, Box::new(clocks)).unwrap();
     let mut graph = a7_graph();
     graph.peripherals.push(super::factory::Peripheral { core: 0, address: clock::BASE, physical: clock::BASE, size: 0x100 });
-    let mut board = graph.build(Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20), bus, None).unwrap();
+    let mut board = graph.build(Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20), bus, None).unwrap();
     let mut code = store_at(clock::BASE as u32 + 0x84, 0, 0).to_vec();
     code.push(0xeafffffe);
     words(&board, CODE, &code);

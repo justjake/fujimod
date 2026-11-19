@@ -44,6 +44,11 @@ pub struct CardTree {
     pub entries: Vec<fat::CardEntry>,
 }
 
+/// Prepare a replacement medium before changing the host controller.
+pub fn merge_files(medium: Card, files: &[(String, Vec<u8>)]) -> Result<Card, String> {
+    if files.is_empty() { Ok(medium) } else { fat::merge(&medium, files) }
+}
+
 impl Session {
     pub fn card_state(&self, name: &str) -> Result<CardState, String> {
         let contacts = self.contacts.get(name).ok_or("no SD host with that name")?;
@@ -151,6 +156,21 @@ impl Session {
         let card = fat::format(options, files)?;
         self.board
             .edit_capability::<dyn CardSlot, _>(id, |host| host.replace_card(card).map(|_| ()))
+    }
+    /// Replace the medium with an explicit image, optionally adding files in one revision.
+    pub fn install_card_files(
+        &mut self,
+        name: &str,
+        medium: Option<Card>,
+        files: &[(String, Vec<u8>)],
+    ) -> Result<(), String> {
+        let medium = match medium {
+            Some(medium) => medium,
+            None => self.card_medium(name)?,
+        };
+        let medium = merge_files(medium, files)?;
+        self.insert_card(name, medium, true, false)?;
+        Ok(())
     }
     pub fn card_medium(&self, name: &str) -> Result<Card, String> {
         self.board

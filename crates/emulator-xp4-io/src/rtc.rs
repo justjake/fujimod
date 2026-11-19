@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 // Field names and ordering preserve the three-byte peer's checkpoint encoding.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Counter {
     pub(crate) seconds: u32,

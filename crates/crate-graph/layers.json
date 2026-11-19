@@ -41,6 +41,7 @@
       "fujimod-emulator-sensor-input",
       "fujimod-emulator-xp4-display",
       "fujimod-emulator-xp4-io",
+      "fujimod-emulator-xp4-video",
       "fujimod-emulator-xp4-system",
       "fujimod-emulator-xp4-storage",
       "fujimod-emulator-xp5-display",
@@ -83,6 +84,7 @@
     ],
     "final": [
       "fujimod-emulator-cli",
+      "fujimod-emulator-xp5-bringup",
       "fujimod-emulator-ip-dmp-webgpu",
       "fujimod-emulator-javascript",
       "fujimod-emulator-models",
@@ -91,8 +93,7 @@
       "fujimod-python-graphics",
       "fujimod-python-host-image",
       "fujimod-python-module",
-      "fujimod-python-xp4",
-      "xt5-bringup"
+      "fujimod-python-xp4"
     ],
     "other": [
       "fujimod-bindgen",
@@ -168,7 +169,8 @@
         "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io",
         "fujimod-emulator-xp4-storage",
-        "fujimod-emulator-xp4-system"
+        "fujimod-emulator-xp4-system",
+        "fujimod-emulator-xp4-video"
       ],
       "fujimod-emulator-xpp": [
         "fujimod-emulator-graphics",

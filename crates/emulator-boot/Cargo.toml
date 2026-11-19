@@ -11,12 +11,29 @@ license.workspace = true
 [lib]
 doctest = false
 
+[features]
+xp5-startup = [
+    "dep:fujimod-emulator-parts-controls",
+    "dep:fujimod-emulator-xp5-board",
+    "dep:fujimod-emulator-xp4-board",
+    "dep:fujimod-emulator-xpp",
+    "dep:fujimod-emulator-xp5-display",
+    "dep:fujimod-emulator-xp5-io",
+    "dep:fujimod-emulator-xp5-storage",
+    "dep:fujimod-framebuffer",
+    "dep:fujimod-firmware",
+    "dep:ctrlc",
+    "dep:regex",
+    "dep:toml",
+    "dep:zstd",
+]
+
 [dependencies]
 fujimod-emulator-session.workspace = true
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true
-fujimod-emulator-cpu-unicorn.workspace = true
+fujimod-emulator-board-graph.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-exr2-plan.workspace = true
 fujimod-emulator-preparation.workspace = true
@@ -27,6 +44,8 @@ fujimod-catalog-resolution.workspace = true
 fujimod-catalog-assets.workspace = true
 fujimod-catalog-construction.workspace = true
 fujimod-catalog-controls.workspace = true
+fujimod-catalog-wiring.workspace = true
+fujimod-emulator-controls.workspace = true
 fujimod-catalog-remote.workspace = true
 fujimod-catalog-run-inputs.workspace = true
 fujimod-settings.workspace = true
@@ -41,6 +60,21 @@ fujimod-workspace-hack.workspace = true
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 sha2 = { workspace = true, features = ["asm-aarch64"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+fujimod-emulator-parts-controls = { workspace = true, optional = true }
+fujimod-emulator-xp5-board = { workspace = true, optional = true }
+fujimod-emulator-xp4-board = { path = "../emulator-xp4-board", optional = true }
+fujimod-emulator-xpp = { workspace = true, optional = true }
+fujimod-emulator-xp5-display = { workspace = true, optional = true }
+fujimod-emulator-xp5-io = { workspace = true, optional = true }
+fujimod-emulator-xp5-storage = { workspace = true, optional = true }
+fujimod-framebuffer = { workspace = true, optional = true }
+fujimod-firmware = { workspace = true, optional = true }
+ctrlc = { version = "3", optional = true }
+regex = { version = "1", optional = true }
+toml = { version = "1.1", optional = true }
+zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 fujimod-emulator-exr2-board.workspace = true

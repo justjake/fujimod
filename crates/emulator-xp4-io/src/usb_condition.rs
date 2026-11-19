@@ -45,6 +45,22 @@ impl Device for UsbCondition {
             cx.unmodeled();
         }
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(self.base, self.present.load(Ordering::SeqCst)))
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let (base, _): (u64, bool) = data.decode(self.name())?;
+        if base != self.base {
+            return Err("Invalid XP4 USB condition checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(data)?;
+        let (_, present): (u64, bool) = data.decode(self.name())?;
+        self.present.store(present, Ordering::SeqCst);
+        Ok(())
+    }
     fn save(&self) -> Value {
         serde_json::json!({ "base": self.base, "present": self.present.load(Ordering::SeqCst) })
     }

@@ -198,6 +198,7 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},
@@ -223,7 +224,7 @@ mod tests {
         })).unwrap();
         let mut board = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,
@@ -306,7 +307,7 @@ mod tests {
         .unwrap();
         let mut b = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,
@@ -364,7 +365,7 @@ mod tests {
         .unwrap();
         let mut b = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,

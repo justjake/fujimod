@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use crate::board::{factory::*, memory::BusMapping};
 use fujimod_emulator_cpu::{Model, arm};
@@ -154,7 +155,7 @@ pub(super) fn board_mode(mode: bus::Mode) -> Board {
         .unwrap();
     let mut board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
             bus,
             None,
         )

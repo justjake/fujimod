@@ -1,5 +1,6 @@
 //! XP5 polled SPI controller. GPIO selection routes wire frames to attached
 //! parts; FIFO readiness follows serial clock edges on the guest timeline.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::xp5::pins::SharedPins;
 use fujimod_emulator_parts_io::serial::{Endpoint, Frame};
 use fujimod_emulator_devices::{Cx, Device};
@@ -47,6 +48,24 @@ pub struct GpioWire {
     attachments: Vec<Attachment>,
     state: WireState,
 }
+fn attachment_checkpoints(attachments: &[Attachment]) -> Result<Vec<Checkpoint>, String> {
+    attachments.iter().map(|part| part.endpoint.checkpoint()).collect()
+}
+
+fn validate_attachments(
+    attachments: &[Attachment], selects: &[Select], saved: &[Checkpoint],
+) -> Result<(), String> {
+    if selects.iter().copied().ne(attachments.iter().map(|part| part.select))
+        || saved.len() != attachments.len()
+    {
+        return Err("SPI checkpoint endpoint wiring differs".into());
+    }
+    for (part, state) in attachments.iter().zip(saved) {
+        part.endpoint.validate_checkpoint(state)?;
+    }
+    Ok(())
+}
+
 impl GpioWire {
     pub fn new(pins: SharedPins, attachments: Vec<Attachment>) -> Result<Self, String> {
         if attachments.is_empty()
@@ -127,6 +146,41 @@ impl fujimod_emulator_parts_io::serial::Wire for GpioWire {
         let endpoint = self.state.active.take().unwrap().endpoint;
         Ok(self.attachments[endpoint].endpoint.transfer(frame, now))
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let selects: Vec<_> = self.attachments.iter().map(|part| part.select).collect();
+        Ok(Checkpoint::encode("gpio-serial-wire", &(&self.state, selects))?
+            .with_children(attachment_checkpoints(&self.attachments)?))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (state, selects): (WireState, Vec<Select>) = saved.decode("gpio-serial-wire")?;
+        validate_attachments(&self.attachments, &selects, saved.children())?;
+        let count = self.attachments.len();
+        if state.last_endpoint.is_some_and(|index| index >= count)
+            || state.active.as_ref().is_some_and(|frame| {
+                frame.endpoint >= count || state.generation == 0
+                    || state.last_endpoint != Some(frame.endpoint) || state.last_epoch != frame.epoch
+            })
+        {
+            return Err("invalid serial wire checkpoint".into());
+        }
+        Ok(())
+    }
+    fn validate_pending(&self, saved: &Checkpoint, token: u64, frame: Frame) -> Result<(), String> {
+        let (state, _): (WireState, Vec<Select>) = saved.decode("gpio-serial-wire")?;
+        if state.generation != token || !state.active.is_some_and(|active| active.frame == frame) {
+            return Err("PL022 pending frame differs from its GPIO serial wire".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (state, _): (WireState, Vec<Select>) = saved.decode("gpio-serial-wire")?;
+        for (part, checkpoint) in self.attachments.iter_mut().zip(saved.children()) {
+            part.endpoint.restore_checkpoint(checkpoint)?;
+        }
+        self.state = state;
+        Ok(())
+    }
     fn save(&self) -> Value {
         json!({"state":self.state,"parts":self.attachments.iter().map(|a|json!({"select":a.select,"kind":a.endpoint.name(),"state":a.endpoint.save()})).collect::<Vec<_>>()})
     }
@@ -201,6 +255,30 @@ pub struct Spi {
     attachments: Vec<Attachment>,
 }
 impl Spi {
+    fn validate_state(&self, decoded: &State) -> Result<(), String> {
+        if decoded
+            .last_endpoint
+            .is_some_and(|i| i >= self.attachments.len())
+            || decoded.pending.as_ref().is_some_and(|p| {
+                p.endpoint >= self.attachments.len() || p.token != decoded.generation
+            })
+            || decoded.rx.is_some() && decoded.pending.is_some()
+            || decoded.control & !0xffcf != 0
+            || decoded.control != 0 && decoded.control & 15 < 3
+            || decoded.enable & !0xa != 0
+            || decoded.divider != 0
+                && (!(2..=254).contains(&decoded.divider) || decoded.divider & 1 != 0)
+            || decoded.irq_enable != 0
+            || decoded.causes != 0
+        {
+            return Err("invalid SPI checkpoint transfer state".into());
+        }
+        if decoded.pending.is_some() && (decoded.enable & 2 == 0 || decoded.divider == 0) {
+            return Err("SPI checkpoint has a transfer without a serial clock".into());
+        }
+        Ok(())
+    }
+
     pub fn new(
         base: u64,
         pins: SharedPins,
@@ -403,6 +481,28 @@ impl Device for Spi {
     fn pollable(&self, address: u64, size: u8) -> bool {
         size == 4 && address == self.base + 0xc
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let selects: Vec<_> = self.attachments.iter().map(|part| part.select).collect();
+        Ok(Checkpoint::encode(self.name(), &(self.base, self.source_hz, &self.state, selects))?
+            .with_children(attachment_checkpoints(&self.attachments)?))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (base, clock, state, selects): (u64, u64, State, Vec<Select>) = saved.decode(self.name())?;
+        if base != self.base || clock != self.source_hz {
+            return Err("SPI checkpoint clock/address differs".into());
+        }
+        self.validate_state(&state)?;
+        validate_attachments(&self.attachments, &selects, saved.children())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_, _, state, _): (u64, u64, State, Vec<Select>) = saved.decode(self.name())?;
+        for (part, checkpoint) in self.attachments.iter_mut().zip(saved.children()) {
+            part.endpoint.restore_checkpoint(checkpoint)?;
+        }
+        self.state = state;
+        Ok(())
+    }
     fn save(&self) -> Value {
         json!({"base":self.base,"source_hz":self.source_hz,"controller":self.state,
             "endpoints":self.attachments.iter().map(|a|json!({"select":a.select,"kind":a.endpoint.name(),"state":a.endpoint.save()})).collect::<Vec<_>>()})
@@ -424,23 +524,7 @@ impl Device for Spi {
         }
         let decoded: State =
             serde_json::from_value(state["controller"].clone()).map_err(|e| e.to_string())?;
-        if decoded
-            .last_endpoint
-            .is_some_and(|i| i >= self.attachments.len())
-            || decoded.pending.as_ref().is_some_and(|p| {
-                p.endpoint >= self.attachments.len() || p.token != decoded.generation
-            })
-            || decoded.rx.is_some() && decoded.pending.is_some()
-            || decoded.control & !0xffcf != 0
-            || decoded.control != 0 && decoded.control & 15 < 3
-            || decoded.enable & !0xa != 0
-            || decoded.divider != 0
-                && (!(2..=254).contains(&decoded.divider) || decoded.divider & 1 != 0)
-            || decoded.irq_enable != 0
-            || decoded.causes != 0
-        {
-            return Err("invalid SPI checkpoint transfer state".into());
-        }
+        self.validate_state(&decoded)?;
         if let Some(p) = &decoded.pending {
             if decoded.enable & 2 == 0 || decoded.divider == 0 {
                 return Err("SPI checkpoint has a transfer without a serial clock".into());

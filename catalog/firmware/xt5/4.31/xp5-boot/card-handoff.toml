@@ -1,0 +1,9 @@
+# Firmware entry after the mask ROM loads the SD card startup stage.
+pc = 0xff800000
+sp = 0xff83c000
+slot = 0xff9b0000
+stage_max_bytes = 0x3c000
+
+[power_controller_registers]
+"0" = 0x8202
+"10" = 0x0002

@@ -1245,7 +1245,7 @@ mod tests {
         assert_eq!(engine(0xfffd_5000)["fixed"], json!([[0x60, 1]]));
         assert_eq!(
             engine(0xfff9_8000)["job"],
-            json!({"start": [4, 1], "status": null, "stop": [0, 1], "irq": 130, "ticks": 144000})
+            json!({"start": [4, 5], "status": null, "stop": [0, 1], "irq": 130, "ticks": 144000})
         );
         assert_eq!(engine(0xfff7_e000)["fixed"], json!([[0x1c, 0x0100_0100]]));
         assert_eq!(
@@ -1329,7 +1329,7 @@ mod tests {
         let assembly = xt20(&assets).unwrap();
         let spec: Spec = serde_json::from_value(assembly.devices).unwrap();
         let flash = BTreeMap::from([(assembly.flash_asset.to_string(), vec![0xff; 0x1000])]);
-        let built = build(assembly.execution, spec, &flash, Mode::Strict).unwrap();
+        let built = build(assembly.execution, spec, &flash, Mode::Strict, fujimod_catalog_configuration::RunEngine::Unicorn).unwrap();
         for name in [
             "gpio",
             "resets",

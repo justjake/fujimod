@@ -1,8 +1,10 @@
 //! Catalog run preparation and boot for the Python emulator bindings, installed through
 //! `fujimod_python_base::boot` when the module initializes.
 use fujimod_emulator_boot as boot;
+use fujimod_emulator::board::bus::Mode;
 use fujimod_emulator_session::Session;
-use fujimod_python_base::boot::{Boot, Inputs};
+use fujimod_python_base::boot::{Boot, Inputs, Opened};
+use fujimod_catalog_configuration::{RunInputs, RunInstructionRate};
 
 struct CatalogBoot;
 
@@ -11,7 +13,84 @@ impl Boot for CatalogBoot {
         let prepared = boot::prepare(configuration_id, overlays)?;
         serde_json::to_string(&prepared.to_json()).map_err(|failure| failure.to_string())
     }
-    fn open(&self, inputs: Inputs) -> Result<Session, String> {
+    fn open(&self, inputs: Inputs) -> Result<Opened, String> {
+        let mut resolved = fujimod_catalog_resolution::ResolvedConfiguration::with_overlays(
+            &inputs.configuration_id, &inputs.overlays,
+        )?;
+        if let Some(engine) = inputs.engine {
+            resolved.override_engine(engine.parse()
+                .map_err(|error| format!("invalid CPU engine: {error}"))?)?;
+        }
+        if let Some((numerator, denominator)) = inputs.instruction_rate {
+            let rate = RunInstructionRate { numerator, denominator };
+            rate.validate()?;
+            resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
+                .instructions_per_tick = rate;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") {
+            if inputs.boot_rom.is_some() || inputs.manifest.is_some() || inputs.nand.is_some()
+                || inputs.settings.is_some() || inputs.camera.is_some() || inputs.access_point.is_some()
+                || inputs.capability_reply.is_some() || inputs.clock_seconds_2000.is_some()
+                || !inputs.preferred_languages.is_empty()
+            {
+                return Err("application-profile inputs belong in the startup plan".into());
+            }
+            let plan = inputs.application_plan.ok_or("application startup needs an application plan")?;
+            let boot::Opened::Application(mut started) = boot::open(resolved, boot::StartupInputs::Application(
+                boot::application::Startup {
+                    update: inputs.update, plan, discovery: inputs.discovery, quantum: inputs.quantum,
+                    card_image: inputs.card_image,
+                    card_files: inputs.card_files,
+                },
+            ))? else {
+                return Err("application startup returned another processor generation".into());
+            };
+            if let Some(path) = inputs.scene {
+                started.board.set_scene(&boot::host::read_scene(&path)?)?;
+            }
+            return match started.board {
+                boot::application::Board::Xp4(session) => fujimod_python_xp4::adopt(*session, started.quantum)
+                    .map(Opened::Xp4).map_err(|error| error.to_string()),
+                boot::application::Board::Xpp(session) => Ok(Opened::Graph(*session)),
+            };
+        }
+        if inputs.application_plan.is_some() {
+            return Err("application startup plan does not match this configuration".into());
+        }
+        let mode = if inputs.discovery { Mode::Discovery } else { Mode::Strict };
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+            if inputs.nand.is_some() || inputs.settings.is_some() || inputs.clock_seconds_2000.is_some()
+                || !inputs.preferred_languages.is_empty() || inputs.camera.is_some()
+                || inputs.access_point.is_some() || inputs.capability_reply.is_some()
+            {
+                return Err("EXR II startup settings do not apply to XP5".into());
+            }
+            let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
+                update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
+                card_image: inputs.card_image, card_files: inputs.card_files, scene: inputs.scene,
+                output: None, viewer_port: None,
+                mode, quantum: inputs.quantum,
+            }))? else {
+                return Err("XP5 startup returned another processor generation".into());
+            };
+            let (session, inputs, read_limit) = started.into_session();
+            return Ok(Opened::Xp5 {session, inputs, read_limit});
+        }
+        if inputs.manifest.is_some() {
+            return Err("a boot manifest requires an XP5 run configuration".into());
+        }
+        if let Some(quantum) = inputs.quantum {
+            if quantum == 0 {
+                return Err("processor quantum must be positive".into());
+            }
+            resolved.configuration.execution.as_mut().ok_or("configuration has no execution policy")?
+                .quantum = quantum;
+        }
+        if let Some(path) = inputs.scene {
+            boot::host::set_exr2_scene(&mut resolved, &path)?;
+        }
         let access_point = inputs
             .access_point
             .as_deref()
@@ -23,11 +102,9 @@ impl Boot for CatalogBoot {
             .as_deref()
             .map(|bytes| <[u8; 20]>::try_from(bytes).map_err(|_| "MT5931 capability fixture must be 20 bytes"))
             .transpose()?;
-        boot::open(boot::Options {
-            configuration_id: inputs.configuration_id,
-            overlays: inputs.overlays,
+        let options = boot::Options {
             update: inputs.update,
-            boot_rom: inputs.boot_rom,
+            boot_rom: inputs.boot_rom.ok_or("EXR II requires a boot ROM")?,
             nand: inputs.nand,
             settings: inputs.settings,
             clock_seconds_2000: inputs.clock_seconds_2000,
@@ -35,7 +112,11 @@ impl Boot for CatalogBoot {
             camera: inputs.camera,
             access_point,
             capability_reply,
-        })
+        };
+        let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2()?;
+        #[cfg(not(target_arch = "wasm32"))]
+        boot::media::attach(&mut session, inputs.card_image.as_deref(), &inputs.card_files)?;
+        Ok(Opened::Graph(session))
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

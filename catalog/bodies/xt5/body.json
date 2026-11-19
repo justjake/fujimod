@@ -31,6 +31,30 @@
       ]
     },
     {
+      "id": "sensor-power-enable",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "sensor-power-sense",
+      "kind": "sensor",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 4,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
+    },
+    {
       "id": "thermal-0",
       "kind": "control",
       "signals": [
@@ -67,7 +91,12 @@
         "select_connection_id": "power-controller-select"
       }
     ],
-    "gpio_feedback": [],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "sensor-power-enable",
+        "input_connection_id": "sensor-power-sense"
+      }
+    ],
     "keypad_samples": {},
     "thermal_connection_ids": ["thermal-0"],
     "bus_drain": {

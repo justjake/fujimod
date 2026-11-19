@@ -1,0 +1,9 @@
+# Stock1479fc4 initializes eight banks and global words atff90e564..578 (147b724 adds564/568).
+# Direct DMA uses addressed RAM and FIFO requests; unsupported modes refuse.
+[[device]]
+base = 0xff930000
+size = 0x8000
+kind = "general-dma"
+
+[device.options]
+companion_irq_base = 83

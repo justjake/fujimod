@@ -7,6 +7,7 @@
 //! ambient-light and proximity samples with no interrupt pending; the channel
 //! and proximity data registers read zero: dark, nothing in front of the
 //! finder.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use crate::i2c::Registers;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -49,6 +50,21 @@ impl Registers for Proximity {
             0x14..=0x19 => 0,
             r => self.registers.get(r as usize).copied().unwrap_or(0),
         })
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), self)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: Self = saved.decode(self.name())?;
+        if state.registers.len() != 0x20 {
+            return Err("invalid TMD2772 checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        *self = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()

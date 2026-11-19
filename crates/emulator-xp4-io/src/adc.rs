@@ -91,6 +91,31 @@ impl Adc {
         }
     }
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SavedAdc { inputs: [u16; 12], sample_ticks: u64, state: State }
+
+impl Adc {
+    fn validate_savedadc(&self, saved: &SavedAdc) -> Result<(), String> {
+        let inputs = &saved.inputs;
+        let state = &saved.state;
+        if inputs.iter().any(|v| *v > 4095)
+            || saved.sample_ticks != self.sample_ticks
+            || state.control & !0x0fff0003 != 0
+            || state.divider >= 0x100000
+            || state.gate > 1
+            || state.status > 1
+            || state.trim > 255
+            || state.samples.iter().any(|v| *v > 4095)
+            || (state.deadline.is_some()
+                && (state.control & 1 == 0 || state.gate == 0 || state.control & 0x0fff0000 == 0))
+        {
+            return Err("Invalid XP4 ADC checkpoint or conversion clock".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Adc {
     fn name(&self) -> &'static str {
         "xp4-adc"
@@ -174,24 +199,25 @@ impl Device for Adc {
     fn save(&self) -> Value {
         serde_json::json!({"inputs":self.inputs,"sample_ticks":self.sample_ticks,"adc":self.state})
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedAdc { inputs: self.inputs, sample_ticks: self.sample_ticks, state: self.state.clone() })
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_savedadc(&data.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let saved: SavedAdc = data.decode(self.name())?;
+        self.validate_savedadc(&saved)?;
+        self.inputs = saved.inputs;
+        self.state = saved.state;
+        Ok(())
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State =
             serde_json::from_value(value["adc"].clone()).map_err(|e| e.to_string())?;
         let inputs: [u16; 12] =
             serde_json::from_value(value["inputs"].clone()).map_err(|e| e.to_string())?;
-        if inputs.iter().any(|v| *v > 4095)
-            || value["sample_ticks"] != self.sample_ticks
-            || state.control & !0x0fff0003 != 0
-            || state.divider >= 0x100000
-            || state.gate > 1
-            || state.status > 1
-            || state.trim > 255
-            || state.samples.iter().any(|v| *v > 4095)
-            || (state.deadline.is_some()
-                && (state.control & 1 == 0 || state.gate == 0 || state.control & 0x0fff0000 == 0))
-        {
-            return Err("Invalid XP4 ADC checkpoint or conversion clock".into());
-        }
+        self.validate_savedadc(&SavedAdc { inputs, sample_ticks: value["sample_ticks"].as_u64().unwrap_or_default(), state: state.clone() })?;
         self.inputs = inputs;
         self.state = state;
         Ok(())

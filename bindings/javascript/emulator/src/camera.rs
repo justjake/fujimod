@@ -1,5 +1,6 @@
 //! Shared EXR II construction from the checked runtime/device plans. Python
 //! transition adapters refuse before CPU construction on every target.
+use fujimod_catalog_configuration::RunEngine;
 use super::session::{Firmware, Session, decode};
 use fujimod_emulator::board::{
     bus::{Bus, Mode},
@@ -451,7 +452,7 @@ impl Session {
         let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, built.graph)?;
         let mut board = g.execution.build(
-            factory::Options::new(factory::Engine::Unicorn),
+            factory::Options::new(RunEngine::Unicorn),
             bus,
             None,
         )?;
@@ -479,6 +480,7 @@ impl Session {
             resources: built.resources,
             contacts: built.contacts,
             power_cycle: None,
+            window_action: None,
             recording_frames: Default::default(),
         };
         let mut session = Self::start_camera(

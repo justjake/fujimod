@@ -220,6 +220,7 @@ export interface RecReport {
      */
     scanout_instance: number | null;
     failure: string | null;
+    discovery_callee_stubs: unknown;
 }
 
 /**
@@ -312,6 +313,15 @@ export interface QueueState {
     active: ActiveTransition | null;
     requested: Record<string, string>;
     completed: number;
+}
+
+/**
+* Host-visible controls and their current positions.
+*/
+export interface ControlState {
+    inputs: ControlInput[];
+    positions: Record<string, string>;
+    inputQueue: QueueState | null;
 }
 
 /**

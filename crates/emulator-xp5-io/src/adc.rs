@@ -38,6 +38,15 @@ impl Adc {
         })
     }
 }
+impl Adc {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state.samples.iter().any(|&value| value > 4095) {
+            return Err("ADC checkpoint sample exceeds 12-bit range".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Adc {
     fn name(&self) -> &'static str {
         "adc-sequencer-input"
@@ -91,6 +100,8 @@ impl Device for Adc {
             _ => cx.unmodeled(),
         }
     }
+    // The physical-controls source owns its shared input queue checkpoint.
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
     fn save(&self) -> Value {
         json!({"adc":self.state, "input":self.input.save()})
     }

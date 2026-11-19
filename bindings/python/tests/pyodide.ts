@@ -29,28 +29,34 @@ try {
   await py.runPythonAsync(
     `import micropip;await micropip.install(${JSON.stringify('emfs:/' + manifest.wheel)})`,
   );
-  for (const name of [
-    'exposure',
-    'extended',
-    'adjustment',
-    'lens',
-    'configuration',
-    'transfer',
-    'peripheral',
-    'media',
-    'network',
-  ]) {
+  const testPackage = `${py.FS.cwd()}/bindings/python/tests`;
+  py.FS.mkdirTree(testPackage);
+  for (const path of ['bindings', 'bindings/python', 'bindings/python/tests']) {
     py.FS.writeFile(
-      `${py.FS.cwd()}/${name}_contract.py`,
-      await readFile(new URL(`./${name}_contract.py`, import.meta.url), 'utf8'),
+      `${py.FS.cwd()}/${path}/__init__.py`,
+      await readFile(new URL(`../../../${path}/__init__.py`, import.meta.url), 'utf8'),
     );
   }
-  py.FS.writeFile(
-    `${py.FS.cwd()}/contract_assertions.py`,
-    await readFile(new URL('./contract_assertions.py', import.meta.url), 'utf8'),
-  );
+  for (const name of [
+    'exposure_contract',
+    'extended_contract',
+    'adjustment_contract',
+    'lens_contract',
+    'configuration_contract',
+    'transfer_contract',
+    'peripheral_contract',
+    'media_contract',
+    'network_contract',
+    'contract_assertions',
+    'webusb_contract',
+  ]) {
+    py.FS.writeFile(
+      `${testPackage}/${name}.py`,
+      await readFile(new URL(`./${name}.py`, import.meta.url), 'utf8'),
+    );
+  }
   const result = await py.runPythonAsync(
-    (await readFile(new URL('./webusb_contract.py', import.meta.url), 'utf8')) + '\nawait run()',
+    'from bindings.python.tests.webusb_contract import run\nawait run()',
   );
   assert.equal(result, true);
   console.log(

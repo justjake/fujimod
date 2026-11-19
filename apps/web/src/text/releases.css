@@ -1,0 +1,22 @@
+.releases-page time {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.releases-page .release-notes h4 {
+  margin: 1.4em 0 0.5em;
+  color: #f2f2f7;
+}
+
+.releases-page pre {
+  overflow: auto;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--key);
+}
+
+.releases-page a {
+  overflow-wrap: anywhere;
+}

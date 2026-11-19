@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "image_bytes": 872,
+  "symbols": {
+    "xp5_stub_end": 872,
+    "xp5_stub_entry": 0,
+    "xp5_stub_out_dst_crc": 856,
+    "xp5_stub_out_result": 864,
+    "xp5_stub_out_src_crc": 848,
+    "xp5_stub_out_status": 840,
+    "xp5_stub_p_bytes": 720,
+    "xp5_stub_p_copy": 744,
+    "xp5_stub_p_crc": 736,
+    "xp5_stub_p_dram": 728,
+    "xp5_stub_p_dst": 704,
+    "xp5_stub_p_enable": 792,
+    "xp5_stub_p_enable_green": 800,
+    "xp5_stub_p_enable_red": 808,
+    "xp5_stub_p_flash": 712,
+    "xp5_stub_p_gap": 784,
+    "xp5_stub_p_green": 752,
+    "xp5_stub_p_mux": 816,
+    "xp5_stub_p_pin": 768,
+    "xp5_stub_p_pulse": 776,
+    "xp5_stub_p_red": 760,
+    "xp5_stub_p_restore": 832,
+    "xp5_stub_p_return": 824,
+    "xp5_stub_p_self": 696,
+    "xp5_stub_params": 696
+  }
+}

@@ -64,7 +64,7 @@ fn main() {
 fn node(script: &Path, args: &[&str], what: &str) {
     assert!(
         script.is_file(),
-        "{what} requires {}; run npm ci at the repository root",
+        "{what} requires {}; run pnpm install --frozen-lockfile at the repository root",
         script.display()
     );
     let status =

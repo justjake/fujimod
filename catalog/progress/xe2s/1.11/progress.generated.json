@@ -422,7 +422,7 @@
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
@@ -432,7 +432,7 @@
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
@@ -442,7 +442,7 @@
         {
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-fast-memory",
@@ -493,9 +493,9 @@
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
@@ -509,9 +509,9 @@
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
@@ -525,9 +525,9 @@
           "id": "camera-snapshot",
           "label": "Camera state dumped (RAM at least)",
           "stage": "camera-snapshot",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-fast-memory",
@@ -602,12 +602,12 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "walkthroughs",
@@ -617,7 +617,7 @@
         {
           "id": "sd-boot-v1-fujimod-built",
           "title": "SD boot v1: FujiMod SD image built",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "firmware-update-fujimod-built",
@@ -643,7 +643,7 @@
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -651,7 +651,7 @@
           "id": "mod-build",
           "label": "Every shipped mod built",
           "stage": "mod-build",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -659,7 +659,7 @@
           "id": "sd-boot-v1-fujimod-built",
           "label": "SD boot v1: FujiMod SD image built",
           "stage": "sd-boot-v1-fujimod-built",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -698,6 +698,14 @@
         {
           "id": "walkthroughs/aspect-ratio",
           "label": "aspect-ratio",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/raw-crop-file",
+          "label": "raw-crop-file",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -760,6 +768,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/movie-film",
+          "label": "movie-film",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/card-films",
           "label": "card-films",
           "stage": "walkthroughs",
@@ -786,6 +802,14 @@
         {
           "id": "walkthroughs/film-grain",
           "label": "film-grain",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/grain-texture",
+          "label": "grain-texture",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -826,6 +850,14 @@
         {
           "id": "walkthroughs/clarity",
           "label": "clarity",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/monochromatic-color",
+          "label": "monochromatic-color",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1056,8 +1088,40 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/iso-auto-min-shutter",
+          "label": "iso-auto-min-shutter",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/custom-settings-bkt",
           "label": "custom-settings-bkt",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/ae-bkt-setting",
+          "label": "ae-bkt-setting",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/multiple-exposure-control",
+          "label": "multiple-exposure-control",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/interval-timer",
+          "label": "interval-timer",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1235,8 +1299,8 @@
     },
     "control-input": {
       "result": "stale",
-      "passed": 4,
-      "total": 40
+      "passed": 52,
+      "total": 52
     },
     "focus": {
       "result": "not-run"
@@ -1274,6 +1338,7 @@
     "fujimod": "not-run",
     "aspect-ratio": "not-run",
     "raw-teleconverter": "inapplicable",
+    "raw-crop-file": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
@@ -1281,15 +1346,18 @@
     "noise-reduction": "not-run",
     "framing-guideline": "not-run",
     "film-sims": "not-run",
+    "movie-film": "not-run",
     "card-films": "not-run",
     "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
+    "grain-texture": "not-run",
     "color-chrome": "not-run",
     "halation": "not-run",
     "light-leaks": "not-run",
     "film-borders": "not-run",
     "clarity": "not-run",
+    "monochromatic-color": "not-run",
     "tone-curve": "not-run",
     "tone-steps": "not-run",
     "d-range-priority": "not-run",
@@ -1320,7 +1388,11 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
+    "iso-auto-min-shutter": "not-run",
     "custom-settings-bkt": "not-run",
+    "ae-bkt-setting": "not-run",
+    "multiple-exposure-control": "not-run",
+    "interval-timer": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",

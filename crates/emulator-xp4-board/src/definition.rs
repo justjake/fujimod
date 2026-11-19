@@ -40,6 +40,10 @@ pub struct Definition {
     pub memory_regions: Vec<super::memory::Region>,
     #[serde(default)]
     pub initial_registers: Vec<Vec<(Register, u64)>>,
+    /// Explicit Cortex-A7 SCR/NSACR inputs, one per core. Empty preserves
+    /// backend defaults; this declaration is not a physical reset measurement.
+    #[serde(default)]
+    pub initial_security: Vec<InitialSecurity>,
     #[serde(default)]
     pub labels: Vec<u32>,
     #[serde(default)]
@@ -65,6 +69,14 @@ pub struct Definition {
     /// Refuse every write-enable, erase and program request to the NOR.
     #[serde(default)]
     pub storage_write_protect: bool,
+    /// Bound external NOR reads to the supplied asset. Omitted preserves
+    /// erased bytes beyond the asset; this does not declare chip capacity.
+    #[serde(default)]
+    pub storage_strict_backing: bool,
+    /// Explicit erased initial ranges outside the byte asset. Requires strict
+    /// backing; undeclared gaps remain inaccessible.
+    #[serde(default)]
+    pub storage_erased_ranges: Vec<fujimod_emulator_xp4_storage::storage::ErasedRange>,
     /// DMA-only connection with explicitly declared reset and timing hypotheses.
     #[serde(default)]
     pub standalone_dma: Option<StandaloneDma>,
@@ -81,6 +93,12 @@ pub struct Definition {
     pub storage_geometry: Option<(usize, usize, u64, u64)>,
     #[serde(default)]
     pub storage_irq: Option<u32>,
+    /// Declared audio channels of the XP4 storage DMA: paced silent audio
+    /// FIFOs and linked descriptor lists (see
+    /// [`fujimod_emulator_xp4_storage::storage::AudioPacing`]). Absent, every
+    /// channel is unchanged.
+    #[serde(default)]
+    pub storage_dma_audio: Option<fujimod_emulator_xp4_storage::storage::AudioPacing>,
     #[serde(default)]
     pub xpp_storage: Option<XppStorage>,
     #[serde(default)]
@@ -233,6 +251,9 @@ pub struct Definition {
     /// The JPEG encoder with the XP4 driver's register contract, when declared.
     #[serde(default)]
     pub jpeg_encoder: Option<JpegEncoder>,
+    /// The JPEG decoder with the X-Processor Pro register contract, when declared.
+    #[serde(default)]
+    pub jpeg_decoder: Option<JpegDecoder>,
     /// Declared still-processing engines (see `crate::still`).
     #[serde(default)]
     pub still_engines: Vec<StillEngine>,
@@ -245,6 +266,12 @@ pub struct Definition {
     /// The filter engine with the XP4 driver's register contract, when declared.
     #[serde(default)]
     pub filter_engine: Option<FilterEngine>,
+    /// Arm PL011 UARTs with nothing attached, when declared.
+    #[serde(default)]
+    pub pl011_uarts: Vec<Pl011Uart>,
+    /// The Mali-V61 style video unit with the XP4 driver's host interface, when declared.
+    #[serde(default)]
+    pub mali_v61: Option<fujimod_emulator_xp4_video::mali_v61::Options>,
     #[serde(default = "instruction_rate")]
     pub instructions_per_tick: (u64, u64),
     #[serde(default)]
@@ -271,6 +298,19 @@ pub struct CountdownDial {
     pub rest_phase: u8,
 }
 
+/// One Arm PL011 UART: register page base and, when routed, its interrupt
+/// line (see `fujimod_emulator_ip_arm::pl011`).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Pl011Uart {
+    pub base: u64,
+    #[serde(default)]
+    pub irq: Option<u32>,
+    /// Optional virtual programming peer, with a declared code-flash geometry.
+    #[serde(default)]
+    pub rl78: Option<fujimod_emulator_ip_arm::pl011::Rl78Config>,
+}
+
 /// The XP4 JPEG encoder: register page base, completion interrupt line,
 /// run time in ticks and the address of its memory type word.
 #[derive(Deserialize)]
@@ -282,6 +322,17 @@ pub struct JpegEncoder {
     pub memory_type: u64,
 }
 
+/// The XP4 JPEG decoder: register page base, completion interrupt line and
+/// the ticks a run takes. Its registers follow the X-Processor Pro decoder
+/// contract of `fujimod_emulator_ip::jpeg::Decoder`.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JpegDecoder {
+    pub base: u64,
+    pub irq: u32,
+    pub run_ticks: u64,
+}
+
 /// One declared XP4 still-processing engine: which contract, its register
 /// page base, completion interrupt line and the ticks a job takes.
 #[derive(Deserialize)]
@@ -291,6 +342,19 @@ pub struct StillEngine {
     pub base: u64,
     pub irq: u32,
     pub run_ticks: u64,
+    /// A finished job also computes the engine's declared output (opt-in;
+    /// RESZ only, see `crate::still`). Absent, a job writes nothing.
+    #[serde(default)]
+    pub compute: bool,
+    /// RECC only: the sensor RAW its passes develop from (opt-in, see
+    /// `crate::still`). Absent, a pass writes nothing.
+    #[serde(default)]
+    pub raw: Option<crate::still::Raw>,
+    /// RECC with `raw` only: its still bands develop with the color the
+    /// firmware programs into its two color pages (opt-in, see
+    /// `crate::still`). Absent, they develop with the declared sRGB law.
+    #[serde(default)]
+    pub firmware_color: bool,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the
@@ -476,6 +540,12 @@ pub struct XppRegisterBlock {
     /// Commands that set a field of a status word.
     #[serde(default)]
     pub commands: Vec<XppBlockCommand>,
+    /// The block's job converts audio samples, as the X-T3 5.11 audio format
+    /// converter 0xfffa8000 does (opt-in, needs the job; see
+    /// [`fujimod_emulator_xpp::blocks::AUDIO_CONTROL`]). Off, the job only
+    /// raises its interrupt.
+    #[serde(default)]
+    pub audio_converter: bool,
 }
 
 /// Command law of a register block: writing exactly `value` to `word` sets

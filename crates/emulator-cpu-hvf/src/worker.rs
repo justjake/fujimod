@@ -1,6 +1,6 @@
 //! A vCPU never leaves its owning thread. Callbacks execute on the Cpu owner;
 //! while paused for one, this worker serves register/snapshot/stop RPCs.
-use super::{ffi, machine::Machine};
+use super::{NativeExit, ffi, machine::Machine};
 use fujimod_emulator_cpu::{arm64::TranslationState, *};
 use std::sync::{
     Arc, Mutex,
@@ -19,6 +19,7 @@ pub enum Op {
     Restore(Registers),
     Interrupt(Interrupt, bool),
     Run(Run, ExecutionPolicy, bool, mpsc::Sender<Event>),
+    RunToNativeExit,
     Resume(bool),
     Shutdown,
 }
@@ -28,6 +29,7 @@ pub enum Value {
     Address(u64),
     Registers(Registers),
     Exit(Result<Exit, ExecutionError>),
+    NativeExit(NativeExit),
 }
 pub struct Command {
     pub op: Op,
@@ -1169,6 +1171,27 @@ impl Processor {
             }
         }
     }
+    fn run_to_native_exit(&self) -> Result<NativeExit, String> {
+        let mdscr = self.sys(ffi::MDSCR)?;
+        self.set_sys(ffi::MDSCR, mdscr & !1)?;
+        let pstate = self.reg(ffi::PSTATE)?;
+        self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+        if self.shared.stop.load(Ordering::Acquire) {
+            return Ok(NativeExit::Canceled);
+        }
+        unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run diagnostic")? };
+        let exit = unsafe { *self.exit };
+        match exit.reason {
+            0 => Ok(NativeExit::Canceled),
+            1 => Ok(NativeExit::Exception(Trap {
+                syndrome: exit.exception.syndrome,
+                virtual_address: exit.exception.virtual_address,
+                physical_address: exit.exception.physical_address,
+            })),
+            2 => Ok(NativeExit::VirtualTimer),
+            reason => Err(format!("unknown HVF diagnostic exit reason {reason}")),
+        }
+    }
     fn execute(&mut self, op: Op) -> Result<Value, String> {
         match op {
             Op::Read(r) => Ok(Value::Bytes(self.read(r)?)),
@@ -1177,6 +1200,7 @@ impl Processor {
                 Ok(Value::Empty)
             }
             Op::Translate(a, k) => Ok(Value::Address(self.translate(a, k)?)),
+            Op::RunToNativeExit => Ok(Value::NativeExit(self.run_to_native_exit()?)),
             Op::Snapshot => Ok(Value::Registers(self.snapshot()?)),
             Op::Restore(s) => {
                 self.restore(s)?;

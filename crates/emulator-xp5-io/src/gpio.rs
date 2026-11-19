@@ -68,9 +68,21 @@ impl Gpio {
             feedback: Vec::new(),
         })
     }
+    /// Wires from drive fields to input pads. A wire holds its pad at the
+    /// drive bit's level from construction on, so apply it after the initial
+    /// outputs and inputs; a fed pad cannot also declare an initial input.
     pub fn with_feedback(mut self, feedback: Vec<Feedback>) -> Result<Self, String> {
         for connection in &feedback {
             connection.validate(20)?;
+        }
+        {
+            let mut pins = self.pins.lock().unwrap();
+            for connection in &feedback {
+                let level = pins.ports[connection.port].registers[connection.register]
+                    & (1 << connection.bit)
+                    != 0;
+                pins.set_input(connection.input_port, connection.input_pin, level);
+            }
         }
         self.feedback = feedback;
         Ok(self)
@@ -500,5 +512,28 @@ mod wiring_tests {
         gpio.write(&mut cx, 0xff907000, 4, (1 << 19) | (1 << 3));
         assert_eq!(pins.lock().unwrap().output_rising_edges(0, 3), 1);
         assert!(cx.refusal().is_none());
+    }
+
+    #[test]
+    fn a_fed_pad_starts_at_its_drive_bit_level() {
+        let wire = Feedback { port: 4, register: 0, bit: 4, input_port: 4, input_pin: 4 };
+        // Undeclared pads read high; the wire pulls a low drive bit's pad low.
+        let pins = Pins::shared();
+        assert_eq!(pins.lock().unwrap().level(4, 4), 1);
+        Gpio::new(0xff907000, pins.clone(), false, Vec::new())
+            .unwrap()
+            .with_feedback(vec![wire])
+            .unwrap();
+        assert_eq!(pins.lock().unwrap().level(4, 4), 0);
+        // A high initial drive bit holds the pad high.
+        let pins = Pins::shared();
+        pins.lock().unwrap().set_input(4, 4, false);
+        Gpio::new(0xff907000, pins.clone(), false, Vec::new())
+            .unwrap()
+            .with_initial_outputs(vec![InitialOutput { port: 4, levels: 1 << 4 }])
+            .unwrap()
+            .with_feedback(vec![wire])
+            .unwrap();
+        assert_eq!(pins.lock().unwrap().level(4, 4), 1);
     }
 }

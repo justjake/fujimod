@@ -529,6 +529,19 @@ impl Device for Engine {
     fn name(&self) -> &'static str {
         "xpp-imaging-statistics"
     }
+    fn set_scene(&mut self, input: &Value) -> Result<bool, String> {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Scene { light: f64 }
+
+        if self.scene.is_none() {
+            return Ok(false);
+        }
+        let scene: Scene = serde_json::from_value(input.clone())
+            .map_err(|error| format!("X-Processor Pro scene light: {error}"))?;
+        self.set_scene_light(scene.light)?;
+        Ok(true)
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         u64::from(match self.offset(address, size) {
             Some(0) => self.word(0) | RUN,

@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 pub trait Xp4Backend {
+    fn catalog_quantum(&self) -> Option<usize>;
     fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()>;
     fn read_register(&self, core: usize, register: Register) -> PyResult<u64>;
     fn write_register(&self, core: usize, register: Register, value: u64) -> PyResult<()>;
@@ -46,6 +47,7 @@ pub trait Xp4Backend {
     fn cpr_read(&self, core: usize, crn: u32, crm: u32, opc1: u32, opc2: u32) -> PyResult<u64>;
     fn write(&self, address: usize, data: &[u8]) -> PyResult<()>;
     fn run(&self, core: usize, budget: usize) -> PyResult<()>;
+    fn run_to(&self, core: usize, budget: usize, target: u64) -> PyResult<()>;
     fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()>;
     fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()>;
     fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()>;

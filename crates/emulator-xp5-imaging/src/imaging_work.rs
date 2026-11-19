@@ -360,6 +360,7 @@ impl Device for Work {
             .chain(self.state.frame_deadline)
             .min()
     }
+    fujimod_emulator_devices::checkpoint_fields!(state: State);
     fn save(&self) -> Value {
         json!({"state":self.state})
     }

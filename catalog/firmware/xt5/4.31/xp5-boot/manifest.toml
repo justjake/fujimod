@@ -1,0 +1,50 @@
+# Cold OS boot: EL3 -> EL1t handoff at 0x5847c, after stock 0x58420..0x58478.
+version = 1
+firmware = "xt5-431"
+load_firmware = true
+
+# Device windows: xt5-431.d/*.toml, merged in filename order.
+
+[[ram]]
+base = 0
+size = 0x40000000
+
+# Linux 256 MiB, then the shared arenas, through 0x60000000: the application's
+# memory map (0x2df35d8) maps 0x40000000+0x10000000, 0x50000000+0xff00000 and
+# 0x5ff00000+0x100000, and the supplied Linux DTB declares memory@40000000 size
+# body's dram_bytes ends at the same address. Installed capacity is unmeasured
+# (camera-needs.md 1.19).
+[[ram]]
+base = 0x40000000
+size = 0x20000000
+
+# M-core SRAM: stock 13f7b58 copies flash f01c0000 here before reset release.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+# Stock 5847c replaces SP_EL1/SP_EL0 from 0xa6000/0xb6000 before use.

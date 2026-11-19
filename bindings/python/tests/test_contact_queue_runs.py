@@ -5,7 +5,7 @@ import struct
 import pytest
 from fujimod.emulator import Asset, Definition, Image, make_board
 
-from test_emulator import _execution_graph
+from .test_emulator import _execution_graph
 
 
 def contact_board(quantum):
