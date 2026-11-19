@@ -82,14 +82,16 @@ impl Session {
         {
             return Err("snapshot session definition or attachments differ".into());
         }
+        // The definitions match, so a session whose controls are not yet
+        // connected adopts the snapshot's panel and driver on restore.
         match (&self.controls, &saved.controls) {
             (Some(current), Some(saved)) if current.spec() == saved.spec() => (),
-            (None, None) => (),
+            (None, _) => (),
             _ => return Err("snapshot physical contact circuits differ".into()),
         }
         match (&self.contact_driver, &saved.contact_driver) {
             (Some(current), Some(driver)) => current.validate_checkpoint(driver, saved.now())?,
-            (None, None) => (),
+            (None, _) => (),
             _ => return Err("snapshot host input driver differs".into()),
         }
         self.resources.validate_checkpoint(&saved.resources)
