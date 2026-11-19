@@ -26,8 +26,8 @@ number arrays. Write it to a separate binary file and reference that file by pat
 
 Work on a topic branch and open a pull request against `main`; nothing is
 committed to `main` directly. Push after every commit so no work stays only on
-one machine, and rebase onto `origin/main` often
-(`python scripts/git/sync.py --onto main`). In a checkout several agents share,
+one machine, and rebase onto the pull request's base often with
+`mise run rebase`. In a checkout several agents share,
 commit with `mise run commit -- -m "Describe the change" PATHS...`
 (`scripts/git/commit.py`) rather than staging by hand.
 

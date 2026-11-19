@@ -236,3 +236,25 @@ def test_onto_refuses_the_base_branch(repos: tuple[Path, Path, Path]) -> None:
     _, shared, _ = repos
     with pytest.raises(Failure, match="base branch"):
         rebase(Repository(shared), "main")
+
+
+def test_onto_drops_commits_of_a_stacked_base_that_landed_by_rebase(
+    repos: tuple[Path, Path, Path],
+) -> None:
+    remote, shared, other = repos
+    run("git", "switch", "-q", "-c", "someone/base", cwd=shared)
+    (shared / "b.txt").write_text("base\n")
+    run("git", "commit", "-qam", "base change", cwd=shared)
+    run("git", "switch", "-q", "-c", "someone/stacked", cwd=shared)
+    (shared / "gone.txt").write_text("stacked\n")
+    run("git", "commit", "-qam", "stacked change", cwd=shared)
+    # The base lands on main by rebase: same change, new commit, after other work.
+    push(other, {"a.txt": "one\ntwo\nthree\nfour\nFIVE\n"})
+    push(other, {"b.txt": "base\n"})
+    rebased = rebase(Repository(shared), "main")
+    assert (rebased.replayed, rebased.dropped) == (1, 1)
+    assert run("git", "log", "--format=%s", "origin/main..HEAD", cwd=shared).split("\n")[0] == (
+        "stacked change"
+    )
+    assert run("git", "rev-list", "--count", "origin/main..HEAD", cwd=shared).strip() == "1"
+    assert run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head

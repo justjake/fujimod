@@ -223,11 +223,20 @@ class Rebased:
     replayed: int
     pushed: bool
     moved: Result | None = None
+    dropped: int = 0
 
 
-def replay(repository: Repository, onto: str, commits: list[str]) -> str:
-    """Copy ``commits`` (oldest first) onto ``onto`` without touching any checkout."""
+def replay(
+    repository: Repository, onto: str, commits: list[str]
+) -> tuple[str, int, int]:
+    """Copy ``commits`` (oldest first) onto ``onto`` without touching any checkout.
+
+    A commit whose change ``onto`` already has, such as a stacked base's commit
+    that landed on main by rebase, is dropped. Returns the new head and the
+    numbers of commits kept and dropped.
+    """
     head = onto
+    kept = dropped = 0
     for commit in commits:
         parents = repository.output("rev-list", "--parents", "-n", "1", commit).split()[1:]
         if len(parents) != 1:
@@ -244,6 +253,10 @@ def replay(repository: Repository, onto: str, commits: list[str]) -> str:
                 "changed. Conflicting files: " + ", ".join(lines[1:] or ["(unknown)"])
             )
         tree = merged.stdout.split()[0]
+        if tree == repository.output("rev-parse", f"{head}^{{tree}}"):
+            dropped += 1
+            continue
+        kept += 1
         fields = repository.output(
             "log", "-1", "--format=%an%x00%ae%x00%ad", "--date=raw", commit
         ).split("\0")
@@ -257,7 +270,7 @@ def replay(repository: Repository, onto: str, commits: list[str]) -> str:
         head = repository.git(
             "commit-tree", tree, "-p", head, env=env, input=message
         ).stdout.strip()
-    return head
+    return head, kept, dropped
 
 
 def rebase(repository: Repository, base: str) -> Rebased:
@@ -278,11 +291,12 @@ def rebase(repository: Repository, base: str) -> Rebased:
         ).split()
         moved = None
         head = current
+        kept = dropped = 0
         if not ancestor(repository, onto, current):
-            head = replay(repository, onto, commits)
+            head, kept, dropped = replay(repository, onto, commits)
             moved = advance(repository, ref, current, head)
         if pushed_before == head:
-            return Rebased(head, 0, False, moved)
+            return Rebased(head, kept, False, moved, dropped)
         lease = f"--force-with-lease=refs/heads/{name}:{pushed_before or ''}"
         pushed = repository.git(
             "push", "-q", lease, "origin", f"{head}:refs/heads/{name}", check=False
@@ -293,7 +307,7 @@ def rebase(repository: Repository, base: str) -> Rebased:
                 "moved or refused); run the sync again:\n" + pushed.stderr.strip()
             )
         repository.git("update-ref", f"refs/remotes/origin/{name}", head)
-        return Rebased(head, len(commits) if moved else 0, True, moved)
+        return Rebased(head, kept, True, moved, dropped)
 
 
 def advance(repository: Repository, ref: str, current: str, remote: str) -> Result:
@@ -494,14 +508,7 @@ def run(args: argparse.Namespace, repo: Path) -> None:
                 print("sync: detached submodule; the superproject's sync moves its pin")
             return
         if args.onto:
-            rebased = rebase(repository, args.onto)
-            report(rebased.moved)
-            if rebased.replayed:
-                print(f"sync: replayed {rebased.replayed} commits onto origin/{args.onto}")
-            print(
-                f"sync: at {rebased.head[:10]}"
-                + ("; pushed" if rebased.pushed else "; origin already has it")
-            )
+            rebase_and_report(repository, args.onto)
             return
         ref = repository.branch()
         if args.quiet and remote_head(repository, ref) == repository.output(
@@ -515,6 +522,18 @@ def run(args: argparse.Namespace, repo: Path) -> None:
     if result.merged or result.conflicts or not args.quiet:
         print(f"sync: at {result.head[:10]}")
     report(result)
+
+
+def rebase_and_report(repository: Repository, base: str) -> None:
+    rebased = rebase(repository, base)
+    report(rebased.moved)
+    if rebased.replayed or rebased.dropped:
+        dropped = f", dropped {rebased.dropped} it already has" if rebased.dropped else ""
+        print(f"sync: replayed {rebased.replayed} commits onto origin/{base}{dropped}")
+    print(
+        f"sync: at {rebased.head[:10]}"
+        + ("; pushed" if rebased.pushed else "; origin already has it")
+    )
 
 
 def report(result: Result | None) -> None:
