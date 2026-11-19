@@ -1,6 +1,18 @@
-//! XP5 MOVDC packed422 output DMA, MOVRSZ output, the IBUF input write DMA and reset-only work
+//! XP5 MOVDC output DMA, MOVRSZ output, the IBUF input write DMA and reset-only work
 //! gates. MOVDC registers: size+18, address+c0/c4, stride+d0, cause+e0/W1C+e4,
 //! mask+e8. Static evidence: 144be74/144cacc/144d118; no software ring access.
+//!
+//! MOVDC output format (X-T5 4.31 driver; channel base `(n + 0xff970) << 12`):
+//! * +08 (setter 0x13609d8, called per channel from 0x2c6cd10/0x2c6cd3c/0x2c6cd68): bits 1..0
+//!   the output format, bit 8 and bit 12 two flags. The caller maps the saclac per-channel
+//!   format words [0x4ba5c68 + 0x54/0x64/0x74] to it (0x2e9a9f0..0x2e9ab68). Live view writes
+//!   0x100 (format 0, packed 4:2:2, one plane); the FHD movie channel 2 writes 0x101 (format 1)
+//!   with a second address. Format 1 is modeled as 8-bit two-plane 4:2:0 with interleaved Cb,Cr
+//!   (the H.264 encoder's input format); the half-height chroma is inferred from that consumer,
+//!   not from a MOVDC-side proof. Formats 2 and 3 are refused.
+//! * Address setter 0x1361804: plane 0 address bits 34..32 -> +c0, bits 31..0 -> +c4; plane 1
+//!   address -> +c8/+cc; one stride -> +d0 for both planes. It requires both addresses
+//!   8-byte aligned and below 0x7fffffff0, and the stride a multiple of 4.
 //!
 //! IBUF (X-T5 4.31 0xff945000, driver 0x138a8dc..0x138ba9c, DMA mask 0x40000 of 0x2c6af44 /
 //! 0x2c6ce5c). Static evidence:
@@ -22,6 +34,7 @@
 //! and raises INTID 169 while +0x68 enables it. It writes no pixels: the RAW destination is not
 //! read by anything the emulator models yet.
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::frame::{self, YuvLayout};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -155,14 +168,26 @@ impl Work {
             let luma = self
                 .source_luma
                 .ok_or("MOVDC has no declared frame source")?;
-            // Only the observed packed422 mode is implemented. The second
-            // programmed address is retained as opaque register data.
+            // Output format +08 bits 1..0 (setter 0x13609d8): 0 is packed 4:2:2 (live view),
+            // 1 is 8-bit two-plane 4:2:0 with the Cb,Cr plane at +c8/+cc (the FHD movie
+            // encoder feed). Other formats are refused.
+            let format = self.state.r(8) & 3;
             if self.state.r(0xf0) != 0xb
                 || self.state.r(0xd8) != 0x10030001
                 || self.state.r(0x18) & !0x07ff07ff != 0
                 || self.state.r(0xc0) > 7
+                || format > 1
+                || (format == 1 && self.state.r(0xc8) > 7)
             {
-                return Err("unsupported MOVDC output mode/size/address".into());
+                return Err(format!(
+                    "unsupported MOVDC output mode/size/address: +08 {:#x} +18 {:#x} +c0 {:#x} +c8 {:#x} +d8 {:#x} +f0 {:#x}",
+                    self.state.r(8),
+                    self.state.r(0x18),
+                    self.state.r(0xc0),
+                    self.state.r(0xc8),
+                    self.state.r(0xd8),
+                    self.state.r(0xf0)
+                ));
             }
             let size = self.state.r(0x18);
             let width = (size & 0x7ff) + 1;
@@ -171,10 +196,22 @@ impl Work {
             if address == 0 || address & 7 != 0 {
                 return Err("MOVDC output DMA requires a nonzero 8-byte-aligned address".into());
             }
+            // One stride serves both planes: the address setter 0x1361804 writes only +d0.
             let stride = self.state.r(0xd0);
+            let layout = if format == 0 {
+                YuvLayout::Packed422
+            } else {
+                let chroma = (u64::from(self.state.r(0xc8)) << 32) | u64::from(self.state.r(0xcc));
+                if chroma == 0 || chroma & 7 != 0 {
+                    return Err(format!(
+                        "MOVDC two-plane output requires a nonzero 8-byte-aligned chroma address, not {chroma:#x}"
+                    ));
+                }
+                YuvLayout::TwoPlane420 { chroma, chroma_stride: stride }
+            };
             // XT5_SCENE (a host input outside the checkpoint) replaces the flat source.
-            if !fujimod_emulator_imaging::frame::paint_scene(cx, address, width, height, stride, self.state.frames)? {
-                fujimod_emulator_imaging::frame::paint(cx, address, width, height, stride, luma)?;
+            if !frame::paint_scene(cx, address, width, height, stride, layout, self.state.frames)? {
+                frame::paint_layout(cx, address, width, height, stride, layout, luma)?;
             }
         } else {
             // Half-size packed422: consume the actual programmed input. The
@@ -218,7 +255,7 @@ impl Work {
                 )?;
             }
             let weights = (control & 0x01000000 != 0).then_some(weights);
-            let output = fujimod_emulator_imaging::frame::half_422(&input, width as usize, height as usize, weights)?;
+            let output = frame::half_422(&input, width as usize, height as usize, weights)?;
             for y in 0..height as usize / 2 {
                 cx.ram_write(
                     address + y as u64 * u64::from(output_stride),
@@ -593,6 +630,73 @@ mod tests {
         work.event(&mut Cx::new(&mut host, 0, 0, 0), token);
         assert_eq!(work.next_deadline(host.now), None);
         assert_eq!(work.save()["state"]["frames"], 1);
+    }
+    /// Format 1 (+08 bits 1..0, the FHD movie channel) writes a Y plane at +c0/+c4 and a
+    /// half-height Cb,Cr plane at +c8/+cc, both with the +d0 stride. Without XT5_SCENE the
+    /// flat source gives Y = luma and Cb = Cr = 128.
+    #[test]
+    fn movdc_two_plane_output_writes_luma_and_half_height_chroma_planes() {
+        if fujimod_emulator_imaging::frame::host_scene().is_some() {
+            return;
+        }
+        let mut work = Work::movdc(BASE, 1000, 100).unwrap();
+        let mut host = RecordingHost {
+            ram_base: 0x1_0000_0100,
+            ram: vec![0x55; 0x200],
+            ..Default::default()
+        };
+        setup(&mut work, &mut host, 0xb);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // 8x3, stride 12: chroma at 0x1_0000_0200 gets ceil(3 / 2) = 2 lines.
+        for (o, v) in [(8, 0x101), (0x18, (2 << 16) | 7), (0xc8, 1), (0xcc, 0x200), (0xd0, 12)] {
+            work.write(&mut cx, BASE + o, 4, v);
+        }
+        host.now = 1_000_000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        work.advance(&mut cx);
+        assert!(cx.refusal().is_none());
+        for y in 0..3 {
+            assert_eq!(&host.ram[16 + y * 12..16 + y * 12 + 8], &[100; 8]);
+            assert_eq!(&host.ram[16 + y * 12 + 8..16 + y * 12 + 12], &[0x55; 4]);
+        }
+        assert!(host.ram[16 + 36..0x100].iter().all(|v| *v == 0x55));
+        for y in 0..2 {
+            assert_eq!(&host.ram[0x100 + y * 12..0x100 + y * 12 + 8], &[128; 8]);
+            assert_eq!(&host.ram[0x100 + y * 12 + 8..0x100 + y * 12 + 12], &[0x55; 4]);
+        }
+        assert!(host.ram[0x100 + 24..].iter().all(|v| *v == 0x55));
+        assert_eq!(work.save()["state"]["frames"], 1);
+        assert!(host.irqs.contains(&(171, true)));
+    }
+    /// Formats 2 and 3, and format 1 without a chroma address, are refused without pixels.
+    #[test]
+    fn movdc_refuses_unmodeled_formats_and_a_missing_chroma_plane() {
+        for (control, high, chroma, expected) in [
+            (0x102, 1, 0x200, "+08 0x102"),
+            (0x103, 1, 0x200, "+08 0x103"),
+            (0x101, 0, 0, "chroma address"),
+            (0x101, 1, 0x204, "chroma address"),
+            (0x101, 8, 0x200, "+c8 0x8"),
+        ] {
+            let mut work = Work::movdc(BASE, 1000, 100).unwrap();
+            let mut host = RecordingHost {
+                ram_base: 0x1_0000_0100,
+                ram: vec![0x55; 0x200],
+                ..Default::default()
+            };
+            setup(&mut work, &mut host, 0xb);
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            for (o, v) in [(8, control), (0xc8, high), (0xcc, chroma)] {
+                work.write(&mut cx, BASE + o, 4, v);
+            }
+            host.now = 1_000_000;
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            work.advance(&mut cx);
+            let refusal = cx.refusal().unwrap();
+            assert!(refusal.contains(expected), "{refusal}");
+            assert!(host.ram.iter().all(|v| *v == 0x55));
+            assert_eq!(work.save()["state"]["frames"], 0);
+        }
     }
     #[test]
     fn unsupported_output_does_not_receive_pixels_or_completion() {
