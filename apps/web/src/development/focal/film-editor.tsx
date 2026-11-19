@@ -594,7 +594,11 @@ type Tool = 'curve' | 'color' | 'mix' | 'tone' | 'channels';
 const TOOLS: Tool[] = ['curve', 'color', 'mix', 'tone', 'channels'];
 /** The scroller's sections: the RAW file while one is shown, the custom
  * setting the film is seen through, then the film's tools. */
-type Section = 'raw' | 'custom' | Tool;
+type Section = 'film' | 'raw' | 'custom' | Tool;
+/** The stops above the tools: the film's name and files, the RAW file and the
+ * custom setting. */
+type Meta = 'name' | 'saveas' | 'open' | 'strip' | 'create' | 'custom';
+const META_SECTION: Record<Meta, Section> = { name: 'film', saveas: 'film', open: 'film', strip: 'raw', create: 'raw', custom: 'custom' };
 const TOOL_NAMES: Record<Tool, string> = {
   curve: 'TONE CURVE',
   color: 'COLOR',
@@ -797,9 +801,14 @@ interface State {
   crop: number;
   picker: Picker | null;
   /** Where the D-pad is: the RAW strip, the tool rail or the tool rows. */
-  area: 'strip' | 'create' | 'custom' | 'rail' | 'rows';
-  /** On the rail, the RAW or CUSTOM SETTING section instead of a tool. */
-  railOn: 'raw' | 'custom' | null;
+  area: Meta | 'rail' | 'rows';
+  /** On the rail, the film, RAW or CUSTOM SETTING section instead of a tool. */
+  railOn: 'film' | 'raw' | 'custom' | null;
+  /** The film's name on the SD card, and the film it was made from. */
+  name: string;
+  from: string | null;
+  /** The tone curve over the whole picture. */
+  full: boolean;
   strip: StripStyle;
   /** The RAW last developed with OK. */
   created: number;
@@ -831,25 +840,69 @@ const EDITED: Film = (() => {
   };
 })();
 
-type Picker = { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number };
+type Picker = { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
 
+/** Films on the SD card, standing in as edits of the built-in ones. */
+const CARD_FILMS: { name: string; from: string; film: () => Film }[] = [
+  { name: 'NEW FILM', from: 'Classic Chrome', film: () => EDITED },
+  { name: 'WARM FADE', from: 'CLASSIC Neg.', film: () => ({ ...baseFilm(6), saturation: -25, bands: [-30, -10, 0, 0, -20] }) },
+  { name: 'NIGHT STREET', from: 'ETERNA', film: () => ({ ...baseFilm(5), red: 1, blue: 1 }) },
+  { name: 'SOFT PORTRAIT', from: 'ASTIA', film: () => ({ ...baseFilm(2), saturation: -5 }) },
+];
+
+/** Options are film numbers: the SD card's films, then the built-in ones. */
 function pickerOptions(p: Picker): (number | 'opened')[] {
+  if (p.kind === 'open') return [...CARD_FILMS.map((_, i) => i), ...BASES.map((_, i) => CARD_FILMS.length + i)];
   return p.kind === 'compare' ? ['opened', ...BASES.map((_, i) => i)] : BASES.map((_, i) => i);
 }
 
-function choose(s: State, p: Picker, k: number | 'opened'): State {
-  if (p.kind === 'copy') return k === 'opened' ? s : { ...s, picker: null, film: copyGroup(s.film, p.tool, k) };
-  return { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } };
+function pickerLabel(p: Picker, k: number | 'opened'): string {
+  if (k === 'opened') return 'AS OPENED';
+  if (p.kind !== 'open') return BASES[k].name;
+  return k < CARD_FILMS.length ? CARD_FILMS[k].name : BASES[k - CARD_FILMS.length].name;
 }
 
-function openPicker(s: State, p: { kind: 'copy'; tool: Tool } | { kind: 'compare' }): State {
-  const current = p.kind === 'copy' ? groupSource(s.film, p.tool) : s.compare?.b;
+function pickerCurrent(s: State, p: Picker): number | 'opened' | undefined {
+  if (p.kind === 'copy') return groupSource(s.film, p.tool);
+  if (p.kind === 'compare') return s.compare?.b;
+  const card = CARD_FILMS.findIndex((c) => c.name === s.name);
+  return card < 0 ? undefined : card;
+}
+
+function choose(s: State, p: Picker, k: number | 'opened'): State {
+  if (k === 'opened') return p.kind === 'compare' ? { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } } : s;
+  switch (p.kind) {
+    case 'copy':
+      return { ...s, picker: null, film: copyGroup(s.film, p.tool, k) };
+    case 'compare':
+      return { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } };
+    case 'open': {
+      /* An SD card film opens as itself; a built-in one as a new film made from it. */
+      if (k < CARD_FILMS.length) {
+        const card = CARD_FILMS[k];
+        return { ...s, picker: null, name: card.name, from: card.from, film: card.film(), opened: card.film() };
+      }
+      const base = k - CARD_FILMS.length;
+      return { ...s, picker: null, name: 'NEW FILM', from: BASES[base].name, film: baseFilm(base), opened: baseFilm(base) };
+    }
+  }
+}
+
+/** SAVE AS: the edits go on in a copy; the film saved before stays as it was. */
+function saveAs(s: State): State {
+  const match = /^(.*?)(?: (\d+))?$/.exec(s.name);
+  const name = `${match?.[1] ?? s.name} ${Number(match?.[2] ?? 1) + 1}`;
+  return { ...s, name, from: s.name };
+}
+
+function openPicker(s: State, p: { kind: 'copy'; tool: Tool } | { kind: 'compare' } | { kind: 'open' }): State {
+  const current = pickerCurrent(s, { ...p, at: 0 });
   const at = Math.max(0, pickerOptions({ ...p, at: 0 }).indexOf(current ?? -1));
   return { ...s, picker: { ...p, at } };
 }
 
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, strip: 'frames', created: 0, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', full: false, strip: 'frames', created: 0, ...over };
 }
 
 const RAIL = 60;
@@ -868,25 +921,23 @@ type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' 
 const firstOf = (tool: Tool) => CONTROLS.findIndex((c) => c.tool === tool);
 
 function railSections(s: State): Section[] {
-  return [...(s.crop ? (['raw'] as Section[]) : []), 'custom', ...TOOLS];
+  return ['film', ...(s.crop ? (['raw'] as Section[]) : []), 'custom', ...TOOLS];
+}
+
+/** The stops above the tools, a row at a time; a row of two buttons is one row. */
+function metaRows(s: State): Meta[][] {
+  return [['name'], ['saveas', 'open'], ...(s.crop ? ([['strip'], ['create']] as Meta[][]) : []), ['custom']];
 }
 
 /** The section the focus is in, or on the rail, the section chosen there. */
 function currentSection(s: State): Section {
-  switch (s.area) {
-    case 'strip':
-    case 'create':
-      return 'raw';
-    case 'custom':
-      return 'custom';
-    case 'rail':
-      return s.railOn ?? CONTROLS[s.focus].tool;
-    case 'rows':
-      return CONTROLS[s.focus].tool;
-  }
+  if (s.area === 'rail') return s.railOn ?? CONTROLS[s.focus].tool;
+  if (s.area === 'rows') return CONTROLS[s.focus].tool;
+  return META_SECTION[s.area];
 }
 
 function enterSection(s: State, section: Section): State {
+  if (section === 'film') return { ...s, area: 'name', railOn: null };
   if (section === 'raw') return { ...s, area: 'strip', railOn: null };
   if (section === 'custom') return { ...s, area: 'custom', railOn: null };
   return { ...s, area: 'rows', railOn: null, focus: firstOf(section), header: false };
@@ -923,62 +974,62 @@ function press(s: State, key: Key): State {
       return { ...s, crop: 0, area: s.area === 'strip' || s.area === 'create' ? 'custom' : s.area, railOn: s.railOn === 'raw' ? 'custom' : s.railOn };
   }
   const step = key === 'left' || key === 'dial-' ? -1 : 1;
-  switch (s.area) {
-    case 'strip':
-      switch (key) {
-        case 'down':
-        case 'ok':
-          return { ...s, area: 'create' };
-        case 'back':
-          return { ...s, area: 'rail', railOn: 'raw' };
-        case 'up':
-          return s;
+  if (s.area === 'rail') {
+    const list = railSections(s);
+    const at = list.indexOf(currentSection(s));
+    switch (key) {
+      case 'up':
+      case 'down':
+      case 'dial-':
+      case 'dial+': {
+        const next = list[at + (key === 'up' || key === 'dial-' ? -1 : 1)];
+        if (!next) return s;
+        if (next === 'film' || next === 'raw' || next === 'custom') return { ...s, railOn: next, scrollTo: undefined };
+        return { ...s, railOn: null, focus: firstOf(next), header: false, scrollTo: undefined };
       }
-      return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + step)), created: 0 };
-    case 'create':
-      switch (key) {
-        case 'up':
-          return { ...s, area: 'strip' };
-        case 'down':
-          return { ...s, area: 'custom' };
-        case 'ok':
-          return { ...s, created: s.crop };
-        case 'back':
-          return { ...s, area: 'rail', railOn: 'raw' };
-      }
-      return s;
-    case 'custom':
-      switch (key) {
-        case 'up':
-          return s.crop ? { ...s, area: 'create' } : s;
-        case 'down':
-          return { ...s, area: 'rows', focus: 0, header: true };
-        case 'back':
-          return { ...s, area: 'rail', railOn: 'custom' };
-      }
-      return { ...s, custom: !s.custom };
-    case 'rail': {
-      const list = railSections(s);
-      const at = list.indexOf(currentSection(s));
-      switch (key) {
-        case 'up':
-        case 'down':
-        case 'dial-':
-        case 'dial+': {
-          const next = list[at + (key === 'up' || key === 'dial-' ? -1 : 1)];
-          if (!next) return s;
-          if (next === 'raw' || next === 'custom') return { ...s, railOn: next, scrollTo: undefined };
-          return { ...s, railOn: null, focus: firstOf(next), header: false, scrollTo: undefined };
-        }
-        case 'right':
-        case 'ok':
-          return enterSection(s, currentSection(s));
-      }
-      return s;
+      case 'right':
+      case 'ok':
+        return enterSection(s, currentSection(s));
+    }
+    return s;
+  }
+  if (s.area !== 'rows') {
+    const area = s.area;
+    const grid = metaRows(s);
+    const r = grid.findIndex((row) => row.includes(area));
+    const row = grid[r];
+    switch (key) {
+      case 'up':
+        return r > 0 ? { ...s, area: grid[r - 1][0] } : s;
+      case 'down':
+        return r < grid.length - 1 ? { ...s, area: grid[r + 1][0] } : { ...s, area: 'rows', focus: 0, header: true };
+      case 'back':
+        return { ...s, area: 'rail', railOn: META_SECTION[area] as 'film' | 'raw' | 'custom' };
+    }
+    if (row.length > 1 && (key === 'left' || key === 'right')) {
+      const next = row[row.indexOf(area) + step];
+      return next ? { ...s, area: next } : s;
+    }
+    switch (area) {
+      case 'strip':
+        if (key === 'ok') return { ...s, area: 'create' };
+        return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + step)), created: 0 };
+      case 'create':
+        return key === 'ok' ? { ...s, created: s.crop } : s;
+      case 'custom':
+        return { ...s, custom: !s.custom };
+      case 'open':
+        return key === 'ok' ? openPicker(s, { kind: 'open' }) : s;
+      case 'saveas':
+        return key === 'ok' ? saveAs(s) : s;
+      case 'name':
+        return s;
     }
   }
   if (s.inside) {
-    if (key === 'ok' || key === 'back') return { ...s, inside: false, bend: false };
+    /* Inside the tone curve, OK takes it full screen and back. */
+    if (key === 'back') return s.full ? { ...s, full: false } : { ...s, inside: false, bend: false };
+    if (key === 'ok') return control.kind === 'curve' ? { ...s, full: !s.full } : { ...s, inside: false };
     if (control.kind === 'curve') {
       if (key === 'left' || key === 'right') return { ...s, knot: Math.max(0, Math.min(9, s.knot + d)), bend: false };
       if (key === 'dial-' || key === 'dial+') {
@@ -1020,6 +1071,11 @@ function ToolIcon(props: { tool: Section; color: string }) {
   const stroke = () => ({ fill: 'none', stroke: props.color, 'stroke-width': 2.5, 'stroke-linecap': 'round' as const, 'stroke-linejoin': 'round' as const });
   return (
     <svg width="32" height="32" viewBox="0 0 34 34">
+      <Show when={props.tool === 'film'}>
+        <rect x="5" y="5" width="24" height="24" rx="2" {...stroke()} />
+        <path d="M5 10h24M5 24h24" {...stroke()} stroke-opacity="0.6" />
+        <path d="M9 7.5h2M15 7.5h2M21 7.5h2M9 26.5h2M15 26.5h2M21 26.5h2" {...stroke()} stroke-width="2" />
+      </Show>
       <Show when={props.tool === 'raw'}>
         <rect x="4" y="8" width="26" height="18" rx="2" {...stroke()} />
         <path d="M14 12.5v9l7.5-4.5z" fill={props.color} />
@@ -1067,6 +1123,21 @@ function Swatch(props: { film: Film; mix: number }) {
       class="block size-[36px] shrink-0 rounded-full"
       style={{ background: `linear-gradient(90deg, ${MIX[props.mix].color} 50%, ${after()} 50%)`, 'box-shadow': 'inset 0 0 0 2px rgb(255 255 255 / 0.35)' }}
     />
+  );
+}
+
+function ExpandIcon(props: { full?: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22">
+      <path
+        d={props.full ? 'M8 3v5H3M14 3v5h5M8 19v-5H3M14 19v-5h5' : 'M3 8V3h5M19 8V3h-5M3 14v5h5M19 14v5h-5'}
+        fill="none"
+        stroke="#fff"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -1198,7 +1269,15 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
 
 /** The film editor's own layers over the picture: the rail, the scroller,
  * the compare divider, RAW strip, pickers and key hints. */
-function Editor(props: { s: State; set: (s: State) => void; histogram: number[]; title: { name: string; from?: string } }) {
+function Editor(props: {
+  s: State;
+  set: (s: State) => void;
+  histogram: number[];
+  /** The rail and the scroller, as presented. */
+  column?: JSX.CSSProperties;
+  /** The key hints at the bottom right, as presented. */
+  chrome?: JSX.CSSProperties;
+}) {
   const s = () => props.s;
   let scroller: HTMLDivElement | undefined;
   const sections: Partial<Record<Section, HTMLElement>> = {};
@@ -1298,7 +1377,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
               ⇆
             </div>
             <div class="absolute" style={{ left: `${PICTURE_LEFT + 8}px`, top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
-              <Hint glyph="A" label={props.title.name} />
+              <Hint glyph="A" label={s().name} />
             </div>
             <div class="absolute right-[10px]" style={{ top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
               <Hint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update(openPicker(s(), { kind: 'compare' }))} />
@@ -1310,6 +1389,15 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
         <RawStrip s={s()} set={update} />
       </Show>
 
+      <div
+        class="absolute inset-y-0 left-0"
+        style={{
+          width: `${RAIL + SCROLLER}px`,
+          ...props.column,
+          ...(s().full ? { opacity: 0, 'pointer-events': 'none' } : {}),
+          transition: [props.column?.transition, 'opacity 200ms ease-out'].filter(Boolean).join(', '),
+        }}
+      >
       <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'rgb(18 18 20 / 0.82)' }}>
         <For each={railSections(s())}>
           {(tool) => {
@@ -1322,12 +1410,12 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                 style={lit() ? { background: '#fff' } : chosen() ? { background: 'rgb(255 255 255 / 0.2)' } : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
-                  const on = tool === 'raw' || tool === 'custom' ? tool : null;
+                  const on = tool === 'film' || tool === 'raw' || tool === 'custom' ? tool : null;
                   update({ ...s(), focus: on ? s().focus : index(tool as Tool), railOn: on, area: 'rail', header: false, inside: false, bend: false, scrollTo: undefined });
                 }}
               >
                 <ToolIcon tool={tool} color={lit() ? '#000' : '#fff'} />
-                <Show when={tool !== 'raw' && tool !== 'custom' && edited(tool)}>
+                <Show when={tool !== 'film' && tool !== 'raw' && tool !== 'custom' && edited(tool)}>
                   <span class="absolute top-[5px] right-[5px] size-[9px] rounded-full" style={{ background: ACCENT, 'box-shadow': '0 0 0 2px #1c1c1e' }} />
                 </Show>
               </button>
@@ -1342,12 +1430,40 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
         style={{ ...COLUMN, left: `${RAIL}px`, width: `${SCROLLER}px`, 'scrollbar-width': 'none' }}
         onScroll={spy}
       >
-        <div class="flex h-[54px] items-baseline gap-[10px] px-[6px] pt-[16px]">
-          <span class={`font-semibold ${TEXT}`}>{props.title.name}</span>
-          <Show when={props.title.from}>
-            <span class={`text-white/60 ${SMALL}`}>{props.title.from}</span>
-          </Show>
-        </div>
+        <section ref={(element) => (sections.film = element)} class="pt-[8px] pb-[14px]">
+          <div
+            class="mb-[8px] flex h-[57px] items-center gap-[10px] px-[10px]"
+            style={TRACK(s().area === 'name')}
+            onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false })}
+          >
+            <div class="flex min-w-0 grow flex-col gap-[5px]">
+              <span class={`truncate font-semibold ${TEXT}`}>{s().name}</span>
+              <Show when={s().from}>
+                <span class="text-[16px] leading-none text-white/60">from {s().from}</span>
+              </Show>
+            </div>
+            <svg width="24" height="24" viewBox="0 0 24 24" class="shrink-0 opacity-70">
+              <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" />
+            </svg>
+          </div>
+          <div class="flex gap-[8px]">
+            <For each={[['saveas', 'SAVE AS'], ['open', 'OPEN']] as ['saveas' | 'open', string][]}>
+              {([area, label]) => (
+                <button
+                  type="button"
+                  class={`flex h-[47px] grow basis-0 items-center justify-center font-semibold ${SMALL}`}
+                  style={TRACK(s().area === area)}
+                  onClick={() => {
+                    const next = { ...s(), area, railOn: null, header: false, inside: false };
+                    update(area === 'open' ? openPicker(next, { kind: 'open' }) : saveAs(next));
+                  }}
+                >
+                  {label}
+                </button>
+              )}
+            </For>
+          </div>
+        </section>
         <Show when={s().crop > 0}>
           <section ref={(element) => (sections.raw = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
             <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>RAW FILE</div>
@@ -1431,7 +1547,16 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                   </button>
                 </div>
                 <Show when={tool === 'curve'}>
-                  <div ref={(element) => (rows[0] = element)} class="rounded-[14px] p-[2px]" style={frame(0)} onPointerDown={() => focusControl(0)}>
+                  <div ref={(element) => (rows[0] = element)} class="relative rounded-[14px] p-[2px]" style={frame(0)} onPointerDown={() => focusControl(0)}>
+                    <button
+                      type="button"
+                      class="absolute top-[10px] left-[10px] z-10 flex size-[36px] items-center justify-center rounded-[10px]"
+                      style={{ background: 'rgb(255 255 255 / 0.14)' }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={() => update({ ...s(), focus: 0, area: 'rows', header: false, inside: true, full: true })}
+                    >
+                      <ExpandIcon />
+                    </button>
                     <CurveGraph
                       film={s().film}
                       opened={s().opened}
@@ -1490,30 +1615,63 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
         </For>
         <div class="h-[300px]" />
       </div>
+      </div>
+
+      <Show when={s().full}>
+        <div class="absolute inset-0" style={{ background: 'rgb(0 0 0 / 0.38)' }}>
+          <div class="absolute top-[14px] left-[24px]">
+            <CurveGraph
+              film={s().film}
+              opened={s().opened}
+              histogram={props.histogram}
+              width={W - 48}
+              height={H - 80}
+              focus={s().knot}
+              bend={s().bend}
+              set={(film) => update({ ...s(), film })}
+              focusKnot={(knot) => update({ ...s(), knot })}
+            />
+          </div>
+          <button
+            type="button"
+            class="absolute top-[18px] left-[28px] flex size-[40px] items-center justify-center rounded-[10px]"
+            style={GLASS}
+            onClick={() => update({ ...s(), full: false })}
+          >
+            <ExpandIcon full />
+          </button>
+          <div class={`absolute bottom-[16px] left-[24px] flex h-[36px] items-center rounded-[12px] px-[12px] font-medium tabular-nums ${SMALL}`} style={GLASS}>
+            {knotReadout(s().film, s().knot, s().bend)}
+          </div>
+        </div>
+      </Show>
 
       <Show when={!s().picker}>
-        <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]">
-          <Hint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
-          <div class="flex gap-[6px]">
-            <Hint glyph="Q" label="A|B" accent={!!s().compare} tap={() => update(press(s(), 'q'))} />
-            <Hint glyph="▶" label={s().crop ? 'LIVE' : 'RAW'} tap={() => update(press(s(), 'play'))} />
-          </div>
+        <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]" style={props.chrome}>
+          <Show when={s().inside && CONTROLS[s().focus].kind === 'curve'}>
+            <Hint glyph="OK" label={s().full ? 'SIDEBAR' : 'FULL SCREEN'} tap={() => update(press(s(), 'ok'))} />
+          </Show>
+          {/* Full screen keeps the picture clear: only the way back shows. */}
+          <Show when={!s().full}>
+            <Hint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
+            <div class="flex gap-[6px]">
+              <Hint glyph="Q" label="A|B" accent={!!s().compare} tap={() => update(press(s(), 'q'))} />
+              <Hint glyph="▶" label={s().crop ? 'LIVE' : 'RAW'} tap={() => update(press(s(), 'play'))} />
+            </div>
+          </Show>
         </div>
       </Show>
 
       <Show when={s().picker}>
         {(picker) => {
-          const current = () => {
-            const p = picker();
-            return p.kind === 'copy' ? groupSource(s().film, p.tool) : s().compare?.b;
-          };
+          const current = () => pickerCurrent(s(), picker());
           const options = () => pickerOptions(picker());
           return (
             <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'rgb(30 30 32 / 0.9)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
               <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>
                 {(() => {
                   const p = picker();
-                  return p.kind === 'copy' ? `COPY ${TOOL_NAMES[p.tool]} FROM` : 'COMPARE WITH';
+                  return p.kind === 'copy' ? `COPY ${TOOL_NAMES[p.tool]} FROM` : p.kind === 'open' ? 'OPEN FILM' : 'COMPARE WITH';
                 })()}
               </div>
               <div class="grow overflow-y-auto" style={{ 'scrollbar-width': 'none' }}>
@@ -1525,7 +1683,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                       style={picker().at === i() ? { background: '#fff', color: '#000' } : { color: '#fff' }}
                       onClick={() => update(choose(s(), picker(), k))}
                     >
-                      {k === 'opened' ? 'AS OPENED' : BASES[k].name}
+                      {pickerLabel(picker(), k)}
                       <Show when={current() === k}>
                         <span>✓</span>
                       </Show>
@@ -1549,7 +1707,6 @@ function useHistogram() {
   return histogram;
 }
 
-const NEW_TITLE = { name: 'NEW FILM', from: 'from Classic Chrome' };
 
 function Screen(props: { state: () => State; set: (s: State) => void }) {
   const histogram = useHistogram();
@@ -1565,7 +1722,7 @@ function Screen(props: { state: () => State; set: (s: State) => void }) {
           return b && s.compare ? { film: b, split: s.compare.split } : undefined;
         })()}
       />
-      <Editor s={props.state()} set={props.set} histogram={histogram()} title={NEW_TITLE} />
+      <Editor s={props.state()} set={props.set} histogram={histogram()} />
     </div>
   );
 }
@@ -1681,54 +1838,20 @@ function RecipeColumn(props: { film: string }) {
   );
 }
 
-/* Both push over from the left edge, and the recipe column is gone once the
-   film editor is in: nothing shows through the film editor's column.
-   PUSH ACROSS: the film editor's right edge pushes the recipe column ahead of
-   it across the picture, fading it out on the way.
-   FADE UNDER: the recipe column drifts right a little and fades out while the
-   film editor covers it. */
-type Presentation = 'push' | 'fade';
+/* FADE UNDER: the film editor slides in from the left edge while the recipe
+   column drifts right a little and fades out beneath it. Once the film editor
+   is in, the recipe column is not drawn; the key hints stay where they are
+   and change. */
 const SPRING = '460ms cubic-bezier(0.22, 1, 0.36, 1)';
 
 function Presented() {
-  const [style, setStyle] = createSignal<Presentation>('push');
   const [open, setOpen] = createSignal(false);
   const [state, setState] = createSignal<State>(initial({ film: START }));
   const histogram = useHistogram();
   const editorWidth = RAIL + SCROLLER;
-  const column = (): JSX.CSSProperties => {
-    if (style() === 'push')
-      return {
-        transform: open() ? `translateX(${editorWidth}px)` : 'none',
-        opacity: open() ? 0 : 1,
-        transition: `transform ${SPRING}, opacity 460ms ${open() ? 'cubic-bezier(0.5, 0, 0.9, 0.6)' : 'cubic-bezier(0.1, 0.4, 0.5, 1)'}, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
-        visibility: open() ? 'hidden' : 'visible',
-      };
-    return {
-      transform: open() ? 'translateX(48px)' : 'none',
-      opacity: open() ? 0 : 1,
-      transition: `transform ${SPRING}, opacity ${open() ? '220ms' : '320ms 140ms'} ease-out, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
-      visibility: open() ? 'hidden' : 'visible',
-    };
-  };
   return (
     <>
       <div class="mb-[10px] flex flex-wrap gap-[8px]">
-        <For each={[['push', 'Push across'], ['fade', 'Fade under']] as [Presentation, string][]}>
-          {([value, label]) => (
-            <button
-              type="button"
-              class="h-[44px] rounded-[12px] px-[14px] text-[16px] font-semibold"
-              style={style() === value ? { background: '#fff', color: '#000' } : { background: '#2c2c2e', color: '#fff' }}
-              onClick={() => {
-                setOpen(false);
-                setStyle(value);
-              }}
-            >
-              {label}
-            </button>
-          )}
-        </For>
         <button type="button" class="h-[44px] rounded-[12px] px-[18px] text-[16px] font-semibold text-white" style={{ background: ACCENT }} onClick={() => setOpen(!open())}>
           {open() ? 'Back' : 'Edit film'}
         </button>
@@ -1736,23 +1859,28 @@ function Presented() {
       <Fit>
         <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
           <Picture film={state().film} custom={state().custom} crop={0} />
-          <div class="absolute inset-0" style={column()}>
-            <RecipeColumn film="Classic Chrome" />
-          </div>
-          <Show when={!open()}>
-            <div class="absolute right-[10px] bottom-[10px]">
-              <Hint glyph="Fn" label="EDIT FILM" tap={() => setOpen(true)} />
-            </div>
-          </Show>
           <div
             class="absolute inset-0"
             style={{
-              transition: `transform ${SPRING}, visibility 0s linear ${open() ? '0ms' : '460ms'}`,
-              transform: open() ? 'none' : `translateX(-${editorWidth}px)`,
-              visibility: open() ? 'visible' : 'hidden',
+              transform: open() ? 'translateX(48px)' : 'none',
+              opacity: open() ? 0 : 1,
+              transition: `transform ${SPRING}, opacity ${open() ? '220ms' : '320ms 140ms'} ease-out, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
+              visibility: open() ? 'hidden' : 'visible',
             }}
           >
-            <Editor s={state()} set={setState} histogram={histogram()} title={NEW_TITLE} />
+            <RecipeColumn film="Classic Chrome" />
+          </div>
+          <div class="absolute right-[10px] bottom-[10px]" style={{ opacity: open() ? 0 : 1, transition: 'opacity 200ms', 'pointer-events': open() ? 'none' : 'auto' }}>
+            <Hint glyph="Fn" label="EDIT FILM" tap={() => setOpen(true)} />
+          </div>
+          <div class="absolute inset-0" style={{ visibility: open() ? 'visible' : 'hidden', transition: `visibility 0s linear ${open() ? '0ms' : '460ms'}` }}>
+            <Editor
+              s={state()}
+              set={setState}
+              histogram={histogram()}
+              column={{ transform: open() ? 'none' : `translateX(-${editorWidth}px)`, transition: `transform ${SPRING}` }}
+              chrome={{ opacity: open() ? 1 : 0, transition: `opacity 200ms ${open() ? '200ms' : '0ms'}` }}
+            />
           </div>
         </div>
       </Fit>
@@ -1763,7 +1891,10 @@ function Presented() {
 /* ---- Review ------------------------------------------------------------------------- */
 
 const STATES: { id: string; title: string; state: State }[] = [
-  { id: 'curve', title: 'Inside the tone curve', state: initial({ focus: 0, knot: 7, inside: true }) },
+  { id: 'film', title: 'The film: name, save as, open', state: initial({ area: 'name' }) },
+  { id: 'open', title: 'Open another film', state: openPicker(initial({ area: 'open' }), { kind: 'open' }) },
+  { id: 'curve', title: 'Inside the tone curve', state: initial({ focus: 0, knot: 7, inside: true, scrollTo: 'curve' }) },
+  { id: 'full', title: 'The tone curve full screen', state: initial({ focus: 0, knot: 7, inside: true, full: true }) },
   { id: 'color-mix', title: 'Color mix', state: initial({ focus: 5, scrollTo: 'mix' }) },
   { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, inside: true, scrollTo: 'tone' }) },
   { id: 'copy', title: 'Copy one tool from a film', state: openPicker(initial({ header: true }), { kind: 'copy', tool: 'curve' }) },
