@@ -1,0 +1,23 @@
+# SSP instance 8 (0xff910000 + 8*0x1000) carries the audio codec. Client 2 of the serial
+# descriptor table (lookup 0x137f2a8: 0x18ea120 + 0x30*n, n < 0x22) is 0x18ea180 =
+# [8, 0x000f000b, 0, 0, 0x18, ..., 0x10]: instance 8, select GPIO 15.11 active-low, mode
+# 0, prescaler 0x18, 16-bit words. The X-T5's client 2 (0x18e7c40) has the same fields
+# on instance 4 and select 12.7. Its only user 0x1490cac is the X-T5 codec driver
+# 0x148ad68 one-to-one (GPIO 15.3/15.4/15.5 for 12.0/12.1/12.2): one select period
+# carries a command word and a data word, bit 15 of the command marks a read whose
+# second reply is kept. Its callers are the stock task `audio` (task 0x43, name at
+# 0x19a2348, created by 0x1494f04 with entry 0x1492e30), which after the reset handshake
+# writes 12 pairs from 0x19a63e8 and 4133 from 0x19a2350, none with bit 15.
+# The codec part is not identified, so this is FujiMod's write-only command/data register
+# endpoint as on the X-T5: writes are retained and a read is refused because the reply
+# is unknown. MISO during writes is discarded by the driver; miso_high = false is
+# UNVERIFIED. source_hz is the X-T5 and X100VI value, UNVERIFIED.
+[[device]]
+base = 0xff918000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 15, pin = 11, active_high = false }
+part = { kind = "serial-command-registers", bits = 16, mode = 0, read_flag = 0x8000, data_words = 1, miso_high = false }

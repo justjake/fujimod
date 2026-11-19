@@ -1,0 +1,13 @@
+# I2C instance 2 at ff926000 (controllers at ff924000 + n*0x1000; the open routine
+# 0x138996c writes 0xff924018 + (n << 12) = 3 through 0x1389148). Its interrupt is
+# selector 0x18eb770[2] = 5, whose descriptor 0x18ece30 + 16*5 holds line 0x122 (290);
+# buses 0..3 use lines 0x120..0x123, as on the X-T5. No part on this bus is identified,
+# so none is declared and every address is not acknowledged. byte_ns is a functional
+# latency, not a bus rate.
+[[device]]
+kind = "i2c-controller"
+base = 0xff926000
+size = 0x1000
+[device.options]
+interrupt = 290
+byte_ns = 1000000

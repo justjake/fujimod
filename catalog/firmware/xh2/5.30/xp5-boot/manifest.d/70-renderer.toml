@@ -1,0 +1,20 @@
+# SMAPH-H/OpenVG command renderer (the SoC's `renderer` block, the shared `renderer`
+# model, declared as on the X-T5 and X100VI). 0x15e76d8 sets the base word 0x27ac820 to
+# 0xff93c000 and read-modify-writes, through 0x15e74b4 (read helper 0x15e7470), +0x18c0,
+# +0x10c0, +0x10c4 = 0xffffffff, +0x1800, +0x1000, +0x1020 = 0, +0x1880, +0x10a0 =
+# 0x12345678, +0x18c0, +0x10c4 = 0xfffffff0, +0x1248 = 1, +0xc18, +0x1c = 0: the X-T5's
+# 0x15ddd0c sequence. The handler 0x15e7568 reads status +0x34 and acknowledges bit 31
+# (+0x1800, +0x1020), bit 30 (+0xc18) and bit 26 (+0x1c); 0x15e7684 attaches it to
+# interrupt descriptor 0x92 of the table 0x18ece30 (lookup 0x13a137c), whose row
+# 0x18ed750 names INTID 153 (0x99), the line the model raises. The driver
+# 0x15e7470..0x15e7e33 is the X-T5's 0x15ddaa4..0x15de467 instruction for instruction
+# apart from relocated global offsets; the register accessors 0x15e786c/0x15e7880 are
+# the only other callers of the helpers. The model also owns the address-high word
+# 0xff90e73c, which 0x147eb38 sets to bits 34..32 of the draw buffer around each draw
+# and clears afterwards, and 0x147e6c4 clears (the X-T5's 0x1478854 and 0x14783e0);
+# nothing else on the X-H2 declares it. DMA latency and the pixmap readback channel
+# order are the model's assumptions, not camera measurements (UNVERIFIED).
+[[device]]
+base = 0xff93c000
+size = 0x3000
+kind = "renderer"

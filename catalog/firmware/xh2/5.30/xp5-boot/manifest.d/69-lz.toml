@@ -1,0 +1,20 @@
+# Lazy-code/font streaming DMA and conversion block (the SoC's `lz` block, the shared
+# `lz` model, declared as on the X-T5 and X100VI). 0x13a1630 powers it (gate 0xff90db10
+# bit 3, polled at 0xff90db30) and runs the reset handshake 0x13a1928 (write 0 to +0x00,
+# wait for nonzero, then for +0x24 == 0x10001), the X-T5's 0x139f9d0 word for word.
+# The stream setup 0x13a1978 (+0x40 = 0, address-high 0xff90e70c, +0x10..+0x1c, then
+# +0x20 = 0x84000400 and 0x94001400) and the page start 0x13a1a20 (address-high
+# 0xff90e708, +0x08, +0x0c, +0x04 = 1) equal the X-T5's 0x139fa20 and 0x139fac8; the
+# acknowledge words are +0x28 (0x13a1a80) and +0x68 (0x13a1acc, 0x148523c). The OSD
+# converter 0x14853a0 (reset 0x14852c8 polls +0x64 for 0x1010001) programs +0x40 = 1,
+# +0x48..+0x54 and +0x58/+0x5c/+0x60 = 0x400/0x4000400/0x1010001 before starting +0x44.
+# These are all the image's accesses to the page. The handlers 0x13a1538 and 0x148528c
+# attach to interrupt descriptors 0x8a (0x13a1734) and 0x71 (0x1485474) of the table
+# 0x18ece30 (lookup 0x13a137c); entries 0x18ed6d0 and 0x18ed540 both name INTID 201
+# (0xc9), the line the model raises. The model
+# also owns the address-high words 0xff90e708/e70c. Completion timing is the model's
+# functional assumption, not a camera measurement (UNVERIFIED).
+[[device]]
+base = 0xff980000
+size = 0x1000
+kind = "lz"
