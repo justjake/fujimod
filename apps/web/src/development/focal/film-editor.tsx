@@ -4,13 +4,13 @@ import type { JSX } from '@solidjs/web';
 
 import './focal.css';
 
-/* FILM EDITOR redesign mock: a film's controls as an editing sidebar over
-   live view, in four layouts. The picture is developed the way the film
-   stage develops it: a 3x3 matrix on linear RGB (the primaries), one shared
-   tone curve of ten knots joined by cubic Bezier segments, the channels
-   entering that curve at their own exposure, then a 2x2 on CbCr
-   (saturation, hue, warm/cool) and a chroma gain chosen by output
-   brightness in five bands. */
+/* FILM EDITOR redesign mock: a tool rail down the left edge beside one tall
+   scroller holding every tool, all open, over the picture. The rail scrolls
+   to a tool and follows the scroller. The picture is developed the way the
+   film stage develops it: a 3x3 matrix on linear RGB (COLOR MIX), one shared
+   tone curve of ten knots joined by cubic Bezier segments, red and blue
+   entering that curve at their own exposure, then a 2x2 on CbCr (COLOR) and
+   a chroma gain chosen by output brightness in five bands. */
 
 /* ---- Film model ----------------------------------------------------------------- */
 
@@ -159,10 +159,21 @@ interface Source {
   histogram: number[];
 }
 
-let sourcePromise: Promise<Source> | undefined;
+const sources = new Map<number, Promise<Source>>();
 
-function source(): Promise<Source> {
-  sourcePromise ??= new Promise((resolve) => {
+/** RAW files on the SD card, standing in as crops of the default scene. */
+const RAWS = [
+  { name: 'DSCF0412.RAF', zoom: 1.8, x: 0.62, y: 0.42 },
+  { name: 'DSCF0413.RAF', zoom: 2.2, x: 0.18, y: 0.5 },
+  { name: 'DSCF0415.RAF', zoom: 1.5, x: 0.4, y: 0.2 },
+  { name: 'DSCF0418.RAF', zoom: 2.6, x: 0.82, y: 0.62 },
+];
+
+/** Crop 0 is live view; crop n is RAWS[n - 1]. */
+function source(crop = 0): Promise<Source> {
+  const cached = sources.get(crop);
+  if (cached) return cached;
+  const promise = new Promise<Source>((resolve) => {
     const image = new Image();
     image.onload = () => {
       const canvas = document.createElement('canvas');
@@ -170,10 +181,13 @@ function source(): Promise<Source> {
       canvas.height = H;
       const context = canvas.getContext('2d');
       if (!context) throw new Error('No 2D context');
-      const scale = Math.max(W / image.width, H / image.height);
+      const raw = RAWS[crop - 1];
+      const scale = Math.max(W / image.width, H / image.height) * (raw?.zoom ?? 1);
       const w = image.width * scale;
       const h = image.height * scale;
-      context.drawImage(image, (W - w) / 2, (H - h) / 2, w, h);
+      const x = raw ? Math.min(0, Math.max(W - w, W / 2 - raw.x * w)) : (W - w) / 2;
+      const y = raw ? Math.min(0, Math.max(H - h, H / 2 - raw.y * h)) : (H - h) / 2;
+      context.drawImage(image, x, y, w, h);
       const pixels = context.getImageData(0, 0, W, H).data;
       const histogram = new Array<number>(64).fill(0);
       for (let p = 0; p < pixels.length; p += 4) {
@@ -185,12 +199,36 @@ function source(): Promise<Source> {
     };
     image.src = PHOTO;
   });
-  return sourcePromise;
+  sources.set(crop, promise);
+  return promise;
 }
 
 const DECODE = Array.from({ length: 256 }, (_, v) => decode(v / 255));
 
-function develop(f: Film, src: Source, out: ImageData) {
+/** Each output brightness's chroma gain from the five bands. */
+function bandGains(f: Film): Float32Array {
+  const band = new Float32Array(256);
+  const centers = [0, ...f.edges, 255];
+  for (let y = 0; y < 256; y++) {
+    let i = 0;
+    while (i < 4 && y > f.edges[i]) i++;
+    const mid = (centers[i] + centers[i + 1]) / 2;
+    const next = y < mid ? Math.max(0, i - 1) : Math.min(4, i + 1);
+    const nextMid = (centers[next] + centers[next + 1]) / 2;
+    const t = next === i ? 0 : Math.min(0.5, Math.abs(y - mid) / Math.max(1, Math.abs(nextMid - mid)));
+    band[y] = 1 + ((1 - t) * f.bands[i] + t * f.bands[next]) / 100;
+  }
+  return band;
+}
+
+/** The recipe's other settings, for CUSTOM SETTING on: a little more
+ * contrast (HIGHLIGHT +1, SHADOW -1) and warmer white balance. */
+function customSettings(v: number, channel: number): number {
+  const contrast = 0.5 + (v - 0.5) * 1.1;
+  return contrast * [1.04, 1, 0.94][channel];
+}
+
+function develop(f: Film, src: Source, out: ImageData, custom: boolean) {
   const hs = handles(f);
   const lut = new Float32Array(4097);
   for (let x = 0; x <= 4096; x++) lut[x] = curveAt(f, hs, axis(x));
@@ -212,19 +250,7 @@ function develop(f: Film, src: Source, out: ImageData) {
   const a01 = c * k01 - sn * k11;
   const a10 = sn * k00 + c * k01;
   const a11 = sn * k01 + c * k11;
-  const band = new Float32Array(256);
-  const centers = [0, ...f.edges, 255];
-  for (let y = 0; y < 256; y++) {
-    let i = 0;
-    while (i < 4 && y > f.edges[i]) i++;
-    const lo = centers[i];
-    const hi = centers[i + 1];
-    const mid = (lo + hi) / 2;
-    const next = y < mid ? Math.max(0, i - 1) : Math.min(4, i + 1);
-    const nextMid = (centers[next] + centers[next + 1]) / 2;
-    const t = next === i ? 0 : Math.min(0.5, Math.abs(y - mid) / Math.max(1, Math.abs(nextMid - mid)));
-    band[y] = 1 + ((1 - t) * f.bands[i] + t * f.bands[next]) / 100;
-  }
+  const band = bandGains(f);
   const px = src.pixels;
   const o = out.data;
   for (let p = 0; p < px.length; p += 4) {
@@ -243,51 +269,52 @@ function develop(f: Film, src: Source, out: ImageData) {
     const R2 = Y + 1.402 * cr2;
     const B2 = Y + 1.773 * cb2;
     const G2 = (Y - 0.299 * R2 - 0.114 * B2) / 0.587;
-    o[p] = R2 * 255;
-    o[p + 1] = G2 * 255;
-    o[p + 2] = B2 * 255;
+    o[p] = (custom ? customSettings(R2, 0) : R2) * 255;
+    o[p + 1] = (custom ? customSettings(G2, 1) : G2) * 255;
+    o[p + 2] = (custom ? customSettings(B2, 2) : B2) * 255;
     o[p + 3] = 255;
   }
 }
 
-function Picture(props: { film: Film; onPick?: (x: number, y: number, u: number) => void }) {
+function Canvas(props: { film: Film; custom: boolean; crop: number; style?: JSX.CSSProperties }) {
   let canvas: HTMLCanvasElement | undefined;
-  const [src, setSrc] = createSignal<Source>();
+  const [src, setSrc] = createSignal<{ crop: number; source: Source }>();
   let frame = 0;
-  onSettled(() => {
-    void source().then(setSrc);
-  });
   createEffect(
-    () => [props.film, src()] as const,
-    ([film, s]) => {
+    () => props.crop,
+    (crop) => {
+      void source(crop).then((s) => setSrc({ crop, source: s }));
+    },
+  );
+  createEffect(
+    () => [props.film, props.custom, src()] as const,
+    ([film, custom, s]) => {
       if (!s || !canvas) return;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const context = canvas?.getContext('2d');
         if (!context) return;
         const out = context.createImageData(W, H);
-        develop(film, s, out);
+        develop(film, s.source, out, custom);
         context.putImageData(out, 0, 0);
       });
     },
   );
+  return <canvas ref={(element) => (canvas = element)} width={W} height={H} class="absolute inset-0" style={props.style} />;
+}
+
+/** The picture, developed with the film; in compare, B's development shows
+ * right of the divider. */
+function Picture(props: { film: Film; custom: boolean; crop: number; compare?: { film: Film; split: number } }) {
   return (
-    <canvas
-      ref={(element) => (canvas = element)}
-      width={W}
-      height={H}
-      class="absolute inset-0"
-      onPointerDown={(e) => {
-        const s = src();
-        if (!props.onPick || !s) return;
-        const box = e.currentTarget.getBoundingClientRect();
-        const x = Math.round(((e.clientX - box.left) / box.width) * W);
-        const y = Math.round(((e.clientY - box.top) / box.height) * H);
-        const p = (y * W + x) * 4;
-        const l = 0.2126 * DECODE[s.pixels[p]] + 0.7152 * DECODE[s.pixels[p + 1]] + 0.0722 * DECODE[s.pixels[p + 2]];
-        props.onPick(x, y, axis(l * 4096));
-      }}
-    />
+    <>
+      <Canvas film={props.film} custom={props.custom} crop={props.crop} />
+      <Show when={props.compare}>
+        {(c) => (
+          <Canvas film={c().film} custom={props.custom} crop={props.crop} style={{ 'clip-path': `inset(0 0 0 ${c().split}px)` }} />
+        )}
+      </Show>
+    </>
   );
 }
 
@@ -311,8 +338,6 @@ const TRACK = (focused: boolean): JSX.CSSProperties => ({
   'border-radius': '13px',
   'box-shadow': focused ? 'inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.14)' : undefined,
 });
-const PRIMARY_COLORS = ['#e5484d', '#46a758', '#3e63dd'];
-const PRIMARY_NAMES = ['RED', 'GREEN', 'BLUE'];
 const BAND_NAMES = ['BLACKS', 'SHADOWS', 'MIDTONES', 'HIGHLIGHTS', 'WHITES'];
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
@@ -328,6 +353,8 @@ function Ruler(props: {
   focused: boolean;
   changed: boolean;
   set: (value: number) => void;
+  /** A gradient under the ticks showing what the scale does. */
+  track?: string;
 }) {
   const spacing = 34;
   const index = () => (props.value - props.min) / props.step;
@@ -338,9 +365,10 @@ function Ruler(props: {
   let drag: { x: number; value: number } | undefined;
   return (
     <div
-      class="relative h-full touch-none overflow-hidden"
+      class="relative h-full overflow-hidden"
       style={{
         width: `${props.width}px`,
+        'touch-action': 'pan-y',
         'mask-image': 'linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent)',
       }}
       onPointerDown={(e) => {
@@ -355,7 +383,11 @@ function Ruler(props: {
         props.set(Math.max(props.min, Math.min(props.max, drag.value + steps * props.step)));
       }}
       onPointerUp={() => (drag = undefined)}
+      onPointerCancel={() => (drag = undefined)}
     >
+      <Show when={props.track}>
+        {(track) => <div class="absolute inset-x-0 bottom-[5px] h-[9px] rounded-full opacity-80" style={{ background: track() }} />}
+      </Show>
       <div class="absolute inset-y-0 left-0 transition-transform duration-150 ease-out" style={{ transform: `translateX(${origin()}px)` }}>
         <For each={Array.from({ length: count() }, (_, i) => i)}>
           {(i) => {
@@ -389,7 +421,7 @@ function Ruler(props: {
 function Row(props: { name: string; focused: boolean; width: number; nameWidth?: number; children: JSX.Element; onClick?: () => void }) {
   const nameWidth = () => props.nameWidth ?? 146;
   return (
-    <div class="flex h-[57px] items-center gap-[8px] px-[8px]" style={{ width: `${props.width}px` }} onClick={() => props.onClick?.()}>
+    <div class="flex h-[57px] items-center gap-[8px]" style={{ width: `${props.width}px` }} onClick={() => props.onClick?.()}>
       <span
         class={`shrink-0 font-light tracking-[0.06em] ${SMALL}`}
         style={{ width: `${nameWidth()}px`, color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.72)' }}
@@ -403,29 +435,6 @@ function Row(props: { name: string; focused: boolean; width: number; nameWidth?:
   );
 }
 
-function BaseStrip(props: { film: Film; width: number; focused: boolean; set: (base: number) => void }) {
-  return (
-    <div class="relative flex h-full items-center justify-center" style={{ width: `${props.width}px` }}>
-      <span
-        class={`flex h-[37px] items-center rounded-[10px] px-[10px] font-medium whitespace-nowrap ${SMALL}`}
-        style={{ background: '#fff', color: '#000' }}
-      >
-        {BASES[props.film.base].name}
-      </span>
-      <Show when={props.film.base > 0}>
-        <button type="button" class="absolute left-0 w-[16px] text-[24px] text-white" onClick={() => props.set(props.film.base - 1)}>
-          ‹
-        </button>
-      </Show>
-      <Show when={props.film.base < BASES.length - 1}>
-        <button type="button" class="absolute right-0 w-[16px] text-[24px] text-white" onClick={() => props.set(props.film.base + 1)}>
-          ›
-        </button>
-      </Show>
-    </div>
-  );
-}
-
 function curvePath(f: Film, w: number, h: number): string {
   const hs = handles(f);
   const n = 140;
@@ -435,16 +444,6 @@ function curvePath(f: Film, w: number, h: number): string {
     d += `${k ? ' L' : 'M'}${(u * w).toFixed(1)},${((1 - disp(curveAt(f, hs, u))) * h).toFixed(1)}`;
   }
   return d;
-}
-
-/** A small picture of the curve for a row's track. */
-function CurveSpark(props: { film: Film; opened: Film; width: number; height: number }) {
-  return (
-    <svg width={props.width} height={props.height} class="block">
-      <path d={curvePath(props.opened, props.width, props.height)} fill="none" stroke="rgb(255 255 255 / 0.3)" stroke-width="1.5" />
-      <path d={curvePath(props.film, props.width, props.height)} fill="none" stroke="#fff" stroke-width="2.5" />
-    </svg>
-  );
 }
 
 interface CurveProps {
@@ -585,162 +584,254 @@ function knotReadout(f: Film, knot: number, bend: boolean): string {
   return bend ? `${where} · BEND ${signed(Math.round(f.tilt[knot] * 10))}` : `${where} · ${out}%`;
 }
 
-/** Saturation by brightness: five bands between four edges, drawn over the
- * picture's brightness. A finger drags a band's bar or an edge. */
-function BandGraph(props: { film: Film; opened: Film; width: number; height: number; focus: number; set: (film: Film) => void; focusBand: (band: number) => void }) {
-  const pad = 14;
-  const w = () => props.width - 2 * pad;
-  const h = () => props.height - 2 * pad;
-  const X = (y: number) => pad + (y / 255) * w();
-  const mid = () => pad + h() / 2;
-  const Yb = (pct: number) => mid() - (pct / 100) * (h() / 2);
-  const bounds = () => [0, ...props.film.edges, 255];
-  let drag: { band: number; y: number; start: number } | undefined;
-  return (
-    <svg
-      width={props.width}
-      height={props.height}
-      class="block touch-none"
-      onPointerDown={(e) => {
-        const element = e.currentTarget;
-        element.setPointerCapture(e.pointerId);
-        const box = element.getBoundingClientRect();
-        const x = ((e.clientX - box.left) / box.width) * props.width;
-        const y = ((e.clientY - box.top) / box.height) * props.height;
-        const b = bounds();
-        let band = 0;
-        while (band < 4 && x > X(b[band + 1])) band++;
-        props.focusBand(band);
-        drag = { band, y, start: props.film.bands[band] };
-      }}
-      onPointerMove={(e) => {
-        if (!drag) return;
-        const box = e.currentTarget.getBoundingClientRect();
-        const y = ((e.clientY - box.top) / box.height) * props.height;
-        const bands = [...props.film.bands];
-        bands[drag.band] = Math.max(-100, Math.min(100, Math.round((drag.start + ((drag.y - y) / (h() / 2)) * 100) / 5) * 5));
-        props.set({ ...props.film, bands });
-      }}
-      onPointerUp={() => (drag = undefined)}
-    >
-      <defs>
-        <linearGradient id="band-ramp" x1="0" x2="1">
-          <stop offset="0" stop-color="#000" />
-          <stop offset="1" stop-color="#fff" />
-        </linearGradient>
-      </defs>
-      <rect x={pad} y={pad + h() - 8} width={w()} height="8" fill="url(#band-ramp)" opacity="0.8" />
-      <line x1={pad} x2={pad + w()} y1={mid()} y2={mid()} stroke="rgb(255 255 255 / 0.35)" stroke-dasharray="4 4" />
-      <For each={props.film.bands}>
-        {(pct, i) => {
-          const b = () => bounds();
-          const focused = () => i() === props.focus;
-          const changed = () => pct !== props.opened.bands[i()];
-          return (
-            <>
-              <rect
-                x={X(b()[i()]) + 3}
-                y={Math.min(mid(), Yb(pct))}
-                width={Math.max(2, X(b()[i() + 1]) - X(b()[i()]) - 6)}
-                height={Math.max(2, Math.abs(Yb(pct) - mid()))}
-                rx="4"
-                fill={changed() ? ACCENT : focused() ? '#fff' : 'rgb(255 255 255 / 0.5)'}
-              />
-              <Show when={focused()}>
-                <rect x={X(b()[i()]) + 1} y={pad} width={X(b()[i() + 1]) - X(b()[i()]) - 2} height={h() - 10} rx="6" fill="none" stroke="#fff" stroke-width="2" />
-              </Show>
-            </>
-          );
-        }}
-      </For>
-      <For each={props.film.edges}>
-        {(edge) => <line x1={X(edge)} x2={X(edge)} y1={pad} y2={pad + h()} stroke="rgb(255 255 255 / 0.4)" stroke-width="1.5" />}
-      </For>
-    </svg>
-  );
-}
-
-function Legend(props: { hints: [string, string][]; left?: boolean }) {
-  return (
-    <div class="absolute bottom-[10px] flex gap-[4px]" style={props.left ? { left: '10px' } : { right: '10px' }}>
-      <For each={props.hints}>
-        {([key, label]) => (
-          <div class="flex h-[34px] items-center gap-[8px] rounded-[12px] px-[7px] whitespace-nowrap" style={GLASS}>
-            <span class="flex h-[24px] min-w-[24px] items-center justify-center rounded-[6px] bg-white px-[4px] text-[18px] leading-none font-semibold text-black">{key}</span>
-            <Show when={label}>
-              <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{label}</span>
-            </Show>
-          </div>
-        )}
-      </For>
-    </div>
-  );
-}
-
-function Swatches(props: { film: Film; focus: number; size: number; pick: (primary: number) => void }) {
-  return (
-    <div class="flex items-center justify-center gap-[14px]">
-      <For each={PRIMARY_COLORS}>
-        {(color, i) => {
-          const p = () => props.film.primaries[i()];
-          const changed = () => p().hue !== 0 || p().sat !== 0;
-          return (
-            <button
-              type="button"
-              class="relative rounded-full"
-              style={{
-                width: `${props.size}px`,
-                height: `${props.size}px`,
-                background: `color-mix(in oklch, ${color}, ${p().hue > 0 ? '#ffd60a' : '#bf5af2'} ${Math.abs(p().hue) * 2}%)`,
-                filter: `saturate(${1 + p().sat / 100})`,
-                'box-shadow': i() === props.focus ? '0 0 0 3px #1c1c1e, 0 0 0 6px #fff' : undefined,
-              }}
-              onClick={() => props.pick(i())}
-            >
-              <Show when={changed()}>
-                <span class="absolute -right-[3px] -bottom-[3px] size-[14px] rounded-full" style={{ background: ACCENT, 'box-shadow': '0 0 0 2px #1c1c1e' }} />
-              </Show>
-            </button>
-          );
-        }}
-      </For>
-    </div>
-  );
-}
-
 /* ---- Tools ----------------------------------------------------------------------- */
 
-type Tool = 'base' | 'curve' | 'color' | 'primaries' | 'bands' | 'channels';
+type Tool = 'curve' | 'color' | 'mix' | 'tone' | 'channels';
+const TOOLS: Tool[] = ['curve', 'color', 'mix', 'tone', 'channels'];
 const TOOL_NAMES: Record<Tool, string> = {
-  base: 'BASE FILM',
   curve: 'TONE CURVE',
   color: 'COLOR',
-  primaries: 'PRIMARIES',
-  bands: 'SAT BY TONE',
+  mix: 'COLOR MIX',
+  tone: 'SATURATION BY TONE',
   channels: 'CHANNELS',
 };
-const TOOLS: Tool[] = ['base', 'curve', 'color', 'primaries', 'bands', 'channels'];
+
+const GROUPS: Record<Tool, (f: Film) => unknown> = {
+  curve: (f) => [f.knots, f.tilt],
+  color: (f) => [f.saturation, f.hue, f.warmth],
+  mix: (f) => f.primaries,
+  tone: (f) => [f.bands, f.edges],
+  channels: (f) => [f.red, f.blue],
+};
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The film a tool's settings came from, or none once edited. */
+function groupSource(f: Film, tool: Tool): number | undefined {
+  const value = GROUPS[tool](f);
+  if (same(GROUPS[tool](baseFilm(f.base)), value)) return f.base;
+  const k = BASES.findIndex((_, i) => same(GROUPS[tool](baseFilm(i)), value));
+  return k < 0 ? undefined : k;
+}
+
+function copyGroup(f: Film, tool: Tool, k: number): Film {
+  const b = baseFilm(k);
+  switch (tool) {
+    case 'curve':
+      return { ...f, knots: b.knots, tilt: b.tilt };
+    case 'color':
+      return { ...f, saturation: b.saturation, hue: b.hue, warmth: b.warmth };
+    case 'mix':
+      return { ...f, primaries: b.primaries };
+    case 'tone':
+      return { ...f, bands: b.bands, edges: b.edges };
+    case 'channels':
+      return { ...f, red: b.red, blue: b.blue };
+  }
+}
+
+interface Scale {
+  name: string;
+  get: (f: Film) => number;
+  put: (f: Film, v: number) => Film;
+  min: number;
+  max: number;
+  step: number;
+  track: string;
+}
+
+const gradient = (...stops: string[]) => `linear-gradient(to right, ${stops.join(', ')})`;
+const GRAY = '#8e8e93';
+
+const COLOR_SCALES: Scale[] = [
+  { name: 'SATURATION', get: (f) => f.saturation, put: (f, v) => ({ ...f, saturation: v }), min: -50, max: 50, step: 5, track: gradient(GRAY, '#ff9500') },
+  { name: 'HUE', get: (f) => f.hue, put: (f, v) => ({ ...f, hue: v }), min: -15, max: 15, step: 1, track: gradient('#ff375f', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2') },
+  { name: 'WARM/COOL', get: (f) => f.warmth, put: (f, v) => ({ ...f, warmth: v }), min: -50, max: 50, step: 5, track: gradient('#0a84ff', GRAY, '#ff9f0a') },
+];
+
+/** COLOR MIX: how reds, greens and blues render. HUE turns them toward
+ * their neighbors (reds toward pink or orange); SATURATION makes them
+ * stronger or weaker. Grays stay gray. */
+const MIX = [
+  { name: 'REDS', color: '#ff3b30', linear: [0.75, 0.06, 0.04], hue: gradient('#ff2d78', '#ff3b30', '#ff9500') },
+  { name: 'GREENS', color: '#34c759', linear: [0.08, 0.5, 0.1], hue: gradient('#b5d334', '#34c759', '#00c7be') },
+  { name: 'BLUES', color: '#0a64ff', linear: [0.04, 0.1, 0.7], hue: gradient('#32ade6', '#0a64ff', '#a35bff') },
+];
+const mixScales = (p: number): Scale[] => [
+  {
+    name: 'HUE',
+    get: (f) => f.primaries[p].hue,
+    put: (f, v) => ({ ...f, primaries: f.primaries.map((q, i) => (i === p ? { ...q, hue: v } : q)) }),
+    min: -30,
+    max: 30,
+    step: 2,
+    track: MIX[p].hue,
+  },
+  {
+    name: 'SATURATION',
+    get: (f) => f.primaries[p].sat,
+    put: (f, v) => ({ ...f, primaries: f.primaries.map((q, i) => (i === p ? { ...q, sat: v } : q)) }),
+    min: -50,
+    max: 50,
+    step: 5,
+    track: gradient(GRAY, MIX[p].color),
+  },
+];
+
+const CHANNEL_SCALES: Scale[] = [
+  { name: 'RED CURVE', get: (f) => f.red, put: (f, v) => ({ ...f, red: v }), min: -5, max: 5, step: 1, track: gradient('#00c7be', GRAY, '#ff3b30') },
+  { name: 'BLUE CURVE', get: (f) => f.blue, put: (f, v) => ({ ...f, blue: v }), min: -5, max: 5, step: 1, track: gradient('#ffd60a', GRAY, '#0a84ff') },
+];
+
+type Control = { tool: Tool; kind: 'curve' } | { tool: Tool; kind: 'tone' } | { tool: Tool; kind: 'scale'; scale: Scale; mix?: number };
+
+const CONTROLS: Control[] = [
+  { tool: 'curve', kind: 'curve' },
+  ...COLOR_SCALES.map((scale): Control => ({ tool: 'color', kind: 'scale', scale })),
+  ...[0, 1, 2].flatMap((p) => mixScales(p).map((scale): Control => ({ tool: 'mix', kind: 'scale', scale, mix: p }))),
+  { tool: 'tone', kind: 'tone' },
+  ...CHANNEL_SCALES.map((scale): Control => ({ tool: 'channels', kind: 'scale', scale })),
+];
+
+/* ---- Saturation by tone ----------------------------------------------------------- */
+
+function hsv(h: number, s: number, v: number): [number, number, number] {
+  const f = (n: number) => {
+    const k = (n + h / 60) % 6;
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+  };
+  return [f(5), f(3), f(1)];
+}
+
+/** Every hue from dark to bright, at the saturation each brightness gets:
+ * where the bands lower saturation the colors fade toward gray. */
+function ToneField(props: { film: Film; width: number; height: number }) {
+  let canvas: HTMLCanvasElement | undefined;
+  createEffect(
+    () => props.film.bands.join() + props.film.edges.join(),
+    () => {
+      const context = canvas?.getContext('2d');
+      if (!context) return;
+      const gains = bandGains(props.film);
+      const w = 64;
+      const h = 24;
+      const image = context.createImageData(w, h);
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          const v = 0.06 + (x / (w - 1)) * 0.94;
+          const gain = gains[Math.round(v * 255)];
+          const [r, g, b] = hsv((y / h) * 360, Math.min(1, 0.6 * gain), v);
+          const p = (y * w + x) * 4;
+          image.data[p] = r * 255;
+          image.data[p + 1] = g * 255;
+          image.data[p + 2] = b * 255;
+          image.data[p + 3] = 255;
+        }
+      context.putImageData(image, 0, 0);
+    },
+  );
+  return (
+    <canvas
+      ref={(element) => (canvas = element)}
+      width={64}
+      height={24}
+      class="absolute inset-0 rounded-[12px]"
+      style={{ width: `${props.width}px`, height: `${props.height}px` }}
+    />
+  );
+}
+
+const BAND_CENTERS = (f: Film) => {
+  const b = [0, ...f.edges, 255];
+  return [0, 1, 2, 3, 4].map((i) => (b[i] + b[i + 1]) / 2);
+};
+
+function ToneGraph(props: { film: Film; opened: Film; width: number; height: number; band: number; focused: boolean; set: (film: Film) => void; focusBand: (band: number) => void }) {
+  const X = (y: number) => (y / 255) * props.width;
+  const mid = () => props.height / 2;
+  const Y = (gain: number) => mid() - (gain - 1) * (props.height / 2 - 10);
+  const line = () => {
+    const gains = bandGains(props.film);
+    let d = '';
+    for (let y = 0; y < 256; y += 3) d += `${y ? ' L' : 'M'}${X(y).toFixed(1)},${Y(gains[y]).toFixed(1)}`;
+    return d;
+  };
+  let drag: { band: number; y: number; start: number } | undefined;
+  const local = (e: PointerEvent, element: Element) => {
+    const box = element.getBoundingClientRect();
+    return { x: ((e.clientX - box.left) / box.width) * props.width, y: ((e.clientY - box.top) / box.height) * props.height };
+  };
+  return (
+    <div class="relative" style={{ width: `${props.width}px`, height: `${props.height}px` }}>
+      <ToneField film={props.film} width={props.width} height={props.height} />
+      <svg
+        width={props.width}
+        height={props.height}
+        class="absolute inset-0 touch-none"
+        onPointerDown={(e) => {
+          const element = e.currentTarget;
+          element.setPointerCapture(e.pointerId);
+          const p = local(e, element);
+          const centers = BAND_CENTERS(props.film);
+          let band = 0;
+          for (let i = 1; i < 5; i++) if (Math.abs(X(centers[i]) - p.x) < Math.abs(X(centers[band]) - p.x)) band = i;
+          props.focusBand(band);
+          drag = { band, y: p.y, start: props.film.bands[band] };
+        }}
+        onPointerMove={(e) => {
+          if (!drag) return;
+          const p = local(e, e.currentTarget);
+          const bands = [...props.film.bands];
+          const pct = drag.start + ((drag.y - p.y) / (props.height / 2 - 10)) * 100;
+          bands[drag.band] = Math.max(-100, Math.min(100, Math.round(pct / 5) * 5));
+          props.set({ ...props.film, bands });
+        }}
+        onPointerUp={() => (drag = undefined)}
+      >
+        <line x1="0" x2={props.width} y1={mid()} y2={mid()} stroke="rgb(255 255 255 / 0.55)" stroke-dasharray="5 5" />
+        <path d={line()} fill="none" stroke="#000" stroke-width="5" stroke-opacity="0.35" />
+        <path d={line()} fill="none" stroke="#fff" stroke-width="3" />
+        <For each={BAND_CENTERS(props.film)}>
+          {(c, i) => {
+            const pct = () => props.film.bands[i()];
+            const focused = () => props.focused && props.band === i();
+            return (
+              <circle
+                cx={X(c)}
+                cy={Y(1 + pct() / 100)}
+                r={focused() ? 10 : 7}
+                fill={pct() !== props.opened.bands[i()] ? ACCENT : focused() ? '#fff' : '#1c1c1e'}
+                stroke="#fff"
+                stroke-width={focused() ? 3 : 2}
+              />
+            );
+          }}
+        </For>
+      </svg>
+    </div>
+  );
+}
+
+/* ---- Editor ----------------------------------------------------------------------- */
 
 interface State {
   film: Film;
   opened: Film;
-  tool: Tool;
-  /** The focused control within the tool. */
-  control: number;
+  focus: number;
   knot: number;
   bend: boolean;
-  primary: number;
   band: number;
-  /** Layout A: a tool open in the fly-out. Layout B: the open section. */
-  open: Tool | null;
-  picked?: { x: number; y: number; u: number };
+  /** CUSTOM SETTING: the recipe's other settings applied on top of the film. */
+  custom: boolean;
+  compare: { b: number | 'opened'; split: number } | null;
+  /** 0: live view; n: RAWS[n - 1]. */
+  crop: number;
+  picker: { kind: 'copy'; tool: Tool } | { kind: 'compare' } | null;
+  /** Review states open scrolled to a tool. */
+  scrollTo?: Tool;
 }
 
 const START = baseFilm(3);
-
-function initial(over: Partial<State>): State {
-  return { film: START, opened: START, tool: 'curve', control: 0, knot: 4, bend: false, primary: 0, band: 1, open: null, ...over };
-}
 
 /** An edited film for the review states. */
 const EDITED: Film = (() => {
@@ -764,427 +855,72 @@ const EDITED: Film = (() => {
   };
 })();
 
-type Control = { name: string; get: (f: Film) => number; put: (f: Film, v: number) => Film; min: number; max: number; step: number };
+function initial(over: Partial<State>): State {
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, custom: true, compare: null, crop: 0, picker: null, ...over };
+}
 
-const COLOR_CONTROLS: Control[] = [
-  { name: 'SATURATION', get: (f) => f.saturation, put: (f, v) => ({ ...f, saturation: v }), min: -50, max: 50, step: 5 },
-  { name: 'HUE', get: (f) => f.hue, put: (f, v) => ({ ...f, hue: v }), min: -15, max: 15, step: 1 },
-  { name: 'WARM/COOL', get: (f) => f.warmth, put: (f, v) => ({ ...f, warmth: v }), min: -50, max: 50, step: 5 },
-];
-const CHANNEL_CONTROLS: Control[] = [
-  { name: 'RED CURVE', get: (f) => f.red, put: (f, v) => ({ ...f, red: v }), min: -5, max: 5, step: 1 },
-  { name: 'BLUE CURVE', get: (f) => f.blue, put: (f, v) => ({ ...f, blue: v }), min: -5, max: 5, step: 1 },
-];
-const primaryControls = (p: number): Control[] => [
-  {
-    name: 'HUE',
-    get: (f) => f.primaries[p].hue,
-    put: (f, v) => ({ ...f, primaries: f.primaries.map((q, i) => (i === p ? { ...q, hue: v } : q)) }),
-    min: -30,
-    max: 30,
-    step: 2,
-  },
-  {
-    name: 'SATURATION',
-    get: (f) => f.primaries[p].sat,
-    put: (f, v) => ({ ...f, primaries: f.primaries.map((q, i) => (i === p ? { ...q, sat: v } : q)) }),
-    min: -50,
-    max: 50,
-    step: 5,
-  },
-];
+const RAIL = 60;
+const SCROLLER = 352;
+const CONTENT = SCROLLER - 12;
+const PICTURE_LEFT = RAIL + SCROLLER;
+const SPLIT = Math.round((PICTURE_LEFT + W) / 2);
 
-/** Keys for whichever tool has focus: UP/DOWN move between its controls,
- * LEFT/RIGHT change the focused one. On the curve LEFT/RIGHT pick a knot and
- * UP/DOWN move it (the dial too); OK toggles BEND. */
-function toolKey(s: State, tool: Tool, key: string): State | undefined {
+function compareFilm(s: State): Film | undefined {
+  if (!s.compare) return undefined;
+  return s.compare.b === 'opened' ? s.opened : baseFilm(s.compare.b);
+}
+
+type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
+
+function press(s: State, key: Key): State {
+  const control = CONTROLS[s.focus];
   const f = s.film;
-  const nudge = (control: Control, d: number) => ({
-    ...s,
-    film: control.put(f, Math.max(control.min, Math.min(control.max, control.get(f) + d * control.step))),
-  });
-  const list = (controls: Control[]) => {
-    if (key === 'ArrowLeft' || key === 'ArrowRight') return nudge(controls[s.control] ?? controls[0], key === 'ArrowRight' ? 1 : -1);
-    if (key === 'ArrowUp' && s.control > 0) return { ...s, control: s.control - 1 };
-    if (key === 'ArrowDown' && s.control < controls.length - 1) return { ...s, control: s.control + 1 };
-    return undefined;
-  };
-  switch (tool) {
-    case 'base':
-      if (key === 'ArrowLeft' || key === 'ArrowRight') {
-        const base = Math.max(0, Math.min(BASES.length - 1, f.base + (key === 'ArrowRight' ? 1 : -1)));
-        return { ...s, film: baseFilm(base), opened: baseFilm(base) };
-      }
-      return undefined;
-    case 'curve':
-      if (key === 'ArrowLeft' || key === 'ArrowRight') return { ...s, knot: Math.max(0, Math.min(9, s.knot + (key === 'ArrowRight' ? 1 : -1))) };
-      if (key === 'ArrowUp' || key === 'ArrowDown') {
-        const d = key === 'ArrowUp' ? 1 : -1;
-        if (s.bend) {
-          const tilt = [...f.tilt];
-          tilt[s.knot] = Math.round((tilt[s.knot] + d * 0.1) * 10) / 10;
-          return { ...s, film: { ...f, tilt } };
-        }
-        const knots = [...f.knots];
-        knots[s.knot] = fromDisp(disp(knots[s.knot]) + d / 70);
-        return { ...s, film: { ...f, knots } };
-      }
-      if (key === 'Enter') return { ...s, bend: !s.bend };
-      return undefined;
-    case 'color':
-      return list(COLOR_CONTROLS);
-    case 'channels':
-      return list(CHANNEL_CONTROLS);
-    case 'primaries':
-      if (s.control === 0 && (key === 'ArrowLeft' || key === 'ArrowRight'))
-        return { ...s, primary: Math.max(0, Math.min(2, s.primary + (key === 'ArrowRight' ? 1 : -1))) };
-      if (s.control > 0 && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-        const control = primaryControls(s.primary)[s.control - 1];
-        return nudge(control, key === 'ArrowRight' ? 1 : -1);
-      }
-      if (key === 'ArrowUp' && s.control > 0) return { ...s, control: s.control - 1 };
-      if (key === 'ArrowDown' && s.control < 2) return { ...s, control: s.control + 1 };
-      return undefined;
-    case 'bands':
-      if (key === 'ArrowLeft' || key === 'ArrowRight') return { ...s, band: Math.max(0, Math.min(4, s.band + (key === 'ArrowRight' ? 1 : -1))) };
-      if (key === 'ArrowUp' || key === 'ArrowDown') {
-        const bands = [...f.bands];
-        bands[s.band] = Math.max(-100, Math.min(100, bands[s.band] + (key === 'ArrowUp' ? 5 : -5)));
-        return { ...s, film: { ...f, bands } };
-      }
-      return undefined;
+  if (s.picker) return key === 'back' ? { ...s, picker: null } : s;
+  switch (key) {
+    case 'up':
+      return { ...s, focus: Math.max(0, s.focus - 1), bend: false, scrollTo: undefined };
+    case 'down':
+      return { ...s, focus: Math.min(CONTROLS.length - 1, s.focus + 1), bend: false, scrollTo: undefined };
+    case 'q':
+      return { ...s, compare: s.compare ? null : { b: 'opened', split: SPLIT } };
+    case 'fn':
+      return { ...s, custom: !s.custom };
+    case 'play':
+      return { ...s, crop: s.crop ? 0 : 1 };
+    case 'back':
+      if (s.bend) return { ...s, bend: false };
+      if (s.compare) return { ...s, compare: null };
+      if (s.crop) return { ...s, crop: 0 };
+      return s;
+    case 'ok':
+      return control.kind === 'curve' ? { ...s, bend: !s.bend } : s;
   }
-}
-
-function Controls(props: { s: State; controls: Control[]; width: number; offset?: number; set: (s: State) => void }) {
-  return (
-    <For each={props.controls}>
-      {(control, i) => (
-        <Row name={control.name} focused={props.s.control === i() + (props.offset ?? 0)} width={props.width} onClick={() => props.set({ ...props.s, control: i() + (props.offset ?? 0) })}>
-          <Ruler
-            value={control.get(props.s.film)}
-            min={control.min}
-            max={control.max}
-            step={control.step}
-            width={props.width - 170}
-            focused={props.s.control === i() + (props.offset ?? 0)}
-            changed={control.get(props.s.film) !== control.get(props.s.opened)}
-            set={(v) => props.set({ ...props.s, control: i() + (props.offset ?? 0), film: control.put(props.s.film, v) })}
-          />
-        </Row>
-      )}
-    </For>
-  );
-}
-
-/** A tool's full panel, as the fly-out (A), the open section (B) and the rail's panel (C) show it. */
-function ToolPanel(props: { s: State; tool: Tool; width: number; graphHeight: number; histogram: number[]; set: (s: State) => void }) {
-  const s = () => props.s;
-  return (
-    <div class="flex flex-col gap-[6px]" style={{ width: `${props.width}px` }}>
-      <Show when={props.tool === 'base'}>
-        <Row name="COPY FROM" focused width={props.width}>
-          <BaseStrip film={s().film} width={props.width - 170} focused set={(base) => props.set({ ...s(), film: baseFilm(base), opened: baseFilm(base) })} />
-        </Row>
-      </Show>
-      <Show when={props.tool === 'curve'}>
-        <CurveGraph
-          film={s().film}
-          opened={s().opened}
-          histogram={props.histogram}
-          width={props.width}
-          height={props.graphHeight}
-          focus={s().knot}
-          bend={s().bend}
-          picked={s().picked?.u}
-          set={(film) => props.set({ ...s(), film })}
-          focusKnot={(knot) => props.set({ ...s(), knot })}
-        />
-        <div class={`px-[10px] font-medium tabular-nums ${SMALL}`}>{knotReadout(s().film, s().knot, s().bend)}</div>
-      </Show>
-      <Show when={props.tool === 'color'}>
-        <Controls s={s()} controls={COLOR_CONTROLS} width={props.width} set={props.set} />
-      </Show>
-      <Show when={props.tool === 'channels'}>
-        <Controls s={s()} controls={CHANNEL_CONTROLS} width={props.width} set={props.set} />
-      </Show>
-      <Show when={props.tool === 'primaries'}>
-        <div class="flex h-[57px] items-center justify-center rounded-[13px]" style={TRACK(s().control === 0)}>
-          <Swatches film={s().film} focus={s().primary} size={38} pick={(primary) => props.set({ ...s(), primary, control: 0 })} />
-        </div>
-        <div class={`px-[10px] font-medium ${SMALL}`}>{PRIMARY_NAMES[s().primary]}</div>
-        <Controls s={s()} controls={primaryControls(s().primary)} width={props.width} offset={1} set={props.set} />
-      </Show>
-      <Show when={props.tool === 'bands'}>
-        <BandGraph
-          film={s().film}
-          opened={s().opened}
-          width={props.width}
-          height={Math.min(props.graphHeight, 200)}
-          focus={s().band}
-          set={(film) => props.set({ ...s(), film })}
-          focusBand={(band) => props.set({ ...s(), band })}
-        />
-        <div class={`px-[10px] font-medium tabular-nums ${SMALL}`}>
-          {BAND_NAMES[s().band]} · {signed(s().film.bands[s().band])}%
-        </div>
-      </Show>
-    </div>
-  );
-}
-
-function hintsFor(tool: Tool, bend: boolean): [string, string][] {
-  switch (tool) {
-    case 'curve':
-      return bend
-        ? [['◀▶', 'POINT'], ['▲▼', 'BEND'], ['OK', 'MOVE'], ['BACK', '']]
-        : [['◀▶', 'POINT'], ['▲▼', 'MOVE'], ['OK', 'BEND'], ['BACK', '']];
-    case 'bands':
-      return [['◀▶', 'BAND'], ['▲▼', 'SATURATION'], ['BACK', '']];
-    case 'base':
-      return [['◀▶', 'FILM'], ['BACK', '']];
-    default:
-      return [['▲▼', 'SELECT'], ['◀▶', 'ADJUST'], ['BACK', '']];
+  const d = key === 'left' || key === 'dial-' ? -1 : 1;
+  if (control.kind === 'scale') {
+    const c = control.scale;
+    return { ...s, film: c.put(f, Math.max(c.min, Math.min(c.max, c.get(f) + d * c.step))) };
   }
-}
-
-/* ---- Layout A: rows and fly-outs -------------------------------------------------- */
-
-/* The recipe editor's column, one 57-pixel row per control. Rows whose
-   control needs room (the curve, the primaries, saturation by tone) show a
-   summary in their track and open a fly-out beside the column, as WB SHIFT
-   does. */
-const ROWS_A: { tool: Tool; control?: Control }[] = [
-  { tool: 'base' },
-  { tool: 'curve' },
-  { tool: 'color', control: COLOR_CONTROLS[0] },
-  { tool: 'color', control: COLOR_CONTROLS[1] },
-  { tool: 'color', control: COLOR_CONTROLS[2] },
-  { tool: 'primaries' },
-  { tool: 'bands' },
-  { tool: 'channels', control: CHANNEL_CONTROLS[0] },
-  { tool: 'channels', control: CHANNEL_CONTROLS[1] },
-];
-const COLUMN_A = 360;
-
-function LayoutA(props: { s: State; set: (s: State) => void; histogram: number[]; title?: { name: string; from?: string }; opaque?: boolean }) {
-  const s = () => props.s;
-  const head = () => (props.title ? 56 : 0);
-  const scroll = () => Math.max(0, Math.min(ROWS_A.length * 57 + head() - 480 + 8, (s().control - 3) * 57));
-  return (
-    <>
-      <div
-        class="absolute inset-y-0 left-0 overflow-hidden"
-        style={{ ...COLUMN, ...(props.opaque ? { background: 'rgb(26 26 28 / 0.96)' } : {}), width: `${COLUMN_A}px` }}
-      >
-        <div class="transition-transform duration-150" style={{ transform: `translateY(${4 - scroll()}px)` }}>
-          <Show when={props.title}>
-            {(title) => (
-              <div class="flex h-[56px] items-baseline gap-[10px] px-[12px] pt-[14px]" style={{ 'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.16)' }}>
-                <span class={`font-semibold ${TEXT}`}>{title().name}</span>
-                <Show when={title().from}>
-                  <span class={`text-white/60 ${SMALL}`}>{title().from}</span>
-                </Show>
-              </div>
-            )}
-          </Show>
-          <For each={ROWS_A}>
-            {(row, i) => {
-              const focused = () => (s().open ? !row.control && row.tool === s().open : s().control === i());
-              const name = () => row.control?.name ?? TOOL_NAMES[row.tool];
-              return (
-                <Row name={name()} focused={focused()} width={COLUMN_A} onClick={() => props.set({ ...s(), control: i(), open: row.control || row.tool === 'base' ? null : row.tool })}>
-                  <Show when={row.control}>
-                    {(control) => (
-                      <Ruler
-                        value={control().get(s().film)}
-                        min={control().min}
-                        max={control().max}
-                        step={control().step}
-                        width={COLUMN_A - 170}
-                        focused={focused()}
-                        changed={control().get(s().film) !== control().get(s().opened)}
-                        set={(v) => props.set({ ...s(), control: i(), film: control().put(s().film, v) })}
-                      />
-                    )}
-                  </Show>
-                  <Show when={row.tool === 'base'}>
-                    <BaseStrip film={s().film} width={COLUMN_A - 170} focused={focused()} set={(base) => props.set({ ...s(), film: baseFilm(base), opened: baseFilm(base) })} />
-                  </Show>
-                  <Show when={row.tool === 'curve'}>
-                    <div class="flex h-full items-center justify-between px-[10px]">
-                      <CurveSpark film={s().film} opened={s().opened} width={120} height={36} />
-                      <span class="text-[24px]">›</span>
-                    </div>
-                  </Show>
-                  <Show when={row.tool === 'primaries'}>
-                    <div class="flex h-full items-center justify-between px-[10px]">
-                      <Swatches film={s().film} focus={-1} size={24} pick={() => undefined} />
-                      <span class="text-[24px]">›</span>
-                    </div>
-                  </Show>
-                  <Show when={row.tool === 'bands'}>
-                    <div class="flex h-full items-center justify-between px-[10px]">
-                      <svg width="120" height="36">
-                        <For each={s().film.bands}>
-                          {(b, k) => <rect x={k() * 24 + 2} y={b >= 0 ? 18 - (b / 100) * 16 : 18} width="20" height={Math.max(2, (Math.abs(b) / 100) * 16)} rx="2" fill={b === s().opened.bands[k()] ? '#fff' : ACCENT} />}
-                        </For>
-                      </svg>
-                      <span class="text-[24px]">›</span>
-                    </div>
-                  </Show>
-                </Row>
-              );
-            }}
-          </For>
-        </div>
-      </div>
-      <Show when={s().open}>
-        {(tool) => (
-          <div class="absolute top-[8px] left-[368px] flex flex-col gap-[8px] rounded-[16px] p-[10px]" style={GLASS}>
-            <div class={`px-[6px] pt-[2px] font-semibold ${TEXT}`}>{TOOL_NAMES[tool()]}</div>
-            <ToolPanel s={s()} tool={tool()} width={324} graphHeight={300} histogram={props.histogram} set={props.set} />
-          </div>
-        )}
-      </Show>
-      <Legend hints={s().open ? hintsFor(s().open ?? 'curve', s().bend) : [['◀▶', 'ADJUST'], ['OK', 'OPEN']]} />
-    </>
-  );
-}
-
-function keyA(s: State, key: string): State | undefined {
-  if (s.open) {
-    if (key === 'Escape' || key === 'Backspace') return { ...s, open: null, bend: false, control: ROWS_A.findIndex((r) => r.tool === s.open) };
-    return toolKey(s, s.open, key);
+  if (control.kind === 'curve') {
+    if (key === 'left' || key === 'right') return { ...s, knot: Math.max(0, Math.min(9, s.knot + d)) };
+    if (s.bend) {
+      const tilt = [...f.tilt];
+      tilt[s.knot] = Math.round((tilt[s.knot] + d * 0.1) * 10) / 10;
+      return { ...s, film: { ...f, tilt } };
+    }
+    const knots = [...f.knots];
+    knots[s.knot] = fromDisp(disp(knots[s.knot]) + d / 70);
+    return { ...s, film: { ...f, knots } };
   }
-  const row = ROWS_A[s.control];
-  if (key === 'ArrowUp' && s.control > 0) return { ...s, control: s.control - 1 };
-  if (key === 'ArrowDown' && s.control < ROWS_A.length - 1) return { ...s, control: s.control + 1 };
-  if (key === 'Enter' && !row.control && row.tool !== 'base') return { ...s, open: row.tool, control: 0 };
-  if ((key === 'ArrowLeft' || key === 'ArrowRight') && row.control) {
-    const c = row.control;
-    const v = Math.max(c.min, Math.min(c.max, c.get(s.film) + (key === 'ArrowRight' ? c.step : -c.step)));
-    return { ...s, film: c.put(s.film, v) };
-  }
-  if (row.tool === 'base') return toolKey(s, 'base', key);
-  return undefined;
+  if (key === 'left' || key === 'right') return { ...s, band: Math.max(0, Math.min(4, s.band + d)) };
+  const bands = [...f.bands];
+  bands[s.band] = Math.max(-100, Math.min(100, bands[s.band] + d * 5));
+  return { ...s, film: { ...f, bands } };
 }
-
-/* ---- Layout B: sections of any height --------------------------------------------- */
-
-/* Darkroom's and Capture One's sidebar: a section per tool, its header a
-   row with the tool's name; the open section shows its whole panel inline,
-   at whatever height it needs, and the column scrolls. OK opens or closes
-   the focused section; inside it, the keys work its controls. */
-const COLUMN_B = 360;
-
-function sectionHeight(s: State, tool: Tool): number {
-  if (s.open !== tool) return 50;
-  switch (tool) {
-    case 'curve':
-      return 50 + 236 + 36;
-    case 'bands':
-      return 50 + 200 + 40;
-    case 'primaries':
-      return 50 + 57 + 30 + 2 * 63;
-    case 'color':
-      return 50 + 3 * 63;
-    case 'channels':
-      return 50 + 2 * 63;
-    case 'base':
-      return 50 + 63;
-  }
-}
-
-function LayoutB(props: { s: State; set: (s: State) => void; histogram: number[] }) {
-  const s = () => props.s;
-  const top = (tool: Tool) => TOOLS.slice(0, TOOLS.indexOf(tool)).reduce((sum, t) => sum + sectionHeight(s(), t), 0);
-  const total = () => TOOLS.reduce((sum, t) => sum + sectionHeight(s(), t), 0);
-  const scroll = () => Math.max(0, Math.min(total() - 474, top(s().tool) - (s().open ? 0 : 120)));
-  return (
-    <>
-      <div class="absolute inset-y-0 left-0 overflow-hidden" style={{ ...COLUMN, width: `${COLUMN_B}px` }}>
-        <div class="px-[8px] pt-[6px] transition-transform duration-150" style={{ transform: `translateY(${-scroll()}px)` }}>
-          <For each={TOOLS}>
-            {(tool) => {
-              const open = () => s().open === tool;
-              const focused = () => s().tool === tool;
-              const edited = () => JSON.stringify(sectionValue(s().film, tool)) !== JSON.stringify(sectionValue(s().opened, tool));
-              return (
-                <div style={{ height: `${sectionHeight(s(), tool)}px`, 'box-shadow': 'inset 0 -1px 0 rgb(255 255 255 / 0.12)' }}>
-                  <div
-                    class="flex h-[50px] items-center gap-[10px] rounded-[12px] px-[10px]"
-                    style={focused() && !open() ? TRACK(true) : {}}
-                    onClick={() => props.set({ ...s(), tool, open: open() ? null : tool, control: tool === 'primaries' ? 0 : 0 })}
-                  >
-                    <span class="w-[20px] text-[21px] text-white/70">{open() ? '▾' : '▸'}</span>
-                    <span class={`grow font-medium tracking-[0.04em] ${TEXT}`}>{TOOL_NAMES[tool]}</span>
-                    <Show when={tool === 'base'}>
-                      <span class={`text-white/70 ${SMALL}`}>{BASES[s().film.base].name}</span>
-                    </Show>
-                    <Show when={edited()}>
-                      <span class="size-[10px] rounded-full" style={{ background: ACCENT }} />
-                    </Show>
-                  </div>
-                  <Show when={open()}>
-                    <ToolPanel s={s()} tool={tool} width={COLUMN_B - 16} graphHeight={236} histogram={props.histogram} set={props.set} />
-                  </Show>
-                </div>
-              );
-            }}
-          </For>
-        </div>
-      </div>
-      <Legend hints={s().open ? hintsFor(s().open ?? 'curve', s().bend) : [['▲▼', 'SELECT'], ['OK', 'OPEN']]} />
-    </>
-  );
-}
-
-function sectionValue(f: Film, tool: Tool): unknown {
-  switch (tool) {
-    case 'base':
-      return f.base;
-    case 'curve':
-      return [f.knots, f.tilt];
-    case 'color':
-      return [f.saturation, f.hue, f.warmth];
-    case 'primaries':
-      return f.primaries;
-    case 'bands':
-      return [f.bands, f.edges];
-    case 'channels':
-      return [f.red, f.blue];
-  }
-}
-
-function keyB(s: State, key: string): State | undefined {
-  if (s.open) {
-    if (key === 'Escape' || key === 'Backspace') return { ...s, open: null, bend: false };
-    return toolKey(s, s.open, key);
-  }
-  const i = TOOLS.indexOf(s.tool);
-  if (key === 'ArrowUp' && i > 0) return { ...s, tool: TOOLS[i - 1] };
-  if (key === 'ArrowDown' && i < TOOLS.length - 1) return { ...s, tool: TOOLS[i + 1] };
-  if (key === 'Enter') return { ...s, open: s.tool, control: 0 };
-  return undefined;
-}
-
-/* ---- Layout C: tool rail ---------------------------------------------------------- */
-
-/* Darkroom and Lightroom on a phone: a rail of tools down the screen's
-   edge; the chosen tool fills the panel beside it at full height. UP/DOWN
-   on the rail choose a tool, RIGHT enters its panel, BACK returns. */
-const RAIL = 68;
-const PANEL_C = 360;
 
 function ToolIcon(props: { tool: Tool; color: string }) {
   const stroke = () => ({ fill: 'none', stroke: props.color, 'stroke-width': 2.5, 'stroke-linecap': 'round' as const, 'stroke-linejoin': 'round' as const });
   return (
-    <svg width="34" height="34" viewBox="0 0 34 34">
-      <Show when={props.tool === 'base'}>
-        <rect x="6" y="5" width="22" height="24" rx="2" {...stroke()} />
-        <path d="M6 11h22M6 23h22" {...stroke()} />
-      </Show>
+    <svg width="32" height="32" viewBox="0 0 34 34">
       <Show when={props.tool === 'curve'}>
         <rect x="5" y="5" width="24" height="24" rx="3" {...stroke()} stroke-opacity="0.5" />
         <path d="M7 27C14 26 13 9 27 7" {...stroke()} />
@@ -1193,176 +929,452 @@ function ToolIcon(props: { tool: Tool; color: string }) {
         <circle cx="17" cy="17" r="11" {...stroke()} />
         <path d="M17 6a11 11 0 0 1 0 22z" fill={props.color} />
       </Show>
-      <Show when={props.tool === 'primaries'}>
+      <Show when={props.tool === 'mix'}>
         <circle cx="12" cy="13" r="6.5" {...stroke()} />
         <circle cx="22" cy="13" r="6.5" {...stroke()} />
         <circle cx="17" cy="22" r="6.5" {...stroke()} />
       </Show>
-      <Show when={props.tool === 'bands'}>
+      <Show when={props.tool === 'tone'}>
         <path d="M6 24v-4M12 24v-9M18 24v-13M24 24v-7M29 24v-3" {...stroke()} />
         <path d="M5 28h24" {...stroke()} stroke-opacity="0.5" />
       </Show>
       <Show when={props.tool === 'channels'}>
-        <path d="M6 27C13 25 15 12 28 8" {...stroke()} stroke={PRIMARY_COLORS[0]} />
-        <path d="M6 27C15 26 18 13 28 10" {...stroke()} stroke={PRIMARY_COLORS[2]} />
+        <path d="M6 27C13 25 15 12 28 8" {...stroke()} />
+        <path d="M6 27C15 26 18 13 28 10" {...stroke()} stroke-opacity="0.55" />
       </Show>
     </svg>
   );
 }
 
-function LayoutC(props: { s: State; set: (s: State) => void; histogram: number[] }) {
+function Swatch(props: { film: Film; mix: number }) {
+  const after = () => {
+    const m = primariesMatrix(props.film.primaries);
+    const l = MIX[props.mix].linear;
+    const rgb = [0, 1, 2].map((r) => encode(Math.max(0, Math.min(1, m[r * 3] * l[0] + m[r * 3 + 1] * l[1] + m[r * 3 + 2] * l[2]))) * 255);
+    return `rgb(${rgb.map(Math.round).join(' ')})`;
+  };
+  return (
+    <span
+      class="block size-[36px] shrink-0 rounded-full"
+      style={{ background: `linear-gradient(90deg, ${MIX[props.mix].color} 50%, ${after()} 50%)`, 'box-shadow': 'inset 0 0 0 2px rgb(255 255 255 / 0.35)' }}
+    />
+  );
+}
+
+function Hint(props: { glyph: string; label?: string; tap?: () => void; accent?: boolean }) {
+  return (
+    <button
+      type="button"
+      class="flex h-[36px] items-center gap-[8px] rounded-[12px] px-[7px] whitespace-nowrap"
+      style={{ ...GLASS, ...(props.accent ? { background: ACCENT } : {}) }}
+      onClick={(e) => {
+        e.stopPropagation();
+        props.tap?.();
+      }}
+    >
+      <span class="flex h-[24px] min-w-[24px] items-center justify-center rounded-[6px] bg-white px-[4px] text-[18px] leading-none font-semibold text-black">{props.glyph}</span>
+      <Show when={props.label}>
+        <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{props.label}</span>
+      </Show>
+    </button>
+  );
+}
+
+/** The film editor's own layers over the picture: the rail, the scroller,
+ * the compare divider, RAW strip, pickers and key hints. */
+function Editor(props: { s: State; set: (s: State) => void; histogram: number[]; title: { name: string; from?: string } }) {
   const s = () => props.s;
-  const inPanel = () => s().open !== null;
+  let scroller: HTMLDivElement | undefined;
+  const sections: Partial<Record<Tool, HTMLElement>> = {};
+  const rows: HTMLElement[] = [];
+  const [inView, setInView] = createSignal<Tool>(CONTROLS[props.s.focus].tool);
+  const update = (next: State) => props.set(next);
+  const scrollToTool = (tool: Tool, smooth: boolean) => {
+    const section = sections[tool];
+    if (scroller && section) scroller.scrollTo({ top: section.offsetTop - 6, behavior: smooth ? 'smooth' : 'auto' });
+  };
+  onSettled(() => {
+    const tool = props.s.scrollTo;
+    if (tool) scrollToTool(tool, false);
+  });
+  createEffect(
+    () => s().focus,
+    (focus) => {
+      const row = rows[focus];
+      if (s().scrollTo || !row || !scroller) return;
+      /* Only the scroller moves: scrollIntoView would scroll the page too. */
+      const top = row.offsetTop;
+      const bottom = top + row.offsetHeight;
+      if (top < scroller.scrollTop + 8) scroller.scrollTo({ top: top - 60, behavior: 'smooth' });
+      else if (bottom > scroller.scrollTop + scroller.clientHeight - 8)
+        scroller.scrollTo({ top: bottom - scroller.clientHeight + 16, behavior: 'smooth' });
+    },
+  );
+  const spy = () => {
+    if (!scroller) return;
+    let current: Tool = 'curve';
+    for (const tool of TOOLS) {
+      const section = sections[tool];
+      if (section && section.offsetTop - 60 <= scroller.scrollTop) current = tool;
+    }
+    if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) current = TOOLS[TOOLS.length - 1];
+    setInView(current);
+  };
+  const focusControl = (i: number) => s().focus !== i && update({ ...s(), focus: i, bend: false, scrollTo: undefined });
+  const edited = (tool: Tool) => !same(GROUPS[tool](s().film), GROUPS[tool](s().opened));
+  const scaleRow = (i: number, c: Scale, width: number, nameWidth: number) => (
+    <div ref={(element) => (rows[i] = element)} onPointerDown={() => focusControl(i)}>
+      <Row name={c.name} focused={s().focus === i} width={width} nameWidth={nameWidth}>
+        <Ruler
+          value={c.get(s().film)}
+          min={c.min}
+          max={c.max}
+          step={c.step}
+          width={width - nameWidth - 8}
+          focused={s().focus === i}
+          changed={c.get(s().film) !== c.get(s().opened)}
+          track={c.track}
+          set={(v) => update({ ...s(), focus: i, film: c.put(s().film, v) })}
+        />
+      </Row>
+    </div>
+  );
+  const index = (tool: Tool, nth = 0) => CONTROLS.findIndex((c) => c.tool === tool) + nth;
   return (
     <>
-      <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[6px] pt-[10px]" style={{ ...COLUMN, width: `${RAIL}px` }}>
+      <Show when={s().compare}>
+        {(c) => (
+          <>
+            <div
+              class="absolute inset-y-0 touch-none"
+              style={{ left: `${PICTURE_LEFT}px`, right: '0' }}
+              onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+              onPointerMove={(e) => {
+                if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                const box = e.currentTarget.getBoundingClientRect();
+                const x = PICTURE_LEFT + ((e.clientX - box.left) / box.width) * (W - PICTURE_LEFT);
+                update({ ...s(), compare: { ...c(), split: Math.round(Math.max(PICTURE_LEFT + 30, Math.min(W - 30, x))) } });
+              }}
+            />
+            <div class="pointer-events-none absolute inset-y-0 w-[3px] -translate-x-1/2 bg-white" style={{ left: `${c().split}px`, 'box-shadow': '0 0 6px rgb(0 0 0 / 0.6)' }} />
+            <div class="pointer-events-none absolute top-[220px] flex size-[40px] -translate-x-1/2 items-center justify-center rounded-full bg-white text-[21px] font-semibold text-black" style={{ left: `${c().split}px` }}>
+              ⇆
+            </div>
+            <div class="absolute top-[10px]" style={{ left: `${PICTURE_LEFT + 8}px` }}>
+              <Hint glyph="A" label={props.title.name} />
+            </div>
+            <div class="absolute top-[10px] right-[10px]">
+              <Hint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update({ ...s(), picker: { kind: 'compare' } })} />
+            </div>
+          </>
+        )}
+      </Show>
+      <Show when={s().crop > 0}>
+        <div class="absolute top-[10px] right-[10px]" style={{ display: s().compare ? 'none' : undefined }}>
+          <Hint glyph="▶" label={RAWS[s().crop - 1].name} />
+        </div>
+      </Show>
+
+      <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'rgb(18 18 20 / 0.82)' }}>
         <For each={TOOLS}>
           {(tool) => {
-            const chosen = () => s().tool === tool;
-            const edited = () => JSON.stringify(sectionValue(s().film, tool)) !== JSON.stringify(sectionValue(s().opened, tool));
+            const chosen = () => inView() === tool;
             return (
               <button
                 type="button"
-                class="relative flex size-[56px] items-center justify-center rounded-[14px]"
-                style={chosen() ? { background: inPanel() ? 'rgb(255 255 255 / 0.17)' : '#fff' } : {}}
-                onClick={() => props.set({ ...s(), tool, open: null, control: 0, bend: false })}
+                class="relative flex size-[52px] items-center justify-center rounded-[14px]"
+                style={chosen() ? { background: '#fff' } : {}}
+                onClick={() => {
+                  scrollToTool(tool, true);
+                  update({ ...s(), focus: index(tool), bend: false, scrollTo: undefined });
+                }}
               >
-                <ToolIcon tool={tool} color={chosen() && !inPanel() ? '#000' : '#fff'} />
-                <Show when={edited()}>
-                  <span class="absolute top-[6px] right-[6px] size-[9px] rounded-full" style={{ background: ACCENT }} />
+                <ToolIcon tool={tool} color={chosen() ? '#000' : '#fff'} />
+                <Show when={edited(tool)}>
+                  <span class="absolute top-[5px] right-[5px] size-[9px] rounded-full" style={{ background: ACCENT, 'box-shadow': '0 0 0 2px #1c1c1e' }} />
                 </Show>
               </button>
             );
           }}
         </For>
       </div>
-      <div class="absolute inset-y-0 flex flex-col gap-[8px] px-[8px] pt-[10px]" style={{ ...COLUMN, left: `${RAIL}px`, width: `${PANEL_C}px` }} onClick={() => !inPanel() && props.set({ ...s(), open: s().tool })}>
-        <div class={`px-[6px] pt-[4px] pb-[4px] font-semibold ${TEXT}`}>{TOOL_NAMES[s().tool]}</div>
-        <div style={{ opacity: inPanel() ? 1 : 0.85 }}>
-          <ToolPanel s={s()} tool={s().tool} width={PANEL_C - 16} graphHeight={300} histogram={props.histogram} set={(next) => props.set({ ...next, open: next.tool })} />
+
+      <div
+        ref={(element) => (scroller = element)}
+        class="absolute inset-y-0 overflow-y-auto overscroll-contain px-[6px]"
+        style={{ ...COLUMN, left: `${RAIL}px`, width: `${SCROLLER}px`, 'scrollbar-width': 'none' }}
+        onScroll={spy}
+      >
+        <div class="flex h-[54px] items-baseline gap-[10px] px-[6px] pt-[16px]">
+          <span class={`font-semibold ${TEXT}`}>{props.title.name}</span>
+          <Show when={props.title.from}>
+            <span class={`text-white/60 ${SMALL}`}>{props.title.from}</span>
+          </Show>
         </div>
+        <For each={TOOLS}>
+          {(tool) => {
+            const from = () => groupSource(s().film, tool);
+            return (
+              <section ref={(element) => (sections[tool] = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
+                <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
+                  <span class={`grow font-semibold tracking-[0.03em] ${TEXT}`} style={{ 'font-size': tool === 'tone' ? '21px' : undefined }}>
+                    {TOOL_NAMES[tool]}
+                  </span>
+                  <button
+                    type="button"
+                    class={`flex h-[36px] items-center gap-[6px] rounded-[10px] px-[10px] whitespace-nowrap ${SMALL}`}
+                    style={from() === undefined ? { background: ACCENT, color: '#fff' } : { background: 'rgb(255 255 255 / 0.14)', color: '#fff' }}
+                    onClick={() => update({ ...s(), picker: { kind: 'copy', tool } })}
+                  >
+                    {from() === undefined ? 'EDITED' : BASES[from() as number].name}
+                    <span class="text-[15px]">▾</span>
+                  </button>
+                </div>
+                <Show when={tool === 'curve'}>
+                  <div ref={(element) => (rows[0] = element)} class="rounded-[14px] p-[2px]" style={s().focus === 0 ? TRACK(true) : {}} onPointerDown={() => focusControl(0)}>
+                    <CurveGraph
+                      film={s().film}
+                      opened={s().opened}
+                      histogram={props.histogram}
+                      width={CONTENT - 4}
+                      height={220}
+                      focus={s().knot}
+                      bend={s().bend}
+                      set={(film) => update({ ...s(), film })}
+                      focusKnot={(knot) => update({ ...s(), knot, focus: 0 })}
+                    />
+                    <div class={`px-[10px] pt-[2px] pb-[8px] font-medium tabular-nums ${SMALL}`}>{knotReadout(s().film, s().knot, s().bend)}</div>
+                  </div>
+                </Show>
+                <Show when={tool === 'color'}>
+                  <For each={COLOR_SCALES}>{(c, k) => scaleRow(index('color', k()), c, CONTENT, 146)}</For>
+                </Show>
+                <Show when={tool === 'mix'}>
+                  <For each={MIX}>
+                    {(mix, p) => (
+                      <div class="flex items-center gap-[8px]">
+                        <div class="flex w-[48px] shrink-0 flex-col items-center gap-[4px]">
+                          <Swatch film={s().film} mix={p()} />
+                          <span class="text-[14px] font-medium tracking-[0.04em] text-white/70">{mix.name}</span>
+                        </div>
+                        <div>
+                          <For each={mixScales(p())}>{(c, k) => scaleRow(index('mix', p() * 2 + k()), c, CONTENT - 56, 134)}</For>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </Show>
+                <Show when={tool === 'tone'}>
+                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={s().focus === index('tone') ? TRACK(true) : {}} onPointerDown={() => focusControl(index('tone'))}>
+                    <ToneGraph
+                      film={s().film}
+                      opened={s().opened}
+                      width={CONTENT - 12}
+                      height={150}
+                      band={s().band}
+                      focused={s().focus === index('tone')}
+                      set={(film) => update({ ...s(), film })}
+                      focusBand={(band) => update({ ...s(), band, focus: index('tone') })}
+                    />
+                    <div class="mt-[4px] h-[8px] rounded-full" style={{ background: gradient('#000', '#fff') }} />
+                    <div class={`px-[4px] pt-[8px] pb-[2px] font-medium tabular-nums ${SMALL}`}>
+                      {BAND_NAMES[s().band]} · {signed(s().film.bands[s().band])}%
+                    </div>
+                  </div>
+                </Show>
+                <Show when={tool === 'channels'}>
+                  <For each={CHANNEL_SCALES}>{(c, k) => scaleRow(index('channels', k()), c, CONTENT, 146)}</For>
+                </Show>
+              </section>
+            );
+          }}
+        </For>
+        <div class="h-[300px]" />
       </div>
-      <Legend hints={inPanel() ? hintsFor(s().tool, s().bend).slice(0, 2) : [['▲▼', 'TOOL'], ['▶', 'EDIT']]} />
+
+      <Show when={s().crop > 0 && !s().picker}>
+        <div class="absolute bottom-[56px] flex items-center gap-[6px]" style={{ left: `${PICTURE_LEFT + 8}px` }}>
+          <For each={RAWS}>
+            {(raw, i) => (
+              <button
+                type="button"
+                class="h-[44px] w-[58px] rounded-[8px] bg-cover"
+                style={{
+                  'background-image': `url(${PHOTO})`,
+                  'background-size': `${raw.zoom * 100}% auto`,
+                  'background-position': `${raw.x * 100}% ${raw.y * 100}%`,
+                  'box-shadow': s().crop === i() + 1 ? '0 0 0 3px #fff' : '0 0 0 1px rgb(255 255 255 / 0.3)',
+                }}
+                onClick={() => update({ ...s(), crop: i() + 1 })}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <Show when={!s().picker}>
+        <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]">
+          <Show when={s().crop > 0}>
+            <Hint glyph="OK" label="CREATE" />
+          </Show>
+          <Hint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
+          <div class="flex gap-[6px]">
+            <Hint glyph="Q" label="A|B" accent={!!s().compare} tap={() => update(press(s(), 'q'))} />
+            <Hint glyph="▶" label={s().crop ? 'LIVE' : 'RAW'} tap={() => update(press(s(), 'play'))} />
+          </div>
+        </div>
+      </Show>
+
+      <Show when={s().picker}>
+        {(picker) => {
+          const current = () => {
+            const p = picker();
+            return p.kind === 'copy' ? groupSource(s().film, p.tool) : s().compare?.b;
+          };
+          const choose = (k: number | 'opened') => {
+            const p = picker();
+            if (p.kind === 'copy' && k !== 'opened') update({ ...s(), picker: null, film: copyGroup(s().film, p.tool, k) });
+            else update({ ...s(), picker: null, compare: { b: k, split: s().compare?.split ?? SPLIT } });
+          };
+          const options = () => (picker().kind === 'compare' ? (['opened', ...BASES.map((_, i) => i)] as (number | 'opened')[]) : BASES.map((_, i) => i));
+          return (
+            <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'rgb(30 30 32 / 0.9)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
+              <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>
+                {(() => {
+                  const p = picker();
+                  return p.kind === 'copy' ? `COPY ${TOOL_NAMES[p.tool]} FROM` : 'COMPARE WITH';
+                })()}
+              </div>
+              <div class="grow overflow-y-auto" style={{ 'scrollbar-width': 'none' }}>
+                <For each={options()}>
+                  {(k) => (
+                    <button
+                      type="button"
+                      class={`flex h-[44px] w-full items-center justify-between rounded-[10px] px-[10px] text-left ${SMALL}`}
+                      style={current() === k ? { background: '#fff', color: '#000' } : { color: '#fff' }}
+                      onClick={() => choose(k)}
+                    >
+                      {k === 'opened' ? 'AS OPENED' : BASES[k].name}
+                      <Show when={current() === k}>
+                        <span>✓</span>
+                      </Show>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          );
+        }}
+      </Show>
     </>
   );
 }
 
-function keyC(s: State, key: string): State | undefined {
-  if (s.open) {
-    if (key === 'Escape' || key === 'Backspace') return { ...s, open: null, bend: false };
-    if (key === 'ArrowLeft' && (s.tool === 'color' || s.tool === 'channels' || s.tool === 'primaries') && s.control === 0 && s.tool !== 'primaries')
-      return { ...s, open: null };
-    return toolKey(s, s.open, key);
-  }
-  const i = TOOLS.indexOf(s.tool);
-  if (key === 'ArrowUp' && i > 0) return { ...s, tool: TOOLS[i - 1] };
-  if (key === 'ArrowDown' && i < TOOLS.length - 1) return { ...s, tool: TOOLS[i + 1] };
-  if (key === 'ArrowRight' || key === 'Enter') return { ...s, open: s.tool, control: 0 };
-  return undefined;
+function useHistogram() {
+  const [histogram, setHistogram] = createSignal<number[]>([]);
+  onSettled(() => {
+    void source().then((src) => setHistogram(src.histogram));
+  });
+  return histogram;
 }
 
-/* ---- Layout D: on the picture ----------------------------------------------------- */
+const NEW_TITLE = { name: 'NEW FILM', from: 'from Classic Chrome' };
 
-/* Apple Photos' and Lightroom's targeted adjustment, on the live picture:
-   the curve is drawn over the whole screen. Touch a tone in the picture
-   and drag up or down: the knot for that brightness moves, and the curve
-   marks where the touched tone falls. Knots can also be dragged directly,
-   and the keys work as in the curve panel. */
-function LayoutD(props: { s: State; set: (s: State) => void; histogram: number[] }) {
-  const s = () => props.s;
-  let drag: { y: number; start: number; knot: number } | undefined;
-  const nearest = (u: number) => {
-    let k = 0;
-    for (let i = 1; i < 10; i++) if (Math.abs(US[i] - u) < Math.abs(US[k] - u)) k = i;
-    return k;
-  };
+function Screen(props: { state: () => State; set: (s: State) => void }) {
+  const histogram = useHistogram();
+  return (
+    <div class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
+      <Picture
+        film={props.state().film}
+        custom={props.state().custom}
+        crop={props.state().crop}
+        compare={(() => {
+          const s = props.state();
+          const b = compareFilm(s);
+          return b && s.compare ? { film: b, split: s.compare.split } : undefined;
+        })()}
+      />
+      <Editor s={props.state()} set={props.set} histogram={histogram()} title={NEW_TITLE} />
+    </div>
+  );
+}
+
+/* ---- Camera keys, on screen -------------------------------------------------------- */
+
+function Pad(props: { send: (key: Key) => void }) {
+  const button = (key: Key, label: string, extra = '') => (
+    <button
+      type="button"
+      class={`flex h-[52px] min-w-[52px] items-center justify-center rounded-[14px] bg-[#2c2c2e] px-[10px] text-[17px] font-semibold text-white active:bg-[#48484a] ${extra}`}
+      onClick={() => props.send(key)}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div class="mt-[12px] flex max-w-[720px] flex-wrap items-center justify-between gap-[14px]">
+      <div class="grid grid-cols-3 gap-[6px]">
+        <span />
+        {button('up', '▲')}
+        <span />
+        {button('left', '◀')}
+        {button('ok', 'OK')}
+        {button('right', '▶')}
+        <span />
+        {button('down', '▼')}
+        <span />
+      </div>
+      <div class="grid grid-cols-2 gap-[6px]">
+        {button('dial-', 'DIAL −')}
+        {button('dial+', 'DIAL +')}
+        {button('q', 'Q')}
+        {button('fn', 'Fn')}
+        {button('play', 'PLAY ▶')}
+        {button('back', 'BACK')}
+      </div>
+    </div>
+  );
+}
+
+function Live(props: { start: State }) {
+  const [state, setState] = createSignal<State>(props.start);
   return (
     <>
-      <div
-        class="absolute inset-0 touch-none"
-        onPointerDown={(e) => {
-          const element = e.currentTarget;
-          const box = element.getBoundingClientRect();
-          const x = ((e.clientX - box.left) / box.width) * W;
-          const y = ((e.clientY - box.top) / box.height) * H;
-          void source().then((src) => {
-            const p = (Math.round(y) * W + Math.round(x)) * 4;
-            const l = 0.2126 * DECODE[src.pixels[p]] + 0.7152 * DECODE[src.pixels[p + 1]] + 0.0722 * DECODE[src.pixels[p + 2]];
-            const u = axis(l * 4096);
-            const knot = nearest(u);
-            drag = { y, start: s().film.knots[knot], knot };
-            props.set({ ...s(), knot, picked: { x, y, u } });
-          });
-          element.setPointerCapture(e.pointerId);
-        }}
-        onPointerMove={(e) => {
-          if (!drag) return;
-          const box = e.currentTarget.getBoundingClientRect();
-          const y = ((e.clientY - box.top) / box.height) * H;
-          const knots = [...s().film.knots];
-          knots[drag.knot] = fromDisp(disp(drag.start) + (drag.y - y) / 400);
-          props.set({ ...s(), film: { ...s().film, knots } });
-        }}
-        onPointerUp={() => (drag = undefined)}
-      />
-      <div class="pointer-events-none absolute top-[14px] left-[14px] opacity-90" style={{ filter: 'drop-shadow(0 1px 2px rgb(0 0 0 / 0.8))' }}>
-        <CurveGraph
-          film={s().film}
-          opened={s().opened}
-          histogram={props.histogram}
-          width={692}
-          height={400}
-          focus={s().knot}
-          bend={s().bend}
-          picked={s().picked?.u}
-          set={() => undefined}
-          focusKnot={() => undefined}
-          bare
-        />
-      </div>
-      <Show when={s().picked}>
-        {(p) => (
-          <div class="pointer-events-none absolute size-[44px] -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${p().x}px`, top: `${p().y}px`, 'box-shadow': '0 0 0 3px #ffd60a, 0 0 0 5px rgb(0 0 0 / 0.5)' }} />
-        )}
-      </Show>
-      <div class={`absolute top-[12px] right-[12px] rounded-[12px] px-[12px] py-[8px] font-medium tabular-nums ${SMALL}`} style={GLASS}>
-        {knotReadout(s().film, s().knot, s().bend)}
-      </div>
-      <Legend left hints={[['◀▶', 'POINT'], ['▲▼', 'MOVE'], ['OK', 'BEND'], ['Fn', 'COLOR']]} />
+      <Fit>
+        <Screen state={state} set={setState} />
+      </Fit>
+      <Pad send={(key) => setState(press(state(), key))} />
     </>
   );
 }
 
-/* ---- From the recipe editor ------------------------------------------------------- */
+/* ---- From the recipe editor --------------------------------------------------------- */
 
-/* The recipe editor's FILM SIMULATION row opens the film editor with the
-   key WB SHIFT uses. A built-in film opens as a new film copied from it; a
-   card film opens as itself. The film editor is a column too, so it
-   presents as a sheet from the left edge: the recipe column recedes and
-   dims, and peeks out from behind its right edge. BACK at the film
-   editor's top level returns. */
+/* The recipe editor's FILM SIMULATION row opens the film editor. A built-in
+   film opens as a new film copied from it; a card film opens as itself. Two
+   presentations: a sheet rising from the bottom while the recipe column
+   recedes, or the film editor sliding in over it from the left edge. */
 
 const STOCK = '/review/stock-icons/x70-110';
 const stockIcon = (id: number) => `${STOCK}/ff${id.toString(16).padStart(6, '0')}.svg`;
 const RECIPE_WIDTH = 280;
-const PEEK = 48;
 
-type RecipeRow = { name: string; icon: number; value?: string; level?: number };
+type RecipeRow = { icon: number; value?: string; level?: number };
 const RECIPE_ROWS: RecipeRow[] = [
-  { name: 'FILM SIMULATION', icon: 0x5f3 },
-  { name: 'WHITE BALANCE', icon: 0x609, value: 'Auto' },
-  { name: 'DYNAMIC RANGE', icon: 0x5f1, value: 'DR100' },
-  { name: 'HIGHLIGHT TONE', icon: 0x5f6, level: 1 },
-  { name: 'SHADOW TONE', icon: 0x607, level: -1 },
-  { name: 'COLOR', icon: 0x5f0, level: 0 },
-  { name: 'SHARPNESS', icon: 0x605, level: 0 },
-  { name: 'NOISE REDUCTION', icon: 0x603, level: -2 },
+  { icon: 0x5f3 },
+  { icon: 0x609, value: 'Auto' },
+  { icon: 0x5f1, value: 'DR100' },
+  { icon: 0x5f6, level: 1 },
+  { icon: 0x607, level: -1 },
+  { icon: 0x5f0, level: 0 },
+  { icon: 0x605, level: 0 },
+  { icon: 0x603, level: -2 },
 ];
 
 function StockIcon(props: { id: number; color: string }) {
   return (
     <span
-      class="block size-[38px]"
+      class="block size-[38px] shrink-0"
       style={{
         background: props.color,
         'mask-image': `url(${stockIcon(props.id)})`,
@@ -1374,207 +1386,136 @@ function StockIcon(props: { id: number; color: string }) {
   );
 }
 
-function RecipeColumn(props: { focus: number; film: string; changed: boolean }) {
+function RecipeColumn(props: { film: string }) {
   return (
     <div class="absolute inset-y-0 left-0 overflow-hidden pt-[4px]" style={{ ...COLUMN, width: `${RECIPE_WIDTH}px` }}>
       <For each={RECIPE_ROWS}>
-        {(row, i) => {
-          const focused = () => props.focus === i();
-          return (
-            <div class="flex h-[57px] items-center gap-[4px] pr-[6px] pl-[10px]">
-              <StockIcon id={row.icon} color={focused() ? '#fff' : 'rgb(255 255 255 / 0.72)'} />
-              <div class="ml-[8px] flex h-[47px] grow items-center justify-center" style={TRACK(focused())}>
-                <Show
-                  when={row.level === undefined}
-                  fallback={<Ruler value={row.level ?? 0} min={-2} max={2} step={1} width={208} focused={focused()} changed={false} set={() => undefined} />}
-                >
-                  <span
-                    class={`flex h-[37px] items-center rounded-[10px] px-[12px] font-medium whitespace-nowrap ${SMALL}`}
-                    style={{ background: i() === 0 && props.changed ? ACCENT : '#fff', color: i() === 0 && props.changed ? '#fff' : '#000' }}
-                  >
-                    {i() === 0 ? props.film : row.value}
-                  </span>
-                </Show>
-              </div>
+        {(row, i) => (
+          <div class="flex h-[57px] items-center pr-[6px] pl-[10px]">
+            <StockIcon id={row.icon} color={i() === 0 ? '#fff' : 'rgb(255 255 255 / 0.72)'} />
+            <div class="ml-[8px] flex h-[47px] grow items-center justify-center" style={TRACK(i() === 0)}>
+              <Show
+                when={row.level === undefined}
+                fallback={<Ruler value={row.level ?? 0} min={-2} max={2} step={1} width={208} focused={false} changed={false} set={() => undefined} />}
+              >
+                <span class={`flex h-[37px] items-center rounded-[10px] bg-white px-[12px] font-medium whitespace-nowrap text-black ${SMALL}`}>{i() === 0 ? props.film : row.value}</span>
+              </Show>
             </div>
-          );
-        }}
+          </div>
+        )}
       </For>
     </div>
   );
 }
 
-interface RecipeState {
-  focus: number;
-  presented: boolean;
-  /** The recipe's film is a card film, edited as itself. */
-  card: boolean;
-  saved: boolean;
-  editor: State;
-}
+type Presentation = 'sheet' | 'edge';
+const SPRING = '460ms cubic-bezier(0.22, 1, 0.36, 1)';
 
-function recipeKey(r: RecipeState, key: string): RecipeState | undefined {
-  if (r.presented) {
-    const next = keyA(r.editor, key);
-    if (next) return { ...r, editor: next };
-    if (key === 'Escape' || key === 'Backspace')
-      return { ...r, presented: false, saved: r.saved || JSON.stringify(r.editor.film) !== JSON.stringify(r.editor.opened) };
-    return undefined;
-  }
-  if (key === 'ArrowUp' && r.focus > 0) return { ...r, focus: r.focus - 1 };
-  if (key === 'ArrowDown' && r.focus < RECIPE_ROWS.length - 1) return { ...r, focus: r.focus + 1 };
-  if (key === 's' && r.focus === 0) return { ...r, presented: true };
-  return undefined;
-}
-
-const CARD_FILM = 'MY FILM 1';
-
-function RecipeScreen(props: { start: RecipeState }) {
-  const [r, setR] = createSignal<RecipeState>(props.start);
-  const [histogram, setHistogram] = createSignal<number[]>([]);
-  onSettled(() => {
-    void source().then((src) => setHistogram(src.histogram));
-  });
-  const filmName = () => (r().card ? CARD_FILM : r().saved ? 'NEW FILM 1' : 'Classic Chrome');
-  const spring = 'transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms cubic-bezier(0.22, 1, 0.36, 1)';
-  /** The recipe column's right edge peeks past the sheet's. */
-  const pushed = () => COLUMN_A + PEEK - RECIPE_WIDTH * 0.92;
+function Presented() {
+  const [style, setStyle] = createSignal<Presentation>('sheet');
+  const [open, setOpen] = createSignal(false);
+  const [state, setState] = createSignal<State>(initial({ film: START }));
+  const histogram = useHistogram();
+  const editorWidth = RAIL + SCROLLER;
+  const hidden = () => (style() === 'sheet' ? 'translateY(100%)' : `translateX(-${editorWidth + 30}px)`);
   return (
-    <div
-      tabindex="0"
-      class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans outline-none select-none"
-      onKeyDown={(e) => {
-        const next = recipeKey(r(), e.key);
-        if (next) {
-          e.preventDefault();
-          setR(next);
-        }
-      }}
-    >
-      <Picture film={r().presented || r().saved ? r().editor.film : START} />
-      <div
-        class="absolute inset-0 origin-left"
-        style={{
-          transition: spring,
-          transform: r().presented ? `translateX(${pushed()}px) translateY(${480 * 0.03}px) scale(0.92)` : 'none',
-        }}
-      >
-        <RecipeColumn focus={r().focus} film={filmName()} changed={r().saved && !r().card} />
-        <div
-          class="pointer-events-none absolute inset-y-0 left-0 rounded-[10px] bg-black"
-          style={{ width: `${RECIPE_WIDTH}px`, opacity: r().presented ? 0.4 : 0, transition: spring }}
-        />
+    <>
+      <div class="mb-[10px] flex flex-wrap gap-[8px]">
+        <For each={[['sheet', 'Bottom sheet'], ['edge', 'From the left edge']] as [Presentation, string][]}>
+          {([value, label]) => (
+            <button
+              type="button"
+              class="h-[44px] rounded-[12px] px-[14px] text-[16px] font-semibold"
+              style={style() === value ? { background: '#fff', color: '#000' } : { background: '#2c2c2e', color: '#fff' }}
+              onClick={() => {
+                setOpen(false);
+                setStyle(value);
+              }}
+            >
+              {label}
+            </button>
+          )}
+        </For>
+        <button type="button" class="h-[44px] rounded-[12px] px-[18px] text-[16px] font-semibold text-white" style={{ background: ACCENT }} onClick={() => setOpen(!open())}>
+          {open() ? 'Back' : 'Edit film'}
+        </button>
       </div>
-      <Show when={!r().presented}>
-        <Legend hints={r().focus === 0 ? [['▲', 'EDIT FILM'], ['◀▶', 'FILM']] : [['◀▶', 'ADJUST']]} />
-      </Show>
-      <div
-        class="absolute inset-0"
-        style={{
-          transform: r().presented ? 'none' : `translateX(-${COLUMN_A + 24}px)`,
-          'pointer-events': r().presented ? 'auto' : 'none',
-          visibility: r().presented ? 'visible' : 'hidden',
-          transition: `${spring}, visibility 0s linear ${r().presented ? '0ms' : '420ms'}`,
-        }}
-      >
-        <div class="absolute inset-y-0 left-0" style={{ width: `${COLUMN_A}px`, 'box-shadow': '8px 0 24px rgb(0 0 0 / 0.45)' }} />
-        <LayoutA
-          s={r().editor}
-          set={(editor) => setR({ ...r(), editor })}
-          histogram={histogram()}
-          title={r().card ? { name: CARD_FILM } : { name: 'NEW FILM', from: 'from Classic Chrome' }}
-          opaque
-        />
-      </div>
-    </div>
+      <Fit>
+        <div class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
+          <Picture film={state().film} custom={state().custom} crop={0} />
+          <div
+            class="absolute inset-0 origin-top"
+            style={{
+              transition: `transform ${SPRING}, filter ${SPRING}`,
+              transform: open() && style() === 'sheet' ? 'scale(0.94)' : 'none',
+              filter: open() ? 'brightness(0.55)' : 'none',
+            }}
+          >
+            <RecipeColumn film="Classic Chrome" />
+            <Show when={!open()}>
+              <div class="absolute right-[10px] bottom-[10px]">
+                <Hint glyph="Fn" label="EDIT FILM" tap={() => setOpen(true)} />
+              </div>
+            </Show>
+          </div>
+          <div
+            class="absolute inset-0"
+            style={{
+              transition: `transform ${SPRING}, visibility 0s linear ${open() ? '0ms' : '460ms'}`,
+              transform: open() ? 'none' : hidden(),
+              visibility: open() ? 'visible' : 'hidden',
+              top: style() === 'sheet' ? '12px' : '0',
+            }}
+          >
+            <div
+              class="absolute inset-0 overflow-hidden"
+              style={style() === 'sheet' ? { 'border-radius': '16px 16px 0 0', width: `${editorWidth}px` } : { width: `${editorWidth}px` }}
+            >
+              <Editor s={state()} set={setState} histogram={histogram()} title={NEW_TITLE} />
+            </div>
+            <Show when={style() === 'sheet'}>
+              <div class="absolute top-[5px] h-[5px] w-[40px] -translate-x-1/2 rounded-full bg-white/60" style={{ left: `${editorWidth / 2}px` }} />
+            </Show>
+          </div>
+        </div>
+      </Fit>
+    </>
   );
 }
 
-/* ---- Screens and review ----------------------------------------------------------- */
+/* ---- Review ------------------------------------------------------------------------- */
 
-type LayoutId = 'a' | 'b' | 'c' | 'd';
-const KEYS: Record<LayoutId, (s: State, key: string) => State | undefined> = {
-  a: keyA,
-  b: keyB,
-  c: keyC,
-  d: (s, key) => toolKey(s, 'curve', key),
-};
+const STATES: { id: string; title: string; state: State }[] = [
+  { id: 'curve', title: 'Tone curve', state: initial({ focus: 0, knot: 7 }) },
+  { id: 'color-mix', title: 'Color mix', state: initial({ focus: 5, scrollTo: 'mix' }) },
+  { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, scrollTo: 'tone' }) },
+  { id: 'copy', title: 'Copy one tool from a film', state: initial({ picker: { kind: 'copy', tool: 'curve' } }) },
+  { id: 'compare', title: 'Compare with a film', state: initial({ compare: { b: 0, split: SPLIT } }) },
+  { id: 'film-only', title: 'Custom setting off: the film alone', state: initial({ custom: false }) },
+  { id: 'raw', title: 'PLAY: a RAW from the SD card', state: initial({ crop: 1 }) },
+];
 
-function Screen(props: { layout: LayoutId; start: State }) {
+function Static(props: { start: State }) {
   const [state, setState] = createSignal<State>(props.start);
-  const [histogram, setHistogram] = createSignal<number[]>([]);
-  onSettled(() => {
-    void source().then((src) => setHistogram(src.histogram));
-  });
   return (
-    <div
-      tabindex="0"
-      class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans outline-none select-none"
-      onKeyDown={(e) => {
-        const next = KEYS[props.layout](state(), e.key);
-        if (next) {
-          e.preventDefault();
-          setState(next);
-        }
-      }}
-    >
-      <Picture film={state().film} />
-      <Show when={props.layout === 'a'}>
-        <LayoutA s={state()} set={setState} histogram={histogram()} />
-      </Show>
-      <Show when={props.layout === 'b'}>
-        <LayoutB s={state()} set={setState} histogram={histogram()} />
-      </Show>
-      <Show when={props.layout === 'c'}>
-        <LayoutC s={state()} set={setState} histogram={histogram()} />
-      </Show>
-      <Show when={props.layout === 'd'}>
-        <LayoutD s={state()} set={setState} histogram={histogram()} />
-      </Show>
-    </div>
+    <Fit>
+      <Screen state={state} set={setState} />
+    </Fit>
   );
 }
-
-const STATES: { id: string; layout: LayoutId; title: string; state: State }[] = [
-  { id: 'a-rows', layout: 'a', title: 'A · Rows, one height, with fly-outs', state: initial({ film: EDITED, control: 1 }) },
-  { id: 'a-curve', layout: 'a', title: 'A · TONE CURVE fly-out', state: initial({ film: EDITED, open: 'curve', knot: 4 }) },
-  { id: 'a-bend', layout: 'a', title: 'A · TONE CURVE fly-out, BEND', state: initial({ film: EDITED, open: 'curve', knot: 4, bend: true }) },
-  { id: 'a-primaries', layout: 'a', title: 'A · PRIMARIES fly-out', state: initial({ film: EDITED, open: 'primaries', primary: 1, control: 2 }) },
-  { id: 'b-curve', layout: 'b', title: 'B · Sections of any height, TONE CURVE open', state: initial({ film: EDITED, tool: 'curve', open: 'curve', knot: 7 }) },
-  { id: 'b-bands', layout: 'b', title: 'B · SAT BY TONE open', state: initial({ film: EDITED, tool: 'bands', open: 'bands', band: 4 }) },
-  { id: 'c-curve', layout: 'c', title: 'C · Tool rail, TONE CURVE', state: initial({ film: EDITED, tool: 'curve', open: 'curve', knot: 2 }) },
-  { id: 'c-primaries', layout: 'c', title: 'C · Tool rail, PRIMARIES', state: initial({ film: EDITED, tool: 'primaries', open: 'primaries', primary: 0, control: 1 }) },
-  { id: 'd-picture', layout: 'd', title: 'D · On the picture: touch a tone, drag it', state: initial({ film: EDITED, knot: 6, picked: { x: 520, y: 150, u: US[6] + 0.01 } }) },
-];
-
-const RECIPE_STATES: { id: string; title: string; state: RecipeState }[] = [
-  { id: 'r-row', title: 'Recipe editor · FILM SIMULATION row (press S for the ▲ key)', state: { focus: 0, presented: false, card: false, saved: false, editor: initial({ control: 1 }) } },
-  { id: 'r-new', title: 'Recipe editor · a built-in film opens as a new film', state: { focus: 0, presented: true, card: false, saved: false, editor: initial({ control: 1 }) } },
-  { id: 'r-card', title: 'Recipe editor · a card film opens as itself', state: { focus: 0, presented: true, card: true, saved: false, editor: initial({ film: EDITED, opened: EDITED, control: 1 }) } },
-];
 
 function Review() {
   return (
-    <div class="min-h-dvh touch-manipulation bg-[#111] p-[16px] font-sans text-[15px] text-[#ddd]">
-      <h1 class="mb-[6px] text-[22px] font-semibold">Film editor</h1>
-      <p class="mb-[8px] max-w-[720px] text-[#999]">Each screen is live: click it, then use the arrow keys, Enter (OK) and Escape (BACK), or drag with the mouse or a finger.</p>
-      <For each={RECIPE_STATES}>
-        {(entry) => (
-          <section id={entry.id} class="mt-[28px]">
-            <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
-            <Fit>
-              <RecipeScreen start={entry.state} />
-            </Fit>
-          </section>
-        )}
-      </For>
+    <div class="min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd]">
+      <h1 class="mb-[12px] text-[22px] font-semibold">Film editor</h1>
+      <Live start={initial({ film: START })} />
+      <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">From the recipe editor</h2>
+      <Presented />
       <For each={STATES}>
         {(entry) => (
           <section id={entry.id} class="mt-[28px]">
             <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
-            <Fit>
-              <Screen layout={entry.layout} start={entry.state} />
-            </Fit>
+            <Static start={entry.state} />
           </section>
         )}
       </For>
@@ -1593,7 +1534,7 @@ function Fit(props: { children: JSX.Element }) {
     return () => observer.disconnect();
   });
   return (
-    <div ref={(element) => (host = element)} class="w-full max-w-[720px]" style={{ height: `${480 * scale()}px` }}>
+    <div ref={(element) => (host = element)} class="w-full max-w-[720px] overflow-hidden" style={{ height: `${480 * scale()}px` }}>
       <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: '720px' }}>
         {props.children}
       </div>
