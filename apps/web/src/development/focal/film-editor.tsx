@@ -1212,10 +1212,17 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
   onSettled(() => {
     const tool = props.s.scrollTo;
     if (tool) scrollToTool(tool, false);
+    spy();
   });
+  /* The editor opens at the top; later focus moves keep the focused row in view. */
+  let opened = false;
   createEffect(
     () => s().focus,
     (focus) => {
+      if (!opened) {
+        opened = true;
+        return;
+      }
       const row = rows[focus];
       if (s().scrollTo || !row || !scroller) return;
       /* Only the scroller moves: scrollIntoView would scroll the page too. */
@@ -1547,7 +1554,7 @@ const NEW_TITLE = { name: 'NEW FILM', from: 'from Classic Chrome' };
 function Screen(props: { state: () => State; set: (s: State) => void }) {
   const histogram = useHistogram();
   return (
-    <div class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
+    <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
       <Picture
         film={props.state().film}
         custom={props.state().custom}
@@ -1674,20 +1681,40 @@ function RecipeColumn(props: { film: string }) {
   );
 }
 
-type Presentation = 'sheet' | 'edge';
+/* Both push over from the left edge, and the recipe column is gone once the
+   film editor is in: nothing shows through the film editor's column.
+   PUSH ACROSS: the film editor's right edge pushes the recipe column ahead of
+   it across the picture, fading it out on the way.
+   FADE UNDER: the recipe column drifts right a little and fades out while the
+   film editor covers it. */
+type Presentation = 'push' | 'fade';
 const SPRING = '460ms cubic-bezier(0.22, 1, 0.36, 1)';
 
 function Presented() {
-  const [style, setStyle] = createSignal<Presentation>('sheet');
+  const [style, setStyle] = createSignal<Presentation>('push');
   const [open, setOpen] = createSignal(false);
   const [state, setState] = createSignal<State>(initial({ film: START }));
   const histogram = useHistogram();
   const editorWidth = RAIL + SCROLLER;
-  const hidden = () => (style() === 'sheet' ? 'translateY(100%)' : `translateX(-${editorWidth + 30}px)`);
+  const column = (): JSX.CSSProperties => {
+    if (style() === 'push')
+      return {
+        transform: open() ? `translateX(${editorWidth}px)` : 'none',
+        opacity: open() ? 0 : 1,
+        transition: `transform ${SPRING}, opacity 460ms ${open() ? 'cubic-bezier(0.5, 0, 0.9, 0.6)' : 'cubic-bezier(0.1, 0.4, 0.5, 1)'}, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
+        visibility: open() ? 'hidden' : 'visible',
+      };
+    return {
+      transform: open() ? 'translateX(48px)' : 'none',
+      opacity: open() ? 0 : 1,
+      transition: `transform ${SPRING}, opacity ${open() ? '220ms' : '320ms 140ms'} ease-out, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
+      visibility: open() ? 'hidden' : 'visible',
+    };
+  };
   return (
     <>
       <div class="mb-[10px] flex flex-wrap gap-[8px]">
-        <For each={[['sheet', 'Bottom sheet'], ['edge', 'From the left edge']] as [Presentation, string][]}>
+        <For each={[['push', 'Push across'], ['fade', 'Fade under']] as [Presentation, string][]}>
           {([value, label]) => (
             <button
               type="button"
@@ -1707,41 +1734,25 @@ function Presented() {
         </button>
       </div>
       <Fit>
-        <div class="relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
+        <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
           <Picture film={state().film} custom={state().custom} crop={0} />
-          <div
-            class="absolute inset-0 origin-top"
-            style={{
-              transition: `transform ${SPRING}, filter ${SPRING}`,
-              transform: open() && style() === 'sheet' ? 'scale(0.94)' : 'none',
-              filter: open() ? 'brightness(0.55)' : 'none',
-            }}
-          >
+          <div class="absolute inset-0" style={column()}>
             <RecipeColumn film="Classic Chrome" />
-            <Show when={!open()}>
-              <div class="absolute right-[10px] bottom-[10px]">
-                <Hint glyph="Fn" label="EDIT FILM" tap={() => setOpen(true)} />
-              </div>
-            </Show>
           </div>
+          <Show when={!open()}>
+            <div class="absolute right-[10px] bottom-[10px]">
+              <Hint glyph="Fn" label="EDIT FILM" tap={() => setOpen(true)} />
+            </div>
+          </Show>
           <div
             class="absolute inset-0"
             style={{
               transition: `transform ${SPRING}, visibility 0s linear ${open() ? '0ms' : '460ms'}`,
-              transform: open() ? 'none' : hidden(),
+              transform: open() ? 'none' : `translateX(-${editorWidth}px)`,
               visibility: open() ? 'visible' : 'hidden',
-              top: style() === 'sheet' ? '12px' : '0',
             }}
           >
-            <div
-              class="absolute inset-0 overflow-hidden"
-              style={style() === 'sheet' ? { 'border-radius': '16px 16px 0 0', width: `${editorWidth}px` } : { width: `${editorWidth}px` }}
-            >
-              <Editor s={state()} set={setState} histogram={histogram()} title={NEW_TITLE} />
-            </div>
-            <Show when={style() === 'sheet'}>
-              <div class="absolute top-[5px] h-[5px] w-[40px] -translate-x-1/2 rounded-full bg-white/60" style={{ left: `${editorWidth / 2}px` }} />
-            </Show>
+            <Editor s={state()} set={setState} histogram={histogram()} title={NEW_TITLE} />
           </div>
         </div>
       </Fit>
@@ -1770,10 +1781,42 @@ function Static(props: { start: State }) {
   );
 }
 
-function Review() {
+/* The recipe editor's ROUNDED CORNERS and UPPERCASE options, over every
+   screen on the page. Round marks (knots, swatches, dots) stay round. */
+const STYLE_OPTIONS = `
+.fm-square .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
+.fm-square .fm-screen rect { rx: 0; ry: 0; }
+.fm-upper .fm-screen { text-transform: uppercase; }
+`;
+
+function Toggle(props: { label: string; on: boolean; set: (on: boolean) => void }) {
   return (
-    <div class="min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd]">
+    <button
+      type="button"
+      class="flex h-[44px] items-center gap-[10px] rounded-[12px] bg-[#2c2c2e] pr-[14px] pl-[8px] text-[16px] font-semibold text-white"
+      onClick={() => props.set(!props.on)}
+    >
+      <span class="relative h-[28px] w-[46px] rounded-full transition-colors" style={{ background: props.on ? '#34c759' : '#48484a' }}>
+        <span class="absolute top-[2px] size-[24px] rounded-full bg-white transition-[left]" style={{ left: props.on ? '20px' : '2px' }} />
+      </span>
+      {props.label}
+    </button>
+  );
+}
+
+function Review() {
+  const [rounded, setRounded] = createSignal(true);
+  const [upper, setUpper] = createSignal(false);
+  return (
+    <div
+      class={`min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd] ${rounded() ? '' : 'fm-square'} ${upper() ? 'fm-upper' : ''}`}
+    >
+      <style>{STYLE_OPTIONS}</style>
       <h1 class="mb-[12px] text-[22px] font-semibold">Film editor</h1>
+      <div class="mb-[14px] flex flex-wrap gap-[8px]">
+        <Toggle label="Rounded corners" on={rounded()} set={setRounded} />
+        <Toggle label="Uppercase" on={upper()} set={setUpper} />
+      </div>
       <Live start={initial({ film: START })} />
       <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">From the recipe editor</h2>
       <Presented />
