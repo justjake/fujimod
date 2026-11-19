@@ -224,7 +224,8 @@ fn serve(
                 serde_json::json!({"banks": banks, "keys_available": keys.is_some()}).to_string();
             reply(stream, "200 OK", "application/json", body.as_bytes())
         }
-        ("POST", "/key") => {
+        ("POST", "/key" | "/set") => {
+            let set = path == "/set";
             if length == 0 || length > 1024 {
                 return reply(
                     stream,
@@ -254,15 +255,36 @@ fn serve(
                 Ok(v) => v,
                 Err(_) => return reply(stream, "400 Bad Request", "text/plain", b"invalid JSON"),
             };
-            let (Some(key), Some(pressed)) = (value["key"].as_str(), value["pressed"].as_bool())
-            else {
-                return reply(
-                    stream,
-                    "400 Bad Request",
-                    "text/plain",
-                    b"expected key:string and pressed:boolean",
-                );
+            // `/set` moves a dial or switch: {"control": "iso", "position": "800"}. It reaches the
+            // key handler as `SET CONTROL=POSITION`, which the run parses like `--set`.
+            let (key, pressed) = if set {
+                let (Some(control), Some(position)) =
+                    (value["control"].as_str(), value["position"].as_str())
+                else {
+                    return reply(
+                        stream,
+                        "400 Bad Request",
+                        "text/plain",
+                        b"expected control:string and position:string",
+                    );
+                };
+                if [control, position].iter().any(|text| text.contains([',', '@', '='])) {
+                    return reply(stream, "400 Bad Request", "text/plain", b"invalid control or position");
+                }
+                (format!("SET {control}={position}"), true)
+            } else {
+                let (Some(key), Some(pressed)) = (value["key"].as_str(), value["pressed"].as_bool())
+                else {
+                    return reply(
+                        stream,
+                        "400 Bad Request",
+                        "text/plain",
+                        b"expected key:string and pressed:boolean",
+                    );
+                };
+                (key.to_owned(), pressed)
             };
+            let key = key.as_str();
             let Some(handler) = keys else {
                 return reply(
                     stream,
@@ -290,17 +312,19 @@ const PAGE: &str = r#"<!doctype html><meta charset="utf-8"><meta name="viewport"
 <section class="controls" aria-label="Camera controls"><div class="primary"><button data-key="MENU">MENU / OK</button><button data-key="BACK">DISP / BACK</button></div>
 <div class="dpad"><button class="up" data-key="UP" aria-label="Up">↑</button><button class="left" data-key="LEFT" aria-label="Left">←</button><button class="down" data-key="DOWN" aria-label="Down">↓</button><button class="right" data-key="RIGHT" aria-label="Right">→</button></div>
 <div class="shutter"><button data-key="SHUTTER_HALF">Shutter half</button><button data-key="SHUTTER_FULL">Shutter full</button></div>
-<div class="keys"><button data-key="Q">Q</button><button data-key="PLAY">PLAY</button><button data-key="DELETE">DELETE</button><button data-key="VIEW">VIEW</button><button data-key="FN1">FN1</button><button data-key="FN2">FN2</button></div>
-<div class="dials"><span>Rear dial</span><button data-detent="REAR-" aria-label="Rear dial minus">−</button><button data-detent="REAR+" aria-label="Rear dial plus">+</button><span>Front dial</span><button data-detent="FRONT-" aria-label="Front dial minus">−</button><button data-detent="FRONT+" aria-label="Front dial plus">+</button></div></section>
-<p class="detail keyboard">Keyboard: arrows · Enter = MENU/OK · Esc = BACK · Space or H = shutter half · F = shutter full · Q · P = PLAY · [ / ] = rear dial · , / . = front dial</p><p id="status" role="status"></p>
+<div class="keys"><button data-key="Q">Q</button><button data-key="PLAY">PLAY</button><button data-key="DELETE">DELETE</button><button data-key="VIEW">VIEW</button><button data-key="FN1">FN1</button><button data-key="FN2">FN2</button><button data-key="AEL">AEL</button><button data-key="AFON">AFON</button><button data-key="REAR_PUSH">Rear push</button><button data-key="FRONT_PUSH">Front push</button></div>
+<div class="dials"><span>Rear dial</span><button data-detent="REAR-" aria-label="Rear dial minus">−</button><button data-detent="REAR+" aria-label="Rear dial plus">+</button><span>Front dial</span><button data-detent="FRONT-" aria-label="Front dial minus">−</button><button data-detent="FRONT+" aria-label="Front dial plus">+</button></div>
+<div class="sets"><input id="setting" placeholder="iso=800" aria-label="Dial position, CONTROL=POSITION" size="12"><button id="apply">Set dial</button></div></section>
+<p class="detail keyboard">Keyboard: arrows · Enter = MENU/OK · Esc = BACK · Space or H = shutter half · F = shutter full · Q · P = PLAY · [ / ] = rear dial · , / . = front dial · L = AEL · O = AFON · R = rear push · T = front push</p><p id="status" role="status"></p>
 <script>
 const status=document.querySelector('#status'),held=new Set(),pressedAt=new Map();
 async function send(k,p){try{const r=await fetch('/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:k,pressed:p})});status.textContent=r.ok?'':await r.text()}catch(e){status.textContent=e.message}}
 async function key(k,p){if(p===held.has(k))return;if(p){pressedAt.set(k,performance.now());held.add(k)}else{held.delete(k);await new Promise(r=>setTimeout(r,Math.max(0,150-(performance.now()-pressedAt.get(k)))));if(held.has(k))return;}await send(k,p)}
 for(const b of document.querySelectorAll('[data-key]')){b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);key(b.dataset.key,true)};b.onpointerup=b.onpointercancel=b.onlostpointercapture=()=>key(b.dataset.key,false);b.onclick=e=>{if(e.detail===0){key(b.dataset.key,true);key(b.dataset.key,false)}}}
 for(const b of document.querySelectorAll('[data-detent]'))b.onclick=()=>send(b.dataset.detent,true);
-const mapping={ArrowUp:'UP',ArrowDown:'DOWN',ArrowLeft:'LEFT',ArrowRight:'RIGHT',Enter:'MENU',Escape:'BACK',h:'SHUTTER_HALF',' ':'SHUTTER_HALF',f:'SHUTTER_FULL',q:'Q',p:'PLAY'},dials={'[':'REAR-',']':'REAR+',',':'FRONT-','.':'FRONT+'};
-onkeydown=e=>{const k=mapping[e.key]||mapping[e.key.toLowerCase()],d=dials[e.key];if(k){e.preventDefault();key(k,true)}else if(d){e.preventDefault();if(!e.repeat)send(d,true)}};onkeyup=e=>{const k=mapping[e.key]||mapping[e.key.toLowerCase()];if(k){e.preventDefault();key(k,false)}};onblur=()=>{for(const k of [...held])key(k,false)};document.addEventListener("visibilitychange",()=>{if(document.hidden)onblur()});
+document.querySelector('#apply').onclick=async()=>{const [c,p]=document.querySelector('#setting').value.split('=');try{const r=await fetch('/set',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({control:(c||'').trim(),position:(p||'').trim()})});status.textContent=r.ok?'':await r.text()}catch(e){status.textContent=e.message}};
+const mapping={ArrowUp:'UP',ArrowDown:'DOWN',ArrowLeft:'LEFT',ArrowRight:'RIGHT',Enter:'MENU',Escape:'BACK',h:'SHUTTER_HALF',' ':'SHUTTER_HALF',f:'SHUTTER_FULL',q:'Q',p:'PLAY',l:'AEL',o:'AFON',r:'REAR_PUSH',t:'FRONT_PUSH'},dials={'[':'REAR-',']':'REAR+',',':'FRONT-','.':'FRONT+'};
+onkeydown=e=>{if(e.target.tagName==='INPUT')return;const k=mapping[e.key]||mapping[e.key.toLowerCase()],d=dials[e.key];if(k){e.preventDefault();key(k,true)}else if(d){e.preventDefault();if(!e.repeat)send(d,true)}};onkeyup=e=>{if(e.target.tagName==='INPUT')return;const k=mapping[e.key]||mapping[e.key.toLowerCase()];if(k){e.preventDefault();key(k,false)}};onblur=()=>{for(const k of [...held])key(k,false)};document.addEventListener("visibilitychange",()=>{if(document.hidden)onblur()});
 async function refresh(){try{const r=await fetch('/status'),s=await r.json();for(const b of s.banks){const n=b.bank,im=document.querySelector('#b'+n),label=document.querySelector('#s'+n),detail=document.querySelector('#d'+n);label.textContent=b.enabled?'enabled':'disabled';label.dataset.enabled=b.enabled;const layers=[...(b.picture||[]).flatMap((on,i)=>on?['picture '+i]:[]),...(b.osd||[]).flatMap((on,i)=>on?['OSD '+i]:[])];detail.textContent=[b.width&&b.height?b.width+'×'+b.height+' (total '+b.total_width+'×'+b.total_height+')':'timing not programmed',layers.length?layers.join(', '):'no planes enabled',b.error||'',!b.enabled&&b.has_frame?'showing last frame':''].filter(Boolean).join(' · ');if(b.has_frame&&im.dataset.frame!==String(b.frames)){const frame=await fetch('/bank'+n+'.png');if(frame.ok){const u=URL.createObjectURL(await frame.blob()),old=im.dataset.url;im.src=u;im.dataset.url=u;im.dataset.frame=b.frames;if(old)URL.revokeObjectURL(old)}}}for(const b of document.querySelectorAll('button'))b.disabled=!s.keys_available}catch(e){status.textContent=e.message}setTimeout(refresh,200)}refresh();
 </script>"#;
 
@@ -356,4 +380,44 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], bytes: &[u8]) {
         }
     }
     out.extend_from_slice(&(!crc).to_be_bytes());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    fn post(address: SocketAddr, path: &str, body: &str) -> String {
+        let mut stream = TcpStream::connect(address).unwrap();
+        write!(
+            stream,
+            "POST {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        )
+        .unwrap();
+        let mut reply = String::new();
+        stream.read_to_string(&mut reply).unwrap();
+        reply
+    }
+
+    #[test]
+    fn set_requests_reach_the_key_handler_as_one_position_change() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let record = seen.clone();
+        let handler: KeyHandler = Arc::new(move |name: &str, pressed: bool| {
+            record.lock().unwrap().push((name.to_owned(), pressed));
+            Ok(())
+        });
+        let frames = std::env::temp_dir();
+        let viewer = Viewer::with_bind(frames, std::net::Ipv4Addr::LOCALHOST.into(), 0, None, Some(handler)).unwrap();
+        let address = viewer.address();
+        assert!(post(address, "/set", r#"{"control":"iso","position":"800"}"#).starts_with("HTTP/1.1 200"));
+        assert!(post(address, "/key", r#"{"key":"AEL","pressed":true}"#).starts_with("HTTP/1.1 200"));
+        assert!(post(address, "/set", r#"{"control":"iso","position":"800@5"}"#).starts_with("HTTP/1.1 400"));
+        assert!(post(address, "/set", r#"{"control":"iso"}"#).starts_with("HTTP/1.1 400"));
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [("SET iso=800".to_owned(), true), ("AEL".to_owned(), true)]
+        );
+    }
 }

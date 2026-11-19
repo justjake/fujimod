@@ -1,6 +1,15 @@
 //! Scene-derived IBUF color sums, with the stock 16x16/64-byte-row layout.
 //! Unmapped statistic fields remain explore accesses; see ae-pipeline.md.
+//!
+//! With a sensor exposure ([`Statistics::with_sensor_scene`]) each completion measures the
+//! host scene the sensor sees (`XT5_SCENE`, or an 18% grey card when none is set) through the
+//! X-T5 sensor response at the exposure read at that completion
+//! ([`fujimod_emulator_imaging::xtrans::Response::xt5`]): colour gains, the 1024 pedestal and
+//! clipping at 16383, so the firmware's AE and AWB see their own programming. A run-definition
+//! statistics scene ([`Device::set_scene`]) takes precedence.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_imaging::exposure::ExposureHandle;
+use fujimod_emulator_imaging::xtrans;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -144,6 +153,44 @@ impl Scene {
                 .unwrap_or_else(signal_shift),
         })
     }
+    /// The sensor's view of `rgb` (`width` x `height` sRGB pixels) through `response`: each
+    /// pixel's signal above the pedestal per colour, unclipped (planes clip the raw value).
+    fn sensor(width: usize, height: usize, rgb: &[u8], response: xtrans::Response) -> Self {
+        Self {
+            name: "sensor scene".into(),
+            width,
+            height,
+            rgb: rgb
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|p| {
+                    std::array::from_fn(|c| {
+                        let level = xtrans::srgb_to_linear(p[c]);
+                        let signal = level * response.colour_gain[c] * response.exposure * response.white;
+                        signal.round().clamp(0., f64::from(u16::MAX)) as u16
+                    })
+                })
+                .collect(),
+            signal_shift: 0,
+            ..Self::default()
+        }
+    }
+    /// [`Scene::sensor`] of the host scene (`XT5_SCENE`; an 18% grey card, sRGB 118, when none
+    /// is set) at `columns * 8` x `rows * 8` pixels, at relative exposure `exposure`.
+    fn host(columns: usize, rows: usize, exposure: f64) -> Result<Self, String> {
+        let (width, height) = (columns * 8, rows * 8);
+        let response = xtrans::Response::xt5(exposure);
+        let Some(scene) = fujimod_emulator_imaging::frame::host_scene() else {
+            return Ok(Self::sensor(width, height, &vec![118; width * height * 3], response));
+        };
+        let mut rgb = Vec::with_capacity(width * height * 3);
+        fujimod_emulator_imaging::frame::render_rgb_lines(scene, width, height, |_, line| {
+            rgb.extend_from_slice(line);
+            Ok(())
+        })?;
+        Ok(Self::sensor(width, height, &rgb, response))
+    }
     fn planes(&self, columns: usize, rows: usize, ae: bool) -> Vec<u8> {
         let mut bytes = vec![0; 0x1000];
         // The scene spans the configured grid, not the unused 16x16 padding.
@@ -189,6 +236,9 @@ struct State {
     bytes: Vec<u8>,
     frames: u64,
     last_destination: u64,
+    /// A run-definition scene was set ([`Device::set_scene`]); it replaces the sensor scene.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    explicit: bool,
 }
 #[derive(Clone)]
 pub struct Statistics {
@@ -198,6 +248,9 @@ pub struct Statistics {
     /// The banks are ordinary guest memory (another device or the CPU may use
     /// the same SRAM for other data), so frames complete by DMA into it.
     in_memory: bool,
+    /// The sensor exposure: measure the host scene through the sensor response
+    /// ([`Statistics::with_sensor_scene`]).
+    exposure: Option<ExposureHandle>,
 }
 impl Statistics {
     /// Statistics whose SRAM is plain guest memory rather than a device window.
@@ -218,11 +271,20 @@ impl Statistics {
                 bytes: vec![0; bank_size * 2],
                 frames: 0,
                 last_destination: 0,
+                explicit: false,
             })),
             base,
             bank_size,
             in_memory: false,
+            exposure: None,
         })
+    }
+
+    /// Measure the host scene through the X-T5 sensor response at the exposure `exposure`
+    /// holds at each completion (see the module notes).
+    pub fn with_sensor_scene(mut self, exposure: ExposureHandle) -> Self {
+        self.exposure = Some(exposure);
+        self
     }
 
     pub fn complete(
@@ -240,7 +302,14 @@ impl Statistics {
         if !(1..=16).contains(&columns) || !(1..=16).contains(&rows) {
             return Err("statistics grid exceeds 16x16 hardware cells".into());
         }
-        let mut bytes = s.scene.planes(columns, rows, matches!(planes, Planes::Ae));
+        let ae = matches!(planes, Planes::Ae);
+        let mut bytes = match &self.exposure {
+            Some(exposure) if !s.explicit => {
+                let relative = exposure.lock().map_or(1., |e| e.relative());
+                Scene::host(columns, rows, relative)?.planes(columns, rows, ae)
+            }
+            _ => s.scene.planes(columns, rows, ae),
+        };
         if !matches!(planes, Planes::Color) {
             bytes.truncate(0xc00);
         }
@@ -309,7 +378,9 @@ impl Device for Statistics {
     }
     fn set_scene(&mut self, input: &Value) -> Result<bool, String> {
         let scene = Scene::load(input)?;
-        self.state.lock().unwrap().scene = scene;
+        let mut state = self.state.lock().unwrap();
+        state.scene = scene;
+        state.explicit = true;
         Ok(true)
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
@@ -407,6 +478,53 @@ mod tests {
             ],
             [9216 * 2080, 9216 * 5200, 9216 * 2080]
         );
+    }
+    /// The sensor scene: doubling the exposure doubles the signal above the pedestal; green
+    /// takes the most signal, red and blue their colour gains; bright pixels clip at 16383
+    /// before the cells integrate them.
+    #[test]
+    fn sensor_scene_signal_follows_exposure_and_clips() {
+        let grey = vec![118u8; 16 * 16 * 3];
+        let cell = |exposure: f64, plane: usize| {
+            let scene = Scene::sensor(16, 16, &grey, xtrans::Response::xt5(exposure));
+            let samples = f64::from(scene.ae_cell_area * [2, 5, 2, 5][plane] / 9);
+            f64::from(word(&scene.planes(16, 16, true), plane, 3, 3)) / samples
+        };
+        let (one, two) = (cell(1., 1), cell(2., 1));
+        assert!(((two - 1024.) / (one - 1024.) - 2.).abs() < 1e-3, "{one} -> {two}");
+        // 18% grey (sRGB 118, linear 0.181) at the reference exposure: green 0.181 x 7679.5
+        // above black.
+        assert!((one - 1024. - xtrans::srgb_to_linear(118) * xtrans::XT5_SCENE_WHITE).abs() < 1., "{one}");
+        assert!(cell(1., 0) < one && cell(1., 2) < one && cell(1., 0) < cell(1., 2));
+        // Four stops over: green clips; red (gain 0.47) does not yet.
+        assert_eq!(cell(16., 1).round(), 16383.);
+        assert!(cell(16., 0) < 16383.);
+        let white = vec![255u8; 16 * 16 * 3];
+        let clipped = Scene::sensor(16, 16, &white, xtrans::Response::xt5(8.));
+        let samples = clipped.samples_per_cell;
+        assert_eq!(word(&clipped.planes(1, 1, false), 1, 0, 0), 16383 * samples);
+    }
+    /// A sensor-scene statistics block measures the host scene at the exposure read at each
+    /// completion; a run-definition scene replaces it.
+    #[test]
+    fn completions_read_the_exposure_each_time() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        use fujimod_emulator_imaging::exposure::Exposure;
+        let exposure = ExposureHandle::default();
+        let statistics = Statistics::in_memory(0x1000, 0x2000).unwrap().with_sensor_scene(exposure.clone());
+        let mut host = RecordingHost { ram: vec![0; 0x1000], ram_base: 0x1000, ..Default::default() };
+        let mut green = || {
+            statistics.complete(&mut Cx::new(&mut host, 0, 0, 0), 0x1000, 16, 16, Planes::Ae).unwrap();
+            word(&host.ram, 1, 5, 5)
+        };
+        let one = green();
+        *exposure.lock().unwrap() = Exposure { seconds: 1. / 125., analog_gain: 2. };
+        let two = green();
+        let pedestal = 1024 * (120 * 78 * 5 / 9);
+        assert!(((two - pedestal) as f64 / (one - pedestal) as f64 - 2.).abs() < 1e-3);
+        let mut device = statistics.clone();
+        device.set_scene(&serde_json::json!({"luma": 2048})).unwrap();
+        assert_eq!(green(), 9216 * 5200);
     }
     #[test]
     fn clipping_precedes_area_integration() {

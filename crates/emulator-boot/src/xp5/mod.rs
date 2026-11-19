@@ -10,6 +10,7 @@ mod loader_card;
 pub mod firmware;
 mod manifest;
 mod open;
+mod profile;
 mod rom_start;
 mod run;
 
@@ -19,7 +20,7 @@ pub use run::{Run, run_boot};
 use fujimod_catalog_configuration::RunStart;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 /// Explicit files and settings needed to construct an XP5 session.
 pub struct Startup {
@@ -35,6 +36,9 @@ pub struct Startup {
     pub viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     pub mode: Mode,
     pub quantum: Option<usize>,
+    /// Named camera settings (`setup=done`, `language=en`) the loader start boots with, from
+    /// the user profile the firmware's settings layout locates. Empty: the flash as installed.
+    pub camera_settings: BTreeMap<String, String>,
 }
 
 pub struct Started {
@@ -63,7 +67,8 @@ pub(super) fn open_startup(
     startup: Startup,
 ) -> Result<Started, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override } = startup;
+        scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
+        camera_settings } = startup;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard && sd_image.is_none()
         && !card_files.iter().any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
@@ -131,6 +136,13 @@ pub(super) fn open_startup(
         }
         None
     };
+    let profile = if camera_settings.is_empty() {
+        None
+    } else if rom.is_some() {
+        return Err("camera settings apply to the loader start only".into());
+    } else {
+        Some(profile::place(&mut state, &firmware, configuration, &camera_settings)?)
+    };
     let opened = open::open_from(
         &firmware,
         &state,
@@ -142,6 +154,7 @@ pub(super) fn open_startup(
         rom.as_ref(),
         loader.as_ref(),
         viewer_keys,
+        profile.as_ref(),
     )?;
     let card_write_back = loader.and_then(|card| card.write_back);
     Ok(Started { firmware, state, opened, card_write_back })

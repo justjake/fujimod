@@ -26,6 +26,12 @@ XP5 loader starts put the card in slot 1 and write changed sectors back into IMA
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,ADDR:LEN...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 XP5 --gpio also takes PORT:PIN=0|1@MS: the level applies MS guest milliseconds after the run starts.\n\
+XP5 --set CONTROL=POSITION[@MS][,...] moves a dial or switch MS guest milliseconds after the run starts\n\
+(X-T5: iso=A|C|125..12800, ss=A|8000..2|1|T|B, ev=-3..+3|C, drive=PANO|ADV|BKT|CH|CL|S|HDR,\n\
+focus=S|C|M, mode=STILL|MOVIE, power=ON|OFF).\n\
+XP5 --camera-settings NAME=VALUE[,...] boots the loader start from the user profile the firmware's settings\n\
+layout locates, built from the update at run time (X-T5: setup=done, language=en). X-T5 --press keys also include AEL, AFON, STICK_UL/UR/DL/DR,\n\
+REAR_PUSH, FRONT_PUSH and one detent of REAR+, REAR-, FRONT+, FRONT-.\n\
 XP5 --watch-writes logs each CPU store, DMA and host write into the physical ranges to stderr (needs --engine unicorn).\n\
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE.\n\
@@ -33,7 +39,7 @@ Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FIL
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 39] = [
+const VALUED: [&str; 41] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -71,6 +77,8 @@ const VALUED: [&str; 39] = [
     "--gpio",
     "--poke",
     "--press",
+    "--set",
+    "--camera-settings",
     "--load-snapshot",
     "--save-snapshot",
 ];
@@ -234,6 +242,21 @@ impl Boot {
     }
 }
 
+/// `NAME=VALUE[,NAME=VALUE...]` camera settings; each name at most once.
+fn camera_settings(text: Option<&str>) -> Result<BTreeMap<String, String>, String> {
+    let mut settings = BTreeMap::new();
+    for item in text.unwrap_or_default().split(',').map(str::trim).filter(|item| !item.is_empty()) {
+        let (name, value) = item
+            .split_once('=')
+            .filter(|(name, value)| !name.is_empty() && !value.is_empty())
+            .ok_or_else(|| format!("--camera-settings {item}: needs NAME=VALUE"))?;
+        if settings.insert(name.to_owned(), value.to_owned()).is_some() {
+            return Err(format!("--camera-settings names {name} twice"));
+        }
+    }
+    Ok(settings)
+}
+
 /// What a finished run reports to the shell.
 struct Outcome {
     success: bool,
@@ -255,7 +278,8 @@ fn prepare_mod(
 fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     boot_options.refuse(
         "EXR II",
-        &["--application-plan", "--manifest", "--watch-pcs", "--watch-writes", "--dump", "--hash"],
+        &["--application-plan", "--manifest", "--watch-pcs", "--watch-writes", "--dump", "--hash", "--set",
+          "--camera-settings"],
     )?;
     let mut loaded_mod = prepare_mod(&resolved, fujimod_emulator_cpu::Model::CortexR5F, &boot_options.mods)?;
     if let Some(path) = boot_options.path("--scene") {
@@ -417,6 +441,8 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         gpio: boot_options.text("--gpio")?,
         pokes: std::mem::take(&mut boot_options.pokes),
         press: boot_options.text("--press")?,
+        settings: boot_options.text("--set")?,
+        camera_settings: camera_settings(boot_options.text("--camera-settings")?.as_deref())?,
         discovery: boot_options.discovery,
         stubs: std::mem::take(&mut boot_options.stubs),
         patch_file: boot_options.path("--patch"),
@@ -452,6 +478,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
 }
 
 fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
+    options.refuse("application-profile", &["--set", "--camera-settings"])?;
     let request = boot::application::Startup {
         update: options.required("--update")?.into(),
         plan: options.required("--application-plan")?.into(),
@@ -641,6 +668,9 @@ mod tests {
         assert!(parse(args(&["boot", "--configuration", "a", "--configuration", "b"])).is_err());
         assert!(parse(args(&["boot", "--discovery", "--discovery"])).is_err());
         assert!(parse(args(&["boot", "--body", "x70"])).is_err());
+        let set = parse(args(&["boot", "--set", "iso=800@1000,ev=+1"])).unwrap().unwrap();
+        assert!(set.refuse("EXR II", &["--set"]).unwrap_err().contains("does not apply"));
+        assert!(parse(args(&["boot", "--set", "iso=800", "--set", "ss=A"])).is_err());
         let boot = parse(args(&["boot", "--overlay", "usb", "--overlay", "service", "--discovery"]))
             .unwrap()
             .unwrap();
@@ -672,6 +702,18 @@ mod tests {
         let mut boot = parse(args(&["boot", "--wall-seconds", "12.5"])).unwrap().unwrap();
         assert_eq!(boot.text("--wall-seconds").unwrap().as_deref(), Some("12.5"));
         assert!(parse(args(&["boot", "--wall-seconds", "1", "--wall-seconds", "2"])).is_err());
+    }
+
+    #[test]
+    fn camera_settings_are_named_once() {
+        let expected = BTreeMap::from([
+            ("language".to_owned(), "en".to_owned()),
+            ("setup".to_owned(), "done".to_owned()),
+        ]);
+        assert_eq!(camera_settings(Some("setup=done, language=en")).unwrap(), expected);
+        assert!(camera_settings(None).unwrap().is_empty());
+        assert!(camera_settings(Some("setup")).is_err());
+        assert!(camera_settings(Some("setup=done,setup=done")).is_err());
     }
 
     #[test]

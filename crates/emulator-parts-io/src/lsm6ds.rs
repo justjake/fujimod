@@ -1,5 +1,10 @@
 //! LSM6DSO-compatible SPI configuration-register subset (ST DS12140).
-//! No synthetic acceleration, FIFO samples, data-ready or interrupt is supplied.
+//! No FIFO samples, data-ready interrupt or motion is supplied. The output
+//! registers (STATUS_REG 0x1e, OUT_TEMP 0x20..0x21, gyroscope 0x22..0x27,
+//! accelerometer 0x28..0x2d) read as a still body: data ready, zero rate, zero
+//! acceleration and 25 C. The X-T5 4.31 IBIS servo polls them with burst read
+//! `a0` (M-core command table 0x32714) once it runs. Gravity is not applied;
+//! the still-body outputs are a scenario input, not a measurement.
 //! Software reset commits atomically with its register write on the guest wire;
 //! internal reset latency and the exact silicon identity are unmeasured.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
@@ -34,11 +39,18 @@ impl Registers {
         self.state.offsets = [0; 3];
     }
     fn supported(address: u8) -> bool {
-        matches!(address,1|0xd|0xf|0x10..=0x17|0x73..=0x75)
+        matches!(address,1|0xd|0xf|0x10..=0x17|0x73..=0x75) || Self::output(address)
+    }
+    /// Read-only status and output registers.
+    fn output(address: u8) -> bool {
+        matches!(address, 0x1e | 0x20..=0x2d)
     }
     fn value(&self, address: u8) -> u8 {
         match address {
             0xf => 0x6c,
+            // XLDA, GDA and TDA: every output holds a fresh still-body sample.
+            0x1e => 7,
+            0x20..=0x2d => 0,
             0x73..=0x75 => self.state.offsets[(address - 0x73) as usize],
             _ => self.state.registers[address as usize],
         }
@@ -59,6 +71,7 @@ impl Endpoint for Registers {
             }
             if !self.state.read
                 && (address == 0xf
+                    || Self::output(address)
                     || address == 1 && word != 0
                     || address == 0xd && word != 0
                     || address == 0x12 && word & !0x75 != 0)
@@ -129,5 +142,31 @@ impl Endpoint for Registers {
         }
         self.state = state;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn exchange(part: &mut Registers, words: &[u16]) -> Result<Vec<u16>, String> {
+        part.reset_transaction();
+        words
+            .iter()
+            .map(|&w| {
+                let frame = Frame { bits: 8, mode: 3, word: w };
+                part.validate(frame)?;
+                Ok(part.transfer(frame, 0))
+            })
+            .collect()
+    }
+    #[test]
+    fn still_body_outputs_read_back_and_refuse_writes() {
+        let mut part = Registers::default();
+        assert_eq!(exchange(&mut part, &[0x8f, 0]).unwrap(), vec![0, 0x6c]);
+        // The servo's burst: temperature, then gyroscope, auto-incremented.
+        assert_eq!(exchange(&mut part, &[0xa0, 0, 0, 0, 0, 0, 0]).unwrap(), vec![0; 7]);
+        assert_eq!(exchange(&mut part, &[0x9e, 0]).unwrap(), vec![0, 7]);
+        assert!(exchange(&mut part, &[0x22, 1]).is_err());
+        assert!(exchange(&mut part, &[0xb0, 0]).is_err());
     }
 }

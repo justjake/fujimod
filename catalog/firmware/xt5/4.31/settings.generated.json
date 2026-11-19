@@ -17,7 +17,757 @@
   },
   "defaults": null,
   "fields": [],
-  "profile": null,
-  "settings": {},
+  "profile": {
+    "header": {
+      "address": 27995288,
+      "size": 8,
+      "sha256": "7eeba9e49bc4bd278d85741e360aabcb5a57e17c0d14d9ccc68f95f355e348d9"
+    },
+    "loader_offset": 344,
+    "power_register": 31,
+    "records": {
+      "main": {
+        "block": 1920,
+        "bytes": 32768,
+        "defaults": {
+          "address": 28291072,
+          "size": 31444,
+          "sha256": "8bb90529e6003bd47a027f51585318582f180f07904c28595bd4e12cc78d6555"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 31740,
+        "fields": [
+          {
+            "offset": 31736,
+            "bytes": [
+              4,
+              49
+            ],
+            "basis": "Stock profile writer 0x149ac40 stamps the version bytes at 0x1ab226e/0x1ab226f into record +0x7bf8/+0x7bf9; the validator 0x149b18c refuses a record whose stamp is zero."
+          },
+          {
+            "offset": 900,
+            "bytes": [
+              21
+            ],
+            "basis": "UI_SETP_BKUP_VER: the stock migration 0x12e3fdc resets fields newer than the stored backup version and then stores version 0x15; a current profile carries 0x15."
+          },
+          {
+            "offset": 1906,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_APP_INTRODUCTION_SET: stock startup check 0x12f3bec reopens its first-start page while it is zero."
+          },
+          {
+            "offset": 1907,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_PAIRING_SET: stock startup check 0x12f3bec reopens its first-start page while it is zero."
+          },
+          {
+            "offset": 26940,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_POWER_OFF_TEMPERATURE_SET: stock startup check 0x12f3bec reopens its first-start page while it is zero."
+          }
+        ]
+      },
+      "system": {
+        "block": 1896,
+        "bytes": 8192,
+        "defaults": {
+          "address": 27995296,
+          "size": 7168,
+          "sha256": "6c98a0e888fdb03df57393ce1aa6819cb6f922b0987a380a03c0ee42abcaaef5"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 7932,
+        "fields": []
+      }
+    },
+    "derived_fields": [
+      {
+        "store": "system",
+        "offset": 430,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 0: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 433,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 0: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 432,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 0: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 1454,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 1: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 1457,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 1: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 1456,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 1: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 2478,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 2: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 2481,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 2: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 2480,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 2: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 3502,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 3: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 3505,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 3: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 3504,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 3: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 4526,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 4: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 4529,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 4: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 4528,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 4: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 5550,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 5: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 5553,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 5: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 5552,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 5: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 6574,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 6: configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "system",
+        "offset": 6577,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 6: configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "system",
+        "offset": 6576,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock system defaults builder 0x149dd08, page 6: configuration key 0x219: 1, 2 or 3 kept, else 0."
+      }
+    ]
+  },
+  "settings": {
+    "setup": {
+      "store": "header",
+      "offset": 4,
+      "values": {
+        "done": [
+          14
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 1034,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    }
+  },
   "sections": []
 }

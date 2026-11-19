@@ -76,6 +76,12 @@ struct Channel {
     status: u8,
     remaining: u64,
     counter_exhausted: bool,
+    /// Count, source and destination as programmed for the last enabled transfer.
+    /// Re-enabling an exhausted channel without new values repeats that transfer:
+    /// the X-T5 4.31 M-core restarts its per-tick capture-table stream (DMA handle
+    /// `0x4000d`, routine `0x1fa90`) by setting only the enable bit.
+    #[serde(default)]
+    programmed: Option<[u32; 3]>,
     started: bool,
     irq_published: bool,
 }
@@ -367,10 +373,19 @@ impl Pair {
         }
         if register == 0x28 && value & ENABLE != 0 {
             let mut candidate = c.clone();
+            if candidate.counter_exhausted
+                && let Some([count, source, destination]) = candidate.programmed
+            {
+                candidate.count = count;
+                candidate.source = source;
+                candidate.destination = destination;
+                candidate.counter_exhausted = false;
+            }
             candidate.control = value;
             self.validate(lane, &candidate)?;
             candidate.remaining = candidate.count as u64 + 1;
             candidate.counter_exhausted = false;
+            candidate.programmed = Some([candidate.count, candidate.source, candidate.destination]);
             candidate.started = false;
             self.state.channels[lane] = candidate;
             self.routing.lock().unwrap().enabled[lane] = true;

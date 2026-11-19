@@ -41,6 +41,8 @@ pub struct Resources {
     /// Verified and decoded image backing, shared by aperture, controller and DMA.
     pub storage: Option<flash_storage::Medium>,
     pub displays: BTreeMap<u64, display::Config>,
+    /// Extended-timer PWM words, read by the IBIS stage model behind input capture.
+    pub pwm: fujimod_emulator_xp5_io::timer::PwmOutputs,
 }
 fn register_with_resources(
     bus: &mut DeviceGraph,
@@ -89,19 +91,6 @@ fn register_with_resources(
                     companion.pins,
                     companion.channel.clone(),
                 )),
-            )?;
-        }
-        "input-capture" => {
-            if window.size != 0x1000 {
-                return Err("invalid input-capture window size".into());
-            }
-            if window.options.keys().any(|key| key != "dma_transmit") {
-                return Err("invalid input-capture option".into());
-            }
-            bus.register(
-                window.base,
-                window.size,
-                Box::new(fujimod_emulator_xp5_io::input_capture::InputCapture::new(window.base)?),
             )?;
         }
         "discarded-read" => {
@@ -406,7 +395,7 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(timer::Timer::extended(window.base)),
+                Box::new(timer::Timer::extended(window.base).with_pwm_outputs(resources.pwm.clone())),
             )?;
         }
         "timer" | "timer-focus-capture" => {
@@ -715,6 +704,7 @@ pub fn register_all(
         windows,
         resources.companion.as_ref().map(|c| c.pins.companion),
         resources.pins.clone(),
+        resources.pwm.clone(),
         // Only a declared aperture exposes the flash backing on the bus.
         resources.storage.as_ref().filter(|_| aperture),
     )?;

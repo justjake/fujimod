@@ -75,6 +75,7 @@ pub fn register_all(
             channel: 1,
             sixteen_bit_codes: still_raw16_codes()?,
             scene: fujimod_emulator_imaging::frame::still_scene,
+            optical_black: (24, 66),
         })
     } else {
         sensor
@@ -179,6 +180,8 @@ pub fn register_all(
     } else {
         statistics::Statistics::in_memory(STATISTICS_BASE, STATISTICS_BANK_SIZE)?
     };
+    // AE/AWB statistics measure the host scene at the sensor's programmed exposure.
+    let statistics = statistics.with_sensor_scene(sensor.exposure());
     for w in windows.iter().filter(|w| w.kind == "imaging-statistics") {
         if w.base != STATISTICS_BASE || w.size != (STATISTICS_BANK_SIZE * 2) as u64 {
             return Err("invalid statistics SRAM window".into());
@@ -320,11 +323,13 @@ pub fn register_all(
         };
         let work = match w.kind.as_str() {
             "imaging-reset" => work::Work::reset(w.base)?,
+            // Live view follows the sensor's programmed exposure.
             "movdc" => work::Work::movdc(
                 w.base,
                 number("frame_period_us")?,
                 u8::try_from(number("source_luma")?).map_err(|e| e.to_string())?,
-            )?,
+            )?
+            .with_exposure(sensor.exposure()),
             "imaging-ibuf" => work::Work::ibuf(w.base, number("completion_us")?)?,
             _ => work::Work::resize(w.base, number("completion_us")?)?,
         };

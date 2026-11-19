@@ -1,6 +1,7 @@
 //! X100VI 48 MHz general/PWM and reload timers (ff908000), plus six
 //! extended general channels (ff909000). Finder logical17 uses general6/IRQ42.
 //! External capture inputs are not synthesized.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -58,6 +59,10 @@ impl General {
     }
 }
 
+/// Extended-timer general-channel words (initial count, period, first and second
+/// compare) shared read-only with models of what the PWM outputs drive.
+pub type PwmOutputs = std::sync::Arc<std::sync::Mutex<[[u32; 4]; 6]>>;
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct Timer {
     #[serde(skip)]
@@ -75,6 +80,8 @@ pub struct Timer {
     companion_cpu: Option<usize>,
     #[serde(skip)]
     focus_capture: Option<fujimod_emulator_devices::xp5::pins::SharedPins>,
+    #[serde(skip)]
+    pwm: Option<PwmOutputs>,
 }
 impl Timer {
     pub fn new(base: u64) -> Self {
@@ -144,6 +151,20 @@ impl Timer {
         self.focus_capture = Some(pins);
         self
     }
+    /// Publish the general-channel words of an extended timer to `outputs`.
+    pub fn with_pwm_outputs(mut self, outputs: PwmOutputs) -> Self {
+        self.pwm = Some(outputs);
+        self.publish_pwm();
+        self
+    }
+    fn publish_pwm(&self) {
+        if let Some(outputs) = &self.pwm {
+            let mut outputs = outputs.lock().unwrap();
+            for (n, output) in outputs.iter_mut().enumerate() {
+                *output = self.general[n].words;
+            }
+        }
+    }
     fn schedule(&self, cx: &mut Cx<'_>, channel: usize) {
         let c = &self.counters[channel];
         if c.enabled {
@@ -162,6 +183,20 @@ impl Timer {
             None
         }
     }
+}
+#[derive(Serialize)]
+struct TimerSnapshotRef<'a> {
+    counters: &'a [Counter; 16],
+    general: &'a [General; 16],
+    routing: &'a [u32; 2],
+    group: &'a u32,
+}
+#[derive(Deserialize)]
+struct TimerSnapshot {
+    counters: [Counter; 16],
+    general: [General; 16],
+    routing: [u32; 2],
+    group: u32,
 }
 impl Device for Timer {
     fn name(&self) -> &'static str {
@@ -316,6 +351,7 @@ impl Device for Timer {
             }
             g.count.generation += 1;
             self.schedule_general(cx, n);
+            self.publish_pwm();
             return;
         }
         if self.extended {
@@ -393,7 +429,33 @@ impl Device for Timer {
         }
         self.schedule(cx, n);
     }
-    fujimod_emulator_devices::checkpoint_fields!(counters: [Counter; 16], general: [General; 16], routing: [u32; 2], group: u32);
+    // Field-for-field the `checkpoint_fields!` encoding, written out so a restore
+    // also republishes the PWM words.
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &TimerSnapshotRef {
+            counters: &self.counters,
+            general: &self.general,
+            routing: &self.routing,
+            group: &self.group,
+        })
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let _: TimerSnapshot = saved.decode(self.name())?;
+        if !saved.blobs().is_empty() {
+            return Err("device snapshot blob lengths differ".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let TimerSnapshot { counters, general, routing, group } = saved.decode(self.name())?;
+        self.counters = counters;
+        self.general = general;
+        self.routing = routing;
+        self.group = group;
+        self.publish_pwm();
+        Ok(())
+    }
     fn save(&self) -> Value {
         serde_json::to_value(self).expect("timer state")
     }
@@ -403,7 +465,9 @@ impl Device for Timer {
         saved.base = self.base;
         saved.companion_cpu = self.companion_cpu;
         saved.focus_capture = self.focus_capture.clone();
+        saved.pwm = self.pwm.clone();
         *self = saved;
+        self.publish_pwm();
         Ok(())
     }
 }

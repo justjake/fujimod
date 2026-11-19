@@ -205,6 +205,7 @@ impl Session {
                     storage: None,
                     sd: BTreeMap::new(),
                     displays: scanouts,
+                    pwm: Default::default(),
                 };
                 board::register_all(&mut devices, &windows, &mut resources, &mut |w| {
                     Err(format!("unsupported device {}@{:#x}", w.kind, w.base))

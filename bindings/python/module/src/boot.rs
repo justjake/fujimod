@@ -32,7 +32,7 @@ impl Boot for CatalogBoot {
             if inputs.boot_rom.is_some() || inputs.manifest.is_some() || inputs.nand.is_some()
                 || inputs.settings.is_some() || inputs.camera.is_some() || inputs.access_point.is_some()
                 || inputs.capability_reply.is_some() || inputs.clock_seconds_2000.is_some()
-                || !inputs.preferred_languages.is_empty()
+                || !inputs.preferred_languages.is_empty() || !inputs.camera_settings.is_empty()
             {
                 return Err("application-profile inputs belong in the startup plan".into());
             }
@@ -70,8 +70,8 @@ impl Boot for CatalogBoot {
             let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
                 update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
                 card_image: inputs.card_image, card_files: inputs.card_files, scene: inputs.scene,
-                output: None, viewer_port: None,
-                mode, quantum: inputs.quantum,
+                output: None, viewer_port: None, viewer_keys: None,
+                mode, quantum: inputs.quantum, camera_settings: inputs.camera_settings,
             }))? else {
                 return Err("XP5 startup returned another processor generation".into());
             };
@@ -80,6 +80,9 @@ impl Boot for CatalogBoot {
         }
         if inputs.manifest.is_some() {
             return Err("a boot manifest requires an XP5 run configuration".into());
+        }
+        if !inputs.camera_settings.is_empty() {
+            return Err("camera settings require an XP5 run configuration".into());
         }
         if let Some(quantum) = inputs.quantum {
             if quantum == 0 {

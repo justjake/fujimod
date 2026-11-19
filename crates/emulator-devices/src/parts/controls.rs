@@ -19,6 +19,22 @@ pub trait Controls: Send + Sync {
     fn register_sample(&self, _register: u8) -> Option<u16> {
         None
     }
+    /// Every power-controller register these controls drive, in ascending
+    /// order: the register ladders plus any register whose bits a switch
+    /// drives or whose count a dial accumulates.
+    fn driven_registers(&self) -> Vec<u8> {
+        self.register_ladders()
+    }
+    /// Value of a driven register given its current value, or `None` to leave
+    /// it unchanged. Host inspection never advances the controls.
+    fn drive_register(&self, register: u8, _current: u16) -> Option<u16> {
+        self.register_sample(register)
+    }
+    /// Value one guest read of a counting register returns. The read consumes
+    /// what it returns; `None` for any register that does not count.
+    fn take_register(&self, _register: u8) -> Option<u16> {
+        None
+    }
     fn save(&self) -> Value;
     fn restore(&self, state: &Value) -> Result<(), String>;
     /// Exact future-affecting state, including held keys and queued edges.

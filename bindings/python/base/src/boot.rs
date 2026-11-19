@@ -29,6 +29,8 @@ pub struct Inputs {
     pub access_point: Option<String>,
     /// Explicit 20-byte MT5931 capability fixture.
     pub capability_reply: Option<Vec<u8>>,
+    /// Named camera settings of the user profile an XP5 loader start boots with.
+    pub camera_settings: std::collections::BTreeMap<String, String>,
 }
 
 /// A native catalog session with its processor-specific physical input handle.
