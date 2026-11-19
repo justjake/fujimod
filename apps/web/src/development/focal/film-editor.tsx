@@ -786,8 +786,36 @@ const TOOLS: Tool[] = ['curve', 'color', 'mix', 'tone', 'channels'];
 type Section = 'film' | 'raw' | 'custom' | Tool;
 /** The stops above the tools: the film's name and files, the RAW file and the
  * custom setting. */
-type Meta = 'icon' | 'name' | 'saveas' | 'open' | 'strip' | 'create' | 'custom';
-const META_SECTION: Record<Meta, Section> = { icon: 'film', name: 'film', saveas: 'film', open: 'film', strip: 'raw', create: 'raw', custom: 'custom' };
+type Meta = 'icon' | 'name' | 'save' | 'saveas' | 'open' | 'strip' | 'reflect' | RawOption | 'create' | 'custom';
+
+/** How a RAW is developed. These belong to the conversion, not to the custom setting or the film: they are never saved into either. */
+const RAW_OPTIONS = [
+  { key: 'push', name: 'PUSH/PULL PROCESSING', values: ['−1 EV', '−2/3 EV', '−1/3 EV', '0', '+1/3 EV', '+2/3 EV', '+1 EV', '+1 1/3 EV', '+1 2/3 EV', '+2 EV', '+2 1/3 EV', '+2 2/3 EV', '+3 EV'], start: 3 },
+  { key: 'space', name: 'COLOR SPACE', values: ['sRGB', 'Adobe RGB'], start: 0 },
+  { key: 'filetype', name: 'FILE TYPE', values: ['JPEG', 'HEIF', 'TIFF 8BIT', 'TIFF 16BIT'], start: 0 },
+  { key: 'size', name: 'IMAGE SIZE', values: ['L 3:2', 'M 3:2', 'S 3:2'], start: 0 },
+  { key: 'quality', name: 'IMAGE QUALITY', values: ['FINE', 'NORMAL'], start: 0 },
+  { key: 'lmo', name: 'LENS MODULATION OPTIMIZER', values: ['ON', 'OFF'], start: 0 },
+] as const;
+type RawOption = (typeof RAW_OPTIONS)[number]['key'];
+const RAW_DEFAULT: number[] = RAW_OPTIONS.map((o) => o.start);
+const META_SECTION: Record<Meta, Section> = {
+  icon: 'film',
+  name: 'film',
+  save: 'film',
+  saveas: 'film',
+  open: 'film',
+  strip: 'raw',
+  reflect: 'raw',
+  push: 'raw',
+  space: 'raw',
+  filetype: 'raw',
+  size: 'raw',
+  quality: 'raw',
+  lmo: 'raw',
+  create: 'raw',
+  custom: 'custom',
+};
 const TOOL_NAMES: Record<Tool, string> = {
   curve: 'TONE CURVE',
   color: 'COLOR',
@@ -1014,6 +1042,8 @@ interface State {
   strip: StripStyle;
   /** The RAW last developed with OK. */
   created: number;
+  /** The RAW conversion's options, an index into each of RAW_OPTIONS' values. */
+  raw: number[];
   /** The primary COLOR MIX's scales edit: 0 reds, 1 greens, 2 blues. */
   primary: number;
   /** A matrix shown as numbers over the column, with the focused cell. */
@@ -1204,12 +1234,19 @@ function choose(s: State, p: Picker, k: number | 'opened'): State {
   }
 }
 
-/** SAVE AS: the edits go on in a copy; the film saved before stays as it was. */
-function saveAs(s: State): State {
-  const match = /^(.*?)(?: (\d+))?$/.exec(s.name);
-  const name = `${match?.[1] ?? s.name} ${Number(match?.[2] ?? 1) + 1}`;
-  return { ...s, name, from: s.name };
+/** SAVE AS NEW's suggested name: the film's name numbered on. */
+function nextName(name: string): string {
+  const match = /^(.*?)(?: (\d+))?$/.exec(name);
+  return `${match?.[1] ?? name} ${Number(match?.[2] ?? 1) + 1}`;
 }
+
+/** SAVE AS NEW: the edits are written to a new film under the typed name, and editing goes on there; the film opened stays as it was saved. */
+function saveAs(s: State, name: string): State {
+  return { ...s, name, from: s.name, opened: s.film };
+}
+
+/** SAVE: the edits are written over the film opened. */
+const save = (s: State): State => ({ ...s, opened: s.film });
 
 function openPicker(s: State, p: { kind: 'icon' } | { kind: 'copy'; tool: Tool } | { kind: 'compare' } | { kind: 'open' }): State {
   const current = pickerCurrent(s, { ...p, at: 0 });
@@ -1218,7 +1255,7 @@ function openPicker(s: State, p: { kind: 'icon' } | { kind: 'copy'; tool: Tool }
 }
 
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, primary: 0, numbers: null, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, raw: RAW_DEFAULT, primary: 0, numbers: null, ...over };
 }
 
 const RAIL = 60;
@@ -1242,7 +1279,7 @@ function railSections(s: State): Section[] {
 
 /** The stops above the tools, a row at a time; a row of two buttons is one row. */
 function metaRows(s: State): Meta[][] {
-  return [['icon', 'name'], ['saveas', 'open'], ...(s.crop ? ([['strip'], ['create']] as Meta[][]) : []), ['custom']];
+  return [['icon', 'name'], ['save', 'saveas', 'open'], ...(s.crop ? ([['strip'], ['reflect'], ...RAW_OPTIONS.map((o) => [o.key]), ['create']] as Meta[][]) : []), ['custom']];
 }
 
 /** The section the focus is in, or on the rail, the section chosen there. */
@@ -1278,7 +1315,9 @@ function Chevron(props: { dir: 'down' | 'left' | 'right'; size?: number; color?:
    Shift gives capitals; an icon's lowercase letters are its small capitals. */
 type KeyKind = 'char' | 'shift' | 'delete' | 'layer' | 'space' | 'return' | 'caret-left' | 'caret-right';
 type KeyCap = { kind: KeyKind; row: number; left: number; width: number; label: string };
-type Typing = { text: string; cursor: number; focus: number; shift: 'off' | 'once' | 'locked'; digits: boolean; target: 'name' | 'icon' };
+type Typing = { text: string; cursor: number; focus: number; shift: 'off' | 'once' | 'locked'; digits: boolean; target: TypingTarget };
+/** What the keyboard names: the film (rename), a copy (SAVE AS NEW) or the lettered icon. */
+type TypingTarget = 'name' | 'saveas' | 'icon';
 
 function keyCaps(t: Typing): KeyCap[] {
   const rows = t.digits ? ['1234567890', "-/:;()&@'", '.,?!+#*'] : ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
@@ -1294,7 +1333,7 @@ function keyCaps(t: Typing): KeyCap[] {
     if (row === 3) caps.push({ kind: 'delete', row, left: 85, width: 15, label: '' });
   });
   caps.push({ kind: 'layer', row: 4, left: 0, width: 25, label: t.digits ? 'ABC' : '123' });
-  caps.push(t.target === 'name' ? { kind: 'space', row: 4, left: 25, width: 50, label: 'space' } : { kind: 'space', row: 4, left: 25, width: 50, label: '' });
+  caps.push(t.target !== 'icon' ? { kind: 'space', row: 4, left: 25, width: 50, label: 'space' } : { kind: 'space', row: 4, left: 25, width: 50, label: '' });
   caps.push({ kind: 'return', row: 4, left: 75, width: 25, label: 'OK' });
   return caps;
 }
@@ -1307,6 +1346,7 @@ function typeKey(s: State, t: Typing, cap: KeyCap): State {
   switch (cap.kind) {
     case 'return':
       if (t.target === 'icon') return { ...s, keyboard: null, icon: t.text ? `text:${t.text}` : s.icon };
+      if (t.target === 'saveas') return saveAs({ ...s, keyboard: null }, t.text.trim() || s.name);
       return { ...s, keyboard: null, name: t.text.trim() || s.name };
     case 'delete':
       return t.cursor ? put({ ...t, text: t.text.slice(0, t.cursor - 1) + t.text.slice(t.cursor), cursor: t.cursor - 1 }) : s;
@@ -1359,7 +1399,7 @@ function pressKeyboard(s: State, t: Typing, key: Key): State {
   return s;
 }
 
-const typing = (text: string, target: 'name' | 'icon'): Typing => ({ text, cursor: text.length, focus: 4, shift: target === 'icon' ? 'locked' : 'off', digits: false, target });
+const typing = (text: string, target: TypingTarget): Typing => ({ text, cursor: text.length, focus: 4, shift: target === 'icon' ? 'locked' : 'off', digits: false, target });
 
 function DialGlyph() {
   return (
@@ -1405,7 +1445,7 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
     <div class="absolute inset-0 flex flex-col" style={{ 'text-transform': 'none' }}>
       <div class="flex h-[48px] items-center gap-[14px] px-[18px]" style={{ background: 'var(--m-title)' }}>
         <button type="button" class="flex size-[32px] items-center justify-center text-white/70" onClick={() => props.update({ ...props.s, keyboard: null })}><Chevron dir="left" size={22} /></button>
-        <span class="text-[21px] font-medium tracking-[0.18em] text-white/75">{icon() ? 'ICON LETTERS' : 'FILM NAME'}</span>
+        <span class="text-[21px] font-medium tracking-[0.18em] text-white/75">{icon() ? 'ICON LETTERS' : t().target === 'saveas' ? 'SAVE AS NEW' : 'FILM NAME'}</span>
       </div>
       <div class="flex grow items-start gap-[14px] px-[20px] pt-[16px]" style={{ background: 'var(--m-text-area)' }}>
         <Show when={icon()}>
@@ -1532,8 +1572,24 @@ function press(s: State, key: Key): State {
         return { ...s, custom: !s.custom };
       case 'open':
         return key === 'ok' ? openPicker(s, { kind: 'open' }) : s;
+      case 'save':
+        return key === 'ok' ? save(s) : s;
       case 'saveas':
-        return key === 'ok' ? saveAs(s) : s;
+        return key === 'ok' ? { ...s, keyboard: typing(nextName(s.name), 'saveas') } : s;
+      case 'reflect':
+        return key === 'ok' ? { ...s, raw: RAW_DEFAULT, custom: true } : s;
+      case 'push':
+      case 'space':
+      case 'filetype':
+      case 'size':
+      case 'quality':
+      case 'lmo': {
+        if (key === 'ok') return s;
+        const k = RAW_OPTIONS.findIndex((o) => o.key === area);
+        const raw = [...s.raw];
+        raw[k] = Math.max(0, Math.min(RAW_OPTIONS[k].values.length - 1, raw[k] + step));
+        return { ...s, raw };
+      }
       case 'icon':
         return key === 'ok' ? openPicker(s, { kind: 'icon' }) : s;
       case 'name':
@@ -2194,26 +2250,29 @@ function Editor(props: {
           </div>
           </div>
           <div class="flex gap-[8px]">
-            <For each={[['saveas', 'SAVE AS'], ['open', 'OPEN']] as ['saveas' | 'open', string][]}>
-              {([area, label]) => (
-                <button
-                  type="button"
-                  class={`flex h-[47px] grow basis-0 items-center justify-center font-semibold ${SMALL}`}
-                  style={TRACK(s().area === area)}
-                  onClick={() => {
-                    const next = { ...s(), area, railOn: null, header: false, inside: false };
-                    update(area === 'open' ? openPicker(next, { kind: 'open' }) : saveAs(next));
-                  }}
-                >
-                  {label}
-                </button>
-              )}
+            <For each={[['save', 'SAVE'], ['saveas', 'SAVE AS NEW'], ['open', 'OPEN']] as ['save' | 'saveas' | 'open', string][]}>
+              {([area, label]) => {
+                const idle = () => area === 'save' && same(s().film, s().opened);
+                return (
+                  <button
+                    type="button"
+                    class={`flex h-[47px] items-center justify-center px-[10px] font-semibold whitespace-nowrap ${SMALL} ${area === 'saveas' ? 'grow' : 'grow basis-0'}`}
+                    style={{ ...TRACK(s().area === area), ...(idle() ? { color: 'rgb(255 255 255 / 0.35)' } : {}) }}
+                    onClick={() => {
+                      const next = { ...s(), area, railOn: null, header: false, inside: false };
+                      update(area === 'open' ? openPicker(next, { kind: 'open' }) : area === 'save' ? save(next) : { ...next, keyboard: typing(nextName(s().name), 'saveas') });
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              }}
             </For>
           </div>
         </section>
         <Show when={s().crop > 0}>
           <section ref={(element) => (sections.raw = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
-            <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>RAW FILE</div>
+            <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>RAW CONVERSION</div>
             <div
               class="mb-[8px] flex h-[57px] items-center gap-[10px] px-[10px]"
               style={TRACK(s().area === 'strip')}
@@ -2226,6 +2285,51 @@ function Editor(props: {
               <span class={`text-white/60 tabular-nums ${SMALL}`}>
                 {s().crop}/{RAWS.length}
               </span>
+            </div>
+            <button
+              type="button"
+              class={`mb-[8px] flex h-[47px] w-full items-center justify-center rounded-[12px] font-semibold ${SMALL}`}
+              style={TRACK(s().area === 'reflect')}
+              onClick={() => update({ ...s(), area: 'reflect', railOn: null, header: false, inside: false, raw: RAW_DEFAULT, custom: true })}
+            >
+              REFLECT SHOOTING COND.
+            </button>
+            <div class="mb-[8px] flex flex-col gap-[4px]">
+              <For each={RAW_OPTIONS}>
+                {(o, k) => (
+                  <div
+                    class="flex h-[57px] items-center gap-[6px] pr-[6px] pl-[12px]"
+                    style={TRACK(s().area === o.key)}
+                    onPointerDown={() => update({ ...s(), area: o.key, railOn: null, header: false, inside: false })}
+                  >
+                    <div class="flex min-w-0 grow flex-col gap-[5px]">
+                      <span class="truncate text-[15px] leading-none tracking-[0.02em] text-white/60">{o.name}</span>
+                      <span class={`font-medium ${SMALL}`}>{o.values[s().raw[k()]]}</span>
+                    </div>
+                    <For each={[-1, 1]}>
+                      {(d) => {
+                        const at = () => s().raw[k()] + d;
+                        const ok = () => at() >= 0 && at() < o.values.length;
+                        return (
+                          <button
+                            type="button"
+                            class="flex size-[40px] items-center justify-center"
+                            style={{ color: ok() ? '#fff' : 'rgb(255 255 255 / 0.2)' }}
+                            onClick={() => {
+                              if (!ok()) return;
+                              const raw = [...s().raw];
+                              raw[k()] = at();
+                              update({ ...s(), raw, area: o.key });
+                            }}
+                          >
+                            <Chevron dir={d < 0 ? 'left' : 'right'} size={18} />
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                )}
+              </For>
             </div>
             <button
               type="button"
@@ -2678,7 +2782,9 @@ function Presented() {
 /* ---- Review ------------------------------------------------------------------------- */
 
 const STATES: { id: string; title: string; state: State }[] = [
-  { id: 'film', title: 'The film: name, save as, open', state: initial({ area: 'name' }) },
+  { id: 'film', title: 'The film: name, save, save as new, open', state: initial({ area: 'save' }) },
+  { id: 'save-as', title: 'Save as new: name the copy', state: initial({ area: 'saveas', keyboard: { ...typing(nextName('NEW FILM'), 'saveas'), focus: 4 } }) },
+  { id: 'raw-options', title: 'RAW conversion options', state: initial({ crop: 3, area: 'push', raw: [6, 1, 0, 0, 0, 0], scrollTo: 'raw' }) },
   { id: 'icon', title: 'Pick the film\'s icon', state: openPicker(initial({ area: 'icon', icon: 'custom' }), { kind: 'icon' }) },
   { id: 'name', title: 'Type the film\'s name over live view', state: initial({ area: 'name', keyboard: { ...typing('Warm Fa', 'name'), focus: 18 } }) },
   { id: 'monogram', title: 'Letter the icon yourself', state: initial({ area: 'icon', keyboard: { ...typing('Wf', 'icon'), shift: 'off', focus: 4 } }) },
