@@ -456,7 +456,7 @@ function Dial(props: {
   const [pos, setPos] = createSignal<number | null>(null);
   const shown = () => pos() ?? indexOf(props.value);
   const active = () => pos() !== null;
-  const color = () => (props.changed ? ACCENT : '#fff');
+  const color = () => '#fff';
   let gesture: { x: number; y: number; start: number; axis: 'x' | 'y' | null; samples: [number, number][] } | undefined;
   let frame = 0;
   const stop = () => cancelAnimationFrame(frame);
@@ -499,7 +499,7 @@ function Dial(props: {
   const scaleOf = (el: Element) => (el as HTMLElement).offsetWidth / el.getBoundingClientRect().width;
   return (
     <div
-      class="relative h-[84px] overflow-hidden select-none"
+      class="relative h-[76px] overflow-hidden select-none"
       style={{ width: `${props.width}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
       onPointerDown={(e) => {
         stop();
@@ -544,15 +544,19 @@ function Dial(props: {
         if (active()) settle();
       }}
     >
-      <span class="absolute top-[8px] left-[12px] text-[16px] leading-none tracking-[0.06em]" style={{ color: props.focused || active() ? 'rgb(255 255 255 / 0.85)' : 'rgb(255 255 255 / 0.6)' }}>
+      <span class="absolute top-[7px] left-[12px] flex items-center gap-[6px] text-[17px] leading-[20px] tracking-[0.06em]" style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
         {props.name}
+        {/* Changed from the film as opened: the same dot the rail uses. */}
+        <Show when={props.changed}>
+          <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
+        </Show>
       </span>
-      <span class="absolute top-[26px] left-[12px] origin-left font-semibold tabular-nums transition-transform duration-100" style={{ color: color(), 'font-size': '24px', 'line-height': '24px', transform: active() ? 'scale(1.15)' : 'none' }}>
+      <span class="absolute top-[4px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100" style={{ color: color(), 'font-size': '22px', 'line-height': '26px', transform: active() ? 'scale(1.2)' : 'none' }}>
         {signed(props.value)}
       </span>
       {/* The scale: a recessed strip along the bottom, the track's colors on
           its bottom edge, labels over the major ticks, the mark at the center. */}
-      <div class="absolute inset-x-0 bottom-0 h-[34px]" style={{ background: 'rgb(0 0 0 / 0.24)', 'box-shadow': 'inset 0 1px 0 rgb(0 0 0 / 0.3)' }}>
+      <div class="absolute inset-x-0 bottom-0 h-[44px]" style={{ background: 'rgb(0 0 0 / 0.24)', 'box-shadow': 'inset 0 1px 0 rgb(0 0 0 / 0.3)' }}>
         <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
           <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out' }}>
             <For each={Array.from({ length: count() }, (_, i) => i)}>
@@ -562,13 +566,13 @@ function Dial(props: {
                 return (
                   <>
                     <Show when={major()}>
-                      <span class="absolute top-[3px] -translate-x-1/2 text-[12px] leading-none tabular-nums" style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
+                      <span class="absolute top-[3px] -translate-x-1/2 text-[15px] leading-none font-medium tabular-nums" style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
                         {signed(props.min + i * props.step)}
                       </span>
                     </Show>
                     <span
-                      class="absolute bottom-[6px] w-[2px] -translate-x-1/2"
-                      style={{ left: `${i * SPACING}px`, height: `${major() ? 11 : 7}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
+                      class="absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1px]"
+                      style={{ left: `${i * SPACING}px`, height: `${major() ? 20 : 12}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
                     />
                   </>
                 );
@@ -577,7 +581,7 @@ function Dial(props: {
           </div>
         </div>
         <Show when={props.track}>{(track) => <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />}</Show>
-        <span class="absolute bottom-[4px] w-[3px] -translate-x-1/2 transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '19px' : '15px', background: color() }} />
+        <span class="absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-t-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: ACCENT, 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.45)' }} />
       </div>
     </div>
   );
