@@ -42,6 +42,8 @@ export function Section(props: {
   /** Beside the title on its right, such as a chip. */
   accessory?: JSX.Element;
   first?: boolean;
+  /** A long title: a size smaller, and free to wrap. */
+  long?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -52,7 +54,7 @@ export function Section(props: {
     >
       <Show when={props.title}>
         <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
-          <span class={`grow font-semibold tracking-[0.02em] whitespace-nowrap ${TEXT}`}>{props.title}</span>
+          <span class={`grow font-semibold tracking-[0.02em] ${props.long ? SMALL : `whitespace-nowrap ${TEXT}`}`}>{props.title}</span>
           {props.accessory}
         </div>
       </Show>

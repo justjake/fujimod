@@ -1,10 +1,11 @@
 import PHOTO from '../../../engine/assets/default-scene.png';
 import { Artwork, Monogram, filmArtwork, stockArtwork } from '../../../design/artwork';
 import { Button, Scroller, Section } from '../../../design/column';
+import { Picker, pickerStep } from '../../../design/picker';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { Chevron, Choice, Dial, signed } from '../../../design/controls';
+import { Chevron, Choice, Dial, Switch, signed } from '../../../design/controls';
 import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
 import { ACCENT, COLUMN, GLASS, SMALL, TEXT, TRACK } from '../../../design/materials';
 import '../../../design/design.css';
@@ -757,7 +758,7 @@ export interface State {
   compare: { b: number | 'opened'; split: number } | null;
   /** 0: live view; n: RAWS[n - 1]. */
   crop: number;
-  picker: Picker | null;
+  picker: PickerState | null;
   /** Where the D-pad is: the RAW strip, the tool rail or the tool rows. */
   area: Meta | 'rail' | 'rows';
   /** On the rail, the film, RAW or CUSTOM SETTING section instead of a tool. */
@@ -862,7 +863,7 @@ const EDITED: Film = (() => {
   };
 })();
 
-type Picker = { kind: 'icon'; at: number } | { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
+type PickerState = { kind: 'icon'; at: number } | { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
 
 /** Films on the SD card, standing in as edits of the built-in ones. */
 const CARD_FILMS: { name: string; from: string; icon: string; film: () => Film }[] = [
@@ -895,20 +896,20 @@ function FilmIcon(props: { slug: string; size: number; color: string }) {
 }
 
 /** Options are film numbers: the SD card's films, then the built-in ones. */
-function pickerOptions(p: Picker): (number | 'opened')[] {
+function pickerOptions(p: PickerState): (number | 'opened')[] {
   if (p.kind === 'icon') return ICONS.map((_, i) => i);
   if (p.kind === 'open') return [...CARD_FILMS.map((_, i) => i), ...BASES.map((_, i) => CARD_FILMS.length + i)];
   return p.kind === 'compare' ? ['opened', ...BASES.map((_, i) => i)] : BASES.map((_, i) => i);
 }
 
-function pickerLabel(p: Picker, k: number | 'opened'): string {
+function pickerLabel(p: PickerState, k: number | 'opened'): string {
   if (k === 'opened') return 'AS OPENED';
   if (p.kind === 'icon') return ICONS[k];
   if (p.kind !== 'open') return BASES[k].name;
   return k < CARD_FILMS.length ? CARD_FILMS[k].name : BASES[k - CARD_FILMS.length].name;
 }
 
-function pickerCurrent(s: State, p: Picker): number | 'opened' | undefined {
+function pickerCurrent(s: State, p: PickerState): number | 'opened' | undefined {
   if (p.kind === 'icon') return s.icon.startsWith('text:') ? ICONS.length - 1 : ICONS.indexOf(s.icon);
   if (p.kind === 'copy') return groupSource(s.film, p.tool);
   if (p.kind === 'compare') return s.compare?.b;
@@ -916,7 +917,7 @@ function pickerCurrent(s: State, p: Picker): number | 'opened' | undefined {
   return card < 0 ? undefined : card;
 }
 
-function choose(s: State, p: Picker, k: number | 'opened'): State {
+function choose(s: State, p: PickerState, k: number | 'opened'): State {
   if (k === 'opened') return p.kind === 'compare' ? { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } } : s;
   switch (p.kind) {
     case 'icon':
@@ -1190,17 +1191,9 @@ export function press(s: State, key: CameraKey): State {
   if (s.picker) {
     const p = s.picker;
     const options = pickerOptions(p);
-    if (p.kind === 'icon') {
-      const step = { left: -1, right: 1, up: -ICON_COLUMNS, down: ICON_COLUMNS, 'dial-': -1, 'dial+': 1 }[key as string];
-      if (step !== undefined) return { ...s, picker: { ...p, at: Math.max(0, Math.min(options.length - 1, p.at + step)) } };
-    }
+    const at = pickerStep(p.at, options.length, key, p.kind === 'icon' ? ICON_COLUMNS : 1);
+    if (at !== undefined) return { ...s, picker: { ...p, at } };
     switch (key) {
-      case 'up':
-      case 'dial-':
-        return { ...s, picker: { ...p, at: Math.max(0, p.at - 1) } };
-      case 'down':
-      case 'dial+':
-        return { ...s, picker: { ...p, at: Math.min(options.length - 1, p.at + 1) } };
       case 'ok':
         return choose(s, p, options[p.at]);
       case 'back':
@@ -1990,10 +1983,9 @@ export function Editor(props: {
           </Section>
         </Show>
         <Section ref={(element) => (sections.custom = element)} title="CUSTOM SETTING">
-          <Choice
+          <Switch
             items={['OFF', 'ON']}
             value={s().custom ? 1 : 0}
-            width={CONTENT}
             focused={s().area === 'custom'}
             onFocus={() => update({ ...s(), area: 'custom', railOn: null, header: false, inside: false })}
             pick={(v) => update({ ...s(), custom: v === 1, area: 'custom' })}
@@ -2016,6 +2008,7 @@ export function Editor(props: {
               <Section
                 ref={(element) => (sections[tool] = element)}
                 title={TOOL_NAMES[tool]}
+                long={tool === 'tone'}
                 accessory={
                   <button
                     type="button"
@@ -2160,63 +2153,32 @@ export function Editor(props: {
         </div>
       </Show>
 
-      <Show when={s().picker?.kind === 'icon' ? s().picker : undefined}>
-        {(picker) => (
-          <div class="absolute top-[8px] bottom-[8px] flex flex-col rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
-            <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>ICON</div>
-            <div class="grid gap-[4px]" style={{ 'grid-template-columns': `repeat(${ICON_COLUMNS}, 1fr)` }}>
-              <For each={ICONS}>
-                {(slug, i) => (
-                  <button
-                    type="button"
-                    class="relative flex aspect-square items-center justify-center rounded-[10px]"
-                    style={picker().at === i() ? { background: '#fff' } : {}}
-                    onClick={() => update(choose(s(), picker(), i()))}
-                  >
-                    <FilmIcon slug={slug} size={36} color={picker().at === i() ? '#000' : '#fff'} />
-                    <Show when={s().icon === slug}>
-                      <span class="absolute top-[3px] right-[3px] size-[8px] rounded-full" style={{ background: ACCENT }} />
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        )}
-      </Show>
-
       <Show when={s().keyboard}>{(t) => <Keyboard s={s()} t={t()} update={update} />}</Show>
 
-      <Show when={s().picker?.kind !== 'icon' ? s().picker : undefined}>
+      <Show when={s().picker}>
         {(picker) => {
-          const current = () => pickerCurrent(s(), picker());
-          const options = () => pickerOptions(picker());
+          const p = () => picker();
+          const options = () => pickerOptions(p());
           return (
-            <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
-              <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>
-                {(() => {
-                  const p = picker();
-                  return p.kind === 'icon' ? 'ICON' : p.kind === 'copy' ? `COPY ${TOOL_NAMES[p.tool]} FROM` : p.kind === 'open' ? 'OPEN FILM' : 'COMPARE WITH';
-                })()}
-              </div>
-              <div class="grow overflow-y-auto" style={{ 'scrollbar-width': 'none' }}>
-                <For each={options()}>
-                  {(k, i) => (
-                    <button
-                      type="button"
-                      class={`flex h-[44px] w-full items-center justify-between rounded-[10px] px-[10px] text-left ${SMALL}`}
-                      style={picker().at === i() ? { background: '#fff', color: '#000' } : { color: '#fff' }}
-                      onClick={() => update(choose(s(), picker(), k))}
-                    >
-                      {pickerLabel(picker(), k)}
-                      <Show when={current() === k}>
-                        <span>✓</span>
-                      </Show>
-                    </button>
-                  )}
-                </For>
-              </div>
-            </div>
+            <Picker
+              title={(() => {
+                const q = p();
+                return q.kind === 'icon' ? 'ICON' : q.kind === 'copy' ? `COPY ${TOOL_NAMES[q.tool]} FROM` : q.kind === 'open' ? 'OPEN FILM' : 'COMPARE WITH';
+              })()}
+              options={options().map((k) =>
+                p().kind === 'icon'
+                  ? { label: String(k), art: (ink: string) => <FilmIcon slug={ICONS[k as number]} size={36} color={ink} /> }
+                  : { label: pickerLabel(p(), k) },
+              )}
+              at={p().at}
+              current={(() => {
+                const c = pickerCurrent(s(), p());
+                return c === undefined ? undefined : options().indexOf(c);
+              })()}
+              columns={p().kind === 'icon' ? ICON_COLUMNS : undefined}
+              choose={(i) => update(choose(s(), p(), options()[i]))}
+              style={{ left: `${PICTURE_LEFT + 8}px`, right: '8px' }}
+            />
           );
         }}
       </Show>

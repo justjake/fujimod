@@ -5,7 +5,8 @@ import type { JSX } from '@solidjs/web';
 import { Choice, Dial, type ChoiceItem } from '../../../design/controls';
 import { COLUMN, SMALL, TRACK } from '../../../design/materials';
 import { Artwork, Wordmark, modArtwork, stockArtwork } from '../../../design/artwork';
-import { Scroller, reveal } from '../../../design/column';
+import { Button, Scroller, reveal } from '../../../design/column';
+import { Picker, pickerStep } from '../../../design/picker';
 import { Card, Fit, KeyHint } from '../../../design/screen';
 import '../../../design/design.css';
 
@@ -423,6 +424,8 @@ function Column(props: {
   active?: boolean;
   /** Shared by A and B so they scroll together, and read by the fly-outs. */
   scroll: number;
+  saved?: boolean;
+  raw?: boolean;
   setScroll: (top: number) => void;
   send: Send;
 }) {
@@ -464,6 +467,11 @@ function Column(props: {
           />
         )}
       </For>
+      <Show when={props.side === undefined}>
+        <div class="px-[6px] pt-[10px] pb-[12px]">
+          <Button label={props.saved ? 'SAVED' : props.raw ? 'CREATE' : 'SAVE'} class="w-full" focused={false} accent={props.saved} onClick={() => props.send({ key: 'save' })} />
+        </div>
+      </Show>
     </Scroller>
   );
 }
@@ -562,6 +570,10 @@ export interface EditorState {
   /** A: the recipe kept to compare against. */
   snapshot?: Recipe;
   comparing: boolean;
+  /** The cursor in the focused choice row's list, while it is open. */
+  list?: number;
+  /** Saved since the last change. */
+  saved?: boolean;
   /** The compare column that takes edits. */
   side: Side;
 }
@@ -587,7 +599,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
     else if (focused().id === 'wb' && s().fly === 'none') list.push({ glyph: '▲', label: 'SHIFT', key: 's' });
     if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
     else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
-    list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
+    list.push({ glyph: 'OK', label: focused().kind === 'choice' && !compare() ? 'SELECT' : s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
     return list;
   };
 
@@ -634,8 +646,23 @@ export function Editor(props: { state: EditorState; send?: Send }) {
       </Show>
 
       <Show when={!compare()}>
-        <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} send={send} />
-        <Show when={s().fly === 'none'}>
+        <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} raw={s().mode === 'raw'} send={send} />
+        <Show when={s().list !== undefined && focused().kind === 'choice' ? (focused() as ChoiceSetting) : undefined}>
+          {(setting) => (
+            <Picker
+              title={setting().name}
+              options={setting().choices.map((choice) => {
+                const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
+                return { label: choice.name, art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class="h-[30px] w-[50px]" color={ink} /> };
+              })}
+              at={s().list ?? 0}
+              current={s().recipe[setting().id]}
+              choose={(value) => send({ set: setting().id, value, focus: s().focus })}
+              style={{ left: `${WIDTH + 8}px`, right: '8px' }}
+            />
+          )}
+        </Show>
+        <Show when={s().fly === 'none' && s().list === undefined}>
           <div class="absolute top-[10px] flex flex-col items-start gap-[4px]" style={{ left: `${WIDTH + 12}px` }}>
             <Show when={focused().id !== 'film'}>
               <Card class={`px-[12px] py-[6px] ${SMALL}`}>{focused().name}</Card>
@@ -668,7 +695,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
         </Show>
       </Show>
 
-      <Show when={s().fly !== 'shift'}>
+      <Show when={s().fly !== 'shift' && s().list === undefined}>
         <div
           class={`absolute bottom-[12px] flex gap-[4px] ${compare() ? '-translate-x-1/2 flex-col items-stretch' : ''}`}
           style={{ left: `${compare() ? 360 : WIDTH + 12}px` }}
@@ -685,8 +712,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
 /** Applies an edit to the column that has focus. */
 function edit(state: EditorState, change: (r: Recipe) => Recipe): EditorState {
   if (state.comparing && state.side === 'a' && state.snapshot)
-    return { ...state, snapshot: change(state.snapshot) };
-  return { ...state, recipe: change(state.recipe) };
+    return { ...state, snapshot: change(state.snapshot), saved: false };
+  return { ...state, recipe: change(state.recipe), saved: false };
 }
 
 function step(state: EditorState, delta: number): EditorState {
@@ -700,6 +727,19 @@ function step(state: EditorState, delta: number): EditorState {
 
 export function onKey(state: EditorState, key: string): EditorState {
   const id = SETTINGS[state.focus].id;
+  const setting = SETTINGS[state.focus];
+  if (state.list !== undefined && setting.kind === 'choice') {
+    const keyName = ({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'dial-', ArrowRight: 'dial+' } as Record<string, string>)[key];
+    const at = keyName === undefined ? undefined : pickerStep(state.list, setting.choices.length, keyName);
+    if (at !== undefined) return { ...state, list: at };
+    const chosen = state.list;
+    if (key === 'Enter') return { ...edit(state, (r) => ({ ...r, [setting.id]: chosen })), list: undefined };
+    if (key === 'Escape') return { ...state, list: undefined };
+    return state;
+  }
+  if (key === 'Enter' && setting.kind === 'choice' && state.fly === 'none' && !state.comparing)
+    return { ...state, list: state.recipe[setting.id] };
+  if (key === 'save' || (key === 'Enter' && state.fly === 'none')) return { ...state, saved: true };
   if (state.fly === 'shift') {
     const clamp = (n: number) => Math.max(-9, Math.min(9, n));
     if (key === 'ArrowLeft') return edit(state, (r) => ({ ...r, shiftR: clamp(r.shiftR - 1) }));
@@ -736,6 +776,7 @@ export function apply(state: EditorState, action: Action): EditorState {
     focus: action.focus,
     side: action.side ?? state.side,
     fly: action.focus === state.focus ? state.fly : ('none' as Fly),
+    list: undefined,
   };
   if ('set' in action) return edit(moved, (r) => ({ ...r, [action.set]: action.value }));
   return moved;
@@ -782,6 +823,8 @@ export const SETTINGS_STATES: { id: string; title: string; state: EditorState }[
     state: { ...INITIAL, focus: 9, recipe: EDITED },
   },
   { id: 'film-notes', title: 'Film simulation', state: { ...INITIAL, focus: 0 } },
+  { id: 'film-list', title: 'FILM SIMULATION list, opened with OK', state: { ...INITIAL, focus: 0, list: 3 } },
+  { id: 'wb-list', title: 'WHITE BALANCE list', state: { ...INITIAL, focus: 1, list: 2 } },
   { id: 'grain-size', title: 'GRAIN SIZE under the grain icon', state: { ...INITIAL, focus: 13, recipe: EDITED } },
   { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
   {

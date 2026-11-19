@@ -21,12 +21,115 @@ export function Chevron(props: { dir: 'down' | 'left' | 'right'; size?: number; 
   );
 }
 
-/* A choice row, the recipe column's strip in the slider card's frame: the name
-   on the top line, the choices as words in the recessed strip below. The
-   chosen word is a white plate with black ink; the others fade with their
-   distance from it. The strip slides to keep the chosen word in the middle,
-   with a chevron at an end that has more past it. A tap on a word chooses it;
-   LEFT, RIGHT and the dial step. */
+/* The dial gesture, shared by the choice strip and the slider: a sideways
+   drag moves the position with the finger, one to one, the value changing
+   as each step passes the middle; let go and it coasts and settles on a
+   step. Past either end it gives a third as much, as a rubber band. A
+   vertical drag scrolls the column instead. */
+function useDialGesture(o: {
+  count: () => number;
+  /** The settled position: the current value's step. */
+  index: () => number;
+  /** Pixels per step. */
+  spacing: () => number;
+  commit: (step: number) => void;
+  onFocus?: () => void;
+  /** A press without a drag, at a client x. */
+  tap?: (x: number, box: DOMRect) => void;
+}) {
+  const [pos, setPos] = createSignal<number | null>(null);
+  const shown = () => pos() ?? o.index();
+  const active = () => pos() !== null;
+  let gesture: { x: number; y: number; start: number; axis: 'x' | 'y' | null; samples: [number, number][] } | undefined;
+  let dragged = false;
+  let frame = 0;
+  const stop = () => cancelAnimationFrame(frame);
+  const commit = (p: number) => {
+    const i = Math.max(0, Math.min(o.count() - 1, Math.round(p)));
+    if (i !== Math.round(o.index())) o.commit(i);
+  };
+  const band = (p: number) => (p < 0 ? p / 3 : p > o.count() - 1 ? o.count() - 1 + (p - o.count() + 1) / 3 : p);
+  const settle = () => {
+    const from = pos() ?? o.index();
+    const to = Math.max(0, Math.min(o.count() - 1, Math.round(from)));
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / 200);
+      setPos(from + (to - from) * (1 - (1 - t) ** 3));
+      if (t < 1) frame = requestAnimationFrame(tick);
+      else setPos(null);
+    };
+    commit(to);
+    frame = requestAnimationFrame(tick);
+  };
+  const coast = (velocity: number) => {
+    let v = velocity;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = now - last;
+      last = now;
+      v *= 0.94 ** (dt / 16);
+      const next = (pos() ?? 0) + (v * dt) / o.spacing();
+      const clamped = Math.max(-0.4, Math.min(o.count() - 0.6, next));
+      setPos(clamped);
+      commit(clamped);
+      if (Math.abs(v) < 0.08 || clamped !== next) settle();
+      else frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+  };
+  const scaleOf = (el: Element) => (el as HTMLElement).offsetWidth / el.getBoundingClientRect().width;
+  const handlers = {
+    onPointerDown: (e: PointerEvent & { currentTarget: HTMLElement }) => {
+      stop();
+      dragged = false;
+      o.onFocus?.();
+      gesture = { x: e.clientX, y: e.clientY, start: pos() ?? o.index(), axis: null, samples: [[performance.now(), e.clientX]] };
+    },
+    onPointerMove: (e: PointerEvent & { currentTarget: HTMLElement }) => {
+      if (!gesture) return;
+      const k = scaleOf(e.currentTarget);
+      const dx = (e.clientX - gesture.x) * k;
+      const dy = (e.clientY - gesture.y) * k;
+      if (!gesture.axis) {
+        if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+          gesture.axis = 'x';
+          dragged = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } else if (Math.abs(dy) > 8) gesture.axis = 'y';
+      }
+      if (gesture.axis !== 'x') return;
+      gesture.samples = [...gesture.samples.slice(-4), [performance.now(), e.clientX]];
+      const p = band(gesture.start - dx / o.spacing());
+      setPos(p);
+      commit(p);
+    },
+    onPointerUp: (e: PointerEvent & { currentTarget: HTMLElement }) => {
+      const g = gesture;
+      gesture = undefined;
+      if (!g) return;
+      if (g.axis === 'x') {
+        const [[t0, x0], [t1, x1]] = [g.samples[0], g.samples[g.samples.length - 1]];
+        const velocity = t1 > t0 ? (-(x1 - x0) * scaleOf(e.currentTarget)) / (t1 - t0) : 0;
+        if (Math.abs(velocity) > 0.3) coast(velocity);
+        else settle();
+      } else if (!g.axis) o.tap?.(e.clientX, e.currentTarget.getBoundingClientRect());
+    },
+    onPointerCancel: () => {
+      gesture = undefined;
+      if (active()) settle();
+    },
+  };
+  return { shown, active, handlers, dragged: () => dragged };
+}
+
+/* A choice row: the slider's dial for a list of choices. The choices sit
+   as words or artwork in the recessed strip; the chosen one is a white
+   plate with black ink, the others fading with their distance from it. The
+   strip keeps the chosen cell in the middle, with a chevron at an end that
+   has more past it. A thumb sliding sideways moves the strip with it and
+   chooses each cell as it reaches the middle; a swipe coasts and settles. A
+   tap on a cell chooses it; LEFT, RIGHT and the dial step. */
 /** A choice: a word, or artwork drawn in the given ink. */
 export type ChoiceItem = string | { name: string; art: (ink: string) => JSX.Element };
 
@@ -43,24 +146,50 @@ export function Choice(props: {
   onFocus?: () => void;
 }) {
   let track: HTMLDivElement | undefined;
-  const [offset, setOffset] = createSignal(0);
-  const [ends, setEnds] = createSignal<[boolean, boolean]>([false, false]);
+  /** Each cell's center along the strip, measured once laid out. */
+  const [centers, setCenters] = createSignal<number[]>([]);
+  const [length, setLength] = createSignal(0);
   createEffect(
-    () => [props.value, props.width, props.items] as const,
-    ([value, width]) => {
+    () => [props.width, props.items] as const,
+    () => {
       requestAnimationFrame(() => {
         const cells = track ? (Array.from(track.children) as HTMLElement[]) : [];
-        const chosen = cells[value];
-        if (!track || !chosen) return;
-        const max = Math.max(0, track.scrollWidth - width);
-        const next = Math.max(0, Math.min(max, chosen.offsetLeft + chosen.offsetWidth / 2 - width / 2));
-        setOffset(next);
-        setEnds([next > 0, next < max]);
+        setCenters(cells.map((c) => c.offsetLeft + c.offsetWidth / 2));
+        setLength(track?.scrollWidth ?? 0);
       });
     },
   );
+  const dial = useDialGesture({
+    count: () => props.items.length,
+    index: () => props.value,
+    spacing: () => (centers().length > 1 ? (centers()[centers().length - 1] - centers()[0]) / (centers().length - 1) : 60),
+    commit: (i) => props.pick(i),
+    onFocus: () => props.onFocus?.(),
+  });
+  /** The strip's center at a fractional cell, past the ends by one spacing per cell. */
+  const centerAt = (p: number) => {
+    const c = centers();
+    if (c.length === 0) return 0;
+    const last = c.length - 1;
+    const step = last > 0 ? (c[last] - c[0]) / last : 0;
+    if (p <= 0) return c[0] + p * step;
+    if (p >= last) return c[last] + (p - last) * step;
+    const i = Math.floor(p);
+    return c[i] + (c[i + 1] - c[i]) * (p - i);
+  };
+  const max = () => Math.max(0, length() - props.width);
+  const offset = () => {
+    const raw = centerAt(dial.shown()) - props.width / 2;
+    return dial.active() ? raw : Math.max(0, Math.min(max(), raw));
+  };
+  const ends = (): [boolean, boolean] => [offset() > 1, offset() < max() - 1];
+  const chosen = () => Math.max(0, Math.min(props.items.length - 1, Math.round(dial.shown())));
   return (
-    <div class="relative shrink-0 overflow-hidden select-none" style={{ width: `${props.width}px`, height: `${props.height ?? 76}px`, ...TRACK(props.focused) }} onPointerDown={() => props.onFocus?.()}>
+    <div
+      class="relative shrink-0 overflow-hidden select-none"
+      style={{ width: `${props.width}px`, height: `${props.height ?? 76}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || dial.active()) }}
+      {...dial.handlers}
+    >
       <Show when={props.name !== undefined}>
         <span class="absolute top-[7px] left-[12px] flex items-center gap-[6px] text-[17px] leading-[20px] tracking-[0.06em]" style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
           {props.name}
@@ -72,20 +201,22 @@ export function Choice(props: {
       <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge)' }}>
         <div
           ref={(element) => (track = element)}
-          class="absolute inset-y-0 left-0 flex items-stretch gap-[4px] px-[6px] py-[5px] transition-transform duration-150 ease-out"
-          style={{ transform: `translateX(${-offset()}px)` }}
+          class="absolute inset-y-0 left-0 flex items-stretch gap-[4px] px-[6px] py-[5px]"
+          style={{ transform: `translateX(${-offset()}px)`, transition: dial.active() ? 'none' : 'transform 150ms ease-out' }}
         >
           <For each={[...props.items]}>
             {(item, i) => {
-              const chosen = () => i() === props.value;
-              const fade = () => Math.max(0.35, 0.85 - Math.abs(i() - props.value) * 0.15);
-              const ink = () => (chosen() ? '#000' : `rgb(255 255 255 / ${fade()})`);
+              const on = () => i() === chosen();
+              const fade = () => Math.max(0.35, 0.85 - Math.abs(i() - dial.shown()) * 0.15);
+              const ink = () => (on() ? '#000' : `rgb(255 255 255 / ${fade()})`);
               return (
                 <button
                   type="button"
                   class={`relative flex shrink-0 items-center justify-center rounded-[9px] font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[12px]' : 'w-[56px]'}`}
-                  style={chosen() ? { background: '#fff', color: ink() } : { color: ink() }}
-                  onClick={() => props.pick(i())}
+                  style={on() ? { background: '#fff', color: ink() } : { color: ink() }}
+                  onClick={() => {
+                    if (!dial.dragged()) props.pick(i());
+                  }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}
                 </button>
@@ -111,15 +242,11 @@ export function Choice(props: {
   );
 }
 
-/* A slider row, as the camera's command dials and the recipe column's rulers
-   behave: the whole row is the track; the name and value sit on its top line
-   and a scale of ticks runs across its full width under a fixed center mark.
-   A sideways drag moves the scale with the finger, one to one and without
-   snapping while held, the value changing as each tick crosses the mark and
-   the picture following; let go and it coasts and settles on a step. A
-   vertical drag scrolls the sidebar instead. A tap left or right of the mark
-   steps once. While held, the value grows and the mark and the ticks near it
-   light up. */
+/* A slider row, as the camera's command dials behave: the whole row is the
+   track; the name and value sit on its top line and a scale of ticks runs
+   across its full width under a fixed center mark, moved by the dial
+   gesture above. A tap left or right of the mark steps once. While held,
+   the value grows and the mark and the ticks near it light up. */
 export function Dial(props: {
   /** The top line's name and value; without one the scale fills the card. */
   name?: string;
@@ -147,97 +274,24 @@ export function Dial(props: {
   const label = (v: number) => (props.format ?? signed)(v);
   const indexOf = (v: number) => (v - props.min) / props.step;
   const zero = () => indexOf(props.zero ?? 0);
-  /** The scale's position in steps while held or coasting; settled otherwise. */
-  const [pos, setPos] = createSignal<number | null>(null);
-  const shown = () => pos() ?? indexOf(props.value);
-  const active = () => pos() !== null;
-  const color = () => '#fff';
-  let gesture: { x: number; y: number; start: number; axis: 'x' | 'y' | null; samples: [number, number][] } | undefined;
-  let frame = 0;
-  const stop = () => cancelAnimationFrame(frame);
-  const commit = (p: number) => {
-    const i = Math.max(0, Math.min(count() - 1, Math.round(p)));
-    const v = props.min + i * props.step;
-    if (v !== props.value) props.set(v);
-  };
-  /* Past either end the scale gives a third as much, as a rubber band. */
-  const band = (p: number) => (p < 0 ? p / 3 : p > count() - 1 ? count() - 1 + (p - count() + 1) / 3 : p);
-  const settle = () => {
-    const from = pos() ?? indexOf(props.value);
-    const to = Math.max(0, Math.min(count() - 1, Math.round(from)));
-    const t0 = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - t0) / 200);
-      setPos(from + (to - from) * (1 - (1 - t) ** 3));
-      if (t < 1) frame = requestAnimationFrame(tick);
-      else setPos(null);
-    };
-    commit(to);
-    frame = requestAnimationFrame(tick);
-  };
-  const coast = (velocity: number) => {
-    let v = velocity;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const dt = now - last;
-      last = now;
-      v *= 0.94 ** (dt / 16);
-      const next = (pos() ?? 0) + (v * dt) / SPACING;
-      const clamped = Math.max(-0.4, Math.min(count() - 0.6, next));
-      setPos(clamped);
-      commit(clamped);
-      if (Math.abs(v) < 0.08 || clamped !== next) settle();
-      else frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-  };
-  const scaleOf = (el: Element) => (el as HTMLElement).offsetWidth / el.getBoundingClientRect().width;
+  const dial = useDialGesture({
+    count,
+    index: () => indexOf(props.value),
+    spacing: () => SPACING,
+    commit: (i) => props.set(props.min + i * props.step),
+    onFocus: () => props.onFocus?.(),
+    tap: (x, box) => {
+      const i = Math.max(0, Math.min(count() - 1, Math.round(indexOf(props.value)) + (x > box.left + box.width / 2 ? 1 : -1)));
+      props.set(props.min + i * props.step);
+    },
+  });
+  const shown = dial.shown;
+  const active = dial.active;
   return (
     <div
       class="relative shrink-0 overflow-hidden select-none"
       style={{ width: `${props.width}px`, height: `${props.height ?? 76}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
-      onPointerDown={(e) => {
-        stop();
-        props.onFocus?.();
-        gesture = { x: e.clientX, y: e.clientY, start: pos() ?? indexOf(props.value), axis: null, samples: [[performance.now(), e.clientX]] };
-      }}
-      onPointerMove={(e) => {
-        if (!gesture) return;
-        const k = scaleOf(e.currentTarget);
-        const dx = (e.clientX - gesture.x) * k;
-        const dy = (e.clientY - gesture.y) * k;
-        if (!gesture.axis) {
-          if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
-            gesture.axis = 'x';
-            e.currentTarget.setPointerCapture(e.pointerId);
-          } else if (Math.abs(dy) > 8) gesture.axis = 'y';
-        }
-        if (gesture.axis !== 'x') return;
-        gesture.samples = [...gesture.samples.slice(-4), [performance.now(), e.clientX]];
-        const p = band(gesture.start - dx / SPACING);
-        setPos(p);
-        commit(p);
-      }}
-      onPointerUp={(e) => {
-        const g = gesture;
-        gesture = undefined;
-        if (!g) return;
-        if (g.axis === 'x') {
-          const [[t0, x0], [t1, x1]] = [g.samples[0], g.samples[g.samples.length - 1]];
-          const velocity = t1 > t0 ? (-(x1 - x0) * scaleOf(e.currentTarget)) / (t1 - t0) : 0;
-          if (Math.abs(velocity) > 0.3) coast(velocity);
-          else settle();
-        } else if (!g.axis) {
-          const box = e.currentTarget.getBoundingClientRect();
-          const right = e.clientX > box.left + box.width / 2;
-          const i = Math.max(0, Math.min(count() - 1, Math.round(indexOf(props.value)) + (right ? 1 : -1)));
-          props.set(props.min + i * props.step);
-        }
-      }}
-      onPointerCancel={() => {
-        gesture = undefined;
-        if (active()) settle();
-      }}
+      {...dial.handlers}
     >
       <Show when={props.name !== undefined}>
         <span class="absolute top-[7px] left-[12px] flex items-center gap-[6px] text-[17px] leading-[20px] tracking-[0.06em]" style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
@@ -247,7 +301,7 @@ export function Dial(props: {
             <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
           </Show>
         </span>
-        <span class="absolute top-[4px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100" style={{ color: color(), 'font-size': '22px', 'line-height': '26px', transform: active() ? 'scale(1.2)' : 'none' }}>
+        <span class="absolute top-[4px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100" style={{ color: '#fff', 'font-size': '22px', 'line-height': '26px', transform: active() ? 'scale(1.2)' : 'none' }}>
           {label(props.value)}
         </span>
       </Show>
@@ -288,3 +342,23 @@ export function Dial(props: {
   );
 }
 
+/** Two to four options side by side, the chosen one a white plate: ON/OFF and
+ * other short choices, where a strip would hide what there is to choose. */
+export function Switch(props: { items: readonly string[]; value: number; focused: boolean; pick: (i: number) => void; onFocus?: () => void }) {
+  return (
+    <div class="flex h-[47px] items-center gap-[4px] px-[5px]" style={TRACK(props.focused)} onPointerDown={() => props.onFocus?.()}>
+      <For each={[...props.items]}>
+        {(item, i) => (
+          <button
+            type="button"
+            class={`flex h-[37px] grow basis-0 items-center justify-center rounded-[10px] font-medium ${SMALL}`}
+            style={props.value === i() ? { background: '#fff', color: '#000' } : { color: 'rgb(255 255 255 / 0.6)' }}
+            onClick={() => props.pick(i())}
+          >
+            {item}
+          </button>
+        )}
+      </For>
+    </div>
+  );
+}
