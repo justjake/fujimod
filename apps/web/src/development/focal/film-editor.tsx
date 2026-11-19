@@ -551,7 +551,7 @@ function Dial(props: {
         {signed(props.value)}
       </span>
       <div
-        class="absolute inset-x-0 bottom-0 h-[24px]"
+        class="absolute inset-x-0 bottom-0 h-[32px]"
         style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent)' }}
       >
         <Show when={props.track}>{(track) => <div class="absolute inset-x-[8px] bottom-[4px] h-[4px] rounded-full opacity-70" style={{ background: track() }} />}</Show>
