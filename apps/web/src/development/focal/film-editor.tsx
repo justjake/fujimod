@@ -576,8 +576,8 @@ function Dial(props: {
           </For>
         </div>
         <span
-          class="absolute bottom-[6px] w-[4px] -translate-x-1/2 rounded-full transition-[height] duration-100"
-          style={{ left: `${props.width / 2}px`, height: active() ? '22px' : '18px', background: color(), 'box-shadow': '0 0 0 1.5px rgb(0 0 0 / 0.5)' }}
+          class="absolute bottom-[10px] w-[4px] -translate-x-1/2 rounded-full transition-[height] duration-100"
+          style={{ left: `${props.width / 2}px`, height: active() ? '20px' : '16px', background: color(), 'box-shadow': '0 0 0 1.5px rgb(0 0 0 / 0.5)' }}
         />
       </div>
     </div>
