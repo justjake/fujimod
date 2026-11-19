@@ -1,5 +1,6 @@
 //! Recovered reset/gate latches and request/status mirrors. Initial values
 //! are explicitly zero session assumptions, not hardware reset measurements.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -114,6 +115,24 @@ impl Device for Gates {
         {
             clocks.selector(v as u32);
         }
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &self.regs)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let registers: BTreeMap<u64, u32> = saved.decode(self.name())?;
+        if registers.keys().any(|&offset| !self.latch(offset)) {
+            return Err("clock gate snapshot has an unknown latch".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.regs = saved.decode(self.name())?;
+        if !self.power && let Some(clocks) = &self.panel_clocks {
+            clocks.selector(self.regs.get(&0x608).copied().unwrap_or(0));
+        }
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.regs).unwrap()

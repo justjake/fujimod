@@ -1,5 +1,6 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::bus::{Bus, Mode};
-use super::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+use super::factory::{Graph, MemoryMap, Options, Processor, Ram};
 use super::memory::BusMapping;
 use super::preservation::{
     PhysicalRange, PreservationBusSource, PreservationFault, PreservationState,
@@ -48,7 +49,7 @@ fn mapped_board(mappings: Vec<MemoryMap>, decoders: Vec<decoder::Decoder>) -> Bo
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
     .build(
-        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
         Bus::new(Mode::Strict),
         None,
     )
@@ -99,7 +100,7 @@ pub(super) fn two_core_board() -> Board {
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     }
     .build(
-        Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
         Bus::new(Mode::Strict),
         None,
     )

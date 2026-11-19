@@ -71,6 +71,29 @@ impl Requests {
             .any(|&(lo, hi)| lo <= address && address < hi)
     }
 }
+
+impl Requests {
+    fn validate_self(&self, state: &Self) -> Result<(), String> {
+        if !state.words.keys().eq(self.words.keys())
+            || state.blocks != self.blocks
+            || state
+                .registers
+                .keys()
+                .any(|&address| !state.in_block(address))
+            || state.words.iter().any(|(a, w)| {
+                w.ticks != self.words[a].ticks
+                    || !matches!(w.value, 0 | 2 | 3 | 5 | 6)
+                    || w.due.is_some() != (w.value != 0)
+                    || w.due
+                        .is_some_and(|(_, token)| token == 0 || token > state.generation)
+            })
+        {
+            return Err("Invalid XP4 request checkpoint or clock input".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Requests {
     fn name(&self) -> &'static str {
         "xp4-control-requests"
@@ -147,24 +170,21 @@ impl Device for Requests {
     fn save(&self) -> Value {
         json!(self)
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), self)
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_self(&data.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let saved: Self = data.decode(self.name())?;
+        self.validate_self(&saved)?;
+        *self = saved;
+        Ok(())
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: Self = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if !state.words.keys().eq(self.words.keys())
-            || state.blocks != self.blocks
-            || state
-                .registers
-                .keys()
-                .any(|&address| !state.in_block(address))
-            || state.words.iter().any(|(a, w)| {
-                w.ticks != self.words[a].ticks
-                    || !matches!(w.value, 0 | 2 | 3 | 5 | 6)
-                    || w.due.is_some() != (w.value != 0)
-                    || w.due
-                        .is_some_and(|(_, token)| token == 0 || token > state.generation)
-            })
-        {
-            return Err("Invalid XP4 request checkpoint or clock input".into());
-        }
+        self.validate_self(&state)?;
         *self = state;
         Ok(())
     }

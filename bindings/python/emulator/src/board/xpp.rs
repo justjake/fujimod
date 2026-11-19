@@ -7,6 +7,7 @@ impl Board {
         assets: &Bound<'_, PyDict>,
         read_limit: usize,
         mode: Mode,
+        engine: RunEngine,
         continue_refusals: bool,
         definition: serde_json::Value,
     ) -> PyResult<Self> {
@@ -25,43 +26,15 @@ impl Board {
                 "X-Processor Pro does not continue modeled refusals",
             ));
         }
-        let built = fujimod_emulator_xpp::board::build(graph, json(devices)?, &loaded, mode)
+        let session = fujimod_emulator_xpp::board::build(graph, json(devices)?, &loaded, mode, engine)
+            .and_then(|board| board.into_session(definition))
             .map_err(error)?;
-        let mut resources = fujimod_emulator_exr2_resources::Resources {
-            encoders: built.encoders,
-            ..Default::default()
-        };
-        for (name, level, node) in built.inputs {
-            if resources
-                .wires
-                .insert(
-                    name.clone(),
-                    fujimod_emulator_exr2_resources::Wire::LogicLevel(level),
-                )
-                .is_some()
-            {
-                return Err(PyValueError::new_err(
-                    "Repeated X-Processor Pro physical input",
-                ));
-            }
-            resources.users.entry(name).or_default().insert(node);
-        }
         Ok(Self {
             driver: None,
             memory_watch: None,
             function_watch: None,
             instruction_points: BTreeMap::new(),
-            backend: Some(Backend::Graph(fujimod_emulator_session::Session {
-                definition,
-                board: built.board,
-                controls: None,
-                contact_driver: None,
-                resources,
-                nodes: built.nodes,
-                contacts: built.contacts,
-                power_cycle: None,
-                recording_frames: Default::default(),
-            })),
+            backend: Some(Backend::Graph(session)),
             objects: BTreeMap::new(),
             failures: Failures::default(),
             read_limit,

@@ -8,9 +8,7 @@ import { toolAt, type Wizard } from './routes';
 import { remoteControlUrl } from './sharing';
 import { pageCameraModel } from './usb-camera-model';
 import { Workbench } from './Workbench';
-import { SiteHeader } from '../ui/site-header';
-import '../home/site.css';
-import '../navigation.css';
+import { SiteFrame } from '../ui/SiteFrame';
 import './style.css';
 
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
@@ -107,14 +105,13 @@ export default function DevTools(props: { model?: CameraModel; supported?: boole
     };
   });
   return (
-    <div class="shell dev-tools">
-      <SiteHeader root="../" current="dev-tools" />
+    <SiteFrame class="dev-tools">
       <Workbench
         model={model}
         usbSupported={usbSupported()}
         initialWizard={initialWizard()}
         remoteStatus={remoteStatus()}
       />
-    </div>
+    </SiteFrame>
   );
 }

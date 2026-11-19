@@ -25,6 +25,9 @@ const assets = new Map<string, [string, string]>([
   ['/pkg/service-values.js', ['../../javascript/pkg/service-values.js', 'text/javascript']],
   ['/pkg/fujimod_bg.wasm', ['../../javascript/pkg/fujimod_bg.wasm', 'application/wasm']],
   ['/fixture.mjs', ['../../javascript/tests/webusb-fixture.ts', 'text/javascript']],
+  ['/bindings/__init__.py', ['../../__init__.py', 'text/plain']],
+  ['/bindings/python/__init__.py', ['../__init__.py', 'text/plain']],
+  ['/bindings/python/tests/__init__.py', ['./__init__.py', 'text/plain']],
   ['/contract-assertions.py', ['./contract_assertions.py', 'text/plain']],
   ['/contract.py', ['./webusb_contract.py', 'text/plain']],
   ['/media-contract.py', ['./media_contract.py', 'text/plain']],
@@ -120,6 +123,14 @@ try {
       await py.runPythonAsync(
         `import micropip;await micropip.install(${JSON.stringify('emfs:/' + wheelName)})`,
       );
+      const testPackage = `${py.FS.cwd()}/bindings/python/tests`;
+      py.FS.mkdirTree(testPackage);
+      for (const path of ['bindings', 'bindings/python', 'bindings/python/tests']) {
+        py.FS.writeFile(
+          `${py.FS.cwd()}/${path}/__init__.py`,
+          await (await fetch(`/${path}/__init__.py`)).text(),
+        );
+      }
       for (const name of [
         'exposure',
         'extended',
@@ -132,16 +143,20 @@ try {
         'network',
       ]) {
         py.FS.writeFile(
-          `${py.FS.cwd()}/${name}_contract.py`,
+          `${testPackage}/${name}_contract.py`,
           await (await fetch(`/${name}-contract.py`)).text(),
         );
       }
       py.FS.writeFile(
-        `${py.FS.cwd()}/contract_assertions.py`,
+        `${testPackage}/contract_assertions.py`,
         await (await fetch('/contract-assertions.py')).text(),
       );
+      py.FS.writeFile(
+        `${testPackage}/webusb_contract.py`,
+        await (await fetch('/contract.py')).text(),
+      );
       const passed = await py.runPythonAsync(
-        (await (await fetch('/contract.py')).text()) + '\nawait run()',
+        'from bindings.python.tests.webusb_contract import run\nawait run()',
       );
       return { passed, secure: isSecureContext, realWindow: window instanceof Window };
     } finally {

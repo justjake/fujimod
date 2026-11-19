@@ -47,6 +47,30 @@ impl MemoryConfiguration {
         words.len() == WORDS && words.keys().all(|offset| Self::parameter(*offset))
     }
 }
+impl MemoryConfiguration {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state.staged.keys().any(|offset| !Self::parameter(*offset))
+            || state
+                .committed
+                .as_ref()
+                .is_some_and(|words| !Self::programmed(words))
+            || !matches!(state.request, None | Some(0 | 1))
+            || state.request == Some(0) && state.committed.is_none()
+            || state.committed.is_some() && state.generation == 0
+            || state.pending.is_some_and(|(_, generation)| {
+                generation != state.generation
+                    || generation == 0
+                    || state.request != Some(1)
+                    || !Self::programmed(&state.staged)
+            })
+            || state.request == Some(1) && state.pending.is_none()
+        {
+            return Err("invalid memory configuration state".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for MemoryConfiguration {
     fn name(&self) -> &'static str {
         "memory-configuration"
@@ -115,29 +139,13 @@ impl Device for MemoryConfiguration {
         let offset = address.wrapping_sub(self.base);
         size == 4 && offset == COMMIT && self.state.request.is_some()
     }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        if state.staged.keys().any(|offset| !Self::parameter(*offset))
-            || state
-                .committed
-                .as_ref()
-                .is_some_and(|words| !Self::programmed(words))
-            || !matches!(state.request, None | Some(0 | 1))
-            || state.request == Some(0) && state.committed.is_none()
-            || state.committed.is_some() && state.generation == 0
-            || state.pending.is_some_and(|(_, generation)| {
-                generation != state.generation
-                    || generation == 0
-                    || state.request != Some(1)
-                    || !Self::programmed(&state.staged)
-            })
-            || state.request == Some(1) && state.pending.is_none()
-        {
-            return Err("invalid memory configuration state".into());
-        }
+        self.validate_state(&state)?;
         self.state = state;
         Ok(())
     }

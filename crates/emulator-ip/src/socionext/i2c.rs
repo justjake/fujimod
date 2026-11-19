@@ -28,6 +28,7 @@
 //! mode, the slave address register (`0x0c`), general calls, arbitration loss,
 //! bus errors and clock stretching are not modeled, and the commands that
 //! would need them refuse, as does any command while a byte is in flight.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::i2c::Bus;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -119,6 +120,18 @@ pub struct Controller<B: Bus> {
 }
 
 impl<B: Bus> Controller<B> {
+    fn validate_state(state: &State) -> Result<(), String> {
+        if state.low_drives & !(BC2R_SCLL | BC2R_SDAL) != 0
+            || state.ccr & CCR_RESERVED != 0
+            || state.bcr & (BCR_INT | BCR_GCAA | BCR_BER) != 0
+            || (state.phase == Phase::Idle) != (state.bsr & BSR_BB == 0)
+            || state.pending.is_some() && state.int
+        {
+            return Err("invalid I2C controller checkpoint state".into());
+        }
+        Ok(())
+    }
+
     pub fn new(options: Options, bus: B) -> Result<Self, String> {
         if options.base & 0xfff != 0 || options.byte_ns == 0 {
             return Err("I2C controller needs a 4 KiB aligned base and a positive byte_ns".into());
@@ -360,20 +373,33 @@ impl<B: Bus> Device for Controller<B> {
             cx.unsupported(reason);
         }
     }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Ok(Checkpoint::encode(self.name(), &(&self.options, &self.state))?
+            .with_children(vec![self.bus.checkpoint()?]))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (options, state): (Options, State) = saved.decode(self.name())?;
+        let [bus] = saved.children() else { return Err("I2C checkpoint lacks target state".into()); };
+        if options != self.options {
+            return Err("I2C controller wiring differs from checkpoint".into());
+        }
+        Self::validate_state(&state)?;
+        self.bus.validate_checkpoint(bus)
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_, state): (Options, State) = saved.decode(self.name())?;
+        self.bus.restore_checkpoint(&saved.children()[0])?;
+        self.state = state;
+        Ok(())
+    }
     fn save(&self) -> Value {
         serde_json::json!({ "controller": self.state, "bus": self.bus.save() })
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value["controller"].clone())
             .map_err(|e| format!("invalid I2C controller checkpoint: {e}"))?;
-        if state.low_drives & !(BC2R_SCLL | BC2R_SDAL) != 0
-            || state.ccr & CCR_RESERVED != 0
-            || state.bcr & (BCR_INT | BCR_GCAA | BCR_BER) != 0
-            || (state.phase == Phase::Idle) != (state.bsr & BSR_BB == 0)
-            || state.pending.is_some() && state.int
-        {
-            return Err("invalid I2C controller checkpoint state".into());
-        }
+        Self::validate_state(&state)?;
         self.bus.restore(&value["bus"])?;
         self.state = state;
         Ok(())

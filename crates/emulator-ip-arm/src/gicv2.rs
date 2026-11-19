@@ -23,7 +23,13 @@ impl Gic {
         serde_json::to_value(self).unwrap()
     }
     pub fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
-        let mut state: Self = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        let state: Self = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.validate_state(&state)?;
+        *self = state;
+        Ok(())
+    }
+
+    pub fn validate_state(&self, state: &Self) -> Result<(), String> {
         let vectors = [&state.enabled, &state.pending, &state.active];
         if state.cores != self.cores
             || state.lines != self.lines
@@ -55,12 +61,11 @@ impl Gic {
                 }
             }
         }
-        let eligible = state.eligible.clone();
-        state.refresh();
-        if state.eligible != eligible {
+        let mut recalculated = state.clone();
+        recalculated.refresh();
+        if recalculated.eligible != state.eligible {
             return Err("GIC checkpoint eligibility differs from its registers".into());
         }
-        *self = state;
         Ok(())
     }
     pub fn new(cores: usize, lines: usize) -> Self {

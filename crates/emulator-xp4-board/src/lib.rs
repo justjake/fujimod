@@ -2,6 +2,7 @@
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
 mod client;
+mod checkpoint;
 mod counted;
 mod definition;
 mod initial_security;
@@ -16,7 +17,7 @@ mod jpeg;
 mod dsp;
 mod still;
 mod timer;
-use fujimod_emulator::board::discovery::Discovery;
+use fujimod_emulator::board::discovery::{CalleeStub, Discovery};
 use fujimod_emulator::board::harness::arm32 as driver_guard;
 use fujimod_emulator::board::observation::calls as observe;
 use fujimod_emulator_cpu::{
@@ -117,6 +118,8 @@ struct RunState {
     recorder: Option<observe::Recorder>,
     memory_watch: Option<observation::MemoryWatch>,
     pc_observers: Vec<BTreeSet<u64>>,
+    pc_trace: Option<fujimod_emulator::board::observation::PcRecorder>,
+    callee_stubs: BTreeMap<(usize, u64), (CalleeStub, u64)>,
     devices: Option<devices::Devices>,
     cache_dirty: bool,
     pmu: Vec<Option<fujimod_emulator::board::armv7a::Profile>>,
@@ -349,6 +352,21 @@ impl Cluster {
         self.write_reg(core, arm::PC, pc)?;
         self.cpus[core].stop()
     }
+    fn substitute_callee(&self, core: usize, address: u64) -> Result<bool, String> {
+        let result = unsafe { &mut *self.state.get() }.callee_stubs.get_mut(&(core, address))
+            .map(|(stub, hits)| {
+                *hits = hits.saturating_add(1);
+                stub.value as u32
+            });
+        if let Some(value) = result {
+            let link = self.reg(core, arm::CORE[14])?;
+            self.write_reg(core, arm::CORE[0], value)?;
+            self.redirect(core, link)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn word(&self, core: usize, address: u64) -> Result<u32, String> {
         // The engine is about to execute this word, so its fetch permission
         // already holds: when it translates into plain DRAM, read the backing
@@ -630,12 +648,16 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         c.due();
         c.healthy()?;
         let state = unsafe { &mut *c.state.get() };
+        if let Some(trace) = &mut state.pc_trace {
+            trace.record(core, address, size);
+        }
         state.instructions += 1;
         let (ticks, phase) = c.instruction_rate.advance_phase(state.tick_phase, 1)?;
         state.ticks = state.ticks.checked_add(ticks as u64).ok_or("A7 guest time overflow")?;
         state.tick_phase = phase;
         state.per_core[core] += 1;
         state.waiting[core] = 0;
+        c.substitute_callee(core, address)?;
         return Ok(());
     }
     c.due();
@@ -679,6 +701,9 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         }
     }
     let state = unsafe { &mut *c.state.get() };
+    if let Some(trace) = &mut state.pc_trace {
+        trace.record(core, address, size);
+    }
     state.instructions += 1;
     let (ticks, phase) = c.instruction_rate.advance_phase(state.tick_phase, 1)?;
     state.ticks = state
@@ -694,6 +719,9 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
     }
     trace.push_back((address as u32, word));
     observe(c, core, address)?;
+    if c.substitute_callee(core, address)? {
+        return Ok(());
+    }
     special(c, core, address, word)
 }
 /// Passive observations at an entered instruction: labels (milestones and
@@ -2143,6 +2171,8 @@ impl Session {
                 recorder: None,
                 memory_watch: None,
                 pc_observers: vec![BTreeSet::new(); cores],
+                pc_trace: None,
+                callee_stubs: BTreeMap::new(),
                 devices,
                 cache_dirty: false,
                 pmu: (0..cores)
@@ -2764,6 +2794,10 @@ impl Session {
         result.map_err(|error| c.retain_failure(error))
     }
     pub fn idle(&self) -> bool {
+        self.idle_until(None)
+    }
+
+    fn idle_until(&self, until: Option<u64>) -> bool {
         let c = &self.inner;
         if c.host_mutation().is_err() {
             return false;
@@ -2789,6 +2823,10 @@ impl Session {
             let Some(at) = peripheral.into_iter().chain(timer).min() else {
                 return false;
             };
+            if let Some(until) = until.filter(|until| *until < at) {
+                state.ticks = until;
+                return true;
+            }
             state.ticks = at;
             c.due();
             if c.healthy().is_err() {

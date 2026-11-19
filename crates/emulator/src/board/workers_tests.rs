@@ -1,3 +1,4 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 
 fn board() -> Board {
@@ -11,7 +12,7 @@ fn board() -> Board {
     })).unwrap();
     let board = graph
         .build(
-            factory::Options::new(factory::Engine::Unicorn)
+            factory::Options::new(RunEngine::Unicorn)
                 .with_translation_cache_size_bytes(1 << 20),
             Bus::new(bus::Mode::Strict),
             None,

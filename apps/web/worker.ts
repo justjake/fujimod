@@ -541,7 +541,8 @@ export async function serveRequest(
       fetch,
       env.GITHUB_TOKEN,
     );
-  if (!url.pathname.startsWith('/releases/')) return env.ASSETS.fetch(request);
+  if (url.pathname === '/releases/' || !url.pathname.startsWith('/releases/'))
+    return env.ASSETS.fetch(request);
   return serveRelease(
     request,
     await caches.open('fujimod-releases'),

@@ -12,7 +12,7 @@ deploy: `fujimod.com` shows the site code and the camera progress in
 `catalog/progress/` as of its last deploy, which is a maintainer's manual deploy
 or the [nightly deploy](#nightly-deploy). GitHub Releases contain
 `patches.json`, mod patches, optional `notes.md`, and camera update assets.
-Generated emulator runtimes, the camera catalog, and feature media are uploaded
+Generated emulator runtimes, the camera catalog, feature media, and FocalUI SDK docs are uploaded
 directly to Cloudflare with the website.
 Generated assets stay outside Git.
 
@@ -21,7 +21,8 @@ From `apps/web`, use the locally generated asset directories:
 ```sh
 FUJIMOD_SIGNAL_URL=wss://share.fujimod.com/usb-proxy/signal pnpm run deploy -- \
   --runtime /path/to/runtime \
-  --media /path/to/feature-media
+  --media /path/to/feature-media \
+  --sdk-docs /path/to/sdk-docs
 ```
 
 Deploys authenticate with the Cloudflare CLI's sign-in (`cf auth login`) through
@@ -37,6 +38,18 @@ staging leaves out recordings of cards the homepage no longer has. Locally, set
 back to its current promotion. Media and recording outputs are served directly
 at workspace-relative URLs. `FUJIMOD_MEDIA` selects a standalone media directory
 at `/artifacts/docs/`; production builds read this explicit directory.
+`FUJIMOD_SDK_DOCS` selects the SDK docs directory for dev and build. Its
+`manifest.json` supplies the component reference and preview metadata, and its
+preview HTML, scripts, and Wasm are served under `/docs/sdk/focal/`.
+
+The production build reads the published release history from GitHub. Set
+`GH_TOKEN` to authenticate those requests. Set `FUJIMOD_CONTRIBUTORS` to the
+directory of contributor JSON files, each with an `attributionName`, to supply
+the contributor roster. Development and `local-preview` builds use versioned
+Markdown in `FUJIMOD_RELEASE_NOTES` without contacting GitHub. Local dates come
+from when the notes were added to Git, or their modification times if Git
+history is unavailable. To see the personal note in development, open
+`/__dev/release-personal-note`.
 
 The command validates and stages these assets, runs application checks and tests,
 builds the website, and deploys `dist/client` using `wrangler.jsonc`. Staging fails
@@ -57,15 +70,16 @@ input deploys anyway. It runs the Web checks workflow first, then:
 pnpm run deploy -- --carry-from https://fujimod.com/
 ```
 
-CI cannot rebuild emulator runtimes or feature media, because their inputs stay
+CI cannot rebuild emulator runtimes, feature media, or SDK docs because their inputs stay
 outside Git. `--carry-from` downloads the assets the site already serves instead:
 it reads the site's `site-assets.json`, downloads every file it lists, and checks
 each file's size and SHA-256 and each runtime loader against this checkout's
 Camera API before running the same checks, tests, build and upload as a manual
 deploy. A size or hash mismatch, or a runtime missing a Camera method, stops the
-deploy. When the bindings change the Camera API, a maintainer deploys
-fresh runtimes with `--runtime` and `--media`, and the nightly deploy then
-carries those forward.
+deploy. A runtime SBOM without linker provenance also requires a fresh runtime
+build. A maintainer deploys fresh inputs with `--runtime`, `--media`, and
+`--sdk-docs`. The nightly deploy carries the SDK bundle forward after the first
+deploy that publishes it.
 
 The workflow needs the repository secret `CLOUDFLARE_API_TOKEN`: a Cloudflare API
 token from the "Edit Cloudflare Workers" template, limited to the account in

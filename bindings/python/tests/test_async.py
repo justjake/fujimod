@@ -10,9 +10,10 @@ from unittest.mock import patch
 import pytest
 from fujimod import usb
 from fujimod.usb import app80, testing, tracing
-from test_app80 import config_read, config_write
-from test_service_commands import info
-from test_stream import LIMITS, TOKEN, E, control, memory_read
+
+from .test_app80 import config_read, config_write
+from .test_service_commands import info
+from .test_stream import LIMITS, TOKEN, E, control, memory_read
 
 
 async def opened(
@@ -307,7 +308,7 @@ def test_native_wakeup_resumes_asyncio_without_busy_polling_or_worker_runtime() 
 
 
 def test_diagnostic_and_upload_dtos_are_shared_across_async_and_blocking() -> None:
-    from test_service_commands import command
+    from .test_service_commands import command
 
     async def test() -> None:
         query = struct.pack("<8I", 0x450006, 0, 0, 0, 0x80, 0, 0, 0)

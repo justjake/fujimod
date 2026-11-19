@@ -1,4 +1,4 @@
-from extended_contract import check_extended_values
+from .extended_contract import check_extended_values
 
 
 def test_extended_values() -> None:

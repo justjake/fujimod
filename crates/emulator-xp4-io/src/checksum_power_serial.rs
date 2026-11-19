@@ -4,6 +4,7 @@ use crate::{
     rtc::{StagedClock, StagedConfig},
     spi::Input,
 };
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_ip::socionext::gpio::SharedPins;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -98,6 +99,38 @@ impl ChecksumPowerSerial {
                 response: 0,
             },
         })
+    }
+}
+
+impl ChecksumPowerSerial {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        let s = &self.state;
+        if state.kind != s.kind
+            || state.port != s.port
+            || state.pin != s.pin
+            || state.active_high != s.active_high
+            || state.idle != s.idle
+            || state.inputs != s.inputs
+            || state.disable_writes != s.disable_writes
+            || state.retained_registers != s.retained_registers
+            || state
+                .stored
+                .keys()
+                .any(|r| !s.retained_registers.contains(r))
+            || state
+                .retained_written
+                .iter()
+                .any(|r| !s.retained_registers.contains(r) || !state.stored.contains_key(r))
+            || state.phase > 3
+        {
+            return Err("Invalid checksum power SPI checkpoint or physical input".into());
+        }
+        match (&state.rtc, &s.rtc) {
+            (Some(saved), Some(current)) => saved.validate_restore(current)?,
+            (None, None) => {}
+            _ => return Err("Staged RTC selection differs from checkpoint".into()),
+        }
+        Ok(())
     }
 }
 
@@ -196,38 +229,26 @@ impl Input for ChecksumPowerSerial {
         Ok(reply)
     }
 
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode("xp4-spi-checksum-power", &self.state)
+    }
+    fn validate_checkpoint(&self, data: &Checkpoint) -> Result<(), String> {
+        self.validate_state(&data.decode("xp4-spi-checksum-power")?)
+    }
+    fn restore_checkpoint(&mut self, data: &Checkpoint) -> Result<(), String> {
+        let state: State = data.decode("xp4-spi-checksum-power")?;
+        self.validate_state(&state)?;
+        self.state = state;
+        Ok(())
+    }
+
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
 
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let s = &self.state;
-        if state.kind != s.kind
-            || state.port != s.port
-            || state.pin != s.pin
-            || state.active_high != s.active_high
-            || state.idle != s.idle
-            || state.inputs != s.inputs
-            || state.disable_writes != s.disable_writes
-            || state.retained_registers != s.retained_registers
-            || state
-                .stored
-                .keys()
-                .any(|r| !s.retained_registers.contains(r))
-            || state
-                .retained_written
-                .iter()
-                .any(|r| !s.retained_registers.contains(r) || !state.stored.contains_key(r))
-            || state.phase > 3
-        {
-            return Err("Invalid checksum power SPI checkpoint or physical input".into());
-        }
-        match (&state.rtc, &s.rtc) {
-            (Some(saved), Some(current)) => saved.validate_restore(current)?,
-            (None, None) => {}
-            _ => return Err("Staged RTC selection differs from checkpoint".into()),
-        }
+        self.validate_state(&state)?;
         self.state = state;
         Ok(())
     }

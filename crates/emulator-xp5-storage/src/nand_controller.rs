@@ -290,6 +290,15 @@ impl NandController {
     }
 }
 
+impl NandController {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state.regs.len() != self.state.regs.len() {
+            return Err("serial flash checkpoint has the wrong register count".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for NandController {
     fn pollable(&self, offset: u64, size: u8) -> bool {
         offset == 0xff90a0f0 && size == 4
@@ -394,6 +403,7 @@ impl Device for NandController {
             cx.fail(e);
         }
     }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }

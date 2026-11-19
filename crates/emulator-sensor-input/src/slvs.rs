@@ -285,6 +285,8 @@ impl Device for Receiver {
             }
         }
     }
+    // The sensor command device retains the shared sensor state.
+    fujimod_emulator_devices::checkpoint_fields!(state: State, period_ticks: u64, active_ticks: u64);
     fn save(&self) -> Value {
         serde_json::json!({"state":self.state,"period_ticks":self.period_ticks,"active_ticks":self.active_ticks})
     }

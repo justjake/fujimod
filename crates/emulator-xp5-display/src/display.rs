@@ -231,6 +231,18 @@ impl Display {
         Ok(())
     }
 }
+impl Display {
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        if state.regs.len() != 0x7d4 / 4
+            || state.phase >= 3
+            || state.enabled != state.deadline.is_some()
+        {
+            return Err("invalid display checkpoint register/phase state".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for Display {
     fn name(&self) -> &'static str {
         "lcdc"
@@ -346,18 +358,14 @@ impl Device for Display {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.deadline
     }
+    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let state: State = serde_json::from_value(value.clone())
             .map_err(|e| format!("display checkpoint: {e}"))?;
-        if state.regs.len() != 0x7d4 / 4
-            || state.phase >= 3
-            || state.enabled != state.deadline.is_some()
-        {
-            return Err("invalid display checkpoint register/phase state".into());
-        }
+        self.validate_state(&state)?;
         self.state = state;
         // Republish the same deterministic sequence into a new host run;
         // publication is not a new modeled image change.

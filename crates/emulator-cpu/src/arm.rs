@@ -1,5 +1,5 @@
 //! Architectural ARM registers; no execution-library numbering.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Register {
     R(u8),
     Cpsr,
@@ -49,7 +49,7 @@ pub struct Coprocessor {
     pub secure: u32,
     pub wide: bool,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SystemRegister {
     pub op0: u8,

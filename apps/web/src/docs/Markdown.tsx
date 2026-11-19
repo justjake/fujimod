@@ -1,5 +1,6 @@
 import { For } from 'solid-js';
 import type { JSX } from '@solidjs/web';
+import './markdown.css';
 
 const KEYWORDS = new Set([
   'break', 'case', 'const', 'continue', 'default', 'do', 'else', 'enum', 'extern',

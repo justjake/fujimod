@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xt5-431-sd-card-start",
+  "configuration_id": "xt5-431",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "sd_card"
+    }
+  }
+}

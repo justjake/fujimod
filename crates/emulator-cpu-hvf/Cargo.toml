@@ -29,5 +29,6 @@ path = "examples/check.rs"
 unsafe_op_in_unsafe_fn = "deny"
 
 [dev-dependencies]
+fujimod-catalog-configuration.workspace = true
 fujimod-emulator-xp5-io = { path = "../../crates/emulator-xp5-io" }
 fujimod-emulator-ip-arm = { path = "../../crates/emulator-ip-arm" }

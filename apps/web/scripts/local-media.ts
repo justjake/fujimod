@@ -1,8 +1,11 @@
 /** Opt-in development media, served directly from a recording workspace. */
-import { existsSync, realpathSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import type { Connect, Plugin } from 'vite';
 import { staticFiles } from './local-review-files.ts';
+import { featureMediaFiles } from './stage-site.ts';
+import { validateFeatureMedia } from '../src/home/feature-media.ts';
+import homepage from '../src/home/features.generated.json' with { type: 'json' };
 
 export function previewMedia(
   root: string | undefined,
@@ -15,6 +18,38 @@ export function previewMedia(
     if (existsSync(resolve(current, 'media.json'))) return current;
   }
   return fallback;
+}
+
+/** Embed one manifest and publish its referenced recordings from the same directory. */
+export function siteFeatureMedia(root: string | undefined, configured: string | undefined) {
+  const staged = resolve('public/artifacts/docs');
+  let directory: string | undefined;
+  let manifest: ReturnType<typeof validateFeatureMedia> | null;
+  return {
+    name: 'site-feature-media',
+    config(_config, { command }) {
+      directory = (command === 'serve' ? previewMedia(root, configured) : configured) ?? staged;
+      const path = resolve(directory, 'media.json');
+      if (existsSync(path)) {
+        directory = realpathSync(directory);
+        manifest = validateFeatureMedia(
+          JSON.parse(readFileSync(resolve(directory, 'media.json'), 'utf8')),
+        );
+      } else {
+        manifest = null;
+      }
+      return { define: { __FUJIMOD_FEATURE_MEDIA__: JSON.stringify(manifest) } };
+    },
+    writeBundle(options) {
+      if (this.environment.name !== 'client' || !directory || !manifest || !options.dir) return;
+      if (existsSync(staged) && directory === realpathSync(staged)) return;
+      const destination = resolve(options.dir, 'artifacts/docs');
+      mkdirSync(destination, { recursive: true });
+      const names = featureMediaFiles(manifest, Object.keys(homepage.cards));
+      for (const name of [...names, 'media.json'])
+        copyFileSync(resolve(directory, name), resolve(destination, name));
+    },
+  } satisfies Plugin;
 }
 
 export function recordingFiles(directory: string): Connect.NextHandleFunction {

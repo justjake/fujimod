@@ -1,5 +1,6 @@
 //! Scene-derived IBUF color sums, with the stock 16x16/64-byte-row layout.
 //! Unmapped statistic fields remain explore accesses; see ae-pipeline.md.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -310,6 +311,23 @@ impl Device for Statistics {
         let scene = Scene::load(input)?;
         self.state.lock().unwrap().scene = scene;
         Ok(true)
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &*self.state.lock().unwrap())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode(self.name())?;
+        if state.bytes.len() != self.bank_size * 2
+            || state.scene.width.checked_mul(state.scene.height) != Some(state.scene.rgb.len())
+        {
+            return Err("statistics checkpoint dimensions disagree".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        *self.state.lock().unwrap() = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         serde_json::to_value(&*self.state.lock().unwrap()).unwrap()

@@ -5,19 +5,20 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from _fixture import log, state
-from adjustment_contract import check_adjustment_values
-from configuration_contract import check_configuration_values
-from contract_assertions import expect
-from exposure_contract import check_exposure_values
-from extended_contract import check_extended_values
 from fujimod import usb
 from fujimod.catalog import service as definitions
 from fujimod.usb import app80, data, memory, research, tracing
-from lens_contract import check_lens_values
-from media_contract import check_media_values
-from network_contract import check_network_values
-from peripheral_contract import check_peripheral_values
-from transfer_contract import check_transfer_values
+
+from .adjustment_contract import check_adjustment_values
+from .configuration_contract import check_configuration_values
+from .contract_assertions import expect
+from .exposure_contract import check_exposure_values
+from .extended_contract import check_extended_values
+from .lens_contract import check_lens_values
+from .media_contract import check_media_values
+from .network_contract import check_network_values
+from .peripheral_contract import check_peripheral_values
+from .transfer_contract import check_transfer_values
 
 if TYPE_CHECKING:
     from _fujimod_js import JsBytes

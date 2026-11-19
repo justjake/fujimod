@@ -16,6 +16,7 @@ import { gzipSync } from 'node:zlib';
 import { parseArgs } from 'node:util';
 import { sharedStringEncoding } from './shared-memory-encoding.ts';
 import { optimizeWasm } from './wasm-optimization.mts';
+import { cargoArtifacts, readLinkedCrates } from '../scripts/linked-crates.ts';
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const defaultOutput = resolve(root, '../../target/emulator');
@@ -119,9 +120,12 @@ export function options(args: string[], base = root): BuildOptions {
   )
     throw new Error('Invalid --opt-level value.');
   const incremental = values.incremental;
-  const codegenUnits = values['codegen-units'] === undefined
-    ? incremental ? 256 : undefined
-    : Number(values['codegen-units']);
+  const codegenUnits =
+    values['codegen-units'] === undefined
+      ? incremental
+        ? 256
+        : undefined
+      : Number(values['codegen-units']);
   if (codegenUnits !== undefined && (!Number.isSafeInteger(codegenUnits) || codegenUnits < 1))
     throw new Error('--codegen-units must be a positive integer.');
   if (values.allocator !== 'dlmalloc' && values.allocator !== 'emmalloc')
@@ -306,6 +310,7 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     join(target, 'wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a'),
     '-o',
     join(out, 'camera.mjs'),
+    `-Wl,-Map=${join(out, 'camera.map')}`,
     // Keep the standalone module within static hosting's per-file size budget.
     selected.incremental ? '-O1' : '-Oz',
     '--no-entry',
@@ -507,13 +512,19 @@ export function build(selected: BuildOptions) {
   const start = performance.now();
   run(plan.cmakeBuild, plan.env);
   const unicornSeconds = (performance.now() - start) / 1000;
-  run(['cargo', `+${pinned.nightly}`, ...plan.rust.slice(1)], plan.env);
+  const cameraArtifacts = cargoArtifacts(
+    [`+${pinned.nightly}`, ...plan.rust.slice(1)],
+    root,
+    plan.env,
+  );
   const rustSeconds = (performance.now() - start) / 1000 - unicornSeconds;
   const webgpuEnv: NodeJS.ProcessEnv = {
     ...plan.env,
     // This wasm-bindgen module shares a worker with Emscripten, but uses its
     // own non-shared memory and does not need atomics.
     CARGO_ENCODED_RUSTFLAGS: ['-C', 'panic=abort'].join('\x1f'),
+    // Keep dependency object names in the standalone Wasm linker map.
+    CARGO_PROFILE_RELEASE_WEB_LTO: 'off',
   };
   if (selected.incremental) {
     delete webgpuEnv.CARGO_PROFILE_DIST_LTO;
@@ -522,12 +533,12 @@ export function build(selected: BuildOptions) {
     delete webgpuEnv.CARGO_PROFILE_DIST_INCREMENTAL;
   }
   const webgpuStart = performance.now();
-  run(
+  const webgpuMap = join(out, 'dmp-webgpu.map');
+  const webgpuArtifacts = cargoArtifacts(
     [
-      'cargo',
       `+${pinned.nightly}`,
       '-Zbuild-std=std,panic_abort',
-      'build',
+      'rustc',
       '--locked',
       '-j2',
       '--profile',
@@ -540,7 +551,9 @@ export function build(selected: BuildOptions) {
       '-p',
       'fujimod-emulator-ip-dmp-webgpu',
     ],
+    root,
     webgpuEnv,
+    [`-Clink-arg=-Map=${webgpuMap}`],
   );
   run(
     [
@@ -559,7 +572,10 @@ export function build(selected: BuildOptions) {
     webgpuEnv,
   );
   const webgpuSeconds = (performance.now() - webgpuStart) / 1000;
-  const archive = join(out, 'rust/wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a');
+  const archive = join(
+    out,
+    'rust/wasm32-unknown-emscripten/release-web/libfujimod_emulator_javascript.a',
+  );
   const symbols = capture([
     'emnm',
     '--defined-only',
@@ -628,8 +644,28 @@ export function build(selected: BuildOptions) {
     unicorn_dirty: false,
     unicorn_tci_sha256: hash(readFileSync(join(vendor, 'qemu/tcg/tci.c'))),
   };
+  const cameraMap = join(out, 'camera.map');
+  writeFileSync(
+    join(out, 'linked-crates.json'),
+    JSON.stringify({
+      rust: receipt.rust,
+      emscripten: receipt.emscripten,
+      perf: receipt.perf,
+      modules: {
+        'camera.wasm': {
+          sha256: receipt.wasm_sha256,
+          linkedDirectories: readLinkedCrates(cameraMap, cameraArtifacts),
+        },
+        'dmp_webgpu_bg.wasm': {
+          sha256: hash(readFileSync(join(out, 'dmp_webgpu_bg.wasm'))),
+          linkedDirectories: readLinkedCrates(webgpuMap, webgpuArtifacts),
+        },
+      },
+    }) + '\n',
+  );
   const receiptPath = join(out, 'build.json');
   writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  rmSync(cameraMap);
   stageRuntimeNotices(out);
   if (selected.stagePackage) stagePackage(out);
   console.log(JSON.stringify(receipt, null, 2));

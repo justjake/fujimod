@@ -184,6 +184,42 @@ impl CountdownTimers {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SavedTimers {
+    base: u64,
+    lines: [Option<u32>; CHANNELS],
+    channels: [Channel; CHANNELS],
+    dials: Vec<SavedDial>,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SavedDial {
+    channel: usize,
+    phase: u8,
+    final_phase: u8,
+    events: VecDeque<(u64, u8)>,
+}
+
+impl CountdownTimers {
+    fn validate_state(&self, saved: &SavedTimers) -> Result<(), String> {
+        if saved.base != self.base || saved.lines != self.lines || saved.dials.len() != self.dials.len()
+            || saved.channels.iter().any(|channel|
+                (channel.counter.enabled && decoded(channel.control)) != channel.counter.next.is_some())
+            || saved.dials.iter().zip(&self.dials).any(|(saved, live)| {
+                saved.channel != live.channel || saved.phase > 3 || saved.final_phase > 3
+                    || saved.events.len() > 4096
+                    || saved.events.iter().any(|(_, phase)| *phase > 3)
+                    || saved.events.iter().zip(saved.events.iter().skip(1)).any(|(a, b)| a.0 >= b.0)
+                    || saved.events.back().map_or(saved.phase, |(_, phase)| *phase) != saved.final_phase
+            })
+        {
+            return Err("Invalid XP4 countdown timer checkpoint".into());
+        }
+        Ok(())
+    }
+}
+
 impl Device for CountdownTimers {
     fn name(&self) -> &'static str {
         "xp4-countdown-timers"
@@ -285,6 +321,31 @@ impl Device for CountdownTimers {
             .filter_map(|n| self.channels[n].counter.next)
             .chain(self.dials.iter().filter_map(|d| d.input.events.lock().events.front().map(|e| e.0)))
             .min()
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        let state = SavedTimers {
+            base: self.base, lines: self.lines, channels: self.channels.clone(),
+            dials: self.dials.iter().map(|dial| {
+                let input = dial.input.events.lock();
+                SavedDial { channel: dial.channel, phase: dial.phase, final_phase: input.final_phase, events: input.events.clone() }
+            }).collect(),
+        };
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &state)
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_state(&data.decode(self.name())?)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let saved: SavedTimers = data.decode(self.name())?;
+        self.validate_state(&saved)?;
+        self.channels = saved.channels;
+        for (dial, saved) in self.dials.iter_mut().zip(saved.dials) {
+            dial.phase = saved.phase;
+            *dial.input.events.lock() = EncoderQueue {
+                events: saved.events, final_phase: saved.final_phase,
+            };
+        }
+        Ok(())
     }
     fn save(&self) -> Value {
         let dials: Vec<_> = self
