@@ -411,7 +411,7 @@ class Guide[C: RecordingCamera]:
 
     def save(self) -> None:
         temporary = self.output / ".guide.json.tmp"
-        temporary.write_text(json.dumps(self.report, indent=2) + "\n")
+        temporary.write_text(json.dumps(self.report, separators=(",", ":")) + "\n")
         os.replace(temporary, self.output / "guide.json")
 
     def _overlay_event(self, event: dict[str, object]) -> None:

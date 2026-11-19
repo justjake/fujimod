@@ -91,6 +91,10 @@ class WalkthroughTests(unittest.TestCase):
         report = guide.run(run)
         self.assertTrue(report["passed"])
         self.assertEqual(report["steps"][0]["capture_index"], 0)
+        self.assertEqual(
+            (guide.output / "guide.json").read_text(),
+            json.dumps(report, separators=(",", ":")) + "\n",
+        )
 
     def test_badge_filter_preserves_every_input_as_coverage_evidence(self) -> None:
         from unittest.mock import Mock, call
