@@ -242,16 +242,29 @@ fn register_with_resources(
             let options: fujimod_emulator_xp5_io::completion_stub::Options =
                 toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("completion stub options: {e}"))?;
             // XP5 board time is in nanoseconds.
-            bus.register(
+            let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
                 window.base,
                 window.size,
-                Box::new(fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+                options,
+                1000,
+            )?;
+            if window.base == fujimod_emulator_xp5_imaging::imaging::mix::MIX_BASE && window.size == 0x1000 {
+                // MIX 0xffd22000: the same stub that, with XT5_STILL_PATH=real, also writes the
+                // HDR blend and composite (emulator-xp5-imaging imaging_mix.rs). Same device
+                // name and checkpoint, so the manifest and snapshots are unchanged.
+                let mix = fujimod_emulator_xp5_imaging::imaging::mix::Mix::new(stub);
+                bus.register(
                     window.base,
                     window.size,
-                    options,
-                    1000,
-                )?),
-            )?;
+                    Box::new(if fujimod_emulator_imaging::frame::still_path_real() {
+                        mix.with_still_path()
+                    } else {
+                        mix
+                    }),
+                )?;
+            } else {
+                bus.register(window.base, window.size, Box::new(stub))?;
+            }
         }
         "imaging-tnr" => {
             // TNR 0xffd24000: the completion stub that, with XT5_MOVIE_PATH=real, also copies

@@ -25,6 +25,12 @@ pub struct SensorState {
     /// The last picture the still channel ([`StillChannel`]) wrote.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub still_raw: Option<StillRaw>,
+    /// Pictures the still channel wrote before [`SensorState::still_raw`], oldest first, at
+    /// most [`EARLIER_STILL_RAWS`], none overlapping a later one. A multi-frame drive mode (the
+    /// X-T5 4.31 HDR writes three exposures to three buffers) develops each of them after the
+    /// last one was written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub earlier_still_raws: Vec<StillRaw>,
     /// The still channel's destination was programmed and no frame has used it yet.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub still_programmed: bool,
@@ -43,8 +49,22 @@ impl Default for SensorState {
             last_dma: [(0, 0, 0); 2],
             armed: [false; 2],
             still_raw: None,
+            earlier_still_raws: Vec::new(),
             still_programmed: false,
         }
+    }
+}
+impl SensorState {
+    /// Make `picture` the last still channel picture; the previous one joins the earlier ones,
+    /// which drop any picture it overlaps and keep the newest [`EARLIER_STILL_RAWS`].
+    pub fn record_still_raw(&mut self, picture: StillRaw) {
+        if let Some(previous) = self.still_raw.take() {
+            self.earlier_still_raws.push(previous);
+        }
+        self.earlier_still_raws.retain(|r| !r.overlaps(&picture));
+        let excess = self.earlier_still_raws.len().saturating_sub(EARLIER_STILL_RAWS);
+        self.earlier_still_raws.drain(..excess);
+        self.still_raw = Some(picture);
     }
 }
 #[derive(Clone, Copy)]
@@ -116,6 +136,21 @@ pub struct StillRaw {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub packed12: bool,
 }
+/// Still channel pictures kept besides the last one ([`SensorState::earlier_still_raws`]).
+pub const EARLIER_STILL_RAWS: usize = 7;
+impl StillRaw {
+    /// The bytes from the first line's start to the last line's start plus one pitch.
+    fn end(&self) -> u64 {
+        self.address + self.pitch * u64::from(self.lines)
+    }
+    /// Whether a reader with line pitch `pitch` starting at `address` is inside this picture.
+    pub fn contains(&self, address: u64, pitch: u64) -> bool {
+        self.pitch == pitch && address >= self.address && address < self.end()
+    }
+    fn overlaps(&self, other: &StillRaw) -> bool {
+        self.address < other.end() && other.address < self.end()
+    }
+}
 #[derive(Clone)]
 pub struct Sensor(
     pub Arc<Mutex<SensorState>>,
@@ -136,6 +171,18 @@ impl Sensor {
     /// The last picture the still channel wrote, if any.
     pub fn still_raw(&self) -> Option<StillRaw> {
         self.0.lock().unwrap().still_raw
+    }
+    /// The latest still channel picture (the last one, then the earlier ones) whose pitch is
+    /// `pitch` and whose lines hold `address`; otherwise the last picture, as
+    /// [`Sensor::still_raw`].
+    pub fn still_raw_at(&self, address: u64, pitch: u64) -> Option<StillRaw> {
+        let s = self.0.lock().unwrap();
+        s.still_raw
+            .iter()
+            .chain(s.earlier_still_raws.iter().rev())
+            .find(|r| r.contains(address, pitch))
+            .copied()
+            .or(s.still_raw)
     }
     pub fn image_reg(&self, offset: u64) -> u32 {
         self.0
@@ -354,13 +401,14 @@ impl Sensor {
         s.still_programmed = false;
         s.frames[still.channel] += 1;
         s.last_dma[still.channel] = (address, width, lines);
-        s.still_raw = Some(StillRaw {
+        let picture = StillRaw {
             address,
             pitch,
             width,
             lines,
             packed12,
-        });
+        };
+        s.record_still_raw(picture);
         let status = base + 0x24;
         let value = s.image.get(&status).copied().unwrap_or(0) | done;
         s.image.insert(status, value);
@@ -792,6 +840,38 @@ impl Device for Command {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+    /// Three exposures in three buffers (the X-T5 4.31 HDR): a reader finds the picture its
+    /// input is in; an unknown input or another pitch gets the last picture. A new picture
+    /// over an earlier buffer replaces it, and only the newest earlier pictures are kept.
+    #[test]
+    fn still_raw_at_finds_earlier_pictures() {
+        let picture = |address| StillRaw {
+            address,
+            pitch: 0x3d80,
+            width: 7776,
+            lines: 5250,
+            packed12: false,
+        };
+        let sensor = Sensor::new(None, (0, 0));
+        for address in [0xbb00f6b0, 0x1_fb00f690, 0xb600f6a0] {
+            sensor.0.lock().unwrap().record_still_raw(picture(address));
+        }
+        assert_eq!(sensor.still_raw_at(0xbb10d1e0, 0x3d80), Some(picture(0xbb00f6b0)));
+        assert_eq!(sensor.still_raw_at(0x1_fb10d1c0, 0x3d80), Some(picture(0x1_fb00f690)));
+        assert_eq!(sensor.still_raw_at(0xb610d1d0, 0x3d80), Some(picture(0xb600f6a0)));
+        assert_eq!(sensor.still_raw_at(0x1_c34f5880, 0x3d60), Some(picture(0xb600f6a0)));
+        assert_eq!(sensor.still_raw_at(0xbb10d1e0, 0x3d60), Some(picture(0xb600f6a0)));
+        // A picture 0x1000 bytes into the first buffer replaces it.
+        sensor.0.lock().unwrap().record_still_raw(picture(0xbb0106b0));
+        assert_eq!(sensor.0.lock().unwrap().earlier_still_raws, vec![picture(0x1_fb00f690), picture(0xb600f6a0)]);
+        for n in 0..10 {
+            sensor.0.lock().unwrap().record_still_raw(picture(0x2_0000_0000 + n * 0x1000_0000));
+        }
+        let state = sensor.0.lock().unwrap();
+        assert_eq!(state.earlier_still_raws.len(), EARLIER_STILL_RAWS);
+        assert_eq!(state.earlier_still_raws[EARLIER_STILL_RAWS - 1], picture(0x2_8000_0000));
+    }
     #[test]
     fn timing_input_causes_ack_without_granting_raw_dma_support() {
         let sensor = Sensor::new(
