@@ -15,6 +15,7 @@ crate-type = ["rlib"]
 perf = ["fujimod-perf/perf"]
 
 [dependencies]
+fujimod-catalog-configuration.workspace = true
 serde = { version = "1", features = ["derive"] }
 fujimod-emulator-devices = { path = "../emulator-devices" }
 fujimod-emulator-cpu = { path = "../emulator-cpu" }

@@ -62,11 +62,11 @@ pub struct HookId {
     pub owner: Identity,
     pub key: usize,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Diagnostic {
     ExceptionSyndrome,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Register {
     Diagnostic(Diagnostic),
     Arm32(arm::Register),

@@ -821,6 +821,7 @@ pub fn checked_call_with(
 
 #[cfg(test)]
 mod tests {
+    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},
@@ -836,7 +837,7 @@ mod tests {
         })).unwrap();
         let b = graph
             .build(
-                factory::Options::new(factory::Engine::Unicorn)
+                factory::Options::new(RunEngine::Unicorn)
                     .with_translation_cache_size_bytes(1 << 20),
                 Bus::new(Mode::Strict),
                 None,

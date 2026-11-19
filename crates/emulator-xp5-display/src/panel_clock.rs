@@ -2,6 +2,7 @@
 //! Only the four display PLL banks are owned here. Request/lock latency
 //! is an explicit50us scheduling assumption; frequencies use guest N/D.
 use fujimod_emulator_devices::xp5::panel_clocks::Clocks;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_xp5_io::clocks::BANKS;
 use serde_json::Value;
@@ -96,6 +97,26 @@ impl Device for PanelPll {
         if token == p.generation {
             p.request = 0;
         }
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let clocks = self.clocks.0.lock().unwrap();
+        Checkpoint::encode(self.name(), &(clocks.plls[self.index], clocks.selector))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        use fujimod_emulator_devices::xp5::panel_clocks::Pll;
+        let (_, selector): (Pll, u32) = saved.decode(self.name())?;
+        if selector > 1 {
+            return Err("panel clock selector differs".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (pll, selector) = saved.decode(self.name())?;
+        let mut clocks = self.clocks.0.lock().unwrap();
+        clocks.plls[self.index] = pll;
+        clocks.selector = selector;
+        Ok(())
     }
     fn save(&self) -> Value {
         let s = self.clocks.0.lock().unwrap();

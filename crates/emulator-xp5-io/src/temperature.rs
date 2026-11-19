@@ -51,6 +51,7 @@ impl Device for Monitor {
             _ => cx.unmodeled(),
         }
     }
+    fujimod_emulator_devices::checkpoint_fields!(registers: BTreeMap<u64, u32>);
     fn save(&self) -> Value {
         json!(self)
     }

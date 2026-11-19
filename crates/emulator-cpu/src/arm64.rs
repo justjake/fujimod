@@ -1,5 +1,41 @@
 //! AArch64 architectural mechanisms, independent of a host execution backend.
-use super::Access;
+use super::{Access, Register};
+
+/// Resolve a register name used by AArch64 sessions or their ARM32 companions.
+pub fn register(name: &str) -> Result<Register, String> {
+    match name {
+        "pc" => Ok(Register::Pc),
+        "sp" => Ok(Register::Sp),
+        "pstate" => Ok(Register::Pstate),
+        "fpcr" => Ok(Register::Fpcr),
+        "fpsr" => Ok(Register::Fpsr),
+        _ => {
+            if let Some(r) = name
+                .strip_prefix('x')
+                .and_then(|n| n.parse::<u8>().ok())
+                .filter(|n| *n <= 30)
+            {
+                return Ok(Register::X(r));
+            }
+            if let Some(r) = name
+                .strip_prefix('r')
+                .and_then(|n| n.parse::<u8>().ok())
+                .filter(|n| *n <= 15)
+            {
+                return Ok(Register::Arm32(super::arm::Register::R(r)));
+            }
+            if let Some(r) = name
+                .strip_prefix("sys:")
+                .and_then(|n| u16::from_str_radix(n.trim_start_matches("0x"), 16).ok())
+            {
+                return Ok(Register::Arm64System(
+                    super::arm::SystemRegister::from_encoding(r),
+                ));
+            }
+            Ok(Register::Arm64System(system_register(name)?))
+        }
+    }
+}
 
 /// Named architectural registers used by checked handoffs and inspection.
 pub fn system_register(name: &str) -> Result<super::arm::SystemRegister, String> {

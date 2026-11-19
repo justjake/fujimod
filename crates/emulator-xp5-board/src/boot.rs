@@ -4,6 +4,7 @@
 //! values supplied to those devices; neither the caller nor a board runner
 //! needs a second copy of the register-window map.
 
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{
     InterruptMap, aprofile,
     bus::{Bus, Mode},
@@ -31,7 +32,7 @@ use std::{collections::BTreeMap, sync::Arc};
 /// firmware startup profile. The profile is data; opening the board does not
 /// inspect firmware instructions or select a profile by firmware identity.
 pub struct FirmwareStartup {
-    pub processors: Vec<fujimod_emulator_boot::graph::ProcessorStart>,
+    pub processors: Vec<fujimod_emulator_board_graph::ProcessorStart>,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
 }
@@ -126,7 +127,7 @@ pub fn startup_from_profile(
                 }
             }
             insert_start_register(&mut registers, "MPIDR_EL1", *affinity)?;
-            Ok(fujimod_emulator_boot::graph::ProcessorStart {
+            Ok(fujimod_emulator_board_graph::ProcessorStart {
                 processor_id: processor.id.clone(),
                 released: cpu.running,
                 registers,
@@ -649,7 +650,7 @@ pub struct OpenOptions {
     /// `None` when the body has no key model; key edges are then refused.
     pub controls: Option<ControlsOptions>,
     pub resources: xp5_board::Resources,
-    pub engine: factory::Engine,
+    pub engine: RunEngine,
     pub interrupts: Option<InterruptMap>,
     pub aprofile: Vec<(usize, aprofile::Config)>,
     pub images: Vec<MemoryImage>,
@@ -725,6 +726,7 @@ pub fn open(
         nodes: assembly.nodes,
         contacts: assembly.contacts,
         power_cycle: None,
+        window_action: None,
         recording_frames: Default::default(),
     };
     Ok((session, assembly.inputs))

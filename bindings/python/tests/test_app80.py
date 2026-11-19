@@ -5,7 +5,8 @@ import struct
 import pytest
 from fujimod import usb
 from fujimod.usb import app80, testing
-from test_stream import LIMITS, E, control, opened
+
+from .test_stream import LIMITS, E, control, opened
 
 
 def config_write(

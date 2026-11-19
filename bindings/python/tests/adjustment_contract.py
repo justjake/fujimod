@@ -1,7 +1,8 @@
 """Native/Pyodide contract for direct adjustment requests and snapshots."""
 
-from contract_assertions import expect
 from fujimod.usb import app80
+
+from .contract_assertions import expect
 
 
 def check_adjustment_values() -> bool:

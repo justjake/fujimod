@@ -1,9 +1,10 @@
 //! Restore physical flash/controller state into the already connected graph.
 //! Immutable flash bytes, geometry and interrupt routes belong to the factory.
 use super::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
 enum Pending {
     Erase {
@@ -17,7 +18,7 @@ enum Pending {
         bytes: Vec<u8>,
     },
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NorState {
     #[serde(default)]
@@ -42,7 +43,26 @@ fn extent(address: u64, size: usize) -> bool {
         .is_some_and(|end| end <= FLASH_SIZE)
 }
 impl Nor {
-    fn restore_state(&mut self, state: NorState) -> Result<(), String> {
+    fn capture_state(&self) -> NorState {
+        NorState {
+            immutable_prefix: self.prefix.map(|prefix| prefix.bytes()),
+            write_protect: self.write_protect, read_backing: self.read_backing.clone(),
+            jedec: self.jedec, write_enable: self.write_enable,
+            pending: self.pending.as_ref().map(|(at, mutation)| match mutation {
+                Mutation::Erase { address, size } => Pending::Erase {
+                    at: *at, erase_address: *address, size: *size,
+                },
+                Mutation::Program { address, bytes } => Pending::Program {
+                    at: *at, program_address: *address, bytes: bytes.clone(),
+                },
+            }),
+            erase_bytes: self.geometry.erase_bytes, page_bytes: self.geometry.page_bytes,
+            erase_ticks: self.geometry.erase_ticks, page_ticks: self.geometry.page_ticks,
+            overlay: self.overlay.clone(),
+        }
+    }
+
+    fn validate_state(&self, state: &NorState) -> Result<Option<(u64, Mutation)>, String> {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
             || state.write_protect != self.write_protect
@@ -60,20 +80,20 @@ impl Nor {
         {
             return Err("Invalid XP4 NOR checkpoint or changed physical input".into());
         }
-        let pending = match state.pending {
+        let pending = match &state.pending {
             Some(Pending::Erase {
                 at,
                 erase_address: address,
                 size,
             }) => {
-                if ![4096, g.erase_bytes].contains(&size)
-                    || address.wrapping_sub(FLASH) % size as u64 != 0
-                    || !extent(address, size)
-                    || self.check_mutation(address, size).is_err()
+                if ![4096, g.erase_bytes].contains(size)
+                    || address.wrapping_sub(FLASH) % *size as u64 != 0
+                    || !extent(*address, *size)
+                    || self.check_mutation(*address, *size).is_err()
                 {
                     return Err("Invalid pending XP4 NOR erase".into());
                 }
-                Some((at, Mutation::Erase { address, size }))
+                Some((*at, Mutation::Erase { address: *address, size: *size }))
             }
             Some(Pending::Program {
                 at,
@@ -81,24 +101,29 @@ impl Nor {
                 bytes,
             }) => {
                 if bytes.is_empty()
-                    || !extent(address, bytes.len())
-                    || self.check_mutation(address, bytes.len()).is_err()
+                    || !extent(*address, bytes.len())
+                    || self.check_mutation(*address, bytes.len()).is_err()
                     || address.wrapping_sub(FLASH) as usize % g.page_bytes + bytes.len()
                         > g.page_bytes
                 {
                     return Err("Invalid pending XP4 NOR program".into());
                 }
-                Some((at, Mutation::Program { address, bytes }))
+                Some((*at, Mutation::Program { address: *address, bytes: bytes.clone() }))
             }
             None => None,
         };
+        Ok(pending)
+    }
+
+    fn apply_state(&mut self, state: NorState) -> Result<(), String> {
+        let pending = self.validate_state(&state)?;
         self.write_enable = state.write_enable;
         self.overlay = state.overlay;
         self.pending = pending;
         Ok(())
     }
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FlashState {
     registers: Vec<u32>,
@@ -117,11 +142,60 @@ struct FlashState {
     #[serde(default)]
     mapped_misses: u64,
 }
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FlashArchive {
+    state: FlashState,
+    pages: Vec<usize>,
+    epoch: u64,
+}
 impl SerialFlashController {
+    pub(super) fn capture_portable(&self) -> Result<Checkpoint, String> {
+        let port = self.port.lock().map_err(|_| "XP4 NOR lock poisoned")?;
+        let mut state = FlashState {
+            registers: self.regs.to_vec(), next: self.due, operations: self.operations,
+            jedec: port.nor.jedec, nor: port.nor.capture_state(), stream: port.request.clone(),
+            program_fifo: port.program_data.clone(), irq: self.irq, irq_level: self.irq_level,
+            mapped_read_gate: self.gate.clone(), pad: self.pad, mapped_misses: self.mapped_misses,
+        };
+        let (pages, blobs): (Vec<_>, Vec<_>) = std::mem::take(&mut state.nor.overlay).into_iter()
+            .map(|(page, data)| (page, Arc::from(data))).unzip();
+        let archive = FlashArchive { state, pages, epoch: self.epoch.load(Ordering::Relaxed) };
+        Ok(Checkpoint::encode(self.name(), &archive)?.with_blobs(blobs))
+    }
+
+    fn decode_portable(&self, data: &Checkpoint) -> Result<FlashArchive, String> {
+        let mut archive: FlashArchive = data.decode(self.name())?;
+        let page_bytes = self.port.lock().map_err(|_| "XP4 NOR lock poisoned")?.nor.geometry.page_bytes;
+        if !archive.state.nor.overlay.is_empty() || archive.pages.len() != data.blobs().len()
+            || archive.pages.windows(2).any(|pair| pair[0] >= pair[1])
+            || data.blobs().iter().any(|page| page.len() != page_bytes)
+        {
+            return Err("XP4 flash checkpoint page directory differs".into());
+        }
+        archive.state.nor.overlay = archive.pages.iter().copied().zip(data.blobs().iter().map(|bytes| bytes.to_vec())).collect();
+        Ok(archive)
+    }
+
+    pub(super) fn validate_portable(&self, data: &Checkpoint) -> Result<(), String> {
+        self.validate_state(&self.decode_portable(data)?.state).map(|_| ())
+    }
+
+    pub(super) fn restore_portable(&mut self, data: &Checkpoint) -> Result<(), String> {
+        let archive = self.decode_portable(data)?;
+        self.apply_state(archive.state)?;
+        self.epoch.store(archive.epoch, Ordering::Relaxed);
+        Ok(())
+    }
+
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
-        let state: FlashState = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        let state: FlashState = serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        self.apply_state(state)
+    }
+
+    fn validate_state(&self, state: &FlashState) -> Result<[u32; 64], String> {
         let registers: [u32; 64] = state
-            .registers
+            .registers.as_slice()
             .try_into()
             .map_err(|_| "Invalid XP4 flash register count")?;
         let geometry = self.port.lock().unwrap().nor.geometry;
@@ -161,7 +235,7 @@ impl SerialFlashController {
         {
             return Err("Invalid XP4 serial-flash checkpoint or route".into());
         }
-        let mut port = self.port.lock().unwrap();
+        let port = self.port.lock().unwrap();
         if state.next.is_some_and(|(_, token)| token == 1) {
             port.nor
                 .check_command(registers[0x90 / 4], registers[0x94 / 4])?;
@@ -175,7 +249,14 @@ impl SerialFlashController {
                 port.nor.check_read_backing(request.address, request.size)?;
             }
         }
-        port.nor.restore_state(state.nor)?;
+        port.nor.validate_state(&state.nor)?;
+        Ok(registers)
+    }
+
+    fn apply_state(&mut self, state: FlashState) -> Result<(), String> {
+        let registers = self.validate_state(&state)?;
+        let mut port = self.port.lock().map_err(|_| "XP4 NOR lock poisoned")?;
+        port.nor.apply_state(state.nor)?;
         port.request = state.stream;
         port.program_data = state.program_fifo;
         self.regs = registers;
@@ -187,7 +268,7 @@ impl SerialFlashController {
         Ok(())
     }
 }
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DmaState {
     #[serde(default)]
@@ -210,11 +291,43 @@ struct DmaState {
     microphone_frames: Option<u64>,
 }
 impl DmaController {
+    pub(super) fn capture_portable(&self) -> Result<Checkpoint, String> {
+        if self.receiver.is_some() {
+            return Err("connected transmit receiver has no portable checkpoint".into());
+        }
+        let standalone = self.port.is_none();
+        let state = DmaState {
+            serial_flash_peer: standalone.then_some(false),
+            reset_profile: standalone.then(|| Self::STANDALONE_RESET.to_owned()),
+            timing_profile: standalone.then(|| Self::STANDALONE_TIMING.to_owned()),
+            assumptions_recorded: standalone.then_some(self.standalone_admitted),
+            channels: self.channels.to_vec(), irq_routes: self.routes,
+            request_mux: self.mux.clone(), request_mux_changed: self.mux_changed,
+            request: self.request.clone(), audio: self.audio.clone(),
+            microphone_frames: self.microphone().map(|_| self.microphone_frames),
+        };
+        Checkpoint::encode(self.name(), &state)
+    }
+
+    pub(super) fn validate_portable(&self, data: &Checkpoint) -> Result<(), String> {
+        self.validate_state(&data.decode(self.name())?)
+    }
+
+    pub(super) fn restore_portable(&mut self, data: &Checkpoint) -> Result<(), String> {
+        self.apply_state(data.decode(self.name())?)
+    }
+
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
-        if self.receiver.is_some() || value["transmit_receiver_connected"] == true {
+        if value["transmit_receiver_connected"] == true {
             return Err("Connected transmit receiver checkpoint restore is not supported".into());
         }
-        let state: DmaState = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        self.apply_state(serde_json::from_value(value.clone()).map_err(|error| error.to_string())?)
+    }
+
+    fn validate_state(&self, state: &DmaState) -> Result<(), String> {
+        if self.receiver.is_some() {
+            return Err("connected transmit receiver has no portable checkpoint".into());
+        }
         let standalone = self.port.is_none();
         let mode_matches = if standalone {
             state.serial_flash_peer == Some(false)
@@ -256,6 +369,11 @@ impl DmaController {
                 if channel.submitted { port.nor.check_mutation(u64::from(channel.regs[0x18 / 4]), channel.regs[0x10 / 4] as usize + 1)?; }
             }
         }
+        Ok(())
+    }
+
+    fn apply_state(&mut self, state: DmaState) -> Result<(), String> {
+        self.validate_state(&state)?;
         self.standalone_admitted = state.assumptions_recorded.unwrap_or(false);
         self.microphone_frames = state.microphone_frames.unwrap_or(0);
         self.channels = state

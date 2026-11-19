@@ -393,6 +393,7 @@ impl Device for Timer {
         }
         self.schedule(cx, n);
     }
+    fujimod_emulator_devices::checkpoint_fields!(counters: [Counter; 16], general: [General; 16], routing: [u32; 2], group: u32);
     fn save(&self) -> Value {
         serde_json::to_value(self).expect("timer state")
     }

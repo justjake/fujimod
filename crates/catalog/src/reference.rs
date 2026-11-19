@@ -2644,19 +2644,37 @@ impl ReferenceCatalog {
             firmware_versions: crate::firmware_versions::FirmwareVersions::bundled()?.releases,
             ..Self::default()
         };
-        for (kind, path, bytes) in bundled_documents() {
+        #[cfg(target_os = "emscripten")]
+        let mut packed = {
+            let bytes = include_bytes!(concat!(env!("OUT_DIR"), "/bundled_catalog.zst"));
+            ruzstd::decoding::StreamingDecoder::new(bytes.as_slice())
+                .map_err(|error| format!("cannot open bundled catalog: {error}"))?
+        };
+        #[cfg(target_os = "emscripten")]
+        let mut document = Vec::new();
+        for &(kind, path, source) in BUNDLED_CATALOG {
+            #[cfg(target_os = "emscripten")]
+            let bytes = {
+                use std::io::Read;
+                document.resize(source, 0);
+                packed.read_exact(&mut document)
+                    .map_err(|error| format!("cannot decompress bundled catalog record {path}: {error}"))?;
+                document.as_slice()
+            };
+            #[cfg(not(target_os = "emscripten"))]
+            let bytes = source.as_bytes();
             match kind {
                 ReferenceKind::Soc => {
-                    let value: Soc = decode(bytes.as_bytes(), Path::new(path))?;
+                    let value: Soc = decode(bytes, Path::new(path))?;
                     value.validate(&value.id)?;
                     insert_unique(&mut catalog.socs, value.id.clone(), value, Path::new(path))?;
                 }
                 ReferenceKind::Part => {
-                    let value: Part = decode(bytes.as_bytes(), Path::new(path))?;
+                    let value: Part = decode(bytes, Path::new(path))?;
                     value.validate(&value.id)?;
                     insert_unique(&mut catalog.parts, value.id.clone(), value, Path::new(path))?;
                 }
-                kind => catalog.insert_document(kind, bytes.as_bytes(), Path::new(path))?,
+                kind => catalog.insert_document(kind, bytes, Path::new(path))?,
             }
         }
         catalog.validate_references()?;
@@ -3638,10 +3656,6 @@ impl ReferenceKind {
 }
 
 include!(concat!(env!("OUT_DIR"), "/bundled_catalog.rs"));
-
-fn bundled_documents() -> impl Iterator<Item = (ReferenceKind, &'static str, &'static str)> {
-    BUNDLED_CATALOG.iter().copied()
-}
 
 #[cfg(test)]
 mod tests;

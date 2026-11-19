@@ -586,6 +586,13 @@ impl Session {
             .ok_or_else(|| "instruction count overflow".into())
     }
 
+    fn synchronize_window(&mut self) -> Result<(), String> {
+        match &mut self.window_action {
+            Some(action) => (action.synchronize)(&self.board),
+            None => Ok(()),
+        }
+    }
+
     /// Continue an existing host window across contact acknowledgments and
     /// passive observer stops, retaining its absolute instruction ceiling.
     /// A watched queue ends the window after the pump that changes it.
@@ -601,7 +608,10 @@ impl Session {
             .as_ref()
             .filter(|d| d.watched)
             .map(Driver::progress);
-        if !self.board.is_powered_off() { self.pump_contacts()?; }
+        if !self.board.is_powered_off() {
+            self.synchronize_window()?;
+            self.pump_contacts()?;
+        }
         if end <= self.total_instructions()? {
             if self.board.is_powered_off() { return Ok(()); }
             return self.board.run_window(end, quantum, pause_after, until);
@@ -631,8 +641,13 @@ impl Session {
                 ),
                 None => until,
             };
+            let horizon = horizon.into_iter().chain(self.window_action.as_ref().map(|action|
+                self.board.now().saturating_add(action.interval.get())
+            )).min();
             let before = (self.board.now(), current);
-            self.board.run_window(end, quantum, pause_after, horizon)?;
+            let execution = self.board.run_window(end, quantum, pause_after, horizon);
+            self.synchronize_window()?;
+            execution?;
             if self.board.is_powered_off() { continue; }
             self.pump_contacts()?;
             if watched.is_some() && watched != self.contact_driver.as_ref().map(Driver::progress) {

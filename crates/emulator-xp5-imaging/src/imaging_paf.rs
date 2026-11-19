@@ -56,6 +56,7 @@ impl Device for Paf {
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.deadline
     }
+    fujimod_emulator_devices::checkpoint_fields!(registers: BTreeMap<u64, u32>, generation: u64, deadline: Option<u64>);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }

@@ -1,6 +1,7 @@
 """The function watcher can count execution in raw PC intervals."""
 import pytest
-from test_watch_continuation import board
+
+from .test_watch_continuation import board
 
 
 def test_instruction_ranges_are_opt_in_and_count_the_same_window():

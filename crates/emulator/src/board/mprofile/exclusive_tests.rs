@@ -1,8 +1,9 @@
+use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use crate::board::{
     Board,
     bus::{Bus, Mode},
-    factory::{Engine, Graph, MemoryMap, Options, Processor, Ram},
+    factory::{Graph, MemoryMap, Options, Processor, Ram},
 };
 use fujimod_emulator_cpu::Model;
 use fujimod_emulator_cpu::timeline::Ratio;
@@ -78,7 +79,7 @@ pub(super) fn board_with_bus(code: &[u16], peer: &[u16], bus: Bus) -> Board {
     };
     let b = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )

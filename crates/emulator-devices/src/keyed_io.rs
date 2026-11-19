@@ -82,6 +82,7 @@ impl Device for KeyedIoGroup {
             _ => cx.unmodeled(),
         }
     }
+    crate::checkpoint_fields!(state: State);
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()
     }

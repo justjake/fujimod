@@ -1,7 +1,8 @@
 """Shared native/Pyodide direct service lens contract."""
 
-from contract_assertions import expect
 from fujimod.usb import app80
+
+from .contract_assertions import expect
 
 
 def check_lens_values() -> bool:

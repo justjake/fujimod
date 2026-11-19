@@ -8,9 +8,7 @@ import type { Firmware } from '../catalog';
 import type { LoadedRelease } from '../patch/release';
 import type { FirmwareDownloadFormat } from '../firmware-download';
 import type { FirmwareLibrary } from './firmware-library';
-import { FirmwareDownloads } from './FirmwareDownloads';
 import { FirmwarePicker } from './FirmwarePicker';
-import { ReleaseNotes } from './ReleaseNotes';
 import { DownloadModal } from './DownloadModal';
 import { latestCamera } from './selection';
 import './launcher.css';
@@ -75,14 +73,22 @@ export function CameraLauncher(props: {
   }>();
   const [downloading, setDownloading] = createSignal(false);
   const [downloadError, setDownloadError] = createSignal('');
-  const chosen = () => props.library.chosen();
-  const support = () => props.supported.find((entry) => entry.firmware.sha256 === chosen()?.sha256);
-  const patch = () => props.release?.firmwares.find((entry) => entry.sha256 === chosen()?.sha256);
-  const label = () => chosen()?.name.replace(' · ', ' • ');
+  const [fetching, setFetching] = createSignal(false);
+  const [fetchError, setFetchError] = createSignal('');
+  const choices = () => [...props.supported].sort(cameraOrder);
+  const selected = () => props.library.selected() ?? choices()[0]?.firmware.sha256;
+  const chosen = () => props.library.entries().find((entry) => entry.sha256 === selected());
+  const target = () =>
+    props.supported.find((entry) => entry.firmware.sha256 === selected())?.firmware;
+  const busy = () => props.busy || props.library.busy() || fetching();
+  const support = () => props.supported.find((entry) => entry.firmware.sha256 === selected());
+  const patch = () => props.release?.firmwares.find((entry) => entry.sha256 === selected());
+  const label = () =>
+    target() ? `${target()!.model} • ${target()!.version}` : chosen()?.name.replace(' · ', ' • ');
   const modRelease = () =>
     props.release ? `FujiMod ${props.release.tag.replace(/^v/, '')}` : 'FujiMod';
   const available = (row: Row) => {
-    if (!chosen()) return false;
+    if (!target()) return false;
     switch (row.id) {
       case 'installable':
         return !!patch()?.downloads.sd_boot_v1_installable;
@@ -99,7 +105,7 @@ export function CameraLauncher(props: {
       ? latestCamera(props.cameras, chosen()!.sha256, row.id === 'mod')
       : undefined;
   const subtitle = (row: Row) => {
-    if (!chosen()) return row.subtitle;
+    if (!target()) return row.subtitle;
     if (!available(row)) return 'Not available for this camera yet';
     switch (row.id) {
       case 'installable':
@@ -112,19 +118,36 @@ export function CameraLauncher(props: {
         return `${label()} official firmware`;
     }
   };
-  function activate(row: Row) {
-    const firmware = chosen();
-    if (!firmware || !available(row) || props.busy) return;
-    if (row.id === 'mod' || row.id === 'stock') props.run(firmware, row.id === 'mod', false);
-    else {
-      setDownloadError('');
-      setModal({
-        firmware,
-        format: row.id,
-        release: modRelease(),
-        updateFilename: patch()?.update_filename,
-      });
+  function activate(row: Row, fresh = false) {
+    if (!available(row) || busy()) return;
+    const launch = (firmware: LibraryFirmware) => {
+      if (row.id === 'mod' || row.id === 'stock') props.run(firmware, row.id === 'mod', fresh);
+      else {
+        setDownloadError('');
+        setModal({
+          firmware,
+          format: row.id,
+          release: modRelease(),
+          updateFilename: patch()?.update_filename,
+        });
+      }
+    };
+    setFetchError('');
+    const saved = chosen();
+    if (saved) {
+      launch(saved);
+      return;
     }
+    const firmware = target();
+    if (!firmware) return;
+    setFetching(true);
+    void props.library
+      .get(firmware)
+      .then(launch)
+      .catch((error: unknown) => {
+        setFetchError(shownError(error));
+      })
+      .finally(() => setFetching(false));
   }
   async function download() {
     const target = modal();
@@ -134,37 +157,34 @@ export function CameraLauncher(props: {
     try {
       await props.download(target.firmware, target.format);
     } catch (error) {
-      if (modal() === target)
-        setDownloadError(shownError(error));
+      if (modal() === target) setDownloadError(shownError(error));
     } finally {
       setDownloading(false);
     }
   }
   return (
-    <div class={{ launcher: true, 'launcher-pending': !props.ready, 'launcher-empty': !chosen() }}>
-      <section class="release-panel" aria-label="Current release">
-        <div class="release-heading">
-          <h3>{props.release ? `FujiMod ${props.release.tag}` : 'FujiMod'}</h3>
-          <Show when={props.release?.published_at}>
-            {(date) => (
-              <time datetime={date()}>
-                {new Date(date()).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  timeZone: 'UTC',
-                })}
-              </time>
-            )}
-          </Show>
-        </div>
-        <Show when={props.release?.notesText}>{(notes) => <ReleaseNotes text={notes()} />}</Show>
-        <Show when={!chosen()}>
-          <div class="release-gate">
-            Add base firmware to continue
-            <Icon name="arrow-right" size={18} />
-          </div>
-        </Show>
+    <div class={{ launcher: true, 'launcher-pending': !props.ready }}>
+      <section class="launcher-actions" aria-label="Camera actions">
+        <label class="launcher-camera">
+          Camera
+          <select
+            aria-label="Camera"
+            value={selected() ?? ''}
+            disabled={busy()}
+            onChange={(event) => {
+              props.library.select(event.currentTarget.value);
+              setFetchError('');
+            }}
+          >
+            <For each={choices()}>
+              {({ firmware }) => (
+                <option value={firmware.sha256}>
+                  {firmware.model} · {firmware.version}
+                </option>
+              )}
+            </For>
+          </select>
+        </label>
         <div class="release-actions">
           <For each={rows}>
             {(row) => (
@@ -173,7 +193,7 @@ export function CameraLauncher(props: {
                   class="release-hit"
                   aria-label={row.title}
                   aria-describedby={'release-subtitle-' + row.id}
-                  disabled={props.busy || props.library.busy() || !available(row)}
+                  disabled={busy() || !available(row)}
                   onClick={() => activate(row)}
                 />
                 <div class="launcher-row">
@@ -191,10 +211,9 @@ export function CameraLauncher(props: {
                         {' • '}
                         <button
                           class="start-fresh"
-                          disabled={props.busy || props.library.busy()}
+                          disabled={busy()}
                           onClick={() => {
-                            const firmware = chosen();
-                            if (firmware) props.run(firmware, row.id === 'mod', true);
+                            activate(row, true);
                           }}
                         >
                           Start fresh
@@ -212,32 +231,16 @@ export function CameraLauncher(props: {
         </div>
       </section>
       <div class="launcher-firmware">
-        <FirmwarePicker
-          library={props.library}
-          inputId="firmware-file"
-          disabled={props.busy}
-          heading="Base firmware"
-          description="FujiMod is assembled in your browser by patching official firmware you provide"
-        />
-        <FirmwareDownloads
-          heading="Get from fujifilm.com"
-          rows={props.supported
-            .filter((camera) => camera.emu)
-            .sort(cameraOrder)
-            .map(({ firmware, mod }) => ({
-              model: firmware.model,
-              processor: firmware.processor,
-              version: firmware.version,
-              url: firmware.download_url,
-              tag: mod ? 'Moddable' : undefined,
-            }))}
-        />
+        <details>
+          <summary>Import firmware</summary>
+          <FirmwarePicker library={props.library} inputId="firmware-file" disabled={busy()} />
+        </details>
         <span
-          class={{ 'camera-storage-status': true, error: props.error }}
+          class={{ 'camera-storage-status': true, error: props.error || !!fetchError() }}
           role="status"
           aria-live="polite"
         >
-          {props.message}
+          {fetching() ? 'Downloading firmware…' : fetchError() || props.message}
         </span>
       </div>
       <Show when={modal()}>

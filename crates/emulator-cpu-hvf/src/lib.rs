@@ -44,6 +44,13 @@ impl Vm {
         Core::create(self.machine.clone())
     }
 }
+/// A native exit from an isolated diagnostic, before framework emulation.
+#[derive(Clone, Copy, Debug)]
+pub enum NativeExit {
+    Canceled,
+    Exception(Trap),
+    VirtualTimer,
+}
 #[derive(Clone, Copy)]
 struct Window {
     end: u64,
@@ -140,6 +147,31 @@ impl Core {
                 let _ = worker.join();
                 Err(e)
             }
+        }
+    }
+    /// Give an isolated native diagnostic another physical view of VM-owned RAM.
+    pub fn map_owned_alias(
+        &self, address: u64, source: u64, bytes: usize, permissions: u32,
+    ) -> Result<(), String> {
+        if self.running.get() || self.execution_policy.get() != ExecutionPolicy::Interactive {
+            return Err("native RAM aliases require a stopped interactive CPU".into());
+        }
+        self.machine.alias_owned(address, source, bytes, permissions)
+    }
+
+    /// Run one native diagnostic interval from the current PC. Report the raw
+    /// architectural exit to the caller that owns the diagnostic semantics.
+    pub fn run_to_native_exit(&self, watchdog_us: u64) -> Result<NativeExit, String> {
+        if watchdog_us == 0 || self.execution_policy.get() != ExecutionPolicy::Interactive
+            || self.has_instruction_hooks() || self.running.get() || self.active_run.borrow().is_some()
+        {
+            return Err("native diagnostics need an idle interactive CPU, no hooks, and a watchdog".into());
+        }
+        self.shared.stop.store(false, Ordering::Release);
+        let _watchdog = Watchdog::new(self.native_cpu, watchdog_us, self.shared.clone());
+        match self.rpc(Op::RunToNativeExit)? {
+            Value::NativeExit(exit) => Ok(exit),
+            _ => unreachable!(),
         }
     }
     fn rpc(&self, op: Op) -> Result<Value, String> {

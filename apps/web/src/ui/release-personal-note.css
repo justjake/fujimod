@@ -1,0 +1,83 @@
+.release-personal-note {
+  position: relative;
+  width: min(600px, calc(100% - 28px));
+  margin: 24px auto 96px;
+  color: #d1d1d6;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.release-personal-note .note-socials {
+  display: block;
+  color: var(--dim);
+  font-size: 13px;
+}
+.release-personal-note > time {
+  display: block;
+  margin-bottom: 1em;
+}
+.release-personal-note p {
+  margin: 0 0 1em;
+}
+.release-personal-note b {
+  color: #eee;
+}
+.release-personal-note .note-signature {
+  margin-top: 28px;
+}
+.release-personal-note .note-socials {
+  display: grid;
+  justify-items: start;
+  margin-top: 4px;
+}
+.release-personal-note .note-hover {
+  position: relative;
+}
+.release-personal-note .note-popover {
+  display: none;
+  position: absolute;
+  inset-inline-start: 0;
+  z-index: 5;
+  width: 260px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--key);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px #000c;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.release-personal-note .note-hover:is(:hover, :focus-within) .note-popover {
+  display: grid;
+  gap: 4px;
+}
+/* Keep the card open while crossing from the text line into the panel. */
+.release-personal-note .note-people::before {
+  content: '';
+  position: absolute;
+  inset: -10px 0 100%;
+}
+.release-personal-note .note-names {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+  max-height: min(280px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+.release-personal-note .note-credits {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--edge);
+}
+@media (max-width: 1050px) {
+  .release-personal-note .note-hover {
+    position: static;
+  }
+  .release-personal-note .note-popover {
+    width: min(260px, 100%);
+  }
+  .release-personal-note .note-people {
+    width: 100%;
+  }
+}

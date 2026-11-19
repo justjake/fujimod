@@ -53,8 +53,10 @@ export type MenuRow = {
   path: string[];
   /** Position among its siblings in the camera's menu. */
   order: number;
-  kind: 'page' | 'setting' | 'command' | 'heading';
-  /** A stock row whose options FujiMod changes. */
+  kind: 'group' | 'info' | 'page' | 'value' | 'command' | 'link';
+  /** An unlabeled group serves as the parent of its rows. */
+  anonymous?: true;
+  /** A stock row FujiMod documents or a stock page it passes through. */
   stock: boolean;
   card: string | null;
   feature: string | null;

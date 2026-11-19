@@ -9,6 +9,13 @@ use fujimod_python_base::error;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyModule};
 
+/// Return the serialized register selector for an architectural name.
+#[pyfunction]
+fn arm64_register(name: &str) -> PyResult<String> {
+    let register = fujimod_emulator_cpu::arm64::register(name).map_err(error)?;
+    serde_json::to_string(&register).map_err(|failure| error(failure.to_string()))
+}
+
 /// Compile checked reference identities and starting inputs without constructing a CPU.
 #[pyfunction]
 #[pyo3(signature = (configuration_id, overlays=Vec::new()))]
@@ -60,7 +67,7 @@ fn load_input_assets<'py>(
 )]
 mod binding {
     #[pymodule_export]
-    use super::{load_input_assets, prepare_configuration};
+    use super::{arm64_register, load_input_assets, prepare_configuration};
     #[pymodule_export]
     use fujimod_python_base::NativeError;
 

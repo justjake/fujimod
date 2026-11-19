@@ -2,6 +2,7 @@
 //! Copied-image ecf0..edfa writes 01/02/0b/1c/05, emits single-byte command09,
 //! and reads low revision nibbles at21/22. Physical identity and analog effects
 //! are unproved. Revision and idle MISO are explicit external scenario inputs.
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -86,6 +87,22 @@ impl Endpoint for Registers {
         };
         self.state.transfers += 1;
         response
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let state: State = saved.decode(self.name())?;
+        if matches!(state.phase, Phase::Write(a) if Self::slot(a).is_none())
+            || matches!(state.phase, Phase::Read(a) if !matches!(a, 0x21 | 0x22)) {
+            return Err("invalid BIS configuration checkpoint".into());
+        }
+        Ok(())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        self.state = saved.decode(self.name())?;
+        Ok(())
     }
     fn save(&self) -> Value {
         json!({"revision":self.revision,"idle_high":self.idle_high,"state":self.state})

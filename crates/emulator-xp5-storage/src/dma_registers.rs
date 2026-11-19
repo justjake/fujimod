@@ -2,6 +2,7 @@
 //! 227d0/227f8 address paired words; 22820 writes two masked 6-bit lanes.
 //! Views share routing/address state with the XDMAC channel pairs.
 use fujimod_emulator_ip::socionext::xdmac::{Routing, SharedRouting};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -61,6 +62,21 @@ impl Device for AddressHigh {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let words: [u32; 16] = serde_json::from_value(value.clone())
             .map_err(|e| format!("DMA address-high checkpoint: {e}"))?;
+        self.apply(words)
+    }
+    // XDMAC channel pairs own the routing state seen through this view.
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode(self.name())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)
+    }
+}
+impl AddressHigh {
+    fn candidates(&self, words: [u32; 16]) -> Result<Vec<Routing>, String> {
         let mut candidates: Vec<_> = self
             .banks
             .iter()
@@ -69,6 +85,10 @@ impl Device for AddressHigh {
         for (slot, word) in words.into_iter().enumerate() {
             candidates[slot / 2].set_high(slot % 2, word)?;
         }
+        Ok(candidates)
+    }
+    fn apply(&mut self, words: [u32; 16]) -> Result<(), String> {
+        let candidates = self.candidates(words)?;
         for (bank, candidate) in self.banks.iter().zip(candidates) {
             *bank.lock().unwrap() = candidate;
         }
@@ -132,6 +152,21 @@ impl Device for RequestRouting {
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let words: [u32; 8] = serde_json::from_value(value.clone())
             .map_err(|e| format!("DMA routing checkpoint: {e}"))?;
+        self.apply(words)
+    }
+    // XDMAC channel pairs own the routing state seen through this view.
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Checkpoint::encode(self.name(), &())
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        saved.decode(self.name())
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)
+    }
+}
+impl RequestRouting {
+    fn candidates(&self, words: [u32; 8]) -> Result<Vec<Routing>, String> {
         if words.iter().any(|v| v & !0x3f3f != 0) {
             return Err("DMA routing checkpoint has reserved bits".into());
         }
@@ -144,6 +179,10 @@ impl Device for RequestRouting {
             candidates[slot].set_request(0, (word & 63) as u8)?;
             candidates[slot].set_request(1, ((word >> 8) & 63) as u8)?;
         }
+        Ok(candidates)
+    }
+    fn apply(&mut self, words: [u32; 8]) -> Result<(), String> {
+        let candidates = self.candidates(words)?;
         for (bank, candidate) in self.banks.iter().zip(candidates) {
             *bank.lock().unwrap() = candidate;
         }

@@ -922,6 +922,15 @@ impl Device for SerialFlashController {
             self.drive_irq(cx, self.regs[0x44 / 4] & 0x4000 != 0);
         }
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        self.capture_portable()
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_portable(data)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.restore_portable(data)
+    }
     fn save(&self) -> Value {
         let port = self.port.lock().unwrap();
         json!({"registers":self.regs.to_vec(),"next":self.due,"operations":self.operations,
@@ -934,7 +943,7 @@ impl Device for SerialFlashController {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Channel {
     #[serde(rename = "registers")]
@@ -1486,6 +1495,15 @@ impl Device for DmaController {
         {
             cx.fail(e);
         }
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        self.capture_portable()
+    }
+    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_portable(data)
+    }
+    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.restore_portable(data)
     }
     fn save(&self) -> Value {
         let mut state = json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request});

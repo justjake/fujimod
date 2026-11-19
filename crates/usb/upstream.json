@@ -1,0 +1,9 @@
+[
+  {
+    "name": "fffw",
+    "version": "bedc091e0b54a1a34aaf6929dd08e1db36d13b08",
+    "source": "https://github.com/tiredboffin/fffw/tree/bedc091e0b54a1a34aaf6929dd08e1db36d13b08/ff80",
+    "license": "MIT",
+    "files": ["LICENSE.fffw"]
+  }
+]
