@@ -49,6 +49,10 @@ interface Film {
   hue: number;
   warmth: number;
   primaries: Primary[];
+  /** COLOR MIX's 3x3 typed in on its NUMBERS page, row by row; wins over primaries. */
+  matrix?: Matrix;
+  /** COLOR's 2x2 on (Cb, Cr) typed in on its NUMBERS page; wins over saturation, hue and warmth. */
+  chroma?: number[];
   edges: number[];
   bands: number[];
   /** Red and blue entering the curve, in tenths of a stop. */
@@ -147,6 +151,39 @@ function primariesMatrix(ps: Primary[]): Matrix {
   return m;
 }
 
+const mixMatrix = (f: Film): Matrix => f.matrix ?? primariesMatrix(f.primaries);
+
+/** The hue and saturation per primary nearest a typed-in matrix, so the scope and sliders follow the numbers. */
+function fitPrimaries(m: Matrix): Primary[] {
+  const n = 1 / Math.sqrt(3);
+  return [0, 1, 2].map((c) => {
+    const col = [m[c], m[3 + c], m[6 + c]];
+    const mean = (col[0] + col[1] + col[2]) / 3;
+    const v = col.map((x) => x - mean);
+    const h = [0, 1, 2].map((k) => (k === c ? 1 : 0) - 1 / 3);
+    const cross = [h[1] * v[2] - h[2] * v[1], h[2] * v[0] - h[0] * v[2], h[0] * v[1] - h[1] * v[0]];
+    const hue = (Math.atan2(n * (cross[0] + cross[1] + cross[2]), h[0] * v[0] + h[1] * v[1] + h[2] * v[2]) * 180) / Math.PI;
+    const sat = (Math.hypot(v[0], v[1], v[2]) / Math.hypot(h[0], h[1], h[2]) - 1) * 100;
+    return { hue: Math.round(Math.max(-30, Math.min(30, hue))), sat: Math.round(Math.max(-50, Math.min(50, sat))) };
+  });
+}
+
+/** COLOR's 2x2 on (Cb, Cr), row by row: hue turns, saturation scales, warm/cool stretches along the orange-blue axis. */
+function chromaMatrix(f: Film): number[] {
+  if (f.chroma) return f.chroma;
+  const s = 1 + f.saturation / 100;
+  const a = (f.hue * Math.PI) / 180;
+  const dx = -0.6;
+  const dy = 0.8;
+  const w = f.warmth / 100;
+  const k00 = 1 + w * dx * dx;
+  const k01 = w * dx * dy;
+  const k11 = 1 + w * dy * dy;
+  const c = Math.cos(a) * s;
+  const sn = Math.sin(a) * s;
+  return [c * k00 - sn * k01, c * k01 - sn * k11, sn * k00 + c * k01, sn * k01 + c * k11];
+}
+
 /* ---- Developing the picture ----------------------------------------------------- */
 
 const PHOTO = new URL('../../engine/assets/default-scene.png', import.meta.url).href;
@@ -236,24 +273,10 @@ function develop(f: Film, src: Source, out: ImageData, custom: boolean) {
   const hs = handles(f);
   const lut = new Float32Array(4097);
   for (let x = 0; x <= 4096; x++) lut[x] = curveAt(f, hs, axis(x));
-  const m = primariesMatrix(f.primaries);
+  const m = mixMatrix(f);
   const gr = 2 ** (f.red / 10);
   const gb = 2 ** (f.blue / 10);
-  const s = 1 + f.saturation / 100;
-  const a = (f.hue * Math.PI) / 180;
-  /* Warm/cool stretches chroma along the orange-blue axis. */
-  const dx = -0.6;
-  const dy = 0.8;
-  const w = f.warmth / 100;
-  const k00 = 1 + w * dx * dx;
-  const k01 = w * dx * dy;
-  const k11 = 1 + w * dy * dy;
-  const c = Math.cos(a) * s;
-  const sn = Math.sin(a) * s;
-  const a00 = c * k00 - sn * k01;
-  const a01 = c * k01 - sn * k11;
-  const a10 = sn * k00 + c * k01;
-  const a11 = sn * k01 + c * k11;
+  const [a00, a01, a10, a11] = chromaMatrix(f);
   const band = bandGains(f);
   const px = src.pixels;
   const o = out.data;
@@ -775,8 +798,8 @@ const TOOL_NAMES: Record<Tool, string> = {
 
 const GROUPS: Record<Tool, (f: Film) => unknown> = {
   curve: (f) => [f.knots, f.tilt],
-  color: (f) => [f.saturation, f.hue, f.warmth],
-  mix: (f) => f.primaries,
+  color: (f) => [f.saturation, f.hue, f.warmth, f.chroma],
+  mix: (f) => [f.primaries, f.matrix],
   tone: (f) => [f.bands, f.edges],
   channels: (f) => [f.red, f.blue],
 };
@@ -797,9 +820,9 @@ function copyGroup(f: Film, tool: Tool, k: number): Film {
     case 'curve':
       return { ...f, knots: b.knots, tilt: b.tilt };
     case 'color':
-      return { ...f, saturation: b.saturation, hue: b.hue, warmth: b.warmth };
+      return { ...f, saturation: b.saturation, hue: b.hue, warmth: b.warmth, chroma: undefined };
     case 'mix':
-      return { ...f, primaries: b.primaries };
+      return { ...f, primaries: b.primaries, matrix: undefined };
     case 'tone':
       return { ...f, bands: b.bands, edges: b.edges };
     case 'channels':
@@ -821,9 +844,9 @@ const gradient = (...stops: string[]) => `linear-gradient(to right, ${stops.join
 const GRAY = '#8e8e93';
 
 const COLOR_SCALES: Scale[] = [
-  { name: 'SATURATION', get: (f) => f.saturation, put: (f, v) => ({ ...f, saturation: v }), min: -50, max: 50, step: 5, track: gradient(GRAY, '#ff9500') },
-  { name: 'HUE', get: (f) => f.hue, put: (f, v) => ({ ...f, hue: v }), min: -15, max: 15, step: 1, track: gradient('#ff375f', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2') },
-  { name: 'WARM/COOL', get: (f) => f.warmth, put: (f, v) => ({ ...f, warmth: v }), min: -50, max: 50, step: 5, track: gradient('#0a84ff', GRAY, '#ff9f0a') },
+  { name: 'SATURATION', get: (f) => f.saturation, put: (f, v) => ({ ...f, saturation: v, chroma: undefined }), min: -50, max: 50, step: 5, track: gradient(GRAY, '#ff9500') },
+  { name: 'HUE', get: (f) => f.hue, put: (f, v) => ({ ...f, hue: v, chroma: undefined }), min: -15, max: 15, step: 1, track: gradient('#ff375f', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2') },
+  { name: 'WARM/COOL', get: (f) => f.warmth, put: (f, v) => ({ ...f, warmth: v, chroma: undefined }), min: -50, max: 50, step: 5, track: gradient('#0a84ff', GRAY, '#ff9f0a') },
 ];
 
 /** COLOR MIX: how reds, greens and blues render. HUE turns them toward
@@ -838,7 +861,7 @@ const mixScales = (p: number): Scale[] => [
   {
     name: 'HUE',
     get: (f) => f.primaries[p].hue,
-    put: (f, v) => ({ ...f, primaries: f.primaries.map((q, i) => (i === p ? { ...q, hue: v } : q)) }),
+    put: (f, v) => ({ ...f, matrix: undefined, primaries: f.primaries.map((q, i) => (i === p ? { ...q, hue: v } : q)) }),
     min: -30,
     max: 30,
     step: 2,
@@ -847,7 +870,7 @@ const mixScales = (p: number): Scale[] => [
   {
     name: 'SATURATION',
     get: (f) => f.primaries[p].sat,
-    put: (f, v) => ({ ...f, primaries: f.primaries.map((q, i) => (i === p ? { ...q, sat: v } : q)) }),
+    put: (f, v) => ({ ...f, matrix: undefined, primaries: f.primaries.map((q, i) => (i === p ? { ...q, sat: v } : q)) }),
     min: -50,
     max: 50,
     step: 5,
@@ -860,12 +883,21 @@ const CHANNEL_SCALES: Scale[] = [
   { name: 'BLUE CURVE', get: (f) => f.blue, put: (f, v) => ({ ...f, blue: v }), min: -5, max: 5, step: 1, track: gradient('#ffd60a', GRAY, '#0a84ff') },
 ];
 
-type Control = { tool: Tool; kind: 'curve' } | { tool: Tool; kind: 'tone' } | { tool: Tool; kind: 'scale'; scale: Scale; mix?: number };
+/** A focus stop. COLOR MIX's two scales edit the primary its chips chose (pick: 0 hue, 1 saturation). */
+type Control =
+  | { tool: Tool; kind: 'curve' }
+  | { tool: Tool; kind: 'tone' }
+  | { tool: Tool; kind: 'chips' }
+  | { tool: 'mix' | 'color'; kind: 'numbers' }
+  | { tool: Tool; kind: 'scale'; scale: Scale; pick?: number };
 
 const CONTROLS: Control[] = [
   { tool: 'curve', kind: 'curve' },
   ...COLOR_SCALES.map((scale): Control => ({ tool: 'color', kind: 'scale', scale })),
-  ...[0, 1, 2].flatMap((p) => mixScales(p).map((scale): Control => ({ tool: 'mix', kind: 'scale', scale, mix: p }))),
+  { tool: 'color', kind: 'numbers' },
+  { tool: 'mix', kind: 'chips' },
+  ...mixScales(0).map((scale, pick): Control => ({ tool: 'mix', kind: 'scale', scale, pick })),
+  { tool: 'mix', kind: 'numbers' },
   { tool: 'tone', kind: 'tone' },
   ...CHANNEL_SCALES.map((scale): Control => ({ tool: 'channels', kind: 'scale', scale })),
 ];
@@ -982,8 +1014,66 @@ interface State {
   strip: StripStyle;
   /** The RAW last developed with OK. */
   created: number;
+  /** The primary COLOR MIX's scales edit: 0 reds, 1 greens, 2 blues. */
+  primary: number;
+  /** A matrix shown as numbers over the column, with the focused cell. */
+  numbers: { tool: 'mix' | 'color'; cell: number } | null;
   /** Review states open scrolled to a tool. */
   scrollTo?: Section;
+}
+
+/** The scale a control edits now: COLOR MIX's follow the chosen primary. */
+const scaleOf = (c: Control & { kind: 'scale' }, s: State): Scale => (c.pick === undefined ? c.scale : mixScales(s.primary)[c.pick]);
+
+/** A matrix's cells for its NUMBERS page, row by row. */
+const MATRIX_SIZE = { mix: 3, color: 2 } as const;
+const cells = (f: Film, tool: 'mix' | 'color'): number[] => (tool === 'mix' ? mixMatrix(f) : chromaMatrix(f));
+/** COLOR MIX's diagonal follows its row so white stays white. */
+const fixedCell = (tool: 'mix' | 'color', cell: number) => tool === 'mix' && cell % 4 === 0;
+
+function putCell(f: Film, tool: 'mix' | 'color', cell: number, v: number): Film {
+  const m = [...cells(f, tool)];
+  m[cell] = Math.round(v * 100) / 100;
+  if (tool === 'color') {
+    const hue = Math.round((Math.atan2(m[2], m[0]) * 180) / Math.PI);
+    const saturation = Math.round((Math.hypot(m[0], m[2]) - 1) * 100);
+    return { ...f, chroma: m, hue: Math.max(-15, Math.min(15, hue)), saturation: Math.max(-50, Math.min(50, saturation)) };
+  }
+  const row = Math.floor(cell / 3) * 3;
+  const diag = row + row / 3;
+  m[diag] = Math.round((1 - m.slice(row, row + 3).reduce((sum, x, k) => (row + k === diag ? sum : sum + x), 0)) * 100) / 100;
+  return { ...f, matrix: m, primaries: fitPrimaries(m) };
+}
+
+function pressNumbers(s: State, n: NonNullable<State['numbers']>, key: Key): State {
+  const size = MATRIX_SIZE[n.tool];
+  const move = (dr: number, dc: number) => {
+    let r = Math.floor(n.cell / size);
+    let c = n.cell % size;
+    for (let tries = 0; tries < size; tries++) {
+      r = Math.max(0, Math.min(size - 1, r + dr));
+      c = Math.max(0, Math.min(size - 1, c + dc));
+      if (!fixedCell(n.tool, r * size + c)) return { ...s, numbers: { ...n, cell: r * size + c } };
+    }
+    return s;
+  };
+  switch (key) {
+    case 'left':
+      return move(0, -1);
+    case 'right':
+      return move(0, 1);
+    case 'up':
+      return move(-1, 0);
+    case 'down':
+      return move(1, 0);
+    case 'dial-':
+    case 'dial+':
+      return { ...s, film: putCell(s.film, n.tool, n.cell, cells(s.film, n.tool)[n.cell] + (key === 'dial+' ? 0.01 : -0.01)) };
+    case 'ok':
+    case 'back':
+      return { ...s, numbers: null };
+  }
+  return s;
 }
 
 const START = baseFilm(3);
@@ -1128,7 +1218,7 @@ function openPicker(s: State, p: { kind: 'icon' } | { kind: 'copy'; tool: Tool }
 }
 
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, primary: 0, numbers: null, ...over };
 }
 
 const RAIL = 60;
@@ -1364,6 +1454,7 @@ function press(s: State, key: Key): State {
   const f = s.film;
   const d = key === 'left' || key === 'down' || key === 'dial-' ? -1 : 1;
   if (s.keyboard) return pressKeyboard(s, s.keyboard, key);
+  if (s.numbers) return pressNumbers(s, s.numbers, key);
   if (s.picker) {
     const p = s.picker;
     const options = pickerOptions(p);
@@ -1483,10 +1574,13 @@ function press(s: State, key: Key): State {
       return { ...s, area: 'rail', railOn: null, header: false };
     case 'ok':
       if (s.header) return openPicker(s, { kind: 'copy', tool: control.tool });
-      return control.kind === 'scale' ? s : { ...s, inside: true };
+      if (control.kind === 'numbers') return { ...s, numbers: { tool: control.tool, cell: 1 } };
+      return control.kind === 'scale' || control.kind === 'chips' ? s : { ...s, inside: true };
   }
-  if (s.header || control.kind !== 'scale') return s;
-  const c = control.scale;
+  if (s.header) return s;
+  if (control.kind === 'chips') return { ...s, primary: Math.max(0, Math.min(2, s.primary + step)) };
+  if (control.kind !== 'scale') return s;
+  const c = scaleOf(control, s);
   return { ...s, film: c.put(f, Math.max(c.min, Math.min(c.max, c.get(f) + step * c.step))) };
 }
 
@@ -1536,14 +1630,14 @@ function ToolIcon(props: { tool: Section; color: string }) {
 
 function Swatch(props: { film: Film; mix: number }) {
   const after = () => {
-    const m = primariesMatrix(props.film.primaries);
+    const m = mixMatrix(props.film);
     const l = MIX[props.mix].linear;
     const rgb = [0, 1, 2].map((r) => encode(Math.max(0, Math.min(1, m[r * 3] * l[0] + m[r * 3 + 1] * l[1] + m[r * 3 + 2] * l[2]))) * 255);
     return `rgb(${rgb.map(Math.round).join(' ')})`;
   };
   return (
     <span
-      class="block size-[36px] shrink-0 rounded-full"
+      class="fm-round block size-[18px] shrink-0 rounded-full"
       style={{ background: `linear-gradient(90deg, ${MIX[props.mix].color} 50%, ${after()} 50%)`, 'box-shadow': 'inset 0 0 0 2px rgb(255 255 255 / 0.35)' }}
     />
   );
@@ -1692,6 +1786,211 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
 
 /** The film editor's own layers over the picture: the rail, the scroller,
  * the compare divider, RAW strip, pickers and key hints. */
+/* ---- COLOR MIX scope and COLOR wheel ------------------------------------------------ */
+
+const SCOPE = 236;
+const SCOPE_R = SCOPE / 2 - 10;
+/** A pure primary sits on this ring; out from it is more saturated. */
+const RING = SCOPE_R * 0.7;
+const PRIMARY_INKS = ['#ff453a', '#30d158', '#0a84ff'];
+const scopeAt = (angle: number, radius: number): [number, number] => [SCOPE / 2 + radius * Math.cos(angle), SCOPE / 2 - radius * Math.sin(angle)];
+/** Hue as the angle of (Cb, Cr). */
+const hueAngle = (r: number, g: number, b: number) => {
+  const y = 0.299 * r + 0.587 * g + 0.114 * b;
+  return Math.atan2(0.713 * (r - y), 0.564 * (b - y));
+};
+const HOME = [hueAngle(1, 0, 0), hueAngle(0, 1, 0), hueAngle(0, 0, 1)];
+const HUE_MARKS = Array.from({ length: 12 }, (_, i) => {
+  const [r, g, b] = hsv(i * 30, 1, 1);
+  return { angle: hueAngle(r, g, b), ink: `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})` };
+});
+
+/** COLOR MIX's vectorscope: the picture's colors after the matrix, and a handle per primary to drag. */
+function Scope(props: { film: Film; crop: number; chosen: number; choose: (p: number) => void; set: (film: Film) => void }) {
+  let dots: HTMLCanvasElement | undefined;
+  let box: HTMLDivElement | undefined;
+  const [src, setSrc] = createSignal<Source>();
+  createEffect(
+    () => props.crop,
+    (crop) => {
+      void source(crop).then(setSrc);
+    },
+  );
+  createEffect(
+    () => [mixMatrix(props.film), src()] as const,
+    ([m, s]) => {
+      const g = dots?.getContext('2d');
+      if (!g || !s) return;
+      g.clearRect(0, 0, SCOPE, SCOPE);
+      g.fillStyle = 'rgb(255 255 255 / 0.22)';
+      const px = s.pixels;
+      for (let p = 0; p < px.length; p += 4 * 41) {
+        const r = DECODE[px[p]];
+        const gg = DECODE[px[p + 1]];
+        const b = DECODE[px[p + 2]];
+        const c = [0, 1, 2].map((k) => encode(Math.max(0, Math.min(1, m[k * 3] * r + m[k * 3 + 1] * gg + m[k * 3 + 2] * b))));
+        const hi = Math.max(...c);
+        if (hi < 0.04) continue;
+        const [x, y] = scopeAt(hueAngle(c[0], c[1], c[2]), ((hi - Math.min(...c)) / hi) * RING);
+        g.fillRect(x, y, 1.5, 1.5);
+      }
+    },
+  );
+  const handle = (i: number) => scopeAt(HOME[i] + (props.film.primaries[i].hue * Math.PI) / 180, RING * (1 + props.film.primaries[i].sat / 100));
+  const moveTo = (i: number, x: number, y: number) => {
+    let hue = ((Math.atan2(SCOPE / 2 - y, x - SCOPE / 2) - HOME[i]) * 180) / Math.PI;
+    hue = ((hue + 540) % 360) - 180;
+    const sat = (Math.hypot(x - SCOPE / 2, y - SCOPE / 2) / RING - 1) * 100;
+    const scales = mixScales(i);
+    const f = scales[0].put(props.film, Math.round(Math.max(-30, Math.min(30, hue))));
+    props.set(scales[1].put(f, Math.round(Math.max(-50, Math.min(50, sat)))));
+  };
+  const local = (e: PointerEvent): [number, number] => {
+    const r = box!.getBoundingClientRect();
+    const k = SCOPE / r.width;
+    return [(e.clientX - r.left) * k, (e.clientY - r.top) * k];
+  };
+  return (
+    <div
+      ref={box}
+      class="relative mx-auto touch-none"
+      style={{ width: `${SCOPE}px`, height: `${SCOPE}px` }}
+      onPointerDown={(e) => {
+        const [x, y] = local(e);
+        const near = [0, 1, 2].reduce((best, i) => (Math.hypot(handle(i)[0] - x, handle(i)[1] - y) < Math.hypot(handle(best)[0] - x, handle(best)[1] - y) ? i : best), props.chosen);
+        props.choose(near);
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        const [x, y] = local(e);
+        moveTo(props.chosen, x, y);
+      }}
+    >
+      <div class="fm-round absolute inset-[10px] rounded-full" style={{ background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge), 0 0 0 1px rgb(255 255 255 / 0.14)' }} />
+      <canvas ref={dots} width={SCOPE} height={SCOPE} class="absolute inset-0" />
+      <svg class="absolute inset-0" width={SCOPE} height={SCOPE}>
+        <circle cx={SCOPE / 2} cy={SCOPE / 2} r={RING} fill="none" stroke="rgb(255 255 255 / 0.12)" />
+        <For each={HUE_MARKS}>{(m) => <circle cx={scopeAt(m.angle, SCOPE_R - 6)[0]} cy={scopeAt(m.angle, SCOPE_R - 6)[1]} r="3.5" fill={m.ink} />}</For>
+        <polygon points={HOME.map((a) => scopeAt(a, RING).join(',')).join(' ')} fill="none" stroke="rgb(255 255 255 / 0.3)" stroke-dasharray="4 4" />
+        <polygon points={[0, 1, 2].map((i) => handle(i).join(',')).join(' ')} fill="rgb(255 255 255 / 0.05)" stroke="rgb(255 255 255 / 0.75)" stroke-width="1.5" />
+        <For each={[0, 1, 2]}>
+          {(i) => <circle cx={handle(i)[0]} cy={handle(i)[1]} r={props.chosen === i ? 13 : 10} fill={PRIMARY_INKS[i]} stroke="#fff" stroke-width={props.chosen === i ? 3 : 1.5} />}
+        </For>
+      </svg>
+    </div>
+  );
+}
+
+/** COLOR's wheel: the handle's angle is HUE, its distance SATURATION; WARM/COOL stretches the ring along orange-blue. */
+function ColorWheel(props: { film: Film; set: (film: Film) => void }) {
+  const D = 200;
+  const c = D / 2;
+  const R = 62;
+  let box: HTMLDivElement | undefined;
+  const radius = () => R * (1 + props.film.saturation / 100);
+  /* Up is no hue shift; the handle turns with HUE, exaggerated so a few degrees read. */
+  const angle = () => ((props.film.hue * 3 - 90) * Math.PI) / 180;
+  const stretch = () => 1 + props.film.warmth / 100;
+  const axis = (Math.atan2(0.8, -0.6) * 180) / Math.PI;
+  const set = (e: PointerEvent) => {
+    const r = box!.getBoundingClientRect();
+    const x = ((e.clientX - r.left) * D) / r.width - c;
+    const y = ((e.clientY - r.top) * D) / r.height - c;
+    const hue = Math.round(Math.max(-15, Math.min(15, ((Math.atan2(y, x) * 180) / Math.PI + 90) / 3)));
+    const saturation = Math.round(Math.max(-50, Math.min(50, (Math.hypot(x, y) / R - 1) * 100)) / 5) * 5;
+    props.set(COLOR_SCALES[0].put(COLOR_SCALES[1].put(props.film, hue), saturation));
+  };
+  return (
+    <div
+      ref={box}
+      class="relative mx-auto touch-none"
+      style={{ width: `${D}px`, height: `${D}px` }}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        set(e);
+      }}
+      onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && set(e)}
+    >
+      <div
+        class="fm-round absolute inset-[6px] rounded-full"
+        style={{ background: 'conic-gradient(from 0deg, #ff3b30, #ff9500, #ffd60a, #30d158, #00c7be, #0a84ff, #bf5af2, #ff2d78, #ff3b30)', transform: `rotate(${props.film.hue * 3}deg)`, 'mask-image': 'radial-gradient(closest-side, transparent 80%, #000 82%)' }}
+      />
+      <svg class="absolute inset-0" width={D} height={D}>
+        <circle cx={c} cy={c} r={R} fill="none" stroke="rgb(255 255 255 / 0.3)" stroke-dasharray="4 4" />
+        <ellipse cx={c} cy={c} rx={radius() * stretch()} ry={radius()} transform={`rotate(${axis} ${c} ${c})`} fill="rgb(255 255 255 / 0.06)" stroke="rgb(255 255 255 / 0.75)" stroke-width="1.5" />
+        <line x1={c} y1={c} x2={c + radius() * Math.cos(angle())} y2={c + radius() * Math.sin(angle())} stroke="#fff" stroke-width="2" stroke-linecap="round" />
+        <circle cx={c + radius() * Math.cos(angle())} cy={c + radius() * Math.sin(angle())} r="11" fill="var(--m-mark)" stroke="#fff" stroke-width="2.5" />
+      </svg>
+    </div>
+  );
+}
+
+/** A matrix as numbers over the column: rows are outputs, columns inputs. */
+function NumbersSheet(props: { s: State; update: (s: State) => void }) {
+  const n = () => props.s.numbers!;
+  const size = () => MATRIX_SIZE[n().tool];
+  const labels = () => (n().tool === 'mix' ? ['R', 'G', 'B'] : ['Cb', 'Cr']);
+  const values = () => cells(props.s.film, n().tool);
+  return (
+    <div class="absolute inset-y-0 flex flex-col px-[12px] pt-[10px]" style={{ ...COLUMN, left: `${RAIL}px`, width: `${SCROLLER}px` }}>
+      <div class="mb-[10px] flex items-center gap-[6px]">
+        <button type="button" class="flex size-[32px] items-center justify-center text-white/70" onClick={() => props.update({ ...props.s, numbers: null })}>
+          <Chevron dir="left" size={22} />
+        </button>
+        <span class="text-[24px] font-semibold">{TOOL_NAMES[n().tool]}</span>
+        <span class={`ml-auto text-white/55 ${SMALL}`}>NUMBERS</span>
+      </div>
+      <div class="grid gap-[8px]" style={{ 'grid-template-columns': `30px repeat(${size()}, 1fr)` }}>
+        <span />
+        <For each={labels()}>{(l) => <span class={`text-center text-white/50 ${SMALL}`}>{l}</span>}</For>
+        <For each={labels()}>
+          {(rowLabel, r) => (
+            <>
+              <span class={`flex items-center text-white/50 ${SMALL}`}>{rowLabel}</span>
+              <For each={labels()}>
+                {(_, col) => {
+                  const cell = () => r() * size() + col();
+                  const fixed = () => fixedCell(n().tool, cell());
+                  const on = () => n().cell === cell();
+                  return (
+                    <div
+                      class="flex h-[54px] touch-none items-center justify-center rounded-[10px] text-[22px] font-medium tabular-nums"
+                      style={
+                        fixed()
+                          ? { color: 'rgb(255 255 255 / 0.45)', 'box-shadow': 'inset 0 0 0 1px rgb(255 255 255 / 0.14)' }
+                          : { ...TRACK(on()), color: '#fff' }
+                      }
+                      onPointerDown={(e) => {
+                        if (fixed()) return;
+                        const y0 = e.clientY;
+                        const v0 = values()[cell()];
+                        const at = cell();
+                        props.update({ ...props.s, numbers: { ...n(), cell: at } });
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        const el = e.currentTarget;
+                        const move = (ev: PointerEvent) => props.update({ ...props.s, film: putCell(props.s.film, n().tool, at, v0 + (y0 - ev.clientY) / 300) });
+                        const up = () => {
+                          el.removeEventListener('pointermove', move);
+                          el.removeEventListener('pointerup', up);
+                        };
+                        el.addEventListener('pointermove', move);
+                        el.addEventListener('pointerup', up);
+                      }}
+                    >
+                      {values()[cell()].toFixed(2).replace('-', '−')}
+                    </div>
+                  );
+                }}
+              </For>
+            </>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 function Editor(props: {
   s: State;
   set: (s: State) => void;
@@ -1774,11 +2073,23 @@ function Editor(props: {
         changed={c.get(s().film) !== c.get(s().opened)}
         track={c.track}
         onFocus={() => focusControl(i)}
-        set={(v) => update({ ...s(), focus: i, film: c.put(s().film, v) })}
-      />
+        set={(v) => update({ ...s(), focus: i, film: c.put(s().film, v) })}      />
     </div>
   );
   const index = (tool: Tool, nth = 0) => CONTROLS.findIndex((c) => c.tool === tool) + nth;
+  /* A quiet row at a tool's foot: OK or a tap shows its matrix as numbers. */
+  const numbersRow = (i: number, tool: 'mix' | 'color') => (
+    <button
+      type="button"
+      ref={(element) => (rows[i] = element)}
+      class={`my-[2px] flex h-[40px] w-full items-center justify-between rounded-[10px] px-[12px] text-white/50 ${SMALL}`}
+      style={isFocused(i) ? { ...TRACK(true), color: '#fff' } : {}}
+      onClick={() => update({ ...s(), focus: i, area: 'rows', header: false, numbers: { tool, cell: 1 } })}
+    >
+      NUMBERS
+      <Chevron dir="right" size={14} />
+    </button>
+  );
   return (
     <>
       <Show when={s().compare}>
@@ -1847,10 +2158,13 @@ function Editor(props: {
         </For>
       </div>
 
+      <Show when={s().numbers}>
+        <NumbersSheet s={s()} update={update} />
+      </Show>
       <div
         ref={(element) => (scroller = element)}
         class="absolute inset-y-0 overflow-y-auto overscroll-contain px-[6px]"
-        style={{ ...COLUMN, left: `${RAIL}px`, width: `${SCROLLER}px`, 'scrollbar-width': 'none' }}
+        style={{ ...COLUMN, left: `${RAIL}px`, width: `${SCROLLER}px`, 'scrollbar-width': 'none', visibility: s().numbers ? 'hidden' : undefined }}
         onScroll={spy}
       >
         <section ref={(element) => (sections.film = element)} class="pt-[8px] pb-[14px]">
@@ -2005,22 +2319,35 @@ function Editor(props: {
                   </div>
                 </Show>
                 <Show when={tool === 'color'}>
+                  <ColorWheel film={s().film} set={(film) => update({ ...s(), film })} />
                   <For each={COLOR_SCALES}>{(c, k) => scaleRow(index('color', k()), c, CONTENT, 146)}</For>
+                  {numbersRow(index('color', 3), 'color')}
                 </Show>
                 <Show when={tool === 'mix'}>
-                  <For each={MIX}>
-                    {(mix, p) => (
-                      <div class="flex items-center gap-[8px]">
-                        <div class="flex w-[48px] shrink-0 flex-col items-center gap-[4px]">
+                  <Scope
+                    film={s().film}
+                    crop={s().crop}
+                    chosen={s().primary}
+                    choose={(primary) => update({ ...s(), primary, focus: index('mix', 1), area: 'rows', header: false })}
+                    set={(film) => update({ ...s(), film })}
+                  />
+                  <div ref={(element) => (rows[index('mix')] = element)} class="my-[2px] flex gap-[6px] rounded-[12px] p-[5px]" style={TRACK(isFocused(index('mix')))} onPointerDown={() => focusControl(index('mix'))}>
+                    <For each={MIX}>
+                      {(mix, p) => (
+                        <button
+                          type="button"
+                          class={`flex h-[40px] flex-1 items-center justify-center gap-[7px] rounded-[9px] font-medium ${SMALL}`}
+                          style={s().primary === p() ? { background: '#fff', color: '#000' } : { color: 'rgb(255 255 255 / 0.75)' }}
+                          onClick={() => update({ ...s(), primary: p() })}
+                        >
                           <Swatch film={s().film} mix={p()} />
-                          <span class="text-[14px] font-medium tracking-[0.04em] text-white/70">{mix.name}</span>
-                        </div>
-                        <div>
-                          <For each={mixScales(p())}>{(c, k) => scaleRow(index('mix', p() * 2 + k()), c, CONTENT - 56, 134)}</For>
-                        </div>
-                      </div>
-                    )}
-                  </For>
+                          {mix.name}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                  <For each={[0, 1]}>{(k) => scaleRow(index('mix', 1 + k), mixScales(s().primary)[k], CONTENT, 146)}</For>
+                  {numbersRow(index('mix', 3), 'mix')}
                 </Show>
                 <Show when={tool === 'tone'}>
                   <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={frame(index('tone'))} onPointerDown={() => focusControl(index('tone'))}>
@@ -2358,7 +2685,10 @@ const STATES: { id: string; title: string; state: State }[] = [
   { id: 'open', title: 'Open another film', state: openPicker(initial({ area: 'open' }), { kind: 'open' }) },
   { id: 'curve', title: 'Inside the tone curve', state: initial({ focus: 0, knot: 7, inside: true, scrollTo: 'curve' }) },
   { id: 'full', title: 'The tone curve full screen', state: initial({ focus: 0, knot: 7, inside: true, full: true }) },
-  { id: 'color-mix', title: 'Color mix', state: initial({ focus: 5, scrollTo: 'mix' }) },
+  { id: 'color', title: 'Color: the wheel', state: initial({ focus: 1, scrollTo: 'color' }) },
+  { id: 'color-mix', title: 'Color mix: the vectorscope', state: initial({ focus: 6, scrollTo: 'mix' }) },
+  { id: 'mix-numbers', title: 'Color mix as numbers', state: initial({ focus: 8, scrollTo: 'mix', numbers: { tool: 'mix', cell: 1 } }) },
+  { id: 'color-numbers', title: 'Color as numbers', state: initial({ focus: 4, scrollTo: 'color', numbers: { tool: 'color', cell: 1 } }) },
   { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, inside: true, scrollTo: 'tone' }) },
   { id: 'copy', title: 'Copy one tool from a film', state: openPicker(initial({ header: true }), { kind: 'copy', tool: 'curve' }) },
   { id: 'compare', title: 'Compare with a film', state: initial({ compare: { b: 0, split: SPLIT } }) },
