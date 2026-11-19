@@ -368,13 +368,19 @@ try {
       await docs.close();
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'Today we’re releasing the second version of Fujimod'],
+        ['/', 'Jake'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
         const page = await noJs.newPage();
         const response = await page.goto(base + route);
         assert.equal(response!.status(), 200);
+        if (route === '/')
+          assert.equal(
+            await page.getByRole('article', { name: 'A note from Jake' }).count(),
+            1,
+            `${type.name()} /: personal note`,
+          );
         if (text)
           assert.ok(
             (await page.locator('body').innerText()).includes(text),
