@@ -4,7 +4,8 @@
 //!
 //! - [`mosaic_line`] samples an sRGB picture line as X-Trans sensor samples: each site takes
 //!   its own color, linearised from sRGB and scaled between [`BLACK`] and [`WHITE`], as 14-bit
-//!   values in little-endian 16-bit containers.
+//!   values in little-endian 16-bit containers; [`pack12_line`] turns such a line into packed
+//!   12-bit samples (the top 12 bits, two samples in three bytes).
 //! - [`Raw::rgb`] and [`develop_422_line`] develop such samples: each output pixel takes the
 //!   nearest site of each color, the response is inverted to sRGB and encoded as BT.601
 //!   full-range (JFIF) YCbCr, the pixel pair's chroma averaged.
@@ -106,6 +107,38 @@ pub fn mosaic_line(rgb: &[u8], line: usize, out: &mut [u8]) {
     }
 }
 
+/// Bytes of a packed 12-bit line of `width` samples (an odd last sample takes a whole pair).
+pub fn packed12_bytes(width: usize) -> usize {
+    width.div_ceil(2) * 3
+}
+
+/// Pack a line of little-endian 16-bit 14-bit samples (`samples`, as [`mosaic_line`] writes)
+/// into 12-bit samples, two in three bytes, little-endian: bytes `a[7:0]`, `b[3:0] a[11:8]`,
+/// `b[11:4]`, where `a` and `b` are the samples' top 12 of 14 bits. This is the packing of the
+/// sensor input RAW DMA channels' packed lines. `out` holds [`packed12_bytes`] of the width.
+pub fn pack12_line(samples: &[u8], out: &mut [u8]) {
+    let twelve = |pair: &[u8]| u16::from_le_bytes([pair[0], pair[1]]) >> 2;
+    for (pair, packed) in samples.chunks(4).zip(out.chunks_exact_mut(3)) {
+        let a = twelve(pair);
+        let b = if pair.len() == 4 { twelve(&pair[2..]) } else { 0 };
+        packed[0] = a as u8;
+        packed[1] = (a >> 8) as u8 | (b << 4) as u8;
+        packed[2] = (b >> 4) as u8;
+    }
+}
+
+/// Sample `x` of a packed 12-bit line, scaled to the 14-bit range of the law (the top two
+/// bits repeated into the bottom two, so 0 and 4095 map to 0 and [`WHITE`]).
+fn unpack12(line: &[u8], x: usize) -> u16 {
+    let at = x / 2 * 3;
+    let twelve = if x.is_multiple_of(2) {
+        u16::from(line[at]) | (u16::from(line[at + 1]) & 0xf) << 8
+    } else {
+        u16::from(line[at + 1]) >> 4 | u16::from(line[at + 2]) << 4
+    };
+    twelve << 2 | twelve >> 10
+}
+
 /// BT.601 full-range (JFIF) Y, Cb and Cr of an sRGB pixel.
 pub fn ycbcr_jfif([r, g, b]: [u8; 3]) -> [i32; 3] {
     let (r, g, b) = (i32::from(r), i32::from(g), i32::from(b));
@@ -120,14 +153,16 @@ fn byte(v: i32) -> u8 {
     v.clamp(0, 255) as u8
 }
 
-/// A window of 16-bit X-Trans samples: `lines` lines of `width` little-endian samples, `pitch`
-/// bytes apart, whose first sample is tile site `phase` (line, sample).
+/// A window of X-Trans samples: `lines` lines of `width` samples, `pitch` bytes apart, whose
+/// first sample is tile site `phase` (line, sample). Samples are 14-bit values in little-endian
+/// 16-bit containers ([`Raw::new`]) or packed 12-bit ([`Raw::packed12`], scaled to 14 bits).
 pub struct Raw<'a> {
     bytes: &'a [u8],
     pitch: usize,
     width: usize,
     lines: usize,
     phase: (usize, usize),
+    packed12: bool,
 }
 
 impl<'a> Raw<'a> {
@@ -148,7 +183,24 @@ impl<'a> Raw<'a> {
                 bytes.len()
             ));
         }
-        Ok(Self { bytes, pitch, width, lines, phase })
+        Ok(Self { bytes, pitch, width, lines, phase, packed12: false })
+    }
+    /// A window of packed 12-bit samples ([`pack12_line`]); otherwise as [`Raw::new`].
+    pub fn packed12(
+        bytes: &'a [u8],
+        pitch: usize,
+        width: usize,
+        lines: usize,
+        phase: (usize, usize),
+    ) -> Result<Self, String> {
+        let line = packed12_bytes(width);
+        if lines < 6 || width < 6 || pitch < line || bytes.len() < pitch * (lines - 1) + line {
+            return Err(format!(
+                "packed 12-bit X-Trans RAW window {width}x{lines} pitch {pitch} ({} bytes) is not developable",
+                bytes.len()
+            ));
+        }
+        Ok(Self { bytes, pitch, width, lines, phase, packed12: true })
     }
     pub fn width(&self) -> usize {
         self.width
@@ -168,6 +220,9 @@ impl<'a> Raw<'a> {
             }
         };
         let (y, x) = (fold(y, self.lines) as usize, fold(x, self.width) as usize);
+        if self.packed12 {
+            return unpack12(&self.bytes[y * self.pitch..], x);
+        }
         let i = y * self.pitch + 2 * x;
         u16::from_le_bytes([self.bytes[i], self.bytes[i + 1]])
     }
@@ -233,6 +288,34 @@ mod tests {
         let line = develop_422_line(&raw, 5, 8, |x| x);
         let [yy, cb, cr] = ycbcr_jfif(colour).map(byte);
         assert_eq!(line, [yy, yy, cb, cr].repeat(4));
+    }
+
+    /// Packed 12-bit lines keep the top 12 bits; a flat colour still develops exactly.
+    #[test]
+    fn a_flat_colour_round_trips_through_packed_12_bit_samples() {
+        let mut packed = [0u8; 3];
+        pack12_line(&[0xff, 0x3f, 0x04, 0x00], &mut packed);
+        // 16383 -> 4095, 4 -> 1.
+        assert_eq!(packed, [0xff, 0x1f, 0x00]);
+        assert_eq!((unpack12(&packed, 0), unpack12(&packed, 1)), (WHITE, 4));
+        let mut odd = [0u8; 3];
+        pack12_line(&[0x00, 0x10], &mut odd);
+        assert_eq!(odd, [0x00, 0x04, 0x00]);
+        let (width, lines, pitch) = (24, 12, 40);
+        let colour = [200u8, 100, 30];
+        let rgb = colour.repeat(width);
+        let (mut samples, mut bytes) = (vec![0u8; 2 * width], vec![0u8; pitch * lines]);
+        for y in 0..lines {
+            mosaic_line(&rgb, y, &mut samples);
+            pack12_line(&samples, &mut bytes[y * pitch..y * pitch + packed12_bytes(width)]);
+        }
+        let raw = Raw::packed12(&bytes, pitch, width, lines, (0, 0)).unwrap();
+        for y in 0..lines {
+            for x in 0..width {
+                assert_eq!(raw.rgb(x, y), colour, "pixel ({x}, {y})");
+            }
+        }
+        assert!(Raw::packed12(&bytes, 35, width, lines, (0, 0)).is_err());
     }
 
     #[test]

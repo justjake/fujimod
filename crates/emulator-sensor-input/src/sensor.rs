@@ -72,10 +72,14 @@ pub struct ImageRoutes {
 /// * +0xcc bits 2..0 / +0xd0: destination address bits 34..32 / 31..0.
 /// * +0xd4 bits 2..0 / +0xd8: line pitch in bytes (high / low; the high word must be 0).
 /// * +0xdc bits 18..16: format code 0..5 (from the job config, 0x1352834); bits 15..0 a byte of
-///   the config, not decoded. Only the codes in `sixteen_bit_codes` are modelled, as 14-bit
-///   samples in 16-bit little-endian containers; the others (12-bit packed among them, see
-///   0x2ebeb7c) refuse. X-T5 4.31 still capture programs code 5 with pitch 0x3d80 for 7776
-///   samples (7872 x 2 bytes, an aligned 16-bit stride).
+///   the config, not decoded. The pitch selects the sample layout: from 1.5 up to (not
+///   including) 2 bytes a sample it is packed 12-bit lines, as on the live-view channels (two
+///   samples in three bytes, [`fujimod_emulator_imaging::xtrans::pack12_line`]), whatever the
+///   code; the log line names the code. Otherwise only the codes in `sixteen_bit_codes` are
+///   modelled, as 14-bit samples in 16-bit little-endian containers; the others refuse.
+///   X-T5 4.31 still capture programs code 5 with pitch 0x3d80 for 7776 samples (7872 x 2
+///   bytes, an aligned 16-bit stride); after a MOVIE -> STILL mode switch it programs pitch
+///   0x2d90 (11664 = 7776 x 1.5 bytes) for the same 7776 samples: packed 12-bit.
 /// * +0xe0 interrupt enable, +0xe4 status (write one to clear), INTID 163. The ISR 0x1350d94
 ///   handles bit 1 and bit 0 alike (both run the unit's frame callback).
 ///
@@ -108,6 +112,9 @@ pub struct StillRaw {
     pub pitch: u64,
     pub width: u32,
     pub lines: u32,
+    /// Packed 12-bit lines (two samples in three bytes) instead of 16-bit containers.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub packed12: bool,
 }
 #[derive(Clone)]
 pub struct Sensor(
@@ -290,7 +297,13 @@ impl Sensor {
         }
         let format = reg(0x1c);
         let code = format >> 16 & 7;
-        if still.sixteen_bit_codes >> code & 1 == 0 {
+        let pitch = u64::from(reg(0x18));
+        // As on the live-view channels: a pitch from 1.5 up to (not including) 2 bytes a sample
+        // holds packed 12-bit lines.
+        let packed12 = reg(0x14) & 7 == 0
+            && pitch * 2 >= u64::from(width) * 3
+            && pitch < u64::from(width) * 2;
+        if !packed12 && still.sixteen_bit_codes >> code & 1 == 0 {
             return Err(format!(
                 "still RAW DMA channel {}: format code {code} (+{:#x} = {format:#x}) is not decoded; \
                  only codes {:#010b} (bit n = code n, 16-bit containers) are modelled. If code {code} is 16-bit, \
@@ -300,12 +313,16 @@ impl Sensor {
                 still.sixteen_bit_codes
             ));
         }
-        let pitch = u64::from(reg(0x18));
-        let line = u64::from(width) * 2;
-        if reg(0x14) & 7 != 0 || pitch < line || pitch % 2 != 0 {
+        let samples_bytes = width as usize * 2;
+        let line = if packed12 {
+            fujimod_emulator_imaging::xtrans::packed12_bytes(width as usize) as u64
+        } else {
+            samples_bytes as u64
+        };
+        if reg(0x14) & 7 != 0 || pitch < line || (!packed12 && pitch % 2 != 0) {
             return Err(format!(
                 "still RAW DMA channel {}: pitch {:#x}:{pitch:#x} does not hold {width} 16-bit \
-                 samples (+{:#x} = {:#x}, +{:#x} = {:#x})",
+                 or packed 12-bit samples (+{:#x} = {:#x}, +{:#x} = {:#x}, format code {code})",
                 still.channel,
                 reg(0x14),
                 base + 4,
@@ -317,14 +334,21 @@ impl Sensor {
         if pitch * u64::from(lines - 1) + line > 128 * 1024 * 1024 {
             return Err("still RAW frame exceeds functional DMA limit".into());
         }
-        let mut samples = vec![0u8; line as usize];
+        let mut samples = vec![0u8; samples_bytes];
+        let mut packed = vec![0u8; if packed12 { line as usize } else { 0 }];
         fujimod_emulator_imaging::frame::render_rgb_lines(
             (still.scene)(),
             width as usize,
             lines as usize,
             |y, rgb| {
                 fujimod_emulator_imaging::xtrans::mosaic_line(rgb, y, &mut samples);
-                cx.ram_write(address + pitch * y as u64, &samples)
+                let bytes = if packed12 {
+                    fujimod_emulator_imaging::xtrans::pack12_line(&samples, &mut packed);
+                    &packed
+                } else {
+                    &samples
+                };
+                cx.ram_write(address + pitch * y as u64, bytes)
             },
         )?;
         s.still_programmed = false;
@@ -335,6 +359,7 @@ impl Sensor {
             pitch,
             width,
             lines,
+            packed12,
         });
         let status = base + 0x24;
         let value = s.image.get(&status).copied().unwrap_or(0) | done;
@@ -342,8 +367,10 @@ impl Sensor {
         let enabled = s.image.get(&(base + 0x20)).copied().unwrap_or(0);
         cx.set_irq(irq, value & enabled & 15 != 0);
         cx.log(&format!(
-            "still RAW DMA channel {}: scene {width}x{lines} X-Trans 16-bit at {address:#x} pitch {pitch:#x}",
-            still.channel
+            "still RAW DMA channel {}: scene {width}x{lines} X-Trans {} at {address:#x} pitch {pitch:#x} \
+             (format code {code})",
+            still.channel,
+            if packed12 { "packed 12-bit" } else { "16-bit" }
         ));
         Ok(())
     }
@@ -969,7 +996,7 @@ mod tests {
         assert!(host.irqs.rev_find(163));
         assert_eq!(
             sensor.still_raw(),
-            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x30, width: 16, lines: 8 })
+            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x30, width: 16, lines: 8, packed12: false })
         );
         // The ISR clears bit 1 by writing 2. Later frames write nothing until +0xd0 is
         // programmed again.
@@ -986,8 +1013,31 @@ mod tests {
         frame(&mut host).unwrap();
         assert_eq!(&host.ram[..4], &white);
         assert_eq!(sensor.image_reg(0xe4), 1);
-        // An undecoded format code refuses.
+        // A pitch of 1.5 bytes a sample (0x18 for 16 samples) is packed 12-bit lines, whatever
+        // the code: the top 12 bits of the 16-bit samples, two in three bytes, nothing past the
+        // line.
+        host.ram.fill(0x55);
         write(&mut host, 0xdc, 1 << 16);
+        write(&mut host, 0xd8, 0x18);
+        write(&mut host, 0xd0, 0);
+        frame(&mut host).unwrap();
+        let mut packed = [0u8; 3];
+        fujimod_emulator_imaging::xtrans::pack12_line(&white, &mut packed);
+        assert_eq!(&host.ram[..3], &packed);
+        assert_eq!(&host.ram[0x18..0x1b], &packed);
+        assert_eq!(&host.ram[0xc0..], &[0x55; 0x140]);
+        assert_eq!(
+            sensor.still_raw(),
+            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x18, width: 16, lines: 8, packed12: true })
+        );
+        // A pitch below 1.5 bytes a sample refuses.
+        write(&mut host, 0xdc, 5 << 16);
+        write(&mut host, 0xd8, 0x16);
+        write(&mut host, 0xd0, 0);
+        assert!(frame(&mut host).unwrap_err().contains("does not hold 16"));
+        // An undecoded format code with a 16-bit pitch refuses.
+        write(&mut host, 0xdc, 1 << 16);
+        write(&mut host, 0xd8, 0x30);
         write(&mut host, 0xd0, 0);
         let error = frame(&mut host).unwrap_err();
         assert!(error.contains("format code 1"), "{error}");
