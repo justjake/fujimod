@@ -707,58 +707,23 @@ function hsv(h: number, s: number, v: number): [number, number, number] {
   return [f(5), f(3), f(1)];
 }
 
-/** Every hue from dark to bright, at the saturation each brightness gets:
- * where the bands lower saturation the colors fade toward gray. */
-function ToneField(props: { film: Film; width: number; height: number }) {
-  let canvas: HTMLCanvasElement | undefined;
-  createEffect(
-    () => props.film.bands.join() + props.film.edges.join(),
-    () => {
-      const context = canvas?.getContext('2d');
-      if (!context) return;
-      const gains = bandGains(props.film);
-      const w = 64;
-      const h = 24;
-      const image = context.createImageData(w, h);
-      for (let y = 0; y < h; y++)
-        for (let x = 0; x < w; x++) {
-          const v = 0.06 + (x / (w - 1)) * 0.94;
-          const gain = gains[Math.round(v * 255)];
-          const [r, g, b] = hsv((y / h) * 360, Math.min(1, 0.6 * gain), v);
-          const p = (y * w + x) * 4;
-          image.data[p] = r * 255;
-          image.data[p + 1] = g * 255;
-          image.data[p + 2] = b * 255;
-          image.data[p + 3] = 255;
-        }
-      context.putImageData(image, 0, 0);
-    },
-  );
-  return (
-    <canvas
-      ref={(element) => (canvas = element)}
-      width={64}
-      height={24}
-      class="absolute inset-0 rounded-[12px]"
-      style={{ width: `${props.width}px`, height: `${props.height}px` }}
-    />
-  );
-}
-
 const BAND_CENTERS = (f: Film) => {
   const b = [0, ...f.edges, 255];
   return [0, 1, 2, 3, 4].map((i) => (b[i] + b[i + 1]) / 2);
 };
 
-function ToneGraph(props: { film: Film; opened: Film; width: number; height: number; band: number; focused: boolean; set: (film: Film) => void; focusBand: (band: number) => void }) {
-  const X = (y: number) => (y / 255) * props.width;
-  const mid = () => props.height / 2;
-  const Y = (gain: number) => mid() - (gain - 1) * (props.height / 2 - 10);
-  const line = () => {
-    const gains = bandGains(props.film);
-    let d = '';
-    for (let y = 0; y < 256; y += 3) d += `${y ? ' L' : 'M'}${X(y).toFixed(1)},${Y(gains[y]).toFixed(1)}`;
-    return d;
+/** Saturation by tone: one column per brightness range, darkest at the
+ * left. Each column is drawn at its brightness; its knob is a color at that
+ * brightness and the saturation the column gives it. Up is more color. */
+function ToneGraph(props: { film: Film; opened: Film; width: number; height: number; band: number; inside: boolean; set: (film: Film) => void; focusBand: (band: number) => void }) {
+  const gap = 6;
+  const cw = () => (props.width - 4 * gap) / 5;
+  const Y = (pct: number) => props.height / 2 - (pct / 100) * (props.height / 2 - 16);
+  const level = (i: number) => 0.12 + (BAND_CENTERS(props.film)[i] / 255) * 0.83;
+  const sample = (i: number) => {
+    const gain = Math.max(0, 1 + props.film.bands[i] / 100);
+    const [r, g, b] = hsv(24, Math.min(1, 0.7 * gain), level(i));
+    return `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
   };
   let drag: { band: number; y: number; start: number } | undefined;
   const local = (e: PointerEvent, element: Element) => {
@@ -766,53 +731,45 @@ function ToneGraph(props: { film: Film; opened: Film; width: number; height: num
     return { x: ((e.clientX - box.left) / box.width) * props.width, y: ((e.clientY - box.top) / box.height) * props.height };
   };
   return (
-    <div class="relative" style={{ width: `${props.width}px`, height: `${props.height}px` }}>
-      <ToneField film={props.film} width={props.width} height={props.height} />
-      <svg
-        width={props.width}
-        height={props.height}
-        class="absolute inset-0 touch-none"
-        onPointerDown={(e) => {
-          const element = e.currentTarget;
-          element.setPointerCapture(e.pointerId);
-          const p = local(e, element);
-          const centers = BAND_CENTERS(props.film);
-          let band = 0;
-          for (let i = 1; i < 5; i++) if (Math.abs(X(centers[i]) - p.x) < Math.abs(X(centers[band]) - p.x)) band = i;
-          props.focusBand(band);
-          drag = { band, y: p.y, start: props.film.bands[band] };
+    <svg
+      width={props.width}
+      height={props.height}
+      class="block touch-none"
+      onPointerDown={(e) => {
+        const element = e.currentTarget;
+        element.setPointerCapture(e.pointerId);
+        const p = local(e, element);
+        const band = Math.max(0, Math.min(4, Math.floor(p.x / (cw() + gap))));
+        props.focusBand(band);
+        drag = { band, y: p.y, start: props.film.bands[band] };
+      }}
+      onPointerMove={(e) => {
+        if (!drag) return;
+        const p = local(e, e.currentTarget);
+        const bands = [...props.film.bands];
+        const pct = drag.start + ((drag.y - p.y) / (props.height / 2 - 16)) * 100;
+        bands[drag.band] = Math.max(-100, Math.min(100, Math.round(pct / 5) * 5));
+        props.set({ ...props.film, bands });
+      }}
+      onPointerUp={() => (drag = undefined)}
+    >
+      <For each={[0, 1, 2, 3, 4]}>
+        {(i) => {
+          const x = () => i * (cw() + gap);
+          const v = () => Math.round(level(i) * 255 * 0.8);
+          const pct = () => props.film.bands[i];
+          const chosen = () => props.inside && props.band === i;
+          return (
+            <>
+              <rect x={x()} y="0" width={cw()} height={props.height} rx="8" fill={`rgb(${v()} ${v()} ${v()})`} />
+              <line x1={x() + 8} x2={x() + cw() - 8} y1={Y(0)} y2={Y(0)} stroke="rgb(255 255 255 / 0.5)" stroke-dasharray="4 4" />
+              <line x1={x() + cw() / 2} x2={x() + cw() / 2} y1={Y(0)} y2={Y(pct())} stroke={pct() !== props.opened.bands[i] ? ACCENT : '#fff'} stroke-width="4" stroke-linecap="round" />
+              <circle cx={x() + cw() / 2} cy={Y(pct())} r={chosen() ? 15 : 12} fill={sample(i)} stroke={chosen() ? '#fff' : 'rgb(255 255 255 / 0.7)'} stroke-width={chosen() ? 4 : 2} />
+            </>
+          );
         }}
-        onPointerMove={(e) => {
-          if (!drag) return;
-          const p = local(e, e.currentTarget);
-          const bands = [...props.film.bands];
-          const pct = drag.start + ((drag.y - p.y) / (props.height / 2 - 10)) * 100;
-          bands[drag.band] = Math.max(-100, Math.min(100, Math.round(pct / 5) * 5));
-          props.set({ ...props.film, bands });
-        }}
-        onPointerUp={() => (drag = undefined)}
-      >
-        <line x1="0" x2={props.width} y1={mid()} y2={mid()} stroke="rgb(255 255 255 / 0.55)" stroke-dasharray="5 5" />
-        <path d={line()} fill="none" stroke="#000" stroke-width="5" stroke-opacity="0.35" />
-        <path d={line()} fill="none" stroke="#fff" stroke-width="3" />
-        <For each={BAND_CENTERS(props.film)}>
-          {(c, i) => {
-            const pct = () => props.film.bands[i()];
-            const focused = () => props.focused && props.band === i();
-            return (
-              <circle
-                cx={X(c)}
-                cy={Y(1 + pct() / 100)}
-                r={focused() ? 10 : 7}
-                fill={pct() !== props.opened.bands[i()] ? ACCENT : focused() ? '#fff' : '#1c1c1e'}
-                stroke="#fff"
-                stroke-width={focused() ? 3 : 2}
-              />
-            );
-          }}
-        </For>
-      </svg>
-    </div>
+      </For>
+    </svg>
   );
 }
 
@@ -823,14 +780,19 @@ interface State {
   opened: Film;
   focus: number;
   knot: number;
+  /** The dial last bent the chosen knot: its handles show. */
   bend: boolean;
   band: number;
+  /** OK went inside the focused tone curve or saturation by tone. */
+  inside: boolean;
+  /** The focus is on the heading of the focused control's tool. */
+  header: boolean;
   /** CUSTOM SETTING: the recipe's other settings applied on top of the film. */
   custom: boolean;
   compare: { b: number | 'opened'; split: number } | null;
   /** 0: live view; n: RAWS[n - 1]. */
   crop: number;
-  picker: { kind: 'copy'; tool: Tool } | { kind: 'compare' } | null;
+  picker: Picker | null;
   /** Where the D-pad is: the RAW strip, the tool rail or the tool rows. */
   area: 'strip' | 'rail' | 'rows';
   strip: StripStyle;
@@ -864,8 +826,25 @@ const EDITED: Film = (() => {
   };
 })();
 
+type Picker = { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number };
+
+function pickerOptions(p: Picker): (number | 'opened')[] {
+  return p.kind === 'compare' ? ['opened', ...BASES.map((_, i) => i)] : BASES.map((_, i) => i);
+}
+
+function choose(s: State, p: Picker, k: number | 'opened'): State {
+  if (p.kind === 'copy') return k === 'opened' ? s : { ...s, picker: null, film: copyGroup(s.film, p.tool, k) };
+  return { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } };
+}
+
+function openPicker(s: State, p: { kind: 'copy'; tool: Tool } | { kind: 'compare' }): State {
+  const current = p.kind === 'copy' ? groupSource(s.film, p.tool) : s.compare?.b;
+  const at = Math.max(0, pickerOptions({ ...p, at: 0 }).indexOf(current ?? -1));
+  return { ...s, picker: { ...p, at } };
+}
+
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, custom: true, compare: null, crop: 0, picker: null, area: 'rows', strip: 'frames', created: 0, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', strip: 'frames', created: 0, ...over };
 }
 
 const RAIL = 60;
@@ -886,15 +865,31 @@ const firstOf = (tool: Tool) => CONTROLS.findIndex((c) => c.tool === tool);
 function press(s: State, key: Key): State {
   const control = CONTROLS[s.focus];
   const f = s.film;
-  if (s.picker) return key === 'back' ? { ...s, picker: null } : s;
-  const d = key === 'left' || key === 'up' || key === 'dial-' ? -1 : 1;
+  const d = key === 'left' || key === 'down' || key === 'dial-' ? -1 : 1;
+  if (s.picker) {
+    const p = s.picker;
+    const options = pickerOptions(p);
+    switch (key) {
+      case 'up':
+      case 'dial-':
+        return { ...s, picker: { ...p, at: Math.max(0, p.at - 1) } };
+      case 'down':
+      case 'dial+':
+        return { ...s, picker: { ...p, at: Math.min(options.length - 1, p.at + 1) } };
+      case 'ok':
+        return choose(s, p, options[p.at]);
+      case 'back':
+        return { ...s, picker: null };
+    }
+    return s;
+  }
   switch (key) {
     case 'q':
       return { ...s, compare: s.compare ? null : { b: 'opened', split: SPLIT } };
     case 'fn':
       return { ...s, custom: !s.custom };
     case 'play':
-      return s.crop ? { ...s, crop: 0, area: s.area === 'strip' ? 'rows' : s.area } : { ...s, crop: 1, area: 'strip' };
+      return s.crop ? { ...s, crop: 0, area: s.area === 'strip' ? 'rows' : s.area } : { ...s, crop: 1, area: 'strip', inside: false };
   }
   if (s.area === 'strip') {
     switch (key) {
@@ -906,9 +901,9 @@ function press(s: State, key: Key): State {
       case 'up':
         return s;
     }
-    return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + d)), created: 0 };
+    return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + (key === 'left' || key === 'dial-' ? -1 : 1))), created: 0 };
   }
-  const toStrip = s.crop ? { ...s, area: 'strip' as const } : s;
+  const toStrip = s.crop ? { ...s, area: 'strip' as const, inside: false } : s;
   if (s.area === 'rail') {
     const tool = TOOLS.indexOf(control.tool);
     switch (key) {
@@ -916,9 +911,9 @@ function press(s: State, key: Key): State {
       case 'down':
       case 'dial-':
       case 'dial+': {
-        const next = tool + d;
+        const next = tool + (key === 'up' || key === 'dial-' ? -1 : 1);
         if (next < 0) return key === 'up' ? toStrip : s;
-        return { ...s, focus: firstOf(TOOLS[Math.min(TOOLS.length - 1, next)]), scrollTo: undefined };
+        return { ...s, focus: firstOf(TOOLS[Math.min(TOOLS.length - 1, next)]), header: false, scrollTo: undefined };
       }
       case 'right':
       case 'ok':
@@ -926,36 +921,44 @@ function press(s: State, key: Key): State {
     }
     return s;
   }
+  if (s.inside) {
+    if (key === 'ok' || key === 'back') return { ...s, inside: false, bend: false };
+    if (control.kind === 'curve') {
+      if (key === 'left' || key === 'right') return { ...s, knot: Math.max(0, Math.min(9, s.knot + d)), bend: false };
+      if (key === 'dial-' || key === 'dial+') {
+        const tilt = [...f.tilt];
+        tilt[s.knot] = Math.round((tilt[s.knot] + d * 0.1) * 10) / 10;
+        return { ...s, bend: true, film: { ...f, tilt } };
+      }
+      const knots = [...f.knots];
+      knots[s.knot] = fromDisp(disp(knots[s.knot]) + d / 70);
+      return { ...s, bend: false, film: { ...f, knots } };
+    }
+    if (key === 'left' || key === 'right') return { ...s, band: Math.max(0, Math.min(4, s.band + d)) };
+    const bands = [...f.bands];
+    bands[s.band] = Math.max(-100, Math.min(100, bands[s.band] + d * 5));
+    return { ...s, film: { ...f, bands } };
+  }
+  const first = s.focus === firstOf(control.tool);
   switch (key) {
     case 'up':
+      if (!s.header && first) return { ...s, header: true, scrollTo: undefined };
       if (s.focus === 0) return toStrip;
-      return { ...s, focus: s.focus - 1, bend: false, scrollTo: undefined };
+      return { ...s, focus: s.focus - 1, header: false, scrollTo: undefined };
     case 'down':
-      return { ...s, focus: Math.min(CONTROLS.length - 1, s.focus + 1), bend: false, scrollTo: undefined };
+      if (s.header) return { ...s, header: false, scrollTo: undefined };
+      if (s.focus === CONTROLS.length - 1) return s;
+      return { ...s, focus: s.focus + 1, header: CONTROLS[s.focus + 1].tool !== control.tool, scrollTo: undefined };
     case 'back':
-      return s.bend ? { ...s, bend: false } : { ...s, area: 'rail', bend: false };
+      return { ...s, area: 'rail', header: false };
     case 'ok':
-      return control.kind === 'curve' ? { ...s, bend: !s.bend } : s;
+      if (s.header) return openPicker(s, { kind: 'copy', tool: control.tool });
+      return control.kind === 'scale' ? s : { ...s, inside: true };
   }
-  if (control.kind === 'scale') {
-    const c = control.scale;
-    return { ...s, film: c.put(f, Math.max(c.min, Math.min(c.max, c.get(f) + d * c.step))) };
-  }
-  if (control.kind === 'curve') {
-    if (key === 'left' || key === 'right') return { ...s, knot: Math.max(0, Math.min(9, s.knot + d)) };
-    if (s.bend) {
-      const tilt = [...f.tilt];
-      tilt[s.knot] = Math.round((tilt[s.knot] + d * 0.1) * 10) / 10;
-      return { ...s, film: { ...f, tilt } };
-    }
-    const knots = [...f.knots];
-    knots[s.knot] = fromDisp(disp(knots[s.knot]) + d / 70);
-    return { ...s, film: { ...f, knots } };
-  }
-  if (key === 'left' || key === 'right') return { ...s, band: Math.max(0, Math.min(4, s.band + d)) };
-  const bands = [...f.bands];
-  bands[s.band] = Math.max(-100, Math.min(100, bands[s.band] + d * 5));
-  return { ...s, film: { ...f, bands } };
+  if (s.header || control.kind !== 'scale') return s;
+  const c = control.scale;
+  const step = key === 'left' || key === 'dial-' ? -1 : 1;
+  return { ...s, film: c.put(f, Math.max(c.min, Math.min(c.max, c.get(f) + step * c.step))) };
 }
 
 function ToolIcon(props: { tool: Tool; color: string }) {
@@ -1049,11 +1052,18 @@ function Thumb(props: { raw: number; width: number; height: number; radius: numb
 
 /** The RAW files on the SD card, across the top of the picture. The chosen
  * one stays in the middle. */
+function stripMetrics(style: StripStyle) {
+  return style === 'frames'
+    ? { w: 120, h: 80, gap: 8, radius: 2, band: 104 }
+    : style === 'contact'
+      ? { w: 108, h: 72, gap: 8, radius: 1, band: 110 }
+      : { w: 120, h: 80, gap: 4, radius: 0, band: 108 };
+}
+
 function RawStrip(props: { s: State; set: (s: State) => void }) {
   const s = () => props.s;
   const focused = () => s().area === 'strip';
-  const metrics = () =>
-    s().strip === 'frames' ? { w: 84, h: 56, gap: 6, radius: 2, band: 76 } : s().strip === 'contact' ? { w: 78, h: 52, gap: 8, radius: 1, band: 96 } : { w: 84, h: 56, gap: 4, radius: 0, band: 84 };
+  const metrics = () => stripMetrics(s().strip);
   const offset = () => {
     const m = metrics();
     return PICTURE_WIDTH / 2 - ((s().crop - 1) * (m.w + m.gap) + m.w / 2);
@@ -1110,7 +1120,7 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
         </For>
       </div>
       <Show when={s().strip === 'film' && focused()}>
-        <div class="pointer-events-none absolute top-[14px] h-[56px] w-[84px] -translate-x-1/2" style={{ left: `${PICTURE_WIDTH / 2}px`, 'box-shadow': 'inset 0 0 0 2px #fff' }} />
+        <div class="pointer-events-none absolute top-[14px] -translate-x-1/2" style={{ left: `${PICTURE_WIDTH / 2}px`, width: `${metrics().w}px`, height: `${metrics().h}px`, 'box-shadow': 'inset 0 0 0 3px #fff' }} />
       </Show>
     </div>
   );
@@ -1156,8 +1166,13 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
     if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) current = TOOLS[TOOLS.length - 1];
     setInView(current);
   };
-  const focusControl = (i: number) => (s().focus !== i || s().area !== 'rows') && update({ ...s(), focus: i, area: 'rows', bend: false, scrollTo: undefined });
-  const isFocused = (i: number) => s().area === 'rows' && s().focus === i;
+  const focusControl = (i: number) =>
+    (s().focus !== i || s().area !== 'rows' || s().header) && update({ ...s(), focus: i, area: 'rows', header: false, inside: false, bend: false, scrollTo: undefined });
+  const isFocused = (i: number) => s().area === 'rows' && !s().header && s().focus === i;
+  const headerFocused = (tool: Tool) => s().area === 'rows' && s().header && CONTROLS[s().focus].tool === tool;
+  /* Inside a tool its frame is the accent; focused from outside it is lit. */
+  const frame = (i: number): JSX.CSSProperties =>
+    isFocused(i) ? (s().inside ? { ...TRACK(true), 'box-shadow': `inset 0 0 0 3px ${ACCENT}` } : TRACK(true)) : {};
   /* On the rail, UP and DOWN bring each tool to the top of the scroller. */
   createEffect(
     () => (s().area === 'rail' ? CONTROLS[s().focus].tool : undefined),
@@ -1204,11 +1219,11 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
             <div class="pointer-events-none absolute top-[220px] flex size-[40px] -translate-x-1/2 items-center justify-center rounded-full bg-white text-[21px] font-semibold text-black" style={{ left: `${c().split}px` }}>
               ⇆
             </div>
-            <div class="absolute" style={{ left: `${PICTURE_LEFT + 8}px`, top: s().crop ? '104px' : '10px' }}>
+            <div class="absolute" style={{ left: `${PICTURE_LEFT + 8}px`, top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
               <Hint glyph="A" label={props.title.name} />
             </div>
-            <div class="absolute right-[10px]" style={{ top: s().crop ? '104px' : '10px' }}>
-              <Hint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update({ ...s(), picker: { kind: 'compare' } })} />
+            <div class="absolute right-[10px]" style={{ top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
+              <Hint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update(openPicker(s(), { kind: 'compare' }))} />
             </div>
           </>
         )}
@@ -1218,6 +1233,19 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
       </Show>
 
       <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'rgb(18 18 20 / 0.82)' }}>
+        <Show when={s().crop > 0}>
+          <button
+            type="button"
+            class="mb-[6px] flex size-[52px] items-center justify-center rounded-[14px]"
+            style={s().area === 'strip' ? { background: '#fff' } : { 'box-shadow': 'inset 0 0 0 2px rgb(255 255 255 / 0.25)' }}
+            onClick={() => update({ ...s(), area: 'strip', inside: false })}
+          >
+            <svg width="32" height="32" viewBox="0 0 34 34">
+              <rect x="4" y="8" width="26" height="18" rx="2" fill="none" stroke={s().area === 'strip' ? '#000' : '#fff'} stroke-width="2.5" />
+              <path d="M14 12.5v9l7.5-4.5z" fill={s().area === 'strip' ? '#000' : '#fff'} />
+            </svg>
+          </button>
+        </Show>
         <For each={TOOLS}>
           {(tool) => {
             const chosen = () => (s().area === 'rail' ? CONTROLS[s().focus].tool : inView()) === tool;
@@ -1229,7 +1257,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                 style={lit() ? { background: '#fff' } : chosen() ? { background: 'rgb(255 255 255 / 0.2)' } : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
-                  update({ ...s(), focus: index(tool), area: 'rail', bend: false, scrollTo: undefined });
+                  update({ ...s(), focus: index(tool), area: 'rail', header: false, inside: false, bend: false, scrollTo: undefined });
                 }}
               >
                 <ToolIcon tool={tool} color={lit() ? '#000' : '#fff'} />
@@ -1260,33 +1288,36 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
             return (
               <section ref={(element) => (sections[tool] = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
                 <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
-                  <span class={`grow font-semibold tracking-[0.03em] ${TEXT}`} style={{ 'font-size': tool === 'tone' ? '21px' : undefined }}>
+                  <span class={`grow font-semibold tracking-[0.02em] ${TEXT} ${tool === 'tone' ? '' : 'whitespace-nowrap'}`} style={{ 'font-size': tool === 'tone' ? '21px' : undefined }}>
                     {TOOL_NAMES[tool]}
                   </span>
                   <button
                     type="button"
-                    class={`flex h-[36px] items-center gap-[6px] rounded-[10px] px-[10px] whitespace-nowrap ${SMALL}`}
-                    style={from() === undefined ? { background: ACCENT, color: '#fff' } : { background: 'rgb(255 255 255 / 0.14)', color: '#fff' }}
-                    onClick={() => update({ ...s(), picker: { kind: 'copy', tool } })}
+                    class={`flex h-[36px] shrink-0 items-center gap-[4px] rounded-[10px] px-[8px] whitespace-nowrap ${SMALL}`}
+                    style={{
+                      ...(from() === undefined ? { background: ACCENT, color: '#fff' } : { background: 'rgb(255 255 255 / 0.14)', color: '#fff' }),
+                      'box-shadow': headerFocused(tool) ? '0 0 0 3px #fff' : undefined,
+                    }}
+                    onClick={() => update(openPicker({ ...s(), focus: index(tool), header: true, area: 'rows' }, { kind: 'copy', tool }))}
                   >
                     {from() === undefined ? 'EDITED' : BASES[from() as number].name}
                     <span class="text-[15px]">▾</span>
                   </button>
                 </div>
                 <Show when={tool === 'curve'}>
-                  <div ref={(element) => (rows[0] = element)} class="rounded-[14px] p-[2px]" style={isFocused(0) ? TRACK(true) : {}} onPointerDown={() => focusControl(0)}>
+                  <div ref={(element) => (rows[0] = element)} class="rounded-[14px] p-[2px]" style={frame(0)} onPointerDown={() => focusControl(0)}>
                     <CurveGraph
                       film={s().film}
                       opened={s().opened}
                       histogram={props.histogram}
                       width={CONTENT - 4}
                       height={220}
-                      focus={s().knot}
-                      bend={s().bend}
+                      focus={s().inside && isFocused(0) ? s().knot : -1}
+                      bend={s().inside && isFocused(0) && s().bend}
                       set={(film) => update({ ...s(), film })}
-                      focusKnot={(knot) => update({ ...s(), knot, focus: 0, area: 'rows' })}
+                      focusKnot={(knot) => update({ ...s(), knot, focus: 0, area: 'rows', header: false, inside: true })}
                     />
-                    <div class={`px-[10px] pt-[2px] pb-[8px] font-medium tabular-nums ${SMALL}`}>{knotReadout(s().film, s().knot, s().bend)}</div>
+                    <div class={`h-[31px] px-[10px] pt-[2px] pb-[8px] font-medium tabular-nums ${SMALL}`}>{s().inside && isFocused(0) ? knotReadout(s().film, s().knot, s().bend) : ''}</div>
                   </div>
                 </Show>
                 <Show when={tool === 'color'}>
@@ -1308,20 +1339,19 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                   </For>
                 </Show>
                 <Show when={tool === 'tone'}>
-                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={isFocused(index('tone')) ? TRACK(true) : {}} onPointerDown={() => focusControl(index('tone'))}>
+                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={frame(index('tone'))} onPointerDown={() => focusControl(index('tone'))}>
                     <ToneGraph
                       film={s().film}
                       opened={s().opened}
                       width={CONTENT - 12}
                       height={150}
                       band={s().band}
-                      focused={isFocused(index('tone'))}
+                      inside={s().inside && isFocused(index('tone'))}
                       set={(film) => update({ ...s(), film })}
-                      focusBand={(band) => update({ ...s(), band, focus: index('tone'), area: 'rows' })}
+                      focusBand={(band) => update({ ...s(), band, focus: index('tone'), area: 'rows', header: false, inside: true })}
                     />
-                    <div class="mt-[4px] h-[8px] rounded-full" style={{ background: gradient('#000', '#fff') }} />
-                    <div class={`px-[4px] pt-[8px] pb-[2px] font-medium tabular-nums ${SMALL}`}>
-                      {BAND_NAMES[s().band]} · {signed(s().film.bands[s().band])}%
+                    <div class={`h-[29px] px-[4px] pt-[8px] pb-[2px] font-medium tabular-nums ${SMALL}`}>
+                      {s().inside && isFocused(index('tone')) ? `${BAND_NAMES[s().band]} · ${signed(s().film.bands[s().band])}%` : ''}
                     </div>
                   </div>
                 </Show>
@@ -1354,12 +1384,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
             const p = picker();
             return p.kind === 'copy' ? groupSource(s().film, p.tool) : s().compare?.b;
           };
-          const choose = (k: number | 'opened') => {
-            const p = picker();
-            if (p.kind === 'copy' && k !== 'opened') update({ ...s(), picker: null, film: copyGroup(s().film, p.tool, k) });
-            else update({ ...s(), picker: null, compare: { b: k, split: s().compare?.split ?? SPLIT } });
-          };
-          const options = () => (picker().kind === 'compare' ? (['opened', ...BASES.map((_, i) => i)] as (number | 'opened')[]) : BASES.map((_, i) => i));
+          const options = () => pickerOptions(picker());
           return (
             <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'rgb(30 30 32 / 0.9)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
               <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>
@@ -1370,12 +1395,12 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
               </div>
               <div class="grow overflow-y-auto" style={{ 'scrollbar-width': 'none' }}>
                 <For each={options()}>
-                  {(k) => (
+                  {(k, i) => (
                     <button
                       type="button"
                       class={`flex h-[44px] w-full items-center justify-between rounded-[10px] px-[10px] text-left ${SMALL}`}
-                      style={current() === k ? { background: '#fff', color: '#000' } : { color: '#fff' }}
-                      onClick={() => choose(k)}
+                      style={picker().at === i() ? { background: '#fff', color: '#000' } : { color: '#fff' }}
+                      onClick={() => update(choose(s(), picker(), k))}
                     >
                       {k === 'opened' ? 'AS OPENED' : BASES[k].name}
                       <Show when={current() === k}>
@@ -1609,10 +1634,10 @@ function Presented() {
 /* ---- Review ------------------------------------------------------------------------- */
 
 const STATES: { id: string; title: string; state: State }[] = [
-  { id: 'curve', title: 'Tone curve', state: initial({ focus: 0, knot: 7 }) },
+  { id: 'curve', title: 'Inside the tone curve', state: initial({ focus: 0, knot: 7, inside: true }) },
   { id: 'color-mix', title: 'Color mix', state: initial({ focus: 5, scrollTo: 'mix' }) },
-  { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, scrollTo: 'tone' }) },
-  { id: 'copy', title: 'Copy one tool from a film', state: initial({ picker: { kind: 'copy', tool: 'curve' } }) },
+  { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, inside: true, scrollTo: 'tone' }) },
+  { id: 'copy', title: 'Copy one tool from a film', state: openPicker(initial({ header: true }), { kind: 'copy', tool: 'curve' }) },
   { id: 'compare', title: 'Compare with a film', state: initial({ compare: { b: 0, split: SPLIT } }) },
   { id: 'film-only', title: 'Custom setting off: the film alone', state: initial({ custom: false }) },
   ...STRIP_STYLES.map(([strip, name]) => ({ id: `raw-${strip}`, title: `RAW files: ${name.toLowerCase()}`, state: initial({ crop: 3, area: 'strip', strip }) })),
