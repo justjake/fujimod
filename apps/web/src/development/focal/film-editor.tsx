@@ -556,7 +556,7 @@ function Dial(props: {
       </span>
       {/* The scale: a recessed strip along the bottom, the track's colors on
           its bottom edge, labels over the major ticks, the mark at the center. */}
-      <div class="absolute inset-x-0 bottom-0 h-[44px]" style={{ background: 'rgb(0 0 0 / 0.24)', 'box-shadow': 'inset 0 1px 0 rgb(0 0 0 / 0.3)' }}>
+      <div class="absolute inset-x-0 bottom-0 h-[44px]" style={{ background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge)' }}>
         <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
           <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out' }}>
             <For each={Array.from({ length: count() }, (_, i) => i)}>
@@ -571,7 +571,7 @@ function Dial(props: {
                       </span>
                     </Show>
                     <span
-                      class="absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1px]"
+                      class="fm-round absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1.5px]"
                       style={{ left: `${i * SPACING}px`, height: `${major() ? 20 : 12}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
                     />
                   </>
@@ -581,7 +581,7 @@ function Dial(props: {
           </div>
         </div>
         <Show when={props.track}>{(track) => <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />}</Show>
-        <span class="absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-t-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: ACCENT, 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.45)' }} />
+        <span class="fm-round absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: 'var(--m-mark)', 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.55)' }} />
       </div>
     </div>
   );
@@ -1169,6 +1169,17 @@ function enterSection(s: State, section: Section): State {
   return { ...s, area: 'rows', railOn: null, focus: firstOf(section), header: false };
 }
 
+/** Focal UI's chevron: a stroked, round-capped angle, never a text glyph. */
+function Chevron(props: { dir: 'down' | 'left' | 'right'; size?: number; color?: string }) {
+  const d = { down: 'M2 3l6 6 6-6', left: 'M10 2L4 8l6 6', right: 'M6 2l6 6-6 6' }[props.dir];
+  const size = props.size ?? 16;
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" class="shrink-0" style={{ color: props.color ?? 'currentColor' }}>
+      <path d={d} fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  );
+}
+
 /* ---- Name keyboard ------------------------------------------------------------- */
 
 /* Focal UI's text keyboard (TextKeyboard), presented over live view: the
@@ -1273,9 +1284,9 @@ function KeyLabel(props: { cap: KeyCap; t: Typing }) {
   const c = props.cap;
   switch (c.kind) {
     case 'caret-left':
-      return <span class="flex items-center gap-[10px]">‹<DialGlyph /></span>;
+      return <span class="flex items-center gap-[8px]"><Chevron dir="left" size={18} /><DialGlyph /></span>;
     case 'caret-right':
-      return <span class="flex items-center gap-[10px]"><DialGlyph />›</span>;
+      return <span class="flex items-center gap-[8px]"><DialGlyph /><Chevron dir="right" size={18} /></span>;
     case 'shift':
       return (
         <svg width="26" height="26" viewBox="0 0 24 24" fill={props.t.shift === 'off' ? 'none' : 'currentColor'} stroke="currentColor" stroke-width="2" stroke-linejoin="round">
@@ -1303,7 +1314,7 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
   return (
     <div class="absolute inset-0 flex flex-col" style={{ 'text-transform': 'none' }}>
       <div class="flex h-[48px] items-center gap-[14px] px-[18px]" style={{ background: 'var(--m-title)' }}>
-        <button type="button" class="text-[26px] leading-none text-white/70" onClick={() => props.update({ ...props.s, keyboard: null })}>‹</button>
+        <button type="button" class="flex size-[32px] items-center justify-center text-white/70" onClick={() => props.update({ ...props.s, keyboard: null })}><Chevron dir="left" size={22} /></button>
         <span class="text-[21px] font-medium tracking-[0.18em] text-white/75">{icon() ? 'ICON LETTERS' : 'FILM NAME'}</span>
       </div>
       <div class="flex grow items-start gap-[14px] px-[20px] pt-[16px]" style={{ background: 'var(--m-text-area)' }}>
@@ -1957,15 +1968,15 @@ function Editor(props: {
                   </span>
                   <button
                     type="button"
-                    class={`flex h-[36px] shrink-0 items-center gap-[4px] rounded-[10px] px-[8px] whitespace-nowrap ${SMALL}`}
-                    style={{
-                      ...(from() === undefined ? { background: ACCENT, color: '#fff' } : { background: 'var(--m-track)', color: '#fff', 'box-shadow': 'var(--m-track-edge)' }),
-                      'box-shadow': headerFocused(tool) ? '0 0 0 3px #fff' : undefined,
-                    }}
+                    class={`flex h-[36px] shrink-0 items-center gap-[6px] rounded-[10px] pr-[8px] pl-[10px] whitespace-nowrap text-[18px] leading-none font-medium`}
+                    style={{ background: 'var(--m-chip)', color: 'rgb(255 255 255 / 0.85)', 'box-shadow': headerFocused(tool) ? 'var(--m-focus-edge), 0 0 0 2px #fff' : 'var(--m-chip-edge)' }}
                     onClick={() => update(openPicker({ ...s(), focus: index(tool), header: true, area: 'rows' }, { kind: 'copy', tool }))}
                   >
+                    <Show when={from() === undefined}>
+                      <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
+                    </Show>
                     {from() === undefined ? 'EDITED' : BASES[from() as number].name}
-                    <span class="text-[15px]">▾</span>
+                    <Chevron dir="down" size={14} />
                   </button>
                 </div>
                 <Show when={tool === 'curve'}>
@@ -2381,18 +2392,26 @@ const LOOKS = {
     --m-divider: inset 0 2px 0 rgb(255 255 255 / 0.55);
     --m-accent: #b06cff; --m-confirm: #1f7cff;
     --m-title: #000; --m-text-area: #000; --m-tray: #000;
+    --m-well: #000; --m-well-edge: inset 0 0 0 1px rgb(255 255 255 / 0.4); --m-mark: #ffd60a;
     --m-key: #3a3a3c; --m-key-special: #1c1c1e; --m-key-edge: inset 0 0 0 1px rgb(255 255 255 / 0.5); --m-key-focus: inset 0 0 0 4px #ffd60a;`,
+  /* After the X-series menus: an opaque black column, gray plates with a lit
+     top edge and a dark bottom edge, engraved dividers, recessed wells for
+     scales, and focus as a brighter raised plate with a fine light rim. */
   fujimod: `
     --m-blur: none;
-    --m-column: rgb(0 0 0 / 0.9); --m-column-edge: none;
-    --m-rail: #2a2a2a; --m-panel: #000;
-    --m-chip: rgb(0 0 0 / 0.75); --m-chip-edge: none;
-    --m-track: transparent; --m-track-edge: inset 0 -1px 0 #3a3a3a;
-    --m-focus: #3c3c3e; --m-focus-edge: inset 6px 0 0 #c8232c;
-    --m-divider: inset 0 1px 0 #4a4a4a;
-    --m-accent: #c8232c; --m-confirm: #c8232c;
-    --m-title: #000; --m-text-area: rgb(0 0 0 / 0.8); --m-tray: rgb(0 0 0 / 0.92);
-    --m-key: #3a3a3a; --m-key-special: #222; --m-key-edge: none; --m-key-focus: inset 0 -5px 0 #c8232c;`,
+    --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
+    --m-rail: linear-gradient(90deg, #2e2e2e, #232323); --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
+    --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
+    --m-track: linear-gradient(#262626, #1a1a1a); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(0 0 0 / 0.9);
+    --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.55), 0 2px 4px rgb(0 0 0 / 0.7);
+    --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
+    --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
+    --m-mark: #fff;
+    --m-accent: #d4282f; --m-confirm: linear-gradient(#d83a40, #a91d23);
+    --m-title: linear-gradient(#262626, #121212); --m-text-area: rgb(0 0 0 / 0.82); --m-tray: linear-gradient(#141414, #050505);
+    --m-key: linear-gradient(#4a4a4a, #333); --m-key-special: linear-gradient(#2c2c2c, #1e1e1e);
+    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.8);
+    --m-key-focus: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 2px #fff;`,
 };
 type Look = keyof typeof LOOKS;
 const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
@@ -2418,15 +2437,16 @@ function glassVars(opacity: number, contrast: number): string {
     --m-accent: ${contrast > 0.5 ? '#8f4fe0' : '#7d3fc2'}; --m-confirm: #0a6bdc;
     --m-title: rgb(0 0 0 / ${fill(0.55)}); --m-text-area: rgb(20 20 22 / ${fill(0.42)}); --m-tray: rgb(26 26 28 / ${fill(0.76)});
     --m-key: rgb(255 255 255 / ${mix(0.28, 0.36, contrast)}); --m-key-special: rgb(255 255 255 / ${mix(0.1, 0.17, contrast)});
-    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;`;
+    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;
+    --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a;`;
 }
 const GLASS_DEFAULT = { opacity: 0.35, contrast: 0.6 };
 
 const STYLE_OPTIONS = `
 ${(Object.keys(LOOKS) as Look[]).filter((k) => k !== 'glass').map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
-.fm-look-fujimod .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
+.fm-look-fujimod .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
 .fm-look-fujimod .fm-screen rect { rx: 0; ry: 0; }
-.fm-square .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
+.fm-square .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
 .fm-square .fm-screen rect { rx: 0; ry: 0; }
 .fm-upper .fm-screen { text-transform: uppercase; }
 `;
