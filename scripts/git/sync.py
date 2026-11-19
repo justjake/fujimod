@@ -1,6 +1,7 @@
 """Keep a shared checkout's branch at origin without disturbing anyone's edits.
 
     python sync.py [--repo PATH]
+    python sync.py --onto main [--repo PATH]
     python sync.py --resolved PATH...
     python sync.py --install-service [--repo PATH] [--interval SECONDS]
 
@@ -14,6 +15,13 @@ survives on top of the new commit. Only a file whose merge overlaps, or that is
 binary, LFS, added or deleted on one side, keeps its local content untouched;
 it is recorded as a sync conflict, reported, and refused by the commit tool
 until its owner merges it and runs ``--resolved``.
+
+``--onto main`` rebases a topic branch: after catching up with the branch's
+own ``origin`` copy, each commit not on ``origin/main`` is replayed onto it
+with ``git merge-tree`` (nothing touches the working tree until every commit
+applies), the working tree moves to the result carrying uncommitted edits the
+same three-way way, and the branch is pushed with ``--force-with-lease``. A
+commit that does not apply cleanly stops the rebase with nothing changed.
 
 ``--install-service`` installs a macOS launchd agent that runs the sync every
 ``--interval`` seconds; a run with origin unchanged costs one ``ls-remote``.
@@ -175,13 +183,30 @@ def sync(repository: Repository) -> Result:
         return update(repository)
 
 
+def fetch(repository: Repository, name: str) -> str | None:
+    """Origin's commit for branch ``name``, or None when origin has no such branch."""
+    fetched = repository.git(
+        "fetch", "-q", "origin", f"+refs/heads/{name}:refs/remotes/origin/{name}",
+        check=False,
+    )
+    if fetched.returncode:
+        if not repository.output("ls-remote", "origin", f"refs/heads/{name}"):
+            return None
+        raise Failure(f"git fetch origin {name} failed:\n{fetched.stderr.strip()}")
+    return repository.output("rev-parse", f"refs/remotes/origin/{name}")
+
+
 def update(repository: Repository) -> Result:
-    """Bring the branch to origin; the caller holds the sync lock."""
+    """Bring the branch to origin; the caller holds the sync lock.
+
+    A branch origin does not have yet (a topic not pushed) is left as it is.
+    """
     ref = repository.branch()
     name = ref.removeprefix("refs/heads/")
-    repository.git("fetch", "-q", "origin", name)
-    remote = repository.output("rev-parse", "FETCH_HEAD")
     current = repository.output("rev-parse", "HEAD")
+    remote = fetch(repository, name)
+    if remote is None:
+        return Result(current)
     if remote == current or ancestor(repository, remote, current):
         return Result(current)
     if not ancestor(repository, current, remote):
@@ -190,6 +215,99 @@ def update(repository: Repository) -> Result:
             "resolve that before syncing"
         )
     return advance(repository, ref, current, remote)
+
+
+@dataclass
+class Rebased:
+    head: str
+    replayed: int
+    pushed: bool
+    moved: Result | None = None
+    dropped: int = 0
+
+
+def replay(
+    repository: Repository, onto: str, commits: list[str]
+) -> tuple[str, int, int]:
+    """Copy ``commits`` (oldest first) onto ``onto`` without touching any checkout.
+
+    A commit whose change ``onto`` already has, such as a stacked base's commit
+    that landed on main by rebase, is dropped. Returns the new head and the
+    numbers of commits kept and dropped.
+    """
+    head = onto
+    kept = dropped = 0
+    for commit in commits:
+        parents = repository.output("rev-list", "--parents", "-n", "1", commit).split()[1:]
+        if len(parents) != 1:
+            raise Failure(f"{commit[:10]} is a merge; rebase it by hand")
+        merged = repository.git(
+            "merge-tree", "--write-tree", "--name-only", "--no-messages",
+            f"--merge-base={parents[0]}", head, commit, check=False,
+        )
+        if merged.returncode:
+            lines = merged.stdout.strip().splitlines()
+            subject = repository.output("log", "-1", "--format=%s", commit)
+            raise Failure(
+                f"{commit[:10]} {subject!r} does not apply onto {onto[:10]}; nothing was "
+                "changed. Conflicting files: " + ", ".join(lines[1:] or ["(unknown)"])
+            )
+        tree = merged.stdout.split()[0]
+        if tree == repository.output("rev-parse", f"{head}^{{tree}}"):
+            dropped += 1
+            continue
+        kept += 1
+        fields = repository.output(
+            "log", "-1", "--format=%an%x00%ae%x00%ad", "--date=raw", commit
+        ).split("\0")
+        env = dict(
+            os.environ,
+            GIT_AUTHOR_NAME=fields[0],
+            GIT_AUTHOR_EMAIL=fields[1],
+            GIT_AUTHOR_DATE=fields[2],
+        )
+        message = repository.git("log", "-1", "--format=%B", commit).stdout
+        head = repository.git(
+            "commit-tree", tree, "-p", head, env=env, input=message
+        ).stdout.strip()
+    return head, kept, dropped
+
+
+def rebase(repository: Repository, base: str) -> Rebased:
+    """Rebase the checked-out topic branch onto origin's ``base`` and push it."""
+    ref = repository.branch()
+    name = ref.removeprefix("refs/heads/")
+    if name == base:
+        raise Failure(f"{name} is the base branch; check out a topic branch to rebase")
+    with locked(repository):
+        update(repository)
+        pushed_before = fetch(repository, name)
+        onto = fetch(repository, base)
+        if onto is None:
+            raise Failure(f"origin has no {base}")
+        current = repository.output("rev-parse", "HEAD")
+        commits = repository.output(
+            "rev-list", "--reverse", "--topo-order", f"{onto}..{current}"
+        ).split()
+        moved = None
+        head = current
+        kept = dropped = 0
+        if not ancestor(repository, onto, current):
+            head, kept, dropped = replay(repository, onto, commits)
+            moved = advance(repository, ref, current, head)
+        if pushed_before == head:
+            return Rebased(head, kept, False, moved, dropped)
+        lease = f"--force-with-lease=refs/heads/{name}:{pushed_before or ''}"
+        pushed = repository.git(
+            "push", "-q", lease, "origin", f"{head}:refs/heads/{name}", check=False
+        )
+        if pushed.returncode:
+            raise Failure(
+                f"rebased {name} locally to {head[:10]} but the push failed (origin "
+                "moved or refused); run the sync again:\n" + pushed.stderr.strip()
+            )
+        repository.git("update-ref", f"refs/remotes/origin/{name}", head)
+        return Rebased(head, kept, True, moved, dropped)
 
 
 def advance(repository: Repository, ref: str, current: str, remote: str) -> Result:
@@ -353,16 +471,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--repo",
+        type=Path,
+        action="append",
+        help="checkout to sync (repeatable, in order; default: the current one)",
+    )
     parser.add_argument("--resolved", nargs="+", metavar="PATH")
+    parser.add_argument(
+        "--onto", metavar="BRANCH", help="rebase the topic branch onto origin's BRANCH"
+    )
     parser.add_argument("--install-service", action="store_true")
     parser.add_argument("--interval", type=int, default=30)
     parser.add_argument(
         "--quiet", action="store_true", help="print only when something changed"
     )
     args = parser.parse_args()
+    if (args.resolved or args.install_service) and len(args.repo or []) > 1:
+        parser.error("--resolved and --install-service take one --repo")
+    for repo in args.repo or [Path.cwd()]:
+        run(args, repo)
+
+
+def run(args: argparse.Namespace, repo: Path) -> None:
     try:
-        repository = Repository(Repository.toplevel(args.repo))
+        repository = Repository(Repository.toplevel(repo))
         repository.clear_stale_index_lock()
         if args.resolved:
             resolve(repository, args.resolved)
@@ -373,6 +506,9 @@ def main() -> None:
         if follows_superproject(repository):
             if not args.quiet:
                 print("sync: detached submodule; the superproject's sync moves its pin")
+            return
+        if args.onto:
+            rebase_and_report(repository, args.onto)
             return
         ref = repository.branch()
         if args.quiet and remote_head(repository, ref) == repository.output(
@@ -385,6 +521,24 @@ def main() -> None:
         sys.exit(1)
     if result.merged or result.conflicts or not args.quiet:
         print(f"sync: at {result.head[:10]}")
+    report(result)
+
+
+def rebase_and_report(repository: Repository, base: str) -> None:
+    rebased = rebase(repository, base)
+    report(rebased.moved)
+    if rebased.replayed or rebased.dropped:
+        dropped = f", dropped {rebased.dropped} it already has" if rebased.dropped else ""
+        print(f"sync: replayed {rebased.replayed} commits onto origin/{base}{dropped}")
+    print(
+        f"sync: at {rebased.head[:10]}"
+        + ("; pushed" if rebased.pushed else "; origin already has it")
+    )
+
+
+def report(result: Result | None) -> None:
+    if result is None:
+        return
     for path in result.merged:
         print(f"  merged local edits onto origin: {path}")
     for path in result.conflicts:
