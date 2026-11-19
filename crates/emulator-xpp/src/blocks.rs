@@ -267,11 +267,16 @@ pub fn convert_audio(source: &[u8], from: usize, to: usize) -> Vec<u8> {
         })
         .collect()
 }
+const DEVELOP_CONTROL: u64 = 0x04;
 const DEVELOP_SOURCE: u64 = 0x08;
 const DEVELOP_SOURCE_STRIDE: u64 = 0x0c;
 const DEVELOP_SIZE: u64 = 0x14;
+const DEVELOP_MODE: u64 = 0x18;
 const DEVELOP_DESTINATION: u64 = 0x1c;
 const DEVELOP_DESTINATION_STRIDE: u64 = 0x20;
+const DEVELOP_RAW_DESTINATION: u64 = 0x28;
+const DEVELOP_RAW_DESTINATION_STRIDE: u64 = 0x2c;
+const DEVELOP_RAW_OUTPUT: u32 = 0x010c_0c02;
 const RESIZE_INPUT: u64 = 0x08;
 const RESIZE_OUTPUT: u64 = 0x14;
 const RESIZE_STEP_X: u64 = 0x18;
@@ -399,6 +404,9 @@ pub struct Block {
     /// The still tone unit's words (matrix, curves and brightness table of the
     /// still law), for a development job.
     tone: Option<Published>,
+    /// The configured phase applies to the raster named by the sensor port.
+    /// Other source addresses carry the zero-phase X-Trans memory layout.
+    readout_port: Option<crate::imaging::ReadoutPort>,
     /// The published integration value and scene-light scale the film
     /// picture's light follows.
     film_exposure: Option<crate::statistics::Exposure>,
@@ -456,6 +464,7 @@ impl Block {
             published: None,
             color: None,
             tone: None,
+            readout_port: None,
             film_exposure: None,
             film_light: None,
             film_picture: None,
@@ -497,7 +506,7 @@ impl Block {
     /// Data the job moves when it finishes.
     pub fn with_work(mut self, work: Work) -> Result<Self, String> {
         let words = match work {
-            Work::Develop { phase } if phase.0 < 6 && phase.1 < 6 => DEVELOP_DESTINATION_STRIDE,
+            Work::Develop { phase } if phase.0 < 6 && phase.1 < 6 => DEVELOP_RAW_DESTINATION_STRIDE,
             Work::Resize => RESIZE_FORMAT,
             Work::Audio => AUDIO_DESTINATION_PITCH,
             Work::Develop { .. } => return Err("Invalid X-Trans phase".into()),
@@ -512,6 +521,10 @@ impl Block {
     pub fn with_published(mut self, words: Published) -> Self {
         *words.lock().unwrap() = self.state.words.clone();
         self.published = Some(words);
+        self
+    }
+    pub(crate) fn with_readout_port(mut self, port: crate::imaging::ReadoutPort) -> Self {
+        self.readout_port = Some(port);
         self
     }
     /// Develop with the film law and white balance of the color unit's
@@ -584,6 +597,36 @@ impl Block {
         )?;
         Ok(Some(true))
     }
+    /// Complete the in-place RAW sensor-correction pass. The secondary
+    /// port starts one stride and 128 samples before the input port. Both
+    /// refer to the sensor's U16 raster, which already contains the
+    /// declared sample levels. Preserve that raster's coordinates and CFA
+    /// phase when approximating the corrections as identity.
+    fn finish_raw_output(&self) -> Result<(), String> {
+        let word = |offset| self.state.words.get(&offset).copied().unwrap_or(0);
+        let (lines, width) = crate::development::size(word(DEVELOP_SIZE));
+        let row_bytes = 2 * width as u64;
+        let source_stride = u64::from(word(DEVELOP_SOURCE_STRIDE)) * 2;
+        let destination_stride = u64::from(word(DEVELOP_RAW_DESTINATION_STRIDE)) * 2;
+        let source = u64::from(word(DEVELOP_SOURCE));
+        let destination = u64::from(word(DEVELOP_RAW_DESTINATION));
+        let port_distance = source_stride + 256;
+        if destination == 0
+            || !destination.is_multiple_of(8)
+            || !source.is_multiple_of(8)
+            || source_stride < row_bytes
+            || source_stride > 0x6000
+            || width > 0x3001
+            || lines > 0x3001
+            || destination_stride != source_stride
+            || source.checked_sub(destination) != Some(port_distance)
+            || port_distance >= source_stride * (lines as u64 - 1) + row_bytes
+        {
+            return Err("Unmodeled still RAW output geometry".into());
+        }
+        Ok(())
+    }
+
     fn run_work(&self, cx: &mut Cx<'_>, work: Work) -> Result<(), String> {
         let word = |o| self.state.words.get(&o).copied().unwrap_or(0);
         let address = |o| u64::from(word(o));
@@ -591,12 +634,24 @@ impl Block {
         let (rows, destination, destination_stride) = match work {
             Work::Audio => return Err("The audio converter converts through its own path".into()),
             Work::Develop { phase } => {
+                if word(DEVELOP_MODE) == DEVELOP_RAW_OUTPUT
+                    && word(DEVELOP_CONTROL) & 7 == 7
+                    && word(DEVELOP_DESTINATION) == 0
+                    && word(DEVELOP_DESTINATION_STRIDE) == 0
+                {
+                    return self.finish_raw_output();
+                }
                 let (lines, width) = crate::development::size(word(DEVELOP_SIZE));
+                let source = address(DEVELOP_SOURCE);
                 let source_stride = stride(DEVELOP_SOURCE_STRIDE);
-                let raw = cx.ram_bytes(
-                    address(DEVELOP_SOURCE),
-                    source_stride * (lines - 1) + 2 * width,
-                )?;
+                let raw = cx.ram_bytes(source, source_stride * (lines - 1) + 2 * width)?;
+                let phase = if self.readout_port.as_ref().is_some_and(|port| {
+                    !port.lock().unwrap().contains(source, source_stride as u64)
+                }) {
+                    (0, 0)
+                } else {
+                    phase
+                };
                 let phase = (usize::from(phase.0), usize::from(phase.1));
                 let film = match &self.color {
                     Some((words, reference)) => {
@@ -1934,6 +1989,63 @@ mod tests {
         assert_eq!(engine.next_deadline(20), None);
         write(&mut engine, &mut h, 0xfff98004, 0x22_0006);
         assert_eq!(engine.next_deadline(20), Some(30));
+    }
+
+    #[test]
+    fn an_in_place_raw_output_job_preserves_the_sensor_mosaic() {
+        use fujimod_emulator_devices::test_host::advance;
+
+        const BASE: u64 = 0xfff98000;
+        let mut host = TestHost::new();
+        const STRIDE: u32 = 640;
+        const DESTINATION: u32 = 0x1000;
+        const SOURCE: u32 = DESTINATION + STRIDE + 256;
+        host.ram[0x1000..0x2000].fill(0x5a);
+        let mut engine = Block::new(BASE, 0x1000, vec![], None)
+            .unwrap()
+            .with_job(Job {
+                start: (DEVELOP_CONTROL, 5),
+                status: None,
+                stop: Some((0, 1)),
+                irq: 130,
+                ticks: 10,
+            })
+            .unwrap()
+            .with_work(Work::Develop { phase: (2, 2) })
+            .unwrap()
+            .with_color(Default::default(), [256; 3])
+            .unwrap();
+        for (register, value) in [
+            (DEVELOP_SOURCE, SOURCE),
+            (DEVELOP_SOURCE_STRIDE, STRIDE / 2),
+            (DEVELOP_SIZE, (5 << 16) | 303),
+            (DEVELOP_MODE, DEVELOP_RAW_OUTPUT),
+            (DEVELOP_RAW_DESTINATION, DESTINATION),
+            (DEVELOP_RAW_DESTINATION_STRIDE, STRIDE / 2),
+            (DEVELOP_CONTROL, 7),
+        ] {
+            write(&mut engine, &mut host, BASE + register, value);
+        }
+        advance(&mut engine, &mut host, 9);
+        assert_eq!(engine.state.jobs, 0);
+        advance(&mut engine, &mut host, 10);
+        assert!(host.ram[0x1000..0x2000].iter().all(|&byte| byte == 0x5a));
+        assert_eq!(engine.state.jobs, 1);
+        assert_eq!(engine.state.status, 1);
+
+        write(&mut engine, &mut host, BASE, 0);
+        write(
+            &mut engine,
+            &mut host,
+            BASE + DEVELOP_RAW_DESTINATION,
+            0x2000,
+        );
+        write(&mut engine, &mut host, BASE + DEVELOP_CONTROL, 7);
+        host.now = 20;
+        let mut cx = host.cx();
+        engine.advance(&mut cx);
+        assert_eq!(cx.refusal(), Some("Unmodeled still RAW output geometry"));
+        assert_eq!(engine.state.jobs, 1);
     }
 
     #[test]

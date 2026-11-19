@@ -67,6 +67,10 @@ pub const PROFILE: &str = "xpp-declared-xtrans-nearest-srgb-jfif-422-v1";
 /// The same, with the color of the programmed still tone and color units and
 /// the color unit's white balance.
 pub const FILM_PROFILE: &str = "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1";
+/// The same with a second, memory-fed raster layout. The sensor DMA retains
+/// its declared phase and the memory-fed X-Trans mosaic starts at phase zero.
+pub const FILM_MEDIA_PROFILE: &str =
+    "xpp-declared-xtrans-nearest-fff47-film-relative-wb-media-422-v1";
 
 /// Q12 factors that move the programmed white balance's R and B ratios to
 /// green from the declared `reference` gains to the programmed ones.

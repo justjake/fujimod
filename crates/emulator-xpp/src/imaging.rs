@@ -60,6 +60,7 @@ use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 /// Register window size in bytes.
 pub const WINDOW: u64 = 0x1000;
@@ -95,6 +96,25 @@ pub const WHITE: u16 = 16383;
 /// X-Trans tile (line, sample) at the readout buffer origin.
 pub const TILE_PHASE: (u64, u64) = (4, 2);
 use crate::development::XTRANS;
+
+/// The raster programmed at the sensor DMA port, shared with its consumer.
+#[derive(Default)]
+pub(crate) struct ReadoutGeometry {
+    destination: u64,
+    stride: u64,
+    lines: u64,
+}
+
+impl ReadoutGeometry {
+    pub(crate) fn contains(&self, address: u64, stride: u64) -> bool {
+        stride == self.stride
+            && address
+                .checked_sub(self.destination)
+                .is_some_and(|offset| offset < self.stride * self.lines)
+    }
+}
+
+pub(crate) type ReadoutPort = Arc<Mutex<ReadoutGeometry>>;
 
 /// A sensor readout unit: its channel offset, level interrupt and the ticks
 /// a readout takes. With a frame period the readout begins at the first frame
@@ -153,6 +173,7 @@ pub struct Control {
     readout_status: u32,
     /// The readout writes the declared sensor frame.
     sensor_frame: bool,
+    readout_port: Option<ReadoutPort>,
     /// Host RGB image (width, height, rows of red, green and blue bytes)
     /// written instead of the virtual scene.
     sensor_image: Option<(u64, u64, std::sync::Arc<[u8]>)>,
@@ -183,6 +204,7 @@ impl Control {
             readout_due: None,
             readout_status: 0,
             sensor_frame: false,
+            readout_port: None,
             sensor_image: None,
             write_log: None,
             write_log_sequence: 0,
@@ -208,6 +230,22 @@ impl Control {
         }
         self.sensor_frame = true;
         Ok(self)
+    }
+    pub(crate) fn with_readout_port(mut self, port: ReadoutPort) -> Self {
+        self.readout_port = Some(port);
+        self.publish_readout_geometry();
+        self
+    }
+    fn publish_readout_geometry(&self) {
+        if let (Some(port), Some(readout)) = (&self.readout_port, self.readout) {
+            let word = |offset| u64::from(self.word(readout.offset + offset));
+            let geometry = ReadoutGeometry {
+                destination: word(READOUT_DESTINATION),
+                stride: word(READOUT_STRIDE),
+                lines: word(READOUT_LINES),
+            };
+            *port.lock().unwrap() = geometry;
+        }
     }
     /// The declared sensor frame takes its picture from a host RGB image of
     /// `width` x `height` pixels instead of the virtual scene.
@@ -430,6 +468,14 @@ impl Device for Control {
         } else {
             self.words.insert(offset, value);
         }
+        if self.readout.is_some_and(|r| {
+            matches!(
+                offset.checked_sub(r.offset),
+                Some(READOUT_DESTINATION | READOUT_STRIDE | READOUT_LINES)
+            )
+        }) {
+            self.publish_readout_geometry();
+        }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let Some(r) = self.readout else { return };
@@ -519,6 +565,7 @@ impl Control {
         self.readout_due = state.readout_due;
         self.readout_status = state.readout_status;
         self.publish_integration();
+        self.publish_readout_geometry();
     }
 }
 
@@ -739,6 +786,45 @@ mod tests {
         other.restore(&saved).unwrap();
         assert_eq!(read(&mut other, &mut h, unit + 0x20), 1);
         assert!(Control::new(BASE).unwrap().restore(&saved).is_err());
+    }
+
+    #[test]
+    fn the_readout_port_tracks_programmed_geometry_through_restore() {
+        let unit = Readout {
+            offset: 0xc0,
+            irq: 98,
+            ticks: 10,
+            frame_period: None,
+        };
+        let port = ReadoutPort::default();
+        let mut control = Control::new(BASE)
+            .unwrap()
+            .with_readout(unit)
+            .unwrap()
+            .with_readout_port(port.clone());
+        let mut host = TestHost::new();
+        let address = BASE + unit.offset;
+        write(&mut control, &mut host, address + READOUT_LINES, 12);
+        write(&mut control, &mut host, address + READOUT_STRIDE, 32);
+        write(
+            &mut control,
+            &mut host,
+            address + READOUT_DESTINATION,
+            0x1000,
+        );
+        assert!(port.lock().unwrap().contains(0x1020, 32));
+        assert!(!port.lock().unwrap().contains(0x1020, 16));
+        assert!(!port.lock().unwrap().contains(0x1180, 32));
+        let saved = control.save();
+        write(
+            &mut control,
+            &mut host,
+            address + READOUT_DESTINATION,
+            0x2000,
+        );
+        assert!(!port.lock().unwrap().contains(0x1020, 32));
+        control.restore(&saved).unwrap();
+        assert!(port.lock().unwrap().contains(0x1020, 32));
     }
 
     #[test]
