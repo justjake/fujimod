@@ -930,7 +930,7 @@ function choose(s: State, p: Picker, k: number | 'opened'): State {
   if (k === 'opened') return p.kind === 'compare' ? { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } } : s;
   switch (p.kind) {
     case 'icon':
-      if (ICONS[k] === 'text:') return { ...s, picker: null, keyboard: { text: s.icon.startsWith('text:') ? s.icon.slice(5) : '', row: 0, col: 0, digits: false, target: 'icon', small: false } };
+      if (ICONS[k] === 'text:') return { ...s, picker: null, keyboard: typing(s.icon.startsWith('text:') ? s.icon.slice(5) : '', 'icon') };
       return { ...s, picker: null, icon: ICONS[k] };
     case 'copy':
       return { ...s, picker: null, film: copyGroup(s.film, p.tool, k) };
@@ -1005,60 +1005,181 @@ function enterSection(s: State, section: Section): State {
 
 /* ---- Name keyboard ------------------------------------------------------------- */
 
-type Typing = { text: string; row: number; col: number; digits: boolean; target: 'name' | 'icon'; small: boolean };
-const LETTERS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
-const DIGITS = ['1234567890', "-/:;()&@'", '.,?!+#*'];
-const NAME_LIMIT = 16;
+/* Focal UI's text keyboard (TextKeyboard), presented over live view: the
+   title, the text with its caret, and the tray of keys under a bar of caret
+   keys. Places and widths are in row units, 100 to a row, as on the camera.
+   Shift gives capitals; an icon's lowercase letters are its small capitals. */
+type KeyKind = 'char' | 'shift' | 'delete' | 'layer' | 'space' | 'return' | 'caret-left' | 'caret-right';
+type KeyCap = { kind: KeyKind; row: number; left: number; width: number; label: string };
+type Typing = { text: string; cursor: number; focus: number; shift: 'off' | 'once' | 'locked'; digits: boolean; target: 'name' | 'icon' };
 
-function keyRows(t: Typing): string[][] {
-  const letters = (t.digits ? DIGITS : LETTERS).map((r) => r.split('').map((c) => (t.small ? c.toLowerCase() : c)));
-  return [...letters, t.target === 'icon' ? [t.digits ? 'ABC' : '123', t.small ? 'ᴀʙᴄ' : 'Aᴀ', 'DEL', 'OK'] : [t.digits ? 'ABC' : '123', 'SPACE', 'DEL', 'OK']];
+function keyCaps(t: Typing): KeyCap[] {
+  const rows = t.digits ? ['1234567890', "-/:;()&@'", '.,?!+#*'] : ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+  const caps: KeyCap[] = [
+    { kind: 'caret-left', row: 0, left: 0, width: 15, label: '' },
+    { kind: 'caret-right', row: 0, left: 85, width: 15, label: '' },
+  ];
+  rows.forEach((chars, r) => {
+    const row = r + 1;
+    const first = row === 2 ? 5 + (10 - chars.length) * 5 + (chars.length === 9 ? -5 : 0) : row === 3 ? 15 : 0;
+    if (row === 3) caps.push({ kind: 'shift', row, left: 0, width: 15, label: '' });
+    [...chars].forEach((c, i) => caps.push({ kind: 'char', row, left: first + 10 * i, width: 10, label: !t.digits && t.shift !== 'off' ? c.toUpperCase() : c }));
+    if (row === 3) caps.push({ kind: 'delete', row, left: 85, width: 15, label: '' });
+  });
+  caps.push({ kind: 'layer', row: 4, left: 0, width: 25, label: t.digits ? 'ABC' : '123' });
+  caps.push(t.target === 'name' ? { kind: 'space', row: 4, left: 25, width: 50, label: 'space' } : { kind: 'space', row: 4, left: 25, width: 50, label: '' });
+  caps.push({ kind: 'return', row: 4, left: 75, width: 25, label: 'OK' });
+  return caps;
 }
 
-function typeKey(s: State, t: Typing, key: string): State {
-  switch (key) {
-    case 'OK':
+const NAME_LIMIT = 16;
+const keyLimit = (t: Typing) => (t.target === 'icon' ? MONOGRAM_LIMIT : NAME_LIMIT);
+
+function typeKey(s: State, t: Typing, cap: KeyCap): State {
+  const put = (next: Typing) => ({ ...s, keyboard: next });
+  switch (cap.kind) {
+    case 'return':
       if (t.target === 'icon') return { ...s, keyboard: null, icon: t.text ? `text:${t.text}` : s.icon };
       return { ...s, keyboard: null, name: t.text.trim() || s.name };
-    case 'Aᴀ':
-    case 'ᴀʙᴄ':
-      return { ...s, keyboard: { ...t, small: !t.small } };
-    case 'DEL':
-      return { ...s, keyboard: { ...t, text: t.text.slice(0, -1) } };
-    case '123':
-    case 'ABC': {
-      const next = { ...t, digits: !t.digits };
-      return { ...s, keyboard: { ...next, col: Math.min(t.col, keyRows(next)[t.row].length - 1) } };
-    }
-    case 'SPACE':
-      key = ' ';
+    case 'delete':
+      return t.cursor ? put({ ...t, text: t.text.slice(0, t.cursor - 1) + t.text.slice(t.cursor), cursor: t.cursor - 1 }) : s;
+    case 'shift':
+      return put({ ...t, shift: t.shift === 'off' ? 'once' : t.shift === 'once' ? 'locked' : 'off' });
+    case 'layer':
+      return put({ ...t, digits: !t.digits });
+    case 'caret-left':
+      return put({ ...t, cursor: Math.max(0, t.cursor - 1) });
+    case 'caret-right':
+      return put({ ...t, cursor: Math.min(t.text.length, t.cursor + 1) });
   }
-  return t.text.length < (t.target === 'icon' ? MONOGRAM_LIMIT : NAME_LIMIT) ? { ...s, keyboard: { ...t, text: t.text + key } } : s;
+  if (t.target === 'icon' && cap.kind === 'space') return s;
+  const c = cap.kind === 'space' ? ' ' : cap.label;
+  if (t.text.length >= keyLimit(t)) return s;
+  return put({ ...t, text: t.text.slice(0, t.cursor) + c + t.text.slice(t.cursor), cursor: t.cursor + 1, shift: t.shift === 'once' ? 'off' : t.shift });
 }
 
 function pressKeyboard(s: State, t: Typing, key: Key): State {
-  const rows = keyRows(t);
-  const move = (row: number) => {
-    const from = rows[t.row].length, to = rows[row].length;
-    return { ...t, row, col: Math.round((t.col / Math.max(1, from - 1)) * (to - 1)) };
+  const caps = keyCaps(t);
+  const at = caps[t.focus];
+  const centre = (c: KeyCap) => c.left + c.width / 2;
+  const nearest = (row: number) => {
+    let best = -1;
+    caps.forEach((c, i) => {
+      if (c.row === row && (best < 0 || Math.abs(centre(c) - centre(at)) < Math.abs(centre(caps[best]) - centre(at)))) best = i;
+    });
+    return best;
   };
+  const inRow = caps.map((c, i) => [c, i] as const).filter(([c]) => c.row === at.row).map(([, i]) => i);
+  const k = inRow.indexOf(t.focus);
   switch (key) {
     case 'left':
-      return { ...s, keyboard: { ...t, col: (t.col + rows[t.row].length - 1) % rows[t.row].length } };
+      return { ...s, keyboard: { ...t, focus: inRow[(k + inRow.length - 1) % inRow.length] } };
     case 'right':
-      return { ...s, keyboard: { ...t, col: (t.col + 1) % rows[t.row].length } };
+      return { ...s, keyboard: { ...t, focus: inRow[(k + 1) % inRow.length] } };
     case 'up':
-      return t.row > 0 ? { ...s, keyboard: move(t.row - 1) } : s;
+      return at.row > 0 ? { ...s, keyboard: { ...t, focus: nearest(at.row - 1) } } : s;
     case 'down':
-      return t.row < rows.length - 1 ? { ...s, keyboard: move(t.row + 1) } : s;
+      return at.row < 4 ? { ...s, keyboard: { ...t, focus: nearest(at.row + 1) } } : s;
     case 'ok':
-      return typeKey(s, t, rows[t.row][t.col]);
+      return typeKey(s, t, at);
     case 'dial-':
-      return typeKey(s, t, 'DEL');
+      return typeKey(s, t, caps[0]);
+    case 'dial+':
+      return typeKey(s, t, caps[1]);
     case 'back':
       return { ...s, keyboard: null };
   }
   return s;
+}
+
+const typing = (text: string, target: 'name' | 'icon'): Typing => ({ text, cursor: text.length, focus: 4, shift: target === 'icon' ? 'locked' : 'off', digits: false, target });
+
+function DialGlyph() {
+  return (
+    <svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="currentColor" stroke-width="2">
+      <ellipse cx="13" cy="7" rx="9" ry="4" />
+      <path d="M4 7v5c0 2.2 4 4 9 4s9-1.8 9-4V7M8 19l-2.5 1.5M18 19l2.5 1.5" />
+    </svg>
+  );
+}
+
+function KeyLabel(props: { cap: KeyCap; t: Typing }) {
+  const c = props.cap;
+  switch (c.kind) {
+    case 'caret-left':
+      return <span class="flex items-center gap-[10px]">‹<DialGlyph /></span>;
+    case 'caret-right':
+      return <span class="flex items-center gap-[10px]"><DialGlyph />›</span>;
+    case 'shift':
+      return (
+        <svg width="26" height="26" viewBox="0 0 24 24" fill={props.t.shift === 'off' ? 'none' : 'currentColor'} stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <path d="M12 3 3 12h5v8h8v-8h5z" />
+          {props.t.shift === 'locked' ? <path d="M8 23h8" /> : null}
+        </svg>
+      );
+    case 'delete':
+      return (
+        <svg width="30" height="24" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round">
+          <path d="M9 3h18v18H9L1 12z" />
+          <path d="m14 8 8 8m0-8-8 8" />
+        </svg>
+      );
+  }
+  return <>{c.label}</>;
+}
+
+function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
+  const t = () => props.t;
+  const icon = () => t().target === 'icon';
+  const ROW_TOP = [6, 54, 124, 194, 264];
+  const ROW_H = [38, 60, 60, 60, 60];
+  const caps = () => keyCaps(t());
+  return (
+    <div class="absolute inset-0 flex flex-col" style={{ 'text-transform': 'none' }}>
+      <div class="flex h-[48px] items-center gap-[14px] px-[18px]" style={{ background: 'rgb(0 0 0 / 0.62)' }}>
+        <button type="button" class="text-[26px] leading-none text-white/70" onClick={() => props.update({ ...props.s, keyboard: null })}>‹</button>
+        <span class="text-[21px] font-medium tracking-[0.18em] text-white/75">{icon() ? 'ICON LETTERS' : 'FILM NAME'}</span>
+      </div>
+      <div class="flex grow items-start gap-[14px] px-[20px] pt-[16px]" style={{ background: 'rgb(22 22 24 / 0.5)' }}>
+        <Show when={icon()}>
+          <FilmIcon slug={`text:${t().text}`} size={52} color="#fff" />
+        </Show>
+        <span class="text-[29px] leading-[40px] whitespace-pre text-white" style={{ 'font-variant': icon() ? 'small-caps' : undefined }}>
+          {t().text.slice(0, t().cursor)}
+          <span class="inline-block h-[30px] w-[3px] translate-y-[5px] bg-[#0a6bdc]" />
+          {t().text.slice(t().cursor)}
+        </span>
+      </div>
+      <div class="relative h-[330px] shrink-0" style={{ background: 'rgb(28 28 30 / 0.84)' }}>
+        <For each={caps()}>
+          {(cap, i) => {
+            const special = cap.kind !== 'char' && cap.kind !== 'space';
+            const focused = () => t().focus === i();
+            return (
+              <button
+                type="button"
+                class="absolute flex items-center justify-center rounded-[7px] text-white"
+                style={{
+                  left: `${6 + cap.left * 7.08 + 3}px`,
+                  width: `${cap.width * 7.08 - 6}px`,
+                  top: `${ROW_TOP[cap.row]}px`,
+                  height: `${ROW_H[cap.row]}px`,
+                  background: cap.kind === 'return' ? '#0a6bdc' : special ? 'rgb(255 255 255 / 0.12)' : 'rgb(255 255 255 / 0.3)',
+                  'box-shadow': focused() ? 'inset 0 0 0 3px #fff' : undefined,
+                  'font-size': cap.kind === 'char' ? '29px' : '21px',
+                  'font-variant': icon() && cap.kind === 'char' ? 'small-caps' : undefined,
+                  'letter-spacing': cap.kind === 'layer' ? '0.12em' : undefined,
+                }}
+                onClick={() => props.update(typeKey({ ...props.s, keyboard: { ...t(), focus: i() } }, { ...t(), focus: i() }, cap))}
+              >
+                <KeyLabel cap={cap} t={t()} />
+              </button>
+            );
+          }}
+        </For>
+      </div>
+    </div>
+  );
 }
 
 function press(s: State, key: Key): State {
@@ -1148,7 +1269,7 @@ function press(s: State, key: Key): State {
       case 'icon':
         return key === 'ok' ? openPicker(s, { kind: 'icon' }) : s;
       case 'name':
-        return key === 'ok' ? { ...s, keyboard: { text: s.name, row: 0, col: 0, digits: false, target: 'name', small: false } } : s;
+        return key === 'ok' ? { ...s, keyboard: typing(s.name, 'name') } : s;
     }
   }
   if (s.inside) {
@@ -1568,7 +1689,7 @@ function Editor(props: {
           <div
             class="flex h-[57px] min-w-0 grow items-center gap-[10px] px-[10px]"
             style={TRACK(s().area === 'name')}
-            onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false, keyboard: { text: s().name, row: 0, col: 0, digits: false, target: 'name', small: false } })}
+            onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false, keyboard: typing(s().name, 'name') })}
           >
             <div class="flex min-w-0 grow flex-col gap-[5px]">
               <span class={`truncate font-semibold ${TEXT}`}>{s().name}</span>
@@ -1822,53 +1943,7 @@ function Editor(props: {
         )}
       </Show>
 
-      <Show when={s().keyboard}>
-        {(t) => (
-          <div class="absolute inset-0 flex flex-col">
-            <div class="flex items-center gap-[10px] p-[10px]">
-              <div class="flex size-[57px] items-center justify-center rounded-[13px]" style={GLASS}>
-                <FilmIcon slug={t().target === 'icon' ? `text:${t().text}` : s().icon} size={40} color="#fff" />
-              </div>
-              <div class={`flex h-[57px] grow items-center rounded-[13px] px-[14px] font-semibold ${TEXT}`} style={GLASS}>
-                <span class="whitespace-pre" style={{ 'font-variant': t().target === 'icon' ? 'small-caps' : undefined, 'text-transform': 'none' }}>{t().text}</span>
-                <span class="ml-[2px] h-[30px] w-[3px] animate-pulse rounded-full" style={{ background: ACCENT }} />
-                <span class={`ml-auto text-white/50 tabular-nums ${SMALL}`}>
-                  {t().text.length}/{t().target === 'icon' ? MONOGRAM_LIMIT : NAME_LIMIT}
-                </span>
-              </div>
-            </div>
-            <div class="grow" />
-            <div class="flex flex-col gap-[6px] px-[8px] pt-[8px] pb-[10px]" style={{ ...GLASS, background: 'rgb(22 22 24 / 0.78)', 'border-radius': '18px 18px 0 0' }}>
-              <For each={keyRows(t())}>
-                {(row, r) => (
-                  <div class="flex justify-center gap-[6px]">
-                    <For each={row}>
-                      {(key, c) => {
-                        const on = () => t().row === r() && t().col === c();
-                        const wide = key.length > 1;
-                        return (
-                          <button
-                            type="button"
-                            class={`flex h-[50px] items-center justify-center rounded-[10px] font-medium ${wide ? SMALL : TEXT}`}
-                            style={{
-                              width: key === 'SPACE' ? '300px' : wide ? '110px' : '62px',
-                              background: on() ? '#fff' : key === 'OK' ? ACCENT : wide ? 'rgb(255 255 255 / 0.1)' : 'rgb(255 255 255 / 0.2)',
-                              color: on() ? '#000' : '#fff',
-                            }}
-                            onClick={() => update(typeKey({ ...s(), keyboard: { ...t(), row: r(), col: c() } }, { ...t(), row: r(), col: c() }, key))}
-                          >
-                            <span style={{ 'font-variant': t().target === 'icon' ? 'small-caps' : undefined, 'text-transform': 'none' }}>{key === 'DEL' ? '⌫' : key}</span>
-                          </button>
-                        );
-                      }}
-                    </For>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        )}
-      </Show>
+      <Show when={s().keyboard}>{(t) => <Keyboard s={s()} t={t()} update={update} />}</Show>
 
       <Show when={s().picker?.kind !== 'icon' ? s().picker : undefined}>
         {(picker) => {
@@ -2101,8 +2176,8 @@ function Presented() {
 const STATES: { id: string; title: string; state: State }[] = [
   { id: 'film', title: 'The film: name, save as, open', state: initial({ area: 'name' }) },
   { id: 'icon', title: 'Pick the film\'s icon', state: openPicker(initial({ area: 'icon', icon: 'custom' }), { kind: 'icon' }) },
-  { id: 'name', title: 'Type the film\'s name over live view', state: initial({ area: 'name', keyboard: { text: 'WARM FA', row: 1, col: 3, digits: false, target: 'name', small: false } }) },
-  { id: 'monogram', title: 'Letter the icon yourself', state: initial({ area: 'icon', keyboard: { text: 'WF', row: 0, col: 2, digits: false, target: 'icon', small: true } }) },
+  { id: 'name', title: 'Type the film\'s name over live view', state: initial({ area: 'name', keyboard: { ...typing('Warm Fa', 'name'), focus: 18 } }) },
+  { id: 'monogram', title: 'Letter the icon yourself', state: initial({ area: 'icon', keyboard: { ...typing('Wf', 'icon'), shift: 'off', focus: 4 } }) },
   { id: 'open', title: 'Open another film', state: openPicker(initial({ area: 'open' }), { kind: 'open' }) },
   { id: 'curve', title: 'Inside the tone curve', state: initial({ focus: 0, knot: 7, inside: true, scrollTo: 'curve' }) },
   { id: 'full', title: 'The tone curve full screen', state: initial({ focus: 0, knot: 7, inside: true, full: true }) },
