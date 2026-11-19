@@ -1,7 +1,8 @@
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { COLUMN, GLASS, TRACK } from './materials';
+import { Choice, Dial, type ChoiceItem } from './controls';
+import { COLUMN, GLASS } from './materials';
 import { palette } from './palette';
 import './focal.css';
 
@@ -259,95 +260,6 @@ function Photo(props: { recipe: Recipe }) {
 
 
 
-/** How a drawer shows that its choices continue past its ends. */
-type Depth = 'shadow' | 'fade' | 'clip';
-
-/** Choices start on a whole cell rather than centered (the owner's choice). */
-const center = () => false;
-const depth = (): Depth => 'shadow';
-
-interface Mark {
-  focused: boolean;
-  changed: boolean;
-}
-
-/** Corner brackets, as an AF frame draws them. */
-interface CornerMarks {
-  arm: number;
-  weight: number;
-  color: string;
-  /** The lower brackets' color, when it differs. */
-  lower?: string;
-}
-
-/** A cell or a thumb's box: its own surface and edges, its ink, and marks. */
-interface Look {
-  style: JSX.CSSProperties;
-  ink: string;
-  corners?: CornerMarks;
-  /** A small square in the top right corner. */
-  pip?: string;
-  /** A small dot under the middle. */
-  dot?: string;
-}
-
-/** One cell of a strip: whether it is the chosen one, how many cells away
- * from the chosen one it sits, and its row's state. */
-interface CellState extends Mark {
-  chosen: boolean;
-  distance: number;
-}
-
-/** The sideways-scrolling object a row's choices (and, in most designs, its
- * slider steps) sit in. */
-interface Strip {
-  /** The fixed channel the strip runs in. */
-  track: (focused: boolean) => JSX.CSSProperties;
-  /** The strip's own surface, which slides with its cells. */
-  film?: JSX.CSSProperties;
-  /** Space between the channel's edges and the cells. */
-  inset: number;
-  gap: number;
-  /** A word cell's side padding and least width. */
-  pad: number;
-  min: number;
-  font: string;
-  cell: (state: CellState) => Look;
-  /** The chevron at an end with more cells beyond it, its halo, and the
-   * shadow cast over cells at that end. */
-  ends: { ink: string; halo?: string; shadow: string };
-}
-
-/** The FUJIMOD SET-UP slider: a track, zero to the value filled, a thumb. */
-interface ThumbColors {
-  track: string;
-  tick: string;
-  zero: string;
-  fill: string;
-  value: (mark: Mark) => Look;
-}
-
-/** A ruler slider: a tick scale with each step labeled. The scale slides
- * under a fixed needle in the middle, or stays put while the needle moves. */
-interface Ruler {
-  kind: 'ruler';
-  fixed: boolean;
-  /** Between steps, when the scale slides. */
-  spacing: number;
-  tick: string;
-  major: string;
-  /** The ticks from zero to the value. */
-  fill: string;
-  /** Unchosen step labels; none hides them. */
-  label?: string;
-  /** The needle and the chosen step's label. */
-  chosen: (mark: Mark) => string;
-  font: string;
-}
-
-/** Title case, for designs that do not write in capitals. */
-const titleCase = (name: string) =>
-  name.toLowerCase().replace(/(^|[\s+-])(\S)/g, (_, gap: string, c: string) => gap + c.toUpperCase());
 
 interface Card {
   style: JSX.CSSProperties;
@@ -370,9 +282,6 @@ interface Design {
   iconInk: (focused: boolean) => string;
   /** The stroke after the icon column. */
   divider?: (focused: boolean) => string | undefined;
-  strip: Strip;
-  /** The slider, set in the strip's channel. */
-  slider: ThumbColors | Ruler;
   card: Card;
   legend: { box: JSX.CSSProperties; key: JSX.CSSProperties };
   /** The fly-out's body below its band; the band is the focused row. */
@@ -380,8 +289,6 @@ interface Design {
 }
 
 const ACCENT = 'var(--accent)';
-/** Cells fade with distance from the chosen one, as the film editor's choice strips do. */
-const fade = (distance: number) => Math.max(0.35, 0.85 - distance * 0.15);
 
 /** The film editor's design language (materials.ts): rows as cards in the
  * column, the chosen choice a white plate, a scale's ticks under a fixed
@@ -395,30 +302,6 @@ const DESIGN: Design = {
   focus: 'none',
   focusColor: ACCENT,
   iconInk: (focused) => (focused ? '#fff' : 'rgb(255 255 255 / 0.7)'),
-  strip: {
-    track: TRACK,
-    inset: 4,
-    gap: 4,
-    pad: 12,
-    min: 30,
-    font: 'text-[21px] font-medium',
-    cell: (c) =>
-      c.chosen
-        ? { style: { background: '#fff', 'border-radius': '9px' }, ink: '#000', dot: c.changed ? ACCENT : undefined }
-        : { style: {}, ink: `rgb(255 255 255 / ${fade(c.distance)})` },
-    ends: { ink: '#fff', halo: 'rgb(0 0 0 / 0.55)', shadow: 'rgb(0 0 0 / 0.3)' },
-  },
-  slider: {
-    kind: 'ruler',
-    fixed: false,
-    spacing: 38,
-    tick: 'rgb(255 255 255 / 0.45)',
-    major: 'rgb(255 255 255 / 0.75)',
-    fill: 'rgb(255 255 255 / 0.75)',
-    label: 'rgb(255 255 255 / 0.55)',
-    chosen: () => 'var(--m-mark)',
-    font: 'text-[15px] font-medium',
-  },
   card: { style: { ...GLASS, 'border-radius': '12px' }, class: 'font-semibold' },
   legend: {
     box: { ...GLASS, 'border-radius': '12px' },
@@ -431,82 +314,17 @@ const DESIGN: Design = {
 
 /** The menu pages' row height. */
 const ROW = 57;
-const ICON_CELL = 52;
 /** The icon column, before the stroke that starts each row's drawer. */
 const ICON_COLUMN = 58;
 const WIDTH = 280;
 const COMPARE_WIDTH = 300;
 const STRIPE = 4;
-/** Where clipped rows or choices fade out, to show that more follow. */
-const FADE_WIDTH = 18;
-/** The space at a strip's end that its chevron keeps clear. */
-const LANE = 16;
-/** The focus frame around a value thumb, and the gap between the frame and the thumb. */
-const FRAME = 3;
-const FRAME_GAP = 2;
-/** From a slider's ends to its first and last steps: half a framed value thumb. */
-const INSET = 26;
-
-/** The same scroll for every column, so A and B stay in lockstep. */
-function scrollFor(focus: number, height: number): number {
-  const max = Math.max(0, SETTINGS.length * ROW - height);
-  return Math.max(0, Math.min(max, focus * ROW - (height - ROW) / 2));
-}
 
 const LIGHT = 'font-light tracking-[0.08em] uppercase';
 /** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
 const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
 
-function Corners(props: CornerMarks) {
-  const corners = [
-    ['top', 'left'],
-    ['top', 'right'],
-    ['bottom', 'left'],
-    ['bottom', 'right'],
-  ] as const;
-  const arm = (v: string, h: string, width: number, height: number): JSX.CSSProperties => ({
-    [v]: '0',
-    [h]: '0',
-    width: `${width}px`,
-    height: `${height}px`,
-    background: v === 'bottom' ? (props.lower ?? props.color) : props.color,
-  });
-  return (
-    <For each={corners}>
-      {([v, h]) => (
-        <>
-          <span class="pointer-events-none absolute" style={arm(v, h, props.arm, props.weight)} />
-          <span class="pointer-events-none absolute" style={arm(v, h, props.weight, props.arm)} />
-        </>
-      )}
-    </For>
-  );
-}
 
-/** A look's marks over its cell. */
-function Marks(props: { look: Look }) {
-  return (
-    <>
-      <Show when={props.look.corners}>{(corners) => <Corners {...corners()} />}</Show>
-      <Show when={props.look.dot}>
-        {(color) => (
-          <span
-            class="pointer-events-none absolute bottom-[3px] left-1/2 h-[5px] w-[5px] -translate-x-1/2 rounded-full"
-            style={{ background: color() }}
-          />
-        )}
-      </Show>
-      <Show when={props.look.pip}>
-        {(color) => (
-          <span
-            class="pointer-events-none absolute top-0 right-0 h-[6px] w-[6px]"
-            style={{ background: color() }}
-          />
-        )}
-      </Show>
-    </>
-  );
-}
 
 /* ---- Input ------------------------------------------------------------------- */
 
@@ -589,337 +407,7 @@ function RowIconView(props: { icon: RowIcon; color: string }) {
   );
 }
 
-interface ControlProps {
-  design: Design;
-  focused: boolean;
-  changed: boolean;
-  pick: (value: number) => void;
-}
-
-interface StripItem {
-  name: string;
-  icon?: number;
-}
-
-/** A row's choices in its design's strip, slid to show the chosen one: held
- * in the middle, or brought just into view from the start. */
-function Strip(props: ControlProps & { items: StripItem[]; value: number; width: number }) {
-  const strip = () => props.design.strip;
-  let track: HTMLDivElement | undefined;
-  const [offset, setOffset] = createSignal(0);
-  const [before, setBefore] = createSignal(false);
-  const [after, setAfter] = createSignal(false);
-  /** Space before the first cell and after the last, so either can sit in the middle. */
-  const lead = () => (center() ? props.width / 2 : 0);
-  const follow = () => {
-    const chosen = track?.children[props.value] as HTMLElement | undefined;
-    if (!track || !chosen) return;
-    const cells = Array.from(track.children) as HTMLElement[];
-    let next: number;
-    if (center()) {
-      next = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
-    } else {
-      // Start on a whole cell, the one that best centers the chosen one.
-      const centered = chosen.offsetLeft + chosen.offsetWidth / 2 - props.width / 2;
-      const end = chosen.offsetLeft + chosen.offsetWidth;
-      next = 0;
-      if (track.scrollWidth > props.width)
-        for (const cell of cells) {
-          const start = cell.offsetLeft - strip().gap;
-          if (start > chosen.offsetLeft || end - start > props.width) continue;
-          if (Math.abs(start - centered) < Math.abs(next - centered)) next = Math.max(0, start);
-        }
-    }
-    setOffset(next);
-    const first = cells[0];
-    const last = cells[cells.length - 1];
-    setBefore(first.offsetLeft < next);
-    setAfter(last.offsetLeft + last.offsetWidth > next + props.width);
-  };
-  createEffect(
-    () => [props.value, props.width, props.design, center()],
-    () => {
-      requestAnimationFrame(follow);
-    },
-  );
-  /** Cells give way to the chevron's lane at an end with more beyond it:
-   * fading out, or cut off at the lane. */
-  const fadeMask = () => {
-    if (depth() === 'shadow') return undefined;
-    const from = LANE;
-    const width = depth() === 'fade' ? FADE_WIDTH : 0;
-    const end = (more: boolean, side: 'start' | 'end') =>
-      side === 'start'
-        ? more
-          ? `transparent ${from}px, #000 ${from + width}px`
-          : '#000 0'
-        : more
-          ? `#000 calc(100% - ${from + width}px), transparent calc(100% - ${from}px)`
-          : '#000 100%';
-    return `linear-gradient(to right, ${end(before(), 'start')}, ${end(after(), 'end')})`;
-  };
-  return (
-    <div
-      class="relative h-full overflow-hidden"
-      style={{ width: `${props.width}px`, ...strip().track(props.focused) }}
-    >
-      <div class="absolute inset-0 overflow-hidden" style={{ 'mask-image': fadeMask() }}>
-        <div
-          ref={(element) => (track = element)}
-          class="absolute inset-y-0 left-0 flex items-stretch transition-transform duration-150 ease-out"
-          style={{
-            transform: `translateX(${-offset()}px)`,
-            padding: `${strip().inset}px ${lead() || strip().gap}px`,
-            gap: `${strip().gap}px`,
-            ...strip().film,
-          }}
-        >
-          <For each={props.items.map((item, i) => ({ item, i }))}>
-            {(entry) => {
-              const look = () =>
-                strip().cell({
-                  chosen: entry.i === props.value,
-                  distance: Math.abs(entry.i - props.value),
-                  focused: props.focused,
-                  changed: props.changed && entry.i === props.value,
-                });
-              return (
-                <div
-                  class="relative flex shrink-0 items-center justify-center transition-transform duration-150"
-                  style={{
-                    width: entry.item.icon !== undefined ? `${ICON_CELL}px` : undefined,
-                    'min-width': `${strip().min}px`,
-                    padding: entry.item.icon !== undefined ? undefined : `0 ${strip().pad}px`,
-                    ...look().style,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.pick(entry.i);
-                  }}
-                >
-                  <Show
-                    when={entry.item.icon}
-                    fallback={
-                      <span class={strip().font} style={{ color: look().ink }}>
-                        {props.design.text?.(entry.item.name) ?? entry.item.name}
-                      </span>
-                    }
-                  >
-                    {(icon) => (
-                      <Ink src={stock(icon())} class="h-[24px] w-[46px]" color={look().ink} />
-                    )}
-                  </Show>
-                  <Marks look={look()} />
-                </div>
-              );
-            }}
-          </For>
-        </div>
-      </div>
-      <Show when={depth() === 'shadow'}>
-        {/* The drawer is a recess: its walls shade both ends and the top,
-            whether or not anything lies past them. */}
-        <span
-          class="pointer-events-none absolute inset-0"
-          style={{
-            background: `linear-gradient(to right, ${strip().ends.shadow}, transparent ${LANE + 14}px, transparent calc(100% - ${LANE + 14}px), ${strip().ends.shadow})`,
-            'box-shadow': `inset 0 5px 6px -4px ${strip().ends.shadow}`,
-          }}
-        />
-      </Show>
-      <For each={['left', 'right'] as const}>
-        {(side) => (
-          <Show when={side === 'left' ? before() : after()}>
-            <span
-              class="pointer-events-none absolute inset-y-0 flex items-center"
-              style={{ [side]: '3px' }}
-            >
-              <Chevron side={side} ink={strip().ends.ink} halo={strip().ends.halo} />
-            </span>
-          </Show>
-        )}
-      </For>
-    </div>
-  );
-}
-
-/** The toolkit's chevron, small, pointing toward the choices past this end. */
-function Chevron(props: { side: 'left' | 'right'; ink: string; halo?: string }) {
-  return (
-    <svg
-      width="9"
-      height="16"
-      viewBox="0 0 9 16"
-      style={{
-        color: props.ink,
-        filter: props.halo ? `drop-shadow(0 1px 1px ${props.halo})` : undefined,
-      }}
-    >
-      <path
-        d={props.side === 'left' ? 'M7 2l-5 6 5 6' : 'M2 2l5 6-5 6'}
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
-  );
-}
-
-type SliderProps = ControlProps & { setting: SliderSetting; value: number };
-
-/** FUJIMOD SET-UP's segment bar: zero to the value filled, the value itself a
- * square thumb that carries the number. */
-function ThumbSlider(props: SliderProps & { colors: ThumbColors }) {
-  const look = () => props.colors.value({ focused: props.focused, changed: props.changed });
-  const count = () => props.setting.steps.length;
-  const zero = () => props.setting.steps.indexOf(0);
-  const x = (i: number) => `calc(${INSET}px + (100% - ${2 * INSET}px) * ${i / (count() - 1)})`;
-  return (
-    <div
-      class="relative mx-[6px] flex-1"
-      onClick={(e) => {
-        const element = e.currentTarget;
-        e.stopPropagation();
-        const box = element.getBoundingClientRect();
-        const scale = box.width / element.offsetWidth;
-        const inner = (e.clientX - box.left) / scale - INSET;
-        const i = Math.round((inner / (element.offsetWidth - 2 * INSET)) * (count() - 1));
-        props.pick(Math.max(0, Math.min(count() - 1, i)));
-      }}
-    >
-      <div
-        class="absolute top-1/2 h-[2px] -translate-y-1/2"
-        style={{ left: `${INSET}px`, right: `${INSET}px`, background: props.colors.track }}
-      />
-      <div
-        class="absolute top-1/2 h-[4px] -translate-y-1/2"
-        style={{
-          left: x(Math.min(zero(), props.value)),
-          width: `calc((100% - ${2 * INSET}px) * ${Math.abs(props.value - zero()) / (count() - 1)})`,
-          background: props.colors.fill,
-        }}
-      />
-      <For each={props.setting.steps.map((step, i) => i)}>
-        {(i) => (
-          <span
-            class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-            style={{
-              left: x(i),
-              width: i === zero() ? '4px' : '2px',
-              height: i === zero() ? '26px' : '10px',
-              background: i === zero() ? props.colors.zero : props.colors.tick,
-            }}
-          />
-        )}
-      </For>
-      <span
-        class="absolute inset-y-0 flex -translate-x-1/2"
-        style={{ left: x(props.value), padding: `${FRAME + FRAME_GAP}px` }}
-      >
-        <span
-          class="relative flex min-w-[40px] items-center justify-center px-[4px]"
-          style={look().style}
-        >
-          <span
-            class="text-[17px] leading-none font-semibold tabular-nums"
-            style={{ color: look().ink }}
-          >
-            {fmt(props.setting.steps[props.value])}
-          </span>
-          <Marks look={look()} />
-        </span>
-      </span>
-    </div>
-  );
-}
-
 /** One setting's controls, beside its group's icon. */
-/** Steps between labeled ticks. */
-const RULER_DIVISIONS = 4;
-
-function RulerSlider(props: SliderProps & { ruler: Ruler; width: number }) {
-  const ruler = () => props.ruler;
-  const mark = () => ({ focused: props.focused, changed: props.changed });
-  const count = () => props.setting.steps.length;
-  const zero = () => Math.max(0, props.setting.steps.indexOf(0));
-  const pad = 26;
-  const spacing = () => (ruler().fixed ? (props.width - 2 * pad) / (count() - 1) : ruler().spacing);
-  /** Where step 0 sits in the control. */
-  const origin = () => (ruler().fixed ? pad : props.width / 2 - props.value * spacing());
-  const low = () => Math.min(zero(), props.value);
-  const high = () => Math.max(zero(), props.value);
-  const ticks = () => Array.from({ length: (count() - 1) * RULER_DIVISIONS + 1 }, (_, t) => t);
-  return (
-    <div
-      class="relative h-full overflow-hidden"
-      style={{
-        width: `${props.width}px`,
-        'mask-image': ruler().fixed
-          ? undefined
-          : 'linear-gradient(to right, transparent, #000 44px, #000 calc(100% - 44px), transparent)',
-      }}
-      onClick={(e) => {
-        const element = e.currentTarget;
-        e.stopPropagation();
-        const box = element.getBoundingClientRect();
-        const local = ((e.clientX - box.left) / box.width) * element.offsetWidth;
-        const i = Math.round((local - origin()) / spacing());
-        props.pick(Math.max(0, Math.min(count() - 1, i)));
-      }}
-    >
-      <div
-        class="absolute inset-y-0 left-0 transition-transform duration-150 ease-out"
-        style={{ transform: `translateX(${origin()}px)` }}
-      >
-        <For each={ticks()}>
-          {(t) => {
-            const at = t / RULER_DIVISIONS;
-            const major = t % RULER_DIVISIONS === 0;
-            const lit = () => at >= low() && at <= high() && high() > low();
-            return (
-              <span
-                class="absolute bottom-[calc(50%-16px)] -translate-x-1/2 transition-colors duration-150"
-                style={{
-                  left: `${at * spacing()}px`,
-                  width: major ? '2px' : '1px',
-                  height: `${at === zero() ? 15 : major ? 11 : lit() ? 8 : 6}px`,
-                  background: lit() ? ruler().fill : major ? ruler().major : ruler().tick,
-                }}
-              />
-            );
-          }}
-        </For>
-        <For each={props.setting.steps}>
-          {(step, i) => (
-            <Show when={i() !== props.value && ruler().label}>
-              {(color) => (
-                <span
-                  class={`absolute top-[calc(50%-15px)] -translate-x-1/2 leading-none tabular-nums ${ruler().font}`}
-                  style={{ left: `${i() * spacing()}px`, color: color() }}
-                >
-                  {fmt(step)}
-                </span>
-              )}
-            </Show>
-          )}
-        </For>
-      </div>
-      <span
-        class="absolute top-[calc(50%-17px)] -translate-x-1/2 text-[16px] leading-none font-semibold tabular-nums transition-[left] duration-150 ease-out"
-        style={{ left: `${origin() + props.value * spacing()}px`, color: ruler().chosen(mark()) }}
-      >
-        {fmt(props.setting.steps[props.value])}
-      </span>
-      <span
-        class="absolute bottom-[calc(50%-19px)] h-[20px] w-[3px] -translate-x-1/2 rounded-full transition-[left] duration-150 ease-out"
-        style={{ left: `${origin() + props.value * spacing()}px`, background: ruler().chosen(mark()) }}
-      />
-    </div>
-  );
-}
-
 function SettingRow(props: {
   setting: Setting;
   index: number;
@@ -933,64 +421,54 @@ function SettingRow(props: {
 }) {
   const d = () => props.design;
   const controlWidth = () => props.width - ICON_COLUMN - 1 - (d().lines.right ?? 0);
+  const controlHeight = () => ROW - d().lines.top - d().lines.bottom;
   const pick = (value: number) =>
     props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
+  const focus = () => props.send({ focus: props.index, side: props.side });
   return (
     <div
       class="relative flex items-stretch"
       style={{
         height: `${ROW}px`,
-        ...d().row(props.focused),
         'padding-top': `${d().lines.top}px`,
         'padding-bottom': `${d().lines.bottom}px`,
         'padding-right': `${d().lines.right ?? 0}px`,
       }}
-      onClick={() => props.send({ focus: props.index, side: props.side })}
     >
       <Show
         when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
         fallback={
-          <Strip
-            items={(props.setting as ChoiceSetting).choices}
+          <Choice
+            items={(props.setting as ChoiceSetting).choices.map((choice): ChoiceItem =>
+              choice.icon === undefined
+                ? choice.name
+                : { name: choice.name, art: (ink) => <Ink src={stock(choice.icon!)} class="h-[24px] w-[46px]" color={ink} /> },
+            )}
             value={props.recipe[props.setting.id]}
             width={controlWidth()}
-            design={d()}
+            height={controlHeight()}
             focused={props.focused}
             changed={props.changed}
             pick={pick}
+            onFocus={focus}
           />
         }
       >
         {(slider) => (
-          <div class="flex flex-1 overflow-hidden" style={d().strip.track(props.focused)}>
-            <Show
-              when={'kind' in d().slider ? (d().slider as Ruler) : undefined}
-              fallback={
-                <ThumbSlider
-                  setting={slider()}
-                  colors={d().slider as ThumbColors}
-                  value={props.recipe[slider().id]}
-                  design={d()}
-                  focused={props.focused}
-                  changed={props.changed}
-                  pick={pick}
-                />
-              }
-            >
-              {(ruler) => (
-                <RulerSlider
-                  setting={slider()}
-                  ruler={ruler()}
-                  width={controlWidth()}
-                  value={props.recipe[slider().id]}
-                  design={d()}
-                  focused={props.focused}
-                  changed={props.changed}
-                  pick={pick}
-                />
-              )}
-            </Show>
-          </div>
+          <Dial
+            value={props.recipe[slider().id]}
+            min={0}
+            max={slider().steps.length - 1}
+            step={1}
+            zero={Math.max(0, slider().steps.indexOf(0))}
+            format={(i) => fmt(slider().steps[i])}
+            width={controlWidth()}
+            height={controlHeight()}
+            focused={props.focused}
+            changed={props.changed}
+            set={pick}
+            onFocus={focus}
+          />
         )}
       </Show>
     </div>
@@ -1061,7 +539,7 @@ function SettingGroup(props: {
   );
 }
 
-/** The settings column. In compare, the same rows render once for A and once for B. */
+/** The settings column, a scroller of rows. In compare, the same rows render once for A and once for B. */
 function Column(props: {
   recipe: Recipe;
   other?: Recipe;
@@ -1071,10 +549,34 @@ function Column(props: {
   design: Design;
   side?: Side;
   active?: boolean;
+  /** Shared by A and B so they scroll together, and read by the fly-outs. */
+  scroll: number;
+  setScroll: (top: number) => void;
   send: Send;
 }) {
-  const height = () => 480;
-  const scroll = () => scrollFor(props.focus, height());
+  let scroller: HTMLDivElement | undefined;
+  /* Another column (A or B) moved: follow it. */
+  createEffect(
+    () => props.scroll,
+    (top) => {
+      if (scroller && Math.abs(scroller.scrollTop - top) > 1) scroller.scrollTop = top;
+    },
+  );
+  /* A key moved the focus: bring its row into view, smoothly. */
+  let opened = false;
+  createEffect(
+    () => props.focus,
+    (focus) => {
+      if (!scroller || props.active === false) return;
+      const top = focus * ROW;
+      const bottom = top + ROW;
+      const behavior = opened ? 'smooth' : 'auto';
+      opened = true;
+      if (top < scroller.scrollTop + ROW / 2) scroller.scrollTo({ top: top - ROW, behavior });
+      else if (bottom > scroller.scrollTop + scroller.clientHeight - ROW / 2)
+        scroller.scrollTo({ top: bottom - scroller.clientHeight + ROW, behavior });
+    },
+  );
   return (
     <div
       class="absolute inset-y-0 flex flex-col"
@@ -1086,27 +588,25 @@ function Column(props: {
       }}
     >
       <div
-        class="relative flex-1 overflow-hidden"
-        style={{
-          'mask-image': `linear-gradient(to bottom, ${scroll() > 0 ? 'transparent' : '#000'}, #000 ${FADE_WIDTH}px, #000 calc(100% - ${FADE_WIDTH}px), ${scroll() < SETTINGS.length * ROW - height() ? 'transparent' : '#000'})`,
-        }}
+        ref={(element) => (scroller = element)}
+        class="relative flex-1 overflow-y-auto overscroll-contain"
+        style={{ 'scrollbar-width': 'none' }}
+        onScroll={(e) => props.setScroll(e.currentTarget.scrollTop)}
       >
-        <div style={{ transform: `translateY(${-scroll()}px)` }}>
-          <For each={GROUPS}>
-            {(rows) => (
-              <SettingGroup
-                rows={rows}
-                recipe={props.recipe}
-                other={props.other}
-                focus={props.active !== false ? props.focus : undefined}
-                width={props.width}
-                design={props.design}
-                side={props.side}
-                send={props.send}
-              />
-            )}
-          </For>
-        </div>
+        <For each={GROUPS}>
+          {(rows) => (
+            <SettingGroup
+              rows={rows}
+              recipe={props.recipe}
+              other={props.other}
+              focus={props.active !== false ? props.focus : undefined}
+              width={props.width}
+              design={props.design}
+              side={props.side}
+              send={props.send}
+            />
+          )}
+        </For>
       </div>
     </div>
   );
@@ -1282,7 +782,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
   const send: Send = (action) => props.send?.(action);
   const design = () => DESIGN;
   const focused = () => SETTINGS[s().focus];
-  const rowTop = () => s().focus * ROW - scrollFor(s().focus, 480);
+  const [scroll, setScroll] = createSignal(0);
+  const rowTop = () => s().focus * ROW - scroll();
   const colors = palette(null);
   const compare = () => (s().comparing ? s().snapshot : undefined);
 
@@ -1333,6 +834,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
             <For each={['a', 'b'] as Side[]}>
               {(side) => (
                 <Column
+                  scroll={scroll()}
+                  setScroll={setScroll}
                   recipe={side === 'a' ? a() : s().recipe}
                   other={side === 'a' ? s().recipe : a()}
                   focus={s().focus}
@@ -1351,6 +854,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
 
       <Show when={!compare()}>
         <Column
+          scroll={scroll()}
+          setScroll={setScroll}
           recipe={s().recipe}
           other={s().snapshot}
           focus={s().focus}
