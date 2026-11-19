@@ -1,10 +1,21 @@
 //! Bounded physical power-controller SPI register protocol, not a CPU harness.
 //! 10a09fc clocks a 24-bit frame; 10a1d40 supplies the six-bit register address.
+//!
+//! Selector 23 carries one observed command, `0x0400`, and selector 24 returns
+//! the raw accessory status word. Its consumers test bits 2-4 for the headphone
+//! state and bits 0-1 for the power-source class, so the pair is modeled as a
+//! command plus one declared status input instead of a retained register.
 use crate::{rtc::Counter, spi::Input};
 use fujimod_emulator_ip::socionext::gpio::SharedPins;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+/// Accessory status command selector; the only observed payload is below.
+const ACCESSORY_COMMAND_REGISTER: u8 = 23;
+/// Accessory status word selector; read-only and declared by the profile.
+const ACCESSORY_STATUS_REGISTER: u8 = 24;
+/// The one observed accessory status command: request a status sample.
+const ACCESSORY_STATUS_REQUEST: u16 = 0x0400;
 /// Direct stop/load/start law over the shared counter.
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
@@ -88,6 +99,7 @@ impl PowerSerial {
             || pin >= 16
             || inputs
                 .keys()
+                // 24: declared accessory status word
                 // 48..=55: initial contents of the retained profile registers
                 .any(|k| !matches!(*k, 0..=6 | 16 | 21 | 24 | 27 | 32 | 34 | 35 | 48..=55))
             || [0, 1, 2, 3, 32, 34, 35]
@@ -132,15 +144,20 @@ impl PowerSerial {
         header & 1 != 0 && self.command_output.as_ref().is_some_and(|c|
             c.register == header >> 2 && c.bank == (header & 2 != 0))
     }
+    fn accessory_status(&self) -> Option<u16> {
+        self.inputs.get(&ACCESSORY_STATUS_REGISTER).copied()
+    }
     fn admitted_header(&self, header: u8) -> bool {
         let register = header >> 2;
         let bank = header & 2 != 0;
-        let probe = self.inputs.contains_key(&24);
-        if bank && (matches!(register, 32 | 34 | 35) || probe && matches!(register, 23 | 24)) {
+        let status = self.accessory_status().is_some();
+        if bank && (matches!(register, 32 | 34 | 35) || status && matches!(register, 23 | 24)) {
             return false;
         }
         if header & 1 != 0 {
-            Self::writable(register) || probe && register == 23 || self.output_header(header)
+            Self::writable(register)
+                || status && register == ACCESSORY_COMMAND_REGISTER
+                || self.output_header(header)
         } else {
             Self::writable(register) || self.inputs.contains_key(&register)
         }
@@ -251,14 +268,17 @@ impl Input for PowerSerial {
                 if bank && matches!(register, 32 | 34 | 35) {
                     return Err("Power RTC second bank is not modeled".into());
                 }
-                // Input 24 opts into a provisional fixed-response fixture.
-                // The board accepts it only in discovery, never as strict hardware.
-                let probe = self.inputs.contains_key(&24);
-                if probe && bank && matches!(register, 23 | 24) {
-                    return Err("Provisional power probe supports bank zero only".into());
+                // Selector 23 is admitted only alongside the declared status word,
+                // because the pair has no meaning without a response.
+                let status = self.accessory_status().is_some();
+                if status && bank && matches!(register, 23 | 24) {
+                    return Err("Accessory status pair supports bank zero only".into());
                 }
                 if tx & 1 != 0 {
-                    if !Self::writable(register) && !(probe && register == 23) && !self.output_header(tx) {
+                    if !Self::writable(register)
+                        && !(status && register == ACCESSORY_COMMAND_REGISTER)
+                        && !self.output_header(tx)
+                    {
                         return Err(format!("Unsupported power SPI write register{register}"));
                     }
                     self.response = 0;
@@ -293,13 +313,16 @@ impl Input for PowerSerial {
                         let count = self.accepted_output.as_ref().map_or(0, |o| o.count)
                             .checked_add(1).ok_or("Command output count overflow")?;
                         self.accepted_output = Some(AcceptedOutput { command: command.clone(), count });
-                    } else if register == 23 {
-                        if !self.inputs.contains_key(&24) || self.header & 2 != 0 || value != 0x0400
+                    } else if register == ACCESSORY_COMMAND_REGISTER {
+                        // Both observed callers send this one command and then read
+                        // the status word. Nothing in the firmware retains a register
+                        // value, ready bit, or completion latency for the command.
+                        if self.accessory_status().is_none()
+                            || self.header & 2 != 0
+                            || value != ACCESSORY_STATUS_REQUEST
                         {
-                            return Err("Unsupported provisional power probe payload".into());
+                            return Err("Unsupported power accessory status command".into());
                         }
-                        // No retained register, inferred ready bit, or latency law:
-                        // selector 24 remains the explicitly declared raw input.
                     } else if matches!(register, 32 | 34 | 35) {
                         self.rtc.write(register, value, tick)?;
                     } else {
@@ -584,7 +607,7 @@ mod tests {
     }
 
     #[test]
-    fn provisional_probe_is_explicit_exact_and_preserves_raw_status() {
+    fn accessory_status_command_is_exact_and_preserves_the_raw_word() {
         let pins = Pins::new([0; 16]);
         let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
         let make = |status: Option<u16>| {
@@ -614,6 +637,18 @@ mod tests {
             assert_eq!(restored.exchange(8, 0, 0).unwrap(), status & 255);
             assert!(make(Some(status ^ 1)).restore(&saved).is_err());
         }
+        // The two observed consumers read disjoint bitfields of one raw word.
+        let observed = 0x00a5u16;
+        assert_ne!(observed & 0x1c, 0x0c);
+        assert!(matches!(observed & 3, 1 | 2));
+        let mut repeat = make(Some(observed));
+        for _ in 0..2 {
+            for byte in [0x5d, 0x04, 0x00] {
+                repeat.exchange(8, byte, 0).unwrap();
+            }
+        }
+        assert_eq!(repeat.save()["registers"], json!([]));
+        assert_eq!(repeat.save()["inputs"], make(Some(observed)).save()["inputs"]);
         let mut wrong = make(Some(0xa5));
         wrong.exchange(8, 0x5d, 0).unwrap();
         wrong.exchange(8, 4, 0).unwrap();
