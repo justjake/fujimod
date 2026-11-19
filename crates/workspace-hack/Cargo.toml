@@ -96,17 +96,19 @@ errno = { version = "0.3" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
-futures-sink = { version = "0.3", default-features = false, features = ["std"] }
+futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
-indexmap = { version = "2" }
+indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
 prost-types = { version = "0.14" }
+rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 sha2 = { version = "0.10", features = ["asm-aarch64"] }
@@ -114,6 +116,7 @@ smallvec = { version = "1", default-features = false, features = ["const_new", "
 subtle = { version = "2" }
 tempfile = { version = "3" }
 tokio = { version = "1", features = ["full"] }
+tracing = { version = "0.1", features = ["log"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
@@ -128,17 +131,19 @@ errno = { version = "0.3" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
-futures-sink = { version = "0.3", default-features = false, features = ["std"] }
+futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
-indexmap = { version = "2" }
+indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
 prost-types = { version = "0.14" }
+rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 sha2 = { version = "0.10", features = ["asm-aarch64"] }
@@ -147,6 +152,7 @@ subtle = { version = "2" }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
 tempfile = { version = "3" }
 tokio = { version = "1", features = ["full"] }
+tracing = { version = "0.1", features = ["log"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
@@ -160,20 +166,25 @@ digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["m
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
-futures-sink = { version = "0.3", default-features = false, features = ["std"] }
+futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
+rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
+schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = { version = "0.1", features = ["log"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
@@ -187,21 +198,26 @@ digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["m
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
-futures-sink = { version = "0.3", default-features = false, features = ["std"] }
+futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
 getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
 getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
+indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
+rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
+schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = { version = "0.1", features = ["log"] }
 
 [target.wasm32-unknown-unknown.dependencies]
 bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
@@ -229,7 +245,6 @@ bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2", features = ["extra_traits"] }
-nix = { version = "0.31", features = ["fs", "signal"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
@@ -239,7 +254,6 @@ bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2", features = ["extra_traits"] }
-nix = { version = "0.31", features = ["fs", "signal"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }
