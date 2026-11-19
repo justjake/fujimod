@@ -597,8 +597,8 @@ const TOOLS: Tool[] = ['curve', 'color', 'mix', 'tone', 'channels'];
 type Section = 'film' | 'raw' | 'custom' | Tool;
 /** The stops above the tools: the film's name and files, the RAW file and the
  * custom setting. */
-type Meta = 'name' | 'saveas' | 'open' | 'strip' | 'create' | 'custom';
-const META_SECTION: Record<Meta, Section> = { name: 'film', saveas: 'film', open: 'film', strip: 'raw', create: 'raw', custom: 'custom' };
+type Meta = 'icon' | 'name' | 'saveas' | 'open' | 'strip' | 'create' | 'custom';
+const META_SECTION: Record<Meta, Section> = { icon: 'film', name: 'film', saveas: 'film', open: 'film', strip: 'raw', create: 'raw', custom: 'custom' };
 const TOOL_NAMES: Record<Tool, string> = {
   curve: 'TONE CURVE',
   color: 'COLOR',
@@ -807,6 +807,10 @@ interface State {
   /** The film's name on the SD card, and the film it was made from. */
   name: string;
   from: string | null;
+  /** The film's icon, a FILM ICONS slug. */
+  icon: string;
+  /** Typing the film's name. */
+  keyboard: Typing | null;
   /** The tone curve over the whole picture. */
   full: boolean;
   strip: StripStyle;
@@ -840,29 +844,82 @@ const EDITED: Film = (() => {
   };
 })();
 
-type Picker = { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
+type Picker = { kind: 'icon'; at: number } | { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
 
 /** Films on the SD card, standing in as edits of the built-in ones. */
-const CARD_FILMS: { name: string; from: string; film: () => Film }[] = [
-  { name: 'NEW FILM', from: 'Classic Chrome', film: () => EDITED },
-  { name: 'WARM FADE', from: 'CLASSIC Neg.', film: () => ({ ...baseFilm(6), saturation: -25, bands: [-30, -10, 0, 0, -20] }) },
-  { name: 'NIGHT STREET', from: 'ETERNA', film: () => ({ ...baseFilm(5), red: 1, blue: 1 }) },
-  { name: 'SOFT PORTRAIT', from: 'ASTIA', film: () => ({ ...baseFilm(2), saturation: -5 }) },
+const CARD_FILMS: { name: string; from: string; icon: string; film: () => Film }[] = [
+  { name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', film: () => EDITED },
+  { name: 'WARM FADE', from: 'CLASSIC Neg.', icon: 'custom', film: () => ({ ...baseFilm(6), saturation: -25, bands: [-30, -10, 0, 0, -20] }) },
+  { name: 'NIGHT STREET', from: 'ETERNA', icon: 'eterna', film: () => ({ ...baseFilm(5), red: 1, blue: 1 }) },
+  { name: 'SOFT PORTRAIT', from: 'ASTIA', icon: 'astia', film: () => ({ ...baseFilm(2), saturation: -5 }) },
 ];
+
+/* Our own film artwork (the FILM ICONS packs), by the slug a film file's
+   "icon" names. */
+const ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-hi', 'pro-neg-std', 'eterna', 'bleach-bypass', 'classic-neg', 'nostalgic-neg', 'reala-ace', 'neutral',
+  'acros', 'acros-ye', 'acros-r', 'acros-g', 'mono', 'mono-ye', 'mono-r', 'mono-g', 'sepia', 'leica-x', 'custom', 'text:'];
+/** Our own letters: 1 to 4, capitals or small capitals (typed small), in the tile. */
+const MONOGRAM_LIMIT = 4;
+const ICON_COLUMNS = 6;
+const BASE_ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-std', 'eterna', 'classic-neg'];
+const filmIcon = (slug: string) => `/review/film-icons/a-${slug}.svg`;
+
+function FilmIcon(props: { slug: string; size: number; color: string }) {
+  if (props.slug.startsWith('text:')) {
+    const code = props.slug.slice(5) || 'Aa';
+    const em = props.size * [0.5, 0.5, 0.46, 0.36, 0.28][code.length];
+    return (
+      <span
+        class="flex shrink-0 items-center justify-center rounded-[18%] font-bold"
+        style={{
+          width: `${props.size}px`,
+          height: `${props.size}px`,
+          'box-shadow': `inset 0 0 0 ${props.size / 12}px ${props.color}`,
+          color: props.color,
+          'font-size': `${em}px`,
+          'font-variant': 'small-caps',
+          'font-stretch': 'condensed',
+          'letter-spacing': '-0.02em',
+          'text-transform': 'none',
+          opacity: props.slug === 'text:' ? 0.6 : 1,
+        }}
+      >
+        {code}
+      </span>
+    );
+  }
+  return (
+    <span
+      class="block shrink-0"
+      style={{
+        width: `${props.size}px`,
+        height: `${props.size}px`,
+        background: props.color,
+        'mask-image': `url(${filmIcon(props.slug)})`,
+        'mask-size': 'contain',
+        'mask-repeat': 'no-repeat',
+        'mask-position': 'center',
+      }}
+    />
+  );
+}
 
 /** Options are film numbers: the SD card's films, then the built-in ones. */
 function pickerOptions(p: Picker): (number | 'opened')[] {
+  if (p.kind === 'icon') return ICONS.map((_, i) => i);
   if (p.kind === 'open') return [...CARD_FILMS.map((_, i) => i), ...BASES.map((_, i) => CARD_FILMS.length + i)];
   return p.kind === 'compare' ? ['opened', ...BASES.map((_, i) => i)] : BASES.map((_, i) => i);
 }
 
 function pickerLabel(p: Picker, k: number | 'opened'): string {
   if (k === 'opened') return 'AS OPENED';
+  if (p.kind === 'icon') return ICONS[k];
   if (p.kind !== 'open') return BASES[k].name;
   return k < CARD_FILMS.length ? CARD_FILMS[k].name : BASES[k - CARD_FILMS.length].name;
 }
 
 function pickerCurrent(s: State, p: Picker): number | 'opened' | undefined {
+  if (p.kind === 'icon') return s.icon.startsWith('text:') ? ICONS.length - 1 : ICONS.indexOf(s.icon);
   if (p.kind === 'copy') return groupSource(s.film, p.tool);
   if (p.kind === 'compare') return s.compare?.b;
   const card = CARD_FILMS.findIndex((c) => c.name === s.name);
@@ -872,6 +929,9 @@ function pickerCurrent(s: State, p: Picker): number | 'opened' | undefined {
 function choose(s: State, p: Picker, k: number | 'opened'): State {
   if (k === 'opened') return p.kind === 'compare' ? { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } } : s;
   switch (p.kind) {
+    case 'icon':
+      if (ICONS[k] === 'text:') return { ...s, picker: null, keyboard: { text: s.icon.startsWith('text:') ? s.icon.slice(5) : '', row: 0, col: 0, digits: false, target: 'icon', small: false } };
+      return { ...s, picker: null, icon: ICONS[k] };
     case 'copy':
       return { ...s, picker: null, film: copyGroup(s.film, p.tool, k) };
     case 'compare':
@@ -880,10 +940,10 @@ function choose(s: State, p: Picker, k: number | 'opened'): State {
       /* An SD card film opens as itself; a built-in one as a new film made from it. */
       if (k < CARD_FILMS.length) {
         const card = CARD_FILMS[k];
-        return { ...s, picker: null, name: card.name, from: card.from, film: card.film(), opened: card.film() };
+        return { ...s, picker: null, name: card.name, from: card.from, icon: card.icon, film: card.film(), opened: card.film() };
       }
       const base = k - CARD_FILMS.length;
-      return { ...s, picker: null, name: 'NEW FILM', from: BASES[base].name, film: baseFilm(base), opened: baseFilm(base) };
+      return { ...s, picker: null, name: 'NEW FILM', from: BASES[base].name, icon: BASE_ICONS[base], film: baseFilm(base), opened: baseFilm(base) };
     }
   }
 }
@@ -895,14 +955,14 @@ function saveAs(s: State): State {
   return { ...s, name, from: s.name };
 }
 
-function openPicker(s: State, p: { kind: 'copy'; tool: Tool } | { kind: 'compare' } | { kind: 'open' }): State {
+function openPicker(s: State, p: { kind: 'icon' } | { kind: 'copy'; tool: Tool } | { kind: 'compare' } | { kind: 'open' }): State {
   const current = pickerCurrent(s, { ...p, at: 0 });
   const at = Math.max(0, pickerOptions({ ...p, at: 0 }).indexOf(current ?? -1));
   return { ...s, picker: { ...p, at } };
 }
 
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', full: false, strip: 'frames', created: 0, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, ...over };
 }
 
 const RAIL = 60;
@@ -926,7 +986,7 @@ function railSections(s: State): Section[] {
 
 /** The stops above the tools, a row at a time; a row of two buttons is one row. */
 function metaRows(s: State): Meta[][] {
-  return [['name'], ['saveas', 'open'], ...(s.crop ? ([['strip'], ['create']] as Meta[][]) : []), ['custom']];
+  return [['icon', 'name'], ['saveas', 'open'], ...(s.crop ? ([['strip'], ['create']] as Meta[][]) : []), ['custom']];
 }
 
 /** The section the focus is in, or on the rail, the section chosen there. */
@@ -937,19 +997,82 @@ function currentSection(s: State): Section {
 }
 
 function enterSection(s: State, section: Section): State {
-  if (section === 'film') return { ...s, area: 'name', railOn: null };
+  if (section === 'film') return { ...s, area: 'icon', railOn: null };
   if (section === 'raw') return { ...s, area: 'strip', railOn: null };
   if (section === 'custom') return { ...s, area: 'custom', railOn: null };
   return { ...s, area: 'rows', railOn: null, focus: firstOf(section), header: false };
+}
+
+/* ---- Name keyboard ------------------------------------------------------------- */
+
+type Typing = { text: string; row: number; col: number; digits: boolean; target: 'name' | 'icon'; small: boolean };
+const LETTERS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+const DIGITS = ['1234567890', "-/:;()&@'", '.,?!+#*'];
+const NAME_LIMIT = 16;
+
+function keyRows(t: Typing): string[][] {
+  const letters = (t.digits ? DIGITS : LETTERS).map((r) => r.split('').map((c) => (t.small ? c.toLowerCase() : c)));
+  return [...letters, t.target === 'icon' ? [t.digits ? 'ABC' : '123', t.small ? 'ᴀʙᴄ' : 'Aᴀ', 'DEL', 'OK'] : [t.digits ? 'ABC' : '123', 'SPACE', 'DEL', 'OK']];
+}
+
+function typeKey(s: State, t: Typing, key: string): State {
+  switch (key) {
+    case 'OK':
+      if (t.target === 'icon') return { ...s, keyboard: null, icon: t.text ? `text:${t.text}` : s.icon };
+      return { ...s, keyboard: null, name: t.text.trim() || s.name };
+    case 'Aᴀ':
+    case 'ᴀʙᴄ':
+      return { ...s, keyboard: { ...t, small: !t.small } };
+    case 'DEL':
+      return { ...s, keyboard: { ...t, text: t.text.slice(0, -1) } };
+    case '123':
+    case 'ABC': {
+      const next = { ...t, digits: !t.digits };
+      return { ...s, keyboard: { ...next, col: Math.min(t.col, keyRows(next)[t.row].length - 1) } };
+    }
+    case 'SPACE':
+      key = ' ';
+  }
+  return t.text.length < (t.target === 'icon' ? MONOGRAM_LIMIT : NAME_LIMIT) ? { ...s, keyboard: { ...t, text: t.text + key } } : s;
+}
+
+function pressKeyboard(s: State, t: Typing, key: Key): State {
+  const rows = keyRows(t);
+  const move = (row: number) => {
+    const from = rows[t.row].length, to = rows[row].length;
+    return { ...t, row, col: Math.round((t.col / Math.max(1, from - 1)) * (to - 1)) };
+  };
+  switch (key) {
+    case 'left':
+      return { ...s, keyboard: { ...t, col: (t.col + rows[t.row].length - 1) % rows[t.row].length } };
+    case 'right':
+      return { ...s, keyboard: { ...t, col: (t.col + 1) % rows[t.row].length } };
+    case 'up':
+      return t.row > 0 ? { ...s, keyboard: move(t.row - 1) } : s;
+    case 'down':
+      return t.row < rows.length - 1 ? { ...s, keyboard: move(t.row + 1) } : s;
+    case 'ok':
+      return typeKey(s, t, rows[t.row][t.col]);
+    case 'dial-':
+      return typeKey(s, t, 'DEL');
+    case 'back':
+      return { ...s, keyboard: null };
+  }
+  return s;
 }
 
 function press(s: State, key: Key): State {
   const control = CONTROLS[s.focus];
   const f = s.film;
   const d = key === 'left' || key === 'down' || key === 'dial-' ? -1 : 1;
+  if (s.keyboard) return pressKeyboard(s, s.keyboard, key);
   if (s.picker) {
     const p = s.picker;
     const options = pickerOptions(p);
+    if (p.kind === 'icon') {
+      const step = { left: -1, right: 1, up: -ICON_COLUMNS, down: ICON_COLUMNS, 'dial-': -1, 'dial+': 1 }[key as string];
+      if (step !== undefined) return { ...s, picker: { ...p, at: Math.max(0, Math.min(options.length - 1, p.at + step)) } };
+    }
     switch (key) {
       case 'up':
       case 'dial-':
@@ -1000,9 +1123,9 @@ function press(s: State, key: Key): State {
     const row = grid[r];
     switch (key) {
       case 'up':
-        return r > 0 ? { ...s, area: grid[r - 1][0] } : s;
+        return r > 0 ? { ...s, area: grid[r - 1][Math.min(row.indexOf(area), grid[r - 1].length - 1)] } : s;
       case 'down':
-        return r < grid.length - 1 ? { ...s, area: grid[r + 1][0] } : { ...s, area: 'rows', focus: 0, header: true };
+        return r < grid.length - 1 ? { ...s, area: grid[r + 1][Math.min(row.indexOf(area), grid[r + 1].length - 1)] } : { ...s, area: 'rows', focus: 0, header: true };
       case 'back':
         return { ...s, area: 'rail', railOn: META_SECTION[area] as 'film' | 'raw' | 'custom' };
     }
@@ -1022,8 +1145,10 @@ function press(s: State, key: Key): State {
         return key === 'ok' ? openPicker(s, { kind: 'open' }) : s;
       case 'saveas':
         return key === 'ok' ? saveAs(s) : s;
+      case 'icon':
+        return key === 'ok' ? openPicker(s, { kind: 'icon' }) : s;
       case 'name':
-        return s;
+        return key === 'ok' ? { ...s, keyboard: { text: s.name, row: 0, col: 0, digits: false, target: 'name', small: false } } : s;
     }
   }
   if (s.inside) {
@@ -1394,7 +1519,7 @@ function Editor(props: {
         style={{
           width: `${RAIL + SCROLLER}px`,
           ...props.column,
-          ...(s().full ? { opacity: 0, 'pointer-events': 'none' } : {}),
+          ...(s().full || s().keyboard ? { opacity: 0, 'pointer-events': 'none' } : {}),
           transition: [props.column?.transition, 'opacity 200ms ease-out'].filter(Boolean).join(', '),
         }}
       >
@@ -1431,10 +1556,19 @@ function Editor(props: {
         onScroll={spy}
       >
         <section ref={(element) => (sections.film = element)} class="pt-[8px] pb-[14px]">
+          <div class="mb-[8px] flex gap-[8px]">
+          <button
+            type="button"
+            class="flex size-[57px] shrink-0 items-center justify-center"
+            style={TRACK(s().area === 'icon')}
+            onClick={() => update(openPicker({ ...s(), area: 'icon', railOn: null, header: false, inside: false }, { kind: 'icon' }))}
+          >
+            <FilmIcon slug={s().icon} size={40} color="#fff" />
+          </button>
           <div
-            class="mb-[8px] flex h-[57px] items-center gap-[10px] px-[10px]"
+            class="flex h-[57px] min-w-0 grow items-center gap-[10px] px-[10px]"
             style={TRACK(s().area === 'name')}
-            onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false })}
+            onPointerDown={() => update({ ...s(), area: 'name', railOn: null, header: false, inside: false, keyboard: { text: s().name, row: 0, col: 0, digits: false, target: 'name', small: false } })}
           >
             <div class="flex min-w-0 grow flex-col gap-[5px]">
               <span class={`truncate font-semibold ${TEXT}`}>{s().name}</span>
@@ -1445,6 +1579,7 @@ function Editor(props: {
             <svg width="24" height="24" viewBox="0 0 24 24" class="shrink-0 opacity-70">
               <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" />
             </svg>
+          </div>
           </div>
           <div class="flex gap-[8px]">
             <For each={[['saveas', 'SAVE AS'], ['open', 'OPEN']] as ['saveas' | 'open', string][]}>
@@ -1646,7 +1781,7 @@ function Editor(props: {
         </div>
       </Show>
 
-      <Show when={!s().picker}>
+      <Show when={!s().picker && !s().keyboard}>
         <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]" style={props.chrome}>
           <Show when={s().inside && CONTROLS[s().focus].kind === 'curve'}>
             <Hint glyph="OK" label={s().full ? 'SIDEBAR' : 'FULL SCREEN'} tap={() => update(press(s(), 'ok'))} />
@@ -1662,7 +1797,80 @@ function Editor(props: {
         </div>
       </Show>
 
-      <Show when={s().picker}>
+      <Show when={s().picker?.kind === 'icon' ? s().picker : undefined}>
+        {(picker) => (
+          <div class="absolute top-[8px] bottom-[8px] flex flex-col rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'rgb(30 30 32 / 0.9)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
+            <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>ICON</div>
+            <div class="grid gap-[4px]" style={{ 'grid-template-columns': `repeat(${ICON_COLUMNS}, 1fr)` }}>
+              <For each={ICONS}>
+                {(slug, i) => (
+                  <button
+                    type="button"
+                    class="relative flex aspect-square items-center justify-center rounded-[10px]"
+                    style={picker().at === i() ? { background: '#fff' } : {}}
+                    onClick={() => update(choose(s(), picker(), i()))}
+                  >
+                    <FilmIcon slug={slug} size={36} color={picker().at === i() ? '#000' : '#fff'} />
+                    <Show when={s().icon === slug}>
+                      <span class="absolute top-[3px] right-[3px] size-[8px] rounded-full" style={{ background: ACCENT }} />
+                    </Show>
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      <Show when={s().keyboard}>
+        {(t) => (
+          <div class="absolute inset-0 flex flex-col">
+            <div class="flex items-center gap-[10px] p-[10px]">
+              <div class="flex size-[57px] items-center justify-center rounded-[13px]" style={GLASS}>
+                <FilmIcon slug={t().target === 'icon' ? `text:${t().text}` : s().icon} size={40} color="#fff" />
+              </div>
+              <div class={`flex h-[57px] grow items-center rounded-[13px] px-[14px] font-semibold ${TEXT}`} style={GLASS}>
+                <span class="whitespace-pre" style={{ 'font-variant': t().target === 'icon' ? 'small-caps' : undefined, 'text-transform': 'none' }}>{t().text}</span>
+                <span class="ml-[2px] h-[30px] w-[3px] animate-pulse rounded-full" style={{ background: ACCENT }} />
+                <span class={`ml-auto text-white/50 tabular-nums ${SMALL}`}>
+                  {t().text.length}/{t().target === 'icon' ? MONOGRAM_LIMIT : NAME_LIMIT}
+                </span>
+              </div>
+            </div>
+            <div class="grow" />
+            <div class="flex flex-col gap-[6px] px-[8px] pt-[8px] pb-[10px]" style={{ ...GLASS, background: 'rgb(22 22 24 / 0.78)', 'border-radius': '18px 18px 0 0' }}>
+              <For each={keyRows(t())}>
+                {(row, r) => (
+                  <div class="flex justify-center gap-[6px]">
+                    <For each={row}>
+                      {(key, c) => {
+                        const on = () => t().row === r() && t().col === c();
+                        const wide = key.length > 1;
+                        return (
+                          <button
+                            type="button"
+                            class={`flex h-[50px] items-center justify-center rounded-[10px] font-medium ${wide ? SMALL : TEXT}`}
+                            style={{
+                              width: key === 'SPACE' ? '300px' : wide ? '110px' : '62px',
+                              background: on() ? '#fff' : key === 'OK' ? ACCENT : wide ? 'rgb(255 255 255 / 0.1)' : 'rgb(255 255 255 / 0.2)',
+                              color: on() ? '#000' : '#fff',
+                            }}
+                            onClick={() => update(typeKey({ ...s(), keyboard: { ...t(), row: r(), col: c() } }, { ...t(), row: r(), col: c() }, key))}
+                          >
+                            <span style={{ 'font-variant': t().target === 'icon' ? 'small-caps' : undefined, 'text-transform': 'none' }}>{key === 'DEL' ? '⌫' : key}</span>
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      <Show when={s().picker?.kind !== 'icon' ? s().picker : undefined}>
         {(picker) => {
           const current = () => pickerCurrent(s(), picker());
           const options = () => pickerOptions(picker());
@@ -1671,7 +1879,7 @@ function Editor(props: {
               <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>
                 {(() => {
                   const p = picker();
-                  return p.kind === 'copy' ? `COPY ${TOOL_NAMES[p.tool]} FROM` : p.kind === 'open' ? 'OPEN FILM' : 'COMPARE WITH';
+                  return p.kind === 'icon' ? 'ICON' : p.kind === 'copy' ? `COPY ${TOOL_NAMES[p.tool]} FROM` : p.kind === 'open' ? 'OPEN FILM' : 'COMPARE WITH';
                 })()}
               </div>
               <div class="grow overflow-y-auto" style={{ 'scrollbar-width': 'none' }}>
@@ -1892,6 +2100,9 @@ function Presented() {
 
 const STATES: { id: string; title: string; state: State }[] = [
   { id: 'film', title: 'The film: name, save as, open', state: initial({ area: 'name' }) },
+  { id: 'icon', title: 'Pick the film\'s icon', state: openPicker(initial({ area: 'icon', icon: 'custom' }), { kind: 'icon' }) },
+  { id: 'name', title: 'Type the film\'s name over live view', state: initial({ area: 'name', keyboard: { text: 'WARM FA', row: 1, col: 3, digits: false, target: 'name', small: false } }) },
+  { id: 'monogram', title: 'Letter the icon yourself', state: initial({ area: 'icon', keyboard: { text: 'WF', row: 0, col: 2, digits: false, target: 'icon', small: true } }) },
   { id: 'open', title: 'Open another film', state: openPicker(initial({ area: 'open' }), { kind: 'open' }) },
   { id: 'curve', title: 'Inside the tone curve', state: initial({ focus: 0, knot: 7, inside: true, scrollTo: 'curve' }) },
   { id: 'full', title: 'The tone curve full screen', state: initial({ focus: 0, knot: 7, inside: true, full: true }) },
