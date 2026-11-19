@@ -400,6 +400,11 @@ pub struct StillEngine {
     /// (opt-in, see `crate::still`). Absent, no white balance.
     #[serde(default)]
     pub firmware_white_balance: Option<[u32; 3]>,
+    /// RECC with `firmware_color` only: its still bands also scale their
+    /// chroma by the luma bands the firmware programs into the YCbCr page
+    /// (opt-in, see `crate::still`). Absent, no luma bands.
+    #[serde(default)]
+    pub firmware_luma_bands: bool,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the

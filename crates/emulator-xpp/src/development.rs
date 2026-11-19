@@ -262,13 +262,18 @@ fn byte(v: i32) -> u8 {
 /// [`crate::imaging::WHITE`]), the points joined linearly, a curve's output
 /// taken as its top 8 bits and the chroma offset 128. White balance is off
 /// unless [`FirmwareColor::with_white_balance`] reads the tone page's
-/// channel gains. The pages' other units (brightness gain, chroma modes and
-/// matrix, luma bands, 3D lookup table) are not applied.
+/// channel gains, and the luma bands unless
+/// [`FirmwareColor::with_luma_bands`] reads the YCbCr page's. The pages'
+/// other units (brightness gain, chroma modes and matrix, 3D lookup table)
+/// are not applied.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FirmwareColor {
     matrix: [[i32; 3]; 3],
     /// One 14-bit input to byte lookup per output channel.
     curves: [Vec<u8>; 3],
+    /// The YCbCr page's four luma band bounds and five (slope, Q8 gain)
+    /// bands, when [`Self::with_luma_bands`] reads programmed bands.
+    luma_bands: Option<([i32; 4], [(i32, i32); 5])>,
     ycbcr: [[i32; 3]; 3],
     /// Q12 factors of the tone page's channel gains relative to a declared
     /// reference, when [`Self::with_white_balance`] reads programmed gains.
@@ -282,6 +287,10 @@ const TONE_CURVES: [u64; 3] = [0x224, 0x264, 0x2a4];
 /// and the low half of +0x08c.
 const TONE_GAINS: [(u64, u32); 3] = [(0x088, 0), (0x088, 16), (0x08c, 0)];
 const YCBCR_MATRIX: u64 = 0x204;
+/// The YCbCr page's luma band bounds (+0x258, four bytes) and bands
+/// (+0x25c..+0x26c, five words: signed 11-bit slope low, 10-bit gain high).
+const LUMA_BOUNDS: u64 = 0x258;
+const LUMA_BANDS: u64 = 0x25c;
 
 fn signed13(v: u32) -> i32 {
     ((v << 19) as i32) >> 19
@@ -336,6 +345,7 @@ impl FirmwareColor {
         Ok(Self {
             matrix,
             curves,
+            luma_bands: None,
             ycbcr,
             white_balance: None,
         })
@@ -368,7 +378,8 @@ impl FirmwareColor {
         Ok(self)
     }
     /// Y, Cb, Cr of a 14-bit linear (R, G, B) level: the white balance when
-    /// read, the matrix, each output's curve, then the YCbCr matrix.
+    /// read, the matrix, each output's curve, the YCbCr matrix, then the luma
+    /// bands when read.
     pub fn pixel(&self, linear: [u16; 3]) -> [i32; 3] {
         let mut linear = linear.map(|v| v.min(16383));
         if let Some(factors) = self.white_balance {
@@ -381,11 +392,46 @@ impl FirmwareColor {
         });
         let rgb: [i32; 3] =
             std::array::from_fn(|c| i32::from(self.curves[c][toned[c].clamp(0, 16383) as usize]));
-        std::array::from_fn(|row| {
+        let [y, mut cb, mut cr]: [i32; 3] = std::array::from_fn(|row| {
             let m = self.ycbcr[row];
-            let v = (m[0] * rgb[0] + m[1] * rgb[1] + m[2] * rgb[2] + 512) >> 10;
-            if row == 0 { v } else { v + 128 }
-        })
+            (m[0] * rgb[0] + m[1] * rgb[1] + m[2] * rgb[2] + 512) >> 10
+        });
+        if let Some(f) = self.luma_gain(y) {
+            cb = (cb * f + 128) >> 8;
+            cr = (cr * f + 128) >> 8;
+        }
+        [y, cb + 128, cr + 128]
+    }
+    /// The same law with the luma bands of the YCbCr page's words (opt-in):
+    /// centred Cb and Cr are scaled by `f / 256`, `f = gain + slope * Y / 256`
+    /// of band `k`, the number of bounds (+0x258 bytes) at or below Y
+    /// (0..255): a saturation that follows the luma.
+    ///
+    /// Read: the register format (X-T3 5.11 setter `0x1062e9c`, from the
+    /// filler `0x1d760f8`; the firmware's off state is bounds 0, slopes 0 and
+    /// gains 0x100, which gives `f = 256`, the identity) and the law, which is
+    /// continuous at every bound of the five films recorded and is the X70
+    /// film stage's luma band law at Q8 ([`fujimod_emulator_imaging::film`]).
+    /// Declared: the place right after the YCbCr matrix and the rounding.
+    /// Five zero gains (bands not programmed) leave the stage out.
+    pub fn with_luma_bands(mut self, ycbcr: &BTreeMap<u64, u32>) -> Self {
+        let c = |o: u64| ycbcr.get(&o).copied().unwrap_or(0);
+        let bands: [(i32, i32); 5] = std::array::from_fn(|i| {
+            let w = c(LUMA_BANDS + 4 * i as u64);
+            (((w << 21) as i32) >> 21, ((w >> 16) & 1023) as i32)
+        });
+        self.luma_bands = bands.iter().any(|&(_, gain)| gain != 0).then(|| {
+            let bounds = std::array::from_fn(|i| ((c(LUMA_BOUNDS) >> (8 * i)) & 255) as i32);
+            (bounds, bands)
+        });
+        self
+    }
+    /// The Q8 chroma gain of the luma bands at luma `y`, when read.
+    fn luma_gain(&self, y: i32) -> Option<i32> {
+        let (bounds, bands) = self.luma_bands.as_ref()?;
+        let y = y.clamp(0, 255);
+        let (slope, gain) = bands[bounds.iter().filter(|&&b| b <= y).count()];
+        Some(gain + ((slope * y) >> 8))
     }
 }
 
@@ -861,6 +907,69 @@ pub(crate) mod tests {
         let declared = develop(&raw, stride, lines, width, (2, 2), None).unwrap();
         assert_ne!(declared, out);
         assert!(develop_firmware(&raw, stride, lines, width + 8, (2, 2), &color).is_err());
+    }
+
+    #[test]
+    fn the_luma_bands_keep_the_off_state_and_follow_the_provia_law() {
+        let (tone, mut ycbcr) = firmware_units();
+        let plain = FirmwareColor::from_words(&tone, &ycbcr).unwrap();
+        assert_eq!(plain.luma_bands, None);
+        let inputs = [
+            [0; 3],
+            [16383; 3],
+            [4096; 3],
+            [8192, 2048, 2048],
+            [2048, 2048, 8192],
+            [500, 900, 300],
+            [16383, 9000, 12000],
+        ];
+        let band = |slope: i32, gain: u32| (slope as u32 & 0x7ff) | gain << 16;
+        // Not programmed (five zero gains): the stage is left out.
+        assert_eq!(plain.clone().with_luma_bands(&ycbcr), plain);
+        // Off, as the firmware programs it (bounds 0, slopes 0, gains
+        // 0x100): read, and no pixel changes.
+        ycbcr.insert(0x258, 0);
+        for i in 0..5 {
+            ycbcr.insert(0x25c + 4 * i, band(0, 0x100));
+        }
+        let off = plain.clone().with_luma_bands(&ycbcr);
+        assert!(off.luma_bands.is_some());
+        for x in inputs {
+            assert_eq!(off.pixel(x), plain.pixel(x));
+        }
+        // PROVIA, as X-T3 5.11 programs it for a still.
+        ycbcr.insert(0x258, 64 | 128 << 8 | 192 << 16 | 230 << 24);
+        let provia = [(128, 208), (64, 224), (0, 256), (-64, 304), (-256, 476)];
+        for (i, (slope, gain)) in provia.into_iter().enumerate() {
+            ycbcr.insert(0x25c + 4 * i as u64, band(slope, gain));
+        }
+        let provia = plain.clone().with_luma_bands(&ycbcr);
+        let (bounds, _) = provia.luma_bands.unwrap();
+        assert_eq!(bounds, [64, 128, 192, 230]);
+        let f = |y: i32| provia.luma_gain(y).unwrap();
+        // Lower saturation in the darks and the whites, none in the
+        // midtones; Y outside 0..255 takes the end bands.
+        assert_eq!(
+            [-9, 0, 64, 128, 192, 229, 230, 255, 300].map(f),
+            [208, 208, 240, 256, 256, 246, 246, 221, 221]
+        );
+        // Continuous at every bound, to one step.
+        for b in bounds {
+            assert!((f(b) - f(b - 1)).abs() <= 1, "bound {b}");
+        }
+        // Luma unchanged, centred chroma scaled; a grey stays grey.
+        for x in inputs {
+            let p = plain.pixel(x);
+            let k = f(p[0]);
+            let scaled = |c: i32| (((c - 128) * k + 128) >> 8) + 128;
+            assert_eq!(provia.pixel(x), [p[0], scaled(p[1]), scaled(p[2])]);
+        }
+        assert_eq!(provia.pixel([4096; 3])[1..], [128, 128]);
+        // A dark red loses saturation.
+        let dark = [1024, 256, 256];
+        let (p, q) = (plain.pixel(dark), provia.pixel(dark));
+        assert!(p[0] < 64 && p[2] > 128, "{p:?}");
+        assert!(q[2] < p[2] && q[0] == p[0], "{p:?} {q:?}");
     }
 
     /// drm_fourcc.h's layout: Y0 1, Cb 5, Y1 2, Y2 3, Cr 6, Y3 4.

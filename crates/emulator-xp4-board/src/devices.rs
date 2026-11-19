@@ -977,6 +977,9 @@ impl Devices {
         if let Some(reference) = wiring.firmware_white_balance {
             model = model.firmware_white_balance(reference)?;
         }
+        if wiring.firmware_luma_bands {
+            model = model.firmware_luma_bands()?;
+        }
         let windows = model.windows();
         for &(lo, hi) in &windows {
             if let Some(&(base, end, owner)) =
