@@ -272,6 +272,9 @@ pub fn parse_gpio(spec: &str) -> Result<(u8, u8, bool), String> {
 }
 
 pub fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
+    if spec.contains('@') {
+        return Err(format!("--poke {spec}: the timed form ADDR=U32@MS needs an XP5 run"));
+    }
     let (address, value) = spec.split_once('=').ok_or("--poke needs ADDR=U32")?;
     let address = parse_number(address)?;
     let value = u32::try_from(parse_number(value)?).map_err(|_| "--poke value exceeds u32")?;
@@ -279,6 +282,40 @@ pub fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
         return Err("--poke address needs 4-byte alignment".into());
     }
     Ok((address, value))
+}
+
+/// `ADDR=U32` (applied before the run) or `ADDR=U32@MS` (applied MS milliseconds of guest time
+/// after the run starts, after a snapshot load). Returns the time, if any, and the write.
+pub fn parse_timed_poke(spec: &str) -> Result<(Option<u64>, u64, u32), String> {
+    match spec.split_once('@') {
+        Some((write, at)) => {
+            let at_ms = at.trim().parse()
+                .map_err(|_| format!("--poke {spec}: the time after @ is whole milliseconds"))?;
+            let (address, value) = parse_poke(write.trim())?;
+            Ok((Some(at_ms), address, value))
+        }
+        None => {
+            let (address, value) = parse_poke(spec.trim())?;
+            Ok((None, address, value))
+        }
+    }
+}
+
+#[cfg(test)]
+mod poke_tests {
+    use super::*;
+
+    #[test]
+    fn timed_poke_takes_milliseconds_after_the_at_sign() {
+        assert_eq!(parse_timed_poke("0x257ccd8=0xc02"), Ok((None, 0x257_ccd8, 0xc02)));
+        assert_eq!(parse_timed_poke("0x257ccd8=0xc02@1500"), Ok((Some(1500), 0x257_ccd8, 0xc02)));
+        assert_eq!(parse_timed_poke("0x257ccd8=2@0"), Ok((Some(0), 0x257_ccd8, 2)));
+        assert!(parse_timed_poke("0x257ccd8=2@1.5").is_err());
+        assert!(parse_timed_poke("0x257ccd8=2@").is_err());
+        assert!(parse_timed_poke("0x257ccd9=2@10").is_err(), "unaligned address");
+        assert!(parse_poke("0x257ccd8=2@10").is_err(), "the untimed parser refuses a time");
+        assert_eq!(parse_poke("0x257ccd8=2"), Ok((0x257_ccd8, 2)));
+    }
 }
 
 #[cfg(test)]
