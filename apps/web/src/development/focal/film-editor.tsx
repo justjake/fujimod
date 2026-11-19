@@ -324,23 +324,25 @@ function Picture(props: { film: Film; custom: boolean; crop: number; compare?: {
 
 /* ---- Look ------------------------------------------------------------------------ */
 
-const ACCENT = '#7d3fc2';
+const ACCENT = 'var(--m-accent)';
 const TEXT = 'text-[24px] leading-none';
 const SMALL = 'text-[21px] leading-none';
 const GLASS: JSX.CSSProperties = {
-  background: 'rgb(22 22 24 / 0.62)',
-  'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 0 0 1px rgb(255 255 255 / 0.1)',
+  background: 'var(--m-chip)',
+  'box-shadow': 'var(--m-chip-edge)',
+  'backdrop-filter': 'var(--m-blur)',
   color: '#fff',
 };
 const COLUMN: JSX.CSSProperties = {
-  background: 'rgb(22 22 24 / 0.6)',
-  'box-shadow': 'inset -1px 0 0 rgb(255 255 255 / 0.22)',
+  background: 'var(--m-column)',
+  'box-shadow': 'var(--m-column-edge)',
+  'backdrop-filter': 'var(--m-blur)',
   color: '#fff',
 };
 const TRACK = (focused: boolean): JSX.CSSProperties => ({
-  background: focused ? 'rgb(255 255 255 / 0.17)' : 'rgb(255 255 255 / 0.06)',
+  background: focused ? 'var(--m-focus)' : 'var(--m-track)',
   'border-radius': '13px',
-  'box-shadow': focused ? 'inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.14)' : undefined,
+  'box-shadow': focused ? 'var(--m-focus-edge)' : 'var(--m-track-edge)',
 });
 const BAND_NAMES = ['BLACKS', 'SHADOWS', 'MIDTONES', 'HIGHLIGHTS', 'WHITES'];
 
@@ -1136,11 +1138,11 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
   const caps = () => keyCaps(t());
   return (
     <div class="absolute inset-0 flex flex-col" style={{ 'text-transform': 'none' }}>
-      <div class="flex h-[48px] items-center gap-[14px] px-[18px]" style={{ background: 'rgb(0 0 0 / 0.62)' }}>
+      <div class="flex h-[48px] items-center gap-[14px] px-[18px]" style={{ background: 'var(--m-title)' }}>
         <button type="button" class="text-[26px] leading-none text-white/70" onClick={() => props.update({ ...props.s, keyboard: null })}>‹</button>
         <span class="text-[21px] font-medium tracking-[0.18em] text-white/75">{icon() ? 'ICON LETTERS' : 'FILM NAME'}</span>
       </div>
-      <div class="flex grow items-start gap-[14px] px-[20px] pt-[16px]" style={{ background: 'rgb(22 22 24 / 0.5)' }}>
+      <div class="flex grow items-start gap-[14px] px-[20px] pt-[16px]" style={{ background: 'var(--m-text-area)' }}>
         <Show when={icon()}>
           <FilmIcon slug={`text:${t().text}`} size={52} color="#fff" />
         </Show>
@@ -1150,7 +1152,7 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
           {t().text.slice(t().cursor)}
         </span>
       </div>
-      <div class="relative h-[330px] shrink-0" style={{ background: 'rgb(28 28 30 / 0.84)' }}>
+      <div class="relative h-[330px] shrink-0" style={{ background: 'var(--m-tray)', 'backdrop-filter': 'var(--m-blur)' }}>
         <For each={caps()}>
           {(cap, i) => {
             const special = cap.kind !== 'char' && cap.kind !== 'space';
@@ -1164,8 +1166,8 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
                   width: `${cap.width * 7.08 - 6}px`,
                   top: `${ROW_TOP[cap.row]}px`,
                   height: `${ROW_H[cap.row]}px`,
-                  background: cap.kind === 'return' ? '#0a6bdc' : special ? 'rgb(255 255 255 / 0.12)' : 'rgb(255 255 255 / 0.3)',
-                  'box-shadow': focused() ? 'inset 0 0 0 3px #fff' : undefined,
+                  background: cap.kind === 'return' ? 'var(--m-confirm)' : special ? 'var(--m-key-special)' : 'var(--m-key)',
+                  'box-shadow': focused() ? 'var(--m-key-focus)' : 'var(--m-key-edge)',
                   'font-size': cap.kind === 'char' ? '29px' : '21px',
                   'font-variant': icon() && cap.kind === 'char' ? 'small-caps' : undefined,
                   'letter-spacing': cap.kind === 'layer' ? '0.12em' : undefined,
@@ -1644,7 +1646,7 @@ function Editor(props: {
           transition: [props.column?.transition, 'opacity 200ms ease-out'].filter(Boolean).join(', '),
         }}
       >
-      <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'rgb(18 18 20 / 0.82)' }}>
+      <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'var(--m-rail)' }}>
         <For each={railSections(s())}>
           {(tool) => {
             const chosen = () => (s().area === 'rows' ? inView() : currentSection(s())) === tool;
@@ -1653,7 +1655,7 @@ function Editor(props: {
               <button
                 type="button"
                 class="relative flex size-[52px] items-center justify-center rounded-[14px]"
-                style={lit() ? { background: '#fff' } : chosen() ? { background: 'rgb(255 255 255 / 0.2)' } : {}}
+                style={lit() ? { background: '#fff' } : chosen() ? { background: 'var(--m-focus)' } : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
                   const on = tool === 'film' || tool === 'raw' || tool === 'custom' ? tool : null;
@@ -1721,7 +1723,7 @@ function Editor(props: {
           </div>
         </section>
         <Show when={s().crop > 0}>
-          <section ref={(element) => (sections.raw = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
+          <section ref={(element) => (sections.raw = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
             <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>RAW FILE</div>
             <div
               class="mb-[8px] flex h-[57px] items-center gap-[10px] px-[10px]"
@@ -1749,7 +1751,7 @@ function Editor(props: {
             </button>
           </section>
         </Show>
-        <section ref={(element) => (sections.custom = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
+        <section ref={(element) => (sections.custom = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
           <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>CUSTOM SETTING</div>
           <div
             class="flex h-[47px] items-center gap-[4px] px-[5px]"
@@ -1784,7 +1786,7 @@ function Editor(props: {
           {(tool) => {
             const from = () => groupSource(s().film, tool);
             return (
-              <section ref={(element) => (sections[tool] = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
+              <section ref={(element) => (sections[tool] = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'var(--m-divider)' }}>
                 <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
                   <span class={`grow font-semibold tracking-[0.02em] ${TEXT} ${tool === 'tone' ? '' : 'whitespace-nowrap'}`} style={{ 'font-size': tool === 'tone' ? '21px' : undefined }}>
                     {TOOL_NAMES[tool]}
@@ -1793,7 +1795,7 @@ function Editor(props: {
                     type="button"
                     class={`flex h-[36px] shrink-0 items-center gap-[4px] rounded-[10px] px-[8px] whitespace-nowrap ${SMALL}`}
                     style={{
-                      ...(from() === undefined ? { background: ACCENT, color: '#fff' } : { background: 'rgb(255 255 255 / 0.14)', color: '#fff' }),
+                      ...(from() === undefined ? { background: ACCENT, color: '#fff' } : { background: 'var(--m-track)', color: '#fff', 'box-shadow': 'var(--m-track-edge)' }),
                       'box-shadow': headerFocused(tool) ? '0 0 0 3px #fff' : undefined,
                     }}
                     onClick={() => update(openPicker({ ...s(), focus: index(tool), header: true, area: 'rows' }, { kind: 'copy', tool }))}
@@ -1920,7 +1922,7 @@ function Editor(props: {
 
       <Show when={s().picker?.kind === 'icon' ? s().picker : undefined}>
         {(picker) => (
-          <div class="absolute top-[8px] bottom-[8px] flex flex-col rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'rgb(30 30 32 / 0.9)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
+          <div class="absolute top-[8px] bottom-[8px] flex flex-col rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
             <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>ICON</div>
             <div class="grid gap-[4px]" style={{ 'grid-template-columns': `repeat(${ICON_COLUMNS}, 1fr)` }}>
               <For each={ICONS}>
@@ -1950,7 +1952,7 @@ function Editor(props: {
           const current = () => pickerCurrent(s(), picker());
           const options = () => pickerOptions(picker());
           return (
-            <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'rgb(30 30 32 / 0.9)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
+            <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', left: `${PICTURE_LEFT + 8}px`, right: '8px' }}>
               <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>
                 {(() => {
                   const p = picker();
@@ -2200,7 +2202,50 @@ function Static(props: { start: State }) {
 
 /* The recipe editor's ROUNDED CORNERS and UPPERCASE options, over every
    screen on the page. Round marks (knots, swatches, dots) stay round. */
+/* Materials: each look names how every role is drawn (the column, the rail,
+   rows and their focus, chips, panels, the keyboard), not just two colors. */
+const LOOKS = {
+  glass: `
+    --m-blur: blur(14px) saturate(1.3);
+    --m-column: rgb(22 22 24 / 0.6); --m-column-edge: inset -1px 0 0 rgb(255 255 255 / 0.22);
+    --m-rail: rgb(18 18 20 / 0.82); --m-panel: rgb(30 30 32 / 0.9);
+    --m-chip: rgb(22 22 24 / 0.62); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 0 0 1px rgb(255 255 255 / 0.1);
+    --m-track: rgb(255 255 255 / 0.06); --m-track-edge: none;
+    --m-focus: rgb(255 255 255 / 0.17); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 0 0 1px rgb(255 255 255 / 0.14);
+    --m-divider: inset 0 1px 0 rgb(255 255 255 / 0.16);
+    --m-accent: #7d3fc2; --m-confirm: #0a6bdc;
+    --m-title: rgb(0 0 0 / 0.62); --m-text-area: rgb(22 22 24 / 0.5); --m-tray: rgb(28 28 30 / 0.84);
+    --m-key: rgb(255 255 255 / 0.3); --m-key-special: rgb(255 255 255 / 0.12); --m-key-edge: none; --m-key-focus: inset 0 0 0 3px #fff;`,
+  contrast: `
+    --m-blur: none;
+    --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
+    --m-rail: #000; --m-panel: #000;
+    --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
+    --m-track: rgb(255 255 255 / 0.1); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
+    --m-focus: rgb(255 255 255 / 0.2); --m-focus-edge: inset 0 0 0 3px #ffd60a;
+    --m-divider: inset 0 2px 0 rgb(255 255 255 / 0.55);
+    --m-accent: #b06cff; --m-confirm: #1f7cff;
+    --m-title: #000; --m-text-area: #000; --m-tray: #000;
+    --m-key: #3a3a3c; --m-key-special: #1c1c1e; --m-key-edge: inset 0 0 0 1px rgb(255 255 255 / 0.5); --m-key-focus: inset 0 0 0 4px #ffd60a;`,
+  fujimod: `
+    --m-blur: none;
+    --m-column: rgb(0 0 0 / 0.9); --m-column-edge: none;
+    --m-rail: #2a2a2a; --m-panel: #000;
+    --m-chip: rgb(0 0 0 / 0.75); --m-chip-edge: none;
+    --m-track: transparent; --m-track-edge: inset 0 -1px 0 #3a3a3a;
+    --m-focus: #3c3c3e; --m-focus-edge: inset 6px 0 0 #c8232c;
+    --m-divider: inset 0 1px 0 #4a4a4a;
+    --m-accent: #c8232c; --m-confirm: #c8232c;
+    --m-title: #000; --m-text-area: rgb(0 0 0 / 0.8); --m-tray: rgb(0 0 0 / 0.92);
+    --m-key: #3a3a3a; --m-key-special: #222; --m-key-edge: none; --m-key-focus: inset 0 -5px 0 #c8232c;`,
+};
+type Look = keyof typeof LOOKS;
+const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
+
 const STYLE_OPTIONS = `
+${(Object.keys(LOOKS) as Look[]).map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
+.fm-look-fujimod .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
+.fm-look-fujimod .fm-screen rect { rx: 0; ry: 0; }
 .fm-square .fm-screen *:not(.rounded-full) { border-radius: 0 !important; }
 .fm-square .fm-screen rect { rx: 0; ry: 0; }
 .fm-upper .fm-screen { text-transform: uppercase; }
@@ -2224,15 +2269,31 @@ function Toggle(props: { label: string; on: boolean; set: (on: boolean) => void 
 function Review() {
   const [rounded, setRounded] = createSignal(true);
   const [upper, setUpper] = createSignal(false);
+  const [look, setLook] = createSignal<Look>('glass');
   return (
     <div
-      class={`min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd] ${rounded() ? '' : 'fm-square'} ${upper() ? 'fm-upper' : ''}`}
+      class={`min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd] ${rounded() ? '' : 'fm-square'} ${upper() ? 'fm-upper' : ''} fm-look-${look()}`}
     >
       <style>{STYLE_OPTIONS}</style>
       <h1 class="mb-[12px] text-[22px] font-semibold">Film editor</h1>
       <div class="mb-[14px] flex flex-wrap gap-[8px]">
         <Toggle label="Rounded corners" on={rounded()} set={setRounded} />
         <Toggle label="Uppercase" on={upper()} set={setUpper} />
+        <For each={LOOK_NAMES}>
+          {([value, label]) => (
+            <button
+              type="button"
+              class="h-[44px] rounded-[12px] px-[14px] text-[16px] font-semibold"
+              style={look() === value ? { background: '#fff', color: '#000' } : { background: '#2c2c2e', color: '#fff' }}
+              onClick={() => {
+                setLook(value);
+                if (value === 'fujimod') setUpper(true);
+              }}
+            >
+              {label}
+            </button>
+          )}
+        </For>
       </div>
       <Live start={initial({ film: START })} />
       <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">From the recipe editor</h2>
