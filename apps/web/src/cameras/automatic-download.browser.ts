@@ -42,6 +42,10 @@ try {
   assert.equal(sources.length, 1);
   assert.equal(new URL(sources[0]).hostname, 'fichiers.touslesdrivers.com');
   await page.reload();
+  await page
+    .locator('.firmware-saved-row')
+    .filter({ hasText: 'X70 · 1.10' })
+    .waitFor({ state: 'attached' });
   await camera.selectOption({ label: 'X70 · 1.10' });
   await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
   await page.waitForFunction(
@@ -50,6 +54,7 @@ try {
       document.querySelector('.camera-storage-status')?.textContent !== '',
   );
   assert.equal(sources.length, 1, 'Stored firmware must be reused without another download');
+  await page.unrouteAll({ behavior: 'wait' });
   console.log(
     'Passed: camera selection, real mirror transfer through Worker, verified local import, and reuse.',
   );
