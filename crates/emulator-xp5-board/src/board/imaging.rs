@@ -3,7 +3,7 @@ use fujimod_emulator_devices::graph::DeviceGraph;
 use fujimod_emulator_devices::graph::DeviceWindow;
 use fujimod_emulator_sensor_input::statistics;
 use fujimod_emulator_sensor_input::{sensor, slvs};
-use fujimod_emulator_xp5_imaging::imaging::buffer;
+use fujimod_emulator_xp5_imaging::imaging::{buffer, table};
 use fujimod_emulator_xp5_imaging::imaging::focus;
 use fujimod_emulator_xp5_imaging::imaging::input;
 use fujimod_emulator_xp5_imaging::imaging::iris;
@@ -177,6 +177,12 @@ pub fn register_all(
             return Err("invalid input-buffer window".into());
         }
         bus.register(w.base, w.size, Box::new(buffer::Buffer::default()))?;
+    }
+    for w in windows.iter().filter(|w| w.kind == "imaging-table") {
+        let Some(device) = table::Table::reset(w.base).filter(|_| w.size == 0x1000) else {
+            return Err("invalid imaging table window".into());
+        };
+        bus.register(w.base, w.size, Box::new(device))?;
     }
     for w in windows.iter().filter(|w| w.kind == "imaging-input") {
         if w.base != 0xff946000 || w.size != 0x1000 {

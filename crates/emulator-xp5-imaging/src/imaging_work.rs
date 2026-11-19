@@ -248,7 +248,7 @@ impl Work {
 }
 /// Word offsets (4-byte aligned) of the first reset gate that only latch a value.
 const PLAIN_RESET_WORDS: &[std::ops::RangeInclusive<u64>] = &[
-    0x0c..=0x58,
+    0x08..=0x58,
     0x98..=0x98,
     0xdc..=0xdc,
     0xfc..=0xfc,
@@ -269,8 +269,7 @@ const PLAIN_RESET_WORDS: &[std::ops::RangeInclusive<u64>] = &[
     0x4a8..=0x4a8,
     0x4e8..=0x4e8,
     0x528..=0x57c,
-    0x5f0..=0x638,
-    0x670..=0x7ac,
+    0x5f0..=0x7ac,
 ];
 impl Device for Work {
     fn name(&self) -> &'static str {
@@ -509,11 +508,26 @@ mod reset_tests {
         assert!(host.irqs.is_empty());
     }
     #[test]
+    fn reset_gate_control_word_at_8_is_a_plain_read_modify_write_word() {
+        // The firmware's setters read +8, change one bit and write it back, and
+        // nothing polls it afterward. The power-on value is unverified.
+        let mut work = Work::reset(BASE).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(work.read(&mut cx, BASE + 8, 4), 0);
+        for bit in [0, 4, 8, 12, 16, 17, 20, 21, 24] {
+            let word = work.read(&mut cx, BASE + 8, 4);
+            work.write(&mut cx, BASE + 8, 4, word | (1 << bit));
+            assert_eq!(work.read(&mut cx, BASE + 8, 4), word | (1 << bit));
+        }
+        assert!(cx.refusal().is_none());
+    }
+    #[test]
     fn reset_gate_refuses_the_rest_of_the_block() {
         let mut work = Work::reset(BASE).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        work.read(&mut cx, BASE + 8, 4);
+        work.read(&mut cx, BASE + 0x5c, 4);
         assert!(cx.refusal().is_some());
     }
 }
@@ -622,12 +636,27 @@ mod reset_size_tests {
             assert_eq!(work.read(&mut cx, 0xff950000 + o, 4), v);
         }
         assert!(cx.refusal().is_none());
-        work.write(&mut cx, 0xff950008, 4, 1);
+        work.write(&mut cx, 0xff95005c, 4, 1);
         assert!(cx.refusal().is_some());
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
         let mut other = Work::reset(0xff973000).unwrap();
         other.write(&mut cx, 0xff97301c, 4, 1);
+        assert!(cx.refusal().is_some());
+    }
+
+    #[test]
+    fn first_reset_gate_keeps_the_run_of_words_between_0x638_and_0x674() {
+        let mut work = Work::reset(0xff950000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
+        for (i, o) in (0x638..=0x674u64).step_by(4).enumerate() {
+            let v = 0x087408ae + i as u64;
+            work.write(&mut cx, 0xff950000 + o, 4, v);
+            assert_eq!(work.read(&mut cx, 0xff950000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        work.write(&mut cx, 0xff950001 + 0x63c, 1, 1);
         assert!(cx.refusal().is_some());
     }
 }
