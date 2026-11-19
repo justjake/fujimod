@@ -1390,13 +1390,6 @@ impl Session {
         if power_spi_command_output.is_some() && power_spi.is_none() {
             return Err("Command output requires power SPI peer".into());
         }
-        if !discovery
-            && power_spi
-                .as_ref()
-                .is_some_and(|(_, _, _, _, _, inputs, _)| inputs.contains_key(&24))
-        {
-            return Err("Provisional power status input requires discovery mode".to_owned());
-        }
         // Cortex-A7 TRM DDI0464F table4-47: L1D four ways/64-byte
         // lines, L1I two ways/32-byte lines, L2 eight ways/64-byte lines.
         // Capacities are explicit processor implementation inputs.
