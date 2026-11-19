@@ -1,7 +1,6 @@
 #!/bin/sh
-# Installed by scripts/git/install_hooks.py. Work happens in the main checkout;
-# a new worktree is kept only when FUJIMOD_WORKTREE_APPROVED names the
-# approval for it. Approved creations are logged in the common Git directory.
+# Installed by scripts/git/install_hooks.py. A new worktree is kept only when
+# FUJIMOD_WORKTREE_APPROVED names a person's approval for it (slot tools set it). Approved creations are logged in the common Git directory.
 if command -v git-lfs >/dev/null 2>&1; then
   git lfs post-checkout "$@" || exit $?
 fi
@@ -17,6 +16,6 @@ fi
 cd "$common" && git worktree remove --force "$worktree"
 printf >&2 '\n%s\n%s\n%s\n\n' \
   "New worktrees are refused; removed $worktree." \
-  "Work and commit in the main checkout: mise run commit -- -m MESSAGE PATHS..." \
-  "With the owner's approval for this worktree, set FUJIMOD_WORKTREE_APPROVED to the reason."
+  "Use a slot instead: mise run slot -- acquire --topic NAME --owner PURPOSE" \
+  "When a person asked for this worktree, set FUJIMOD_WORKTREE_APPROVED to the reason."
 exit 1
