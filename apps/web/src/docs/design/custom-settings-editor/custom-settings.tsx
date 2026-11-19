@@ -1,10 +1,12 @@
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { Choice, Dial, type ChoiceItem } from './controls';
-import { COLUMN, GLASS } from './materials';
-import { palette } from './palette';
-import './focal.css';
+import { Choice, Dial, type ChoiceItem } from '../../../design/controls';
+import { COLUMN, GLASS } from '../../../design/materials';
+import { modArtwork, stockArtwork } from '../../../design/artwork';
+import { Fit } from '../../../design/screen';
+import { palette } from '../../../development/focal/palette';
+import '../../../design/design.css';
 
 /* A recipe editor over live view: settings in a translucent left column,
    the picture in the right. Choice rows scroll their choices as stock icons,
@@ -16,9 +18,6 @@ import './focal.css';
    Stock icons come from `mise run stock-icons-svg -- --firmware x70-110`,
    served from the local review directory; they are never published. */
 
-const STOCK = '/review/stock-icons/x70-110';
-const MOD = '/review/recipe-editor/mod-icons';
-const stock = (id: number) => `${STOCK}/ff${id.toString(16).padStart(6, '0')}.svg`;
 
 /* ---- Recipe model ------------------------------------------------------------ */
 
@@ -243,7 +242,7 @@ function look(r: Recipe): string {
 }
 
 /** The emulator's default scene, as walkthroughs show it. */
-const PHOTO = new URL('../../engine/assets/default-scene.png', import.meta.url).href;
+const PHOTO = new URL('../../../engine/assets/default-scene.png', import.meta.url).href;
 
 function Photo(props: { recipe: Recipe }) {
   return (
@@ -380,29 +379,39 @@ function Wordmark(props: { word: string; badge?: string; color: string }) {
   );
 }
 
+/** Words for row icons where the artwork is not published. */
+const ICON_WORDS: Record<string, string> = {
+  [0x5f3]: 'Film',
+  [0x609]: 'WB',
+  [0x5f1]: 'DR',
+  [0x5f6]: 'H',
+  [0x607]: 'S',
+  [0x5f0]: 'Color',
+  [0x605]: 'Sharp',
+  [0x603]: 'NR',
+  d_range_priority: 'D-Pri',
+  clarity: 'Clarity',
+  film_grain: 'Grain',
+};
+
 function RowIconView(props: { icon: RowIcon; color: string }) {
-  const word = () => ('word' in props.icon ? props.icon : undefined);
+  const icon = (): { src?: string; word: string; badge?: string; stock: boolean } => {
+    const i = props.icon;
+    if ('word' in i) return { word: i.word, badge: i.badge, stock: false };
+    if ('stock' in i) return { src: stockArtwork(i.stock), word: ICON_WORDS[i.stock] ?? '', stock: true };
+    return { src: modArtwork(i.mod), word: ICON_WORDS[i.mod] ?? i.mod, stock: false };
+  };
   return (
-    <Show
-      when={!word()}
-      fallback={<Wordmark word={word()!.word} badge={word()!.badge} color={props.color} />}
-    >
-    <Show
-      when={'stock' in props.icon ? props.icon.stock : undefined}
-      fallback={
-        <Ink
-          src={`${MOD}/${(props.icon as { mod: string }).mod}.svg`}
-          class="-mx-[2px] h-[30px] w-[44px]"
-          color={props.color}
-        />
+    <Show when={icon().src} fallback={<Wordmark word={icon().word} badge={icon().badge} color={props.color} />}>
+      {(src) =>
+        icon().stock ? (
+          // Q icons are 80 by 48 with their ink in the middle 52 by 40; at 0.75
+          // the ink is the root menu's 39 by 30.
+          <Ink src={src()} class="-mx-[10px] h-[36px] w-[60px]" color={props.color} />
+        ) : (
+          <Ink src={src()} class="-mx-[2px] h-[30px] w-[44px]" color={props.color} />
+        )
       }
-    >
-      {(id) => (
-        // Q icons are 80 by 48 with their ink in the middle 52 by 40; at 0.75
-        // the ink is the root menu's 39 by 30.
-        <Ink src={stock(id())} class="-mx-[10px] h-[36px] w-[60px]" color={props.color} />
-      )}
-    </Show>
     </Show>
   );
 }
@@ -440,9 +449,10 @@ function SettingRow(props: {
         fallback={
           <Choice
             items={(props.setting as ChoiceSetting).choices.map((choice): ChoiceItem =>
-              choice.icon === undefined
-                ? choice.name
-                : { name: choice.name, art: (ink) => <Ink src={stock(choice.icon!)} class="h-[24px] w-[46px]" color={ink} /> },
+              {
+              const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
+              return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Ink src={src} class="h-[24px] w-[46px]" color={ink} /> };
+            },
             )}
             value={props.recipe[props.setting.id]}
             width={controlWidth()}
@@ -1073,25 +1083,3 @@ export function RecipeStates() {
   );
 }
 
-function Fit(props: { children: JSX.Element }) {
-  let host: HTMLDivElement | undefined;
-  const [scale, setScale] = createSignal(1);
-  onSettled(() => {
-    const element = host;
-    if (!element) return;
-    const observer = new ResizeObserver(() => setScale(Math.min(1, element.clientWidth / 720)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  });
-  return (
-    <div
-      ref={(element) => (host = element)}
-      class="w-full max-w-[720px]"
-      style={{ height: `${480 * scale()}px` }}
-    >
-      <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: '720px' }}>
-        {props.children}
-      </div>
-    </div>
-  );
-}

@@ -2,7 +2,7 @@ import { render } from '@solidjs/web';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import './focal.css';
+import '../../design/design.css';
 
 /* COLOR MIX alternatives: the same 3x3 matrix on linear RGB (white kept) and
    2x2 on CbCr, shown four ways over the developed picture. Every view edits

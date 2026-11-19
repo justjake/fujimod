@@ -17,7 +17,7 @@ import {
   type SetupTarget,
   type UpdateState,
 } from './fujimod-setup';
-import './focal.css';
+import '../../design/design.css';
 
 /** Shows a 720x480 screen at camera size, scaled down to fit narrow viewports. */
 function Fit(props: { children: JSX.Element }) {

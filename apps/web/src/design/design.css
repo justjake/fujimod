@@ -1,8 +1,10 @@
-/* Focal UI prototypes. Every size and color a camera implementation needs is a
+/* The design system for Focal UI prototypes. Every size and color a camera implementation needs is a
    token in @theme below; components use only these tokens. Sizes are camera
    pixels on the 720x480 LCD. */
 @import 'tailwindcss' source(none);
 @source './';
+@source '../docs/design/';
+@source '../development/focal/';
 @import '@fontsource-variable/inter';
 
 @theme {

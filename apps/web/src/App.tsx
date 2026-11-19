@@ -16,6 +16,8 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
 const SdkDocs = lazy(() => import('./docs/Page'));
 const Manual = lazy(() => import('./docs/Manual'));
 const DocsOverview = lazy(() => import('./docs/Overview'));
+const DesignIndex = lazy(() => import('./docs/design/Index'));
+const CustomSettingsEditor = lazy(() => import('./docs/design/custom-settings-editor/Page'));
 const textRoutes = {
   '/safety': lazy(() => import('./text/Safety')),
   '/credits': lazy(() => import('./text/Credits')),
@@ -49,6 +51,10 @@ export default function App() {
           ? Device
           : path === '/docs/' || path === '/docs'
             ? DocsOverview
+            : path === '/docs/design/' || path === '/docs/design'
+            ? DesignIndex
+            : path.startsWith('/docs/design/custom-settings-editor')
+            ? CustomSettingsEditor
             : path.startsWith('/docs/sdk/')
             ? SdkDocs
             : isManualPath(path)

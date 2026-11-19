@@ -1,22 +1,8 @@
-import { render } from '@solidjs/web';
 import { Show, createSignal } from 'solid-js';
 
-import {
-  Editor as FilmEditor,
-  FilmReview,
-  Fit,
-  Hint,
-  Pad,
-  Picture,
-  RAIL,
-  SCROLLER,
-  baseFilm,
-  initial,
-  press,
-  useHistogram,
-  type Key,
-  type State as FilmState,
-} from './film-editor';
+import { DesignFrame } from '../../../design/looks';
+import { CameraKeys, Fit, KeyHint, type CameraKey } from '../../../design/screen';
+import { SiteFrame } from '../../../ui/SiteFrame';
 import {
   Editor as SettingsEditor,
   FILMS,
@@ -25,7 +11,19 @@ import {
   apply,
   onKey,
   type EditorState,
-} from './recipe-editor';
+} from './custom-settings';
+import {
+  Editor as FilmEditor,
+  FilmStates,
+  Picture,
+  RAIL,
+  SCROLLER,
+  baseFilm,
+  initial,
+  press,
+  useHistogram,
+  type State as FilmState,
+} from './film-editor';
 
 /* The custom settings editor and the film editor are one app. Fn on the FILM
    SIMULATION row slides the film editor in from the left over the custom
@@ -44,7 +42,7 @@ const FILM_BASE: Record<string, number> = {
   'PRO Neg. Std': 4,
 };
 
-const SETTINGS_KEYS: Partial<Record<Key, string>> = {
+const SETTINGS_KEYS: Partial<Record<CameraKey, string>> = {
   up: 'ArrowUp',
   down: 'ArrowDown',
   left: 'ArrowLeft',
@@ -69,7 +67,7 @@ function App() {
     setOpen(true);
   };
 
-  const send = (key: Key) => {
+  const send = (key: CameraKey) => {
     if (open()) {
       const next = press(film(), key);
       if (key === 'back' && next === film()) setOpen(false);
@@ -97,7 +95,7 @@ function App() {
             <SettingsEditor state={settings()} send={(action) => setSettings(apply(settings(), action))} />
             <Show when={settings().focus === FILM_ROW}>
               <div class="absolute top-[10px] right-[10px]">
-                <Hint glyph="Fn" label="EDIT FILM" tap={openFilm} />
+                <KeyHint glyph="Fn" label="EDIT FILM" tap={openFilm} />
               </div>
             </Show>
           </div>
@@ -115,22 +113,22 @@ function App() {
           </div>
         </div>
       </Fit>
-      <Pad send={send} />
+      <CameraKeys send={send} />
     </>
   );
 }
 
-const host = document.getElementById('custom-settings-editor');
-if (!host) throw new Error('Missing #custom-settings-editor');
-if (import.meta.env.DEV) {
-  host.replaceChildren();
-  render(
-    () => (
-      <FilmReview>
+/** /docs/design/custom-settings-editor/: the custom settings editor and the
+ * film editor over it, live, then each screen state for review. */
+export default function CustomSettingsEditorPage() {
+  return (
+    <SiteFrame class="design-page">
+      <DesignFrame title="Custom settings editor">
         <App />
         <RecipeStates />
-      </FilmReview>
-    ),
-    host,
+        <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">Film editor</h2>
+        <FilmStates />
+      </DesignFrame>
+    </SiteFrame>
   );
 }

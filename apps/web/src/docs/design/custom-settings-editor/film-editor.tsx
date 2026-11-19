@@ -1,9 +1,11 @@
+import { filmArtwork, stockArtwork } from '../../../design/artwork';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { Chevron, Choice, Dial, signed } from './controls';
-import { ACCENT, COLUMN, GLASS, SMALL, TEXT, TRACK } from './materials';
-import './focal.css';
+import { Chevron, Choice, Dial, signed } from '../../../design/controls';
+import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
+import { ACCENT, COLUMN, GLASS, SMALL, TEXT, TRACK } from '../../../design/materials';
+import '../../../design/design.css';
 
 /* FILM EDITOR redesign mock: a tool rail down the left edge beside one tall
    scroller holding every tool, all open, over the picture. The rail scrolls
@@ -187,7 +189,7 @@ function chromaMatrix(f: Film): number[] {
 
 /* ---- Developing the picture ----------------------------------------------------- */
 
-const PHOTO = new URL('../../engine/assets/default-scene.png', import.meta.url).href;
+const PHOTO = new URL('../../../engine/assets/default-scene.png', import.meta.url).href;
 const W = 720;
 const H = 480;
 
@@ -892,7 +894,7 @@ function putCell(f: Film, tool: 'mix' | 'color', cell: number, v: number): Film 
   return { ...f, matrix: m, primaries: fitPrimaries(m) };
 }
 
-function pressNumbers(s: State, n: NonNullable<State['numbers']>, key: Key): State {
+function pressNumbers(s: State, n: NonNullable<State['numbers']>, key: CameraKey): State {
   const size = MATRIX_SIZE[n.tool];
   const move = (dr: number, dc: number) => {
     let r = Math.floor(n.cell / size);
@@ -965,9 +967,11 @@ const ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-hi', 'pro
 const MONOGRAM_LIMIT = 4;
 const ICON_COLUMNS = 6;
 const BASE_ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-std', 'eterna', 'classic-neg'];
-const filmIcon = (slug: string) => `/review/film-icons/a-${slug}.svg`;
 
 function FilmIcon(props: { slug: string; size: number; color: string }) {
+  const src = props.slug.startsWith('text:') ? undefined : filmArtwork(props.slug);
+  if (src === undefined && !props.slug.startsWith('text:'))
+    return <FilmIcon slug={`text:${props.slug.slice(0, 2).toUpperCase()}`} size={props.size} color={props.color} />;
   if (props.slug.startsWith('text:')) {
     const code = props.slug.slice(5) || 'Aa';
     const em = props.size * [0.5, 0.5, 0.46, 0.36, 0.28][code.length];
@@ -998,7 +1002,7 @@ function FilmIcon(props: { slug: string; size: number; color: string }) {
         width: `${props.size}px`,
         height: `${props.size}px`,
         background: props.color,
-        'mask-image': `url(${filmIcon(props.slug)})`,
+        'mask-image': `url(${src})`,
         'mask-size': 'contain',
         'mask-repeat': 'no-repeat',
         'mask-position': 'center',
@@ -1086,7 +1090,6 @@ function compareFilm(s: State): Film | undefined {
   return s.compare.b === 'opened' ? s.opened : baseFilm(s.compare.b);
 }
 
-export type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
 
 const firstOf = (tool: Tool) => CONTROLS.findIndex((c) => c.tool === tool);
 
@@ -1171,7 +1174,7 @@ function typeKey(s: State, t: Typing, cap: KeyCap): State {
   return put({ ...t, text: t.text.slice(0, t.cursor) + c + t.text.slice(t.cursor), cursor: t.cursor + 1, shift: t.shift === 'once' ? 'off' : t.shift });
 }
 
-function pressKeyboard(s: State, t: Typing, key: Key): State {
+function pressKeyboard(s: State, t: Typing, key: CameraKey): State {
   const caps = keyCaps(t);
   const at = caps[t.focus];
   const centre = (c: KeyCap) => c.left + c.width / 2;
@@ -1295,7 +1298,7 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
   );
 }
 
-export function press(s: State, key: Key): State {
+export function press(s: State, key: CameraKey): State {
   const control = CONTROLS[s.focus];
   const f = s.film;
   const d = key === 'left' || key === 'down' || key === 'dial-' ? -1 : 1;
@@ -1520,24 +1523,6 @@ function ExpandIcon(props: { full?: boolean }) {
   );
 }
 
-export function Hint(props: { glyph: string; label?: string; tap?: () => void; accent?: boolean }) {
-  return (
-    <button
-      type="button"
-      class="flex h-[36px] items-center gap-[8px] rounded-[12px] px-[7px] whitespace-nowrap"
-      style={{ ...GLASS, ...(props.accent ? { background: ACCENT } : {}) }}
-      onClick={(e) => {
-        e.stopPropagation();
-        props.tap?.();
-      }}
-    >
-      <span class="flex h-[24px] min-w-[24px] items-center justify-center rounded-[6px] bg-white px-[4px] text-[18px] leading-none font-semibold text-black">{props.glyph}</span>
-      <Show when={props.label}>
-        <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{props.label}</span>
-      </Show>
-    </button>
-  );
-}
 
 type StripStyle = 'frames' | 'contact' | 'film';
 const STRIP_STYLES: [StripStyle, string][] = [
@@ -1973,10 +1958,10 @@ export function Editor(props: {
               ⇆
             </div>
             <div class="absolute" style={{ left: `${PICTURE_LEFT + 8}px`, top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
-              <Hint glyph="A" label={s().name} />
+              <KeyHint glyph="A" label={s().name} />
             </div>
             <div class="absolute right-[10px]" style={{ top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
-              <Hint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update(openPicker(s(), { kind: 'compare' }))} />
+              <KeyHint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update(openPicker(s(), { kind: 'compare' }))} />
             </div>
           </>
         )}
@@ -2301,14 +2286,14 @@ export function Editor(props: {
       <Show when={!s().picker && !s().keyboard}>
         <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]" style={props.chrome}>
           <Show when={s().inside && CONTROLS[s().focus].kind === 'curve'}>
-            <Hint glyph="OK" label={s().full ? 'SIDEBAR' : 'FULL SCREEN'} tap={() => update(press(s(), 'ok'))} />
+            <KeyHint glyph="OK" label={s().full ? 'SIDEBAR' : 'FULL SCREEN'} tap={() => update(press(s(), 'ok'))} />
           </Show>
           {/* Full screen keeps the picture clear: only the way back shows. */}
           <Show when={!s().full}>
-            <Hint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
+            <KeyHint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
             <div class="flex gap-[6px]">
-              <Hint glyph="Q" label="A|B" accent={!!s().compare} tap={() => update(press(s(), 'q'))} />
-              <Hint glyph="▶" label={s().crop ? 'LIVE' : 'RAW'} tap={() => update(press(s(), 'play'))} />
+              <KeyHint glyph="Q" label="A|B" accent={!!s().compare} tap={() => update(press(s(), 'q'))} />
+              <KeyHint glyph="▶" label={s().crop ? 'LIVE' : 'RAW'} tap={() => update(press(s(), 'play'))} />
             </div>
           </Show>
         </div>
@@ -2408,40 +2393,6 @@ function Screen(props: { state: () => State; set: (s: State) => void }) {
 
 /* ---- Camera keys, on screen -------------------------------------------------------- */
 
-export function Pad(props: { send: (key: Key) => void }) {
-  const button = (key: Key, label: string, extra = '') => (
-    <button
-      type="button"
-      class={`flex h-[52px] min-w-[52px] items-center justify-center rounded-[14px] bg-[#2c2c2e] px-[10px] text-[17px] font-semibold text-white active:bg-[#48484a] ${extra}`}
-      onClick={() => props.send(key)}
-    >
-      {label}
-    </button>
-  );
-  return (
-    <div class="mt-[12px] flex max-w-[720px] flex-wrap items-center justify-between gap-[14px]">
-      <div class="grid grid-cols-3 gap-[6px]">
-        <span />
-        {button('up', '▲')}
-        <span />
-        {button('left', '◀')}
-        {button('ok', 'OK')}
-        {button('right', '▶')}
-        <span />
-        {button('down', '▼')}
-        <span />
-      </div>
-      <div class="grid grid-cols-2 gap-[6px]">
-        {button('dial-', 'DIAL −')}
-        {button('dial+', 'DIAL +')}
-        {button('q', 'Q')}
-        {button('fn', 'Fn')}
-        {button('play', 'PLAY ▶')}
-        {button('back', 'BACK')}
-      </div>
-    </div>
-  );
-}
 
 
 /** The custom setting's rows, as the CUSTOM SETTING section summarizes them. */
@@ -2457,10 +2408,10 @@ const RECIPE_ROWS: RecipeRow[] = [
   { icon: 0x603, level: -2 },
 ];
 
-const STOCK = '/review/stock-icons/x70-110';
-const stockIcon = (id: number) => `${STOCK}/ff${id.toString(16).padStart(6, '0')}.svg`;
 
 function StockIcon(props: { id: number; color: string; size?: number }) {
+  const src = stockArtwork(props.id);
+  if (src === undefined) return <span class="block shrink-0" style={{ width: `${props.size ?? 38}px` }} />;
   return (
     <span
       class="block shrink-0"
@@ -2468,7 +2419,7 @@ function StockIcon(props: { id: number; color: string; size?: number }) {
         width: `${props.size ?? 38}px`,
         height: `${props.size ?? 38}px`,
         background: props.color,
-        'mask-image': `url(${stockIcon(props.id)})`,
+        'mask-image': `url(${src})`,
         'mask-size': 'contain',
         'mask-repeat': 'no-repeat',
         'mask-position': 'center',
@@ -2510,172 +2461,20 @@ function Static(props: { start: State }) {
   );
 }
 
-/* The recipe editor's ROUNDED CORNERS and UPPERCASE options, over every
-   screen on the page. Round marks (knots, swatches, dots) stay round. */
-/* Materials: each look names how every role is drawn (the column, the rail,
-   rows and their focus, chips, panels, the keyboard), not just two colors. */
-const LOOKS = {
-  /* Drawn from its two dials: glassVars. */
-  glass: '',
-  contrast: `
-    --m-blur: none;
-    --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
-    --m-rail: #000; --m-panel: #000;
-    --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
-    --m-track: rgb(255 255 255 / 0.1); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
-    --m-focus: rgb(255 255 255 / 0.2); --m-focus-edge: inset 0 0 0 3px #ffd60a;
-    --m-divider: inset 0 2px 0 rgb(255 255 255 / 0.55);
-    --m-accent: #b06cff; --m-confirm: #1f7cff;
-    --m-title: #000; --m-text-area: #000; --m-tray: #000;
-    --m-well: #000; --m-well-edge: inset 0 0 0 1px rgb(255 255 255 / 0.4); --m-mark: #ffd60a;
-    --m-key: #3a3a3c; --m-key-special: #1c1c1e; --m-key-edge: inset 0 0 0 1px rgb(255 255 255 / 0.5); --m-key-focus: inset 0 0 0 4px #ffd60a;`,
-  /* After the X-series menus: an opaque black column, gray plates with a lit
-     top edge and a dark bottom edge, engraved dividers, recessed wells for
-     scales, and focus as a brighter raised plate with a fine light rim. */
-  fujimod: `
-    --m-blur: none;
-    --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
-    --m-rail: linear-gradient(90deg, #2e2e2e, #232323); --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
-    --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
-    --m-track: linear-gradient(#262626, #1a1a1a); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(0 0 0 / 0.9);
-    --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.55), 0 2px 4px rgb(0 0 0 / 0.7);
-    --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
-    --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
-    --m-mark: #fff;
-    --m-accent: #d4282f; --m-confirm: linear-gradient(#d83a40, #a91d23);
-    --m-title: linear-gradient(#262626, #121212); --m-text-area: rgb(0 0 0 / 0.82); --m-tray: linear-gradient(#141414, #050505);
-    --m-key: linear-gradient(#4a4a4a, #333); --m-key-special: linear-gradient(#2c2c2c, #1e1e1e);
-    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.8);
-    --m-key-focus: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 2px #fff;`,
-};
-type Look = keyof typeof LOOKS;
-const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
 
-/* Glass has two dials, as Liquid Glass does: OPACITY (how much of the photo
-   shows through) and CONTRAST (how bright edges, focus and dividers are). 0 and
-   0 is the lightest glass; the Glass look's defaults sit just under halfway. */
-function glassVars(opacity: number, contrast: number): string {
-  const mix = (a: number, b: number, t: number) => +(a + (b - a) * t).toFixed(3);
-  const fill = (a: number) => mix(a, Math.min(0.97, a + 0.3), opacity);
-  const edge = (a: number) => mix(a, Math.min(1, a * 2.2), contrast);
-  return `
-    --m-blur: blur(${mix(12, 20, opacity)}px) saturate(1.25);
-    --m-column: rgb(${mix(22, 12, opacity)} ${mix(22, 12, opacity)} ${mix(24, 14, opacity)} / ${fill(0.5)});
-    --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
-    --m-rail: rgb(16 16 18 / ${fill(0.72)}); --m-panel: rgb(26 26 28 / ${fill(0.84)});
-    --m-chip: rgb(20 20 22 / ${fill(0.52)});
-    --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
-    --m-track: rgb(255 255 255 / ${mix(0.05, 0.1, contrast)}); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / ${mix(0, 0.12, contrast)});
-    --m-focus: rgb(255 255 255 / ${mix(0.15, 0.26, contrast)});
-    --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.3)}), inset 0 0 0 ${contrast > 0.5 ? 2 : 1}px rgb(255 255 255 / ${edge(0.12) + contrast * 0.3});
-    --m-divider: inset 0 1px 0 rgb(255 255 255 / ${edge(0.14)});
-    --m-accent: ${contrast > 0.5 ? '#8f4fe0' : '#7d3fc2'}; --m-confirm: #0a6bdc;
-    --m-title: rgb(0 0 0 / ${fill(0.55)}); --m-text-area: rgb(20 20 22 / ${fill(0.42)}); --m-tray: rgb(26 26 28 / ${fill(0.76)});
-    --m-key: rgb(255 255 255 / ${mix(0.28, 0.36, contrast)}); --m-key-special: rgb(255 255 255 / ${mix(0.1, 0.17, contrast)});
-    --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;
-    --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a;`;
-}
-const GLASS_DEFAULT = { opacity: 0.35, contrast: 0.6 };
 
-const STYLE_OPTIONS = `
-${(Object.keys(LOOKS) as Look[]).filter((k) => k !== 'glass').map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
-.fm-look-fujimod .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
-.fm-look-fujimod .fm-screen rect { rx: 0; ry: 0; }
-.fm-square .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
-.fm-square .fm-screen rect { rx: 0; ry: 0; }
-.fm-upper .fm-screen { text-transform: uppercase; }
-`;
 
-function Toggle(props: { label: string; on: boolean; set: (on: boolean) => void }) {
+
+/** The film editor's review states, one screen each. */
+export function FilmStates() {
   return (
-    <button
-      type="button"
-      class="flex h-[44px] items-center gap-[10px] rounded-[12px] bg-[#2c2c2e] pr-[14px] pl-[8px] text-[16px] font-semibold text-white"
-      onClick={() => props.set(!props.on)}
-    >
-      <span class="relative h-[28px] w-[46px] rounded-full transition-colors" style={{ background: props.on ? '#34c759' : '#48484a' }}>
-        <span class="absolute top-[2px] size-[24px] rounded-full bg-white transition-[left]" style={{ left: props.on ? '20px' : '2px' }} />
-      </span>
-      {props.label}
-    </button>
+    <For each={STATES}>
+      {(entry) => (
+        <section id={entry.id} class="mt-[28px]">
+          <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
+          <Static start={entry.state} />
+        </section>
+      )}
+    </For>
   );
 }
-
-export function FilmReview(props: { children: JSX.Element }) {
-  const [rounded, setRounded] = createSignal(true);
-  const [upper, setUpper] = createSignal(false);
-  const [look, setLook] = createSignal<Look>('glass');
-  const [opacity, setOpacity] = createSignal(GLASS_DEFAULT.opacity);
-  const [contrast, setContrast] = createSignal(GLASS_DEFAULT.contrast);
-  return (
-    <div
-      class={`min-h-dvh touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd] ${rounded() ? '' : 'fm-square'} ${upper() ? 'fm-upper' : ''} fm-look-${look()}`}
-    >
-      <style>{STYLE_OPTIONS}</style>
-      <style>{`.fm-look-glass .fm-screen {${glassVars(opacity(), contrast())} }`}</style>
-      <h1 class="mb-[12px] text-[22px] font-semibold">Custom settings editor</h1>
-      <div class="mb-[14px] flex flex-wrap gap-[8px]">
-        <Toggle label="Rounded corners" on={rounded()} set={setRounded} />
-        <Toggle label="Uppercase" on={upper()} set={setUpper} />
-        <For each={LOOK_NAMES}>
-          {([value, label]) => (
-            <button
-              type="button"
-              class="h-[44px] rounded-[12px] px-[14px] text-[16px] font-semibold"
-              style={look() === value ? { background: '#fff', color: '#000' } : { background: '#2c2c2e', color: '#fff' }}
-              onClick={() => {
-                setLook(value);
-                if (value === 'fujimod') setUpper(true);
-              }}
-            >
-              {label}
-            </button>
-          )}
-        </For>
-      </div>
-      <Show when={look() === 'glass'}>
-        <div class="mb-[14px] flex max-w-[720px] flex-col gap-[6px]">
-          <For each={[['Opacity', opacity, setOpacity], ['Contrast', contrast, setContrast]] as [string, () => number, (v: number) => void][]}>
-            {([label, get, set]) => (
-              <label class="flex h-[44px] items-center gap-[12px] text-[16px] font-semibold text-white">
-                <span class="w-[84px]">{label}</span>
-                <input type="range" min="0" max="100" value={Math.round(get() * 100)} class="h-[44px] grow accent-white" onInput={(e) => set(Number(e.currentTarget.value) / 100)} />
-                <span class="w-[40px] text-right tabular-nums">{Math.round(get() * 100)}</span>
-              </label>
-            )}
-          </For>
-        </div>
-      </Show>
-      {props.children}
-      <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">Film editor</h2>
-      <For each={STATES}>
-        {(entry) => (
-          <section id={entry.id} class="mt-[28px]">
-            <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
-            <Static start={entry.state} />
-          </section>
-        )}
-      </For>
-    </div>
-  );
-}
-
-export function Fit(props: { children: JSX.Element }) {
-  let host: HTMLDivElement | undefined;
-  const [scale, setScale] = createSignal(1);
-  onSettled(() => {
-    const element = host;
-    if (!element) return;
-    const observer = new ResizeObserver(() => setScale(Math.min(1, element.clientWidth / 720)));
-    observer.observe(element);
-    return () => observer.disconnect();
-  });
-  return (
-    <div ref={(element) => (host = element)} class="w-full max-w-[720px] overflow-hidden" style={{ height: `${480 * scale()}px` }}>
-      <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: '720px' }}>
-        {props.children}
-      </div>
-    </div>
-  );
-}
-
