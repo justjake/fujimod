@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
-            | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -182,12 +182,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let fallback_wait_seconds =
                 take_fallback_wait(&mut inputs, command == "sd-boot-v1-ram-startup")?;
-            let stub_command = command == "sd-boot-v1-copy-stub-startup";
+            let marker_command = command == "sd-boot-v1-marker-startup";
+            let stub_command = command == "sd-boot-v1-copy-stub-startup" || marker_command;
             let redirect_command = command == "sd-boot-v1-checked-redirect-startup" || stub_command;
             let checked_redirect = take_redirect_mode(&mut inputs, redirect_command)?;
             let read_only_destination = take_destination(
                 &mut inputs,
-                matches!(command, "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup"),
+                matches!(command, "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup"),
             )?;
             let overlay = take_ram_overlay(
                 &mut inputs,
@@ -196,13 +197,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|path| fujimod_recovery::image::Overlay::read(&path))
             .transpose()?;
             let (firmware, dat, output, hold) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup"))?;
+                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup"))?;
             let options = StartupOptions {
                 internal_flash: command == "sd-boot-v1-ram-startup",
                 fallback_wait_seconds,
                 read_only_destination,
                 checked_redirect,
                 copy_stub: stub_command,
+                marker: marker_command,
                 ..hold
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
@@ -221,7 +223,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 recipe.build_ota_startup(&source)?
             } else if command == "sd-boot-v1-stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
-            } else if matches!(command, "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup") {
+            } else if matches!(command, "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup") {
                 // The update stays an independent input and is not written.
                 recipe.build_boot_files(&source, options)?
             } else {
@@ -238,7 +240,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-boot-v1-copy-stub-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, one required)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-boot-v1-copy-stub-startup|sd-boot-v1-marker-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup, sd-boot-v1-copy-stub-startup and sd-boot-v1-marker-startup, one required)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }

@@ -58,6 +58,9 @@ pub struct StartupOptions {
     /// dead padding of the stock reset image, and that checks the DRAM copy and the destination at
     /// the moment of use and falls back to the flash copy (`xp5::package_copy_stub`).
     pub copy_stub: bool,
+    /// With `copy_stub`: also change a few named words of the first section (a hook at its entry point and a
+    /// short program in its zero padding) through the same checked path (`xp5::package_marker`).
+    pub marker: bool,
 }
 
 impl StartupOptions {
@@ -505,6 +508,7 @@ impl Recipe {
             !options.copy_stub || options.checked_redirect.is_some(),
             "The copy stub requires the checked redirect",
         )?;
+        require(!options.marker || options.copy_stub, "The marker requires the copy stub")?;
         require(
             source.len() == self.source_size,
             "Update size differs from recipe",
@@ -603,7 +607,16 @@ impl Recipe {
                             contract.verify(&ram)?;
                         }
                         redirect_checked = true;
-                        if options.copy_stub {
+                        if options.marker {
+                            xp5::package_marker(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.hold_units()?,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.copy_stub {
                             xp5::package_copy_stub(
                                 &inverted,
                                 setup,

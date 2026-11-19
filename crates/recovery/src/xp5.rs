@@ -42,6 +42,20 @@ mod stub_template {
     include!(concat!(env!("OUT_DIR"), "/xp5_copy_stub.rs"));
 }
 
+/// The marker build: the copy-stub build plus a binding that names the words the loader changes in
+/// the DRAM copy of the first section.
+#[allow(dead_code)]
+mod marker_loader_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_marker_loader.rs"));
+}
+
+/// The marker program's own image (position independent code and a zero parameter block) and the
+/// offsets of the parameters in it.
+#[allow(dead_code)]
+mod marker_image {
+    include!(concat!(env!("OUT_DIR"), "/xp5_marker.rs"));
+}
+
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
 /// loader (`template`); `INTERNAL_FLASH` is the same sources built for a startup that keeps the
 /// installed flash attached (`flash_template`); `READ_ONLY` only reads the RAM image into spare
@@ -67,8 +81,10 @@ struct Loader {
     read_only_binding: Option<usize>,
     /// Offset of the checked-redirect binding; only the checked-redirect and copy-stub builds have one.
     redirect_binding: Option<usize>,
-    /// Offset of the copy-stub binding; only the copy-stub build has one.
+    /// Offset of the copy-stub binding; only the copy-stub and marker builds have one.
     copy_stub_binding: Option<usize>,
+    /// Offset of the marker binding; only the marker build has one.
+    marker_binding: Option<usize>,
 }
 /// The XP5 redistributor window and the stride of its pages: an SGI frame is the second page of
 /// a redistributor, `0x10000` above a `0x20000`-aligned base, and cores 1 to 3 follow each other.
@@ -101,6 +117,7 @@ const CARD: Loader = Loader {
     read_only_binding: None,
     redirect_binding: None,
     copy_stub_binding: None,
+    marker_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
     image: flash_template::IMAGE,
@@ -121,6 +138,7 @@ const INTERNAL_FLASH: Loader = Loader {
     read_only_binding: None,
     redirect_binding: None,
     copy_stub_binding: None,
+    marker_binding: None,
 };
 const READ_ONLY: Loader = Loader {
     image: read_only_template::IMAGE,
@@ -141,6 +159,7 @@ const READ_ONLY: Loader = Loader {
     read_only_binding: Some(read_only_template::SETUP_SD_READ_ONLY),
     redirect_binding: None,
     copy_stub_binding: None,
+    marker_binding: None,
 };
 const CHECKED_REDIRECT: Loader = Loader {
     image: checked_redirect_template::IMAGE,
@@ -161,6 +180,7 @@ const CHECKED_REDIRECT: Loader = Loader {
     read_only_binding: Some(checked_redirect_template::SETUP_SD_READ_ONLY),
     redirect_binding: Some(checked_redirect_template::SETUP_SD_REDIRECT),
     copy_stub_binding: None,
+    marker_binding: None,
 };
 const COPY_STUB: Loader = Loader {
     image: copy_stub_template::IMAGE,
@@ -181,6 +201,28 @@ const COPY_STUB: Loader = Loader {
     read_only_binding: Some(copy_stub_template::SETUP_SD_READ_ONLY),
     redirect_binding: Some(copy_stub_template::SETUP_SD_REDIRECT),
     copy_stub_binding: Some(copy_stub_template::SETUP_SD_COPY_STUB),
+    marker_binding: None,
+};
+const MARKER: Loader = Loader {
+    image: marker_loader_template::IMAGE,
+    prelude_stack_max: marker_loader_template::PRELUDE_STACK_MAX,
+    setup_entry: marker_loader_template::XP5_SETUP_ENTRY,
+    setup_configuration: marker_loader_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: marker_loader_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: marker_loader_template::XP5_SETUP_STACK,
+    setup_stack_top: marker_loader_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: marker_loader_template::SETUP_SD_INITIALIZE,
+    sd_request: marker_loader_template::SETUP_SD_REQUEST,
+    sd_progress: marker_loader_template::SETUP_SD_PROGRESS,
+    sd_board: marker_loader_template::SETUP_SD_BOARD,
+    boot_ready: marker_loader_template::A64_BOOT_READY,
+    boot_zero_gate: marker_loader_template::A64_BOOT_ZERO_GATE,
+    externals: marker_loader_template::EXTERNALS,
+    internal_flash_binding: None,
+    read_only_binding: Some(marker_loader_template::SETUP_SD_READ_ONLY),
+    redirect_binding: Some(marker_loader_template::SETUP_SD_REDIRECT),
+    copy_stub_binding: Some(marker_loader_template::SETUP_SD_COPY_STUB),
+    marker_binding: Some(marker_loader_template::SETUP_SD_MARKER),
 };
 /// The DRAM a read-only startup may fill: the same two numbers as `READ_ONLY_FLOOR` and
 /// `READ_ONLY_CEILING` in the loader source `read_only.h`, which refuses anything else. It is the
@@ -451,7 +493,73 @@ pub(crate) fn package_read_only(
         success_hold_units,
         None,
         None,
-        Some(ReadOnly { destination, redirect: None, stub: None }),
+        Some(ReadOnly { destination, redirect: None, stub: None, marker: None }),
+    )
+}
+
+/// The copy-stub startup with a change to the first section: a hook at the section's entry point and a
+/// short program in the zero padding of the section, which lights the lamp and returns (`marker.S`). The
+/// card's `ffboot.bin` is the same stock-derived file as the copy stub's, byte for byte; the loader proves
+/// the DRAM copy equal to the flash, then writes the named words into the DRAM copy itself, proves the
+/// result against the flash again, and the copy stub checks the changed section at the moment of use (its
+/// bound CRC-32 is the changed section's) and copies the flash's section on any difference.
+pub(crate) fn package_marker(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64, destination: u64,
+    mode: CheckedRedirect,
+) -> Result<Vec<File>> {
+    let (setup, mut ram) = read_only_inputs(inverted, setup, ram)?;
+    let bias = setup
+        .reset_dat
+        .checked_sub(redirect::RESET_FLASH)
+        .ok_or_else(|| image::Error::Invalid("The reset image precedes its flash offset".into()))?;
+    let reset = extent(&ram, 0, setup.reset_copy_size)?.to_vec();
+    let plan = redirect::locate(&reset, inverted, bias, &ram)?;
+    let prefix = (plan.dst as usize + plan.bytes + 0xfff) & !0xfff;
+    require(prefix <= ram.len(), "The redirected section lies outside the RAM image")?;
+    ram.truncate(prefix);
+    let lamp = &setup.lamp;
+    let stub_lamp = redirect::StubLamp {
+        pio_base: lamp.pio_base,
+        green_port: lamp.green_port,
+        red_port: lamp.red_port,
+        pin: lamp.pin,
+    };
+    let section = extent(inverted, plan.flash_offset as usize + bias, plan.bytes)?;
+    let declared = redirect::declared_size(&plan, inverted, bias)?;
+    let marker = redirect::marker_plan(
+        &plan,
+        section,
+        declared,
+        marker_image::IMAGE,
+        &redirect::MarkerValues::for_lamp(&stub_lamp),
+    )?;
+    let binding = redirect::stub_binding_with(
+        &plan,
+        &reset,
+        inverted,
+        bias,
+        setup.flash.aperture,
+        destination,
+        setup.reset_copy_size,
+        ram.len(),
+        mode == CheckedRedirect::Apply,
+        &stub_lamp,
+        stub_template::IMAGE,
+        Some(marker.modified_crc32),
+    )?;
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_units,
+        None,
+        None,
+        Some(ReadOnly {
+            destination,
+            redirect: Some(redirect::Binding(binding.redirect.0)),
+            stub: Some(binding),
+            marker: Some(marker),
+        }),
     )
 }
 
@@ -529,7 +637,7 @@ pub(crate) fn package_checked_redirect(
         success_hold_units,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(binding), stub: None }),
+        Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None }),
     )
 }
 
@@ -579,7 +687,7 @@ pub(crate) fn package_copy_stub(
         success_hold_units,
         None,
         None,
-        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding) }),
+        Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None }),
     )
 }
 
@@ -592,6 +700,8 @@ struct ReadOnly {
     /// The copy stub of the copy-stub build: with it, `redirect` is the stub build's binding of the
     /// copy call, not of the source translator.
     stub: Option<redirect::StubBinding>,
+    /// The marker of the marker build: the words the loader changes in the DRAM copy of the section.
+    marker: Option<redirect::MarkerPlan>,
 }
 
 /// How an internal-flash startup differs from a card-resident one.
@@ -738,7 +848,9 @@ fn package_inner(
     )?;
     let prefix = setup.verify(inverted)?;
     let loader = if let Some(read_only) = &read_only {
-        if read_only.stub.is_some() {
+        if read_only.marker.is_some() {
+            &MARKER
+        } else if read_only.stub.is_some() {
             &COPY_STUB
         } else if read_only.redirect.is_some() {
             &CHECKED_REDIRECT
@@ -898,6 +1010,12 @@ fn package_inner(
                 image::Error::Invalid("This XP5 loader build has no copy-stub binding".into())
             })?;
             redirect::bind_stub(&mut program, at, stub)?;
+        }
+        if let Some(marker) = &read_only.marker {
+            let at = loader.marker_binding.ok_or_else(|| {
+                image::Error::Invalid("This XP5 loader build has no marker binding".into())
+            })?;
+            redirect::bind_marker(&mut program, at, marker)?;
         }
     }
     let restore = loader.setup_return_branch;
@@ -2045,6 +2163,139 @@ mod tests {
         offsets.sort_unstable();
         assert!(offsets.windows(2).all(|w| w[1] == w[0] + 8));
         assert_eq!(offsets[0], stub_template::XP5_STUB_PARAMS);
+    }
+
+    /// `redirect_fixture` with a section 0 that has a header, an entry point and zero padding before a vector
+    /// table, and tables that declare its size.
+    fn marker_fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+        let (fixture_data, mut s, _) = fixture();
+        let (reset, mut update, ram_stage) = redirect::tests::marker_stage(0);
+        let ram_size = 0x8_1000 + redirect::tests::E2E_SECTION_BYTES;
+        update[..0x40000].copy_from_slice(&fixture_data[..0x40000]);
+        let mut stock = reset.clone();
+        put64(&mut stock, s.selector, 1).unwrap();
+        update[0x40000..0x40000 + stock.len()].copy_from_slice(&stock);
+        s.reset_copy_size = 0xb000;
+        let mut ram = vec![0u8; ram_size];
+        ram[..0xb000].copy_from_slice(&stock);
+        put64(&mut ram, s.selector, 0).unwrap();
+        ram[0x4_0000..0x4_0800].copy_from_slice(&update[0x64_0000..0x64_0800]);
+        ram[0x8_1000..].copy_from_slice(&update[0xc_0000..0xc_0000 + redirect::tests::E2E_SECTION_BYTES]);
+        assert_eq!(ram[0x4_0000..0x4_0800], ram_stage[0x4_0000..0x4_0800]);
+        (update, s, ram)
+    }
+
+    #[test]
+    fn the_marker_packages_the_copy_stubs_file_and_binds_the_names_the_stub_crc_and_every_proof() {
+        let (data, s, ram) = marker_fixture();
+        let at = 0xc000 + marker_loader_template::SETUP_SD_REDIRECT;
+        let stub_at = 0xc000 + marker_loader_template::SETUP_SD_COPY_STUB;
+        let marker_at = 0xc000 + marker_loader_template::SETUP_SD_MARKER;
+        let stub = package_copy_stub(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        for (mode, apply) in [(CheckedRedirect::Apply, 1u64), (CheckedRedirect::VerifyOnly, 0)] {
+            let files = package_marker(&data, &s, ram.clone(), 0, 0x3000_0000, mode).unwrap();
+            assert_eq!(files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["marble_init.bin", "ffboot.bin"]);
+            // The card's file is the stock-derived cut image of the copy stub, byte for byte: the loader makes the change.
+            assert_eq!(files[1].bytes, stub[1].bytes);
+            assert_eq!(files[1].bytes[0x8_1000..0x8_3000], data[0xc_0000..0xc_2000]);
+            let marble = &files[0].bytes;
+            let q = |at: usize, n: usize| u64::from_le_bytes(marble[at + 8 * n..at + 8 * n + 8].try_into().unwrap());
+            let d = |at: usize| u32::from_le_bytes(marble[at..at + 4].try_into().unwrap());
+            // The redirect binding is the copy stub's (the copy call, the flash range's CRC-32: the STOCK section's).
+            let section = &data[0xc_0000..0xc_2000];
+            assert_eq!((q(at, 0), q(at, 1), q(at, 2)), (1, apply, 0x2d04));
+            assert_eq!((q(at, 7), q(at, 8), q(at, 9), q(at, 10)), (0x8_1000, 0x2000, 0xf00c_0000, u64::from(crate::xp4::crc32(section))));
+            // The marker binding: the modified CRC-32, the declared size, the names.
+            let modified_crc = q(marker_at, 1);
+            assert_ne!(modified_crc, q(at, 10));
+            assert_eq!((q(marker_at, 0), q(marker_at, 2), q(marker_at, 3)), (1, 0x1800, 65.min(q(marker_at, 3))));
+            let count = q(marker_at, 3) as usize;
+            assert!(count > 1 && count <= 96);
+            let mut changed = section.to_vec();
+            for n in 0..count {
+                let w = marker_at + 40 + 12 * n;
+                let (offset, old, new) = (d(w) as usize, d(w + 4), d(w + 8));
+                assert_eq!(u32::from_le_bytes(section[offset..offset + 4].try_into().unwrap()), old);
+                changed[offset..offset + 4].copy_from_slice(&new.to_le_bytes());
+            }
+            assert_eq!(u64::from(crate::xp4::crc32(&changed)), modified_crc);
+            // Past the last name the binding is zero, and so are its outputs.
+            assert!(marble[marker_at + 40 + 12 * count..marker_at + 40 + 12 * 96 + 32].iter().all(|b| *b == 0));
+            // The stub checks the MODIFIED section: its bound CRC-32 is the marker's, and the stub bytes carry it.
+            let len = stub_template::IMAGE.len();
+            let image = &marble[stub_at + 48..stub_at + 48 + len];
+            assert_eq!(u64::from_le_bytes(image[stub_template::XP5_STUB_P_CRC..][..8].try_into().unwrap()), modified_crc);
+            assert_eq!(q(stub_at, 4), u64::from(crate::xp4::crc32(image)));
+        }
+        // The two modes differ in the apply word alone.
+        let apply = package_marker(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::Apply).unwrap();
+        let verify = package_marker(&data, &s, ram.clone(), 0, 0x3000_0000, CheckedRedirect::VerifyOnly).unwrap();
+        let differing: Vec<usize> =
+            (0..apply[0].bytes.len()).filter(|&n| apply[0].bytes[n] != verify[0].bytes[n]).collect();
+        assert_eq!(differing, [at + 8]);
+        // The marker loader is a build of its own.
+        assert_ne!(apply[0].bytes, stub[0].bytes);
+        // The stub's own CRC-32 differs from the copy stub's card: only the bound CRC-32 of the stub's block changed.
+        assert_ne!(apply[0].bytes[stub_at + 48..stub_at + 48 + stub_template::IMAGE.len()], stub[0].bytes[0xc000 + copy_stub_template::SETUP_SD_COPY_STUB + 48..0xc000 + copy_stub_template::SETUP_SD_COPY_STUB + 48 + stub_template::IMAGE.len()]);
+    }
+
+    #[test]
+    fn the_marker_refuses_what_it_cannot_prove_or_place() {
+        let (data, s, ram) = marker_fixture();
+        let go = |data: &[u8], s: &Setup, ram: Vec<u8>, destination: u64| {
+            package_marker(data, s, ram, 0, destination, CheckedRedirect::Apply)
+        };
+        assert!(go(&data, &s, ram.clone(), 0x3000_0000).is_ok());
+        for bad in [0x2000_0000, 0x3000_0004, READ_ONLY_CEILING, 0x2445_9000 - 0x1000] {
+            assert!(go(&data, &s, ram.clone(), bad).is_err(), "{bad:#x}");
+        }
+        // The card's section differs from the flash's: the file has to be the stock-derived one (the loader changes it).
+        let mut bad = ram.clone();
+        bad[0x8_1000 + 0x40] ^= 1;
+        assert!(go(&data, &s, bad, 0x3000_0000).is_err());
+        // The entry instruction is not the one the program displaces (flash and card agree).
+        let mut other = data.clone();
+        other[0xc_0000 + 0x40] ^= 0x20;
+        let mut ram_other = ram.clone();
+        ram_other[0x8_1000 + 0x40] ^= 0x20;
+        assert!(go(&other, &s, ram_other, 0x3000_0000).is_err());
+        // Tables that declare no size (the copy stub's fixture) have no section to change.
+        let (plain, plain_setup, plain_ram) = redirect_fixture();
+        assert!(go(&plain, &plain_setup, plain_ram, 0x3000_0000).is_err());
+        let (plain, plain_setup, plain_ram) = fixture();
+        assert!(go(&plain, &plain_setup, plain_ram, 0x3000_0000).is_err());
+    }
+
+    #[test]
+    fn the_marker_loader_asset_keeps_its_four_binding_templates_and_no_other_build_has_the_marker_one() {
+        use marker_loader_template as t;
+        assert_eq!(
+            (t::SETUP_SD_REDIRECT % 8, t::SETUP_SD_READ_ONLY % 8, t::SETUP_SD_COPY_STUB % 8, t::SETUP_SD_MARKER % 8),
+            (0, 0, 0, 0)
+        );
+        let mut template = vec![0u8; redirect::MARKER_BINDING];
+        template[..8].copy_from_slice(&1u64.to_le_bytes());
+        assert_eq!(&t::IMAGE[t::SETUP_SD_MARKER..t::SETUP_SD_MARKER + template.len()], template);
+        assert_eq!(MARKER.marker_binding, Some(t::SETUP_SD_MARKER));
+        assert_eq!(MARKER.copy_stub_binding, Some(t::SETUP_SD_COPY_STUB));
+        assert_eq!(MARKER.redirect_binding, Some(t::SETUP_SD_REDIRECT));
+        assert_eq!(
+            (CARD.marker_binding, INTERNAL_FLASH.marker_binding, READ_ONLY.marker_binding, CHECKED_REDIRECT.marker_binding, COPY_STUB.marker_binding),
+            (None, None, None, None, None)
+        );
+        for other in [
+            include_str!("../assets/sd-boot-v1-xp5-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-internal-flash-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-read-only-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-checked-redirect-loader.generated.json"),
+            include_str!("../assets/sd-boot-v1-xp5-copy-stub-loader.generated.json"),
+        ] {
+            assert!(!other.contains("setup_sd_marker"));
+        }
+        // The marker build is its own loader, and the stub it binds is the copy stub's asset, unchanged.
+        assert_ne!(t::IMAGE, copy_stub_template::IMAGE);
+        assert_eq!(t::XP5_SETUP_RETURN_BRANCH, copy_stub_template::XP5_SETUP_RETURN_BRANCH);
+        assert_eq!(t::PRELUDE_STACK_MAX, copy_stub_template::PRELUDE_STACK_MAX);
     }
 
     #[test]

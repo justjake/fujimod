@@ -149,6 +149,16 @@ fn page_offset(image: &[u8], adrp: usize) -> Result<u64> {
 
 /// The section table's row for id 0: DRAM address, flash offset, size, and whether it is raw.
 fn row0(table: &[u8], table_ram: u64) -> Result<(u64, u64, usize)> {
+    let at = row0_at(table, table_ram)?;
+    let dst = u64::from_le_bytes(table[at + 8..at + 16].try_into().unwrap());
+    let flash = u64::from(word(table, at + 40)?);
+    let size = word(table, at + 48)? as usize;
+    require(word(table, at + 56)? == 0, "Section 0 is not stored raw")?;
+    Ok((dst, flash, size))
+}
+
+/// The byte offset in `table` of the row for id 0.
+fn row0_at(table: &[u8], table_ram: u64) -> Result<usize> {
     require(table.len() >= 0x100, "A section table is too short")?;
     let rows = u64::from_le_bytes(table[..8].try_into().unwrap());
     let first = rows
@@ -167,12 +177,7 @@ fn row0(table: &[u8], table_ram: u64) -> Result<(u64, u64, usize)> {
             found = Some(at);
         }
     }
-    let at = found.ok_or_else(|| image::Error::Invalid("A section table has no row for section 0".into()))?;
-    let dst = u64::from_le_bytes(table[at + 8..at + 16].try_into().unwrap());
-    let flash = u64::from(word(table, at + 40)?);
-    let size = word(table, at + 48)? as usize;
-    require(word(table, at + 56)? == 0, "Section 0 is not stored raw")?;
-    Ok((dst, flash, size))
+    found.ok_or_else(|| image::Error::Invalid("A section table has no row for section 0".into()))
 }
 
 /// Find the redirect in `reset`, the stock reset image, and check it against the update
@@ -362,11 +367,20 @@ pub(super) const STUB_GAP_LOOPS: u64 = 4_000_000;
 /// pointers in this stage: its address constants are 64-bit.) An over-approximation: a data word that
 /// merely looks like a branch is reported too.
 pub(super) fn references_into(image: &[u8], lo: usize, hi: usize) -> Vec<(usize, &'static str)> {
+    references_into_at(image, 0, lo, hi, false)
+}
+
+/// As `references_into` for an image loaded at address `base` (`lo` and `hi` are addresses; the
+/// reported offsets are offsets in the image). With `data32`, aligned 32-bit data words inside the range
+/// are reported too.
+pub(super) fn references_into_at(
+    image: &[u8], base: usize, lo: usize, hi: usize, data32: bool,
+) -> Vec<(usize, &'static str)> {
     let sx = |value: u32, bits: u32| (i64::from(value) << (64 - bits)) >> (64 - bits);
     let mut hits = Vec::new();
     for at in (0..image.len().saturating_sub(3)).step_by(4) {
         let w = word(image, at).unwrap_or(0);
-        let direct = |offset: i64| usize::try_from(at as i64 + offset).ok().filter(|t| (lo..hi).contains(t));
+        let direct = |offset: i64| usize::try_from((base + at) as i64 + offset).ok().filter(|t| (lo..hi).contains(t));
         let hit = if w & 0x7c00_0000 == 0x1400_0000 {
             direct(4 * sx(w & 0x03ff_ffff, 26)).map(|_| "branch")
         } else if w & 0xff00_0010 == 0x5400_0000 {
@@ -382,7 +396,7 @@ pub(super) fn references_into(image: &[u8], lo: usize, hi: usize) -> Vec<(usize,
             direct(4 * sx((w >> 5) & 0x7_ffff, 19)).map(|_| "literal load")
         } else if w & ADRP_MASK == ADRP {
             let imm = (((w >> 5) & 0x7_ffff) << 2) | ((w >> 29) & 3);
-            let page = ((at & !0xfff) as i64) + (sx(imm, 21) << 12);
+            let page = (((base + at) & !0xfff) as i64) + (sx(imm, 21) << 12);
             (page < hi as i64 && page + 0x1000 > lo as i64).then_some("adrp page")
         } else {
             None
@@ -395,6 +409,14 @@ pub(super) fn references_into(image: &[u8], lo: usize, hi: usize) -> Vec<(usize,
         let value = u64::from_le_bytes(image[at..at + 8].try_into().unwrap());
         if (lo as u64..hi as u64).contains(&value) {
             hits.push((at, "64-bit data value"));
+        }
+    }
+    if data32 {
+        for at in (0..image.len().saturating_sub(3)).step_by(4) {
+            let value = word(image, at).unwrap_or(0) as usize;
+            if (lo..hi).contains(&value) {
+                hits.push((at, "32-bit data value"));
+            }
         }
     }
     hits
@@ -536,6 +558,17 @@ pub(super) fn stub_binding(
     plan: &Plan, reset: &[u8], inverted: &[u8], bias: usize, aperture: u64, destination: u64,
     guard_bytes: usize, file_bytes: usize, apply: bool, lamp: &StubLamp, template: &[u8],
 ) -> Result<StubBinding> {
+    stub_binding_with(plan, reset, inverted, bias, aperture, destination, guard_bytes, file_bytes, apply, lamp, template, None)
+}
+
+/// `stub_binding`, with the CRC-32 that the stub compares the DRAM copy and the destination with given
+/// (`stub_crc`: the CRC-32 of the section as the DRAM copy will hold it), instead of the flash range's.
+/// The binding's own flash-range CRC-32 (what the loader measures the flash against) stays the flash's.
+pub(super) fn stub_binding_with(
+    plan: &Plan, reset: &[u8], inverted: &[u8], bias: usize, aperture: u64, destination: u64,
+    guard_bytes: usize, file_bytes: usize, apply: bool, lamp: &StubLamp, template: &[u8],
+    stub_crc: Option<u32>,
+) -> Result<StubBinding> {
     require(
         destination % 0x1000 == 0
             && (READ_ONLY_FLOOR..READ_ONLY_CEILING).contains(&destination)
@@ -570,7 +603,7 @@ pub(super) fn stub_binding(
             flash: aperture + plan.flash_offset,
             bytes: plan.bytes as u64,
             dram: destination + plan.dst,
-            crc: u64::from(crc),
+            crc: u64::from(stub_crc.unwrap_or(crc)),
             copy: plan.copy_fn as u64,
             green: lamp.pio_base + 64 * u64::from(lamp.green_port),
             red: lamp.pio_base + 64 * u64::from(lamp.red_port),
@@ -634,6 +667,260 @@ pub(super) fn bind_stub(program: &mut [u8], at: usize, stub: &StubBinding) -> Re
     put64(program, at + 32, u64::from(stub.crc32))?;
     put64(program, at + 40, stub.params_offset as u64)?;
     program[at + 48..at + 48 + stub.image.len()].copy_from_slice(&stub.image);
+    Ok(())
+}
+
+// ---- The marker ----
+//
+// A change to the section itself. The loader (and the copy stub after it) still proves that the
+// section the stage copies is the section the packager measured; what changes is that this section is
+// no longer the flash's own: a small named set of words differs, namely the first instruction of the
+// section's entry point (replaced by a `b` to a program) and the program itself, written into the
+// run of zero words that the linker left in front of the section's first exception vector table. The
+// program (`marker.S`) lights the lamp and returns to the instruction after the hook, so the
+// section's own flow is unchanged. Nothing is changed in the zero tail of the section (the part
+// past its declared size), which the stage's second core fills with zeros while the section is
+// copied.
+
+/// The most words the loader's binding can name (`MARKER_MAX_WORDS` in `marker.h`).
+pub(super) const MARKER_MAX: usize = 96;
+/// The program's parameter block (`MARKER_PARAMS` in `marker.h`).
+pub(super) const MARKER_PARAMS: usize = 72;
+/// The loader's binding: abi, CRC-32, code bytes, count, parameter offset, the words, four outputs.
+pub(super) const MARKER_BINDING: usize = 40 + 12 * MARKER_MAX + 32;
+/// The run of zero words that takes the program is at least this long (words), ends on a vector
+/// table boundary, and is the only such run in the section's code and data.
+const CAVE_RUN_MIN: usize = 512;
+const CAVE_ALIGN: usize = 16;
+/// At least this many bytes of the zero run stay zero after the program.
+const CAVE_MARGIN: usize = 0x40;
+/// Loop counts of one phase of the lamp: three phases of about a third of a second each on the
+/// stage's code speed on a camera (about 4.4 M loops per second).
+pub(super) const MARKER_PHASE_LOOPS: u64 = 1_600_000;
+
+/// What the marker program's parameter block says (the program's `marker.S` documents each word).
+pub(super) struct MarkerValues {
+    pub green: u64,
+    pub red: u64,
+    pub pin: u64,
+    pub enable: u64,
+    pub enable_green: u64,
+    pub enable_red: u64,
+    pub mux: u64,
+    pub restore: u64,
+    pub phase: u64,
+}
+
+impl MarkerValues {
+    /// The values for the prelude's lamp (the same as the copy stub's).
+    pub(super) fn for_lamp(lamp: &StubLamp) -> Self {
+        Self {
+            green: lamp.pio_base + 64 * u64::from(lamp.green_port),
+            red: lamp.pio_base + 64 * u64::from(lamp.red_port),
+            pin: 1u64 << lamp.pin,
+            enable: lamp.pio_base + 0x500,
+            enable_green: (1u64 << (lamp.green_port + 16)) | (1u64 << lamp.green_port),
+            enable_red: (1u64 << (lamp.red_port + 16)) | (1u64 << lamp.red_port),
+            mux: 3u64 << (2 * lamp.pin + 16),
+            restore: (1u64 << (lamp.pin + 16)) | (1u64 << lamp.pin),
+            phase: MARKER_PHASE_LOOPS,
+        }
+    }
+}
+
+/// The changed section: every named word as (offset in the section, stock word, new word), ascending,
+/// and the CRC-32s of the stock and the changed section.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct MarkerPlan {
+    /// Offsets in the section of the hooked word and of the program.
+    pub hook: usize,
+    pub cave: usize,
+    /// The program's parameter block, as an offset in the section.
+    pub params_offset: usize,
+    /// The section's declared size: every changed word lies below it.
+    pub code_bytes: usize,
+    pub words: Vec<(u32, u32, u32)>,
+    pub stock_crc32: u32,
+    pub modified_crc32: u32,
+}
+
+/// `b target` placed at `at`.
+pub(super) fn b_word(at: usize, target: usize) -> Result<u32> {
+    Ok(bl_word(at, target)? ^ 0x8000_0000)
+}
+
+/// The declared size of section 0 in the row of both section tables (which have to agree), and the
+/// address that follows it: the start of the section's zero-filled part.
+pub(super) fn declared_size(plan: &Plan, inverted: &[u8], bias: usize) -> Result<usize> {
+    let mut found = Vec::new();
+    for &(table_ram, flash) in &plan.tables {
+        let table = extent(inverted, flash as usize + bias, plan.table_bytes)?;
+        let at = row0_at(table, table_ram)?;
+        let declared = u64::from_le_bytes(table[at + 16..at + 24].try_into().unwrap());
+        let bss = u64::from_le_bytes(table[at + 24..at + 32].try_into().unwrap());
+        require(
+            declared % 4 == 0 && declared != 0 && declared <= plan.bytes as u64 && bss == plan.dst + declared,
+            "Section 0's declared size does not end where its zero-filled part begins",
+        )?;
+        found.push(declared as usize);
+    }
+    require(found[0] == found[1], "The two section tables declare section 0 differently")?;
+    Ok(found[0])
+}
+
+/// The offset in the section of the one run of zero words that ends on a vector-table boundary and is
+/// long enough to take `bytes` of program and leave `CAVE_MARGIN` zero bytes after it. Nothing in the
+/// section may refer to the run (every branch, `adr`, literal load, `adrp` page and 32- or 64-bit data
+/// value is checked, as for the copy stub's padding).
+pub(super) fn cave(section: &[u8], base: usize, declared: usize, bytes: usize) -> Result<usize> {
+    require(bytes != 0 && bytes % 4 == 0, "The marker's size is not usable")?;
+    let words = declared / 4;
+    let mut runs = Vec::new();
+    let mut n = 0;
+    while n < words {
+        if word(section, 4 * n)? == 0 {
+            let start = n;
+            while n < words && word(section, 4 * n)? == 0 {
+                n += 1;
+            }
+            if start > 0 && (base + 4 * n) % VECTOR_ALIGN == 0 && 4 * (n - start) >= CAVE_RUN_MIN {
+                runs.push((4 * start, 4 * n));
+            }
+        } else {
+            n += 1;
+        }
+    }
+    require(
+        runs.len() == 1,
+        "The section's zero padding before its vector table is not found exactly once",
+    )?;
+    let (start, end) = runs[0];
+    let at = (start + CAVE_ALIGN - 1) & !(CAVE_ALIGN - 1);
+    require(
+        at >= start + 4 && at + bytes + CAVE_MARGIN <= end,
+        "The marker does not fit the section's zero padding",
+    )?;
+    let hits = references_into_at(extent(section, 0, declared)?, base, base + start, base + end, true);
+    require(
+        hits.is_empty(),
+        &format!("The section refers to its zero padding at {:#x}", hits.first().map_or(0, |h| h.0)),
+    )?;
+    Ok(at)
+}
+
+/// Plan the changed section: the hook at the section's entry point, the program in the zero padding,
+/// and the CRC-32s of the section before and after. `section` is the section as the flash holds it
+/// (`plan.bytes` bytes), `template` the program from its asset.
+pub(super) fn marker_plan(
+    plan: &Plan, section: &[u8], declared: usize, template: &[u8], values: &MarkerValues,
+) -> Result<MarkerPlan> {
+    use super::marker_image as t;
+    require(section.len() == plan.bytes && declared <= section.len(), "Section 0 is not the planned size")?;
+    require(
+        template.len() == t::XP5_MARKER_END
+            && t::XP5_MARKER_PARAMS + MARKER_PARAMS == template.len()
+            && template[t::XP5_MARKER_PARAMS..].iter().all(|b| *b == 0)
+            && t::XP5_MARKER_RETURN + 4 <= t::XP5_MARKER_PARAMS
+            && word(template, t::XP5_MARKER_RETURN)? == 0x1400_0000,
+        "The marker template changed",
+    )?;
+    // The section's own header: its address, its declared size and its entry point.
+    let header = |at: usize| Ok::<u64, image::Error>(u64::from_le_bytes(extent(section, at, 8)?.try_into().unwrap()));
+    let entry = header(0x18)?;
+    require(
+        header(0x8)? == plan.dst && header(0x10)? == declared as u64,
+        "Section 0's header does not name its own address and declared size",
+    )?;
+    let hook = entry
+        .checked_sub(plan.dst)
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|&n| n >= 0x20 && n % 4 == 0 && n + 4 <= declared)
+        .ok_or_else(|| image::Error::Invalid("Section 0's entry point is not inside its code".into()))?;
+    // The hook displaces one instruction, which the program executes first.
+    require(
+        word(section, hook)? == word(template, 0)?,
+        "The section's entry instruction is not the one the marker displaces",
+    )?;
+    let cave = cave(section, plan.dst as usize, declared, template.len())?;
+    require(
+        extent(section, cave, template.len())?.iter().all(|b| *b == 0),
+        "The marker's place in the section is not zero",
+    )?;
+    let mut program = template.to_vec();
+    for (offset, value) in [
+        (t::XP5_MARKER_P_GREEN, values.green),
+        (t::XP5_MARKER_P_RED, values.red),
+        (t::XP5_MARKER_P_PIN, values.pin),
+        (t::XP5_MARKER_P_ENABLE, values.enable),
+        (t::XP5_MARKER_P_ENABLE_GREEN, values.enable_green),
+        (t::XP5_MARKER_P_ENABLE_RED, values.enable_red),
+        (t::XP5_MARKER_P_MUX, values.mux),
+        (t::XP5_MARKER_P_RESTORE, values.restore),
+        (t::XP5_MARKER_P_PHASE, values.phase),
+    ] {
+        require(
+            offset >= t::XP5_MARKER_PARAMS && offset + 8 <= program.len(),
+            "A marker parameter is outside its block",
+        )?;
+        put64(&mut program, offset, value)?;
+    }
+    require(values.phase >= 1 && values.phase <= 1 << 28, "The marker's phase length is not usable")?;
+    // The program returns to the instruction after the hook.
+    image::put(&mut program, t::XP5_MARKER_RETURN, b_word(cave + t::XP5_MARKER_RETURN, hook + 4)?)?;
+    let mut words = vec![(hook as u32, word(section, hook)?, b_word(hook, cave)?)];
+    for at in (0..program.len()).step_by(4) {
+        let new = word(&program, at)?;
+        if new != 0 {
+            words.push(((cave + at) as u32, word(section, cave + at)?, new));
+        }
+    }
+    words.sort_unstable();
+    require(
+        words.len() <= MARKER_MAX
+            && words.windows(2).all(|w| w[0].0 < w[1].0)
+            && words.iter().all(|&(offset, stock, new)| offset as usize + 4 <= declared && stock != new),
+        "The marker changes too many words, or one outside the section's code",
+    )?;
+    let mut modified = section.to_vec();
+    for &(offset, _, new) in &words {
+        modified[offset as usize..offset as usize + 4].copy_from_slice(&new.to_le_bytes());
+    }
+    // The part past the declared size is the stage's zero tail: not a byte of it changes.
+    require(modified[declared..] == section[declared..], "The marker changed the zero tail")?;
+    let stock_crc32 = crc32(section);
+    let modified_crc32 = crc32(&modified);
+    require(stock_crc32 != modified_crc32, "The changed section has the stock CRC-32")?;
+    Ok(MarkerPlan {
+        hook,
+        cave,
+        params_offset: cave + t::XP5_MARKER_PARAMS,
+        code_bytes: declared,
+        words,
+        stock_crc32,
+        modified_crc32,
+    })
+}
+
+/// Write the marker binding into the loader at `at` after checking that the template is untouched
+/// (`abi` 1, everything else zero).
+pub(super) fn bind_marker(program: &mut [u8], at: usize, marker: &MarkerPlan) -> Result<()> {
+    let mut template = vec![0u8; MARKER_BINDING];
+    template[..8].copy_from_slice(&1u64.to_le_bytes());
+    require(extent(program, at, MARKER_BINDING)? == template, "XP5 marker binding template changed")?;
+    require(
+        !marker.words.is_empty() && marker.words.len() <= MARKER_MAX,
+        "The marker names no words or too many",
+    )?;
+    put64(program, at + 8, u64::from(marker.modified_crc32))?;
+    put64(program, at + 16, marker.code_bytes as u64)?;
+    put64(program, at + 24, marker.words.len() as u64)?;
+    put64(program, at + 32, marker.params_offset as u64)?;
+    for (n, &(offset, stock, new)) in marker.words.iter().enumerate() {
+        let w = at + 40 + 12 * n;
+        for (k, value) in [offset, stock, new].into_iter().enumerate() {
+            program[w + 4 * k..w + 4 * k + 4].copy_from_slice(&value.to_le_bytes());
+        }
+    }
     Ok(())
 }
 
@@ -997,5 +1284,205 @@ pub(in crate::xp5) mod tests {
         let mut plan2 = plan;
         plan2.copy_old = 0xaa1f_03e1;
         assert!(stub_binding(&plan2, &reset, &update, BIAS, 0xf000_0000, 0x3000_0000, GUARD, file, true, &lamp(), stub::IMAGE).is_err());
+    }
+
+    // ---- the marker ----
+
+    use crate::xp5::marker_image as marker;
+    const MARKER_DECLARED: usize = 0x1800;
+
+    /// A synthetic section 0: a header (address, declared size, entry point), code, a literal, zero padding up to a
+    /// 0x800 boundary (the first vector table follows), more code and the zero tail.
+    pub(in crate::xp5) fn marker_section() -> Vec<u8> {
+        let mut s = vec![0u8; SECTION_BYTES];
+        s[8..16].copy_from_slice(&SECTION_DST.to_le_bytes());
+        s[16..24].copy_from_slice(&(MARKER_DECLARED as u64).to_le_bytes());
+        s[24..32].copy_from_slice(&(SECTION_DST + 0x40).to_le_bytes());
+        for at in (0x20..MARKER_DECLARED).step_by(4) {
+            put(&mut s, at, 0xd280_0001 | ((at as u32 / 4) & 0xff) << 5).unwrap();
+        }
+        put(&mut s, 0x40, 0xaa00_03f4).unwrap();               // mov x20, x0: the entry instruction
+        for at in (0x5fc..0x800).step_by(4) {
+            put(&mut s, at, 0).unwrap();                       // the zero padding, up to the vector table at 0x800
+        }
+        put(&mut s, 0x5f8, 0x000a_03d8).unwrap();              // the last literal
+        s
+    }
+
+    /// `stage`, with the marker section instead of the patterned one, and both tables declaring its size.
+    pub(in crate::xp5) fn marker_stage(bias: usize) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        let (reset, mut update, mut ram) = stage(bias);
+        let section = marker_section();
+        update[SECTION_FLASH + bias..SECTION_FLASH + bias + SECTION_BYTES].copy_from_slice(&section);
+        ram[0x8_1000..].copy_from_slice(&section);
+        for (flash, ram_at) in [(0x64_0000usize, Some(0x4_0000usize)), (0x12_0000, None)] {
+            let row = flash + bias + 0x50;
+            update[row + 16..row + 24].copy_from_slice(&(MARKER_DECLARED as u64).to_le_bytes());
+            update[row + 24..row + 32].copy_from_slice(&(SECTION_DST + MARKER_DECLARED as u64).to_le_bytes());
+            if let Some(at) = ram_at {
+                ram[at + 0x50 + 16..at + 0x50 + 24].copy_from_slice(&(MARKER_DECLARED as u64).to_le_bytes());
+                ram[at + 0x50 + 24..at + 0x50 + 32].copy_from_slice(&(SECTION_DST + MARKER_DECLARED as u64).to_le_bytes());
+            }
+        }
+        (reset, update, ram)
+    }
+
+    fn marker_values() -> MarkerValues {
+        MarkerValues::for_lamp(&lamp())
+    }
+    fn marker_plan_of(section: &[u8]) -> Result<MarkerPlan> {
+        let (reset, update, ram) = marker_stage(BIAS);
+        let plan = locate(&reset, &update, BIAS, &ram).unwrap();
+        let declared = declared_size(&plan, &update, BIAS).unwrap();
+        marker_plan(&plan, section, declared, marker::IMAGE, &marker_values())
+    }
+
+    #[test]
+    fn the_sections_declared_size_comes_from_both_tables() {
+        let (reset, update, ram) = marker_stage(BIAS);
+        let plan = locate(&reset, &update, BIAS, &ram).unwrap();
+        assert_eq!(declared_size(&plan, &update, BIAS).unwrap(), MARKER_DECLARED);
+        // The tables disagree, or the zero-filled part does not follow the declared size.
+        let mut other = update.clone();
+        other[0x12_0000 + BIAS + 0x50 + 16] ^= 0x10;
+        assert!(declared_size(&plan, &other, BIAS).is_err());
+        let mut other = update.clone();
+        other[0x64_0000 + BIAS + 0x50 + 24] ^= 0x10;
+        assert!(declared_size(&plan, &other, BIAS).is_err());
+        // The fixture without declared sizes (the copy stub's) has none.
+        let (reset, plain, ram) = fixture();
+        let plan = locate(&reset, &plain, BIAS, &ram).unwrap();
+        assert!(declared_size(&plan, &plain, BIAS).is_err());
+    }
+
+    #[test]
+    fn the_marker_hooks_the_entry_and_puts_its_program_in_the_zero_padding() {
+        let section = marker_section();
+        let m = marker_plan_of(&section).unwrap();
+        // The hook is the entry point, its stock word the instruction the program starts with.
+        assert_eq!((m.hook, m.cave, m.code_bytes), (0x40, 0x600, MARKER_DECLARED));
+        assert_eq!(m.words[0], (0x40, 0xaa00_03f4, b_word(0x40, 0x600).unwrap()));
+        assert_eq!(m.params_offset, 0x600 + marker::XP5_MARKER_PARAMS);
+        // Every other changed word is the program: stock zero, new word the program's, ascending, and inside the padding.
+        assert!(m.words.windows(2).all(|w| w[0].0 < w[1].0));
+        assert!(m.words[1..].iter().all(|&(offset, stock, new)| stock == 0 && new != 0 && (0x600..0x800).contains(&(offset as usize))));
+        assert_eq!(m.words[1].2, 0xaa00_03f4);                  // the displaced instruction, first in the program
+        // The program returns to the instruction after the hook.
+        let ret = marker::XP5_MARKER_RETURN;
+        let at = 0x600 + ret;
+        assert_eq!(m.words.iter().find(|w| w.0 as usize == at).unwrap().2, b_word(at, 0x44).unwrap());
+        // The parameter block carries the lamp, and the phase length.
+        let word64 = |offset: usize| {
+            let lo = m.words.iter().find(|w| w.0 as usize == m.params_offset + offset).map_or(0, |w| u64::from(w.2));
+            let hi = m.words.iter().find(|w| w.0 as usize == m.params_offset + offset + 4).map_or(0, |w| u64::from(w.2));
+            lo | hi << 32
+        };
+        assert_eq!(word64(marker::XP5_MARKER_P_GREEN - marker::XP5_MARKER_PARAMS), 0xff90_7200);
+        assert_eq!(word64(marker::XP5_MARKER_P_RED - marker::XP5_MARKER_PARAMS), 0xff90_7180);
+        assert_eq!(word64(marker::XP5_MARKER_P_PIN - marker::XP5_MARKER_PARAMS), 4);
+        assert_eq!(word64(marker::XP5_MARKER_P_PHASE - marker::XP5_MARKER_PARAMS), MARKER_PHASE_LOOPS);
+        // The changed section differs from the stock one in exactly those words, and not at all in the zero tail.
+        let mut modified = section.clone();
+        for &(offset, _, new) in &m.words {
+            modified[offset as usize..offset as usize + 4].copy_from_slice(&new.to_le_bytes());
+        }
+        assert_eq!((m.stock_crc32, m.modified_crc32), (crc32(&section), crc32(&modified)));
+        assert_ne!(m.stock_crc32, m.modified_crc32);
+        let changed: Vec<usize> = (0..section.len()).step_by(4).filter(|&n| section[n..n + 4] != modified[n..n + 4]).collect();
+        assert_eq!(changed, m.words.iter().map(|w| w.0 as usize).collect::<Vec<_>>());
+        assert!(changed.iter().all(|&n| n + 4 <= MARKER_DECLARED));
+        assert!(m.words.len() <= MARKER_MAX);
+    }
+
+    #[test]
+    fn the_marker_is_refused_where_its_place_or_its_hook_is_not_what_it_proves() {
+        let section = marker_section();
+        let refused = |change: &dyn Fn(&mut Vec<u8>)| {
+            let mut other = section.clone();
+            change(&mut other);
+            marker_plan_of(&other).is_err()
+        };
+        assert!(marker_plan_of(&section).is_ok());
+        // The entry instruction is not the one the program displaces; the entry point is outside the code or in the header.
+        assert!(refused(&|s| put(s, 0x40, 0xaa00_03f5).unwrap()));
+        assert!(refused(&|s| s[24..32].copy_from_slice(&(SECTION_DST + 0x1800).to_le_bytes())));
+        assert!(refused(&|s| s[24..32].copy_from_slice(&(SECTION_DST + 0x10).to_le_bytes())));
+        assert!(refused(&|s| s[24..32].copy_from_slice(&(SECTION_DST + 0x42).to_le_bytes())));
+        // The header names another address or declared size.
+        assert!(refused(&|s| s[8..16].copy_from_slice(&0x8_2000u64.to_le_bytes())));
+        assert!(refused(&|s| s[16..24].copy_from_slice(&0x1000u64.to_le_bytes())));
+        // The padding is not zero all through (the run shrinks below the minimum), or does not end on a vector boundary,
+        // or there are two such runs.
+        assert!(refused(&|s| put(s, 0x700, 0xd503_201f).unwrap()));
+        assert!(refused(&|s| put(s, 0x7fc, 0xd503_201f).unwrap()));
+        assert!(refused(&|s| put(s, 0x800, 0).unwrap()));
+        assert!(refused(&|s| {
+            for at in (0x1000..0x1800).step_by(4) {
+                put(s, at, 0).unwrap();
+            }
+        }));
+        // A reference into the padding, of each kind: branch, literal load, adr, adrp page, 64-bit and 32-bit values.
+        let adr = |at: usize, target: usize| {
+            let imm = (target as i64 - at as i64) as u32 & 0x1f_ffff;
+            0x1000_0000 | ((imm & 3) << 29) | ((imm >> 2) << 5)
+        };
+        assert!(refused(&|s| put(s, 0x100, 0x1400_0000 | (((0x700i64 - 0x100) / 4) as u32 & 0x03ff_ffff)).unwrap()));
+        assert!(refused(&|s| put(s, 0x100, 0x5800_0000 | ((((0x700i64 - 0x100) / 4) as u32 & 0x7_ffff) << 5)).unwrap()));
+        assert!(refused(&|s| put(s, 0x100, adr(0x100, 0x700)).unwrap()));
+        assert!(refused(&|s| s[0x108..0x110].copy_from_slice(&0x8_1700u64.to_le_bytes())));
+        assert!(refused(&|s| put(s, 0x100, 0x8_1700).unwrap()));
+        // Look-alikes that are fine: a branch just in front of and behind the padding, a small constant.
+        let mut fine = section.clone();
+        put(&mut fine, 0x100, 0x1400_0000 | (((0x5f8i64 - 0x100) / 4) as u32 & 0x03ff_ffff)).unwrap();
+        put(&mut fine, 0x104, 0x1400_0000 | (((0x800i64 - 0x104) / 4) as u32 & 0x03ff_ffff)).unwrap();
+        put(&mut fine, 0x108, 0x600).unwrap();
+        assert!(marker_plan_of(&fine).is_ok());
+    }
+
+    #[test]
+    fn the_marker_binding_is_the_template_with_the_names_written_in() {
+        let m = marker_plan_of(&marker_section()).unwrap();
+        let mut program = vec![0u8; 0x100 + MARKER_BINDING + 0x100];
+        program[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        bind_marker(&mut program, 0x100, &m).unwrap();
+        let q = |at: usize| u64::from_le_bytes(program[0x100 + at..0x100 + at + 8].try_into().unwrap());
+        assert_eq!((q(0), q(8), q(16), q(24), q(32)), (1, u64::from(m.modified_crc32), MARKER_DECLARED as u64, m.words.len() as u64, m.params_offset as u64));
+        for (n, &(offset, stock, new)) in m.words.iter().enumerate() {
+            let at = 0x100 + 40 + 12 * n;
+            let w = |k: usize| u32::from_le_bytes(program[at + 4 * k..at + 4 * k + 4].try_into().unwrap());
+            assert_eq!((w(0), w(1), w(2)), (offset, stock, new));
+        }
+        // Everything after the last named word stays zero (the other names and the four outputs).
+        assert!(program[0x100 + 40 + 12 * m.words.len()..].iter().all(|b| *b == 0));
+        // A template that was touched is refused.
+        let mut touched = program.clone();
+        touched[0x100 + 8] = 1;
+        assert!(bind_marker(&mut touched, 0x100, &m).is_err());
+        let mut none = MarkerPlan { words: Vec::new(), ..m.clone() };
+        let mut fresh = vec![0u8; 0x100 + MARKER_BINDING];
+        fresh[0x100..0x108].copy_from_slice(&1u64.to_le_bytes());
+        assert!(bind_marker(&mut fresh, 0x100, &none).is_err());
+        none.words = vec![(0, 0, 1); MARKER_MAX + 1];
+        assert!(bind_marker(&mut fresh, 0x100, &none).is_err());
+    }
+
+    #[test]
+    fn the_marker_asset_is_a_position_independent_template() {
+        let image = marker::IMAGE;
+        assert_eq!((image.len() % 8, marker::XP5_MARKER_ENTRY, marker::XP5_MARKER_END), (0, 0, image.len()));
+        assert_eq!(marker::XP5_MARKER_PARAMS + MARKER_PARAMS, image.len());
+        assert!(image[marker::XP5_MARKER_PARAMS..].iter().all(|b| *b == 0));
+        // The first instruction is the displaced `mov x20, x0`; the return is a placeholder `b .`.
+        assert_eq!(word(image, 0).unwrap(), 0xaa00_03f4);
+        assert_eq!(word(image, marker::XP5_MARKER_RETURN).unwrap(), 0x1400_0000);
+        // The parameter offsets are the block's nine words, each once.
+        let mut offsets = vec![
+            marker::XP5_MARKER_P_GREEN, marker::XP5_MARKER_P_RED, marker::XP5_MARKER_P_PIN, marker::XP5_MARKER_P_ENABLE,
+            marker::XP5_MARKER_P_ENABLE_GREEN, marker::XP5_MARKER_P_ENABLE_RED, marker::XP5_MARKER_P_MUX,
+            marker::XP5_MARKER_P_RESTORE, marker::XP5_MARKER_P_PHASE,
+        ];
+        offsets.sort_unstable();
+        assert!(offsets.windows(2).all(|w| w[1] == w[0] + 8));
+        assert_eq!(offsets[0], marker::XP5_MARKER_PARAMS);
     }
 }
