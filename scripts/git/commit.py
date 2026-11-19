@@ -59,7 +59,7 @@ def refuse_protected(repository: GitRepository) -> None:
     if name in PROTECTED:
         raise Failure(
             f"{name} receives work only through pull requests; commit on a topic "
-            "branch (mise run slot -- acquire --topic NAME --owner PURPOSE)"
+            "branch (git switch -c <github-username>/TOPIC)"
         )
 
 
