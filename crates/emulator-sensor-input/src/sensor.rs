@@ -217,6 +217,23 @@ fn input_buffer_mask(o: u64) -> u32 {
         0x01ff_01ff
     }
 }
+/// Input buffer size words at 0x480 and 0x4c0 and their flag words at 0x484 and 0x4c4 (X100VI 1.31;
+/// the same eight-word blocks' neighbors). The setters (0x143fa44, 0x143f2ac, 0x143f678) each read
+/// the word once, replace bit 0 with a boolean and bits 16 to 26 with a size of at most 0x400
+/// (else "IBUF MAX ERROR.") and write it back; the getter 0x143fb58 reads it once. 0x143fbec reads
+/// bits 0 and 1 of the flag words; no writer of them is known. Nothing polls any of these words and
+/// what they configure is unknown. The power-on values are unverified; they read 0 here.
+const INPUT_BUFFER_SIZE_WORDS: [u64; 2] = [0x480, 0x4c0];
+const INPUT_BUFFER_FLAG_WORDS: [u64; 2] = [0x484, 0x4c4];
+fn input_buffer_extra_mask(o: u64) -> Option<u32> {
+    if INPUT_BUFFER_SIZE_WORDS.contains(&o) {
+        Some(0x07ff_0001)
+    } else if INPUT_BUFFER_FLAG_WORDS.contains(&o) {
+        Some(0x3)
+    } else {
+        None
+    }
+}
 fn channel(o: u64) -> Option<u64> {
     (CHANNEL_BASE..CHANNEL_BASE + CHANNEL_STRIDE * CHANNEL_COUNT)
         .contains(&o)
@@ -324,7 +341,9 @@ impl Device for Command {
                 u64::from(self.reg(o))
             }
             0x224..=0x240 => u64::from(self.state.response[((0x240 - o) / 4) as usize]),
-            _ if INPUT_BUFFER.contains(&o) => u64::from(self.reg(o)),
+            _ if INPUT_BUFFER.contains(&o) || input_buffer_extra_mask(o).is_some() => {
+                u64::from(self.reg(o))
+            }
             _ if channel(o).is_some() => {
                 let block = channel(o).unwrap();
                 if o == block + 4 {
@@ -393,8 +412,9 @@ impl Device for Command {
                     self.state.registers.insert(o, value);
                 }
             }
-            _ if INPUT_BUFFER.contains(&o) => {
-                if value & !input_buffer_mask(o) != 0 {
+            _ if INPUT_BUFFER.contains(&o) || input_buffer_extra_mask(o).is_some() => {
+                let mask = input_buffer_extra_mask(o).unwrap_or_else(|| input_buffer_mask(o));
+                if value & !mask != 0 {
                     cx.fail(format!(
                         "input buffer word {o:#x} value {value:#x} sets bits outside its fields"
                     ));
@@ -849,10 +869,33 @@ mod tests {
             assert!(cx.refusal().is_some());
         }
         // The words around the two blocks stay unmodeled.
-        for o in [0x43c, 0x480] {
+        for o in [0x43c, 0x488, 0x4c8, 0x4fc] {
             let mut cx = Cx::new(&mut host, 1, 0, 0);
             command.read(&mut cx, 0xff948000 + o, 4);
             assert!(cx.is_unmodeled());
+        }
+    }
+    #[test]
+    fn input_buffer_size_and_flag_words_read_modify_write() {
+        // X100VI 1.31: 0x143fa44 reads 0x480 or 0x4c0 and writes it back with bit 0 and bits 16 to
+        // 26 replaced; 0x143fbec reads bits 0 and 1 of 0x484 and 0x4c4.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        for o in [0x480, 0x484, 0x4c0, 0x4c4] {
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), 0);
+        }
+        for (o, v) in [(0x480, 0x0400_0001), (0x4c0, 0x0040_0000), (0x484, 3), (0x4c4, 2)] {
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(command.next_deadline(0), None);
+        for (o, v) in [(0x480, 0x0800_0000), (0x4c0, 2), (0x484, 4)] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert!(cx.refusal().is_some());
         }
     }
 }
