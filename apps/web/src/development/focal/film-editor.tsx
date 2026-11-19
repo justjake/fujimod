@@ -167,6 +167,10 @@ const RAWS = [
   { name: 'DSCF0413.RAF', zoom: 2.2, x: 0.18, y: 0.5 },
   { name: 'DSCF0415.RAF', zoom: 1.5, x: 0.4, y: 0.2 },
   { name: 'DSCF0418.RAF', zoom: 2.6, x: 0.82, y: 0.62 },
+  { name: 'DSCF0421.RAF', zoom: 1.2, x: 0.5, y: 0.5 },
+  { name: 'DSCF0422.RAF', zoom: 3, x: 0.3, y: 0.7 },
+  { name: 'DSCF0427.RAF', zoom: 2, x: 0.7, y: 0.3 },
+  { name: 'DSCF0430.RAF', zoom: 1.6, x: 0.1, y: 0.4 },
 ];
 
 /** Crop 0 is live view; crop n is RAWS[n - 1]. */
@@ -827,6 +831,11 @@ interface State {
   /** 0: live view; n: RAWS[n - 1]. */
   crop: number;
   picker: { kind: 'copy'; tool: Tool } | { kind: 'compare' } | null;
+  /** Where the D-pad is: the RAW strip, the tool rail or the tool rows. */
+  area: 'strip' | 'rail' | 'rows';
+  strip: StripStyle;
+  /** The RAW last developed with OK. */
+  created: number;
   /** Review states open scrolled to a tool. */
   scrollTo?: Tool;
 }
@@ -856,7 +865,7 @@ const EDITED: Film = (() => {
 })();
 
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, custom: true, compare: null, crop: 0, picker: null, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, custom: true, compare: null, crop: 0, picker: null, area: 'rows', strip: 'frames', created: 0, ...over };
 }
 
 const RAIL = 60;
@@ -872,30 +881,62 @@ function compareFilm(s: State): Film | undefined {
 
 type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
 
+const firstOf = (tool: Tool) => CONTROLS.findIndex((c) => c.tool === tool);
+
 function press(s: State, key: Key): State {
   const control = CONTROLS[s.focus];
   const f = s.film;
   if (s.picker) return key === 'back' ? { ...s, picker: null } : s;
+  const d = key === 'left' || key === 'up' || key === 'dial-' ? -1 : 1;
   switch (key) {
-    case 'up':
-      return { ...s, focus: Math.max(0, s.focus - 1), bend: false, scrollTo: undefined };
-    case 'down':
-      return { ...s, focus: Math.min(CONTROLS.length - 1, s.focus + 1), bend: false, scrollTo: undefined };
     case 'q':
       return { ...s, compare: s.compare ? null : { b: 'opened', split: SPLIT } };
     case 'fn':
       return { ...s, custom: !s.custom };
     case 'play':
-      return { ...s, crop: s.crop ? 0 : 1 };
+      return s.crop ? { ...s, crop: 0, area: s.area === 'strip' ? 'rows' : s.area } : { ...s, crop: 1, area: 'strip' };
+  }
+  if (s.area === 'strip') {
+    switch (key) {
+      case 'down':
+      case 'back':
+        return { ...s, area: 'rows' };
+      case 'ok':
+        return { ...s, created: s.crop };
+      case 'up':
+        return s;
+    }
+    return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + d)), created: 0 };
+  }
+  const toStrip = s.crop ? { ...s, area: 'strip' as const } : s;
+  if (s.area === 'rail') {
+    const tool = TOOLS.indexOf(control.tool);
+    switch (key) {
+      case 'up':
+      case 'down':
+      case 'dial-':
+      case 'dial+': {
+        const next = tool + d;
+        if (next < 0) return key === 'up' ? toStrip : s;
+        return { ...s, focus: firstOf(TOOLS[Math.min(TOOLS.length - 1, next)]), scrollTo: undefined };
+      }
+      case 'right':
+      case 'ok':
+        return { ...s, area: 'rows' };
+    }
+    return s;
+  }
+  switch (key) {
+    case 'up':
+      if (s.focus === 0) return toStrip;
+      return { ...s, focus: s.focus - 1, bend: false, scrollTo: undefined };
+    case 'down':
+      return { ...s, focus: Math.min(CONTROLS.length - 1, s.focus + 1), bend: false, scrollTo: undefined };
     case 'back':
-      if (s.bend) return { ...s, bend: false };
-      if (s.compare) return { ...s, compare: null };
-      if (s.crop) return { ...s, crop: 0 };
-      return s;
+      return s.bend ? { ...s, bend: false } : { ...s, area: 'rail', bend: false };
     case 'ok':
       return control.kind === 'curve' ? { ...s, bend: !s.bend } : s;
   }
-  const d = key === 'left' || key === 'dial-' ? -1 : 1;
   if (control.kind === 'scale') {
     const c = control.scale;
     return { ...s, film: c.put(f, Math.max(c.min, Math.min(c.max, c.get(f) + d * c.step))) };
@@ -980,6 +1021,101 @@ function Hint(props: { glyph: string; label?: string; tap?: () => void; accent?:
   );
 }
 
+type StripStyle = 'frames' | 'contact' | 'film';
+const STRIP_STYLES: [StripStyle, string][] = [
+  ['frames', 'Frames'],
+  ['contact', 'Contact sheet'],
+  ['film', 'Film strip'],
+];
+const PICTURE_WIDTH = W - PICTURE_LEFT;
+
+function Thumb(props: { raw: number; width: number; height: number; radius: number; style?: JSX.CSSProperties }) {
+  const raw = () => RAWS[props.raw];
+  return (
+    <span
+      class="block shrink-0 bg-cover"
+      style={{
+        width: `${props.width}px`,
+        height: `${props.height}px`,
+        'border-radius': `${props.radius}px`,
+        'background-image': `url(${PHOTO})`,
+        'background-size': `${raw().zoom * 100}% auto`,
+        'background-position': `${raw().x * 100}% ${raw().y * 100}%`,
+        ...props.style,
+      }}
+    />
+  );
+}
+
+/** The RAW files on the SD card, across the top of the picture. The chosen
+ * one stays in the middle. */
+function RawStrip(props: { s: State; set: (s: State) => void }) {
+  const s = () => props.s;
+  const focused = () => s().area === 'strip';
+  const metrics = () =>
+    s().strip === 'frames' ? { w: 84, h: 56, gap: 6, radius: 2, band: 76 } : s().strip === 'contact' ? { w: 78, h: 52, gap: 8, radius: 1, band: 96 } : { w: 84, h: 56, gap: 4, radius: 0, band: 84 };
+  const offset = () => {
+    const m = metrics();
+    return PICTURE_WIDTH / 2 - ((s().crop - 1) * (m.w + m.gap) + m.w / 2);
+  };
+  const choose = (i: number) => props.set({ ...s(), crop: i + 1, area: 'strip', created: 0 });
+  const band = (): JSX.CSSProperties =>
+    s().strip === 'frames'
+      ? { background: 'linear-gradient(rgb(0 0 0 / 0.7), rgb(0 0 0 / 0))' }
+      : s().strip === 'contact'
+        ? { ...COLUMN, background: 'rgb(18 18 20 / 0.86)' }
+        : { background: '#0b0b0b' };
+  return (
+    <div class="absolute top-0 overflow-hidden" style={{ left: `${PICTURE_LEFT}px`, width: `${PICTURE_WIDTH}px`, height: `${metrics().band}px`, ...band() }}>
+      <Show when={s().strip === 'film'}>
+        <div class="absolute inset-x-0 top-[5px] h-[6px]" style={{ background: 'repeating-linear-gradient(90deg, transparent 0 7px, rgb(255 255 255 / 0.55) 7px 15px, transparent 15px 22px)', 'border-radius': '1px' }} />
+        <div class="absolute inset-x-0 bottom-[5px] h-[6px]" style={{ background: 'repeating-linear-gradient(90deg, transparent 0 7px, rgb(255 255 255 / 0.55) 7px 15px, transparent 15px 22px)', 'border-radius': '1px' }} />
+      </Show>
+      <div
+        class="absolute flex"
+        style={{
+          top: s().strip === 'film' ? '14px' : '8px',
+          gap: `${metrics().gap}px`,
+          transform: `translateX(${offset()}px)`,
+          transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+        }}
+      >
+        <For each={RAWS}>
+          {(raw, i) => {
+            const chosen = () => s().crop === i() + 1;
+            const m = metrics;
+            return (
+              <button type="button" class="flex flex-col items-center gap-[4px]" onClick={() => choose(i())}>
+                <Thumb
+                  raw={i()}
+                  width={m().w}
+                  height={m().h}
+                  radius={m().radius}
+                  style={{
+                    opacity: chosen() ? 1 : 0.5,
+                    'box-shadow':
+                      chosen() && s().strip !== 'film'
+                        ? `0 0 0 2px #000, 0 0 0 ${focused() ? 5 : 4}px ${focused() ? '#fff' : 'rgb(255 255 255 / 0.6)'}`
+                        : undefined,
+                  }}
+                />
+                <Show when={s().strip === 'contact'}>
+                  <span class="text-[15px] leading-none font-medium tabular-nums" style={{ color: chosen() ? '#fff' : 'rgb(255 255 255 / 0.5)' }}>
+                    {raw.name.slice(4, 8)}
+                  </span>
+                </Show>
+              </button>
+            );
+          }}
+        </For>
+      </div>
+      <Show when={s().strip === 'film' && focused()}>
+        <div class="pointer-events-none absolute top-[14px] h-[56px] w-[84px] -translate-x-1/2" style={{ left: `${PICTURE_WIDTH / 2}px`, 'box-shadow': 'inset 0 0 0 2px #fff' }} />
+      </Show>
+    </div>
+  );
+}
+
 /** The film editor's own layers over the picture: the rail, the scroller,
  * the compare divider, RAW strip, pickers and key hints. */
 function Editor(props: { s: State; set: (s: State) => void; histogram: number[]; title: { name: string; from?: string } }) {
@@ -1020,18 +1156,26 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
     if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) current = TOOLS[TOOLS.length - 1];
     setInView(current);
   };
-  const focusControl = (i: number) => s().focus !== i && update({ ...s(), focus: i, bend: false, scrollTo: undefined });
+  const focusControl = (i: number) => (s().focus !== i || s().area !== 'rows') && update({ ...s(), focus: i, area: 'rows', bend: false, scrollTo: undefined });
+  const isFocused = (i: number) => s().area === 'rows' && s().focus === i;
+  /* On the rail, UP and DOWN bring each tool to the top of the scroller. */
+  createEffect(
+    () => (s().area === 'rail' ? CONTROLS[s().focus].tool : undefined),
+    (tool) => {
+      if (tool) scrollToTool(tool, true);
+    },
+  );
   const edited = (tool: Tool) => !same(GROUPS[tool](s().film), GROUPS[tool](s().opened));
   const scaleRow = (i: number, c: Scale, width: number, nameWidth: number) => (
     <div ref={(element) => (rows[i] = element)} onPointerDown={() => focusControl(i)}>
-      <Row name={c.name} focused={s().focus === i} width={width} nameWidth={nameWidth}>
+      <Row name={c.name} focused={isFocused(i)} width={width} nameWidth={nameWidth}>
         <Ruler
           value={c.get(s().film)}
           min={c.min}
           max={c.max}
           step={c.step}
           width={width - nameWidth - 8}
-          focused={s().focus === i}
+          focused={isFocused(i)}
           changed={c.get(s().film) !== c.get(s().opened)}
           track={c.track}
           set={(v) => update({ ...s(), focus: i, film: c.put(s().film, v) })}
@@ -1060,36 +1204,35 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
             <div class="pointer-events-none absolute top-[220px] flex size-[40px] -translate-x-1/2 items-center justify-center rounded-full bg-white text-[21px] font-semibold text-black" style={{ left: `${c().split}px` }}>
               ⇆
             </div>
-            <div class="absolute top-[10px]" style={{ left: `${PICTURE_LEFT + 8}px` }}>
+            <div class="absolute" style={{ left: `${PICTURE_LEFT + 8}px`, top: s().crop ? '104px' : '10px' }}>
               <Hint glyph="A" label={props.title.name} />
             </div>
-            <div class="absolute top-[10px] right-[10px]">
+            <div class="absolute right-[10px]" style={{ top: s().crop ? '104px' : '10px' }}>
               <Hint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update({ ...s(), picker: { kind: 'compare' } })} />
             </div>
           </>
         )}
       </Show>
-      <Show when={s().crop > 0}>
-        <div class="absolute top-[10px] right-[10px]" style={{ display: s().compare ? 'none' : undefined }}>
-          <Hint glyph="▶" label={RAWS[s().crop - 1].name} />
-        </div>
+      <Show when={s().crop > 0 && !s().picker}>
+        <RawStrip s={s()} set={update} />
       </Show>
 
       <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'rgb(18 18 20 / 0.82)' }}>
         <For each={TOOLS}>
           {(tool) => {
-            const chosen = () => inView() === tool;
+            const chosen = () => (s().area === 'rail' ? CONTROLS[s().focus].tool : inView()) === tool;
+            const lit = () => chosen() && s().area === 'rail';
             return (
               <button
                 type="button"
                 class="relative flex size-[52px] items-center justify-center rounded-[14px]"
-                style={chosen() ? { background: '#fff' } : {}}
+                style={lit() ? { background: '#fff' } : chosen() ? { background: 'rgb(255 255 255 / 0.2)' } : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
-                  update({ ...s(), focus: index(tool), bend: false, scrollTo: undefined });
+                  update({ ...s(), focus: index(tool), area: 'rail', bend: false, scrollTo: undefined });
                 }}
               >
-                <ToolIcon tool={tool} color={chosen() ? '#000' : '#fff'} />
+                <ToolIcon tool={tool} color={lit() ? '#000' : '#fff'} />
                 <Show when={edited(tool)}>
                   <span class="absolute top-[5px] right-[5px] size-[9px] rounded-full" style={{ background: ACCENT, 'box-shadow': '0 0 0 2px #1c1c1e' }} />
                 </Show>
@@ -1131,7 +1274,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                   </button>
                 </div>
                 <Show when={tool === 'curve'}>
-                  <div ref={(element) => (rows[0] = element)} class="rounded-[14px] p-[2px]" style={s().focus === 0 ? TRACK(true) : {}} onPointerDown={() => focusControl(0)}>
+                  <div ref={(element) => (rows[0] = element)} class="rounded-[14px] p-[2px]" style={isFocused(0) ? TRACK(true) : {}} onPointerDown={() => focusControl(0)}>
                     <CurveGraph
                       film={s().film}
                       opened={s().opened}
@@ -1141,7 +1284,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                       focus={s().knot}
                       bend={s().bend}
                       set={(film) => update({ ...s(), film })}
-                      focusKnot={(knot) => update({ ...s(), knot, focus: 0 })}
+                      focusKnot={(knot) => update({ ...s(), knot, focus: 0, area: 'rows' })}
                     />
                     <div class={`px-[10px] pt-[2px] pb-[8px] font-medium tabular-nums ${SMALL}`}>{knotReadout(s().film, s().knot, s().bend)}</div>
                   </div>
@@ -1165,16 +1308,16 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                   </For>
                 </Show>
                 <Show when={tool === 'tone'}>
-                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={s().focus === index('tone') ? TRACK(true) : {}} onPointerDown={() => focusControl(index('tone'))}>
+                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={isFocused(index('tone')) ? TRACK(true) : {}} onPointerDown={() => focusControl(index('tone'))}>
                     <ToneGraph
                       film={s().film}
                       opened={s().opened}
                       width={CONTENT - 12}
                       height={150}
                       band={s().band}
-                      focused={s().focus === index('tone')}
+                      focused={isFocused(index('tone'))}
                       set={(film) => update({ ...s(), film })}
-                      focusBand={(band) => update({ ...s(), band, focus: index('tone') })}
+                      focusBand={(band) => update({ ...s(), band, focus: index('tone'), area: 'rows' })}
                     />
                     <div class="mt-[4px] h-[8px] rounded-full" style={{ background: gradient('#000', '#fff') }} />
                     <div class={`px-[4px] pt-[8px] pb-[2px] font-medium tabular-nums ${SMALL}`}>
@@ -1192,30 +1335,10 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
         <div class="h-[300px]" />
       </div>
 
-      <Show when={s().crop > 0 && !s().picker}>
-        <div class="absolute bottom-[56px] flex items-center gap-[6px]" style={{ left: `${PICTURE_LEFT + 8}px` }}>
-          <For each={RAWS}>
-            {(raw, i) => (
-              <button
-                type="button"
-                class="h-[44px] w-[58px] rounded-[8px] bg-cover"
-                style={{
-                  'background-image': `url(${PHOTO})`,
-                  'background-size': `${raw.zoom * 100}% auto`,
-                  'background-position': `${raw.x * 100}% ${raw.y * 100}%`,
-                  'box-shadow': s().crop === i() + 1 ? '0 0 0 3px #fff' : '0 0 0 1px rgb(255 255 255 / 0.3)',
-                }}
-                onClick={() => update({ ...s(), crop: i() + 1 })}
-              />
-            )}
-          </For>
-        </div>
-      </Show>
-
       <Show when={!s().picker}>
         <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]">
-          <Show when={s().crop > 0}>
-            <Hint glyph="OK" label="CREATE" />
+          <Show when={s().area === 'strip'}>
+            <Hint glyph="OK" label={s().created === s().crop ? 'CREATED' : 'CREATE'} accent={s().created === s().crop} tap={() => update(press(s(), 'ok'))} />
           </Show>
           <Hint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
           <div class="flex gap-[6px]">
@@ -1492,7 +1615,7 @@ const STATES: { id: string; title: string; state: State }[] = [
   { id: 'copy', title: 'Copy one tool from a film', state: initial({ picker: { kind: 'copy', tool: 'curve' } }) },
   { id: 'compare', title: 'Compare with a film', state: initial({ compare: { b: 0, split: SPLIT } }) },
   { id: 'film-only', title: 'Custom setting off: the film alone', state: initial({ custom: false }) },
-  { id: 'raw', title: 'PLAY: a RAW from the SD card', state: initial({ crop: 1 }) },
+  ...STRIP_STYLES.map(([strip, name]) => ({ id: `raw-${strip}`, title: `RAW files: ${name.toLowerCase()}`, state: initial({ crop: 3, area: 'strip', strip }) })),
 ];
 
 function Static(props: { start: State }) {
