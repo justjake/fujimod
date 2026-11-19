@@ -164,7 +164,7 @@ function fitPrimaries(m: Matrix): Primary[] {
     const cross = [h[1] * v[2] - h[2] * v[1], h[2] * v[0] - h[0] * v[2], h[0] * v[1] - h[1] * v[0]];
     const hue = (Math.atan2(n * (cross[0] + cross[1] + cross[2]), h[0] * v[0] + h[1] * v[1] + h[2] * v[2]) * 180) / Math.PI;
     const sat = (Math.hypot(v[0], v[1], v[2]) / Math.hypot(h[0], h[1], h[2]) - 1) * 100;
-    return { hue: Math.round(Math.max(-30, Math.min(30, hue))), sat: Math.round(Math.max(-50, Math.min(50, sat))) };
+    return { hue: Math.round(hue), sat: Math.round(Math.max(-100, Math.min(100, sat))) };
   });
 }
 
@@ -844,9 +844,9 @@ const gradient = (...stops: string[]) => `linear-gradient(to right, ${stops.join
 const GRAY = '#8e8e93';
 
 const COLOR_SCALES: Scale[] = [
-  { name: 'SATURATION', get: (f) => f.saturation, put: (f, v) => ({ ...f, saturation: v, chroma: undefined }), min: -50, max: 50, step: 5, track: gradient(GRAY, '#ff9500') },
-  { name: 'HUE', get: (f) => f.hue, put: (f, v) => ({ ...f, hue: v, chroma: undefined }), min: -15, max: 15, step: 1, track: gradient('#ff375f', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2') },
-  { name: 'WARM/COOL', get: (f) => f.warmth, put: (f, v) => ({ ...f, warmth: v, chroma: undefined }), min: -50, max: 50, step: 5, track: gradient('#0a84ff', GRAY, '#ff9f0a') },
+  { name: 'SATURATION', get: (f) => f.saturation, put: (f, v) => ({ ...f, saturation: v, chroma: undefined }), min: -100, max: 100, step: 5, track: gradient(GRAY, '#ff9500') },
+  { name: 'HUE', get: (f) => f.hue, put: (f, v) => ({ ...f, hue: v, chroma: undefined }), min: -180, max: 180, step: 1, track: gradient('#00c7be', '#0a84ff', '#bf5af2', '#ff375f', '#ff9f0a', '#ffd60a', '#30d158', '#00c7be') },
+  { name: 'WARM/COOL', get: (f) => f.warmth, put: (f, v) => ({ ...f, warmth: v, chroma: undefined }), min: -100, max: 100, step: 5, track: gradient('#0a84ff', GRAY, '#ff9f0a') },
 ];
 
 /** COLOR MIX: how reds, greens and blues render. HUE turns them toward
@@ -862,8 +862,8 @@ const mixScales = (p: number): Scale[] => [
     name: 'HUE',
     get: (f) => f.primaries[p].hue,
     put: (f, v) => ({ ...f, matrix: undefined, primaries: f.primaries.map((q, i) => (i === p ? { ...q, hue: v } : q)) }),
-    min: -30,
-    max: 30,
+    min: -180,
+    max: 180,
     step: 2,
     track: MIX[p].hue,
   },
@@ -871,8 +871,8 @@ const mixScales = (p: number): Scale[] => [
     name: 'SATURATION',
     get: (f) => f.primaries[p].sat,
     put: (f, v) => ({ ...f, matrix: undefined, primaries: f.primaries.map((q, i) => (i === p ? { ...q, sat: v } : q)) }),
-    min: -50,
-    max: 50,
+    min: -100,
+    max: 100,
     step: 5,
     track: gradient(GRAY, MIX[p].color),
   },
@@ -1037,7 +1037,7 @@ function putCell(f: Film, tool: 'mix' | 'color', cell: number, v: number): Film 
   if (tool === 'color') {
     const hue = Math.round((Math.atan2(m[2], m[0]) * 180) / Math.PI);
     const saturation = Math.round((Math.hypot(m[0], m[2]) - 1) * 100);
-    return { ...f, chroma: m, hue: Math.max(-15, Math.min(15, hue)), saturation: Math.max(-50, Math.min(50, saturation)) };
+    return { ...f, chroma: m, hue, saturation: Math.max(-100, Math.min(100, saturation)) };
   }
   const row = Math.floor(cell / 3) * 3;
   const diag = row + row / 3;
@@ -1842,8 +1842,8 @@ function Scope(props: { film: Film; crop: number; chosen: number; choose: (p: nu
     hue = ((hue + 540) % 360) - 180;
     const sat = (Math.hypot(x - SCOPE / 2, y - SCOPE / 2) / RING - 1) * 100;
     const scales = mixScales(i);
-    const f = scales[0].put(props.film, Math.round(Math.max(-30, Math.min(30, hue))));
-    props.set(scales[1].put(f, Math.round(Math.max(-50, Math.min(50, sat)))));
+    const f = scales[0].put(props.film, Math.round(hue));
+    props.set(scales[1].put(f, Math.round(Math.max(-100, Math.min(100, sat)))));
   };
   const local = (e: PointerEvent): [number, number] => {
     const r = box!.getBoundingClientRect();
@@ -1889,16 +1889,16 @@ function ColorWheel(props: { film: Film; set: (film: Film) => void }) {
   const R = 62;
   let box: HTMLDivElement | undefined;
   const radius = () => R * (1 + props.film.saturation / 100);
-  /* Up is no hue shift; the handle turns with HUE, exaggerated so a few degrees read. */
-  const angle = () => ((props.film.hue * 3 - 90) * Math.PI) / 180;
+  /* Up is no hue shift; the handle turns one degree per degree of HUE, all the way around. */
+  const angle = () => ((props.film.hue - 90) * Math.PI) / 180;
   const stretch = () => 1 + props.film.warmth / 100;
   const axis = (Math.atan2(0.8, -0.6) * 180) / Math.PI;
   const set = (e: PointerEvent) => {
     const r = box!.getBoundingClientRect();
     const x = ((e.clientX - r.left) * D) / r.width - c;
     const y = ((e.clientY - r.top) * D) / r.height - c;
-    const hue = Math.round(Math.max(-15, Math.min(15, ((Math.atan2(y, x) * 180) / Math.PI + 90) / 3)));
-    const saturation = Math.round(Math.max(-50, Math.min(50, (Math.hypot(x, y) / R - 1) * 100)) / 5) * 5;
+    const hue = Math.round((((Math.atan2(y, x) * 180) / Math.PI + 90 + 540) % 360) - 180);
+    const saturation = Math.round(Math.max(-100, Math.min(100, (Math.hypot(x, y) / R - 1) * 100)) / 5) * 5;
     props.set(COLOR_SCALES[0].put(COLOR_SCALES[1].put(props.film, hue), saturation));
   };
   return (
@@ -1914,7 +1914,7 @@ function ColorWheel(props: { film: Film; set: (film: Film) => void }) {
     >
       <div
         class="fm-round absolute inset-[6px] rounded-full"
-        style={{ background: 'conic-gradient(from 0deg, #ff3b30, #ff9500, #ffd60a, #30d158, #00c7be, #0a84ff, #bf5af2, #ff2d78, #ff3b30)', transform: `rotate(${props.film.hue * 3}deg)`, 'mask-image': 'radial-gradient(closest-side, transparent 80%, #000 82%)' }}
+        style={{ background: 'conic-gradient(from 0deg, #ff3b30, #ff9500, #ffd60a, #30d158, #00c7be, #0a84ff, #bf5af2, #ff2d78, #ff3b30)', transform: `rotate(${props.film.hue}deg)`, 'mask-image': 'radial-gradient(closest-side, transparent 80%, #000 82%)' }}
       />
       <svg class="absolute inset-0" width={D} height={D}>
         <circle cx={c} cy={c} r={R} fill="none" stroke="rgb(255 255 255 / 0.3)" stroke-dasharray="4 4" />
