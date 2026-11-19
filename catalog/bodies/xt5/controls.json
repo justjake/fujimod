@@ -343,11 +343,8 @@
       "pushable": true,
       "default_function": "Press to unlock the shutter speed or sensitivity dial; press again to lock it.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "LOCK"
     },
@@ -362,17 +359,8 @@
       "pushable": false,
       "default_function": "Adjust viewfinder focus; lift the control before rotating it, then return it to lock.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
-        },
-        "press": null,
-        "endless": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "DIOPTER"
     },
@@ -620,11 +608,8 @@
       "pushable": true,
       "default_function": "Press to release the lens from the mount.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "LENS"
     },
@@ -980,12 +965,8 @@
       "pushable": false,
       "default_function": "Slide to open the memory card slot cover.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "CARD"
     },
@@ -1109,12 +1090,8 @@
       "pushable": false,
       "default_function": "Slide to open the battery-chamber cover.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "COVER"
     },
@@ -1150,11 +1127,8 @@
       "pushable": true,
       "default_function": "Release the LCD monitor tilt lock so the display can be tilted.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "TILT"
     },
@@ -1169,12 +1143,8 @@
       "pushable": true,
       "default_function": "Press to release the battery from the battery chamber.",
       "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
+      "mechanical": true,
+      "behavior": null,
       "positions": [],
       "short_name": "BATTERY"
     },
@@ -1219,6 +1189,13 @@
           "band_high": 2325,
           "sample": 2213,
           "basis": "Band 2102..2325, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "af_on_button",
+          "band_low": 2618,
+          "band_high": 3066,
+          "sample": 2842,
+          "basis": "Band 2618..3066, derived from the firmware's factory key-band table (scanner row 4, physical code 0x12, UI event FUNC_AF_ON 0x2028); no other control on this wire accepts it. The sample is the band midpoint."
         },
         {
           "control_id": "fn2_button",
@@ -1315,6 +1292,13 @@
           "band_high": 582,
           "sample": 554,
           "basis": "Band 527..582, derived from the firmware's factory key-band table; no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "ael_button",
+          "band_low": 656,
+          "band_high": 767,
+          "sample": 711,
+          "basis": "Band 656..767, derived from the firmware's factory key-band table (scanner row 82, physical code 0x13, UI event FUNC_AE_LOCK 0x2025); no other control on this wire accepts it. The sample is the band midpoint."
         },
         {
           "control_id": "disp_back_bluetooth_button",

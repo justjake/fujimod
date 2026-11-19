@@ -74,6 +74,7 @@ class emulator:
             camera: str | PathLike[str] | None = None,
             access_point: str | None = None,
             capability_reply: bytes | None = None,
+            camera_settings: Mapping[str, str] = ...,
             engine: str | None = None,
             manifest: str | PathLike[str] | None = None,
             application_plan: str | PathLike[str] | None = None,

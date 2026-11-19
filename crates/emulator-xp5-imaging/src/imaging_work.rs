@@ -95,6 +95,8 @@ pub struct Work {
     source_luma: Option<u8>,
     /// Bring-up option: unmodeled aligned words read back their last write (kept in `state.regs`).
     retain_words: bool,
+    /// MOVDC: the sensor exposure that scales the host scene ([`Work::with_exposure`]).
+    exposure: Option<fujimod_emulator_imaging::exposure::ExposureHandle>,
 }
 impl Work {
     pub fn reset(base: u64) -> Result<Self, String> {
@@ -108,6 +110,7 @@ impl Work {
             interval_ns: 0,
             source_luma: None,
             retain_words: false,
+            exposure: None,
         })
     }
     pub fn movdc(base: u64, period_us: u64, luma: u8) -> Result<Self, String> {
@@ -138,6 +141,7 @@ impl Work {
             interval_ns,
             source_luma: luma,
             retain_words: false,
+            exposure: None,
         })
     }
     /// Let every aligned word of the window that has no modeled meaning read back its last
@@ -145,6 +149,13 @@ impl Work {
     /// words have no side effects and are saved in the exact checkpoint with the other registers.
     pub fn with_retained_words(mut self) -> Self {
         self.retain_words = true;
+        self
+    }
+    /// MOVDC: scale the host scene's linear levels by the sensor exposure relative to the
+    /// reference ([`frame::paint_scene_exposed`]), read at each frame, so live view follows the
+    /// firmware's gain programming.
+    pub fn with_exposure(mut self, exposure: fujimod_emulator_imaging::exposure::ExposureHandle) -> Self {
+        self.exposure = Some(exposure);
         self
     }
     fn retained(&self, size: u8, o: u64) -> bool {
@@ -235,7 +246,20 @@ impl Work {
                 YuvLayout::TwoPlane420 { chroma, chroma_stride: stride }
             };
             // XT5_SCENE (a host input outside the checkpoint) replaces the flat source.
-            if !frame::paint_scene(cx, address, width, height, stride, layout, self.state.frames)? {
+            let exposure = self
+                .exposure
+                .as_ref()
+                .map_or(1., |e| e.lock().map_or(1., |e| e.relative()));
+            if !frame::paint_scene_exposed(
+                cx,
+                address,
+                width,
+                height,
+                stride,
+                layout,
+                self.state.frames,
+                exposure,
+            )? {
                 frame::paint_layout(cx, address, width, height, stride, layout, luma)?;
             }
         } else if self.state.r(8) & 0x30 == 0x10 {

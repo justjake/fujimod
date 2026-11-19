@@ -339,7 +339,7 @@ fn global_stop_honors_error_mask_and_unknown_transfer_shapes_never_run() {
 }
 
 #[test]
-fn exhausted_counter_cannot_restart_until_the_guest_programs_a_new_count() {
+fn exhausted_channel_reenabled_without_new_values_repeats_its_programmed_transfer() {
     let routing = Arc::new(Mutex::new(Routing::default()));
     routing.lock().unwrap().set_request(0, 63).unwrap();
     let mut d = pair(routing, BTreeMap::new());
@@ -353,19 +353,21 @@ fn exhausted_counter_cannot_restart_until_the_guest_programs_a_new_count() {
     write(&mut d, &mut h, BASE + 0x28, control);
     advance(&mut d, &mut h);
     write(&mut d, &mut h, BASE + 0x30, 0);
-    let state = d.save();
-    let ram = h.ram.clone();
-    let mut cx = Cx::new(&mut h, 0, 0, 0);
-    d.write(&mut cx, BASE + 0x28, 4, control);
-    assert!(cx.is_unmodeled());
-    assert_eq!(d.save(), state);
-    assert_eq!(h.ram, ram);
-    assert_eq!(d.next_deadline(0), None);
-    write(&mut d, &mut h, BASE + 0x10, 1);
+    assert_eq!(&h.ram[64..66], &[8, 65]);
+    // Restart with only the enable bit: the same byte moves again.
+    h.ram[64] = 0;
     write(&mut d, &mut h, BASE + 0x28, control);
     advance(&mut d, &mut h);
     advance(&mut d, &mut h);
-    assert_eq!(&h.ram[64..67], &[8, 9, 10]);
+    assert_eq!(&h.ram[64..66], &[8, 65]);
+    write(&mut d, &mut h, BASE + 0x30, 0);
+    // A newly programmed count takes effect from the current addresses.
+    write(&mut d, &mut h, BASE + 0x10, 2);
+    write(&mut d, &mut h, BASE + 0x28, control);
+    for _ in 0..4 {
+        advance(&mut d, &mut h);
+    }
+    assert_eq!(&h.ram[64..68], &[8, 9, 10, 11]);
     assert_eq!(read(&mut d, &mut h, BASE + 0x30), 8);
 }
 #[test]

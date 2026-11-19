@@ -8,12 +8,12 @@ use fujimod_emulator_parts_io::serial::{InputLevel, Unconnected, Wire};
 use fujimod_emulator_xp5_storage::{dma_registers, flash_storage, general_dma::Global};
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+
 
 pub fn owns(kind: &str) -> bool {
     matches!(
         kind,
-        "pl022" | "general-dma" | "dma-address-high" | "dma-request-routing"
+        "pl022" | "general-dma" | "dma-address-high" | "dma-request-routing" | "input-capture"
     )
 }
 /// A companion-side SSP instance. The DMA request pair and the companion interrupt line
@@ -34,6 +34,9 @@ struct SerialWiring {
     companion_irq_line: Option<u32>,
     #[serde(default)]
     companion_irq_unconnected: bool,
+    /// Main-processor GIC INTID of the controller interrupt.
+    #[serde(default)]
+    gic_line: Option<u32>,
     wire: WireInput,
 }
 /// SSP instances 0..9 of the SoC (`spi0`..`spi9`), one 4 KiB window each.
@@ -48,6 +51,8 @@ enum WireInput {
     GpioSelected {
         endpoints: Vec<super::serial::Connection>,
     },
+    /// The X-mount lens connector; the registered device wraps the controller.
+    XMountLens(fujimod_emulator_xp5_io::x_mount::Options),
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -64,6 +69,9 @@ struct DmaWiring {
 struct InputCaptureWiring {
     #[serde(default)]
     dma_transmit: Vec<InputCaptureTransmit>,
+    /// The channel that runs the companion's position-sensor word stream.
+    #[serde(default)]
+    sequencer: Option<fujimod_emulator_xp5_io::input_capture::SequencerOptions>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -81,6 +89,7 @@ pub fn register_all(
     windows: &[DeviceWindow],
     companion: Option<usize>,
     pins: fujimod_emulator_devices::xp5::pins::SharedPins,
+    pwm: fujimod_emulator_xp5_io::timer::PwmOutputs,
     flash: Option<&flash_storage::Medium>,
 ) -> Result<(), String> {
     let banks = dma_registers::banks();
@@ -100,18 +109,37 @@ pub fn register_all(
             (None, None) => vec![],
             _ => return Err("invalid XP5 serial DMA request wiring".into()),
         };
-        let interrupts = match wiring.companion_irq_line {
+        let mut interrupts = match wiring.companion_irq_line {
             Some(line) => vec![InterruptLine::Core {
                 core: companion.ok_or("PL022 IRQ wiring requires the companion")?,
                 line,
             }],
             None => vec![],
         };
+        if let Some(line) = wiring.gic_line {
+            if !(32..1020).contains(&line) {
+                return Err("PL022 GIC line must be an SPI in 32..1019".into());
+            }
+            interrupts.push(InterruptLine::Shared(line));
+        }
+        let mut lens = None;
         let wire: Box<dyn Wire> = match wiring.wire {
             WireInput::Unconnected => Box::new(Unconnected),
             WireInput::InputLevel { high } => Box::new(InputLevel(high)),
             WireInput::GpioSelected { endpoints } => {
                 super::serial::gpio_wire(pins.clone(), endpoints)?
+            }
+            WireInput::XMountLens(options) => {
+                use fujimod_emulator_xp5_io::x_mount;
+                let choice = x_mount::lens_choice(&options);
+                let port = x_mount::build_lens(&options, &choice, wiring.ticks_per_second)?;
+                let wire: Box<dyn Wire> = match &port {
+                    Some(port) => Box::new(port.clone()),
+                    // No lens: the receive line idles high.
+                    None => Box::new(InputLevel(true)),
+                };
+                lens = Some((options, choice, port));
+                wire
             }
         };
         let serial = Controller::new(
@@ -144,21 +172,42 @@ pub fn register_all(
                 return Err("duplicate DMA request wire".into());
             }
         }
-        serials.push(bus.register(w.base, w.size, Box::new(serial))?);
+        let device: Box<dyn fujimod_emulator_devices::Device> = match lens {
+            Some((options, choice, port)) => Box::new(fujimod_emulator_xp5_io::x_mount::Connector::new(
+                options,
+                choice,
+                port,
+                pins.clone(),
+                Box::new(serial),
+            )?),
+            None => Box::new(serial),
+        };
+        serials.push(bus.register(w.base, w.size, device)?);
     }
+    let mut captures = vec![];
     for w in windows.iter().filter(|w| w.kind == "input-capture") {
+        use fujimod_emulator_xp5_io::input_capture::InputCapture;
         let channels = match (w.base, w.size) {
             (0xff928000, 0x1000) => 5,
             (0xff929000, 0x1000) => 3,
             _ => return Err("invalid input-capture DMA window".into()),
         };
         let wiring: InputCaptureWiring = options(w)?;
+        let capture = match wiring.sequencer {
+            Some(sequencer) => {
+                let core = companion.ok_or("input-capture sequencer requires the companion")?;
+                if !wiring.dma_transmit.iter().any(|t| t.channel == sequencer.channel) {
+                    return Err("input-capture sequencer channel needs a DMA transmit wire".into());
+                }
+                InputCapture::with_sequencer(w.base, sequencer, core, Some(pwm.clone()))?
+            }
+            None => InputCapture::new(w.base)?,
+        };
         for transmit in wiring.dma_transmit {
             if transmit.channel >= channels || transmit.request >= 63 {
                 return Err("invalid input-capture DMA request wiring".into());
             }
-            let port: fujimod_emulator_devices::dma::SharedPort =
-                Arc::new(Mutex::new(fujimod_emulator_xp5_io::input_capture::TransmitSink));
+            let port = capture.transmit_port(transmit.channel);
             if connections
                 .insert(
                     transmit.request,
@@ -173,6 +222,7 @@ pub fn register_all(
                 return Err("duplicate DMA request wire".into());
             }
         }
+        captures.push(bus.register(w.base, w.size, Box::new(capture))?);
     }
     let mut pairs = vec![];
     let mut views = vec![];
@@ -254,6 +304,10 @@ pub fn register_all(
     }
     for serial in serials {
         bus.depend_on(serial, pairs.iter().chain(&pins).copied().collect())?;
+    }
+    // A DMA word can latch a sequencer capture: its deadline follows the channel banks.
+    for capture in captures {
+        bus.depend_on(capture, pairs.clone())?;
     }
     Ok(())
 }

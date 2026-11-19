@@ -25,9 +25,9 @@ const CATALOG_BLOCK_BYTES: usize = 2048;
 const CONTROL20: u16 = 0x80;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-struct Packet(u32);
+pub(crate) struct Packet(pub(crate) u32);
 impl Packet {
-    fn encode(payload: u16, family: u16, ack: bool) -> Self {
+    pub(crate) fn encode(payload: u16, family: u16, ack: bool) -> Self {
         let mut word = ((payload as u32) << 16) | ((family as u32) << 6);
         word |= u32::from(ack) << 15;
         let check = ([27, 22, 17, 12, 7]
@@ -56,16 +56,16 @@ impl Packet {
         }
         Ok(packet)
     }
-    fn payload(self) -> u16 {
+    pub(crate) fn payload(self) -> u16 {
         (self.0 >> 16) as u16
     }
-    fn family(self) -> u16 {
+    pub(crate) fn family(self) -> u16 {
         ((self.0 & 0x7fc0) >> 6) as u16
     }
-    fn ack(self) -> bool {
+    pub(crate) fn ack(self) -> bool {
         self.0 & 0x8000 != 0
     }
-    fn bytes(self) -> [u8; 4] {
+    pub(crate) fn bytes(self) -> [u8; 4] {
         self.0.to_be_bytes()
     }
 }

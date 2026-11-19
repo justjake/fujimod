@@ -42,6 +42,18 @@ pub enum Key {
     StickPush,
     /// Playback button (scanner debug name K_PLAY).
     Play,
+    /// AE-L (exposure lock) button.
+    AeLock,
+    /// AF-ON button.
+    AfOn,
+    /// Focus-stick diagonal tilts.
+    StickUpLeft,
+    StickUpRight,
+    StickDownLeft,
+    StickDownRight,
+    /// Rear and front command-dial pushes.
+    RearPush,
+    FrontPush,
 }
 impl Key {
     pub fn parse(s: &str) -> Result<Self, String> {
@@ -69,6 +81,14 @@ impl Key {
             "STICK_RIGHT" => Ok(Self::StickRight),
             "STICK_PUSH" => Ok(Self::StickPush),
             "PLAY" | "K_PLAY" | "PLAYBACK" => Ok(Self::Play),
+            "AEL" | "AE-L" | "AE_L" | "AE_LOCK" => Ok(Self::AeLock),
+            "AFON" | "AF-ON" | "AF_ON" => Ok(Self::AfOn),
+            "STICK_UL" | "STICK_UP_LEFT" => Ok(Self::StickUpLeft),
+            "STICK_UR" | "STICK_UP_RIGHT" => Ok(Self::StickUpRight),
+            "STICK_DL" | "STICK_DOWN_LEFT" => Ok(Self::StickDownLeft),
+            "STICK_DR" | "STICK_DOWN_RIGHT" => Ok(Self::StickDownRight),
+            "REAR_PUSH" | "CMD_PUSH" => Ok(Self::RearPush),
+            "FRONT_PUSH" | "CMD2_PUSH" => Ok(Self::FrontPush),
             _ => Err(format!("unknown physical key {s:?}")),
         }
     }

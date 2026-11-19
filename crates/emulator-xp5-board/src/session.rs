@@ -45,6 +45,23 @@ impl Inputs {
         session.board.inputs_changed(self.control_source)
     }
 
+    /// Queue a latched dial or switch position change (`iso`, `ss`, `ev`,
+    /// `drive`, `focus`, `mode`, `power` on the X-T5) at an absolute guest
+    /// nanosecond.
+    pub fn set_position(
+        &self,
+        session: &mut Session,
+        at_ns: u64,
+        dial: &str,
+        position: &str,
+    ) -> Result<(), String> {
+        self.controls
+            .as_ref()
+            .ok_or("this XP5 body has no physical key model; position changes are refused")?
+            .set_position(Duration::from_nanos(at_ns), dial, position)?;
+        session.board.inputs_changed(self.control_source)
+    }
+
     /// Drive one external XP5 GPIO input level and wake its registered devices.
     pub fn gpio(
         &self,

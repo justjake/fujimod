@@ -258,6 +258,43 @@ fn key_name(name: &str) -> Result<String, String> {
     Ok(name.to_owned())
 }
 
+/// A dial or switch position change `MS` guest milliseconds after the run
+/// starts (after a snapshot load, like `--press`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PositionChange {
+    pub at_ms: u64,
+    pub control: String,
+    pub position: String,
+}
+
+/// Parse `--set CONTROL=POSITION[@MS][,...]`. Without `@MS` the change applies
+/// when the run starts. Names are checked later against the body's dials.
+pub fn parse_settings(spec: &str) -> Result<Vec<PositionChange>, String> {
+    let mut changes = Vec::new();
+    for item in spec.split(',').map(str::trim).filter(|item| !item.is_empty()) {
+        let (setting, at_ms) = match item.rsplit_once('@') {
+            Some((setting, at)) => (
+                setting,
+                at.trim()
+                    .parse()
+                    .map_err(|_| format!("--set {item}: the time after @ is whole milliseconds"))?,
+            ),
+            None => (item, 0),
+        };
+        let (control, position) = setting
+            .split_once('=')
+            .ok_or_else(|| format!("--set {item}: needs CONTROL=POSITION[@MS]"))?;
+        let (control, position) = (control.trim(), position.trim());
+        if control.is_empty() || position.is_empty() {
+            return Err(format!("--set {item}: needs CONTROL=POSITION[@MS]"));
+        }
+        changes.push(PositionChange { at_ms, control: control.to_owned(), position: position.to_owned() });
+    }
+    // A stable sort keeps the written order of changes that share a time.
+    changes.sort_by_key(|change| change.at_ms);
+    Ok(changes)
+}
+
 pub fn parse_gpio(spec: &str) -> Result<(u8, u8, bool), String> {
     let (pin, level) = spec.split_once('=').ok_or("--gpio needs PORT:PIN=0|1")?;
     let (port, pin) = pin.split_once(':').ok_or("--gpio needs PORT:PIN=0|1")?;
@@ -304,6 +341,31 @@ pub fn parse_timed_poke(spec: &str) -> Result<(Option<u64>, u64, u32), String> {
 #[cfg(test)]
 mod poke_tests {
     use super::*;
+
+    #[test]
+    fn position_settings_take_an_optional_time() {
+        let change = |at_ms, control: &str, position: &str| PositionChange {
+            at_ms,
+            control: control.into(),
+            position: position.into(),
+        };
+        assert_eq!(
+            parse_settings("iso=800@1500, ss=1/250@500,ev=-2/3,power=OFF@9000").unwrap(),
+            [
+                change(0, "ev", "-2/3"),
+                change(500, "ss", "1/250"),
+                change(1500, "iso", "800"),
+                change(9000, "power", "OFF"),
+            ]
+        );
+        assert_eq!(parse_settings("").unwrap(), []);
+        assert!(parse_settings("iso").is_err());
+        assert!(parse_settings("iso=@10").is_err());
+        assert!(parse_settings("=800").is_err());
+        assert!(parse_settings("iso=800@1.5").is_err());
+        assert!(parse_settings("iso=800@").is_err());
+    }
+
 
     #[test]
     fn timed_poke_takes_milliseconds_after_the_at_sign() {

@@ -69,10 +69,12 @@ impl Endpoint for GenericSink {
         Ok(())
     }
 }
-/// A power controller whose key-ladder registers are driven by the body's
-/// controls. Their value is refreshed before every transfer, so the guest reads
-/// the held key's ladder value, or the declared released value, and a guest
-/// write to one of these registers does not stick.
+/// A power controller whose key-ladder registers, switch bits and dial count
+/// are driven by the body's controls. Ladder and switch registers are
+/// refreshed before every transfer, so the guest reads the held keys' ladder
+/// value, or the declared released value, and a guest write to them does not
+/// stick. A counting register is loaded when the guest starts to read it, and
+/// that read consumes the count it returns.
 struct LadderDriven {
     inner: PowerController,
     controls: Arc<dyn Controls>,
@@ -81,7 +83,7 @@ struct LadderDriven {
 impl LadderDriven {
     fn refresh(&mut self) {
         for &register in &self.registers {
-            if let Some(value) = self.controls.register_sample(register) {
+            if let Some(value) = self.controls.drive_register(register, self.inner.register(register)) {
                 self.inner.set_register(register, value);
             }
         }
@@ -99,6 +101,13 @@ impl Endpoint for LadderDriven {
     }
     fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, now_ns: u64) -> u16 {
         self.refresh();
+        let command = frame.word as u8;
+        if self.inner.transfer_position() == 0
+            && command & 0x80 == 0
+            && let Some(count) = self.controls.take_register(command & 0x7f)
+        {
+            self.inner.set_register(command & 0x7f, count);
+        }
         self.inner.transfer(frame, now_ns)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -151,7 +160,7 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
                 part.set_register(address, value);
             }
             match controls
-                .map(|controls| (controls.register_ladders(), controls))
+                .map(|controls| (controls.driven_registers(), controls))
                 .filter(|(registers, _)| !registers.is_empty())
             {
                 Some((registers, controls)) => {
@@ -211,7 +220,7 @@ pub(super) fn gpio_wire(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_controls::ladder_keys::{Ladder, LadderKeys, Options, Rung, Wire};
+    use fujimod_emulator_parts_controls::ladder_keys::{CountingDial, Ladder, LadderKeys, Options, RegisterSwitch, Rung, Wire};
     use fujimod_emulator_parts_controls::resistor_keys::Key;
     use fujimod_emulator_parts_io::serial::Frame;
     use std::time::Duration;
@@ -234,7 +243,20 @@ mod tests {
                     },
                     levels: 1024,
                     rungs: vec![rung(Key::Menu, 77)],
+                    sets: vec![],
                 }],
+                dials: vec![],
+                switches: vec![RegisterSwitch {
+                    name: "power".into(),
+                    register: 0,
+                    bit: 10,
+                    set: "OFF".into(),
+                    clear: "ON".into(),
+                    basis: "test fixture".into(),
+                }],
+                rear_dial: Some(CountingDial { register: 0x36, basis: "test fixture".into() }),
+                front_dial: None,
+                gpio_keys: vec![],
             })
             .unwrap(),
         )
@@ -284,6 +306,26 @@ mod tests {
         keys.enqueue(Duration::from_nanos(9), Key::Menu, false).unwrap();
         keys.advance(9);
         assert_eq!(read(endpoint.as_mut(), 0x34), 1023);
+    }
+
+    #[test]
+    fn switch_bits_and_the_dial_count_reach_the_power_controller() {
+        let keys = keys();
+        let mut endpoint = attach(keys.clone());
+        assert_eq!(read(endpoint.as_mut(), 0x00), 0x200, "no position: reset value");
+        assert_eq!(read(endpoint.as_mut(), 0x36), 0);
+        keys.set_position(Duration::from_nanos(3), "power", "OFF").unwrap();
+        for _ in 0..3 {
+            keys.enqueue(Duration::from_nanos(3), Key::RearMinus, true).unwrap();
+        }
+        keys.advance(3);
+        assert_eq!(read(endpoint.as_mut(), 0x00), 0x600);
+        // -3 as a signed nibble, then cleared by that read.
+        assert_eq!(read(endpoint.as_mut(), 0x36), 0xd);
+        assert_eq!(read(endpoint.as_mut(), 0x36), 0);
+        keys.set_position(Duration::from_nanos(4), "power", "ON").unwrap();
+        keys.advance(4);
+        assert_eq!(read(endpoint.as_mut(), 0x00), 0x200);
     }
 
     #[test]

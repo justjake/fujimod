@@ -1,0 +1,1063 @@
+//! A powered X-mount lens with focus and aperture motion, for bodies that drive
+//! the full lens-control command set (written for the X-T5 4.31).
+//!
+//! Framing is the X-mount link of [`super::x_mount_link`]: 4-byte header and
+//! acknowledgment frames with the same 5-bit check, replies queued for the
+//! next exchange, and a 128-byte bulk read after the lens sends its
+//! family-0x14 (identification) or family-0x96 (extended record) reply. Unlike that bounded part, this model answers
+//! every request family. Focus (0x54..0x56, 0x58) and aperture (0x60..0x62)
+//! requests start motion that advances with board time; 0x21 reports the focus
+//! position. Other families answer a declared or default payload, and the first
+//! request of a family outside the known X-T5 set is logged once. Malformed or
+//! out-of-phase frames are logged and resynchronized instead of refused,
+//! because the body's exact sequence is not established yet.
+//!
+//! Power: both supply enables must be driven high. The ready output is high
+//! while off and starting, low for a declared busy period after startup, then
+//! released high. Each motion request holds a released ready output low until
+//! the motion ends (at least `min_operation_ticks`), so the body sees a rising
+//! edge when the lens has settled.
+//!
+//! The identification record, the status words and every timing are invented
+//! scenario inputs. None is copied from lens or camera firmware.
+use super::x_mount_link::{FixedReply, Packet};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_parts_io::serial::{Frame, Wire};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::sync::{Arc, Mutex};
+
+pub mod family {
+    pub const SYNC: u16 = 0xff;
+    pub const PARAMETERS: u16 = 0x18;
+    pub const IDENTIFICATION: u16 = 0x14;
+    /// Second (extended) identification record, also a 128-byte bulk read.
+    pub const EXTENDED_IDENTIFICATION: u16 = 0x96;
+    pub const STATUS: u16 = 0x20;
+    pub const FEEDBACK: u16 = 0x21;
+    pub const FOCUS_STATE: u16 = 0x22;
+    pub const APERTURE_STATE: u16 = 0x23;
+    pub const MOTION_STATE: u16 = 0x24;
+    pub const DETAIL_STATUS: u16 = 0x26;
+    pub const APERTURE_RING: u16 = 0x30;
+    pub const FOCUS_RING: u16 = 0x32;
+    pub const FOCUS_TARGET: u16 = 0x54;
+    pub const FOCUS_SPEED: u16 = 0x55;
+    pub const FOCUS_STEP: u16 = 0x56;
+    pub const FOCUS_DRIVE: u16 = 0x58;
+    pub const APERTURE_TARGET: u16 = 0x60;
+    pub const APERTURE_STEP: u16 = 0x61;
+    pub const APERTURE_DRIVE: u16 = 0x62;
+    pub const READ_CATALOG: u16 = 0xc0;
+}
+use family::*;
+
+/// Families the X-T5 sends whose meaning is not modeled; they answer zero
+/// unless the scenario declares a payload. No log line.
+const KNOWN_READS: &[u16] = &[
+    0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x19, 0x2b, 0x31, 0x33, 0x3e, 0x3f, 0xc8, 0xc9,
+    0x11a,
+];
+/// Families the X-T5 sends as settings (OIS, transitions/focus mode); they
+/// echo the request payload and store it.
+const KNOWN_WRITES: &[u16] = &[
+    0x80, 0x81, 0x82, 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa,
+];
+const IDENTIFICATION_BYTES: usize = 128;
+const REPLY_LIMIT: usize = 8;
+/// The byte a frame receives when the lens does not drive its output (off,
+/// starting, or power lost during the frame): the receive line idles high.
+pub const UNDRIVEN_BYTE: u16 = 0xff;
+
+/// One motor axis in lens units.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Axis {
+    pub min: u16,
+    pub max: u16,
+    pub initial: u16,
+    /// Default speed in units per millisecond; zero moves instantly.
+    pub units_per_ms: u16,
+}
+impl Axis {
+    fn validate(self) -> Result<(), String> {
+        if self.min > self.max || !(self.min..=self.max).contains(&self.initial) {
+            return Err("X-mount lens axis needs min <= initial <= max".into());
+        }
+        Ok(())
+    }
+    fn clamp(self, value: i64) -> u16 {
+        value.clamp(self.min as i64, self.max as i64) as u16
+    }
+}
+
+/// The lens scenario: identity, constant status words and motion ranges.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Spec {
+    pub name: String,
+    /// The 128-byte identification record sent by the family-0x14 bulk read.
+    pub identification: Vec<u8>,
+    /// The 128-byte extended record sent by the family-0x96 bulk read.
+    pub extended: Vec<u8>,
+    pub status: u16,
+    pub detail_status: u16,
+    pub aperture_ring: u16,
+    pub focus_ring: u16,
+    pub focus: Axis,
+    pub aperture: Axis,
+    /// Declared payloads for families this model does not drive itself.
+    #[serde(default)]
+    pub replies: Vec<FixedReply>,
+    /// Data catalogs served by family 0xc0 and its bulk read. Undeclared
+    /// selectors serve one zero block.
+    #[serde(default)]
+    pub catalogs: Vec<Catalog>,
+}
+
+/// A family-0xc0 catalog of 2048-byte blocks. The content is generated: zero
+/// bytes, with the 0x55 0xaa marker at +0x47 of `marker_block`.
+///
+/// X-T5 4.31 (0x13ed614): the 0xc0 reply word is the block count. For selector 6
+/// the body treats the last four blocks as one section and requires the marker
+/// 0xaa55 (little-endian at +0x47) in the first of them (index count - 4),
+/// else the read fails and the lens is shut down (0x13f1754 -> 0x13f0084(6)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Catalog {
+    pub selector: u16,
+    pub blocks: u16,
+    pub marker_block: Option<u16>,
+}
+pub const CATALOG_BLOCK_BYTES: usize = 2048;
+
+/// Identification record. Content is invented; the fields the X-T5 4.31
+/// lens manager checks (startup states 0x15 and 0x18, 0x13f2ef8 and
+/// 0x13f3034) are set to values those checks accept:
+/// - +0x08..+0x0f is not all 0xff (registered lens), and is an ASCII class
+///   code with +0x09 = 'L', +0x0a in {P,S,Z}, +0x0b in {G,N,S},
+///   +0x0c in {A,F,W}; any other code ends in the lens-error result 3;
+/// - +0x62/+0x63 is a protocol version listed in the body's table 0x1971540
+///   (1.00 here, the lowest entry, so the body never treats the lens as newer);
+/// - +0x65 bit 1 announces the extended record (family 0x96); without it the
+///   body skips that read and the class check above fails the startup;
+/// - +0x64 bits 4..5 = 0 and the other flag bits clear (meanings unknown).
+/// Everything else (code at +0x00, focal and F-number words, the name) is a
+/// scenario layout the body is not known to read.
+pub struct Identity<'a> {
+    pub model: &'a str,
+    /// Eight-byte ASCII model code at +0x00.
+    pub code: [u8; 8],
+    /// Eight-byte ASCII class code at +0x08 (see the checks above).
+    pub class: [u8; 8],
+    /// Focal lengths in 0.1 mm.
+    pub focal: (u16, u16),
+    /// Widest F-number at the short and long ends, and the smallest aperture, in 0.1 steps.
+    pub f_numbers: (u16, u16, u16),
+    pub ois: bool,
+    pub aperture_ring: bool,
+    pub focus: Axis,
+    pub aperture: Axis,
+    /// Closest focus distance in centimetres.
+    pub closest_cm: u16,
+}
+impl Identity<'_> {
+    pub fn record(&self) -> Vec<u8> {
+        let mut r = vec![0u8; IDENTIFICATION_BYTES];
+        let mut put = |offset: usize, value: u16| {
+            r[offset..offset + 2].copy_from_slice(&value.to_be_bytes());
+        };
+        put(0x10, self.focal.0);
+        put(0x12, self.focal.1);
+        put(0x14, self.f_numbers.0);
+        put(0x16, self.f_numbers.1);
+        put(0x18, self.f_numbers.2);
+        put(0x1a, self.focus.max);
+        put(0x1c, self.aperture.max);
+        put(0x1e, self.closest_cm);
+        r[0x00..0x08].copy_from_slice(&self.code);
+        r[0x08..0x10].copy_from_slice(&self.class);
+        r[0x48] = u8::from(self.ois) | (u8::from(self.aperture_ring) << 1);
+        r[0x62] = 1; // protocol version 1.00 (table 0x1971540 row 0)
+        r[0x63] = 0;
+        r[0x64] = 0;
+        r[0x65] = 0x02; // extended record present
+        let name = self.model.as_bytes();
+        let n = name.len().min(32);
+        r[0x20..0x20 + n].copy_from_slice(&name[..n]);
+        r[0x40..0x48].copy_from_slice(b"FUJIFILM");
+        // Final byte makes the record's byte sum zero.
+        let sum = r[..IDENTIFICATION_BYTES - 1]
+            .iter()
+            .fold(0u8, |s, b| s.wrapping_add(*b));
+        r[IDENTIFICATION_BYTES - 1] = sum.wrapping_neg();
+        r
+    }
+    /// Invented extended record: layout version 1, zero fill, zero byte sum.
+    pub fn extended_record(&self) -> Vec<u8> {
+        let mut r = vec![0u8; IDENTIFICATION_BYTES];
+        r[0] = 1;
+        r[IDENTIFICATION_BYTES - 1] = 0xff;
+        r
+    }
+}
+
+impl Spec {
+    /// Named scenario lenses. Values are plausible public specifications;
+    /// the identification layout and type ids are invented.
+    pub fn preset(name: &str) -> Option<Self> {
+        let (model, code, class, focal, f_numbers, ois, ring, focus, aperture, closest) =
+            match name {
+                "xf18-55" => (
+                    "XF18-55mmF2.8-4 R LM OIS",
+                    *b"EMX1855\0",
+                    *b"XLZSA001",
+                    (180, 550),
+                    (28, 40, 220),
+                    true,
+                    true,
+                    Axis { min: 0, max: 4000, initial: 2000, units_per_ms: 40 },
+                    // Index 0 is wide open; 1/3-stop steps from F2.8 to F22.
+                    Axis { min: 0, max: 18, initial: 0, units_per_ms: 2 },
+                    30,
+                ),
+                "prime" => (
+                    "XF35mmF2 R WR",
+                    *b"EMX3520\0",
+                    *b"XLPSA001",
+                    (350, 350),
+                    (20, 20, 160),
+                    false,
+                    true,
+                    Axis { min: 0, max: 2000, initial: 1000, units_per_ms: 50 },
+                    // F2 to F16 in 1/3 stops.
+                    Axis { min: 0, max: 18, initial: 0, units_per_ms: 2 },
+                    35,
+                ),
+                _ => return None,
+            };
+        let identity = Identity {
+            model,
+            code,
+            class,
+            focal,
+            f_numbers,
+            ois,
+            aperture_ring: ring,
+            focus,
+            aperture,
+            closest_cm: closest,
+        };
+        Some(Self {
+            name: model.into(),
+            identification: identity.record(),
+            extended: identity.extended_record(),
+            // EXR II steady status and detail words (x_mount_link tests); their
+            // meaning for the X-T5 is not established.
+            status: 0x04c0,
+            detail_status: 0x0014,
+            aperture_ring: 0,
+            focus_ring: 0xffff,
+            focus,
+            aperture,
+            replies: vec![],
+            catalogs: vec![Catalog { selector: 6, blocks: 4, marker_block: Some(0) }],
+        })
+    }
+    fn validate(&self) -> Result<(), String> {
+        if self.identification.len() != IDENTIFICATION_BYTES
+            || self.extended.len() != IDENTIFICATION_BYTES
+        {
+            return Err("X-mount identification records must contain 128 bytes".into());
+        }
+        self.focus.validate()?;
+        self.aperture.validate()?;
+        for (i, c) in self.catalogs.iter().enumerate() {
+            if c.selector > 15
+                || c.blocks == 0
+                || c.blocks >= BULK_FINISH
+                || c.marker_block.is_some_and(|m| m >= c.blocks)
+                || self.catalogs[..i].iter().any(|o| o.selector == c.selector)
+            {
+                return Err("invalid X-mount lens catalog".into());
+            }
+        }
+        for (i, reply) in self.replies.iter().enumerate() {
+            if reply.family == 0
+                || reply.family > 0x1ff
+                || Self::driven(reply.family)
+                || self.replies[..i].iter().any(|r| r.family == reply.family)
+            {
+                return Err(format!(
+                    "invalid X-mount declared reply family {:#x}",
+                    reply.family
+                ));
+            }
+        }
+        Ok(())
+    }
+    /// Families whose answers come from lens state, never from a declared payload.
+    fn driven(family: u16) -> bool {
+        matches!(
+            family,
+            SYNC | IDENTIFICATION
+                | EXTENDED_IDENTIFICATION
+                | FEEDBACK
+                | FOCUS_STATE
+                | APERTURE_STATE
+                | MOTION_STATE
+                | FOCUS_TARGET
+                | FOCUS_SPEED
+                | FOCUS_STEP
+                | FOCUS_DRIVE
+                | APERTURE_TARGET
+                | APERTURE_STEP
+                | APERTURE_DRIVE
+        )
+    }
+    fn catalog(&self, selector: u16) -> Catalog {
+        self.catalogs
+            .iter()
+            .copied()
+            .find(|c| c.selector == selector)
+            .unwrap_or(Catalog { selector, blocks: 1, marker_block: None })
+    }
+    fn declared(&self, family: u16) -> Option<u16> {
+        self.replies
+            .iter()
+            .find(|r| r.family == family)
+            .map(|r| r.payload)
+    }
+}
+
+/// Declared durations in board ticks; none is measured lens timing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Timing {
+    pub ticks_per_ms: u64,
+    /// From both supplies high until the lens pulls ready low and serves frames.
+    pub startup_ticks: u64,
+    /// From then until the lens releases ready high.
+    pub busy_ticks: u64,
+    /// Shortest ready-low pulse for a motion request.
+    pub min_operation_ticks: u64,
+}
+impl Timing {
+    fn validate(self) -> Result<(), String> {
+        if self.ticks_per_ms == 0
+            || self.startup_ticks == 0
+            || self.busy_ticks == 0
+            || self.min_operation_ticks == 0
+        {
+            return Err("X-mount lens timing values must be positive".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Motion {
+    from: u16,
+    target: u16,
+    start: u64,
+    units_per_ms: u16,
+}
+impl Motion {
+    fn at_rest(position: u16) -> Self {
+        Self { from: position, target: position, start: 0, units_per_ms: 0 }
+    }
+    fn distance(self) -> u64 {
+        self.from.abs_diff(self.target) as u64
+    }
+    fn end(self, ticks_per_ms: u64) -> u64 {
+        if self.units_per_ms == 0 {
+            return self.start;
+        }
+        let ticks = (self.distance() as u128 * ticks_per_ms as u128)
+            .div_ceil(self.units_per_ms as u128);
+        self.start.saturating_add(u64::try_from(ticks).unwrap_or(u64::MAX))
+    }
+    fn position(self, now: u64, ticks_per_ms: u64) -> u16 {
+        if self.units_per_ms == 0 || now >= self.end(ticks_per_ms) {
+            return self.target;
+        }
+        let moved = (now.saturating_sub(self.start) as u128 * self.units_per_ms as u128
+            / ticks_per_ms as u128) as u64;
+        let step = moved.min(self.distance()) as u16;
+        if self.target >= self.from {
+            self.from + step
+        } else {
+            self.from - step
+        }
+    }
+    fn moving(self, now: u64, ticks_per_ms: u64) -> bool {
+        self.position(now, ticks_per_ms) != self.target
+    }
+    fn retarget(&mut self, now: u64, ticks_per_ms: u64, target: u16, units_per_ms: u16) {
+        let from = self.position(now, ticks_per_ms);
+        *self = Self { from, target, start: now, units_per_ms };
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum Power {
+    Off,
+    Starting { at: u64 },
+    Busy { until: u64 },
+    Released,
+}
+impl Power {
+    fn serving(self) -> bool {
+        matches!(self, Self::Busy { .. } | Self::Released)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Message {
+    packet: u32,
+    sequence: u8,
+    /// A catalog reply names the selector whose blocks the bulk read serves.
+    #[serde(default)]
+    catalog: Option<u16>,
+}
+const IDLE: Message = Message { packet: 0, sequence: 0, catalog: None };
+/// Bulk header the lens sends after the last block, and the body's "no further block" request.
+const BULK_END: u16 = 0xffff;
+/// Bulk header with which the body ends a bulk read.
+const BULK_FINISH: u16 = 0xff00;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum Source {
+    Identification,
+    Extended,
+    Catalog { selector: u16 },
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+enum Phase {
+    #[default]
+    Header,
+    Acknowledgment {
+        received: u32,
+        sent: Message,
+    },
+    /// Block transfers of `width + 3` bytes: 2-byte header, data, 8-bit sum.
+    /// The lens sends block `next` (or the end header) while the body's header
+    /// names the block it wants next; the body ends the read with 0xff00.
+    Bulk {
+        source: Source,
+        next: u16,
+    },
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Link {
+    input: Vec<u8>,
+    outgoing: Option<Message>,
+    phase: Phase,
+    replies: VecDeque<Message>,
+    transmit_counter: u8,
+    receive_counter: u8,
+    frames: u64,
+    /// Completed identification bulk reads since power-up.
+    identification_reads: u64,
+    /// Completed extended-record bulk reads since power-up.
+    #[serde(default)]
+    extended_reads: u64,
+    /// Completed catalog bulk reads since power-up.
+    #[serde(default)]
+    catalog_reads: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct State {
+    powered: bool,
+    power: Power,
+    epoch: u32,
+    link: Link,
+    focus: Motion,
+    focus_speed: u16,
+    aperture: Motion,
+    /// A motion request holds ready low until this tick.
+    operation_until: Option<u64>,
+    /// Last payload of every setting family, for echo and inspection.
+    settings: BTreeMap<u16, u16>,
+    /// Families (and protocol events above 0xffff) already logged.
+    logged: BTreeSet<u32>,
+}
+
+/// Event codes kept in `State::logged` next to family numbers.
+const EVENT_BAD_FRAME: u32 = 0x1_0000;
+const EVENT_OUT_OF_PHASE: u32 = 0x1_0001;
+const EVENT_BULK_ABORT: u32 = 0x1_0002;
+const EVENT_NOT_SERVING: u32 = 0x1_0003;
+const EVENT_REPLY_OVERFLOW: u32 = 0x1_0004;
+const EVENT_IDENTIFICATION: u32 = 0x1_0005;
+const EVENT_FIRST_FOCUS: u32 = 0x1_0006;
+const EVENT_FIRST_APERTURE: u32 = 0x1_0007;
+const EVENT_FRAME_SHAPE: u32 = 0x1_0008;
+const EVENT_EXTENDED: u32 = 0x1_0009;
+/// Plus the selector (0..15).
+const EVENT_CATALOG: u32 = 0x1_0010;
+
+struct Unit {
+    spec: Spec,
+    timing: Timing,
+    state: State,
+    /// Host log lines waiting for the board; never part of a checkpoint.
+    logs: Vec<String>,
+}
+
+fn valid_word(word: u32) -> bool {
+    let packet = Packet(word);
+    word == 0
+        || (word & 1 == 0 && Packet::encode(packet.payload(), packet.family(), packet.ack()) == packet)
+}
+
+impl Unit {
+    fn new(spec: Spec, timing: Timing) -> Result<Self, String> {
+        spec.validate()?;
+        timing.validate()?;
+        let state = Self::reset_state(&spec, 0, false, Power::Off, BTreeSet::new());
+        Ok(Self { spec, timing, state, logs: vec![] })
+    }
+    fn reset_state(spec: &Spec, epoch: u32, powered: bool, power: Power, logged: BTreeSet<u32>) -> State {
+        State {
+            powered,
+            power,
+            epoch,
+            link: Link::default(),
+            focus: Motion::at_rest(spec.focus.initial),
+            focus_speed: spec.focus.units_per_ms,
+            aperture: Motion::at_rest(spec.aperture.initial),
+            operation_until: None,
+            settings: BTreeMap::new(),
+            logged,
+        }
+    }
+    fn log_once(&mut self, event: u32, line: impl FnOnce() -> String) {
+        if self.state.logged.insert(event) {
+            self.logs.push(format!("x-mount lens ({}): {}", self.spec.name, line()));
+        }
+    }
+    fn ready_high(&self) -> bool {
+        match self.state.power {
+            Power::Off | Power::Starting { .. } => true,
+            Power::Busy { .. } => false,
+            Power::Released => self.state.operation_until.is_none(),
+        }
+    }
+    fn next(&self, now: u64, powered: bool) -> Option<u64> {
+        if powered != self.state.powered {
+            return Some(now);
+        }
+        match self.state.power {
+            Power::Starting { at } => Some(at),
+            Power::Busy { until } => Some(until),
+            Power::Released => self.state.operation_until,
+            Power::Off => None,
+        }
+        .map(|at| at.max(now))
+    }
+    /// Apply a supply change at `now`, then every time-driven transition due by `now`.
+    fn tick(&mut self, now: u64, powered: bool) {
+        if powered != self.state.powered {
+            if powered {
+                let epoch = self.state.epoch.wrapping_add(1);
+                let logged = std::mem::take(&mut self.state.logged);
+                self.state = Self::reset_state(
+                    &self.spec,
+                    epoch,
+                    true,
+                    Power::Starting { at: now.saturating_add(self.timing.startup_ticks) },
+                    logged,
+                );
+                self.logs.push(format!("x-mount lens ({}): supplies on", self.spec.name));
+            } else {
+                let epoch = self.state.epoch.wrapping_add(1);
+                let logged = std::mem::take(&mut self.state.logged);
+                self.state = Self::reset_state(&self.spec, epoch, false, Power::Off, logged);
+                self.logs.push(format!("x-mount lens ({}): supplies off", self.spec.name));
+            }
+        }
+        self.settle(now);
+    }
+    fn settle(&mut self, now: u64) {
+        if let Power::Starting { at } = self.state.power
+            && at <= now
+        {
+            self.state.power = Power::Busy { until: at.saturating_add(self.timing.busy_ticks) };
+        }
+        if let Power::Busy { until } = self.state.power
+            && until <= now
+        {
+            self.state.power = Power::Released;
+        }
+        if self.state.operation_until.is_some_and(|until| until <= now) {
+            self.state.operation_until = None;
+        }
+    }
+    fn operation(&mut self, now: u64, motion: Motion) {
+        let end = motion
+            .end(self.timing.ticks_per_ms)
+            .max(now.saturating_add(self.timing.min_operation_ticks));
+        self.state.operation_until = Some(self.state.operation_until.map_or(end, |u| u.max(end)));
+    }
+    fn move_focus(&mut self, now: u64, target: i64) {
+        let target = self.spec.focus.clamp(target);
+        let tpm = self.timing.ticks_per_ms;
+        let speed = self.state.focus_speed;
+        let from = self.state.focus.position(now, tpm);
+        self.state.focus.retarget(now, tpm, target, speed);
+        let focus = self.state.focus;
+        self.operation(now, focus);
+        self.log_once(EVENT_FIRST_FOCUS, || format!("first focus move {from} -> {target}"));
+    }
+    fn move_aperture(&mut self, now: u64, target: i64) {
+        let target = self.spec.aperture.clamp(target);
+        let tpm = self.timing.ticks_per_ms;
+        let speed = self.spec.aperture.units_per_ms;
+        let from = self.state.aperture.position(now, tpm);
+        self.state.aperture.retarget(now, tpm, target, speed);
+        let aperture = self.state.aperture;
+        self.operation(now, aperture);
+        self.log_once(EVENT_FIRST_APERTURE, || format!("first aperture move {from} -> {target}"));
+    }
+    fn respond(&mut self, family: u16, payload: u16, now: u64) -> Option<u16> {
+        let tpm = self.timing.ticks_per_ms;
+        if family == 0 {
+            return None;
+        }
+        let known = Spec::driven(family)
+            || matches!(
+                family,
+                PARAMETERS | STATUS | DETAIL_STATUS | APERTURE_RING | FOCUS_RING | READ_CATALOG
+            )
+            || KNOWN_READS.contains(&family)
+            || KNOWN_WRITES.contains(&family)
+            || self.spec.declared(family).is_some();
+        self.log_once(family as u32, || {
+            format!(
+                "first request family {family:#05x} payload {payload:#06x}{}",
+                if known { "" } else { " (unmodeled family, answered 0)" }
+            )
+        });
+        Some(match family {
+            SYNC | IDENTIFICATION | EXTENDED_IDENTIFICATION => 0,
+            FEEDBACK | FOCUS_STATE => self.state.focus.position(now, tpm),
+            APERTURE_STATE => self.state.aperture.position(now, tpm),
+            MOTION_STATE => {
+                u16::from(self.state.focus.moving(now, tpm))
+                    | (u16::from(self.state.aperture.moving(now, tpm)) << 1)
+            }
+            FOCUS_TARGET | FOCUS_DRIVE => {
+                self.move_focus(now, payload as i64);
+                payload
+            }
+            FOCUS_SPEED => {
+                if payload != 0 {
+                    self.state.focus_speed = payload;
+                }
+                payload
+            }
+            FOCUS_STEP => {
+                let target = self.state.focus.target as i64 + payload as i16 as i64;
+                self.move_focus(now, target);
+                payload
+            }
+            APERTURE_TARGET | APERTURE_DRIVE => {
+                self.move_aperture(now, payload as i64);
+                payload
+            }
+            APERTURE_STEP => {
+                let target = self.state.aperture.target as i64 + payload as i16 as i64;
+                self.move_aperture(now, target);
+                payload
+            }
+            f if self.spec.declared(f).is_some() => self.spec.declared(f).unwrap(),
+            PARAMETERS => payload,
+            STATUS => self.spec.status,
+            DETAIL_STATUS => self.spec.detail_status,
+            APERTURE_RING => self.spec.aperture_ring,
+            FOCUS_RING => self.spec.focus_ring,
+            // The block count; the bulk read follows the reply.
+            READ_CATALOG => self.spec.catalog(payload & 0xf).blocks,
+            f if KNOWN_WRITES.contains(&f) => {
+                self.state.settings.insert(f, payload);
+                payload
+            }
+            _ => 0,
+        })
+    }
+    fn deliver(&mut self, received: u32, now: u64) {
+        if received == 0 {
+            return;
+        }
+        let packet = Packet(received);
+        if let Some(payload) = self.respond(packet.family(), packet.payload(), now) {
+            let link = &mut self.state.link;
+            link.replies.push_back(Message {
+                packet: Packet::encode(payload, packet.family(), false).0,
+                sequence: link.transmit_counter,
+                catalog: (packet.family() == READ_CATALOG).then_some(packet.payload() & 0xf),
+            });
+            link.transmit_counter = (link.transmit_counter + 1) & 7;
+            if link.replies.len() > REPLY_LIMIT {
+                link.replies.pop_front();
+                self.log_once(EVENT_REPLY_OVERFLOW, || {
+                    "body did not collect queued replies; oldest dropped".into()
+                });
+            }
+        }
+        self.state.link.receive_counter = (self.state.link.receive_counter + 1) & 7;
+    }
+    fn bulk_geometry(&self, source: Source) -> (usize, u16) {
+        match source {
+            Source::Identification | Source::Extended => (IDENTIFICATION_BYTES, 1),
+            Source::Catalog { selector } => (CATALOG_BLOCK_BYTES, self.spec.catalog(selector).blocks),
+        }
+    }
+    /// Data byte `offset` of block `block`; past the last block the last one repeats.
+    fn bulk_data(&self, source: Source, block: u16, offset: usize) -> u8 {
+        let (_, count) = self.bulk_geometry(source);
+        let block = block.min(count - 1);
+        match source {
+            Source::Identification => self.spec.identification[offset],
+            Source::Extended => self.spec.extended[offset],
+            Source::Catalog { selector } => {
+                let marked = self.spec.catalog(selector).marker_block == Some(block);
+                match offset {
+                    0x47 if marked => 0x55,
+                    0x48 if marked => 0xaa,
+                    _ => 0,
+                }
+            }
+        }
+    }
+    fn bulk_byte(&self, source: Source, next: u16, index: usize) -> u8 {
+        let (width, _) = self.bulk_geometry(source);
+        let header = next.to_be_bytes();
+        match index {
+            0..=1 => header[index],
+            i if i < width + 2 => self.bulk_data(source, next, i - 2),
+            _ => (0..width).fold(header[0].wrapping_add(header[1]), |sum, i| {
+                sum.wrapping_add(self.bulk_data(source, next, i))
+            }),
+        }
+    }
+    /// One byte-wide frame while serving.
+    fn accept(&mut self, byte: u8, now: u64) -> u8 {
+        self.settle(now);
+        self.state.link.frames = self.state.link.frames.wrapping_add(1);
+        match self.state.link.phase.clone() {
+            Phase::Header => self.header_byte(byte, now),
+            Phase::Acknowledgment { received, sent } => {
+                let index = self.state.link.input.len();
+                let reply = Packet::encode(
+                    0x0800 | ((sent.sequence as u16) << 8),
+                    Packet(received).family(),
+                    true,
+                )
+                .bytes()[index];
+                self.state.link.input.push(byte);
+                if self.state.link.input.len() == 4 {
+                    let word = u32::from_be_bytes(
+                        self.state.link.input.as_slice().try_into().unwrap(),
+                    );
+                    self.state.link.input.clear();
+                    if !valid_word(word) {
+                        self.log_once(EVENT_BAD_FRAME, || {
+                            format!("invalid acknowledgment {word:08x}; resynchronized")
+                        });
+                    }
+                    self.deliver(received, now);
+                    if word != 0 && valid_word(word) && !Packet(word).ack() {
+                        // The body sent a new header instead of acknowledging.
+                        self.log_once(EVENT_OUT_OF_PHASE, || {
+                            format!("header {word:08x} in the acknowledgment phase")
+                        });
+                        self.state.link.phase = Phase::Acknowledgment { received: word, sent: IDLE };
+                    } else if let Some(source) = (sent.packet != 0)
+                        .then(|| match Packet(sent.packet).family() {
+                            IDENTIFICATION => Some(Source::Identification),
+                            EXTENDED_IDENTIFICATION => Some(Source::Extended),
+                            READ_CATALOG => sent.catalog.map(|selector| Source::Catalog { selector }),
+                            _ => None,
+                        })
+                        .flatten()
+                    {
+                        self.state.link.phase = Phase::Bulk { source, next: 0 };
+                    } else {
+                        self.state.link.phase = Phase::Header;
+                    }
+                }
+                reply
+            }
+            Phase::Bulk { source, next } => {
+                let index = self.state.link.input.len();
+                let (width, count) = self.bulk_geometry(source);
+                let out = self.bulk_byte(source, next, index);
+                self.state.link.input.push(byte);
+                if self.state.link.input.len() == width + 3 {
+                    let request = u16::from_be_bytes([self.state.link.input[0], self.state.link.input[1]]);
+                    self.state.link.input.clear();
+                    match request {
+                        BULK_FINISH => {
+                            self.state.link.phase = Phase::Header;
+                            match source {
+                                Source::Identification => {
+                                    self.state.link.identification_reads += 1;
+                                    self.log_once(EVENT_IDENTIFICATION, || "identification record read".into());
+                                }
+                                Source::Extended => {
+                                    self.state.link.extended_reads += 1;
+                                    self.log_once(EVENT_EXTENDED, || "extended record read".into());
+                                }
+                                Source::Catalog { selector } => {
+                                    self.state.link.catalog_reads += 1;
+                                    self.log_once(EVENT_CATALOG + selector as u32, || {
+                                        format!("catalog {selector} read ({count} blocks)")
+                                    });
+                                }
+                            }
+                        }
+                        block if block < count => {
+                            self.state.link.phase = Phase::Bulk { source, next: block };
+                        }
+                        other => {
+                            if other != BULK_END {
+                                self.log_once(EVENT_BULK_ABORT, || {
+                                    format!("bulk request for block {other:#06x} beyond {count} blocks")
+                                });
+                            }
+                            self.state.link.phase = Phase::Bulk { source, next: BULK_END };
+                        }
+                    }
+                }
+                out
+            }
+        }
+    }
+    fn header_byte(&mut self, byte: u8, _now: u64) -> u8 {
+        let index = self.state.link.input.len();
+        if index == 0 {
+            let next = self.state.link.replies.pop_front().unwrap_or(IDLE);
+            self.state.link.outgoing = Some(next);
+        }
+        let sent = self.state.link.outgoing.unwrap_or(IDLE);
+        let out = sent.packet.to_be_bytes()[index];
+        self.state.link.input.push(byte);
+        if self.state.link.input.len() == 4 {
+            let word = u32::from_be_bytes(self.state.link.input.as_slice().try_into().unwrap());
+            self.state.link.input.clear();
+            self.state.link.outgoing = None;
+            if !valid_word(word) || Packet(word).ack() {
+                if valid_word(word) {
+                    self.log_once(EVENT_OUT_OF_PHASE, || {
+                        format!("acknowledgment {word:08x} in the header phase")
+                    });
+                } else {
+                    self.log_once(EVENT_BAD_FRAME, || {
+                        format!("invalid header {word:08x}; resynchronized")
+                    });
+                }
+                // The reply was not acknowledged: send it again.
+                if sent.packet != 0 {
+                    self.state.link.replies.push_front(sent);
+                }
+            } else {
+                self.state.link.phase = Phase::Acknowledgment { received: word, sent };
+            }
+        }
+        out
+    }
+    fn validate_state(&self, state: &State) -> Result<(), String> {
+        let link = &state.link;
+        let bad_motion = |m: Motion, axis: Axis| {
+            !(axis.min..=axis.max).contains(&m.from) || !(axis.min..=axis.max).contains(&m.target)
+        };
+        if link.transmit_counter > 7
+            || link.receive_counter > 7
+            || link.replies.len() > REPLY_LIMIT
+            || link.replies.iter().any(|m| m.sequence > 7 || !valid_word(m.packet))
+            || bad_motion(state.focus, self.spec.focus)
+            || bad_motion(state.aperture, self.spec.aperture)
+            || state.powered != !matches!(state.power, Power::Off)
+            || (!state.power.serving() && (link.frames != 0 || state.operation_until.is_some()))
+        {
+            return Err("invalid X-mount lens checkpoint".into());
+        }
+        match &link.phase {
+            Phase::Header if link.input.len() <= 3 && link.outgoing.is_some() == !link.input.is_empty() => {}
+            Phase::Acknowledgment { received, sent }
+                if link.input.len() <= 3
+                    && link.outgoing.is_none()
+                    && valid_word(*received)
+                    && valid_word(sent.packet) => {}
+            Phase::Bulk { source, next }
+                if (*next < self.bulk_geometry(*source).1 || *next == BULK_END)
+                    && link.input.len() < self.bulk_geometry(*source).0 + 3
+                    && link.outgoing.is_none() => {}
+            _ => return Err("invalid X-mount lens link phase checkpoint".into()),
+        }
+        Ok(())
+    }
+}
+
+/// The board's GPIO boundary and serial controller share one lens.
+#[derive(Clone)]
+pub struct Port(Arc<Mutex<Unit>>);
+impl Port {
+    pub fn new(spec: Spec, timing: Timing) -> Result<Self, String> {
+        Ok(Self(Arc::new(Mutex::new(Unit::new(spec, timing)?))))
+    }
+    pub fn name(&self) -> String {
+        self.0.lock().unwrap().spec.name.clone()
+    }
+    pub fn next_event_tick(&self, now: u64, powered: bool) -> Option<u64> {
+        self.0.lock().unwrap().next(now, powered)
+    }
+    pub fn tick(&self, now: u64, powered: bool) {
+        self.0.lock().unwrap().tick(now, powered)
+    }
+    pub fn powered(&self) -> bool {
+        self.0.lock().unwrap().state.powered
+    }
+    pub fn serving(&self) -> bool {
+        self.0.lock().unwrap().state.power.serving()
+    }
+    pub fn ready_high(&self) -> bool {
+        self.0.lock().unwrap().ready_high()
+    }
+    /// Focus position and target at `now`.
+    pub fn focus(&self, now: u64) -> (u16, u16) {
+        let unit = self.0.lock().unwrap();
+        let s = unit.state.focus;
+        (s.position(now, unit.timing.ticks_per_ms), s.target)
+    }
+    /// Aperture index and target at `now`.
+    pub fn aperture(&self, now: u64) -> (u16, u16) {
+        let unit = self.0.lock().unwrap();
+        let s = unit.state.aperture;
+        (s.position(now, unit.timing.ticks_per_ms), s.target)
+    }
+    pub fn identification_reads(&self) -> u64 {
+        self.0.lock().unwrap().state.link.identification_reads
+    }
+    pub fn extended_reads(&self) -> u64 {
+        self.0.lock().unwrap().state.link.extended_reads
+    }
+    pub fn catalog_reads(&self) -> u64 {
+        self.0.lock().unwrap().state.link.catalog_reads
+    }
+    pub fn take_logs(&self) -> Vec<String> {
+        std::mem::take(&mut self.0.lock().unwrap().logs)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Saved {
+    spec: Spec,
+    timing: Timing,
+    state: State,
+}
+const KIND: &str = "x-mount-motion-lens";
+
+impl Wire for Port {
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        let unit = self.0.lock().unwrap();
+        Checkpoint::encode(
+            KIND,
+            &Saved { spec: unit.spec.clone(), timing: unit.timing, state: unit.state.clone() },
+        )
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let candidate: Saved = saved.decode(KIND)?;
+        let unit = self.0.lock().unwrap();
+        if candidate.spec != unit.spec
+            || candidate.timing != unit.timing
+            || !saved.children().is_empty()
+            || !saved.blobs().is_empty()
+        {
+            return Err("X-mount lens checkpoint differs from its declared lens".into());
+        }
+        unit.validate_state(&candidate.state)
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let candidate: Saved = saved.decode(KIND)?;
+        let mut unit = self.0.lock().unwrap();
+        unit.state = candidate.state;
+        unit.logs.clear();
+        Ok(())
+    }
+    fn validate_pending(&self, saved: &Checkpoint, token: u64, frame: Frame) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let candidate: Saved = saved.decode(KIND)?;
+        if frame.bits > 16 || frame.mode > 3 {
+            return Err("invalid X-mount lens pending frame".into());
+        }
+        if candidate.state.power.serving()
+            && token >> 32 == candidate.state.epoch as u64
+            && token & u32::MAX as u64 != candidate.state.link.frames & u32::MAX as u64
+        {
+            return Err("X-mount lens pending serial token differs".into());
+        }
+        Ok(())
+    }
+    fn begin(&mut self, _frame: Frame) -> Result<u64, String> {
+        let unit = self.0.lock().unwrap();
+        Ok(((unit.state.epoch as u64) << 32) | (unit.state.link.frames & u32::MAX as u64))
+    }
+    fn finish(&mut self, token: u64, frame: Frame, now: u64) -> Result<u16, String> {
+        let mut unit = self.0.lock().unwrap();
+        unit.settle(now);
+        if token >> 32 != unit.state.epoch as u64 {
+            // Power changed while the byte shifted: the line was undriven.
+            return Ok(UNDRIVEN_BYTE);
+        }
+        if !unit.state.power.serving() {
+            unit.log_once(EVENT_NOT_SERVING, || {
+                "body clocked a frame before the lens was ready; answered 0xff".into()
+            });
+            return Ok(UNDRIVEN_BYTE);
+        }
+        if frame.bits != 8 || frame.mode != 3 {
+            let (bits, mode) = (frame.bits, frame.mode);
+            unit.log_once(EVENT_FRAME_SHAPE, || {
+                format!("expected 8-bit SPI mode 3 frames, got {bits} bits mode {mode}")
+            });
+        }
+        Ok(unit.accept(frame.word as u8, now) as u16)
+    }
+    fn save(&self) -> Value {
+        let unit = self.0.lock().unwrap();
+        json!({"kind": KIND, "spec": unit.spec, "timing": unit.timing, "state": unit.state})
+    }
+    fn restore(&mut self, value: &Value) -> Result<(), String> {
+        let mut unit = self.0.lock().unwrap();
+        if value["kind"] != KIND
+            || value["spec"] != json!(unit.spec)
+            || value["timing"] != json!(unit.timing)
+        {
+            return Err("X-mount lens checkpoint differs from its declared lens".into());
+        }
+        let state: State = serde_json::from_value(value["state"].clone()).map_err(|e| e.to_string())?;
+        unit.validate_state(&state)?;
+        unit.state = state;
+        unit.logs.clear();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -49,7 +49,7 @@ impl Fixture {
             window(0xff90e500, 0x20, "dma-request-routing", json!({})),
             window(0xff90e748, 0x40, "dma-address-high", json!({})),
         ];
-        register_all(&mut graph, &windows, Some(4), pins, None).unwrap();
+        register_all(&mut graph, &windows, Some(4), pins, Default::default(), None).unwrap();
         let mut f = Self {
             graph,
             host: RecordingHost {
@@ -231,7 +231,7 @@ fn unknown_sensor_data_and_changed_chip_select_refuse_without_rx_completion() {
     let id = f.graph.at(SPI).unwrap();
     f.write(GPIO + 0x2c0, 0x00280020); // Sensor selected, configuration part idle.
     let mut cx = Cx::new(&mut f.host, 4, 0xfeed, id);
-    f.graph.nodes[id].device.write(&mut cx, SPI + 8, 4, 0x9e); // STATUS_REG is outside the modeled configuration subset.
+    f.graph.nodes[id].device.write(&mut cx, SPI + 8, 4, 0xb0); // Register 0x30 is outside the modeled subset.
     assert!(cx.is_unmodeled());
     assert_eq!(f.graph.nodes[id].device.next_deadline(f.host.now), None);
     f.write(GPIO + 0x2c0, 0x00280008);
@@ -268,7 +268,7 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
     let windows = ssp5_windows(
         json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()}),
     );
-    register_all(&mut graph, &windows, Some(4), pins.clone(), None).unwrap();
+    register_all(&mut graph, &windows, Some(4), pins.clone(), Default::default(), None).unwrap();
     let mut f = Fixture {
         graph,
         host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
@@ -303,12 +303,12 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
         json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":2,"wire":wire.clone()}),
     ] {
         let pins = Pins::shared();
-        let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(options), Some(4), pins, None);
+        let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(options), Some(4), pins, Default::default(), None);
         assert_eq!(error.err().as_deref(), Some("invalid XP5 serial DMA request wiring"));
     }
     let mut outside = ssp5_windows(json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire}));
     outside[1].base = 0xff91a000;
-    let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared(), None);
+    let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared(), Default::default(), None);
     assert_eq!(error.err().as_deref(), Some("invalid XP5 PL022 window"));
 }
 
@@ -328,7 +328,7 @@ fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_l
         graph
             .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
             .unwrap();
-        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins, None).unwrap();
+        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins, Default::default(), None).unwrap();
         let mut f = Fixture {
             graph,
             host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
@@ -345,7 +345,7 @@ fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_l
         assert!(f.host.core_irqs.is_empty() && f.host.irqs.is_empty());
     }
     let both = options(json!({"companion_irq_line":99,"companion_irq_unconnected":true}));
-    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared(), None);
+    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared(), Default::default(), None);
     assert_eq!(error.err().as_deref(), Some("PL022 interrupt output is both connected and unconnected"));
 }
 
@@ -392,6 +392,38 @@ fn a53_irq_base_outside_the_gic_spi_range_refuses() {
             window(0xff90e748, 0x40, "dma-address-high", json!({})),
         ];
         let mut graph = DeviceGraph::new();
-        assert!(register_all(&mut graph, &windows, Some(4), Pins::shared(), None).is_err());
+        assert!(register_all(&mut graph, &windows, Some(4), Pins::shared(), Default::default(), None).is_err());
     }
+}
+
+#[test]
+fn the_xt5_lens_fragment_registers_the_lens_bus_connector() {
+    let fragment: toml::Table = toml::from_str(include_str!(
+        "../../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/45-lens.toml"
+    ))
+    .unwrap();
+    let device = fragment["device"].as_array().unwrap()[0].as_table().unwrap();
+    let lens = DeviceWindow {
+        base: device["base"].as_integer().unwrap() as u64,
+        size: device["size"].as_integer().unwrap() as u64,
+        kind: device["kind"].as_str().unwrap().into(),
+        options: device["options"].as_table().unwrap().clone(),
+    };
+    let pins = Pins::shared();
+    let mut graph = DeviceGraph::new();
+    graph
+        .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+        .unwrap();
+    let windows = vec![
+        window(GPIO, 0x1000, "gpio", json!({})),
+        lens,
+        window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83,"a53_irq_base":237})),
+        window(0xff90e500, 0x20, "dma-request-routing", json!({})),
+        window(0xff90e748, 0x40, "dma-address-high", json!({})),
+    ];
+    register_all(&mut graph, &windows, Some(4), pins.clone(), Default::default(), None).unwrap();
+    let id = graph.at(0xff910000).unwrap();
+    assert_eq!(graph.nodes[id].device.name(), "xp5-x-mount-lens");
+    let attached = std::env::var("XT5_LENS").map_or(true, |v| v != "none");
+    assert_eq!(pins.lock().unwrap().level(0, 11) == 0, attached);
 }

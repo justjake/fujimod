@@ -2760,8 +2760,10 @@ name = "fujimod-emulator-xp5-io"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",

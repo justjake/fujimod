@@ -236,7 +236,7 @@ fn explicit_fixed_wire_input_is_sampled_only_after_the_programmed_frame() {
 }
 
 #[test]
-fn active_retiming_and_disabling_unread_data_refuse_without_discarding_state() {
+fn active_retiming_refuses_and_disabling_keeps_unread_data() {
     let mut c = controller();
     let mut h = RecordingHost::default();
     configure(&mut c, &mut h, true);
@@ -249,13 +249,14 @@ fn active_retiming_and_disabling_unread_data_refuse_without_discarding_state() {
         assert_eq!(c.save(), before);
     }
     tick(&mut c, &mut h, 1000);
-    let before = c.save();
-    let mut cx = Cx::new(&mut h, 0, 0, 0);
-    c.write(&mut cx, BASE + 4, 2, 0);
-    assert!(cx.is_unmodeled());
-    assert_eq!(c.save(), before);
+    // Disable (with SOD) while the reply is unread: the FIFO keeps it.
+    write(&mut c, &mut h, 4, 8);
+    assert_eq!(read(&mut c, &mut h, 0xc) & 4, 4);
+    let mut other = controller();
+    other.restore(&c.save()).unwrap();
     assert_eq!(read(&mut c, &mut h, 8), 0x67);
-    write(&mut c, &mut h, 4, 0);
+    assert_eq!(read(&mut other, &mut h, 8), 0x67);
+    // Retiming still needs empty FIFOs; now they are.
     write(&mut c, &mut h, 0x10, 4);
 }
 #[test]
