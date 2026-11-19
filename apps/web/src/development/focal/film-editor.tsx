@@ -1,4 +1,3 @@
-import { render } from '@solidjs/web';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
@@ -81,7 +80,7 @@ const BASES: Base[] = [
 
 const EDGES = [64, 120, 200, 230];
 
-function baseFilm(base: number): Film {
+export function baseFilm(base: number): Film {
   const b = BASES[base];
   return {
     base,
@@ -332,7 +331,7 @@ function Canvas(props: { film: Film; custom: boolean; crop: number; style?: JSX.
 
 /** The picture, developed with the film; in compare, B's development shows
  * right of the divider. */
-function Picture(props: { film: Film; custom: boolean; crop: number; compare?: { film: Film; split: number } }) {
+export function Picture(props: { film: Film; custom: boolean; crop: number; compare?: { film: Film; split: number } }) {
   return (
     <>
       <Canvas film={props.film} custom={props.custom} crop={props.crop} />
@@ -1074,7 +1073,7 @@ function ToneGraph(props: { film: Film; opened: Film; width: number; height: num
 
 /* ---- Editor ----------------------------------------------------------------------- */
 
-interface State {
+export interface State {
   film: Film;
   opened: Film;
   focus: number;
@@ -1320,12 +1319,12 @@ function openPicker(s: State, p: { kind: 'icon' } | { kind: 'copy'; tool: Tool }
   return { ...s, picker: { ...p, at } };
 }
 
-function initial(over: Partial<State>): State {
+export function initial(over: Partial<State>): State {
   return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, raw: RAW_DEFAULT, primary: 0, numbers: null, ...over };
 }
 
-const RAIL = 60;
-const SCROLLER = 352;
+export const RAIL = 60;
+export const SCROLLER = 352;
 const CONTENT = SCROLLER - 12;
 const PICTURE_LEFT = RAIL + SCROLLER;
 const SPLIT = Math.round((PICTURE_LEFT + W) / 2);
@@ -1335,7 +1334,7 @@ function compareFilm(s: State): Film | undefined {
   return s.compare.b === 'opened' ? s.opened : baseFilm(s.compare.b);
 }
 
-type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
+export type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
 
 const firstOf = (tool: Tool) => CONTROLS.findIndex((c) => c.tool === tool);
 
@@ -1555,7 +1554,7 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
   );
 }
 
-function press(s: State, key: Key): State {
+export function press(s: State, key: Key): State {
   const control = CONTROLS[s.focus];
   const f = s.film;
   const d = key === 'left' || key === 'down' || key === 'dial-' ? -1 : 1;
@@ -1780,7 +1779,7 @@ function ExpandIcon(props: { full?: boolean }) {
   );
 }
 
-function Hint(props: { glyph: string; label?: string; tap?: () => void; accent?: boolean }) {
+export function Hint(props: { glyph: string; label?: string; tap?: () => void; accent?: boolean }) {
   return (
     <button
       type="button"
@@ -2113,7 +2112,7 @@ function NumbersSheet(props: { s: State; update: (s: State) => void }) {
   );
 }
 
-function Editor(props: {
+export function Editor(props: {
   s: State;
   set: (s: State) => void;
   histogram: number[];
@@ -2638,7 +2637,7 @@ function Editor(props: {
   );
 }
 
-function useHistogram() {
+export function useHistogram() {
   const [histogram, setHistogram] = createSignal<number[]>([]);
   onSettled(() => {
     void source().then((src) => setHistogram(src.histogram));
@@ -2668,7 +2667,7 @@ function Screen(props: { state: () => State; set: (s: State) => void }) {
 
 /* ---- Camera keys, on screen -------------------------------------------------------- */
 
-function Pad(props: { send: (key: Key) => void }) {
+export function Pad(props: { send: (key: Key) => void }) {
   const button = (key: Key, label: string, extra = '') => (
     <button
       type="button"
@@ -2703,29 +2702,8 @@ function Pad(props: { send: (key: Key) => void }) {
   );
 }
 
-function Live(props: { start: State }) {
-  const [state, setState] = createSignal<State>(props.start);
-  return (
-    <>
-      <Fit>
-        <Screen state={state} set={setState} />
-      </Fit>
-      <Pad send={(key) => setState(press(state(), key))} />
-    </>
-  );
-}
 
-/* ---- From the recipe editor --------------------------------------------------------- */
-
-/* The recipe editor's FILM SIMULATION row opens the film editor. A built-in
-   film opens as a new film copied from it; a card film opens as itself. Two
-   presentations: a sheet rising from the bottom while the recipe column
-   recedes, or the film editor sliding in over it from the left edge. */
-
-const STOCK = '/review/stock-icons/x70-110';
-const stockIcon = (id: number) => `${STOCK}/ff${id.toString(16).padStart(6, '0')}.svg`;
-const RECIPE_WIDTH = 280;
-
+/** The custom setting's rows, as the CUSTOM SETTING section summarizes them. */
 type RecipeRow = { icon: number; value?: string; level?: number };
 const RECIPE_ROWS: RecipeRow[] = [
   { icon: 0x5f3 },
@@ -2737,6 +2715,9 @@ const RECIPE_ROWS: RecipeRow[] = [
   { icon: 0x605, level: 0 },
   { icon: 0x603, level: -2 },
 ];
+
+const STOCK = '/review/stock-icons/x70-110';
+const stockIcon = (id: number) => `${STOCK}/ff${id.toString(16).padStart(6, '0')}.svg`;
 
 function StockIcon(props: { id: number; color: string; size?: number }) {
   return (
@@ -2755,77 +2736,6 @@ function StockIcon(props: { id: number; color: string; size?: number }) {
   );
 }
 
-function RecipeColumn(props: { film: string }) {
-  return (
-    <div class="absolute inset-y-0 left-0 overflow-hidden pt-[4px]" style={{ ...COLUMN, width: `${RECIPE_WIDTH}px` }}>
-      <For each={RECIPE_ROWS}>
-        {(row, i) => (
-          <div class="flex h-[57px] items-center pr-[6px] pl-[10px]">
-            <StockIcon id={row.icon} color={i() === 0 ? '#fff' : 'rgb(255 255 255 / 0.72)'} />
-            <div class="ml-[8px] flex h-[47px] grow items-center justify-center" style={TRACK(i() === 0)}>
-              <Show
-                when={row.level === undefined}
-                fallback={<Ruler value={row.level ?? 0} min={-2} max={2} step={1} width={208} focused={false} changed={false} set={() => undefined} />}
-              >
-                <span class={`flex h-[37px] items-center rounded-[10px] bg-white px-[12px] font-medium whitespace-nowrap text-black ${SMALL}`}>{i() === 0 ? props.film : row.value}</span>
-              </Show>
-            </div>
-          </div>
-        )}
-      </For>
-    </div>
-  );
-}
-
-/* FADE UNDER: the film editor slides in from the left edge while the recipe
-   column drifts right a little and fades out beneath it. Once the film editor
-   is in, the recipe column is not drawn; the key hints stay where they are
-   and change. */
-const SPRING = '460ms cubic-bezier(0.22, 1, 0.36, 1)';
-
-function Presented() {
-  const [open, setOpen] = createSignal(false);
-  const [state, setState] = createSignal<State>(initial({ film: START }));
-  const histogram = useHistogram();
-  const editorWidth = RAIL + SCROLLER;
-  return (
-    <>
-      <div class="mb-[10px] flex flex-wrap gap-[8px]">
-        <button type="button" class="h-[44px] rounded-[12px] px-[18px] text-[16px] font-semibold text-white" style={{ background: ACCENT }} onClick={() => setOpen(!open())}>
-          {open() ? 'Back' : 'Edit film'}
-        </button>
-      </div>
-      <Fit>
-        <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans select-none">
-          <Picture film={state().film} custom={state().custom} crop={0} />
-          <div
-            class="absolute inset-0"
-            style={{
-              transform: open() ? 'translateX(48px)' : 'none',
-              opacity: open() ? 0 : 1,
-              transition: `transform ${SPRING}, opacity ${open() ? '220ms' : '320ms 140ms'} ease-out, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
-              visibility: open() ? 'hidden' : 'visible',
-            }}
-          >
-            <RecipeColumn film="Classic Chrome" />
-          </div>
-          <div class="absolute right-[10px] bottom-[10px]" style={{ opacity: open() ? 0 : 1, transition: 'opacity 200ms', 'pointer-events': open() ? 'none' : 'auto' }}>
-            <Hint glyph="Fn" label="EDIT FILM" tap={() => setOpen(true)} />
-          </div>
-          <div class="absolute inset-0" style={{ visibility: open() ? 'visible' : 'hidden', transition: `visibility 0s linear ${open() ? '0ms' : '460ms'}` }}>
-            <Editor
-              s={state()}
-              set={setState}
-              histogram={histogram()}
-              column={{ transform: open() ? 'none' : `translateX(-${editorWidth}px)`, transition: `transform ${SPRING}` }}
-              chrome={{ opacity: open() ? 1 : 0, transition: `opacity 200ms ${open() ? '200ms' : '0ms'}` }}
-            />
-          </div>
-        </div>
-      </Fit>
-    </>
-  );
-}
 
 /* ---- Review ------------------------------------------------------------------------- */
 
@@ -2950,7 +2860,7 @@ function Toggle(props: { label: string; on: boolean; set: (on: boolean) => void 
   );
 }
 
-function Review() {
+export function FilmReview(props: { children: JSX.Element }) {
   const [rounded, setRounded] = createSignal(true);
   const [upper, setUpper] = createSignal(false);
   const [look, setLook] = createSignal<Look>('glass');
@@ -2962,7 +2872,7 @@ function Review() {
     >
       <style>{STYLE_OPTIONS}</style>
       <style>{`.fm-look-glass .fm-screen {${glassVars(opacity(), contrast())} }`}</style>
-      <h1 class="mb-[12px] text-[22px] font-semibold">Film editor</h1>
+      <h1 class="mb-[12px] text-[22px] font-semibold">Custom settings editor</h1>
       <div class="mb-[14px] flex flex-wrap gap-[8px]">
         <Toggle label="Rounded corners" on={rounded()} set={setRounded} />
         <Toggle label="Uppercase" on={upper()} set={setUpper} />
@@ -2995,9 +2905,8 @@ function Review() {
           </For>
         </div>
       </Show>
-      <Live start={initial({ film: START })} />
-      <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">From the recipe editor</h2>
-      <Presented />
+      {props.children}
+      <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">Film editor</h2>
       <For each={STATES}>
         {(entry) => (
           <section id={entry.id} class="mt-[28px]">
@@ -3010,7 +2919,7 @@ function Review() {
   );
 }
 
-function Fit(props: { children: JSX.Element }) {
+export function Fit(props: { children: JSX.Element }) {
   let host: HTMLDivElement | undefined;
   const [scale, setScale] = createSignal(1);
   onSettled(() => {
@@ -3029,9 +2938,3 @@ function Fit(props: { children: JSX.Element }) {
   );
 }
 
-const host = document.getElementById('film-editor');
-if (!host) throw new Error('Missing #film-editor');
-if (import.meta.env.DEV) {
-  host.replaceChildren();
-  render(() => <Review />, host);
-}

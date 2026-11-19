@@ -1,4 +1,3 @@
-import { render } from '@solidjs/web';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
@@ -28,7 +27,7 @@ interface Choice {
   note?: string;
 }
 
-const FILMS: Choice[] = [
+export const FILMS: Choice[] = [
   {
     name: 'PROVIA/STANDARD',
     icon: 0x1dc,
@@ -1151,7 +1150,7 @@ type Action =
   | { focus: number; side?: Side }
   | { set: string; value: number; focus: number; side?: Side }
   | { shift: [number, number] };
-type Send = (action: Action) => void;
+export type Send = (action: Action) => void;
 
 /* ---- Rows -------------------------------------------------------------------- */
 
@@ -1892,7 +1891,7 @@ function Legend(props: {
 type Fly = 'none' | 'shift';
 type Mode = 'live' | 'raw';
 
-interface EditorState {
+export interface EditorState {
   mode: Mode;
   /** B: the recipe being edited. */
   recipe: Recipe;
@@ -1913,7 +1912,7 @@ function valueName(setting: Setting, recipe: Recipe): string {
         fmt(setting.steps[recipe[setting.id]]));
 }
 
-function Editor(props: { state: EditorState; send?: Send }) {
+export function Editor(props: { state: EditorState; send?: Send }) {
   const s = () => props.state;
   const send: Send = (action) => props.send?.(action);
   const design = () => DESIGNS[s().design];
@@ -2081,7 +2080,7 @@ function step(state: EditorState, delta: number): EditorState {
   }));
 }
 
-function onKey(state: EditorState, key: string): EditorState {
+export function onKey(state: EditorState, key: string): EditorState {
   const id = SETTINGS[state.focus].id;
   if (state.fly === 'shift') {
     const clamp = (n: number) => Math.max(-9, Math.min(9, n));
@@ -2110,7 +2109,7 @@ function onKey(state: EditorState, key: string): EditorState {
   return state;
 }
 
-function apply(state: EditorState, action: Action): EditorState {
+export function apply(state: EditorState, action: Action): EditorState {
   if ('key' in action) return onKey(state, action.key);
   if ('shift' in action)
     return edit(state, (r) => ({ ...r, shiftR: action.shift[0], shiftB: action.shift[1] }));
@@ -2124,7 +2123,7 @@ function apply(state: EditorState, action: Action): EditorState {
   return moved;
 }
 
-const INITIAL: EditorState = {
+export const INITIAL: EditorState = {
   mode: 'live',
   recipe: BASE,
   focus: 1,
@@ -2134,14 +2133,6 @@ const INITIAL: EditorState = {
   design: 'embossed',
 };
 
-const PADS = [
-  { label: '◀', key: 'ArrowLeft' },
-  { label: '▲', key: 'ArrowUp' },
-  { label: '▼', key: 'ArrowDown' },
-  { label: '▶', key: 'ArrowRight' },
-  { label: 'OK', key: 'Enter' },
-  { label: 'BACK', key: 'Escape' },
-];
 
 /** One of several page options, as a single segmented control. */
 function Segmented<T extends string>(props: {
@@ -2170,22 +2161,12 @@ function Segmented<T extends string>(props: {
   );
 }
 
-function Live() {
-  const [state, setState] = createSignal<EditorState>(INITIAL);
-  const send: Send = (action) => setState(apply(state(), action));
+/** The custom settings editor's look options for this review page. */
+export function RecipeOptions(props: { state: EditorState; set: (state: EditorState) => void }) {
+  const state = () => props.state;
+  const setState = props.set;
   return (
-    <div
-      tabindex="0"
-      class="outline-none"
-      onKeyDown={(e) => {
-        const next = onKey(state(), e.key);
-        if (next !== state()) {
-          e.preventDefault();
-          setState(next);
-        }
-      }}
-    >
-      <div class="mb-[10px] flex flex-wrap gap-[10px]">
+    <div class="mb-[10px] flex flex-wrap gap-[10px]">
         <Segmented
           choices={(Object.keys(DESIGNS) as DesignId[]).map((id) => ({
             value: id,
@@ -2220,23 +2201,6 @@ function Live() {
           />
           Center selected
         </label>
-      </div>
-      <Fit>
-        <Editor state={state()} send={send} />
-      </Fit>
-      <div class="mt-[10px] flex max-w-[720px] flex-wrap gap-[8px]">
-        <For each={PADS}>
-          {(pad) => (
-            <button
-              type="button"
-              class="min-h-[44px] min-w-[52px] rounded-[10px] bg-[#2a2a2c] px-[12px] text-[16px] font-semibold active:bg-[#444]"
-              onClick={() => send({ key: pad.key })}
-            >
-              {pad.label}
-            </button>
-          )}
-        </For>
-      </div>
     </div>
   );
 }
@@ -2295,7 +2259,7 @@ const STATES: { id: string; title: string; state: EditorState }[] = [
   { id: 'grain-size', title: 'GRAIN SIZE under the grain icon', state: { ...INITIAL, focus: 13, recipe: EDITED } },
   { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
   {
-    id: 'compare',
+    id: 'compare-b',
     title: 'Compare, editing B',
     state: { ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 4, comparing: true },
   },
@@ -2306,14 +2270,14 @@ const STATES: { id: string; title: string; state: EditorState }[] = [
   },
 ];
 
-function Review() {
+/** The custom settings editor's review states, one screen each. */
+export function RecipeStates() {
   return (
-    <div class="min-h-dvh touch-manipulation bg-[#111] p-[16px] font-sans text-[15px] text-[#ddd]">
-      <h1 class="mb-[12px] text-[22px] font-semibold">Recipe editor</h1>
-      <Live />
+    <>
+      <h2 class="mt-[32px] mb-[10px] text-[17px] font-semibold">Custom settings editor</h2>
       <For each={STATES}>
         {(entry) => (
-          <section id={entry.id} class="mt-[32px]">
+          <section id={entry.id} class="mt-[28px]">
             <h2 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h2>
             <Fit>
               <Editor state={entry.state} />
@@ -2321,15 +2285,8 @@ function Review() {
           </section>
         )}
       </For>
-    </div>
+    </>
   );
-}
-
-const host = document.getElementById('recipe-editor');
-if (!host) throw new Error('Missing #recipe-editor');
-if (import.meta.env.DEV) {
-  host.replaceChildren();
-  render(() => <Review />, host);
 }
 
 function Fit(props: { children: JSX.Element }) {
