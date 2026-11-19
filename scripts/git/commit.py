@@ -12,6 +12,11 @@ or working tree is included. ``--ignored`` also takes named files that
 refused unless ``--allow-bulk`` is given. ``--untrack PATH`` removes tracked
 files from Git and leaves them on disk; add an ignore rule so they stay out.
 
+Commits go on a topic branch: the tool refuses to commit on ``main`` (land
+work there through a pull request) and in a checkout whose branch is
+detached. ``--allow-main`` is for an unattended service the owner has allowed
+to commit straight to ``main``.
+
 The commit is built in a private index on the checked-out branch's HEAD, after
 ``sync.py`` brings that branch to its ``origin`` counterpart, merging origin's
 changes into anyone's edits. Paths recorded as sync conflicts are refused. One
@@ -33,6 +38,8 @@ from repository import Repository as GitRepository
 from sync import load_conflicts, locked, update
 
 ATTEMPTS = 5
+# Branches that receive work only through pull requests.
+PROTECTED = ("main",)
 # Commits that add this many files, or logs and movies, are usually build or test output.
 BULK_FILES = 500
 UNWANTED_SUFFIXES = (".log", ".mov", ".mp4", ".m4v", ".mkv", ".avi")
@@ -45,7 +52,17 @@ class Arguments(argparse.Namespace):
     ignored: bool
     allow_bulk: bool
     untrack: list[str]
+    allow_main: bool
     paths: list[str]
+
+
+def refuse_protected(repository: GitRepository) -> None:
+    name = repository.branch().removeprefix("refs/heads/")
+    if name in PROTECTED:
+        raise Failure(
+            f"{name} receives work only through pull requests; commit on a topic "
+            "branch (git switch -c <github-username>/TOPIC)"
+        )
 
 
 def within(name: str, path: str) -> bool:
@@ -220,6 +237,11 @@ def main() -> None:
         metavar="PATH",
         help="remove PATH from Git but keep it on disk (repeatable)",
     )
+    parser.add_argument(
+        "--allow-main",
+        action="store_true",
+        help="commit on main (only for services the owner allowed to)",
+    )
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(namespace=Arguments())
     if not args.paths and not args.patch and not args.untrack:
@@ -228,6 +250,8 @@ def main() -> None:
     patch = args.patch.resolve() if args.patch else None
     try:
         repository = Repository(GitRepository.toplevel(args.repo))
+        if not args.allow_main:
+            refuse_protected(repository)
         result = repository.commit(
             args.paths,
             patch,
