@@ -423,6 +423,167 @@ function Ruler(props: {
   );
 }
 
+/* A slider row, as the camera's command dials and the recipe column's rulers
+   behave: the whole row is the track; the name and value sit on its top line
+   and a scale of ticks runs across its full width under a fixed center mark.
+   A sideways drag moves the scale with the finger, one to one and without
+   snapping while held, the value changing as each tick crosses the mark and
+   the picture following; let go and it coasts and settles on a step. A
+   vertical drag scrolls the sidebar instead. A tap left or right of the mark
+   steps once. While held, the value grows and the mark and the ticks near it
+   light up. */
+function Dial(props: {
+  name: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  width: number;
+  focused: boolean;
+  changed: boolean;
+  track?: string;
+  set: (value: number) => void;
+  onFocus?: () => void;
+}) {
+  const SPACING = 26;
+  const count = () => Math.round((props.max - props.min) / props.step) + 1;
+  const indexOf = (v: number) => (v - props.min) / props.step;
+  const zero = () => indexOf(0);
+  /** The scale's position in steps while held or coasting; settled otherwise. */
+  const [pos, setPos] = createSignal<number | null>(null);
+  const shown = () => pos() ?? indexOf(props.value);
+  const active = () => pos() !== null;
+  const color = () => (props.changed ? ACCENT : '#fff');
+  let gesture: { x: number; y: number; start: number; axis: 'x' | 'y' | null; samples: [number, number][] } | undefined;
+  let frame = 0;
+  const stop = () => cancelAnimationFrame(frame);
+  const commit = (p: number) => {
+    const i = Math.max(0, Math.min(count() - 1, Math.round(p)));
+    const v = props.min + i * props.step;
+    if (v !== props.value) props.set(v);
+  };
+  /* Past either end the scale gives a third as much, as a rubber band. */
+  const band = (p: number) => (p < 0 ? p / 3 : p > count() - 1 ? count() - 1 + (p - count() + 1) / 3 : p);
+  const settle = () => {
+    const from = pos() ?? indexOf(props.value);
+    const to = Math.max(0, Math.min(count() - 1, Math.round(from)));
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / 200);
+      setPos(from + (to - from) * (1 - (1 - t) ** 3));
+      if (t < 1) frame = requestAnimationFrame(tick);
+      else setPos(null);
+    };
+    commit(to);
+    frame = requestAnimationFrame(tick);
+  };
+  const coast = (velocity: number) => {
+    let v = velocity;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = now - last;
+      last = now;
+      v *= 0.94 ** (dt / 16);
+      const next = (pos() ?? 0) + (v * dt) / SPACING;
+      const clamped = Math.max(-0.4, Math.min(count() - 0.6, next));
+      setPos(clamped);
+      commit(clamped);
+      if (Math.abs(v) < 0.08 || clamped !== next) settle();
+      else frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+  };
+  const scaleOf = (el: Element) => (el as HTMLElement).offsetWidth / el.getBoundingClientRect().width;
+  return (
+    <div
+      class="relative h-[57px] overflow-hidden select-none"
+      style={{ width: `${props.width}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
+      onPointerDown={(e) => {
+        stop();
+        props.onFocus?.();
+        gesture = { x: e.clientX, y: e.clientY, start: pos() ?? indexOf(props.value), axis: null, samples: [[performance.now(), e.clientX]] };
+      }}
+      onPointerMove={(e) => {
+        if (!gesture) return;
+        const k = scaleOf(e.currentTarget);
+        const dx = (e.clientX - gesture.x) * k;
+        const dy = (e.clientY - gesture.y) * k;
+        if (!gesture.axis) {
+          if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) {
+            gesture.axis = 'x';
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } else if (Math.abs(dy) > 8) gesture.axis = 'y';
+        }
+        if (gesture.axis !== 'x') return;
+        gesture.samples = [...gesture.samples.slice(-4), [performance.now(), e.clientX]];
+        const p = band(gesture.start - dx / SPACING);
+        setPos(p);
+        commit(p);
+      }}
+      onPointerUp={(e) => {
+        const g = gesture;
+        gesture = undefined;
+        if (!g) return;
+        if (g.axis === 'x') {
+          const [[t0, x0], [t1, x1]] = [g.samples[0], g.samples[g.samples.length - 1]];
+          const velocity = t1 > t0 ? (-(x1 - x0) * scaleOf(e.currentTarget)) / (t1 - t0) : 0;
+          if (Math.abs(velocity) > 0.3) coast(velocity);
+          else settle();
+        } else if (!g.axis) {
+          const box = e.currentTarget.getBoundingClientRect();
+          const right = e.clientX > box.left + box.width / 2;
+          const i = Math.max(0, Math.min(count() - 1, Math.round(indexOf(props.value)) + (right ? 1 : -1)));
+          props.set(props.min + i * props.step);
+        }
+      }}
+      onPointerCancel={() => {
+        gesture = undefined;
+        if (active()) settle();
+      }}
+    >
+      <span class={`absolute top-[8px] left-[12px] font-light tracking-[0.06em] ${SMALL}`} style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.72)' }}>
+        {props.name}
+      </span>
+      <span
+        class="absolute top-[5px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100"
+        style={{ color: color(), 'font-size': '23px', 'line-height': '26px', transform: active() ? 'scale(1.3)' : 'none' }}
+      >
+        {signed(props.value)}
+      </span>
+      <div
+        class="absolute inset-x-0 bottom-0 h-[24px]"
+        style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent)' }}
+      >
+        <Show when={props.track}>{(track) => <div class="absolute inset-x-[8px] bottom-[4px] h-[4px] rounded-full opacity-70" style={{ background: track() }} />}</Show>
+        <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out' }}>
+          <For each={Array.from({ length: count() }, (_, i) => i)}>
+            {(i) => {
+              const near = () => Math.max(0, 1 - Math.abs(i - shown()) / 3);
+              const between = () => i >= Math.min(zero(), shown()) && i <= Math.max(zero(), shown()) && Math.round(shown()) !== zero();
+              const major = () => i === zero() || (i - zero()) % 5 === 0;
+              return (
+                <span
+                  class="absolute bottom-[10px] -translate-x-1/2 rounded-full"
+                  style={{
+                    left: `${i * SPACING}px`,
+                    width: '2px',
+                    height: `${(major() ? 12 : 7) + (active() ? near() * 4 : 0)}px`,
+                    background: between() ? ACCENT : `rgb(255 255 255 / ${0.4 + (active() ? near() * 0.6 : 0)})`,
+                  }}
+                />
+              );
+            }}
+          </For>
+        </div>
+        <span
+          class="absolute bottom-[6px] w-[4px] -translate-x-1/2 rounded-full transition-[height] duration-100"
+          style={{ left: `${props.width / 2}px`, height: active() ? '22px' : '18px', background: color(), 'box-shadow': '0 0 0 1.5px rgb(0 0 0 / 0.5)' }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** A labeled row: name on the left, the control in its track on the right. */
 function Row(props: { name: string; focused: boolean; width: number; nameWidth?: number; children: JSX.Element; onClick?: () => void }) {
   const nameWidth = () => props.nameWidth ?? 146;
@@ -1586,21 +1747,21 @@ function Editor(props: {
     },
   );
   const edited = (tool: Tool) => !same(GROUPS[tool](s().film), GROUPS[tool](s().opened));
-  const scaleRow = (i: number, c: Scale, width: number, nameWidth: number) => (
-    <div ref={(element) => (rows[i] = element)} onPointerDown={() => focusControl(i)}>
-      <Row name={c.name} focused={isFocused(i)} width={width} nameWidth={nameWidth}>
-        <Ruler
-          value={c.get(s().film)}
-          min={c.min}
-          max={c.max}
-          step={c.step}
-          width={width - nameWidth - 8}
-          focused={isFocused(i)}
-          changed={c.get(s().film) !== c.get(s().opened)}
-          track={c.track}
-          set={(v) => update({ ...s(), focus: i, film: c.put(s().film, v) })}
-        />
-      </Row>
+  const scaleRow = (i: number, c: Scale, width: number, _nameWidth?: number) => (
+    <div ref={(element) => (rows[i] = element)} class="py-[2px]">
+      <Dial
+        name={c.name}
+        value={c.get(s().film)}
+        min={c.min}
+        max={c.max}
+        step={c.step}
+        width={width}
+        focused={isFocused(i)}
+        changed={c.get(s().film) !== c.get(s().opened)}
+        track={c.track}
+        onFocus={() => focusControl(i)}
+        set={(v) => update({ ...s(), focus: i, film: c.put(s().film, v) })}
+      />
     </div>
   );
   const index = (tool: Tool, nth = 0) => CONTROLS.findIndex((c) => c.tool === tool) + nth;
