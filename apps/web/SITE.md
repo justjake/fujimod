@@ -46,10 +46,8 @@ In this order:
      playback shows the zoomed 65:24 picture.
    - Image looks and recipes: pick a recipe from the recipe library by name,
      turn on HALATION under FILM EFFECTS, shoot, and playback shows the look.
-   - Controls and system: switch MENU STYLE to FUJIMOD (back to live view so
-     the style applies, then reopen the menu), assign ISO to the EV dial under
-     UNLOCKED CONTROLS, turn the dial in live view to change ISO, then open
-     CHECK FOR UPDATES.
+   - Controls and system: assign ISO to the EV dial under UNLOCKED CONTROLS,
+     turn the dial in live view to change ISO, then open CHECK FOR UPDATES.
 3. Two columns: the release notes on the left, a small SD card on the right
    with a checkbox per camera, a Recipes checkbox with a recipe list, and the
    download button. The SD card states that Fujimod lives on the SD card; it
