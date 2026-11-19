@@ -171,3 +171,13 @@ def test_untrack_keeps_the_file_on_disk(repos: tuple[Path, Path]) -> None:
     assert "b.txt" not in files
     assert (checkout / "b.txt").read_text() == "b\n"
     assert run("git", "status", "--porcelain", cwd=checkout) == ""
+
+
+def test_commits_on_main_are_refused(repos: tuple[Path, Path]) -> None:
+    from commit import refuse_protected
+
+    _, checkout = repos
+    with pytest.raises(Failure, match="pull requests"):
+        refuse_protected(Repository(checkout))
+    run("git", "switch", "-q", "-c", "someone/topic", cwd=checkout)
+    refuse_protected(Repository(checkout))
