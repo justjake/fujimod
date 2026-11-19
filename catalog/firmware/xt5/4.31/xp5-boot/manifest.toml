@@ -12,10 +12,25 @@ size = 0x40000000
 # Linux 256 MiB, then the shared arenas, through 0x60000000: the application's
 # memory map (0x2df35d8) maps 0x40000000+0x10000000, 0x50000000+0xff00000 and
 # 0x5ff00000+0x100000, and the supplied Linux DTB declares memory@40000000 size
-# body's dram_bytes ends at the same address. Installed capacity is unmeasured
-# (camera-needs.md 1.19).
+# 0x10000000. The body's dram_bytes ends at the same address. Installed capacity
+# is unmeasured (camera-needs.md 1.19).
 [[ram]]
 base = 0x40000000
+size = 0x20000000
+
+# The firmware uses DRAM up to 0x80000000, past the body's 0x60000000: the still
+# subject-detection arena is 0x7ec00000+0x1400000 (0x2d5ceb8; the AI task 0x2de0b50
+# clears it), the stock early page tables identity-map 0x40000000..0x80000000
+# (non-executable), and the drain classifier 0x14c9914 drains
+# 0x60000000..0x7fffffff with a read of 0x60000000. The body's drain peripheral
+# moves to 0x80000000 only so that it does not overlap the new RAM. Installed
+# capacity is unmeasured.
+[dram]
+limit = 0x80000000
+bus_drain = 0x80000000
+
+[[ram]]
+base = 0x60000000
 size = 0x20000000
 
 # M-core SRAM: stock 13f7b58 copies flash f01c0000 here before reset release.
