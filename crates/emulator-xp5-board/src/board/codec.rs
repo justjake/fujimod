@@ -17,8 +17,10 @@
 //!   chroma plane is interleaved Cb, Cr ([`CB_FIRST`]); the order is inferred.
 //! - With `XT5_SCENE` set and `XT5_MOVIE_PATH` not `real`, the host scene at
 //!   the programmed size replaces the guest picture (a functional shortcut, as
-//!   for the JPEG encoder: the movie develop chain writes no pixels). The scene
-//!   is a host input outside the run definition and the checkpoint.
+//!   for the JPEG encoder). With `XT5_MOVIE_PATH=real` the movie develop chain
+//!   (MOVDC -> RIFP inline -> RESZ -> TNR, emulator-xp5-imaging
+//!   imaging_movie.rs) writes the input picture. The scene is a host input
+//!   outside the run definition and the checkpoint.
 //! - The access unit (SPS, PPS and an IDR slice on each IDR; one non-IDR slice
 //!   otherwise) is written with a 4-byte start code before each NAL into the
 //!   stream banks `BADR_STR0`/`BADR_STR1` of `STR_BUF_SIZE` bytes each. The
@@ -555,18 +557,9 @@ impl Device for Codec {
 }
 
 /// The `XT5_SCENE` scene at the programmed size, unless `XT5_MOVIE_PATH` is
-/// `real` (read once per process).
+/// `real` ([`fujimod_emulator_imaging::frame::movie_path_real`]).
 pub fn host_movie_422(width: usize, height: usize) -> Option<Vec<u8>> {
-    use std::sync::OnceLock;
-    static REAL: OnceLock<bool> = OnceLock::new();
-    let real = *REAL.get_or_init(|| {
-        let real = std::env::var("XT5_MOVIE_PATH").is_ok_and(|v| v == "real");
-        if real {
-            eprintln!("XT5_MOVIE_PATH: real (the H.264 encoder reads the guest Y/C planes)");
-        }
-        real
-    });
-    if real {
+    if fujimod_emulator_imaging::frame::movie_path_real() {
         return None;
     }
     fujimod_emulator_imaging::frame::render_422(
