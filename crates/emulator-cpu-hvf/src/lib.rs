@@ -84,6 +84,9 @@ pub struct Core {
     active_run: RefCell<Option<ActiveRun>>,
     mmio: RefCell<BTreeMap<u64, Window>>,
     running: Cell<bool>,
+    /// The worker waits for this owner, so its published PC and PSTATE are
+    /// current. Cleared whenever the owner lets the vCPU execute.
+    parked: Cell<bool>,
     instruction_hook: Cell<bool>,
     execution_policy: Cell<ExecutionPolicy>,
     _owner: PhantomData<Rc<()>>,
@@ -150,6 +153,7 @@ impl Core {
                     active_run: RefCell::new(None),
                     mmio: RefCell::new(BTreeMap::new()),
                     running: Cell::new(false),
+                    parked: Cell::new(false),
                     instruction_hook: Cell::new(false),
                     execution_policy: Cell::new(ExecutionPolicy::Exact),
                     _owner: PhantomData,
@@ -187,11 +191,27 @@ impl Core {
         }
     }
     fn rpc(&self, op: Op) -> Result<Value, String> {
+        // Every other reply follows the worker publishing its parked state.
+        let resumes = matches!(op, Op::Resume(_) | Op::CompleteMmio(_));
+        self.parked.set(false);
         let (reply, rx) = mpsc::channel();
         self.commands
             .send(Command { op, reply })
             .map_err(|_| "HVF worker disconnected")?;
-        rx.recv().map_err(|_| "HVF worker reply disconnected")?
+        let result = rx.recv().map_err(|_| "HVF worker reply disconnected")?;
+        self.parked.set(!resumes);
+        result
+    }
+    /// PC or PSTATE published by the parked worker, without a round trip.
+    fn parked_register(&self, register: Register) -> Option<u64> {
+        if !self.parked.get() || !self.shared.parked_valid.load(Ordering::Acquire) {
+            return None;
+        }
+        match register {
+            Register::Pc => Some(self.shared.parked_pc.load(Ordering::Relaxed)),
+            Register::Pstate => Some(self.shared.parked_pstate.load(Ordering::Relaxed)),
+            _ => None,
+        }
     }
     fn validate_active_run(
         &self,
@@ -517,6 +537,14 @@ impl Cpu for Core {
         }
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
+        if let Some(value) = self.parked_register(register) {
+            let bytes = value.to_le_bytes();
+            let out = out
+                .get_mut(..bytes.len())
+                .ok_or_else(|| format!("register buffer needs {} bytes", bytes.len()))?;
+            out.copy_from_slice(&bytes);
+            return Ok(bytes.len());
+        }
         match self.rpc(Op::Read(register))? {
             Value::Bytes(bytes) if out.len() >= bytes.len() => {
                 out[..bytes.len()].copy_from_slice(&bytes);
@@ -709,6 +737,7 @@ impl Cpu for Core {
         let (events, event_rx) = mpsc::channel();
         let (reply, rx) = mpsc::channel();
         let observe = self.has_instruction_hooks();
+        self.parked.set(false);
         self.commands
             .send(Command {
                 op: Op::Run(request, policy, observe, events),
@@ -717,6 +746,7 @@ impl Cpu for Core {
             .map_err(|_| ExecutionError::Backend("HVF worker disconnected".into()))?;
         let mut error = None;
         while let Ok(event) = event_rx.recv() {
+            self.parked.set(true);
             match event {
                 Event::Before(pc) => {
                     self.before(pc);
@@ -777,6 +807,7 @@ impl Cpu for Core {
         let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
         let (events, event_rx) = mpsc::channel();
         let (reply, reply_rx) = mpsc::channel();
+        self.parked.set(false);
         if self
             .commands
             .send(Command {
@@ -813,9 +844,11 @@ impl Cpu for Core {
         match state.events.try_recv() {
             Ok(event @ (Event::Before(_) | Event::Trap | Event::Mmio(..))) => {
                 state.pending_callback = Some(event);
+                self.parked.set(true);
                 Ok(RunStatus::CallbackPending)
             }
             Ok(Event::Done) => {
+                self.parked.set(true);
                 let result = match state.reply.try_recv() {
                     Ok(Ok(Value::Exit(result))) => result,
                     Ok(Ok(_)) => Err(ExecutionError::Backend(
