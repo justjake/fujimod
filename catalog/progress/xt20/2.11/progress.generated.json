@@ -40,27 +40,27 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "controls",
@@ -70,7 +70,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "sd-facts",
@@ -125,31 +125,31 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -157,7 +157,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -173,9 +173,9 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-facts",
@@ -381,22 +381,22 @@
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
           "title": "Uploaded code runs in RAM and is cleaned up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
           "title": "Internal flash backed up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-snapshot",
@@ -416,17 +416,17 @@
         {
           "id": "camera-debug",
           "title": "Debug mode saved persistently",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-normal",
           "title": "FF80 answers in normal mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-restart",
           "title": "Restarts itself on a USB request",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-menu",
@@ -452,33 +452,33 @@
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
           "label": "Uploaded code runs in RAM and is cleaned up",
           "stage": "camera-code",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
           "label": "Internal flash backed up",
           "stage": "camera-backup",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-snapshot",
@@ -508,25 +508,25 @@
           "id": "camera-debug",
           "label": "Debug mode saved persistently",
           "stage": "camera-debug",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-normal",
           "label": "FF80 answers in normal mode",
           "stage": "camera-normal",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-restart",
           "label": "Restarts itself on a USB request",
           "stage": "camera-restart",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-menu",
@@ -556,7 +556,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "mod-target",
@@ -594,9 +594,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "mod-target",
@@ -1170,12 +1170,12 @@
         {
           "id": "boot-rom-loads-sd-card-on-camera",
           "title": "Boot ROM: loads an SD card on a camera",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
           "title": "SD boot v1: stock firmware boots from an SD card on a camera",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v1-fujimod-boots-on-camera",
@@ -1208,17 +1208,17 @@
           "id": "boot-rom-loads-sd-card-on-camera",
           "label": "Boot ROM: loads an SD card on a camera",
           "stage": "boot-rom-loads-sd-card-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
           "label": "SD boot v1: stock firmware boots from an SD card on a camera",
           "stage": "sd-boot-v1-stock-boots-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v1-fujimod-boots-on-camera",

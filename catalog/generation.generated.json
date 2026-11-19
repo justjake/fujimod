@@ -7222,6 +7222,10 @@
             }
           ]
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "available",
           "errors": []
