@@ -10,6 +10,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.context().routeWebSocket('**/*', () => {});
+  page.on('pageerror', (error) => console.error('Page error:', error.message));
   const sources: string[] = [];
   await page.route('https://share.fujimod.com/proxy?*', async (route) => {
     const request = new URL(route.request().url());
@@ -42,6 +43,15 @@ try {
   assert.equal(sources.length, 1);
   assert.equal(new URL(sources[0]).hostname, 'fichiers.touslesdrivers.com');
   await page.reload();
+  await page.waitForTimeout(1000);
+  console.log('After reload:', await page.locator('.launcher').innerText());
+  console.log(
+    'Stored entries:',
+    await page.evaluate(async () => {
+      const module: typeof import('./store') = await import('/src/' + 'cameras/store.ts');
+      return new module.CameraStore().library();
+    }),
+  );
   await page
     .locator('.firmware-saved-row')
     .filter({ hasText: 'X70 · 1.10' })
