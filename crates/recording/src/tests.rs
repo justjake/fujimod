@@ -465,3 +465,83 @@ fn packed_abgr_retains_color_bytes_independently_of_alpha() {
     assert!(Frame::abgr(2, 2, &[0; 15]).is_err());
     assert!(Frame::abgr(8193, 1, &[]).is_err());
 }
+
+#[test]
+fn encoder_holds_preserve_the_original_constant_rate_video() {
+    use std::{
+        io::Write,
+        process::{Command, Stdio},
+    };
+
+    if Encoders::check().is_err() {
+        return;
+    }
+    let pixels = |color: u8| Frame::rgb(32, 24, vec![color; 32 * 24 * 3]).unwrap();
+    let dark = pixels(42);
+    let light = pixels(196);
+    for (fps, count) in [(1, 1), (29, 1), (1, 4), (29, 45), (60, 95)] {
+        let output = Output::new();
+        let mut encoders = Encoders::open(&output.0, &dark, fps).unwrap();
+        let annotated = |index| {
+            if (1..count / 3).contains(&index) {
+                &light
+            } else {
+                &dark
+            }
+        };
+        for index in 0..count {
+            encoders.write(annotated(index), &dark).unwrap();
+        }
+        encoders.finish().unwrap();
+
+        for (name, frames) in [
+            ("video.mp4", (0..count).map(annotated).collect::<Vec<_>>()),
+            ("video-clean.mp4", vec![&dark; count]),
+        ] {
+            let baseline = output.0.join("reference.mp4");
+            let mut ffmpeg = Command::new("ffmpeg")
+                .args([
+                    "-v",
+                    "error",
+                    "-y",
+                    "-f",
+                    "rawvideo",
+                    "-pixel_format",
+                    "rgb24",
+                    "-video_size",
+                    "32x24",
+                    "-framerate",
+                    &fps.to_string(),
+                    "-i",
+                    "-",
+                    "-an",
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "fast",
+                    "-crf",
+                    "20",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-movflags",
+                    "+faststart",
+                ])
+                .arg(&baseline)
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap();
+            {
+                let mut input = ffmpeg.stdin.take().unwrap();
+                for frame in frames {
+                    input.write_all(frame.pixels()).unwrap();
+                }
+            }
+            assert!(ffmpeg.wait().unwrap().success());
+            assert_eq!(
+                std::fs::read(output.0.join(name)).unwrap(),
+                std::fs::read(&baseline).unwrap(),
+                "{name} at {fps} fps for {count} frames"
+            );
+        }
+    }
+}

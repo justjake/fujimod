@@ -57,8 +57,8 @@ pub struct Recorder {
     encoders: Option<Encoders>,
     size: Option<(u32, u32)>,
     fitted: Option<Frame>,
-    clean_overlay: Option<Vec<u8>>,
-    annotated: Option<Vec<u8>>,
+    clean_overlay: Option<Frame>,
+    annotated: Option<Frame>,
     labels: Vec<(String, u8)>,
     marks: Vec<Mark>,
     has_poster: bool,
@@ -444,10 +444,12 @@ impl Recorder {
                 }
                 // Both videos show touches; only the annotated one shows badges.
                 touches::draw_on(canvas, &marks);
-                self.clean_overlay = has_clean_overlay.then(|| canvas.rgb());
+                if has_clean_overlay {
+                    self.clean_overlay = Some(Frame::rgb(size.0, size.1, canvas.rgb())?);
+                }
                 if !labels.is_empty() {
                     badges::draw_on(canvas, &labels);
-                    self.annotated = Some(canvas.rgb());
+                    self.annotated = Some(Frame::rgb(size.0, size.1, canvas.rgb())?);
                 }
             }
             self.overlays_changed = animating;
@@ -459,11 +461,8 @@ impl Recorder {
         if self.encoders.is_none() {
             self.encoders = Some(Encoders::open(&self.output, fitted, self.fps)?);
         }
-        let clean = self
-            .clean_overlay
-            .as_deref()
-            .unwrap_or_else(|| fitted.pixels());
-        let annotated = self.annotated.as_deref().unwrap_or(clean);
+        let clean = self.clean_overlay.as_ref().unwrap_or(fitted);
+        let annotated = self.annotated.as_ref().unwrap_or(clean);
         let elapsed = self.encoders.as_mut().unwrap().write(annotated, clean)?;
         for (total, part) in self.metrics.encoder_write_seconds.iter_mut().zip(elapsed) {
             *total += part;
