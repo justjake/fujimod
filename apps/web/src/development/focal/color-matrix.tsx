@@ -12,7 +12,9 @@ const PHOTO = new URL('../../engine/assets/default-scene.png', import.meta.url).
 const MARK = '#ff9f0a';
 
 type Primary = { hue: number; sat: number };
-type State = { p: [Primary, Primary, Primary]; rot: number; gain: number };
+/** Hue and saturation per primary and for COLOR; m and c2 are numbers typed in directly, which win over them. */
+type State = { p: [Primary, Primary, Primary]; rot: number; gain: number; m?: M3; c2?: C2 };
+type C2 = [number, number, number, number];
 const NAMES = ['RED', 'GREEN', 'BLUE'] as const;
 const INKS = ['#ff453a', '#30d158', '#0a84ff'];
 const KR = 0.2126;
@@ -35,6 +37,7 @@ const fromYC = (y: number, cb: number, cr: number): V3 => {
 
 /** Columns are where red, green and blue go; columns are then scaled so white stays white. */
 function matrix(s: State): M3 {
+  if (s.m) return s.m;
   const cols: V3[] = [0, 1, 2].map((i) => {
     const e: V3 = [0, 0, 0];
     e[i] = 1;
@@ -95,9 +98,7 @@ function develop(canvas: HTMLCanvasElement, s: State): void {
   if (!g) return;
   const out = g.createImageData(W, H);
   const m = matrix(s);
-  const a = (s.rot * Math.PI) / 180;
-  const ca = Math.cos(a) * (1 + s.gain / 100);
-  const sa = Math.sin(a) * (1 + s.gain / 100);
+  const [ca, msa, sa, ca2] = chroma2(s);
   for (let i = 0; i < W * H; i++) {
     const r = source[i * 3];
     const gr = source[i * 3 + 1];
@@ -107,13 +108,45 @@ function develop(canvas: HTMLCanvasElement, s: State): void {
     const lb = enc(m[2][0] * r + m[2][1] * gr + m[2][2] * b);
     const y = luma([lr, lg, lb]);
     const [cb, cr] = chroma([lr, lg, lb]);
-    const o = fromYC(y, ca * cb - sa * cr, sa * cb + ca * cr);
+    const o = fromYC(y, ca * cb + msa * cr, sa * cb + ca2 * cr);
     out.data[i * 4] = enc(dec(o[0])) * 255;
     out.data[i * 4 + 1] = enc(dec(o[1])) * 255;
     out.data[i * 4 + 2] = enc(dec(o[2])) * 255;
     out.data[i * 4 + 3] = 255;
   }
   g.putImageData(out, 0, 0);
+}
+
+/** COLOR's 2x2 on (Cb, Cr), row by row. */
+function chroma2(s: State): C2 {
+  if (s.c2) return s.c2;
+  const a = (s.rot * Math.PI) / 180;
+  const k = 1 + s.gain / 100;
+  return [k * Math.cos(a), -k * Math.sin(a), k * Math.sin(a), k * Math.cos(a)];
+}
+
+/** Hue and saturation that best describe typed-in numbers, so the handles sit where the numbers put them. */
+function fitted(s: State): State {
+  if (!s.m && !s.c2) return s;
+  const out: State = { ...s, m: undefined, c2: undefined };
+  if (s.m) {
+    const m = s.m;
+    out.p = [0, 1, 2].map((i) => {
+      const e: V3 = [i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0];
+      const col: V3 = [m[0][i], m[1][i], m[2][i]];
+      const [hb, hr] = chroma(e);
+      const [cb, cr] = chroma(col);
+      let d = ((Math.atan2(cr, cb) - Math.atan2(hr, hb)) * 180) / Math.PI;
+      d = ((d + 540) % 360) - 180;
+      const k = Math.hypot(cb, cr) / luma(col) / (Math.hypot(hb, hr) / luma(e));
+      return { hue: clamp(Math.round(d), -30, 30), sat: clamp(Math.round((k - 1) * 100), -50, 50) };
+    }) as State['p'];
+  }
+  if (s.c2) {
+    out.rot = clamp(Math.round((Math.atan2(s.c2[2], s.c2[0]) * 180) / Math.PI), -30, 30);
+    out.gain = clamp(Math.round((Math.hypot(s.c2[0], s.c2[2]) - 1) * 100), -100, 100);
+  }
+  return out;
 }
 
 /* ---- Shared pieces ----------------------------------------------------------- */
@@ -173,6 +206,106 @@ function drag(el: HTMLElement, e: PointerEvent, move: (x: number, y: number) => 
   el.addEventListener('pointerup', up);
 }
 
+/* ---- Numbers ----------------------------------------------------------------- */
+
+/** A quiet row at the foot of a control; OK or a tap opens the matrix as numbers. */
+function NumbersRow(props: { onOpen: () => void }) {
+  return (
+    <button type="button" class="mx-[14px] mt-auto mb-[12px] flex h-[34px] items-center justify-between px-[4px] text-[15px] tracking-wide text-white/45" onClick={() => props.onOpen()}>
+      NUMBERS
+      <svg width="12" height="12" viewBox="0 0 16 16">
+        <path d="M6 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+/** The matrix as numbers: rows are outputs, columns inputs. Drag a cell up or down, or tap it and use the steppers. Fixed cells follow the others. */
+function Grid(props: {
+  title: string;
+  rows: string[];
+  cols: string[];
+  values: () => number[][];
+  fixed: (r: number, c: number) => boolean;
+  onChange: (r: number, c: number, v: number) => void;
+  onClose: () => void;
+}) {
+  const first = () => {
+    for (let r = 0; r < props.rows.length; r++) for (let c = 0; c < props.cols.length; c++) if (!props.fixed(r, c)) return [r, c] as const;
+    return [0, 0] as const;
+  };
+  const [focus, setFocus] = createSignal<readonly [number, number]>(first());
+  const step = (d: number) => {
+    const [r, c] = focus();
+    props.onChange(r, c, Math.round((props.values()[r][c] + d) * 100) / 100);
+  };
+  return (
+    <div class="flex flex-1 flex-col px-[14px]">
+      <div class="mb-[8px] flex items-center gap-[8px]">
+        <button type="button" class="flex size-[30px] items-center justify-center text-white/70" onClick={() => props.onClose()}>
+          <svg width="18" height="18" viewBox="0 0 16 16">
+            <path d="M10 2L4 8l6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+        <span class="text-[17px] tracking-wide text-white/60">NUMBERS</span>
+      </div>
+      <div class="grid gap-[6px]" style={{ 'grid-template-columns': `28px repeat(${props.cols.length}, 1fr)` }}>
+        <span />
+        <For each={props.cols}>{(c) => <span class="text-center text-[15px] text-white/45">{c}</span>}</For>
+        <For each={props.rows}>
+          {(rname, r) => (
+            <>
+              <span class="flex items-center text-[15px] text-white/45">{rname}</span>
+              <For each={props.cols}>
+                {(_, c) => {
+                  const on = () => focus()[0] === r() && focus()[1] === c();
+                  const fixed = () => props.fixed(r(), c());
+                  return (
+                    <div
+                      class="flex h-[50px] touch-none items-center justify-center rounded-[8px] text-[20px] tabular-nums"
+                      style={{
+                        background: fixed() ? 'transparent' : on() ? 'linear-gradient(#5c5c5e, #3d3d3f)' : PLATE,
+                        'box-shadow': fixed() ? 'inset 0 0 0 1px rgb(255 255 255 / 0.12)' : on() ? 'inset 0 1px 0 rgb(255 255 255 / 0.35), 0 0 0 1px rgb(255 255 255 / 0.55)' : PLATE_EDGE,
+                        color: fixed() ? 'rgb(255 255 255 / 0.45)' : '#fff',
+                      }}
+                      onPointerDown={(e) => {
+                        if (fixed()) return;
+                        setFocus([r(), c()]);
+                        const el = e.currentTarget;
+                        const y0 = e.clientY;
+                        const v0 = props.values()[r()][c()];
+                        el.setPointerCapture(e.pointerId);
+                        const move = (ev: PointerEvent) => props.onChange(r(), c(), Math.round((v0 + (y0 - ev.clientY) / 300) * 100) / 100);
+                        const up = () => {
+                          el.removeEventListener('pointermove', move);
+                          el.removeEventListener('pointerup', up);
+                        };
+                        el.addEventListener('pointermove', move);
+                        el.addEventListener('pointerup', up);
+                      }}
+                    >
+                      {props.values()[r()][c()].toFixed(2)}
+                    </div>
+                  );
+                }}
+              </For>
+            </>
+          )}
+        </For>
+      </div>
+      <div class="mt-[12px] flex gap-[8px]">
+        <For each={[-0.01, 0.01]}>
+          {(d) => (
+            <button type="button" class="h-[44px] flex-1 rounded-[8px] text-[22px]" style={{ background: PLATE, 'box-shadow': PLATE_EDGE }} onClick={() => step(d)}>
+              {d < 0 ? '−' : '+'}
+            </button>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 /* ---- A. Vectorscope ---------------------------------------------------------- */
 
 const SCOPE = 280;
@@ -198,6 +331,7 @@ const MARKS = Array.from({ length: 12 }, (_, i) => {
 });
 
 function Vectorscope(props: { s: State; set: (s: State) => void }) {
+  const [open, setOpen] = createSignal(false);
   const [focus, setFocus] = createSignal(0);
   let scatter: HTMLCanvasElement | undefined;
   createEffect(
@@ -218,20 +352,25 @@ function Vectorscope(props: { s: State; set: (s: State) => void }) {
       }
     },
   );
-  const where = (i: number, s: State) => polar(HOME[i] + (s.p[i].hue * Math.PI) / 180, RING * (1 + s.p[i].sat / 100));
+  const where = (i: number, st: State) => {
+    const s = fitted(st);
+    return polar(HOME[i] + (s.p[i].hue * Math.PI) / 180, RING * (1 + s.p[i].sat / 100));
+  };
   const home = (i: number) => where(i, NEUTRAL);
   const moveTo = (i: number, x: number, y: number) => {
     const c = SCOPE / 2;
     let d = ((Math.atan2(-(y - c), x - c) - HOME[i]) * 180) / Math.PI;
     d = ((d + 540) % 360) - 180;
     const sat = clamp(Math.round((Math.hypot(x - c, y - c) / RING - 1) * 100), -50, 50);
-    const p = props.s.p.map((q, k) => (k === i ? { hue: clamp(Math.round(d), -30, 30), sat } : q)) as State['p'];
-    props.set({ ...props.s, p });
+    const base = fitted({ ...props.s, c2: undefined });
+    const p = base.p.map((q, k) => (k === i ? { hue: clamp(Math.round(d), -30, 30), sat } : q)) as State['p'];
+    props.set({ ...props.s, p, m: undefined });
   };
   let box: HTMLDivElement | undefined;
   return (
     <>
       <Title text="COLOR MIX" />
+      <Show when={!open()} fallback={<Grid title="COLOR MIX" rows={['R', 'G', 'B']} cols={['R', 'G', 'B']} values={() => matrix(props.s)} fixed={(r, c) => r === c} onChange={(r, c, v) => { const m = matrix(props.s).map((row) => [...row]) as M3; m[r][c] = v; m[r][r] = 1 - m[r][(r + 1) % 3] - m[r][(r + 2) % 3]; props.set({ ...props.s, m }); }} onClose={() => setOpen(false)} />}>
       <div class="flex justify-center">
         <div
           ref={box}
@@ -279,10 +418,12 @@ function Vectorscope(props: { s: State; set: (s: State) => void }) {
           {NAMES[focus()]}
         </span>
         <span class="text-[18px] text-white/60">
-          HUE <b class="text-[22px] text-white">{signed(props.s.p[focus()].hue)}</b>
-          <span class="ml-[12px]">SAT</span> <b class="text-[22px] text-white">{signed(props.s.p[focus()].sat)}</b>
+          HUE <b class="text-[22px] text-white">{signed(fitted(props.s).p[focus()].hue)}</b>
+          <span class="ml-[12px]">SAT</span> <b class="text-[22px] text-white">{signed(fitted(props.s).p[focus()].sat)}</b>
         </span>
       </div>
+        <NumbersRow onOpen={() => setOpen(true)} />
+      </Show>
     </>
   );
 }
@@ -375,14 +516,17 @@ function Mixer(props: { s: State }) {
 /* ---- D. COLOR as a wheel (the 2x2) ------------------------------------------- */
 
 function ChromaWheel(props: { s: State; set: (s: State) => void }) {
+  const [open, setOpen] = createSignal(false);
   let box: HTMLDivElement | undefined;
   const D = 260;
   const c = D / 2;
-  const r = () => (D / 2 - 30) * Math.sqrt(1 + props.s.gain / 100) * 0.8;
-  const a = () => ((props.s.rot - 90) * Math.PI) / 180;
+  const f = () => fitted(props.s);
+  const r = () => (D / 2 - 30) * Math.sqrt(Math.max(0, 1 + f().gain / 100)) * 0.8;
+  const a = () => ((f().rot - 90) * Math.PI) / 180;
   return (
     <>
       <Title text="COLOR" />
+      <Show when={!open()} fallback={<Grid title="COLOR" rows={['Cb', 'Cr']} cols={['Cb', 'Cr']} values={() => { const c = chroma2(props.s); return [[c[0], c[1]], [c[2], c[3]]]; }} fixed={() => false} onChange={(r, c, v) => { const c2 = [...chroma2(props.s)] as C2; c2[r * 2 + c] = v; props.set({ ...props.s, c2 }); }} onClose={() => setOpen(false)} />}>
       <div class="flex justify-center">
         <div
           ref={box}
@@ -393,13 +537,13 @@ function ChromaWheel(props: { s: State; set: (s: State) => void }) {
             drag(box, e, (x, y) => {
               const rot = clamp(Math.round((Math.atan2(y - c, x - c) * 180) / Math.PI + 90), -30, 30);
               const k = Math.hypot(x - c, y - c) / ((D / 2 - 30) * 0.8);
-              props.set({ ...props.s, rot, gain: clamp(Math.round((k * k - 1) * 100), -100, 100) });
+              props.set({ ...props.s, rot, gain: clamp(Math.round((k * k - 1) * 100), -100, 100), c2: undefined });
             });
           }}
         >
           <div
             class="absolute inset-[10px] rounded-full"
-            style={{ background: 'conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)', transform: `rotate(${props.s.rot}deg)`, 'mask-image': 'radial-gradient(closest-side, transparent 78%, #000 80%)' }}
+            style={{ background: 'conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)', transform: `rotate(${f().rot}deg)`, 'mask-image': 'radial-gradient(closest-side, transparent 78%, #000 80%)' }}
           />
           <svg class="absolute inset-0" width={D} height={D}>
             <circle cx={c} cy={c} r={(D / 2 - 30) * 0.8} fill="none" stroke="rgb(255 255 255 / 0.3)" stroke-dasharray="4 4" />
@@ -411,12 +555,14 @@ function ChromaWheel(props: { s: State; set: (s: State) => void }) {
       </div>
       <div class="mx-[14px] mt-[14px] flex justify-between rounded-[10px] px-[14px] py-[10px] text-[18px] text-white/60" style={{ background: PLATE, 'box-shadow': PLATE_EDGE }}>
         <span>
-          HUE <b class="text-[22px] text-white">{signed(props.s.rot)}°</b>
+          HUE <b class="text-[22px] text-white">{signed(f().rot)}°</b>
         </span>
         <span>
-          SATURATION <b class="text-[22px] text-white">{signed(props.s.gain)}</b>
+          SATURATION <b class="text-[22px] text-white">{signed(f().gain)}</b>
         </span>
       </div>
+        <NumbersRow onOpen={() => setOpen(true)} />
+      </Show>
     </>
   );
 }
