@@ -2216,6 +2216,17 @@ const LOOKS = {
     --m-accent: #7d3fc2; --m-confirm: #0a6bdc;
     --m-title: rgb(0 0 0 / 0.62); --m-text-area: rgb(22 22 24 / 0.5); --m-tray: rgb(28 28 30 / 0.84);
     --m-key: rgb(255 255 255 / 0.3); --m-key-special: rgb(255 255 255 / 0.12); --m-key-edge: none; --m-key-focus: inset 0 0 0 3px #fff;`,
+  'glass-strong': `
+    --m-blur: blur(18px) saturate(1.2);
+    --m-column: rgb(14 14 16 / 0.74); --m-column-edge: inset -1px 0 0 rgb(255 255 255 / 0.4);
+    --m-rail: rgb(10 10 12 / 0.9); --m-panel: rgb(20 20 22 / 0.94);
+    --m-chip: rgb(14 14 16 / 0.78); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.4), inset 0 0 0 1px rgb(255 255 255 / 0.22);
+    --m-track: rgb(255 255 255 / 0.09); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+    --m-focus: rgb(255 255 255 / 0.24); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 0 0 2px rgb(255 255 255 / 0.55);
+    --m-divider: inset 0 1px 0 rgb(255 255 255 / 0.28);
+    --m-accent: #8f4fe0; --m-confirm: #1474e6;
+    --m-title: rgb(0 0 0 / 0.75); --m-text-area: rgb(14 14 16 / 0.66); --m-tray: rgb(18 18 20 / 0.9);
+    --m-key: rgb(255 255 255 / 0.34); --m-key-special: rgb(255 255 255 / 0.16); --m-key-edge: inset 0 1px 0 rgb(255 255 255 / 0.25); --m-key-focus: inset 0 0 0 3px #fff;`,
   contrast: `
     --m-blur: none;
     --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
@@ -2240,7 +2251,7 @@ const LOOKS = {
     --m-key: #3a3a3a; --m-key-special: #222; --m-key-edge: none; --m-key-focus: inset 0 -5px 0 #c8232c;`,
 };
 type Look = keyof typeof LOOKS;
-const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
+const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['glass-strong', 'Stronger glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
 
 const STYLE_OPTIONS = `
 ${(Object.keys(LOOKS) as Look[]).map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
