@@ -163,14 +163,14 @@ const sources = new Map<number, Promise<Source>>();
 
 /** RAW files on the SD card, standing in as crops of the default scene. */
 const RAWS = [
-  { name: 'DSCF0412.RAF', zoom: 1.8, x: 0.62, y: 0.42 },
-  { name: 'DSCF0413.RAF', zoom: 2.2, x: 0.18, y: 0.5 },
-  { name: 'DSCF0415.RAF', zoom: 1.5, x: 0.4, y: 0.2 },
-  { name: 'DSCF0418.RAF', zoom: 2.6, x: 0.82, y: 0.62 },
-  { name: 'DSCF0421.RAF', zoom: 1.2, x: 0.5, y: 0.5 },
-  { name: 'DSCF0422.RAF', zoom: 3, x: 0.3, y: 0.7 },
-  { name: 'DSCF0427.RAF', zoom: 2, x: 0.7, y: 0.3 },
-  { name: 'DSCF0430.RAF', zoom: 1.6, x: 0.1, y: 0.4 },
+  { name: 'DSCF0412.RAF', zoom: 1.8, x: 0.62, y: 0.42, info: 'f/2.8 · 1/500 · ISO 200' },
+  { name: 'DSCF0413.RAF', zoom: 2.2, x: 0.18, y: 0.5, info: 'f/4 · 1/250 · ISO 400' },
+  { name: 'DSCF0415.RAF', zoom: 1.5, x: 0.4, y: 0.2, info: 'f/5.6 · 1/1000 · ISO 200' },
+  { name: 'DSCF0418.RAF', zoom: 2.6, x: 0.82, y: 0.62, info: 'f/2.8 · 1/60 · ISO 1600' },
+  { name: 'DSCF0421.RAF', zoom: 1.2, x: 0.5, y: 0.5, info: 'f/8 · 1/320 · ISO 200' },
+  { name: 'DSCF0422.RAF', zoom: 3, x: 0.3, y: 0.7, info: 'f/2.8 · 1/125 · ISO 800' },
+  { name: 'DSCF0427.RAF', zoom: 2, x: 0.7, y: 0.3, info: 'f/4 · 1/800 · ISO 200' },
+  { name: 'DSCF0430.RAF', zoom: 1.6, x: 0.1, y: 0.4, info: 'f/2.8 · 1/30 · ISO 3200' },
 ];
 
 /** Crop 0 is live view; crop n is RAWS[n - 1]. */
@@ -592,6 +592,9 @@ function knotReadout(f: Film, knot: number, bend: boolean): string {
 
 type Tool = 'curve' | 'color' | 'mix' | 'tone' | 'channels';
 const TOOLS: Tool[] = ['curve', 'color', 'mix', 'tone', 'channels'];
+/** The scroller's sections: the RAW file while one is shown, the custom
+ * setting the film is seen through, then the film's tools. */
+type Section = 'raw' | 'custom' | Tool;
 const TOOL_NAMES: Record<Tool, string> = {
   curve: 'TONE CURVE',
   color: 'COLOR',
@@ -794,12 +797,14 @@ interface State {
   crop: number;
   picker: Picker | null;
   /** Where the D-pad is: the RAW strip, the tool rail or the tool rows. */
-  area: 'strip' | 'rail' | 'rows';
+  area: 'strip' | 'create' | 'custom' | 'rail' | 'rows';
+  /** On the rail, the RAW or CUSTOM SETTING section instead of a tool. */
+  railOn: 'raw' | 'custom' | null;
   strip: StripStyle;
   /** The RAW last developed with OK. */
   created: number;
   /** Review states open scrolled to a tool. */
-  scrollTo?: Tool;
+  scrollTo?: Section;
 }
 
 const START = baseFilm(3);
@@ -844,7 +849,7 @@ function openPicker(s: State, p: { kind: 'copy'; tool: Tool } | { kind: 'compare
 }
 
 function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', strip: 'frames', created: 0, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, strip: 'frames', created: 0, ...over };
 }
 
 const RAIL = 60;
@@ -861,6 +866,31 @@ function compareFilm(s: State): Film | undefined {
 type Key = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
 
 const firstOf = (tool: Tool) => CONTROLS.findIndex((c) => c.tool === tool);
+
+function railSections(s: State): Section[] {
+  return [...(s.crop ? (['raw'] as Section[]) : []), 'custom', ...TOOLS];
+}
+
+/** The section the focus is in, or on the rail, the section chosen there. */
+function currentSection(s: State): Section {
+  switch (s.area) {
+    case 'strip':
+    case 'create':
+      return 'raw';
+    case 'custom':
+      return 'custom';
+    case 'rail':
+      return s.railOn ?? CONTROLS[s.focus].tool;
+    case 'rows':
+      return CONTROLS[s.focus].tool;
+  }
+}
+
+function enterSection(s: State, section: Section): State {
+  if (section === 'raw') return { ...s, area: 'strip', railOn: null };
+  if (section === 'custom') return { ...s, area: 'custom', railOn: null };
+  return { ...s, area: 'rows', railOn: null, focus: firstOf(section), header: false };
+}
 
 function press(s: State, key: Key): State {
   const control = CONTROLS[s.focus];
@@ -889,37 +919,63 @@ function press(s: State, key: Key): State {
     case 'fn':
       return { ...s, custom: !s.custom };
     case 'play':
-      return s.crop ? { ...s, crop: 0, area: s.area === 'strip' ? 'rows' : s.area } : { ...s, crop: 1, area: 'strip', inside: false };
+      if (!s.crop) return { ...s, crop: 1, area: 'strip', railOn: null, inside: false };
+      return { ...s, crop: 0, area: s.area === 'strip' || s.area === 'create' ? 'custom' : s.area, railOn: s.railOn === 'raw' ? 'custom' : s.railOn };
   }
-  if (s.area === 'strip') {
-    switch (key) {
-      case 'down':
-      case 'back':
-        return { ...s, area: 'rows' };
-      case 'ok':
-        return { ...s, created: s.crop };
-      case 'up':
-        return s;
-    }
-    return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + (key === 'left' || key === 'dial-' ? -1 : 1))), created: 0 };
-  }
-  const toStrip = s.crop ? { ...s, area: 'strip' as const, inside: false } : s;
-  if (s.area === 'rail') {
-    const tool = TOOLS.indexOf(control.tool);
-    switch (key) {
-      case 'up':
-      case 'down':
-      case 'dial-':
-      case 'dial+': {
-        const next = tool + (key === 'up' || key === 'dial-' ? -1 : 1);
-        if (next < 0) return key === 'up' ? toStrip : s;
-        return { ...s, focus: firstOf(TOOLS[Math.min(TOOLS.length - 1, next)]), header: false, scrollTo: undefined };
+  const step = key === 'left' || key === 'dial-' ? -1 : 1;
+  switch (s.area) {
+    case 'strip':
+      switch (key) {
+        case 'down':
+        case 'ok':
+          return { ...s, area: 'create' };
+        case 'back':
+          return { ...s, area: 'rail', railOn: 'raw' };
+        case 'up':
+          return s;
       }
-      case 'right':
-      case 'ok':
-        return { ...s, area: 'rows' };
+      return { ...s, crop: Math.max(1, Math.min(RAWS.length, s.crop + step)), created: 0 };
+    case 'create':
+      switch (key) {
+        case 'up':
+          return { ...s, area: 'strip' };
+        case 'down':
+          return { ...s, area: 'custom' };
+        case 'ok':
+          return { ...s, created: s.crop };
+        case 'back':
+          return { ...s, area: 'rail', railOn: 'raw' };
+      }
+      return s;
+    case 'custom':
+      switch (key) {
+        case 'up':
+          return s.crop ? { ...s, area: 'create' } : s;
+        case 'down':
+          return { ...s, area: 'rows', focus: 0, header: true };
+        case 'back':
+          return { ...s, area: 'rail', railOn: 'custom' };
+      }
+      return { ...s, custom: !s.custom };
+    case 'rail': {
+      const list = railSections(s);
+      const at = list.indexOf(currentSection(s));
+      switch (key) {
+        case 'up':
+        case 'down':
+        case 'dial-':
+        case 'dial+': {
+          const next = list[at + (key === 'up' || key === 'dial-' ? -1 : 1)];
+          if (!next) return s;
+          if (next === 'raw' || next === 'custom') return { ...s, railOn: next, scrollTo: undefined };
+          return { ...s, railOn: null, focus: firstOf(next), header: false, scrollTo: undefined };
+        }
+        case 'right':
+        case 'ok':
+          return enterSection(s, currentSection(s));
+      }
+      return s;
     }
-    return s;
   }
   if (s.inside) {
     if (key === 'ok' || key === 'back') return { ...s, inside: false, bend: false };
@@ -943,28 +999,37 @@ function press(s: State, key: Key): State {
   switch (key) {
     case 'up':
       if (!s.header && first) return { ...s, header: true, scrollTo: undefined };
-      if (s.focus === 0) return toStrip;
+      if (s.focus === 0) return { ...s, area: 'custom', header: false };
       return { ...s, focus: s.focus - 1, header: false, scrollTo: undefined };
     case 'down':
       if (s.header) return { ...s, header: false, scrollTo: undefined };
       if (s.focus === CONTROLS.length - 1) return s;
       return { ...s, focus: s.focus + 1, header: CONTROLS[s.focus + 1].tool !== control.tool, scrollTo: undefined };
     case 'back':
-      return { ...s, area: 'rail', header: false };
+      return { ...s, area: 'rail', railOn: null, header: false };
     case 'ok':
       if (s.header) return openPicker(s, { kind: 'copy', tool: control.tool });
       return control.kind === 'scale' ? s : { ...s, inside: true };
   }
   if (s.header || control.kind !== 'scale') return s;
   const c = control.scale;
-  const step = key === 'left' || key === 'dial-' ? -1 : 1;
   return { ...s, film: c.put(f, Math.max(c.min, Math.min(c.max, c.get(f) + step * c.step))) };
 }
 
-function ToolIcon(props: { tool: Tool; color: string }) {
+function ToolIcon(props: { tool: Section; color: string }) {
   const stroke = () => ({ fill: 'none', stroke: props.color, 'stroke-width': 2.5, 'stroke-linecap': 'round' as const, 'stroke-linejoin': 'round' as const });
   return (
     <svg width="32" height="32" viewBox="0 0 34 34">
+      <Show when={props.tool === 'raw'}>
+        <rect x="4" y="8" width="26" height="18" rx="2" {...stroke()} />
+        <path d="M14 12.5v9l7.5-4.5z" fill={props.color} />
+      </Show>
+      <Show when={props.tool === 'custom'}>
+        <path d="M6 10h22M6 17h22M6 24h22" {...stroke()} stroke-opacity="0.5" />
+        <circle cx="12" cy="10" r="3.2" fill={props.color} />
+        <circle cx="22" cy="17" r="3.2" fill={props.color} />
+        <circle cx="15" cy="24" r="3.2" fill={props.color} />
+      </Show>
       <Show when={props.tool === 'curve'}>
         <rect x="5" y="5" width="24" height="24" rx="3" {...stroke()} stroke-opacity="0.5" />
         <path d="M7 27C14 26 13 9 27 7" {...stroke()} />
@@ -1066,9 +1131,11 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
   const metrics = () => stripMetrics(s().strip);
   const offset = () => {
     const m = metrics();
-    return PICTURE_WIDTH / 2 - ((s().crop - 1) * (m.w + m.gap) + m.w / 2);
+    /* The first file at the left edge; the strip moves only to keep the chosen file in view. */
+    const end = (s().crop - 1) * (m.w + m.gap) + m.w;
+    return 8 - Math.max(0, end - (PICTURE_WIDTH - 16));
   };
-  const choose = (i: number) => props.set({ ...s(), crop: i + 1, area: 'strip', created: 0 });
+  const choose = (i: number) => props.set({ ...s(), crop: i + 1, area: 'strip', railOn: null, created: 0 });
   const band = (): JSX.CSSProperties =>
     s().strip === 'frames'
       ? { background: 'linear-gradient(rgb(0 0 0 / 0.7), rgb(0 0 0 / 0))' }
@@ -1120,7 +1187,10 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
         </For>
       </div>
       <Show when={s().strip === 'film' && focused()}>
-        <div class="pointer-events-none absolute top-[14px] -translate-x-1/2" style={{ left: `${PICTURE_WIDTH / 2}px`, width: `${metrics().w}px`, height: `${metrics().h}px`, 'box-shadow': 'inset 0 0 0 3px #fff' }} />
+        <div
+          class="pointer-events-none absolute top-[14px]"
+          style={{ left: `${offset() + (s().crop - 1) * (metrics().w + metrics().gap)}px`, width: `${metrics().w}px`, height: `${metrics().h}px`, 'box-shadow': 'inset 0 0 0 3px #fff', transition: 'left 260ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+        />
       </Show>
     </div>
   );
@@ -1131,11 +1201,11 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
 function Editor(props: { s: State; set: (s: State) => void; histogram: number[]; title: { name: string; from?: string } }) {
   const s = () => props.s;
   let scroller: HTMLDivElement | undefined;
-  const sections: Partial<Record<Tool, HTMLElement>> = {};
+  const sections: Partial<Record<Section, HTMLElement>> = {};
   const rows: HTMLElement[] = [];
-  const [inView, setInView] = createSignal<Tool>(CONTROLS[props.s.focus].tool);
+  const [inView, setInView] = createSignal<Section>(CONTROLS[props.s.focus].tool);
   const update = (next: State) => props.set(next);
-  const scrollToTool = (tool: Tool, smooth: boolean) => {
+  const scrollToTool = (tool: Section, smooth: boolean) => {
     const section = sections[tool];
     if (scroller && section) scroller.scrollTo({ top: section.offsetTop - 6, behavior: smooth ? 'smooth' : 'auto' });
   };
@@ -1158,12 +1228,13 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
   );
   const spy = () => {
     if (!scroller) return;
-    let current: Tool = 'curve';
-    for (const tool of TOOLS) {
+    const list = railSections(s());
+    let current: Section = list[0];
+    for (const tool of list) {
       const section = sections[tool];
       if (section && section.offsetTop - 60 <= scroller.scrollTop) current = tool;
     }
-    if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) current = TOOLS[TOOLS.length - 1];
+    if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4) current = list[list.length - 1];
     setInView(current);
   };
   const focusControl = (i: number) =>
@@ -1175,7 +1246,7 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
     isFocused(i) ? (s().inside ? { ...TRACK(true), 'box-shadow': `inset 0 0 0 3px ${ACCENT}` } : TRACK(true)) : {};
   /* On the rail, UP and DOWN bring each tool to the top of the scroller. */
   createEffect(
-    () => (s().area === 'rail' ? CONTROLS[s().focus].tool : undefined),
+    () => (s().area === 'rows' ? undefined : currentSection(s())),
     (tool) => {
       if (tool) scrollToTool(tool, true);
     },
@@ -1233,22 +1304,9 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
       </Show>
 
       <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'rgb(18 18 20 / 0.82)' }}>
-        <Show when={s().crop > 0}>
-          <button
-            type="button"
-            class="mb-[6px] flex size-[52px] items-center justify-center rounded-[14px]"
-            style={s().area === 'strip' ? { background: '#fff' } : { 'box-shadow': 'inset 0 0 0 2px rgb(255 255 255 / 0.25)' }}
-            onClick={() => update({ ...s(), area: 'strip', inside: false })}
-          >
-            <svg width="32" height="32" viewBox="0 0 34 34">
-              <rect x="4" y="8" width="26" height="18" rx="2" fill="none" stroke={s().area === 'strip' ? '#000' : '#fff'} stroke-width="2.5" />
-              <path d="M14 12.5v9l7.5-4.5z" fill={s().area === 'strip' ? '#000' : '#fff'} />
-            </svg>
-          </button>
-        </Show>
-        <For each={TOOLS}>
+        <For each={railSections(s())}>
           {(tool) => {
-            const chosen = () => (s().area === 'rail' ? CONTROLS[s().focus].tool : inView()) === tool;
+            const chosen = () => (s().area === 'rows' ? inView() : currentSection(s())) === tool;
             const lit = () => chosen() && s().area === 'rail';
             return (
               <button
@@ -1257,11 +1315,12 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
                 style={lit() ? { background: '#fff' } : chosen() ? { background: 'rgb(255 255 255 / 0.2)' } : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
-                  update({ ...s(), focus: index(tool), area: 'rail', header: false, inside: false, bend: false, scrollTo: undefined });
+                  const on = tool === 'raw' || tool === 'custom' ? tool : null;
+                  update({ ...s(), focus: on ? s().focus : index(tool as Tool), railOn: on, area: 'rail', header: false, inside: false, bend: false, scrollTo: undefined });
                 }}
               >
                 <ToolIcon tool={tool} color={lit() ? '#000' : '#fff'} />
-                <Show when={edited(tool)}>
+                <Show when={tool !== 'raw' && tool !== 'custom' && edited(tool)}>
                   <span class="absolute top-[5px] right-[5px] size-[9px] rounded-full" style={{ background: ACCENT, 'box-shadow': '0 0 0 2px #1c1c1e' }} />
                 </Show>
               </button>
@@ -1282,6 +1341,66 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
             <span class={`text-white/60 ${SMALL}`}>{props.title.from}</span>
           </Show>
         </div>
+        <Show when={s().crop > 0}>
+          <section ref={(element) => (sections.raw = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
+            <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>RAW FILE</div>
+            <div
+              class="mb-[8px] flex h-[57px] items-center gap-[10px] px-[10px]"
+              style={TRACK(s().area === 'strip')}
+              onPointerDown={() => update({ ...s(), area: 'strip', railOn: null, header: false, inside: false })}
+            >
+              <div class="flex grow flex-col gap-[5px]">
+                <span class={`font-medium ${SMALL}`}>{RAWS[s().crop - 1].name}</span>
+                <span class="text-[16px] leading-none text-white/60 tabular-nums">{RAWS[s().crop - 1].info}</span>
+              </div>
+              <span class={`text-white/60 tabular-nums ${SMALL}`}>
+                {s().crop}/{RAWS.length}
+              </span>
+            </div>
+            <button
+              type="button"
+              class={`flex h-[47px] w-full items-center justify-center rounded-[12px] font-semibold ${SMALL}`}
+              style={{
+                ...TRACK(s().area === 'create'),
+                ...(s().created === s().crop ? { background: ACCENT } : {}),
+              }}
+              onClick={() => update({ ...s(), area: 'create', railOn: null, header: false, inside: false, created: s().crop })}
+            >
+              {s().created === s().crop ? 'CREATED' : 'CREATE'}
+            </button>
+          </section>
+        </Show>
+        <section ref={(element) => (sections.custom = element)} class="pt-[10px] pb-[14px]" style={{ 'box-shadow': 'inset 0 1px 0 rgb(255 255 255 / 0.16)' }}>
+          <div class={`mb-[6px] flex h-[44px] items-center px-[6px] font-semibold tracking-[0.02em] ${TEXT}`}>CUSTOM SETTING</div>
+          <div
+            class="flex h-[47px] items-center gap-[4px] px-[5px]"
+            style={TRACK(s().area === 'custom')}
+            onPointerDown={() => update({ ...s(), area: 'custom', railOn: null, header: false, inside: false })}
+          >
+            <For each={[false, true]}>
+              {(on) => (
+                <button
+                  type="button"
+                  class={`flex h-[37px] grow items-center justify-center rounded-[10px] font-medium ${SMALL}`}
+                  style={s().custom === on ? { background: '#fff', color: '#000' } : { color: 'rgb(255 255 255 / 0.6)' }}
+                  onClick={() => update({ ...s(), custom: on, area: 'custom' })}
+                >
+                  {on ? 'ON' : 'OFF'}
+                </button>
+              )}
+            </For>
+          </div>
+          <div class="mt-[10px] flex flex-wrap gap-x-[14px] gap-y-[8px] px-[6px]" style={{ opacity: s().custom ? 1 : 0.4 }}>
+            <For each={RECIPE_ROWS.slice(1)}>
+              {(row) => (
+                <span class="flex items-center gap-[4px]">
+                  <StockIcon id={row.icon} color="rgb(255 255 255 / 0.8)" size={28} />
+                  <span class="text-[18px] leading-none tabular-nums">{row.value ?? signed(row.level ?? 0)}</span>
+                </span>
+              )}
+            </For>
+          </div>
+        </section>
         <For each={TOOLS}>
           {(tool) => {
             const from = () => groupSource(s().film, tool);
@@ -1367,9 +1486,6 @@ function Editor(props: { s: State; set: (s: State) => void; histogram: number[];
 
       <Show when={!s().picker}>
         <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]">
-          <Show when={s().area === 'strip'}>
-            <Hint glyph="OK" label={s().created === s().crop ? 'CREATED' : 'CREATE'} accent={s().created === s().crop} tap={() => update(press(s(), 'ok'))} />
-          </Show>
           <Hint glyph="Fn" label={s().custom ? 'CUSTOM ON' : 'CUSTOM OFF'} accent={!s().custom} tap={() => update(press(s(), 'fn'))} />
           <div class="flex gap-[6px]">
             <Hint glyph="Q" label="A|B" accent={!!s().compare} tap={() => update(press(s(), 'q'))} />
@@ -1519,11 +1635,13 @@ const RECIPE_ROWS: RecipeRow[] = [
   { icon: 0x603, level: -2 },
 ];
 
-function StockIcon(props: { id: number; color: string }) {
+function StockIcon(props: { id: number; color: string; size?: number }) {
   return (
     <span
-      class="block size-[38px] shrink-0"
+      class="block shrink-0"
       style={{
+        width: `${props.size ?? 38}px`,
+        height: `${props.size ?? 38}px`,
         background: props.color,
         'mask-image': `url(${stockIcon(props.id)})`,
         'mask-size': 'contain',
@@ -1639,7 +1757,7 @@ const STATES: { id: string; title: string; state: State }[] = [
   { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, inside: true, scrollTo: 'tone' }) },
   { id: 'copy', title: 'Copy one tool from a film', state: openPicker(initial({ header: true }), { kind: 'copy', tool: 'curve' }) },
   { id: 'compare', title: 'Compare with a film', state: initial({ compare: { b: 0, split: SPLIT } }) },
-  { id: 'film-only', title: 'Custom setting off: the film alone', state: initial({ custom: false }) },
+  { id: 'film-only', title: 'Custom setting off: the film alone', state: initial({ custom: false, area: 'custom', scrollTo: 'custom' }) },
   ...STRIP_STYLES.map(([strip, name]) => ({ id: `raw-${strip}`, title: `RAW files: ${name.toLowerCase()}`, state: initial({ crop: 3, area: 'strip', strip }) })),
 ];
 
