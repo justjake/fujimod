@@ -114,6 +114,26 @@ pub struct Rifp {
 pub struct StillPath {
     pub sensor: fujimod_emulator_sensor_input::sensor::Sensor,
     pub output: super::still::YcOutput,
+    /// The still path (`XT5_STILL_PATH=real`): develop or copy at the end of each queued run
+    /// ([`super::still::rifp_run`]).
+    pub develop: bool,
+    /// The movie path (`XT5_MOVIE_PATH=real`): a queued two-plane 4:2:0 run publishes its
+    /// input as the inline picture at its start ([`super::movie::rifp_inline_picture`]) and is
+    /// not developed.
+    pub movie: bool,
+}
+impl StillPath {
+    /// The inline picture of a queued movie run with the RIFP words `r`, if it is one.
+    fn movie_run(
+        &self,
+        io: &Io,
+        r: impl Fn(u64) -> u32,
+    ) -> Option<Result<super::still::YcPicture, String>> {
+        if !self.movie || io.0.lock().unwrap().r(0x4c) & 1 != 1 {
+            return None;
+        }
+        super::movie::rifp_inline_picture(r)
+    }
 }
 impl Preview {
     pub fn new(rifp: bool, io: Io, options: &toml::Table) -> Result<Self, String> {
@@ -331,7 +351,21 @@ impl Device for Rifp {
             self.state.regs.insert(o, v);
             if o == 4 && v & 1 != 0 {
                 if let Some(still) = &self.still {
-                    still.output.set_busy(true);
+                    let regs = &self.state.regs;
+                    match still.movie_run(&self.io, |o| regs.get(&o).copied().unwrap_or(0)) {
+                        Some(Ok(picture)) => {
+                            cx.log(&format!("RIFP movie run: inline two-plane 4:2:0 picture {picture:?}"));
+                            still.output.set(Some(picture));
+                            self.state.yc_output = Some(picture);
+                        }
+                        Some(Err(e)) => {
+                            cx.log(&format!("{e}; no inline picture"));
+                            still.output.set(None);
+                            self.state.yc_output = None;
+                        }
+                        None if still.develop => still.output.set_busy(true),
+                        None => {}
+                    }
                 }
                 self.state.armed = true;
                 self.state.generation = self.state.generation.wrapping_add(1);
@@ -365,7 +399,26 @@ impl Device for Rifp {
             let regs = self.state.regs.clone();
             let r = |o| regs.get(&o).copied().unwrap_or(0);
             let mut ran = None;
-            if queued && r(0x0c) | r(0x10) & 7 != 0 && r(0x40) | r(0x44) & 7 != 0 {
+            // RCIZ (drive-mode BKT): a queued run without an output address streams its
+            // output into the inline RESZ start that waits for it (still module notes).
+            if still.develop
+                && still.movie_run(&self.io, r).is_none()
+                && queued
+                && r(0x0c) | r(0x10) & 7 != 0
+                && r(0x40) | r(0x44) & 7 == 0
+                && let Some(job) = still.output.take_deferred()
+                && let Err(e) =
+                    super::still::rifp_into_resz(cx, r, still.sensor.still_raw(), &job)
+            {
+                cx.fail(e);
+                return;
+            }
+            if still.develop
+                && still.movie_run(&self.io, r).is_none()
+                && queued
+                && r(0x0c) | r(0x10) & 7 != 0
+                && r(0x40) | r(0x44) & 7 != 0
+            {
                 match super::still::rifp_run(cx, r, still.sensor.still_raw()) {
                     Ok(picture) => {
                         self.state.yc_output = Some(picture);

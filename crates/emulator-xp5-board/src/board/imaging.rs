@@ -80,6 +80,9 @@ pub fn register_all(
         sensor
     };
     let yc_output = fujimod_emulator_xp5_imaging::imaging::still::YcOutput::default();
+    // XT5_MOVIE_PATH=real: the modelled movie data path (MOVDC -> RIFP inline -> RESZ -> TNR),
+    // see fujimod_emulator_xp5_imaging::imaging::movie.
+    let movie_path = fujimod_emulator_imaging::frame::movie_path_real();
     let ticks = |options: &toml::Table, key: &str| -> Result<u64, String> {
         options
             .get(key)
@@ -217,10 +220,12 @@ pub fn register_all(
         } else {
             let device = preview::Preview::new(w.kind == "imaging-rifp", io.clone(), &w.options)?
                 .with_statistics(statistics.clone());
-            Box::new(if still_path {
+            Box::new(if still_path || movie_path {
                 device.with_still_path(preview::StillPath {
                     sensor: sensor.clone(),
                     output: yc_output.clone(),
+                    develop: still_path,
+                    movie: movie_path,
                 })
             } else {
                 device
@@ -261,12 +266,19 @@ pub fn register_all(
         bus.register(
             w.base,
             w.size,
-            Box::new(still::Resz::with_layout(
-                layout,
-                w.base,
-                stub,
-                still_path.then(|| yc_output.clone()),
-            )),
+            Box::new({
+                let resz = still::Resz::with_layout(
+                    layout,
+                    w.base,
+                    stub,
+                    still_path.then(|| yc_output.clone()),
+                );
+                if movie_path {
+                    resz.with_movie_path(yc_output.clone())
+                } else {
+                    resz
+                }
+            }),
         )?;
     }
     for w in windows.iter().filter(|w| w.kind == "imaging-input") {
