@@ -8,8 +8,9 @@ immutable `Frame` and `Recorder`.
 
 PNG encoding is lazy and shared by clones of a frame. Video consumes RGB
 directly, fits a changed image once to its initial canvas, and reuses clean and
-annotated buffers until pixels or badge appearance change. The two ffmpeg
-processes consume that same rendering. Screenshots retain native resolution and
+annotated buffers until pixels or badge appearance change. Each FFmpeg process
+receives a timestamped, lossless RGB stream through a pipe and expands holds to
+the requested frame rate. Screenshots retain native resolution and
 never include input badges. Badges and touch circles are anti-aliased vector
 paths drawn with tiny-skia; badge text is Inter SemiBold (`assets/fonts`, SIL
 Open Font License) outlined through ab_glyph with the font's advances and

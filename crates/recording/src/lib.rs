@@ -7,6 +7,7 @@ mod canvas;
 mod card_panel;
 pub use card_panel::CardPanel;
 pub mod frame;
+mod matroska;
 mod overlays;
 mod text;
 mod timeline;
