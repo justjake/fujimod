@@ -336,3 +336,29 @@ fn power_cycle_retains_card_and_packet_and_runs_no_instructions_while_off() {
     let revision = session.card_state("sd").unwrap().revision;
     assert_eq!(session.card_read("sd", "/DCIM/100_FUJI/A.JPG", revision, 100).unwrap(), b"card bytes");
 }
+
+#[test]
+fn a_session_without_connected_controls_adopts_the_snapshots_contacts() {
+    let source = session();
+    let bytes = source.checkpoint(None).unwrap().export().unwrap();
+    let mut target = card_session();
+    fujimod_emulator_exr2_images::images_mut(&mut target.resources).unwrap().sensors.insert(
+        "scene".into(),
+        Arc::new(Mutex::new(SensorFrames::new(
+            Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
+        ))),
+    );
+    assert!(target.controls.is_none() && target.contact_driver.is_none());
+    let saved = target.import_snapshot(&bytes).unwrap();
+    target.restore(&saved).unwrap();
+    assert_eq!(
+        target.controls.as_ref().map(|panel| panel.spec().clone()),
+        source.controls.as_ref().map(|panel| panel.spec().clone())
+    );
+    assert!(target.contact_driver.is_some());
+
+    // A connected session never drops its contacts for a snapshot without them.
+    let bare = card_session().checkpoint(None).unwrap().export().unwrap();
+    let connected = session();
+    assert!(connected.import_snapshot(&bare).is_err());
+}
