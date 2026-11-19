@@ -52,12 +52,10 @@ pub struct Film {
     /// gain (so shadows stay neutral where the bands fade chroma). SEPIA programs a signed
     /// 13-bit pair at 0x62C (low: Cr, high: Cb) and its scale at 0x628 (1024 = 1);
     /// the other film simulations leave both zero (X100T 1.11 captures).
-    #[serde(default)]
     tone: [i32; 2],
     /// Luma ramps (shadow, highlight) over which the toning fades in from neutral
     /// black/white: 0x63C (SEPIA: 16, 16). Inferred from the X100T's SEPIA program
     /// (the only film that sets it), not measured.
-    #[serde(default)]
     tone_fade: [i32; 2],
 }
 impl Default for Film {
@@ -759,6 +757,20 @@ impl RgbFilm {
 #[cfg(test)]
 pub(crate) mod color_tests {
     use super::*;
+    #[test]
+    fn checkpoint_without_toning_is_refused() {
+        // A film checkpointed before the toning registers holds fewer words than
+        // GROUPS reads; it must be refused, not loaded and then indexed past its end.
+        let r = fujimod_emulator_devices::test_host::film_words();
+        let mut f = Film::default();
+        f.update(|o| r[o / 4]).unwrap();
+        let mut old = serde_json::to_value(&f).unwrap();
+        let fields = old.as_object_mut().unwrap();
+        fields.remove("tone");
+        fields.remove("tone_fade");
+        fields["words"].as_array_mut().unwrap().truncate(41);
+        assert!(serde_json::from_value::<Film>(old).is_err());
+    }
     #[test]
     fn neutral_matrix_tone_and_chroma() {
         let r = fujimod_emulator_devices::test_host::film_words();
