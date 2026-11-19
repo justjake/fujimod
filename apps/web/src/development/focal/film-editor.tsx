@@ -193,7 +193,7 @@ function source(crop = 0): Promise<Source> {
       const y = raw ? Math.min(0, Math.max(H - h, H / 2 - raw.y * h)) : (H - h) / 2;
       context.drawImage(image, x, y, w, h);
       const pixels = context.getImageData(0, 0, W, H).data;
-      const histogram = new Array<number>(64).fill(0);
+      const histogram = Array.from({ length: 64 }, () => 0);
       for (let p = 0; p < pixels.length; p += 4) {
         const l = 0.2126 * DECODE[pixels[p]] + 0.7152 * DECODE[pixels[p + 1]] + 0.0722 * DECODE[pixels[p + 2]];
         histogram[Math.min(63, Math.floor(axis(l * 4096) * 64))]++;
@@ -1025,7 +1025,7 @@ function keyCaps(t: Typing): KeyCap[] {
     const row = r + 1;
     const first = row === 2 ? 5 + (10 - chars.length) * 5 + (chars.length === 9 ? -5 : 0) : row === 3 ? 15 : 0;
     if (row === 3) caps.push({ kind: 'shift', row, left: 0, width: 15, label: '' });
-    [...chars].forEach((c, i) => caps.push({ kind: 'char', row, left: first + 10 * i, width: 10, label: !t.digits && t.shift !== 'off' ? c.toUpperCase() : c }));
+    Array.from(chars).forEach((c, i) => caps.push({ kind: 'char', row, left: first + 10 * i, width: 10, label: !t.digits && t.shift !== 'off' ? c.toUpperCase() : c }));
     if (row === 3) caps.push({ kind: 'delete', row, left: 85, width: 15, label: '' });
   });
   caps.push({ kind: 'layer', row: 4, left: 0, width: 25, label: t.digits ? 'ABC' : '123' });
