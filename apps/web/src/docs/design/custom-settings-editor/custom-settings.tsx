@@ -1,3 +1,4 @@
+import PHOTO from '../../../engine/assets/default-scene.png';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
@@ -242,7 +243,6 @@ function look(r: Recipe): string {
 }
 
 /** The emulator's default scene, as walkthroughs show it. */
-const PHOTO = new URL('../../../engine/assets/default-scene.png', import.meta.url).href;
 
 function Photo(props: { recipe: Recipe }) {
   return (

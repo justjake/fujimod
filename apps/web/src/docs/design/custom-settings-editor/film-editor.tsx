@@ -1,3 +1,4 @@
+import PHOTO from '../../../engine/assets/default-scene.png';
 import { filmArtwork, stockArtwork } from '../../../design/artwork';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
@@ -189,7 +190,6 @@ function chromaMatrix(f: Film): number[] {
 
 /* ---- Developing the picture ----------------------------------------------------- */
 
-const PHOTO = new URL('../../../engine/assets/default-scene.png', import.meta.url).href;
 const W = 720;
 const H = 480;
 
