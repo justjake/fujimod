@@ -265,6 +265,38 @@ mod tests {
         assert!(!irq(&host, 229));
     }
     #[test]
+    fn phy_stores_global_and_lane_words_and_refuses_others() {
+        let mut phy = Phy::default();
+        let mut host = RecordingHost::default();
+        // Global words +0x4..+0xc and lane words +0x100..+0x148 at a 0x100 stride,
+        // read back for the stock read-modify-write lane loops.
+        for (offset, value) in [
+            (0x4, 0x30003),
+            (0xc, 1),
+            (0x104, 0x1f0f01),
+            (0x204, 0x100),
+            (0x348, 0xf701),
+            (0x444, 0x1f0f303),
+        ] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            phy.write(&mut cx, 0xff944000 + offset, 4, value);
+            assert_eq!(phy.read(&mut cx, 0xff944000 + offset, 4), value);
+            assert!(cx.refusal().is_none());
+        }
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(phy.read(&mut cx, 0xff944108, 4), 0);
+        assert!(cx.refusal().is_none());
+        for offset in [0x10, 0x14c, 0x500] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            phy.read(&mut cx, 0xff944000 + offset, 4);
+            assert!(cx.is_unmodeled(), "+{offset:#x}");
+        }
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        phy.write(&mut cx, 0xff944104, 2, 1);
+        assert!(cx.is_unmodeled());
+    }
+
+    #[test]
     fn phy_and_input_reset_wait_for_their_guest_deadlines() {
         let mut phy = Phy::default();
         let mut input = Input::default();
