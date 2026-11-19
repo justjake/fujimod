@@ -246,6 +246,41 @@ fn rgb_line(
     }
 }
 
+/// Rows of `view` at output height `height` with the same key are identical for one marker:
+/// colour bars depend only on whether the row lies in the grey-ramp band, a nearest-neighbour
+/// picture only on its source row. A live scene has no key (every row is rendered).
+fn row_key(view: &View<'_>, y: usize, height: usize) -> Option<usize> {
+    match view {
+        View::Bars => Some(usize::from(y > height * 3 / 4)),
+        View::Nearest { height: source, .. } => Some(y * source / height),
+        View::Bilinear(_) => None,
+    }
+}
+
+/// Calls `emit` with every line of `view` at `width` x `height` as packed 4:2:2 (`width * 2`
+/// bytes), top first. A line whose [`row_key`] matches the previous line's is not rendered
+/// again: live view paints two MOVDC outputs every frame and a movie encodes the host scene at
+/// 3840x2160 every frame, where colour bars have only two distinct lines.
+fn rows_422(
+    view: &View<'_>,
+    width: usize,
+    height: usize,
+    marker: Option<usize>,
+    mut emit: impl FnMut(usize, &[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    let mut row = vec![0u8; width * 2];
+    let mut previous = None;
+    for y in 0..height {
+        let key = row_key(view, y, height);
+        if key.is_none() || key != previous {
+            row_422(view, y, width, height, marker, &mut row);
+        }
+        previous = key;
+        emit(y, &row)?;
+    }
+    Ok(())
+}
+
 fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Option<usize>, row: &mut [u8]) {
     let mut first = [0; 3];
     rgb_line(view, y, width, height, marker, |x, pixel| {
@@ -276,10 +311,15 @@ pub fn render_rgb_lines(
     let (frame, scene) = snapshot(scene);
     let view = view(scene, frame.as_deref(), width);
     let mut row = vec![0u8; width * 3];
+    let mut previous = None;
     for y in 0..height {
-        rgb_line(&view, y, width, height, None, |x, pixel| {
-            row[x * 3..x * 3 + 3].copy_from_slice(&pixel)
-        });
+        let key = row_key(&view, y, height);
+        if key.is_none() || key != previous {
+            rgb_line(&view, y, width, height, None, |x, pixel| {
+                row[x * 3..x * 3 + 3].copy_from_slice(&pixel)
+            });
+        }
+        previous = key;
         line(y, &row)?;
     }
     Ok(())
@@ -320,9 +360,12 @@ pub fn render_422(scene: &Scene, width: usize, height: usize) -> Option<Vec<u8>>
     let (frame, scene) = snapshot(scene);
     let view = view(scene, frame.as_deref(), width);
     let mut out = vec![0u8; width * height * 2];
-    for (y, row) in out.chunks_exact_mut(width * 2).enumerate() {
-        row_422(&view, y, width, height, None, row);
-    }
+    let mut lines = out.chunks_exact_mut(width * 2);
+    rows_422(&view, width, height, None, |_, row| {
+        lines.next().expect("one output line per row").copy_from_slice(row);
+        Ok(())
+    })
+    .ok()?;
     Some(out)
 }
 
@@ -375,11 +418,9 @@ pub fn paint_scene(
     let marker = (frame % w as u64) as usize * 8 % w;
     let (live, scene) = snapshot(scene);
     let view = view(scene, live.as_deref(), w);
-    let mut row = vec![0u8; w * 2];
-    for y in 0..h {
-        row_422(&view, y, w, h, Some(marker), &mut row);
-        cx.ram_write(address + y as u64 * u64::from(stride), &row)?;
-    }
+    rows_422(&view, w, h, Some(marker), |y, row| {
+        cx.ram_write(address + y as u64 * u64::from(stride), row)
+    })?;
     Ok(true)
 }
 
@@ -460,6 +501,51 @@ mod tests {
         let filtered = half_422(&bytes, 8, 2, Some([0, 0, 64, 128])).unwrap();
         assert_eq!(filtered, [4, 32, 128, 128, 64, 96, 128, 128]);
         assert!(half_422(&bytes, 8, 2, Some([0, 0, 0, 0])).is_err());
+    }
+
+    /// Reusing rows with the same key gives the same lines as rendering every row.
+    #[test]
+    fn reused_rows_match_rows_rendered_one_by_one() {
+        let rgb: Vec<u8> = (0..5 * 3 * 3).map(|n| (n * 37 % 251) as u8).collect();
+        let picture = Scene::Picture { width: 5, height: 3, rgb };
+        for scene in [&Scene::Bars, &picture] {
+            for (width, height) in [(960, 640), (10, 7), (4, 2), (2, 1)] {
+                let view = view(scene, None, width);
+                for marker in [None, Some(3)] {
+                    let mut lines = Vec::new();
+                    rows_422(&view, width, height, marker, |y, row| {
+                        lines.push((y, row.to_vec()));
+                        Ok(())
+                    })
+                    .unwrap();
+                    assert_eq!(lines.len(), height);
+                    for (y, line) in lines {
+                        let mut expected = vec![0u8; width * 2];
+                        row_422(&view, y, width, height, marker, &mut expected);
+                        assert_eq!(line, expected, "{width}x{height} row {y} marker {marker:?}");
+                    }
+                }
+                let mut rgb_rows = Vec::new();
+                render_rgb_lines(scene, width, height, |y, row| {
+                    rgb_rows.push((y, row.to_vec()));
+                    Ok(())
+                })
+                .unwrap();
+                for (y, row) in rgb_rows {
+                    let mut expected = vec![0u8; width * 3];
+                    rgb_line(&view, y, width, height, None, |x, pixel| {
+                        expected[x * 3..x * 3 + 3].copy_from_slice(&pixel)
+                    });
+                    assert_eq!(row, expected, "{width}x{height} RGB row {y}");
+                }
+                let whole = render_422(scene, width, height).unwrap();
+                for (y, line) in whole.chunks_exact(width * 2).enumerate() {
+                    let mut expected = vec![0u8; width * 2];
+                    row_422(&view, y, width, height, None, &mut expected);
+                    assert_eq!(line, expected, "{width}x{height} render_422 row {y}");
+                }
+            }
+        }
     }
 
     /// The modelled still path gives the JPEG encoder no host picture for any encode (main,
