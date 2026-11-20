@@ -15,6 +15,10 @@ export function writeLicenseIndex(bom: ReturnType<typeof cycloneDx>, output: str
         ? declared.license.text.content
         : component.evidence?.licenses[0].license.text.content;
     if (!texts) throw Error(`Missing license text for ${component['bom-ref']}`);
+    const source = component.externalReferences.find(
+      ({ type }) => type === 'website' || type === 'vcs',
+    );
+    if (!source) throw Error(`Missing upstream package page for ${component['bom-ref']}`);
     const filename = createHash('sha256').update(texts).digest('hex') + '.txt';
     if (!written.has(filename)) {
       writeFileSync(join(directory, filename), texts);
@@ -25,7 +29,7 @@ export function writeLicenseIndex(bom: ReturnType<typeof cycloneDx>, output: str
       version: /^[a-f0-9]{40,64}$/i.test(component.version)
         ? component.version.slice(0, 12)
         : component.version,
-      source: component.externalReferences[0].url,
+      source: source.url,
       license: 'license' in declared ? declared.license.id : declared.expression,
       licensePath: '/licenses/' + filename,
       products: component.properties.map(({ value }) => value),

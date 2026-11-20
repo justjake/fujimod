@@ -220,6 +220,7 @@ export interface RecReport {
      */
     scanout_instance: number | null;
     failure: string | null;
+    discovery_callee_stubs: unknown;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { Show, createSignal } from 'solid-js';
-import type { FocalPreview } from './sdk.generated';
+import type { FocalPreview } from './sdk-data';
 import { highlightC } from './Markdown';
 
 /** A FocalUI preview running in Wasm, scaled to the surrounding column. */

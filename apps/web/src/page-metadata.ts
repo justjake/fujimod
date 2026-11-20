@@ -1,4 +1,4 @@
-import { focalComponents } from './docs/sdk.generated';
+import { focalComponents } from './docs/sdk-data';
 import { isManualPath } from './docs/manual-routes';
 import { textPagePath, textPages } from './text/routes';
 
@@ -80,6 +80,12 @@ export function pageMetadata(path: string) {
       title: `${component.title} · FocalUI SDK · FujiMod`,
       description: component.summary.replace(/\s+/g, ' ').slice(0, 160) ||
         'FocalUI component reference.',
+      canonical: siteOrigin + normalized,
+    };
+  if (normalized === '/docs/')
+    return {
+      title: 'Docs · FujiMod',
+      description: 'The Fujimod camera manual and FocalUI SDK.',
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/sdk/focal/')

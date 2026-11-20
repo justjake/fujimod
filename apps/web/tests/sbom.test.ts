@@ -9,6 +9,7 @@ import { writeLicenseIndex } from '../scripts/sbom/licenses.ts';
 import { emittedPackageDirectories, npmComponents } from '../scripts/sbom/npm.ts';
 import { vendoredComponents } from '../scripts/sbom/vendor.ts';
 import { linkedCrates } from '../../../bindings/javascript/scripts/linked-crates.ts';
+import { readRuntimeSbom, runtimeSbom, type EmulatorLinks } from '../scripts/sbom/runtime.ts';
 
 test('emitted npm inputs select packages and the lockfile supplies their versions', () => {
   const root = resolve(import.meta.dirname, '../../..');
@@ -24,6 +25,11 @@ test('emitted npm inputs select packages and the lockfile supplies their version
     components.map(({ name }) => name),
     ['solid-js', 'Lucide'],
   );
+  const [solid] = components;
+  assert.deepEqual(cycloneDx([solid]).components[0].externalReferences, [
+    { type: 'distribution', url: solid.source },
+    { type: 'website', url: `https://www.npmjs.com/package/solid-js/v/${solid.version}` },
+  ]);
 });
 
 test('only nonempty linked Rust objects count, with exact artifact versions', () => {
@@ -39,6 +45,41 @@ test('only nonempty linked Rust objects count, with exact artifact versions', ()
     '       -    8d0cd       2d         /build/libsecond-cccc.rlib(second.cccc-cgu.0.rcgu.o):(next)',
   ].join('\n');
   assert.deepEqual(linkedCrates(map, artifacts), ['/crates/first-1.0.0', '/crates/second-1.0.0']);
+});
+
+test('runtime SBOM requires linker evidence for the exact staged Wasm', () => {
+  const runtime = mkdtempSync(join(tmpdir(), 'fujimod-runtime-sbom-'));
+  try {
+    const bundle = join(runtime, 'camera');
+    mkdirSync(bundle);
+    writeFileSync(
+      join(runtime, 'catalog.json'),
+      JSON.stringify({ firmwares: [{ emulate: { bundle: 'runtime/camera/' } }] }),
+    );
+    writeFileSync(join(bundle, 'wasm.json'), '{}');
+    writeFileSync(join(bundle, 'camera.wasm'), 'abc');
+    const receipt = join(runtime, 'sbom-components.json');
+    writeFileSync(receipt, JSON.stringify({ schema: 2, components: [] }));
+    assert.throws(() => readRuntimeSbom(runtime, receipt), /no Wasm digests/);
+
+    const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+    const bom = { schema: 3, wasm: { 'camera/camera.wasm': sha256 }, components: [] };
+    writeFileSync(receipt, JSON.stringify(bom));
+    assert.deepEqual(readRuntimeSbom(runtime, receipt), bom);
+
+    const module = { sha256, linkedDirectories: [] };
+    const links: EmulatorLinks = {
+      perf: false,
+      rust: '',
+      emscripten: '',
+      modules: { 'camera.wasm': module, 'dmp_webgpu_bg.wasm': module },
+    };
+    writeFileSync(join(bundle, 'camera.wasm'), 'changed');
+    assert.throws(() => readRuntimeSbom(runtime, receipt), /does not match the staged Wasm/);
+    assert.throws(() => runtimeSbom(runtime, runtime, [], links), /No matching linker evidence/);
+  } finally {
+    rmSync(runtime, { recursive: true, force: true });
+  }
 });
 
 test('the WebUSB Wasm graph excludes host-side Rust macros and build tools', () => {
@@ -83,7 +124,10 @@ test('CycloneDX retains the declared expression, full texts, source, and every s
     { expression: 'MIT OR Apache-2.0', acknowledgement: 'declared' },
   ]);
   assert.equal(row.evidence?.licenses[0].license.text.content, component.texts.join('\n\n'));
-  assert.equal(row.externalReferences[0].url, component.source);
+  assert.deepEqual(row.externalReferences, [
+    { type: 'distribution', url: component.source },
+    { type: 'website', url: 'https://crates.io/crates/fixture/1.2.3' },
+  ]);
   assert.deepEqual(
     row.properties.map(({ value }) => value),
     ['camera', 'emulator'],
@@ -91,6 +135,10 @@ test('CycloneDX retains the declared expression, full texts, source, and every s
   assert.throws(
     () => cycloneDx([{ ...component, texts: [] }]),
     /missing SPDX license or license text/,
+  );
+  assert.throws(
+    () => cycloneDx([{ ...component, purl: undefined }]),
+    /missing upstream package page/,
   );
 });
 
@@ -100,6 +148,8 @@ test('Credits shortens commit versions and preserves full SBOM references and te
     mkdirSync(join(directory, 'server'));
     const version = '0'.repeat(39) + '1';
     const source = `https://example.org/fixture/tree/${version}`;
+    const packageSource = 'https://registry.npmjs.org/@scope/package/-/package-1.2.3.tgz';
+    const fatFsArchive = 'https://elm-chan.org/fsw/ff/arc/ff16.zip';
     const bom = cycloneDx([
       {
         name: 'fixture',
@@ -109,14 +159,36 @@ test('Credits shortens commit versions and preserves full SBOM references and te
         texts: ['Full license\n'],
         products: ['website'],
       },
+      {
+        name: '@scope/package',
+        version: '1.2.3',
+        source: packageSource,
+        purl: 'pkg:npm/%40scope/package@1.2.3',
+        license: 'MIT',
+        texts: ['Full license\n'],
+        products: ['website'],
+      },
+      {
+        name: 'FatFs',
+        version: 'R0.16',
+        source: fatFsArchive,
+        license: 'BSD-1-Clause',
+        texts: ['Full license\n'],
+        products: ['camera'],
+      },
     ]);
     writeLicenseIndex(bom, directory);
-    const [entry] = JSON.parse(
+    const [npm, fatFs, entry] = JSON.parse(
       readFileSync(join(directory, 'server/credits-components.json'), 'utf8'),
     );
     assert.equal(entry.version, version.slice(0, 12));
-    assert.equal(bom.components[0].version, version);
+    assert.equal(bom.components.find(({ name }) => name === 'fixture')?.version, version);
     assert.equal(entry.source, source);
+    assert.equal(npm.source, 'https://www.npmjs.com/package/@scope/package/v/1.2.3');
+    assert.equal(
+      fatFs.source,
+      'https://github.com/zephyrproject-rtos/fatfs/tree/18ad3932f7f18b59abf99cb2f8a6cd5d6746cfe0',
+    );
     assert.equal(
       readFileSync(join(directory, 'client', entry.licensePath), 'utf8'),
       'Full license\n',

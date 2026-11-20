@@ -8,12 +8,16 @@ import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
-import { routes } from './prerender.ts';
+import { siteRoutes } from './prerender.ts';
+import { readSdkDocs, sdkDocsPath } from './sdk-docs.ts';
 import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual-data.ts';
 import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
 import { textPagePath } from '../src/text/routes.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
+import type { cycloneDx } from './sbom/bom.ts';
 const root = resolve(process.argv[2] || 'dist/client');
+const routes = siteRoutes(root);
+const sdk = readSdkDocs(resolve(root, sdkDocsPath));
 const chapters = manualChapters();
 const manualPage = chapters[0]?.pages[0];
 assert.ok(manualPage, 'Expected a generated manual page');
@@ -74,11 +78,31 @@ try {
         const manual = manualPageAt(route);
         if (manual) {
           const anchors = await page
-            .locator('.manual-entry')
+            .locator('.manual-feature[id], .manual-page-anchor, .manual-entry')
             .evaluateAll((entries) => entries.map((entry) => entry.id));
+          assert.deepEqual(anchors.sort(), manual.sections.map((section) => section.anchor).sort());
+          const top = await page
+            .locator('.manual-feature > .manual-entry')
+            .evaluateAll((rows) => rows.map((row) => '#' + row.id));
           assert.deepEqual(
-            anchors,
-            manual.sections.map((section) => section.anchor),
+            await page
+              .getByRole('navigation', { name: 'On this page' })
+              .getByRole('link')
+              .evaluateAll((links) => links.map((link) => (link as HTMLAnchorElement).hash)),
+            top,
+          );
+          for (const section of manual.sections.filter(
+            (entry) => entry.title === manual.title && entry.path?.length,
+          )) {
+            assert.equal(await page.locator(`.manual-entry[id="${section.anchor}"]`).count(), 0);
+          }
+          assert.deepEqual(
+            await page.locator('.manual-feature > .manual-cameras').allTextContents(),
+            [
+              [...new Set(manual.sections.flatMap((section) => section.cameras))]
+                .sort()
+                .join(' · '),
+            ].filter(Boolean),
           );
         }
         assert.deepEqual(await header.locator('nav a').allTextContents(), [
@@ -87,6 +111,8 @@ try {
           'Safety',
           'Dev Tools',
           'Recovery',
+          'GitHub',
+          'Discord',
         ]);
         assert.equal(
           await header.getByRole('link', { name: 'Discord' }).getAttribute('href'),
@@ -191,7 +217,9 @@ try {
         await creditsPage.locator('.credits-recipes a').count(),
         credits.recipeAuthors.reduce((sum, author) => sum + author.recipes.length, 0),
       );
-      const sbom = await (await noJs.request.get(base + '/sbom.json')).json();
+      const sbom: ReturnType<typeof cycloneDx> = await (
+        await noJs.request.get(base + '/sbom.json')
+      ).json();
       const licenseDetails = creditsPage.locator('.credits-license-details');
       assert.equal(await licenseDetails.getAttribute('open'), null);
       assert.equal(await creditsPage.locator('.credits-products li').count(), 3);
@@ -205,6 +233,22 @@ try {
       );
       const components = creditsPage.locator('.credits-components tbody tr');
       assert.equal(await components.count(), sbom.components.length);
+      const sourceUrls = new Set(
+        sbom.components.flatMap(({ externalReferences }) =>
+          externalReferences
+            .filter(({ type }) => type === 'website' || type === 'vcs')
+            .map(({ url }) => url),
+        ),
+      );
+      for (const selector of [
+        '.credits-products a',
+        '.credits-components tbody td:first-child a',
+      ]) {
+        const links = await creditsPage
+          .locator(selector)
+          .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')));
+        assert.deepEqual(new Set(links), sourceUrls);
+      }
       const licenseHref = await components
         .first()
         .locator('a[href^="/licenses/"]')
@@ -276,21 +320,67 @@ try {
         .last()
         .click();
       await docs.waitForURL(base + destination);
-      const paths = await docs.locator(`#${alias.anchor} .manual-paths li`).allTextContents();
-      assert.ok(paths.length > 1);
-      assert.ok(paths.includes([...alias.path, alias.title].join(' › ')));
+      const paths = await docs.locator(`#${alias.anchor} > .manual-also`).allTextContents();
+      assert.ok(paths.includes('Also in ' + alias.path.join(' › ')));
+      const ratio = manualMenuRows.find(
+        (row) => row.page === 'shape-aspect' && row.title === 'ADD RATIO',
+      );
+      assert.ok(ratio);
+      const ratioDestination = `${manualPagePath(ratio.page)}#${ratio.anchor}`;
+      await docs.goto(base + manualMenus);
+      await docs.locator(`.manual-menu-tree a[href="${ratioDestination}"]`).click();
+      await docs.waitForURL(base + ratioDestination);
+      const nestedRatio = docs.locator(`#${ratio.anchor}.manual-subentry`);
+      assert.equal(await nestedRatio.locator('h3').innerText(), 'ADD RATIO');
+      assert.equal(await nestedRatio.evaluate((row) => row.matches(':target')), true);
+      assert.equal(
+        await docs.locator('.manual-page-path').innerText(),
+        'SHOOTING MENU › SHAPE & ASPECT',
+      );
+      const updatePath = manualPagePath('check-for-updates');
+      const updates = manualPageAt(updatePath)!;
+      const ownUpdate = updates.sections.find((entry) => entry.title === updates.title)!;
+      await docs.goto(`${base}${updatePath}#${ownUpdate.anchor}`);
+      assert.equal(await docs.locator('.manual-feature:target h1').innerText(), updates.title);
+      assert.ok(
+        !(await docs.locator('.manual-introduction').innerText()).includes(ownUpdate.summary!),
+      );
+      assert.deepEqual(
+        await docs
+          .getByRole('navigation', { name: 'On this page' })
+          .getByRole('link')
+          .allTextContents(),
+        ['CHECK AGAIN', 'CONNECT WI-FI', 'DOWNLOAD', 'RESTART TO UPDATE'],
+      );
       await docs.goto(base + '/docs/sdk/focal/');
       assert.equal(await docs.getByRole('navigation', { name: 'FocalUI' }).count(), 1);
+      if (sdk) {
+        for (const component of sdk.components) {
+          const path = `/${sdkDocsPath}/components/${component.slug}/`;
+          const html = await readFile(resolve(root, path.slice(1), 'index.html'), 'utf8');
+          assert.ok(html.includes('class="sdk-component"'), path);
+          for (const preview of component.previews) {
+            assert.ok(html.includes(preview.page), preview.page);
+            assert.equal((await noJs.request.head(base + preview.page)).status(), 200);
+          }
+        }
+      }
       await docs.close();
       assert.equal((await noJs.request.get(base + '/setup/')).status(), 404);
       for (const [route, text] of [
-        ['/', 'Today we’re releasing the second version of Fujimod'],
+        ['/', 'Jake'],
         ['/dev-tools/', 'Dev Tools'],
         ['/bug/', undefined],
       ]) {
         const page = await noJs.newPage();
         const response = await page.goto(base + route);
         assert.equal(response!.status(), 200);
+        if (route === '/')
+          assert.equal(
+            await page.getByRole('article', { name: 'A note from Jake' }).count(),
+            1,
+            `${type.name()} /: personal note`,
+          );
         if (text)
           assert.ok(
             (await page.locator('body').innerText()).includes(text),
@@ -413,8 +503,18 @@ try {
       await desktopTrigger.hover();
       await page.locator('.catalog-card.on').waitFor();
       await page.mouse.move(0, 0);
-      await page.waitForTimeout(300);
-      assert.equal(await page.locator('.catalog-card.on').count(), 0);
+      await page.locator('.catalog-card.on').waitFor({ state: 'detached' });
+
+      // Keyboard focus takes over even if a pointer leave already scheduled dismissal.
+      await desktopTrigger.blur();
+      await desktopTrigger.hover();
+      await page.locator('.catalog-card.on').waitFor();
+      await page.mouse.move(0, 0);
+      await desktopTrigger.focus();
+      await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 300)));
+      assert.equal(await page.locator('.catalog-card.on').count(), 1);
+      await page.keyboard.press('Escape');
+      await page.locator('.catalog-card.on').waitFor({ state: 'detached' });
       // The idle homepage has no camera bar; feedback opens from its URL.
       await page.goto(base + '/?feedback');
       await page.locator('#feedback-dialog[open]').waitFor();

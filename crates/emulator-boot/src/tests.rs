@@ -1,4 +1,5 @@
 use super::*;
+use fujimod_catalog_controls::{ElectricalInput, InputTarget};
 use fujimod_catalog_configuration::Exr2RunScene;
 
 /// The reference X70's NAND sections in the catalog.

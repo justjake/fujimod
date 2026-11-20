@@ -10,11 +10,12 @@ import { previewLicenseFiles, sbomInputs } from './scripts/sbom/vite';
 import { wasmProofRoute } from './scripts/wasm-proof-route';
 import { loadReleaseData } from './scripts/release-data.ts';
 import { localReleases } from './scripts/local-releases.ts';
-import { localMedia, previewMedia } from './scripts/local-media.ts';
+import { localMedia, siteFeatureMedia } from './scripts/local-media.ts';
 import { localReviewFiles } from './scripts/local-review-files.ts';
 import { simulatorReports } from './scripts/local-reports.ts';
 import { directoryRoute } from './src/directory-route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
+import { siteSdkDocs } from './scripts/sdk-docs.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -167,15 +168,6 @@ function localArtifacts(env: Record<string, string>): Plugin {
     configurePreviewServer: (server) => configure(server.middlewares),
   };
 }
-// Feature media by card: an opt-in local directory, else the staged site assets.
-function featureMedia(env: Record<string, string>, development: boolean) {
-  const media = development
-    ? previewMedia(env.FUJIMOD_MEDIA_ROOT, env.FUJIMOD_MEDIA)
-    : env.FUJIMOD_MEDIA;
-  const path = media ? resolve(media, 'media.json') : 'public/artifacts/docs/media.json';
-  return existsSync(path) ? readFileSync(path, 'utf8') : 'null';
-}
-
 function catalogPath(env: Record<string, string>) {
   return env.FUJIMOD_RUNTIME
     ? resolve(env.FUJIMOD_RUNTIME, 'catalog.json')
@@ -248,10 +240,6 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_SIGNAL_URL__: JSON.stringify(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
     ),
-    __FUJIMOD_FEATURE_MEDIA__: featureMedia(
-      loadEnv(mode, process.cwd(), 'FUJIMOD_'),
-      command === 'serve',
-    ),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
@@ -264,9 +252,14 @@ export default defineConfig(({ mode, command }) => ({
   },
   plugins: [
     siteReleaseData(),
+    siteFeatureMedia(
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,
+    ),
     sbomInputs(),
     previewLicenseFiles(),
     isolationHeaders(),
+    siteSdkDocs(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SDK_DOCS),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,
@@ -325,6 +318,9 @@ export default defineConfig(({ mode, command }) => ({
   },
   test: {
     pool: 'forks',
+    // Component tests initialize the Wasm module and drive async UI flows; a
+    // loaded machine pushes individual tests past vitest's 5 s default.
+    testTimeout: 30_000,
     projects: [
       {
         extends: true,

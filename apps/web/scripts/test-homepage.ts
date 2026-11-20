@@ -18,7 +18,7 @@ const recipes =
 assert.ok(recipes.length >= 2, 'The preview release should carry recipes');
 const response = await fetch(new URL('artifacts/docs/media.json', base));
 const media = (response.ok ? await response.json() : { cards: {} }) as FeatureMedia;
-const publishedVideos = new Set(Object.values(media.cards).map(({ video }) => video));
+const reels = Object.entries(media.reels ?? {});
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 await mkdir(output, { recursive: true });
 
@@ -59,7 +59,11 @@ for (const engine of [chromium, webkit]) {
         [...sections].sort((a, b) => a - b),
       );
       assert.equal(await page.locator('.catalog-tile,.sd-tree,#features').count(), 0);
-      assert.equal(await page.locator('.home-reel').count(), 3);
+      assert.deepEqual(
+        await page.locator('.home-reel').evaluateAll((figures) => figures.map(({ id }) => id)),
+        ['reel-shooting', 'reel-looks', 'reel-controls'],
+      );
+      assert.equal(await page.locator('#controls').count(), 1);
       const sectionGeometry = await page.locator('.home-release-notes').boundingBox();
       const cardGeometry = await page.locator('.home-download').boundingBox();
       assert.ok(sectionGeometry && cardGeometry);
@@ -119,25 +123,52 @@ for (const engine of [chromium, webkit]) {
           ),
         ),
       );
-      const sources = await reelVideos.evaluateAll((videos) =>
-        videos.map((video) => video.getAttribute('src')!.split('/').at(-1)!),
-      );
-      if (!publishedVideos.size) assert.equal(sources.length, 0);
+      assert.equal(await reelVideos.count(), reels.length);
       if (process.env.FUJIMOD_EXPECT_REELS)
-        assert.equal(sources.length, Number(process.env.FUJIMOD_EXPECT_REELS));
-      for (const source of sources) assert.ok(publishedVideos.has(source), source);
-      if (engine === chromium && !mobile && sources.length) {
-        const video = reelVideos.first();
-        await video.evaluate(async (element: HTMLVideoElement) => {
-          element.muted = true;
-          await element.play();
-          element.currentTime = element.duration - 0.1;
-        });
-        await page.waitForFunction(
-          (source) =>
-            !document.querySelector('.home-reel video')?.getAttribute('src')?.endsWith(source),
-          sources[0],
+        assert.equal(reels.length, Number(process.env.FUJIMOD_EXPECT_REELS));
+      assert.equal(new Set(reels.map(([, reel]) => reel.still)).size, reels.length);
+      for (const [id, reel] of reels) {
+        const figure = page.locator(`#reel-${id}.home-reel`);
+        const video = figure.locator('video');
+        assert.equal(await video.getAttribute('src'), '/artifacts/docs/' + reel.video);
+        assert.equal(await video.getAttribute('poster'), '/artifacts/docs/' + reel.still);
+        assert.ok(
+          (await page.request.get(new URL('/artifacts/docs/' + reel.still, base).href)).ok(),
         );
+        assert.ok(await video.evaluate((element: HTMLVideoElement) => element.loop));
+        await video.evaluate(async (element: HTMLVideoElement) => {
+          if (element.readyState < HTMLMediaElement.HAVE_METADATA)
+            await new Promise<void>((resolve) =>
+              element.addEventListener('loadedmetadata', () => resolve(), { once: true }),
+            );
+          element.pause();
+        });
+        const seek = (time: number) =>
+          video.evaluate(async (element: HTMLVideoElement, seconds) => {
+            if (element.currentTime === seconds) return;
+            const sought = new Promise<void>((resolve) =>
+              element.addEventListener('seeked', () => resolve(), { once: true }),
+            );
+            element.currentTime = seconds;
+            await sought;
+          }, time);
+        for (const cue of reel.cues) {
+          await seek((cue.start + cue.end) / 2);
+          const caption = figure.locator('.home-reel-caption');
+          await caption.waitFor();
+          assert.equal(await caption.innerText(), cue.text);
+        }
+        if (engine === chromium && !mobile) {
+          const cue = reel.cues.at(-1)!;
+          await seek(Math.max(cue.start, cue.end - 1.2));
+          await figure
+            .locator('.home-reel-video')
+            .screenshot({ path: resolve(output, `${id}@2x.png`) });
+        }
+        if (reel.cues[0].start > 0) {
+          await seek(0);
+          await figure.locator('.home-reel-caption').waitFor({ state: 'detached' });
+        }
       }
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
@@ -163,21 +194,6 @@ for (const engine of [chromium, webkit]) {
       await recipeGroup.getByText('Choose recipes', { exact: true }).click();
 
       if (engine === chromium && !mobile) {
-        await reelVideos.evaluateAll((videos: HTMLVideoElement[]) =>
-          Promise.all(
-            videos.map(async (video) => {
-              if (!Number.isFinite(video.duration)) return;
-              video.pause();
-              const time = Math.min(1.8, video.duration * 0.4);
-              if (Math.abs(video.currentTime - time) < 0.01) return;
-              const sought = new Promise<void>((resolve) =>
-                video.addEventListener('seeked', () => resolve(), { once: true }),
-              );
-              video.currentTime = time;
-              await sought;
-            }),
-          ),
-        );
         for (const [selector, name] of [
           ['.home-reels', 'reels-and-sd-card'],
           ['#software', 'emulator-top'],

@@ -99,6 +99,18 @@
   color: var(--dim);
   cursor: default;
 }
+.home-download-disclaimer {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dim);
+}
+.home-download-disclaimer p {
+  margin: 0 0 8px;
+}
+.home-download-disclaimer a {
+  color: var(--text);
+}
 @media (max-width: 900px) {
   .home-download {
     position: static;
