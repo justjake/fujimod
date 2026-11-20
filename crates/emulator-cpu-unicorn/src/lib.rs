@@ -116,7 +116,9 @@ impl Library {
             (core.api.uc_ctl)(raw, ffi::ctl(13, 1, 1), translation_cache_size_bytes)
         })?;
         // Page-hook code invalidation requires translation-installed watches.
-        // The AArch64 board still uses ordinary instruction observers.
+        // A plain AArch64 core has none; the A-profile execution installs a
+        // translation filter that watches every page it translates and then
+        // switches page hooks on itself (`Core::set_page_hooks`).
         if let Some(enable) = core.api.extensions.page_hooks {
             check(&core.api, unsafe { enable(raw, model != Model::ArmV8A) })?;
         }
@@ -373,6 +375,17 @@ fn range(range: HookRange) -> (u64, u64) {
     }
 }
 impl Core {
+    /// Route stores and hooked accesses to the engine's slow path only on
+    /// pages a hook covers. The caller must watch every page it translates
+    /// from (`watch_stores`), in every alias, before that code runs.
+    pub(crate) fn set_page_hooks(&self, on: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .page_hooks
+            .ok_or("CPU backend has no page hooks")?;
+        self.check(unsafe { set(self.raw, on) })
+    }
     fn check(&self, status: i32) -> Result<(), String> {
         check(&self.api, status)
     }
