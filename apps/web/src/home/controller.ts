@@ -486,9 +486,10 @@ export function startHome(
       progress('Downloading firmware…', undefined, [download(firmware.bytes)]);
       if (current !== generation) return;
       const camera = latestCamera(await cameras.list(), entry.sha256, true);
+      // One read from storage: the camera takes these bytes, the File keeps a copy for restarts.
+      const bytes = await cameras.firmwareBytes(entry.sha256);
       const read = async () => new File([await cameras.firmware(entry.sha256)], entry.fileName);
-      const file = await read();
-      await processFile(file, false, await file.arrayBuffer(), camera ? undefined : read, camera, true);
+      await processFile(new File([bytes], entry.fileName), false, bytes, read, camera, true);
     } catch (error) {
       if (current === generation) {
         ++generation;

@@ -7,7 +7,7 @@ import { sharingUrl } from '../sharing-server';
 export async function fetchFirmware(
   firmware: Firmware,
   progress?: (received: number) => void,
-): Promise<File> {
+): Promise<{ fileName: string; bytes: ArrayBuffer }> {
   const source = firmwareMirrors[firmware.id];
   if (!source) throw Error('No download mirror is available for this firmware.');
   const response = await fetch(sharingUrl(`/proxy?url=${encodeURIComponent(source)}`));
@@ -23,7 +23,5 @@ export async function fetchFirmware(
   }
   if (received !== firmware.bytes || (await sha256(bytes)) !== firmware.sha256)
     throw Error('The downloaded firmware failed its integrity check.');
-  return new File([bytes], new URL(source).pathname.split('/').pop()!, {
-    type: 'application/octet-stream',
-  });
+  return { fileName: new URL(source).pathname.split('/').pop()!, bytes: bytes.buffer };
 }

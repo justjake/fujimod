@@ -54,8 +54,8 @@ export function createFirmwareLibrary(identifyFile?: (file: File) => Promise<Ide
     setBusy(true);
     setError('');
     try {
-      const file = await fetchFirmware(firmware, progress);
-      const entry = await store.addFirmware(file, firmware);
+      const { fileName, bytes } = await fetchFirmware(firmware, progress);
+      const entry = await store.addFirmwareBytes(fileName, bytes, firmware);
       await refresh();
       setSelected(entry.sha256);
       return entry;

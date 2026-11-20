@@ -18,12 +18,12 @@ afterEach(() => vi.unstubAllGlobals());
 test('fetches the French mirror through the proxy and returns verified bytes', async () => {
   const request = vi.fn(async () => new Response(bytes));
   vi.stubGlobal('fetch', request);
-  const file = await fetchFirmware(firmware);
+  const download = await fetchFirmware(firmware);
   expect(request).toHaveBeenCalledWith(
     sharingUrl(`/proxy?url=${encodeURIComponent(firmwareMirrors[firmware.id])}`),
   );
-  expect(file.name).toBe('FPUPDATE.DAT');
-  expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);
+  expect(download.fileName).toBe('FPUPDATE.DAT');
+  expect(new Uint8Array(download.bytes)).toEqual(bytes);
 });
 test('rejects truncated or changed bytes, HTTP failures and missing mirrors', async () => {
   vi.stubGlobal(
