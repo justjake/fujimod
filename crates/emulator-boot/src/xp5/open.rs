@@ -378,6 +378,39 @@ fn carve_out(
     kept
 }
 
+/// Whether the boot manifest declares exactly `base..base+bytes` as RAM.
+fn caller_ram_declares(ram: &[super::manifest::RamRegion], base: u64, bytes: u64) -> bool {
+    ram.iter().any(|region| region.base == base && region.size == bytes)
+}
+
+/// Set `registers` (hex address -> value) on a power-controller part, keeping every register it
+/// already holds at another address. Addresses compare by value: `"0x1f"` and `"1f"` are the same.
+fn merge_power_registers(part: &mut toml::Table, registers: &toml::Value) -> Result<(), String> {
+    let address = |key: &str| {
+        u8::from_str_radix(key.trim_start_matches("0x"), 16)
+            .map_err(|error| format!("power-controller register {key}: {error}"))
+    };
+    let added = registers.as_table().ok_or("power-controller registers must be a table")?;
+    let held = part
+        .entry("registers")
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+        .as_table_mut()
+        .ok_or("power-controller registers must be a table")?;
+    for (key, value) in added {
+        let wanted = address(key)?;
+        let same: Vec<String> = held
+            .keys()
+            .filter(|existing| address(existing).is_ok_and(|found| found == wanted))
+            .cloned()
+            .collect();
+        for existing in same {
+            held.remove(&existing);
+        }
+        held.insert(key.clone(), value.clone());
+    }
+    Ok(())
+}
+
 /// The boot state of a ROM start: nothing of the stock firmware is preloaded, because the ROM
 /// and stage one bring it up from the emulated internal flash; the boot-source straps are an
 /// explicit input; the card carries only the caller's stage-one files.
@@ -396,10 +429,14 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         options,
     });
     let mut fragment = rom_start::Fragment::bundled()?;
+    let mut windows = Vec::new();
     let slot_base = match &rom.entry {
         Entry::MaskRom(_) => Some(0xff9b_0000),
         Entry::CardHandoff(handoff) => {
             fragment.power_controller_registers.clone_from(&handoff.power_controller_registers);
+            // The firmware's own SD card stage windows come first, so their stub registers
+            // answer before the shared fragment's registers of the same page.
+            windows.extend(handoff.device.iter().cloned());
             Some(handoff.slot)
         }
         Entry::SetupHandoff(_) => {
@@ -410,8 +447,9 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             None
         }
     };
+    windows.extend(fragment.device);
     state.ram.extend(fragment.ram);
-    for window in fragment.device {
+    for window in windows {
         // A bring-up stub page the manifest already owns (the X-T5's memory-controller pages
         // 0xfaf27000 and 0xfaf37000) keeps the manifest's registers and gains the ROM-start
         // registers it does not list, instead of a second device on the same page.
@@ -464,7 +502,9 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             for endpoint in endpoints {
                 let part = endpoint.get_mut("part").and_then(toml::Value::as_table_mut);
                 if let Some(part) = part.filter(|part| part.get("kind").and_then(toml::Value::as_str) == Some("power-controller")) {
-                    part.insert("registers".into(), registers.clone());
+                    // Registers the endpoint already holds (a user profile header) stay; the
+                    // reset registers of this start replace only their own addresses.
+                    merge_power_registers(part, &registers)?;
                     found = true;
                 }
             }
@@ -707,6 +747,11 @@ pub(crate) fn open_from(
             let size = usize::try_from(bytes).map_err(|_| "region exceeds host address space")?;
             if !execution.ram.iter().any(|ram| ram.base == base && ram.size == size) {
                 execution.ram.push(board::factory::Ram { base, size });
+            }
+            // A manifest that declares this extent as RAM (the X-T5's boot SRAM) already mapped
+            // it for the cores above and maps it for the bus below; a second mapping overlaps.
+            if caller_ram_declares(&state.ram, base, bytes) {
+                continue;
             }
             execution.dma_mappings.push(board::memory::BusMapping {
                 permissions: permissions & 3,
@@ -1014,6 +1059,36 @@ mod tests {
     use super::*;
 
     const DRAM: (u64, u64) = (0, 0x8000_0000);
+
+    #[test]
+    fn an_entry_extent_the_manifest_declares_as_ram_is_not_mapped_twice() {
+        let ram: Vec<super::super::manifest::RamRegion> =
+            toml::from_str::<toml::Table>("[[ram]]\nbase = 0xff800000\nsize = 0x40000\n").unwrap()["ram"]
+                .clone()
+                .try_into()
+                .unwrap();
+        assert!(caller_ram_declares(&ram, 0xff80_0000, 0x4_0000));
+        assert!(!caller_ram_declares(&ram, 0xff80_0000, 0x3_c000));
+        assert!(!caller_ram_declares(&ram, 0xfff0_0000, 0x1_0000));
+    }
+
+    #[test]
+    fn start_registers_keep_a_profile_header_and_replace_their_own_addresses() {
+        let mut part: toml::Table =
+            toml::from_str("kind = \"power-controller\"\n[registers]\n\"0x1f\" = 7\n\"0x10\" = 9\n").unwrap();
+        let start: toml::Value = toml::from_str("\"0\" = 0x8202\n\"10\" = 2\n").unwrap();
+        merge_power_registers(&mut part, &start).unwrap();
+        let held = part["registers"].as_table().unwrap();
+        assert_eq!(held.len(), 3);
+        assert_eq!(held["0x1f"].as_integer(), Some(7));
+        assert_eq!(held["0"].as_integer(), Some(0x8202));
+        assert_eq!(held["10"].as_integer(), Some(2));
+        let mut bare: toml::Table = toml::from_str("kind = \"power-controller\"\n").unwrap();
+        merge_power_registers(&mut bare, &start).unwrap();
+        assert_eq!(bare["registers"].as_table().unwrap().len(), 2);
+        let bad: toml::Value = toml::from_str("\"zz\" = 1\n").unwrap();
+        assert!(merge_power_registers(&mut bare, &bad).unwrap_err().contains("zz"));
+    }
 
     #[test]
     fn caller_ram_covered_by_catalog_is_skipped() {

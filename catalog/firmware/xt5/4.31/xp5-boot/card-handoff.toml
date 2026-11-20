@@ -7,3 +7,76 @@ stage_max_bytes = 0x3c000
 [power_controller_registers]
 "0" = 0x8202
 "10" = 0x0002
+
+# Windows the X-T5 SD card stage needs beyond the shared ROM-start fragment
+# (catalog/soc/xp5/rom-start.toml). They belong to this start only: the default loader start
+# never runs the stock setup, and its boot manifest and snapshots stay unchanged.
+
+# Memory-controller status. The stock setup in the stage file writes 0xfaf07680 = 0x97100005
+# (0xff800be8) and polls 0xfaf07780 until it reads non-zero (0xff800bf4..0xff800bfc), then takes
+# the low byte of 0xfaf07784 as a result code. It never writes 0x780 itself, so the fragment's
+# answer-after-a-write stub would read 0 for ever. The constant is the answer the former X-T5
+# bring-up runner gave (0x780 = 1). A scripted answer, not a model. All four controllers get it;
+# the fragment adds its other registers (0x784, 0x800) to each page.
+[[device]]
+base = 0xfaf07000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf17000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+# Memory-controller setup words the stock setup stores through its word writer 0xff80dffc and
+# never reads back (discovery run of the SD card start, 2026-11-20): 0xfae60000/0xfae61000/
+# 0xfae63000 (+0x0, +0x8, +0x10, +0x50 at +0x000, +0x200 and +0x400), 0xfae70050, 0xfae71050,
+# 0xfae72050, 0xfae8n000/+4 for n = 0..3, and 0xfaf09000/0xfaf19000 (+0x8..+0x4c). Store-only
+# latches: a read stays unmodeled and refuses. 0xfae62000 is the boot manifest's own window.
+[[device]]
+base = 0xfae60000
+size = 0x2000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae63000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae70000
+size = 0x3000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae80000
+size = 0x4000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf09000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf19000
+size = 0x1000
+kind = "write-only-registers"
