@@ -15,7 +15,10 @@ import '../home/site.css';
 import { modifiedDownload } from '../patch/download';
 import type { PatchResult } from '../patch/patcher';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
-import { verifyPatch } from '../patch/catalog';
+import { verifyPatch, type PatchFirmware } from '../patch/catalog';
+import { loadOtaRelease, sdBootV2Firmware } from '../ota/release';
+import { releaseCameras, sdBootV2Plan, type CardCamera } from './sd-boot-v2/plan';
+import { cardFiles } from './sd-boot-v2/build';
 import { loadRelease, type LoadedRelease } from '../patch/release';
 import { sha256 } from '../patch/patcher';
 import { EngineError, faultFrom } from '@fujimod/emulator-ui/engine/fault';
@@ -160,8 +163,44 @@ export function startHome(
     const firmware = index?.firmwares.find((entry) => entry.sha256 === selected.sha256);
     if (!index || !firmware || !index.patches[selected.sha256])
       return { identities: Promise.resolve([]), load: async () => [] };
+    const camera = releaseCameras(index.firmwares, catalog.firmwares, index.sd_card_files ?? []).find(
+      (entry) => entry.id === sdBootV2Firmware(firmware.id),
+    );
+    return camera ? sdBootV2Media(index, camera) : patchMedia(index, firmware, file);
+  }
+  /** The release's SD boot v2 SD card for one camera, as the downloaded SD card holds it. */
+  function sdBootV2Media(index: LoadedRelease, camera: CardCamera): BootMedia {
+    const plan = loadOtaRelease(index.assetBase, camera.id).then((ota) => {
+      const { files, problems } = sdBootV2Plan({
+        cameras: [camera],
+        card: index.sd_card_files ?? [],
+        releases: new Map([[camera.id, ota]]),
+        excluded: new Set(),
+      });
+      if (problems.length) throw Error(problems[0]);
+      return files;
+    });
+    return {
+      identities: plan.then((files) =>
+        Promise.all(
+          files.map(async (file) => ({
+            path: `/${file.path}`,
+            sha256: file.from === 'data' ? await sha256(file.data) : file.sha256,
+          })),
+        ),
+      ),
+      load: async () => {
+        progress(state.message, undefined, [loadingStep('patch', 'loading')]);
+        const files = await cardFiles(await plan, { assetBase: index.assetBase });
+        progress(state.message, undefined, [loadingStep('patch', 'complete')]);
+        return files.map(({ path, bytes }) => ({ path: `/${path}`, bytes }));
+      },
+    };
+  }
+  /** A release patch's SD boot v1 files, built from the selected firmware. */
+  function patchMedia(index: LoadedRelease, firmware: PatchFirmware, file: File): BootMedia {
     const metadata = (async () => {
-      const response = await fetch(new URL(index.patches[selected.sha256], index.assetBase));
+      const response = await fetch(new URL(index.patches[firmware.sha256], index.assetBase));
       if (!response.ok) throw Error('The release patch could not be downloaded.');
       return verifyPatch(index, firmware, new Uint8Array(await response.arrayBuffer()));
     })();

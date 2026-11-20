@@ -18,13 +18,13 @@ async function fetchChecked(url: URL, sha: string, bytes: number, fetcher: typeo
   return data;
 }
 
-/** Fetch and check every planned file, and zip the card's root. */
-export async function buildCard(files: readonly PlannedFile[], options: CardBuildOptions) {
+/** Fetch and check every planned file: the SD card's root-relative paths and their bytes. */
+export async function cardFiles(files: readonly PlannedFile[], options: CardBuildOptions) {
   const fetcher = options.fetcher ?? fetch;
-  const entries: { path: string; data: Blob }[] = [];
+  const entries: { path: string; bytes: Uint8Array }[] = [];
   let done = 0;
   for (const file of files) {
-    const data =
+    const bytes =
       file.from === 'data'
         ? file.data
         : await fetchChecked(
@@ -36,8 +36,14 @@ export async function buildCard(files: readonly PlannedFile[], options: CardBuil
             file.bytes,
             fetcher,
           );
-    entries.push({ path: file.path, data: new Blob([data.slice()]) });
+    entries.push({ path: file.path, bytes });
     options.progress?.(++done, files.length);
   }
-  return zipBlob(entries);
+  return entries;
+}
+
+/** Fetch and check every planned file, and zip the SD card's root. */
+export async function buildCard(files: readonly PlannedFile[], options: CardBuildOptions) {
+  const entries = await cardFiles(files, options);
+  return zipBlob(entries.map(({ path, bytes }) => ({ path, data: new Blob([bytes.slice()]) })));
 }
