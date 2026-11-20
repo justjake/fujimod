@@ -1,0 +1,214 @@
+{
+  "base": "fb467534f1e4e4e0611d33488e71c8185d44d50f",
+  "integrated": false,
+  "paths": [
+    {
+      "path": "Cargo.lock",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "Cargo.toml",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "bindings/javascript/emulator/Cargo.toml",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "bindings/javascript/emulator/build.mts",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "bindings/javascript/emulator/camera.generated.ts",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "bindings/javascript/emulator/examples/xpro2_checkpoint.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "bindings/javascript/emulator/examples/xpro2_quantum_bench.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "bindings/javascript/emulator/examples/xpro2_rom_boot.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "bindings/javascript/emulator/src/camera.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "bindings/javascript/emulator/src/lib.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "bindings/javascript/emulator/src/lifecycle.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "bindings/javascript/emulator/tests/history.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "bindings/javascript/tests/emulator/build.test.ts",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "catalog/bodies/xpro2/body.json",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "catalog/bodies/xpro2/controls.json",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "catalog/firmware/xpro2/5.11/firmware.json",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "crates/emulator-boot/Cargo.toml",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-boot/examples/xpro2_discovery.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "crates/emulator-boot/src/graph.rs",
+      "status": "new-or-relocated-path; integrate manually"
+    },
+    {
+      "path": "crates/emulator-cpu-unicorn/src/jit/emit.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-cpu-unicorn/sys/src/lib.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "crates/emulator-ip-arm/src/gicv2.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-ip-arm/src/pl330.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-ip-dmp/src/smaph/mod.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-ip/src/sdhci/host.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xp4-board/src/devices.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/Cargo.toml",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/adc.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/src/blocks.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/src/board.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/boot.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/src/clocks.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/display.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/dram.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/src/input_capture.rs",
+      "status": "historical-change-still-applicable; API validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/src/lens.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/lib.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/resets.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator-xpp/src/sd.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator-xpp/src/sync.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/emulator/src/board/mod.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/emulator/src/board/observe.rs",
+      "status": "text-merge-clean; API/build validation pending"
+    },
+    {
+      "path": "crates/framebuffer-xpp/Cargo.toml",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/framebuffer-xpp/src/lib.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/framebuffer/Cargo.toml",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/framebuffer/README.md",
+      "status": "already-identical-upstream"
+    },
+    {
+      "path": "crates/framebuffer/src/frame.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/framebuffer/src/lib.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/framebuffer/src/packed_color.rs",
+      "status": "manual-port-required"
+    },
+    {
+      "path": "crates/framebuffer/src/raster.rs",
+      "status": "already-identical-upstream"
+    },
+    {
+      "path": "crates/framebuffer/src/registers.rs",
+      "status": "already-identical-upstream"
+    },
+    {
+      "path": "packages/emulator-ui/src/engine/api.ts",
+      "status": "text-merge-clean; API/build validation pending"
+    }
+  ]
+}
