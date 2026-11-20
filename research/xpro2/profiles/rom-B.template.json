@@ -1,0 +1,2348 @@
+{
+  "firmwareId": "xpro2-511",
+  "graph": {
+    "assets": {
+      "flash": {
+        "inverted": true,
+        "kind": "dat",
+        "offset": 604,
+        "size": 53543304
+      },
+      "sd-ffsys": {
+        "kind": "dat",
+        "offset": 1248,
+        "size": 2048,
+        "inverted": true
+      },
+      "sd-ffboot": {
+        "kind": "dat",
+        "offset": 53543908,
+        "size": 40235008,
+        "inverted": false
+      },
+      "f1-default-preferences": {
+        "kind": "bytes",
+        "bytes": [
+          79,
+          80,
+          65,
+          67,
+          3,
+          0,
+          0,
+          0,
+          25,
+          0,
+          0,
+          0,
+          75,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "devices": {
+      "cpus": [
+        {
+          "cache_sizes": [
+            32768,
+            32768,
+            1048576
+          ],
+          "configuration_base": 4294901760,
+          "cycles_per_tick": 64,
+          "mpidr": 2147483648
+        },
+        {
+          "cache_sizes": [
+            32768,
+            32768,
+            1048576
+          ],
+          "configuration_base": 4294901760,
+          "cycles_per_tick": 64,
+          "mpidr": 2147483649
+        }
+      ],
+      "gic": {
+        "cpu_interface": 4294909952,
+        "distributor": 4294905856,
+        "lines": 512
+      },
+      "kind": "xpp",
+      "nodes": [
+        {
+          "model": {
+            "base": 4294025216,
+            "kind": "timer",
+            "routes": [
+              [
+                0,
+                48
+              ],
+              [
+                1,
+                49
+              ],
+              [
+                2,
+                50
+              ],
+              [
+                3,
+                51
+              ],
+              [
+                4,
+                52
+              ],
+              [
+                5,
+                53
+              ],
+              [
+                6,
+                54
+              ],
+              [
+                7,
+                55
+              ],
+              [
+                8,
+                56
+              ],
+              [
+                9,
+                57
+              ],
+              [
+                10,
+                58
+              ],
+              [
+                11,
+                59
+              ],
+              [
+                12,
+                60
+              ],
+              [
+                13,
+                61
+              ],
+              [
+                14,
+                62
+              ],
+              [
+                15,
+                63
+              ]
+            ]
+          },
+          "name": "timers"
+        },
+        {
+          "model": {
+            "base": 4293967872,
+            "inputs": [
+              58615,
+              4116,
+              394,
+              559,
+              0,
+              0,
+              16,
+              0,
+              24,
+              0,
+              640,
+              4064,
+              65,
+              633,
+              14,
+              1
+            ],
+            "kind": "gpio"
+          },
+          "name": "gpio"
+        },
+        {
+          "model": {
+            "kind": "clock-control",
+            "options": {
+              "base": 4293963776,
+              "lock_ticks": 4800,
+              "running": [
+                0,
+                1,
+                2,
+                3,
+                4
+              ]
+            }
+          },
+          "name": "clocks"
+        },
+        {
+          "model": {
+            "kind": "boot",
+            "keys": [
+              "lab.sd_boot_strap"
+            ],
+            "options": {
+              "selector_base": 4293959680,
+              "clock_base": 4293984256,
+              "ddr_base": 4293976064,
+              "remap_base": 4278190080,
+              "bus_bases": [],
+              "memory_port_bases": [],
+              "decoder": 0,
+              "normal_selector": 24,
+              "card_selector": 0,
+              "settle_ticks": 48,
+              "refresh_level": 2,
+              "training_result": 31
+            },
+            "high_keys": [
+              "lab.sd_boot_strap"
+            ]
+          },
+          "name": "resets"
+        },
+        {
+          "model": {
+            "aperture": 4026531840,
+            "asset": "flash",
+            "bytes_per_tick": 16,
+            "controller": 4294000640,
+            "dma": 4294017024,
+            "irq": 35,
+            "irq_routes": [
+              207,
+              208,
+              209,
+              210,
+              211,
+              212,
+              213,
+              214
+            ],
+            "kind": "flash",
+            "nor": [
+              {
+                "array": {
+                  "erase_ticks": 4096,
+                  "page_bytes": 256,
+                  "page_ticks": 512
+                },
+                "chip_select": 0,
+                "options": {
+                  "enhanced_volatile_reset": 255,
+                  "identification": [
+                    32
+                  ],
+                  "write_ticks": 16
+                }
+              }
+            ],
+            "setup_ticks": 16,
+            "size": 134217728,
+            "transfer_ticks": 1
+          },
+          "name": "flash"
+        },
+        {
+          "model": {
+            "base": 4294086656,
+            "kind": "serial-port",
+            "peer": {
+              "kind": "none"
+            }
+          },
+          "name": "serial1"
+        },
+        {
+          "model": {
+            "base": 4294090752,
+            "kind": "serial-port",
+            "peer": {
+              "clock": {
+                "first": 65,
+                "hold": 69,
+                "seconds": 846555480,
+                "ticks_per_second": 48000000
+              },
+              "kind": "registers",
+              "registers": [
+                [
+                  96,
+                  16
+                ]
+              ]
+            }
+          },
+          "name": "serial2"
+        },
+        {
+          "model": {
+            "base": 4294094848,
+            "kind": "serial-port",
+            "peer": {
+              "kind": "idle"
+            }
+          },
+          "name": "serial3"
+        },
+        {
+          "model": {
+            "base": 4294098944,
+            "kind": "serial-port",
+            "peer": {
+              "kind": "frames",
+              "registers": [
+                [
+                  0,
+                  64848
+                ],
+                [
+                  12,
+                  514
+                ],
+                [
+                  16,
+                  694
+                ],
+                [
+                  84,
+                  1
+                ]
+              ]
+            }
+          },
+          "name": "serial4"
+        },
+        {
+          "model": {
+            "base": 4294103040,
+            "kind": "serial-port",
+            "peer": {
+              "kind": "none"
+            }
+          },
+          "name": "serial5"
+        },
+        {
+          "model": {
+            "base": 4294107136,
+            "kind": "serial-port",
+            "peer": {
+              "kind": "none"
+            }
+          },
+          "name": "serial6"
+        },
+        {
+          "model": {
+            "base": 4294021120,
+            "conversion_ticks": 16,
+            "kind": "adc",
+            "samples": [
+              176,
+              600,
+              1014,
+              1022,
+              842,
+              599,
+              59,
+              711,
+              439,
+              1021,
+              372,
+              600
+            ]
+          },
+          "name": "adc"
+        },
+        {
+          "model": {
+            "base": 4279508992,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block0"
+        },
+        {
+          "model": {
+            "base": 4279513088,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block1"
+        },
+        {
+          "model": {
+            "base": 4279529472,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block2"
+        },
+        {
+          "model": {
+            "base": 4279533568,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block3"
+        },
+        {
+          "model": {
+            "base": 4293980160,
+            "commands": [
+              {
+                "mask": 63,
+                "state": 39,
+                "status": 188,
+                "value": 1778516482,
+                "word": 184
+              },
+              {
+                "mask": 63,
+                "state": 32,
+                "status": 188,
+                "value": 16908802,
+                "word": 184
+              }
+            ],
+            "fixed": [],
+            "frames": null,
+            "idle": [
+              [
+                332,
+                8
+              ],
+              [
+                1556,
+                3801088
+              ]
+            ],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block4"
+        },
+        {
+          "model": {
+            "base": 4294029312,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block5"
+        },
+        {
+          "model": {
+            "base": 4294156288,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block6"
+        },
+        {
+          "model": {
+            "base": 4294160384,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [
+              [
+                0,
+                1
+              ]
+            ],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block7"
+        },
+        {
+          "model": {
+            "base": 4294176768,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block8"
+        },
+        {
+          "model": {
+            "base": 4294180864,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block9"
+        },
+        {
+          "model": {
+            "base": 4294184960,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block10"
+        },
+        {
+          "model": {
+            "base": 4294189056,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block11"
+        },
+        {
+          "model": {
+            "base": 4294193152,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block12"
+        },
+        {
+          "model": {
+            "base": 4294197248,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block13"
+        },
+        {
+          "model": {
+            "base": 4294201344,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block14"
+        },
+        {
+          "model": {
+            "base": 4294205440,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block15"
+        },
+        {
+          "model": {
+            "base": 4294209536,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block16"
+        },
+        {
+          "model": {
+            "base": 4294266880,
+            "commands": [],
+            "fixed": [],
+            "frames": {
+              "irq": 107,
+              "period_ticks": 880000,
+              "start": [
+                200,
+                268435456
+              ],
+              "stopped": [
+                216,
+                256
+              ]
+            },
+            "idle": [
+              [
+                0,
+                1
+              ]
+            ],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block17"
+        },
+        {
+          "model": {
+            "base": 4294270976,
+            "commands": [],
+            "fixed": [],
+            "frames": {
+              "irq": 108,
+              "period_ticks": 880000,
+              "start": [
+                200,
+                268435456
+              ],
+              "stopped": [
+                216,
+                256
+              ]
+            },
+            "idle": [
+              [
+                0,
+                1
+              ]
+            ],
+            "job": null,
+            "kind": "register-block",
+            "live_view_image": {
+              "lines": 640,
+              "ycbcr": [
+                16,
+                128,
+                128
+              ],
+              "scene": null,
+              "film": null
+            },
+            "size": 4096
+          },
+          "name": "block18"
+        },
+        {
+          "model": {
+            "base": 4294434816,
+            "commands": [],
+            "fixed": [
+              [
+                28,
+                16777472
+              ]
+            ],
+            "frames": null,
+            "idle": [
+              [
+                0,
+                2147483648
+              ]
+            ],
+            "job": {
+              "irq": 127,
+              "start": [
+                0,
+                1
+              ],
+              "status": [
+                32,
+                1
+              ],
+              "stop": null,
+              "ticks": 144000
+            },
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block19"
+        },
+        {
+          "model": {
+            "base": 4294438912,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [
+              [
+                0,
+                1
+              ],
+              [
+                64,
+                65537
+              ]
+            ],
+            "job": {
+              "irq": 128,
+              "start": [
+                4,
+                1
+              ],
+              "status": [
+                68,
+                1
+              ],
+              "stop": null,
+              "ticks": 880000
+            },
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block20"
+        },
+        {
+          "model": {
+            "base": 4294541312,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [
+              [
+                0,
+                1
+              ]
+            ],
+            "job": {
+              "irq": 130,
+              "start": [
+                4,
+                1
+              ],
+              "status": null,
+              "stop": [
+                0,
+                1
+              ],
+              "ticks": 144000
+            },
+            "kind": "register-block",
+            "size": 4096,
+            "work": {
+              "color": 4294209536,
+              "law": "develop",
+              "phase": [
+                2,
+                2
+              ],
+              "profile": "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1",
+              "white_balance": [
+                734,
+                604,
+                2284
+              ]
+            }
+          },
+          "name": "block21"
+        },
+        {
+          "model": {
+            "base": 4294545408,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block22"
+        },
+        {
+          "model": {
+            "base": 4294610944,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block23"
+        },
+        {
+          "model": {
+            "base": 4294619136,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block24"
+        },
+        {
+          "model": {
+            "base": 4294623232,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block25"
+        },
+        {
+          "model": {
+            "base": 4294627328,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block26"
+        },
+        {
+          "model": {
+            "base": 4294631424,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block27"
+        },
+        {
+          "model": {
+            "base": 4294635520,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block28"
+        },
+        {
+          "model": {
+            "base": 4294684672,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block29"
+        },
+        {
+          "model": {
+            "base": 4294688768,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [],
+            "job": null,
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block30"
+        },
+        {
+          "model": {
+            "base": 4294717440,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [
+              [
+                0,
+                1
+              ],
+              [
+                220,
+                16777472
+              ]
+            ],
+            "job": {
+              "irq": 131,
+              "start": [
+                4,
+                1
+              ],
+              "status": [
+                220,
+                1
+              ],
+              "stop": null,
+              "ticks": 144000
+            },
+            "kind": "register-block",
+            "size": 4096,
+            "work": {
+              "law": "resize",
+              "profile": "xpp-declared-xtrans-nearest-fff47-film-relative-wb-422-v1"
+            }
+          },
+          "name": "block31"
+        },
+        {
+          "model": {
+            "base": 4294721536,
+            "commands": [],
+            "fixed": [],
+            "frames": null,
+            "idle": [
+              [
+                0,
+                268435456
+              ],
+              [
+                60,
+                1048576
+              ]
+            ],
+            "job": {
+              "irq": 132,
+              "start": [
+                0,
+                1
+              ],
+              "status": [
+                60,
+                1
+              ],
+              "stop": null,
+              "ticks": 144000
+            },
+            "kind": "register-block",
+            "size": 4096
+          },
+          "name": "block32"
+        },
+        {
+          "model": {
+            "base": 4294262784,
+            "buffers": [
+              [
+                464,
+                [
+                  641739,
+                  0,
+                  1700693,
+                  0,
+                  150556,
+                  0,
+                  0,
+                  0,
+                  590,
+                  0,
+                  1676,
+                  0,
+                  158,
+                  0,
+                  0,
+                  0,
+                  480,
+                  0,
+                  1461,
+                  0,
+                  137,
+                  0,
+                  0,
+                  0,
+                  508,
+                  0,
+                  1312,
+                  0,
+                  115,
+                  0,
+                  0,
+                  0,
+                  521,
+                  0,
+                  1360,
+                  0,
+                  125,
+                  0,
+                  0,
+                  0,
+                  502,
+                  0,
+                  1369,
+                  0,
+                  120,
+                  0,
+                  0,
+                  0,
+                  632,
+                  0,
+                  1582,
+                  0,
+                  143,
+                  0,
+                  0,
+                  0,
+                  562,
+                  0,
+                  1466,
+                  0,
+                  124,
+                  0,
+                  0,
+                  0,
+                  527,
+                  0,
+                  1405,
+                  0,
+                  113,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  365,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              ]
+            ],
+            "irq": 106,
+            "kind": "statistics",
+            "period_ticks": 880000,
+            "scene": [
+              144736,
+              383321,
+              33695
+            ]
+          },
+          "name": "statistics"
+        },
+        {
+          "model": {
+            "base": 4294381568,
+            "irq": 124,
+            "kind": "face",
+            "run_ticks": 508800
+          },
+          "name": "face"
+        },
+        {
+          "model": {
+            "base": 4294737920,
+            "irq": 134,
+            "kind": "jpeg",
+            "run_ticks": 96000
+          },
+          "name": "jpeg-encoder"
+        },
+        {
+          "model": {
+            "base": 4294742016,
+            "irq": 135,
+            "kind": "jpeg-decoder",
+            "run_ticks": 96000
+          },
+          "name": "jpeg-decoder"
+        },
+        {
+          "model": {
+            "base": 4160749568,
+            "kind": "hdmi"
+          },
+          "name": "hdmi"
+        },
+        {
+          "model": {
+            "config": {
+              "base": 4292870144,
+              "command_ticks": 48,
+              "irq": 82,
+              "speed": 0,
+              "transaction_ticks": 6000
+            },
+            "kind": "usb"
+          },
+          "name": "usb"
+        },
+        {
+          "model": {
+            "kind": "i2c",
+            "options": {
+              "base": 4294045696,
+              "clock_hz": 266000000,
+              "fifo_depth": 8,
+              "irq": 68,
+              "tick_hz": 48000000
+            },
+            "parts": []
+          },
+          "name": "i2c0"
+        },
+        {
+          "model": {
+            "kind": "i2c",
+            "options": {
+              "base": 4294049792,
+              "clock_hz": 266000000,
+              "fifo_depth": 8,
+              "irq": 69,
+              "tick_hz": 48000000
+            },
+            "parts": [
+              {
+                "address": 1,
+                "little_endian": true,
+                "registers": {},
+                "select_mask": 255,
+                "width": 1
+              },
+              {
+                "address": 27,
+                "little_endian": true,
+                "registers": {},
+                "select_mask": 255,
+                "width": 1
+              },
+              {
+                "address": 28,
+                "little_endian": false,
+                "registers": {
+                  "1": 192,
+                  "2": 0,
+                  "3": 1,
+                  "4": 160,
+                  "5": 250,
+                  "6": 64
+                },
+                "select_mask": 255,
+                "width": 1
+              },
+              {
+                "address": 54,
+                "little_endian": false,
+                "registers": {
+                  "4": 21568
+                },
+                "select_mask": 255,
+                "width": 2
+              },
+              {
+                "address": 57,
+                "little_endian": true,
+                "registers": {
+                  "19": 0,
+                  "24": 0,
+                  "25": 0
+                },
+                "select_mask": 31,
+                "width": 1
+              }
+            ]
+          },
+          "name": "i2c1"
+        },
+        {
+          "model": {
+            "base": 4294328320,
+            "clear_bits": [
+              [
+                8192,
+                268435456
+              ]
+            ],
+            "kind": "display-output",
+            "scanout": [
+              0,
+              800000
+            ],
+            "set_bits": [
+              [
+                0,
+                65536
+              ]
+            ],
+            "size": 12288
+          },
+          "name": "display0"
+        },
+        {
+          "model": {
+            "irqs": [
+              112,
+              113,
+              114,
+              117,
+              118,
+              119
+            ],
+            "kind": "display-frames",
+            "period_ticks": 800000
+          },
+          "name": "display-frames"
+        },
+        {
+          "model": {
+            "base": 4294152192,
+            "hole": 4294152512,
+            "kind": "imaging-control",
+            "readout": {
+              "frame_period": 880000,
+              "irq": 98,
+              "offset": 192,
+              "ticks": 2605440
+            }
+          },
+          "name": "imaging"
+        },
+        {
+          "model": {
+            "base": 4294148096,
+            "frame_lines": [
+              [
+                0,
+                102
+              ],
+              [
+                1,
+                100
+              ]
+            ],
+            "interrupts": 4294152512,
+            "kind": "frame-sync",
+            "period_ticks": 880000,
+            "ready_after_clear_ticks": 1
+          },
+          "name": "frame-sync"
+        },
+        {
+          "model": {
+            "files": {
+              "/FFSYS.BIN": "sd-ffsys",
+              "/FFBOOT.BIN": "sd-ffboot",
+              "/OPACITY.BIN": "f1-default-preferences"
+            },
+            "format": {
+              "label": "CAMERA",
+              "max_dirty_sectors": 2097152,
+              "partition_start": 8192,
+              "sectors": 16777216,
+              "sectors_per_cluster": 64
+            },
+            "irq": 83,
+            "kind": "sd",
+            "options": {
+              "base": 4294516736,
+              "clock_ticks": 48,
+              "high_speed": true,
+              "ram_banks": [
+                [
+                  2147483648,
+                  1073741824
+                ]
+              ],
+              "ram_bytes": 1073741824,
+              "rca": 1,
+              "register_offset": 512,
+              "reset_ticks": 48,
+              "transfer_ticks": 480
+            },
+            "reset_channel": 0
+          },
+          "name": "sd"
+        },
+        {
+          "model": {
+            "base": 4294443008,
+            "irq": 129,
+            "kind": "decompressor"
+          },
+          "name": "decompressor"
+        },
+        {
+          "model": {
+            "base": 4294475776,
+            "irq": 92,
+            "kind": "renderer",
+            "copy_latency_divisor": 64
+          },
+          "name": "renderer"
+        },
+        {
+          "model": {
+            "kind": "key-lines",
+            "lines": [
+              [
+                0,
+                0,
+                0
+              ],
+              [
+                1,
+                0,
+                1
+              ]
+            ],
+            "poll_ticks": 48000
+          },
+          "name": "key-lines"
+        },
+        {
+          "model": {
+            "files": {},
+            "format": {
+              "label": "CAMERA",
+              "max_dirty_sectors": 2097152,
+              "partition_start": 8192,
+              "sectors": 16777216,
+              "sectors_per_cluster": 64
+            },
+            "irq": 84,
+            "kind": "sd",
+            "options": {
+              "base": 4294520832,
+              "clock_ticks": 48,
+              "high_speed": true,
+              "ram_banks": [
+                [
+                  2147483648,
+                  1073741824
+                ]
+              ],
+              "ram_bytes": 1073741824,
+              "rca": 1,
+              "register_offset": 256,
+              "reset_ticks": 48,
+              "transfer_ticks": 4800
+            },
+            "reset_channel": 1
+          },
+          "name": "sd1"
+        },
+        {
+          "model": {
+            "base": 4294111232,
+            "channels": 5,
+            "irq": 90,
+            "kind": "input-capture-sequence"
+          },
+          "name": "capture0"
+        },
+        {
+          "model": {
+            "base": 4294115328,
+            "channels": 3,
+            "irq": 91,
+            "kind": "input-capture-sequence"
+          },
+          "name": "capture1"
+        }
+      ]
+    },
+    "execution": {
+      "decoders": [
+        {
+          "initial": 0,
+          "choices": [
+            {
+              "processors": [
+                {
+                  "core": 0,
+                  "address": 0,
+                  "physical": 4293918720,
+                  "size": 32768,
+                  "permissions": 7
+                },
+                {
+                  "core": 1,
+                  "address": 0,
+                  "physical": 4293918720,
+                  "size": 32768,
+                  "permissions": 7
+                }
+              ],
+              "dma": [
+                {
+                  "address": 0,
+                  "physical": 4293918720,
+                  "size": 32768,
+                  "permissions": 3
+                }
+              ]
+            },
+            {
+              "processors": [
+                {
+                  "core": 0,
+                  "address": 0,
+                  "physical": 0,
+                  "size": 32768,
+                  "permissions": 7
+                },
+                {
+                  "core": 1,
+                  "address": 0,
+                  "physical": 0,
+                  "size": 32768,
+                  "permissions": 7
+                }
+              ],
+              "dma": [
+                {
+                  "address": 0,
+                  "physical": 0,
+                  "size": 32768,
+                  "permissions": 3
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "dma_mappings": [
+        {
+          "address": 32768,
+          "permissions": 3,
+          "physical": 32768,
+          "size": 1073709056
+        },
+        {
+          "address": 1073741824,
+          "permissions": 3,
+          "physical": 0,
+          "size": 1073741824
+        },
+        {
+          "address": 2147483648,
+          "permissions": 3,
+          "physical": 2147483648,
+          "size": 268435456
+        },
+        {
+          "address": 4293918720,
+          "physical": 4293918720,
+          "size": 32768,
+          "permissions": 1
+        },
+        {
+          "address": 4293971968,
+          "physical": 4293971968,
+          "size": 4096,
+          "permissions": 3
+        },
+        {
+          "address": 0,
+          "physical": 4293918720,
+          "size": 32768,
+          "permissions": 3
+        },
+        {
+          "address": 4026531840,
+          "physical": 4026531840,
+          "size": 134217728,
+          "permissions": 1
+        }
+      ],
+      "instructions_per_tick": [
+        4,
+        1
+      ],
+      "mappings": [
+        {
+          "address": 32768,
+          "core": 0,
+          "permissions": 7,
+          "physical": 32768,
+          "size": 1073709056
+        },
+        {
+          "address": 1073741824,
+          "core": 0,
+          "permissions": 7,
+          "physical": 0,
+          "size": 1073741824
+        },
+        {
+          "address": 2147483648,
+          "core": 0,
+          "permissions": 7,
+          "physical": 2147483648,
+          "size": 268435456
+        },
+        {
+          "address": 32768,
+          "core": 1,
+          "permissions": 7,
+          "physical": 32768,
+          "size": 1073709056
+        },
+        {
+          "address": 1073741824,
+          "core": 1,
+          "permissions": 7,
+          "physical": 0,
+          "size": 1073741824
+        },
+        {
+          "address": 2147483648,
+          "core": 1,
+          "permissions": 7,
+          "physical": 2147483648,
+          "size": 268435456
+        },
+        {
+          "core": 0,
+          "address": 4293918720,
+          "physical": 4293918720,
+          "size": 32768,
+          "permissions": 5
+        },
+        {
+          "core": 0,
+          "address": 4293971968,
+          "physical": 4293971968,
+          "size": 4096,
+          "permissions": 7
+        },
+        {
+          "core": 1,
+          "address": 4293918720,
+          "physical": 4293918720,
+          "size": 32768,
+          "permissions": 5
+        },
+        {
+          "core": 1,
+          "address": 4293971968,
+          "physical": 4293971968,
+          "size": 4096,
+          "permissions": 7
+        },
+        {
+          "core": 0,
+          "address": 0,
+          "physical": 4293918720,
+          "size": 32768,
+          "permissions": 7
+        },
+        {
+          "core": 1,
+          "address": 0,
+          "physical": 4293918720,
+          "size": 32768,
+          "permissions": 7
+        },
+        {
+          "core": 0,
+          "address": 4026531840,
+          "physical": 4026531840,
+          "size": 134217728,
+          "permissions": 5
+        },
+        {
+          "core": 1,
+          "address": 4026531840,
+          "physical": 4026531840,
+          "size": 134217728,
+          "permissions": 5
+        }
+      ],
+      "peripherals": [
+        {
+          "core": 0,
+          "address": 4160749568,
+          "physical": 4160749568,
+          "size": 133169152
+        },
+        {
+          "core": 0,
+          "address": 4293951488,
+          "physical": 4293951488,
+          "size": 20480
+        },
+        {
+          "core": 0,
+          "address": 4293976064,
+          "physical": 4293976064,
+          "size": 991232
+        },
+        {
+          "core": 1,
+          "address": 4160749568,
+          "physical": 4160749568,
+          "size": 133169152
+        },
+        {
+          "core": 1,
+          "address": 4293951488,
+          "physical": 4293951488,
+          "size": 20480
+        },
+        {
+          "core": 1,
+          "address": 4293976064,
+          "physical": 4293976064,
+          "size": 991232
+        }
+      ],
+      "processors": [
+        {
+          "model": "cortex-a7",
+          "mprofile": null,
+          "registers": [
+            [
+              "Pc",
+              4293918720
+            ],
+            [
+              "Pstate",
+              211
+            ]
+          ],
+          "released": true,
+          "rprofile": null
+        },
+        {
+          "model": "cortex-a7",
+          "mprofile": null,
+          "registers": [
+            [
+              "Pc",
+              4293918720
+            ],
+            [
+              "Pstate",
+              211
+            ]
+          ],
+          "released": true,
+          "rprofile": null
+        }
+      ],
+      "ram": [
+        {
+          "base": 0,
+          "size": 1073741824
+        },
+        {
+          "base": 2147483648,
+          "size": 268435456
+        },
+        {
+          "base": 4293918720,
+          "size": 32768
+        },
+        {
+          "base": 4293971968,
+          "size": 4096
+        },
+        {
+          "base": 4026531840,
+          "size": 134217728
+        }
+      ]
+    },
+    "firmware": {
+      "format": "raw",
+      "size": 147354988,
+      "sha256": "REPLACED_BY_PREPARE",
+      "mappings": [
+        {
+          "name": "xt2-reference-agate-rom",
+          "base": 4293918720,
+          "offset": 93778916,
+          "size": 32768,
+          "encoding": "raw",
+          "executable": true
+        },
+        {
+          "name": "stock-nor-xip",
+          "base": 4026531840,
+          "offset": 93811684,
+          "size": 53543304,
+          "encoding": "raw",
+          "executable": true
+        }
+      ]
+    },
+    "firmwareId": "xpro2-511",
+    "quantum": 4096,
+    "scanout": null,
+    "schema": 1,
+    "controls": {
+      "controls": [
+        {
+          "id": "selector.up",
+          "label": "Up",
+          "kind": "button",
+          "positions": [
+            "released",
+            "pressed"
+          ],
+          "initial": "released",
+          "unavailable": null
+        },
+        {
+          "id": "selector.down",
+          "label": "Down",
+          "kind": "button",
+          "positions": [
+            "released",
+            "pressed"
+          ],
+          "initial": "released",
+          "unavailable": null
+        },
+        {
+          "id": "selector.left",
+          "label": "Left",
+          "kind": "button",
+          "positions": [
+            "released",
+            "pressed"
+          ],
+          "initial": "released",
+          "unavailable": null
+        },
+        {
+          "id": "selector.right",
+          "label": "Right",
+          "kind": "button",
+          "positions": [
+            "released",
+            "pressed"
+          ],
+          "initial": "released",
+          "unavailable": null
+        },
+        {
+          "id": "disp_back_button",
+          "label": "DISP/BACK",
+          "kind": "button",
+          "positions": [
+            "released",
+            "pressed"
+          ],
+          "initial": "released",
+          "unavailable": null
+        },
+        {
+          "id": "menu_ok_button",
+          "label": "MENU/OK",
+          "kind": "button",
+          "positions": [
+            "released",
+            "pressed"
+          ],
+          "initial": "released",
+          "unavailable": null
+        }
+      ],
+      "circuits": [
+        {
+          "controls": [
+            "selector.up",
+            "selector.down",
+            "selector.left",
+            "selector.right",
+            "disp_back_button",
+            "menu_ok_button"
+          ],
+          "cases": [
+            {
+              "positions": [
+                "released",
+                "released",
+                "released",
+                "released",
+                "released",
+                "released"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 1022
+                }
+              ]
+            },
+            {
+              "positions": [
+                "pressed",
+                "released",
+                "released",
+                "released",
+                "released",
+                "released"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 15
+                }
+              ]
+            },
+            {
+              "positions": [
+                "released",
+                "pressed",
+                "released",
+                "released",
+                "released",
+                "released"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 62
+                }
+              ]
+            },
+            {
+              "positions": [
+                "released",
+                "released",
+                "pressed",
+                "released",
+                "released",
+                "released"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 133
+                }
+              ]
+            },
+            {
+              "positions": [
+                "released",
+                "released",
+                "released",
+                "pressed",
+                "released",
+                "released"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 221
+                }
+              ]
+            },
+            {
+              "positions": [
+                "released",
+                "released",
+                "released",
+                "released",
+                "pressed",
+                "released"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 706
+                }
+              ]
+            },
+            {
+              "positions": [
+                "released",
+                "released",
+                "released",
+                "released",
+                "released",
+                "pressed"
+              ],
+              "signals": [
+                {
+                  "kind": "analog",
+                  "node": "adc",
+                  "channel": 3,
+                  "value": 328
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "contactDriver": {
+      "poll_ticks": 48000,
+      "max_phase_ticks": 240000000,
+      "catalog": [
+        {
+          "id": "selector.up",
+          "label": "Up",
+          "kind": "button",
+          "supported": true
+        },
+        {
+          "id": "selector.down",
+          "label": "Down",
+          "kind": "button",
+          "supported": true
+        },
+        {
+          "id": "selector.left",
+          "label": "Left",
+          "kind": "button",
+          "supported": true
+        },
+        {
+          "id": "selector.right",
+          "label": "Right",
+          "kind": "button",
+          "supported": true
+        },
+        {
+          "id": "disp_back_button",
+          "label": "DISP/BACK",
+          "kind": "button",
+          "supported": true
+        },
+        {
+          "id": "menu_ok_button",
+          "label": "MENU/OK",
+          "kind": "button",
+          "supported": true
+        }
+      ],
+      "actuators": [
+        {
+          "id": "selector.up",
+          "momentary": true,
+          "states": [
+            {
+              "position": "released",
+              "ready": [
+                {
+                  "address": 14851328,
+                  "bytes": [
+                    24,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851349,
+                  "bytes": [
+                    0
+                  ],
+                  "pointer": null
+                }
+              ]
+            },
+            {
+              "position": "pressed",
+              "ready": [
+                {
+                  "address": 14851328,
+                  "bytes": [
+                    24,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851349,
+                  "bytes": [
+                    1
+                  ],
+                  "pointer": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "selector.down",
+          "momentary": true,
+          "states": [
+            {
+              "position": "released",
+              "ready": [
+                {
+                  "address": 14851356,
+                  "bytes": [
+                    25,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851377,
+                  "bytes": [
+                    0
+                  ],
+                  "pointer": null
+                }
+              ]
+            },
+            {
+              "position": "pressed",
+              "ready": [
+                {
+                  "address": 14851356,
+                  "bytes": [
+                    25,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851377,
+                  "bytes": [
+                    1
+                  ],
+                  "pointer": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "selector.left",
+          "momentary": true,
+          "states": [
+            {
+              "position": "released",
+              "ready": [
+                {
+                  "address": 14851384,
+                  "bytes": [
+                    26,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851405,
+                  "bytes": [
+                    0
+                  ],
+                  "pointer": null
+                }
+              ]
+            },
+            {
+              "position": "pressed",
+              "ready": [
+                {
+                  "address": 14851384,
+                  "bytes": [
+                    26,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851405,
+                  "bytes": [
+                    1
+                  ],
+                  "pointer": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "selector.right",
+          "momentary": true,
+          "states": [
+            {
+              "position": "released",
+              "ready": [
+                {
+                  "address": 14851412,
+                  "bytes": [
+                    27,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851433,
+                  "bytes": [
+                    0
+                  ],
+                  "pointer": null
+                }
+              ]
+            },
+            {
+              "position": "pressed",
+              "ready": [
+                {
+                  "address": 14851412,
+                  "bytes": [
+                    27,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851433,
+                  "bytes": [
+                    1
+                  ],
+                  "pointer": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "disp_back_button",
+          "momentary": true,
+          "states": [
+            {
+              "position": "released",
+              "ready": [
+                {
+                  "address": 14851496,
+                  "bytes": [
+                    21,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851517,
+                  "bytes": [
+                    0
+                  ],
+                  "pointer": null
+                }
+              ]
+            },
+            {
+              "position": "pressed",
+              "ready": [
+                {
+                  "address": 14851496,
+                  "bytes": [
+                    21,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851517,
+                  "bytes": [
+                    1
+                  ],
+                  "pointer": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "menu_ok_button",
+          "momentary": true,
+          "states": [
+            {
+              "position": "released",
+              "ready": [
+                {
+                  "address": 14851580,
+                  "bytes": [
+                    20,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851601,
+                  "bytes": [
+                    0
+                  ],
+                  "pointer": null
+                }
+              ]
+            },
+            {
+              "position": "pressed",
+              "ready": [
+                {
+                  "address": 14851580,
+                  "bytes": [
+                    20,
+                    0,
+                    0,
+                    0
+                  ],
+                  "pointer": null
+                }
+              ],
+              "expected": [
+                {
+                  "address": 14851601,
+                  "bytes": [
+                    1
+                  ],
+                  "pointer": null
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "interfaces": []
+    },
+    "card": {
+      "node": "sd",
+      "format": {
+        "label": "CAMERA",
+        "max_dirty_sectors": 2097152,
+        "partition_start": 8192,
+        "sectors": 16777216,
+        "sectors_per_cluster": 64
+      }
+    },
+    "storage": {
+      "cards": [
+        "sd",
+        "sd1"
+      ],
+      "nands": []
+    }
+  },
+  "schema": 1
+}
