@@ -601,7 +601,7 @@ pub fn register_all(
         }
         if w.options
             .keys()
-            .any(|k| !matches!(k.as_str(), "erased_tail" | "seed" | "medium"))
+            .any(|k| !matches!(k.as_str(), "erased_tail" | "seed" | "seed_file" | "medium"))
         {
             return Err("unknown flash storage option".into());
         }
@@ -642,6 +642,43 @@ pub fn register_all(
                     .and_then(|n| u8::try_from(n).ok())
                     .ok_or("invalid flash storage seed byte")?;
                 storage.seed(offset, value)?;
+            }
+        }
+        // Optional file-backed seeds: `seed_file = [{ offset = N, path = "..." }]`. The file's
+        // bytes are written at the flash offset before the run starts (private inputs stay in
+        // the named file, never in the manifest).
+        if let Some(files) = w.options.get("seed_file").and_then(toml::Value::as_array) {
+            for file in files {
+                let offset = file
+                    .get("offset")
+                    .and_then(toml::Value::as_integer)
+                    .and_then(|n| u64::try_from(n).ok())
+                    .ok_or("invalid flash storage seed_file offset")?;
+                let path = file
+                    .get("path")
+                    .and_then(toml::Value::as_str)
+                    .ok_or("invalid flash storage seed_file path")?;
+                // Optional slice of the file: `file_offset` (default 0) and `length` (default: rest).
+                let slice = |key: &str| {
+                    file.get(key)
+                        .map(|v| {
+                            v.as_integer()
+                                .and_then(|n| usize::try_from(n).ok())
+                                .ok_or_else(|| format!("invalid flash storage seed_file {key}"))
+                        })
+                        .transpose()
+                };
+                let bytes = std::fs::read(path)
+                    .map_err(|error| format!("flash storage seed_file {path}: {error}"))?;
+                let start = slice("file_offset")?.unwrap_or(0);
+                let end = match slice("length")? {
+                    Some(length) => start.checked_add(length),
+                    None => Some(bytes.len()),
+                };
+                let part = end
+                    .and_then(|end| bytes.get(start..end))
+                    .ok_or_else(|| format!("flash storage seed_file {path}: slice outside the file"))?;
+                storage.seed_bytes(offset, part)?;
             }
         }
         bus.register(
