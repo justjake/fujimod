@@ -141,6 +141,7 @@ impl State {
             polls: _,
             settled: _,
             active_slice: _,
+            code_write_deferred: _,
             parallel: _,
             decoders: _,
             memory_access: _,
@@ -224,6 +225,7 @@ impl State {
         self.processor_generations
             .clone_from(&saved.processor_generations);
         self.code_run = saved.code_run;
+        self.code_write_deferred = false;
         if let (Some(interrupts), Some(gic)) = (&mut self.interrupts, &saved.gic) {
             interrupts.gic.restore(gic)?;
         }

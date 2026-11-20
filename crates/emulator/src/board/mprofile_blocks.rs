@@ -65,6 +65,61 @@ pub(super) struct Blocks {
     /// Why: bookkeeping not settled, an instruction the observer must see,
     /// the run's budget, the peer's turn, a deadline.
     pub shortened_by: [u64; 5],
+    /// Scans of blocks entered before (`ScanCache`).
+    pub scans: ScanCache,
+}
+
+/// Host-only: the scans of recently entered blocks, by address. An entry
+/// holds the code it was made from and answers only for the same bytes, so
+/// rewritten code is scanned again. A scan is a function of the bytes alone.
+pub(super) struct ScanCache {
+    entries: Box<[ScanEntry]>,
+}
+#[derive(Clone, Copy)]
+struct ScanEntry {
+    pc: u64,
+    len: u8,
+    code: [u8; ScanCache::BYTES],
+    scan: Scan,
+}
+impl Default for ScanCache {
+    fn default() -> Self {
+        let empty = ScanEntry {
+            pc: u64::MAX,
+            len: 0,
+            code: [0; Self::BYTES],
+            scan: Scan { entries: 0, unit: 0, last: 0, returns_through_lr: false },
+        };
+        Self { entries: vec![empty; Self::SLOTS].into_boxed_slice() }
+    }
+}
+impl ScanCache {
+    const BYTES: usize = 44;
+    const SLOTS: usize = 4096;
+    #[inline]
+    fn slot(pc: u64) -> usize {
+        (pc >> 1) as usize & (Self::SLOTS - 1)
+    }
+    /// The scan of the block at `pc` when it was made from exactly `code`.
+    #[inline]
+    pub fn get(&self, pc: u64, code: &[u8]) -> Option<Scan> {
+        let entry = &self.entries[Self::slot(pc)];
+        (entry.pc == pc && entry.code[..usize::from(entry.len)] == *code).then_some(entry.scan)
+    }
+    /// The bytes of a block short enough to keep.
+    #[inline]
+    pub fn key(code: &[u8]) -> Option<(u8, [u8; Self::BYTES])> {
+        if code.is_empty() || code.len() > Self::BYTES {
+            return None;
+        }
+        let mut kept = [0; Self::BYTES];
+        kept[..code.len()].copy_from_slice(code);
+        Some((code.len() as u8, kept))
+    }
+    #[inline]
+    pub fn put(&mut self, pc: u64, (len, code): (u8, [u8; Self::BYTES]), scan: Scan) {
+        self.entries[Self::slot(pc)] = ScanEntry { pc, len, code, scan };
+    }
 }
 
 /// A device read that may be the head of a poll loop: a load from a
@@ -351,5 +406,28 @@ mod tests {
         assert!(scan(&code(&[0xf240])).is_err());
         assert!(scan(&[0x01]).is_err());
         assert!(scan(&[]).is_err());
+    }
+    #[test]
+    fn the_scan_cache_answers_only_for_the_bytes_it_was_given() {
+        let mut cache = ScanCache::default();
+        let first = code(&[0x3001, 0x4770]);
+        let scanned = scan(&first).unwrap();
+        assert_eq!(cache.get(0x100, &first), None);
+        cache.put(0x100, ScanCache::key(&first).unwrap(), scanned);
+        assert_eq!(cache.get(0x100, &first), Some(scanned));
+        // Other bytes, a shorter or longer block, another address.
+        assert_eq!(cache.get(0x100, &code(&[0x3001, 0x4718])), None);
+        assert_eq!(cache.get(0x100, &first[..2]), None);
+        assert_eq!(cache.get(0x100, &code(&[0x3001, 0x4770, 0x3001])), None);
+        assert_eq!(cache.get(0x102, &first), None);
+        // Two addresses of one slot: the later one replaces the earlier.
+        let other = 0x100 + (ScanCache::SLOTS as u64) * 2;
+        cache.put(other, ScanCache::key(&first[..2]).unwrap(), scan(&first[..2]).unwrap());
+        assert_eq!(cache.get(0x100, &first), None);
+        assert_eq!(cache.get(other, &first[..2]), scan(&first[..2]).ok());
+        // Empty and long blocks are not kept.
+        assert!(ScanCache::key(&[]).is_none());
+        assert!(ScanCache::key(&[0; ScanCache::BYTES + 1]).is_none());
+        assert!(ScanCache::key(&[0; ScanCache::BYTES]).is_some());
     }
 }

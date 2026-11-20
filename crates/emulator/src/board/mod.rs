@@ -215,6 +215,11 @@ struct State {
     // Consecutive resumes of this processor share unchanged external backing.
     // A peer run or host/DMA write requires resynchronizing Unicorn's code cache.
     code_run: Option<usize>,
+    // Host-only: a device wrote RAM during the running slice, none of it RAM
+    // the running M-profile processor maps. `code_run` is cleared when the
+    // slice ends instead of at the write, so that processor's translations
+    // and page copies, which the write cannot have touched, are kept.
+    code_write_deferred: bool,
     // Host-only: proves an M-profile processor's translations still match
     // memory after a peer ran, so its code cache survives the peer's slice.
     code_shadow: Vec<Option<code_shadow::CodeShadow>>,
@@ -572,6 +577,7 @@ impl Board {
             reset_contexts,
             exclusive,
             code_run: None,
+            code_write_deferred: false,
             code_shadow: (0..n).map(|_| None).collect(),
             blocks: (0..n).map(|_| None).collect(),
             run_entries: vec![0; n],
@@ -1388,6 +1394,7 @@ impl Board {
                 }
             }
             s.code_run = Some(core);
+            s.code_write_deferred = false;
             s.settled.clear();
             s.active_slice = Some(slice);
             let entered = s.instructions[core];
@@ -1463,6 +1470,9 @@ impl Board {
             // A block still pending when the run ends ran whole.
             s.settle_block(core, None)?;
             s.end_code_slice(&**cpu, core);
+            if std::mem::take(&mut s.code_write_deferred) {
+                s.code_run = None;
+            }
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {
                 return Err(error);
@@ -2418,6 +2428,7 @@ impl State {
             mprofile,
             exclusive,
             code_run,
+            code_write_deferred,
             decoders,
             active_slice,
             memory_access,
@@ -2446,6 +2457,7 @@ impl State {
             mprofile,
             exclusive,
             code_run,
+            code_write_deferred,
             cpus,
             decoders,
             active_core: active_slice.map(|s| s.core),
@@ -3020,6 +3032,7 @@ struct Services<'a> {
     cpus: &'a [Rc<dyn Cpu>],
     exclusive: &'a fujimod_emulator_cpu::exclusive::Shared,
     code_run: &'a mut Option<usize>,
+    code_write_deferred: &'a mut bool,
     decoders: &'a mut decoder::Decoders,
     active_core: Option<usize>,
     memory_access: bool,
@@ -3164,7 +3177,22 @@ impl Host for Services<'_> {
         if self.decoders.pending() {
             return Err("DMA requires committed memory decoding".into());
         }
-        *self.code_run = None;
+        // A write that lands during the slice of an M-profile processor and
+        // touches none of the RAM that processor maps cannot change its code
+        // or its page copies. Its slice continues; the mark follows when the
+        // slice ends, where every later reader finds it.
+        let foreign = self.execution_policy == ExecutionPolicy::Exact
+            && self.active_core.is_some_and(|core| {
+                *self.code_run == Some(core)
+                    && self.mprofile[core]
+                        .as_ref()
+                        .is_some_and(|p| !p.maps_physical(address, bytes.len()))
+            });
+        if foreign {
+            *self.code_write_deferred = true;
+        } else {
+            *self.code_run = None;
+        }
         self.memory
             .watch_transfer(write_watch::WriteSource::Dma, address, bytes, self.timeline.now());
         self.memory
@@ -3396,7 +3424,18 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         let settled = s.settled();
         let scan = {
             let mut buffer = Vec::new();
-            mprofile_blocks::scan(s.block_code(cpu, core, pc, bytes as usize, &mut buffer)?)?
+            let code = s.block_code(cpu, core, pc, bytes as usize, &mut buffer)?;
+            match s.blocks[core].as_ref().and_then(|blocks| blocks.scans.get(pc, code)) {
+                Some(scan) => scan,
+                None => {
+                    let scan = mprofile_blocks::scan(code)?;
+                    let kept = mprofile_blocks::ScanCache::key(code);
+                    if let (Some(kept), Some(blocks)) = (kept, s.blocks[core].as_mut()) {
+                        blocks.scans.put(pc, kept, scan);
+                    }
+                    scan
+                }
+            }
         };
         let (entries, last) = (scan.entries, scan.last);
         // A `bx lr` that ends the admission is an ordinary branch when LR is
