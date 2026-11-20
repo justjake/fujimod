@@ -23,6 +23,27 @@ impl Calibration {
         Ok(self)
     }
 }
+/// ADC response for a declared sRGB input without an optical exposure model.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NormalizedRgb {
+    pub full_scale: u16,
+    pub reference_white: [u16; 3],
+    pub color_sample_weights: [u8; 3],
+}
+
+impl NormalizedRgb {
+    pub fn validate(self) -> Result<Self, String> {
+        if self.full_scale == 0
+            || self.reference_white.contains(&0)
+            || self.color_sample_weights.contains(&0)
+        {
+            return Err("invalid normalized RGB sensor response".into());
+        }
+        Ok(self)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Exposure {
     pub seconds: f64,

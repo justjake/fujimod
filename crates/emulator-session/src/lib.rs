@@ -43,6 +43,7 @@ pub struct Session {
         BTreeMap<
             (String, usize, bool),
             fujimod_recording::cache::CaptureCache<
+                serde_json::Value,
                 Option<std::sync::Arc<fujimod_framebuffer::frame::Frame>>,
             >,
         >,

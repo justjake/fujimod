@@ -2,7 +2,7 @@
 //! its declared white luminance supplies absolute cd/m². Sensor signal is
 //! irradiance * integration time * analog gain, clipped at the ADC full well.
 use fujimod_emulator_devices::parts::optics::ApertureHandle;
-use fujimod_emulator_imaging::exposure::{Calibration, Exposure, ExposureHandle};
+use fujimod_emulator_imaging::exposure::{Calibration, Exposure, ExposureHandle, NormalizedRgb};
 use fujimod_emulator_imaging::scene::noise::SensorNoise;
 use fujimod_emulator_imaging::scene::{
     Frame, FramePixels, SensorFramesHandle, frames::SensorExposure,
@@ -207,13 +207,52 @@ impl ExposedFrame {
                 scale * calibration.full_scale as f64 * 256. / calibration.reference_white[c] as f64
             }),
         };
+        Self::with_response(
+            frame,
+            exposure,
+            aperture_squared,
+            calibration.color_sample_weights,
+            response_scale,
+        )
+    }
+
+    /// Form RGB ADC samples directly from the declared response. The unit
+    /// exposure is internal to the readout and is never published as metering.
+    pub(crate) fn from_normalized_rgb(
+        frame: Arc<Frame>,
+        calibration: NormalizedRgb,
+    ) -> Result<Self, String> {
+        if !matches!(frame.pixels, FramePixels::Rgb24(_)) || frame.noise.is_some() {
+            return Err("normalized preview requires noiseless sRGB input".into());
+        }
+        let response = calibration
+            .reference_white
+            .map(|white| f64::from(calibration.full_scale) * 256. / f64::from(white));
+        Self::with_response(
+            frame,
+            Exposure {
+                seconds: 1.,
+                analog_gain: 1.,
+            },
+            1.,
+            calibration.color_sample_weights,
+            response,
+        )
+    }
+
+    fn with_response(
+        frame: Arc<Frame>,
+        exposure: Exposure,
+        aperture_squared: f64,
+        color_sample_weights: [u8; 3],
+        response_scale: [f64; 3],
+    ) -> Result<Self, String> {
         if response_scale.iter().any(|v| !v.is_finite() || *v < 0.) {
             return Err("physical radiance exceeds finite sensor response".into());
         }
         let response = std::array::from_fn(|c| {
             std::array::from_fn(|v| {
-                libm::rint(srgb_linear(v as u8) * response_scale[c])
-                    .clamp(0., 16383.) as u16
+                libm::rint(srgb_linear(v as u8) * response_scale[c]).clamp(0., 16383.) as u16
             })
         });
         let signal = std::array::from_fn(|c| {
@@ -223,7 +262,7 @@ impl ExposedFrame {
             frame,
             exposure,
             aperture_squared,
-            color_sample_weights: calibration.color_sample_weights,
+            color_sample_weights,
             response,
             signal,
             response_scale,

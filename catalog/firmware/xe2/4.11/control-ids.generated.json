@@ -4048,7 +4048,8 @@
       "event": 557,
       "debug_key": "DELETE",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn2_button"
       },
       "scanner": {
         "index": 20,

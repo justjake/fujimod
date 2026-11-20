@@ -5,7 +5,7 @@ use super::exposure::ExposedFrame;
 use fujimod_emulator_devices::parts::optics::ApertureHandle;
 use fujimod_emulator_imaging::{
     analysis::ImageLayout,
-    exposure::{Calibration, ExposureHandle},
+    exposure::{Calibration, ExposureHandle, NormalizedRgb},
     exr2_isp::parameters::ParameterHandle,
     film::{Film, FilmPixels},
     scene::{SensorFramesHandle, frames::SensorImage},
@@ -13,13 +13,20 @@ use fujimod_emulator_imaging::{
 use std::sync::{Arc, Mutex};
 pub struct Renderer {
     frames: SensorFramesHandle,
-    exposure: ExposureHandle,
-    aperture: ApertureHandle,
-    calibration: Calibration,
+    input: Input,
     parameters: ParameterHandle,
     projection: Option<Arc<super::optics::Projection>>,
     previous: Option<Arc<Image>>,
 }
+enum Input {
+    Physical {
+        exposure: ExposureHandle,
+        aperture: ApertureHandle,
+        calibration: Calibration,
+    },
+    Normalized(NormalizedRgb),
+}
+
 /// The live front end's fixed gain between the sensor readout the statistics
 /// measure and the image it hands the film stage (Q10; 3.78x, within 0.1 EV of
 /// the 12-bit live readout's factor of four). An X70 in REC shows its preview
@@ -64,34 +71,63 @@ impl Renderer {
     ) -> Result<Self, String> {
         Ok(Self {
             frames,
-            exposure,
-            aperture,
-            calibration: calibration.validate()?,
+            input: Input::Physical {
+                exposure,
+                aperture,
+                calibration: calibration.validate()?,
+            },
             parameters,
             projection: projection.map(Arc::new),
             previous: None,
         })
     }
+    pub fn normalized_rgb(
+        calibration: NormalizedRgb,
+        frames: SensorFramesHandle,
+        parameters: ParameterHandle,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            frames,
+            input: Input::Normalized(calibration.validate()?),
+            parameters,
+            projection: None,
+            previous: None,
+        })
+    }
+    pub fn physical(&self) -> bool {
+        matches!(self.input, Input::Physical { .. })
+    }
     pub fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
-            "radiometric-renderer",
-            &(self.calibration, self.projection.as_ref().map(|p| p.spec())),
-        )
+        use fujimod_emulator_devices::checkpoint::Checkpoint;
+        match self.input {
+            Input::Physical { calibration, .. } => Checkpoint::encode(
+                "radiometric-renderer",
+                &(calibration, self.projection.as_ref().map(|p| p.spec())),
+            ),
+            Input::Normalized(calibration) => {
+                Checkpoint::encode("normalized-rgb-renderer", &calibration)
+            }
+        }
     }
     pub fn validate_checkpoint(
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let (calibration, projection): (
-            Calibration,
-            Option<fujimod_emulator_imaging::optics::Spec>,
-        ) = saved.decode("radiometric-renderer")?;
-        if calibration != self.calibration
-            || projection.as_ref() != self.projection.as_ref().map(|p| p.spec())
-            || !saved.blobs().is_empty()
-            || !saved.children().is_empty()
-        {
-            return Err("radiometric renderer checkpoint calibration differs".into());
+        let matches = match self.input {
+            Input::Physical { calibration, .. } => {
+                let (stored, projection): (
+                    Calibration,
+                    Option<fujimod_emulator_imaging::optics::Spec>,
+                ) = saved.decode("radiometric-renderer")?;
+                stored == calibration
+                    && projection.as_ref() == self.projection.as_ref().map(|p| p.spec())
+            }
+            Input::Normalized(calibration) => {
+                saved.decode::<NormalizedRgb>("normalized-rgb-renderer")? == calibration
+            }
+        };
+        if !matches || !saved.blobs().is_empty() || !saved.children().is_empty() {
+            return Err("renderer checkpoint response differs".into());
         }
         Ok(())
     }
@@ -104,17 +140,36 @@ impl Renderer {
         Ok(())
     }
     pub fn fingerprint(&self) -> serde_json::Value {
-        serde_json::json!({"calibration":self.calibration,"projection":self.projection.as_ref().map(|p|p.spec())})
+        match self.input {
+            Input::Physical { calibration, .. } => serde_json::json!({
+                "calibration":calibration,"projection":self.projection.as_ref().map(|p|p.spec())
+            }),
+            Input::Normalized(calibration) => serde_json::json!({"normalized_rgb":calibration}),
+        }
     }
     pub fn capture(&mut self) -> Result<Option<Arc<Image>>, String> {
-        let Some(mut exposure) = ExposedFrame::capture(
-            &self.frames,
-            &self.exposure,
-            &self.aperture,
-            self.calibration,
-        )?
-        else {
-            return Ok(None);
+        let mut exposure = match &self.input {
+            Input::Physical {
+                exposure,
+                aperture,
+                calibration,
+            } => {
+                let Some(sample) =
+                    ExposedFrame::capture(&self.frames, exposure, aperture, *calibration)?
+                else {
+                    return Ok(None);
+                };
+                sample
+            }
+            Input::Normalized(calibration) => {
+                let frame = self
+                    .frames
+                    .lock()
+                    .map_err(|_| "sensor input poisoned")?
+                    .current
+                    .clone();
+                ExposedFrame::from_normalized_rgb(frame, *calibration)?
+            }
         };
         exposure.focus_shift_mm = self.projection.as_ref().map(|p| p.focus()).transpose()?;
         exposure.view = self
@@ -136,7 +191,12 @@ impl Renderer {
             p.words[0x204 / 4] & 32767,
         ]
         .map(|wb| {
-            let gained = u64::from(wb) * digital * LIVE_FRONT_END_GAIN_Q10;
+            let front_end = if self.physical() {
+                LIVE_FRONT_END_GAIN_Q10
+            } else {
+                1024
+            };
+            let gained = u64::from(wb) * digital * front_end;
             ((gained + (1 << 19)) >> 20).min(32767) as u32
         });
         if let Some(old) = &self.previous

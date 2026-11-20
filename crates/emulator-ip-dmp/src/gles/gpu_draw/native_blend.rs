@@ -256,8 +256,9 @@ pub(super) fn render(
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pass.set_viewport(0., 0., extent.width as f32, extent.height as f32, 0., 1.);
         for (offset, draw) in draws.iter().enumerate() {
+            let [x, y, width, height] = draw.state.viewport.rectangle();
+            pass.set_viewport(x, y, width, height, 0., 1.);
             let scissor = draw.state.scissor;
             let left = u32::from(scissor.left).min(extent.width);
             let top = u32::from(scissor.top).min(extent.height);
