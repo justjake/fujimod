@@ -265,8 +265,9 @@ impl Board {
                 .into());
         }
         if !self.physical_memory.watching_writes() {
-            // The board store hook (`written`) exists on every core when an M-profile core is
-            // present; otherwise each core gets a watch-only store hook.
+            // The board store hook (`written`) serves every core when an M-profile core is
+            // present (installed on demand while a watch is armed on cores that otherwise do not
+            // need it); otherwise each core gets a watch-only store hook.
             let board_hooked = self
                 .cpus
                 .iter()

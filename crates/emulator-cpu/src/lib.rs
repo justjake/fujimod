@@ -590,6 +590,12 @@ pub trait Cpu {
             }
         }
     }
+    /// How many hooks are installed on this processor, when the backend
+    /// installs each one natively. An owner uses it to see observers it did
+    /// not install itself.
+    fn hook_count(&self) -> Option<usize> {
+        None
+    }
     /// Host address of the external backing this processor maps at `address`,
     /// when one mapping covers all `bytes`. Reads through it see what the
     /// processor's own memory reads see. The pointer stays valid until the

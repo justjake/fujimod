@@ -73,6 +73,14 @@ pub(super) struct Watch {
     core: usize,
     addresses: Vec<u64>,
 }
+/// `entered` for a hook that spans every watched address of its processor.
+unsafe fn entered_among(pc: u64, size: u32, data: *mut c_void) {
+    let watch = unsafe { &*data.cast::<Watch>() };
+    // Watched addresses are sorted and unique (`watch_pcs`).
+    if watch.addresses.binary_search(&pc).is_ok() {
+        unsafe { entered(pc, size, data) }
+    }
+}
 unsafe fn entered(pc: u64, _: u32, data: *mut c_void) {
     let watch = unsafe { &*data.cast::<Watch>() };
     let mut entries = watch.entries.borrow_mut();
@@ -218,6 +226,25 @@ impl Board {
             let data = (&**self.watches.last().unwrap() as *const Watch)
                 .cast_mut()
                 .cast();
+            if super::observes_every_instruction(&*self.cpus[core]) {
+                // Every entry of this processor already reaches an observer,
+                // and each further hook is one more list entry to pass on
+                // every instruction. One hook over the watched span, which
+                // looks the entry up, observes the same entries as one hook
+                // per address.
+                let hook = unsafe {
+                    self.cpus[core].install_hook(Hook::Instruction {
+                        callback: entered_among,
+                        data,
+                        range: HookRange::Inclusive {
+                            begin: addresses[0],
+                            end: addresses[addresses.len() - 1],
+                        },
+                    })?
+                };
+                self.hooks.push((core, hook));
+                continue;
+            }
             for &pc in addresses {
                 // The boxed context stays at this address until Board drops
                 // its CPU hooks; its CPU/state links are weak and serialized.
