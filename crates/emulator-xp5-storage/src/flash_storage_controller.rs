@@ -453,11 +453,13 @@ impl Device for Controller {
                     self.flash_storage.lock().unwrap().session.program_mode =
                         self.part.pio(v as u8) == Some(Command::Program);
                 }
-                if o == 0x74 {
-                    self.check_aperture_read()
-                } else {
-                    Ok(())
+                if o == 0x44 || o == 0x74 {
+                    // Configuring is always accepted; a setup the part cannot answer
+                    // only fails when the aperture is actually read through it.
+                    self.flash_storage.lock().unwrap().session.aperture_fault =
+                        self.check_aperture_read().err();
                 }
+                Ok(())
             }
         };
         if let Err(e) = result {
@@ -655,5 +657,29 @@ mod tests {
         controller.state.regs[0x74 / 4] = 10;
         assert!(controller.check_aperture_read().is_err());
         assert_eq!(Part::from_jedec(0xef4018).unwrap_err(), "unsupported serial NOR part 0xef4018");
+    }
+
+    #[test]
+    fn unsupported_setup_is_latched_and_refused_only_when_the_aperture_is_read() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let (storage, mut controller) = mt35xu();
+        let medium = crate::flash_storage::Medium::Nor(storage.clone());
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // Default quad setup (0xec, 10 dummies): configuring is accepted and latched.
+        controller.write(&mut cx, 0xff90a044, 4, 0xec);
+        controller.write(&mut cx, 0xff90a074, 4, 10);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(controller.read(&mut cx, 0xff90a074, 4), 10);
+        // Reading through that setup is refused.
+        assert!(medium.read_device(0, 4).unwrap_err().contains("0xec with 10"));
+        // Reprogramming to a setup the part answers clears the fault.
+        controller.write(&mut cx, 0xff90a044, 4, 0xfd);
+        controller.write(&mut cx, 0xff90a074, 4, 20);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(medium.read_device(0, 4).unwrap(), [0, 1, 2, 3]);
+        // A bad dummy count alone is also refused at read time.
+        controller.write(&mut cx, 0xff90a074, 4, 10);
+        assert!(medium.read_device(0, 4).unwrap_err().contains("0xfd with 10"));
     }
 }
