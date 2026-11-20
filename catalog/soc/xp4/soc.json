@@ -582,8 +582,8 @@
     "blocks": {
       "lcdc0": {
         "kind": "display",
-        "picture_layout": null,
-        "video_layout": null
+        "picture_layout": "abgr8888-straight",
+        "video_layout": "yycbcr422"
       },
       "lcdc1": {
         "kind": "display",
@@ -664,6 +664,8 @@
                 112,
                 113
               ],
+              "picture_layout": "abgr8888-straight",
+              "video_layout": "yycbcr422",
               "basis": "Declared catalog input."
             },
             {
