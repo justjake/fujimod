@@ -113,6 +113,22 @@ struct State {
     generation: u64,
 }
 
+/// Diagnostic only: the first START to each (controller, seven-bit address, outcome) is logged to
+/// standard error, so a run shows which addresses the guest probes and whether anything answered.
+/// It reads no guest state and changes no behavior.
+fn note_address(base: u64, address: u8, ack: bool) {
+    use std::collections::BTreeSet;
+    use std::sync::{Mutex, OnceLock};
+    static SEEN: OnceLock<Mutex<BTreeSet<(u64, u8, bool)>>> = OnceLock::new();
+    let seen = SEEN.get_or_init(|| Mutex::new(BTreeSet::new()));
+    if seen.lock().is_ok_and(|mut seen| seen.insert((base, address, ack))) {
+        eprintln!(
+            "FUJIMOD XP5 i2c: controller {base:#x} address {address:#04x} {}",
+            if ack { "acknowledged" } else { "not acknowledged" }
+        );
+    }
+}
+
 pub struct Controller<B: Bus> {
     options: Options,
     bus: B,
@@ -285,6 +301,7 @@ impl<B: Bus> Controller<B> {
             Operation::Address(byte) => {
                 let read = byte & 1 != 0;
                 let ack = self.bus.start(u16::from(byte >> 1), read);
+                note_address(self.options.base, byte >> 1, ack);
                 s.phase = match (ack, read) {
                     (false, _) => Phase::NotAcknowledged,
                     (true, false) => Phase::Transmitting,

@@ -1,7 +1,9 @@
 //! Checked board wiring for I2C controllers and their declared targets.
 use fujimod_emulator_ip::socionext::i2c::{Controller, Options};
 use fujimod_emulator_parts_io::i2c::{Registers, RetainedRegisters, Target, Targets};
-use fujimod_emulator_parts_io::{power_controller::FuelGauge, tmd2772::Proximity};
+use fujimod_emulator_parts_io::{
+    lsm6ds_i2c::Lsm6ds, power_controller::FuelGauge, tmd2772::Proximity,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -24,6 +26,11 @@ enum Part {
     FuelGauge,
     RetainedRegisters,
     Tmd2772Proximity,
+    /// LSM6DS-class accelerometer; `acceleration` is a declared raw sample (x, y, z), default zero.
+    Lsm6ds {
+        #[serde(default)]
+        acceleration: [i16; 3],
+    },
 }
 
 pub fn build(base: u64, size: u64, options: &toml::Table) -> Result<Controller<Targets>, String> {
@@ -42,6 +49,7 @@ pub fn build(base: u64, size: u64, options: &toml::Table) -> Result<Controller<T
                 Part::FuelGauge => Box::new(FuelGauge::new()) as Box<dyn Registers>,
                 Part::RetainedRegisters => Box::new(RetainedRegisters::default()),
                 Part::Tmd2772Proximity => Box::new(Proximity::default()),
+                Part::Lsm6ds { acceleration } => Box::new(Lsm6ds::new(acceleration)),
             },
         })
         .collect();
@@ -68,7 +76,8 @@ mod tests {
         let wiring = "interrupt = 289\nbyte_ns = 1000000\n\
             [[targets]]\naddress = 0x36\npart = { kind = 'fuel-gauge' }\n\
             [[targets]]\naddress = 0x39\npart = { kind = 'tmd2772-proximity' }\n\
-            [[targets]]\naddress = 0x66\npart = { kind = 'retained-registers' }\n";
+            [[targets]]\naddress = 0x66\npart = { kind = 'retained-registers' }\n\
+            [[targets]]\naddress = 0x6a\npart = { kind = 'lsm6ds', acceleration = [1, 2, 3] }\n";
         assert!(build(0xff925000, 0x1000, &options(wiring)).is_ok());
         assert!(build(0xff925000, 0x2000, &options(wiring)).is_err());
         assert!(build(0xff926000, 0x1000, &options("interrupt = 290\nbyte_ns = 1000000")).is_ok());
