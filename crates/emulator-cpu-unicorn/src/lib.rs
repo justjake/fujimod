@@ -31,6 +31,8 @@ mod actlr_tests;
 #[cfg(test)]
 mod alignment_tests;
 #[cfg(test)]
+mod dual_architecture_tests;
+#[cfg(test)]
 mod code_store_tests;
 pub mod jit;
 pub mod loop_proof;

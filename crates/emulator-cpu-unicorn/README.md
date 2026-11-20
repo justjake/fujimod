@@ -3,8 +3,11 @@
 Its `sys/` crate, `fujimod-unicorn-sys`, builds the pinned Unicorn source as a
 static ARM/AArch64 archive during Cargo builds and links the archive into each
 executable or extension. It has no features, so the archive is compiled once
-per profile. There is no runtime Unicorn library selection. Initialize the
-source submodule once in a fresh checkout:
+per profile. There is no runtime Unicorn library selection. One archive carries
+both: `dual_architecture_tests` opens a Cortex-A7 and an ArmV8-A engine in one
+process and steps them alternately, so a link that lost either architecture
+fails the crate's tests. Initialize the source submodule once in a fresh
+checkout:
 
 ```sh
 git submodule update --init -- crates/emulator-cpu-unicorn/vendor/unicorn
