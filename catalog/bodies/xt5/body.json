@@ -64,6 +64,197 @@
           "threshold": null
         }
       ]
+    },
+    {
+      "id": "controls-adc-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 1,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 2,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 7,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-11",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 11,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-12",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 12,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-13",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 13,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 14,
+          "threshold": null
+        }
+      ]
+    },
+    {
+      "id": "controls-power-controller-34",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "controls-power-controller-35",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "controls-power-controller-36",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "serial_status",
+          "block_id": "spi8",
+          "register": 54,
+          "mask": 15
+        }
+      ]
+    },
+    {
+      "id": "controls-power-controller-00",
+      "kind": "control",
+      "signals": []
+    },
+    {
+      "id": "controls-gpio-0-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 0,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 116
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 1,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 117
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-13",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 14,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-encoder-0-9-0-10",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 9,
+          "active_level": true
+        },
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 10,
+          "active_level": true
+        }
+      ]
     }
   ],
   "parts": [
