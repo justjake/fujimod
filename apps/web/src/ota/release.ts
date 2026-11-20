@@ -16,9 +16,22 @@ const layerPath = (path: string) =>
   /^(?:\/[^/\\]+)+$/.test(path) &&
   !Array.from({ length: path.length }, (_, i) => path.charCodeAt(i)).some((code) => code < 0x20);
 
-/** The card directory of a firmware's release: the firmware id in upper case. */
+/** A firmware's release identity: the firmware id in upper case. */
 export function sdBootV2Firmware(id: string) {
   return id.toUpperCase();
+}
+
+/**
+ * A release's card directory under `FUJIMOD/SYSTEM/`: an 8.3 name, which the
+ * camera's own file system needs. It is the release identity when that has at
+ * most eight characters, otherwise the identity without its hyphens
+ * (`X100T-111` uses `X100T111`).
+ */
+export function sdBootV2SystemFolder(firmware: string) {
+  const folder = firmware.length <= 8 ? firmware : firmware.replaceAll('-', '');
+  if (!folder || folder.length > 8 || folder.includes('.'))
+    throw Error(`The ${firmware} release has no SD card folder name.`);
+  return folder;
 }
 
 /** The 8.3 store name: the first eight SHA-256 hex digits, a dot and the next three, upper case. */
@@ -88,7 +101,7 @@ export async function loadOtaRelease(
   );
 }
 
-/** The first-install system manifest, `FUJIMOD/SYSTEM/<FIRMWARE>/A.JSN`. */
+/** The first-install system manifest, `FUJIMOD/SYSTEM/<folder>/A.JSN`. */
 export function sdBootV2FirstInstallManifest(release: SdBootV2Release) {
   return {
     gen: 1,
@@ -101,7 +114,7 @@ export function sdBootV2FirstInstallManifest(release: SdBootV2Release) {
   };
 }
 
-/** The first-install boot state, `FUJIMOD/SYSTEM/<FIRMWARE>/STATE.JSN`. */
+/** The first-install boot state, `FUJIMOD/SYSTEM/<folder>/STATE.JSN`. */
 export function sdBootV2FirstInstallState() {
   return {
     a: { gen: 1, attempts: 0, confirmed: false },

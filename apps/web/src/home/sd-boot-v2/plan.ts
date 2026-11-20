@@ -4,13 +4,14 @@ import {
   sdBootV2FirstInstallManifest,
   sdBootV2FirstInstallState,
   sdBootV2Firmware,
+  sdBootV2SystemFolder,
   storeName,
   type SdBootV2Release,
 } from '../../ota/release';
 
 /** A camera the release supports, as offered in the download checklist. */
 export interface CardCamera {
-  /** Card directory under `FUJIMOD/SYSTEM/`, such as `X70-110`. */
+  /** Release identity, such as `X70-110`. */
   id: string;
   model: string;
   version: string;
@@ -149,7 +150,7 @@ export function sdBootV2Plan(input: CardPlanInput): { files: PlannedFile[]; prob
       problems.push(`The ${camera.model} release files are unavailable.`);
       continue;
     }
-    const system = `FUJIMOD/SYSTEM/${camera.id}`;
+    const system = `FUJIMOD/SYSTEM/${sdBootV2SystemFolder(camera.id)}`;
     files.push(
       { path: `${system}/A.JSN`, from: 'data', data: json(sdBootV2FirstInstallManifest(release)) },
       { path: `${system}/STATE.JSN`, from: 'data', data: json(sdBootV2FirstInstallState()) },
