@@ -219,3 +219,115 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
         }
     }
 }
+
+/// An AArch64 processor polls the same device through a read helper:
+/// 0x14000: ldr w20,[x19]; loop: str w1,[x19]; poll: mov x0,x19; bl read;
+/// cmp w0,w20; b.eq poll; mov w20,w0; add x21,x21,#1; b loop.
+/// 0x14040 read: ldr w0,[x0]; ret
+fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) -> Outcome {
+    use factory::*;
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![Processor {
+            model: Model::ArmV8A,
+            registers: vec![
+                (Register::Pc, 0x14000),
+                (Register::Pstate, 0x3c5),
+                (Register::X(19), 0x8000000),
+            ],
+            released: true,
+            rprofile: None,
+            mprofile: None,
+        }],
+        dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
+        ram: vec![Ram {
+            base: 0x10000,
+            size: 0x8000,
+        }],
+        mappings: vec![MemoryMap {
+            core: 0,
+            address: 0x10000,
+            physical: 0x10000,
+            size: 0x8000,
+            permissions: 7,
+        }],
+        peripherals: vec![Peripheral {
+            core: 0,
+            address: 0x8000000,
+            physical: 0xff910000,
+            size: 0x4000,
+        }],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    };
+    let probe = Arc::new(Mutex::new(Probe::default()));
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(0xff910000, 4, Box::new(Transfer(probe.clone(), stable)))
+        .unwrap();
+    let mut board = graph
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    board.set_poll_loops(fast_forward);
+    let words = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
+    board
+        .write_physical(
+            0x14000,
+            &words(&[
+                0xb9400274, 0xb9000261, 0xaa1303e0, 0x9400000d, 0x6b14001f, 0x54ffffa0,
+                0x2a0003f4, 0x910006b5, 0x17fffff9,
+            ]),
+        )
+        .unwrap();
+    board
+        .write_physical(0x14040, &words(&[0xb9400000, 0xd65f03c0]))
+        .unwrap();
+    for &window in windows {
+        board.run_until(window, quantum).unwrap();
+    }
+    let cpu = board.cpu(0).unwrap();
+    let registers = [Register::X(0), Register::X(20), Register::X(21), Register::X(30), Register::Pc]
+        .into_iter()
+        .map(|r| scalar(cpu, r).unwrap())
+        .collect();
+    let s = board.state.borrow();
+    Outcome {
+        state: board.state(),
+        registers,
+        skips: s.settled.skips,
+        full: s.settled.full,
+        accesses: board.mmio_callback_counts.borrow()[0],
+        served: probe.lock().unwrap().count,
+        left_out: s.polls.reads[0],
+    }
+}
+
+#[test]
+fn an_aarch64_poll_loop_through_a_read_helper_is_fast_forwarded_with_the_same_result() {
+    for quantum in [1, 7, 100] {
+        let reference = run_a64(quantum, &[9000], true, false);
+        let rounds = reference.registers[2];
+        assert!((25..=31).contains(&rounds), "rounds {rounds}");
+        assert_eq!(reference.left_out, 0);
+        assert_eq!(reference.accesses, reference.served + rounds + 1);
+        for windows in [&[9000][..], &[333, 334, 2111, 9000][..], &[1, 2, 3, 4, 5, 6, 7, 9000][..]] {
+            let got = run_a64(quantum, windows, true, true);
+            assert_eq!(got.registers, reference.registers, "quantum {quantum}");
+            assert!(got.state == reference.state, "quantum {quantum}: board state differs");
+            assert_eq!(got.accesses, reference.accesses, "quantum {quantum}");
+            assert_eq!(got.served + got.left_out, reference.served, "quantum {quantum}");
+            assert!(
+                got.left_out > 4 * got.served,
+                "quantum {quantum}: served {}, left out {}",
+                got.served,
+                got.left_out
+            );
+            // A register that is not declared stable is read every round.
+            let all = run_a64(quantum, windows, false, true);
+            assert!(all.state == reference.state);
+            assert_eq!((all.served, all.left_out), (reference.served, 0));
+        }
+    }
+}

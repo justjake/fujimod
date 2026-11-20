@@ -4,6 +4,7 @@ pub mod armv7a;
 pub mod bus;
 mod code_shadow;
 mod mprofile_blocks;
+mod poll_loops;
 #[cfg(test)]
 mod mprofile_blocks_tests;
 #[cfg(test)]
@@ -222,6 +223,8 @@ struct State {
     // Host-only: entries the instruction observer saw in the current engine
     // run, as the engine's own counter counts them.
     run_entries: Vec<u64>,
+    // Host-only: poll loop fast-forward of AArch64 processors.
+    polls: poll_loops::Polls,
     // Host-only: lets an instruction observer skip interrupt bookkeeping
     // that provably has nothing to do.
     settled: Settled,
@@ -572,6 +575,7 @@ impl Board {
             code_shadow: (0..n).map(|_| None).collect(),
             blocks: (0..n).map(|_| None).collect(),
             run_entries: vec![0; n],
+            polls: poll_loops::Polls::new(n),
             settled: Settled::new(),
             active_slice: None,
             parallel: None,
@@ -1391,6 +1395,7 @@ impl Board {
             drop(s);
             self.sync_store_hook(core)?;
             let blocks = self.sync_block_mode(core, budget as u64)?;
+            self.sync_poll_loops(core, entered, budget as u64);
             let cpu = &self.cpus[core];
             // The exact budget ends at the first device/DMA/processor event
             // or runnable-peer turn; those boundaries end the stable window.
@@ -1609,7 +1614,34 @@ impl Board {
     pub fn set_block_execution(&self, on: bool) {
         self.block_execution.set(on);
     }
-    /// Allow or forbid the fast-forward of poll loops (`mprofile_blocks::Poll`).
+    /// Before an AArch64 processor runs: whether this run may fast-forward a
+    /// poll loop (`poll_loops`), and where its entry budget ends. It needs
+    /// exact ordered execution, an engine whose entry count is exact inside
+    /// a callback and whose limit a callback can lower, and nothing else
+    /// that observes the processor's instructions or stores.
+    fn sync_poll_loops(&self, core: usize, entered: u64, budget: u64) {
+        let cpu = &self.cpus[core];
+        let features = cpu.features();
+        let mut s = self.state.borrow_mut();
+        let active = self.poll_loops.get()
+            && cpu.model() == fujimod_emulator_cpu::Model::ArmV8A
+            && features.instruction_progress
+            && features.tighten_instruction_limit
+            && s.execution_policy == ExecutionPolicy::Exact
+            && s.parallel.is_none()
+            && s.entry_points[core].is_empty()
+            && !s.memory.watching_writes()
+            && self.watches.is_empty()
+            && self.discovery_stub_contexts.is_empty()
+            && self.isolated_core.get().is_none()
+            && self.read_set.try_borrow().is_ok_and(|r| r.is_none())
+            && !self.continuation.as_ref().is_some_and(|watch| watch.active);
+        s.polls.active[core] = active;
+        s.polls.last[core] = None;
+        s.polls.run_end[core] = entered.saturating_add(budget);
+    }
+    /// Allow or forbid the fast-forward of poll loops (`mprofile_blocks::Poll`,
+    /// `poll_loops`).
     /// Both ways give the same guest results; this exists to compare them.
     pub fn set_poll_loops(&self, on: bool) {
         self.poll_loops.set(on);
@@ -1872,6 +1904,16 @@ impl Drop for Board {
                     );
                 }
             }
+            for (core, skips) in s.polls.skips.iter().enumerate() {
+                if *skips != 0 || s.polls.refused[core] != 0 {
+                    eprintln!(
+                        "FUJIMOD execution counters: CPU{core} poll-fast-forwards={skips} poll-reads-left-out={} rounds-refused={} last-refused(pc, entries, link)={:x?}",
+                        s.polls.reads[core],
+                        s.polls.refused[core],
+                        s.polls.refused_at[core]
+                    );
+                }
+            }
             for (core, cpu) in self.cpus.iter().enumerate() {
                 if let Ok(counters) = cpu.exit_counters() {
                     let row = counters
@@ -1885,6 +1927,7 @@ impl Drop for Board {
             }
         }
         access_histogram::report();
+        fujimod_emulator_cpu_unicorn::aprofile::store_histogram::report();
         let _ = self.continuation_end();
         let _ = self.release_store_watch();
         // The board exclusively owns processors; bindings hold only Weak
@@ -1956,6 +1999,7 @@ impl State {
         pc: u64,
         exit: Exit,
     ) -> Result<(), String> {
+        self.polls.last[core] = None;
         match exit {
             Exit::BeforeInstruction(word) => {
                 let pc = scalar(cpu, Register::Pc)?;
@@ -2167,6 +2211,7 @@ impl State {
     fn hint(&mut self, core: usize, hint: fujimod_emulator_cpu::Hint) {
         use fujimod_emulator_cpu::Hint;
         self.settled.clear();
+        self.polls.last[core] = None;
         match hint {
             Hint::WaitForInterrupt => {
                 self.waiting[core] = true;
@@ -2584,6 +2629,13 @@ impl State {
                     self.clock_limit,
                 )?,
             };
+            // Entries a poll loop fast-forward accounted are not in the
+            // engine's count: the run's own budget ends that much earlier.
+            let remaining = if self.polls.active[core] {
+                remaining.min(self.polls.run_end[core].saturating_sub(self.instructions[core]))
+            } else {
+                remaining
+            };
             cpu.tighten_instruction_limit(entered.saturating_add(remaining))?;
         }
         Ok(())
@@ -2606,6 +2658,7 @@ impl State {
         // Any access ends a poll loop candidate, unless it is the loop's own
         // read coming round again (`poll_round`).
         let poll = self.blocks[core].as_mut().and_then(|blocks| blocks.poll.take());
+        let poll64 = self.polls.last[core].take();
         self.sync(&*cpus[core], core)?;
         self.due(cpus)?;
         let pc = scalar(&*cpus[core], Register::Pc)?;
@@ -2616,6 +2669,7 @@ impl State {
             let result = p.access(&*cpus[core], address, size, value, self.timeline.now())?;
             self.refresh_processors()?;
             self.push_pins(cpus)?;
+            self.settle_access(core)?;
             self.tighten(&*cpus[core], core)?;
             return Ok(result);
         }
@@ -2640,9 +2694,111 @@ impl State {
         self.settle_access(core)?;
         if value.is_none() {
             self.poll_round(&*cpus[core], core, pc & !1, address, size, result, poll)?;
+            self.poll_round_a64(&*cpus[core], core, pc, address, size, result, poll64)?;
         }
         self.tighten(&*cpus[core], core)?;
         Ok(result)
+    }
+    /// After a device read of an AArch64 processor: recognise a poll loop
+    /// that came round unchanged (`poll_loops`) and account the rounds that
+    /// must follow, up to one entry before the next device event, the peer's
+    /// turn or the end of the run. Their reads are left out; the engine's
+    /// own count does not hold these entries, so the caller's `tighten`
+    /// lowers its limit by them.
+    #[allow(clippy::too_many_arguments)]
+    fn poll_round_a64(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        address: u64,
+        size: u8,
+        value: u64,
+        last: Option<poll_loops::Poll>,
+    ) -> Result<(), String> {
+        if !self.polls.active[core] || self.error.is_some() {
+            return Ok(());
+        }
+        let instructions = self.instructions[core];
+        let last = last.filter(|p| p.pc == pc && p.address == address && p.size == size);
+        let mut poll = poll_loops::Poll {
+            pc,
+            address,
+            size,
+            stable: match last {
+                Some(last) => last.stable,
+                None => self.bus.poll_stable(address, size),
+            },
+            value,
+            instructions,
+            registers: None,
+            proven: last.and_then(|p| p.proven),
+        };
+        if let Some(last) = last
+            && poll.stable
+            && last.value == value
+            && self.pins[core] == (false, false)
+            && let Some(steps) = instructions.checked_sub(last.instructions)
+            && (2..=poll_loops::LONGEST_ROUND).contains(&steps)
+        {
+            let mut registers = [0; 33];
+            for (index, slot) in registers.iter_mut().enumerate() {
+                *slot = scalar(
+                    cpu,
+                    match index {
+                        0..=30 => Register::X(index as u8),
+                        31 => Register::Sp,
+                        _ => Register::Pstate,
+                    },
+                )?;
+            }
+            poll.registers = Some(registers);
+            if last.registers == Some(registers) {
+                let link = registers[30];
+                let pure = match poll.proven {
+                    Some((length, at, pure)) if length == steps && at == link => pure,
+                    _ => {
+                        let mut read = |address: u64| {
+                            let mut word = [0; 4];
+                            cpu.read_memory(address, &mut word)
+                                .ok()
+                                .map(|()| u32::from_le_bytes(word))
+                        };
+                        let pure = poll_loops::round_is_pure(&mut read, pc, steps, link);
+                        poll.proven = Some((steps, link, pure));
+                        if !pure {
+                            self.polls.refused[core] += 1;
+                            self.polls.refused_at[core] = Some((pc, steps, link));
+                        }
+                        pure
+                    }
+                };
+                // One entry less than the run may still begin: a read left
+                // out must end before the next deadline (see `poll_round`).
+                let rounds = if pure {
+                    self.timeline
+                        .processor_budget(core, self.scheduler_room(core), self.clock_limit)?
+                        .min(self.polls.run_end[core].saturating_sub(instructions))
+                        .saturating_sub(1)
+                        / steps
+                } else {
+                    0
+                };
+                if rounds != 0 {
+                    let entries = rounds * steps;
+                    self.account(core, entries)?;
+                    self.instructions[core] = instructions
+                        .checked_add(entries)
+                        .ok_or("instruction counter overflow")?;
+                    poll.instructions = self.instructions[core];
+                    self.polls.skipped_reads += rounds;
+                    self.polls.skips[core] += 1;
+                    self.polls.reads[core] += rounds;
+                }
+            }
+        }
+        self.polls.last[core] = Some(poll);
+        Ok(())
     }
     /// After a device read of an M-profile processor in block execution:
     /// recognise a poll loop that came round unchanged and account the rounds
@@ -2771,6 +2927,7 @@ impl State {
     }
     fn system_register(&mut self, cpu: &dyn Cpu, core: usize, syndrome: u64) -> Result<(), String> {
         self.settled.clear();
+        self.polls.last[core] = None;
         let r = fujimod_emulator_cpu::arm::SystemRegister {
             op0: ((syndrome >> 20) & 3) as u8,
             op1: ((syndrome >> 14) & 7) as u8,
@@ -3437,6 +3594,7 @@ unsafe fn written(
                 if let Some(blocks) = state.blocks[b.core].as_mut() {
                     blocks.poll = None;
                 }
+                state.polls.last[b.core] = None;
                 let address =
                     cpus[b.core].translate(address, fujimod_emulator_cpu::Access::Write)?;
                 if state.memory.watching_writes() {
@@ -3482,10 +3640,11 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
         let mut state = b.state.borrow_mut();
         let result = state.access(&cpus, b.core, address, size, value);
         // Reads a poll loop fast-forward left out count as serviced.
-        if let Some(skipped) = state.blocks[b.core]
-            .as_mut()
-            .map(|blocks| std::mem::take(&mut blocks.skipped_reads))
-            .filter(|&skipped| skipped != 0)
+        let skipped = std::mem::take(&mut state.polls.skipped_reads)
+            + state.blocks[b.core]
+                .as_mut()
+                .map_or(0, |blocks| std::mem::take(&mut blocks.skipped_reads));
+        if skipped != 0
             && let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core)
         {
             *count = count.saturating_add(skipped);
