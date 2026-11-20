@@ -155,13 +155,27 @@ fn focus_moves_to_its_target_and_feedback_reports_it() {
     port.tick(time, true);
     assert!(port.ready_high(), "settled motion releases ready");
     assert_eq!(request(&mut port, FEEDBACK, 0, &mut time), 2400);
-    // A signed step and clamping at the range end.
-    request(&mut port, FOCUS_STEP, (-400i16) as u16, &mut time);
-    time += 50 * MS;
-    assert_eq!(request(&mut port, FEEDBACK, 0, &mut time), 2000);
-    request(&mut port, FOCUS_TARGET, 0xffff, &mut time);
+    // The target is signed and clamps at the range ends.
+    request(&mut port, FOCUS_TARGET, (-400i16) as u16, &mut time);
+    time += 200 * MS;
+    assert_eq!(request(&mut port, FEEDBACK, 0, &mut time), 0);
+    request(&mut port, FOCUS_TARGET, 0x7fff, &mut time);
     time += 200 * MS;
     assert_eq!(request(&mut port, FEEDBACK, 0, &mut time), 4000);
+    // 0x54 sets the speed of the next move (units per second); 0x7fff is the lens's own.
+    request(&mut port, FOCUS_SPEED, 20000, &mut time);
+    let start = time;
+    request(&mut port, FOCUS_TARGET, 3800, &mut time);
+    let end = port.next_event_tick(time, true).unwrap();
+    assert!(end - start >= 10 * MS, "200 units at 20 units/ms take 10 ms");
+    request(&mut port, FOCUS_SPEED, 0x7fff, &mut time);
+    // A target equal to the position still pulses ready low, so the body sees completion.
+    time = end + MS;
+    port.tick(time, true);
+    assert!(port.ready_high());
+    request(&mut port, FOCUS_TARGET, 3800, &mut time);
+    port.tick(time, true);
+    assert!(!port.ready_high(), "a zero-length move still holds ready low");
     assert_eq!(request(&mut port, ZOOM_STATE, 0, &mut time), 0, "zoom step 0");
 }
 
