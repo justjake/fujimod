@@ -426,4 +426,49 @@ fn the_xt5_lens_fragment_registers_the_lens_bus_connector() {
     assert_eq!(graph.nodes[id].device.name(), "xp5-x-mount-lens");
     let attached = std::env::var("XT5_LENS").map_or(true, |v| v != "none");
     assert_eq!(pins.lock().unwrap().level(0, 11) == 0, attached);
+#[test]
+fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
+    let mut graph = DeviceGraph::new();
+    let windows = vec![
+        window(0xff90e748, 0x40, "dma-address-high", json!({})),
+        window(0xff90e500, 0x20, "dma-request-routing", json!({})),
+    ];
+    register_all(&mut graph, &windows, None, Pins::shared()).unwrap();
+    let mut host = RecordingHost::default();
+    let id = graph.at(0xff90e74c).unwrap();
+    let mut cx = Cx::new(&mut host, 4, 0, id);
+    let view = &mut graph.nodes[id].device;
+    view.write(&mut cx, 0xff90e74c, 4, 0x12340001);
+    assert_eq!(view.read(&mut cx, 0xff90e74c, 4), 0x12340001);
+    assert_eq!(cx.refusal(), None);
+    let checkpoint = view.checkpoint().unwrap();
+    view.write(&mut cx, 0xff90e74c, 4, 0);
+    view.restore_checkpoint(&checkpoint).unwrap();
+    assert_eq!(view.read(&mut cx, 0xff90e74c, 4), 0x12340001);
+    for (address, width) in [(0xff90e74c, 1), (0xff90e74c, 2), (0xff90e74d, 4), (0xff90e788, 4)] {
+        let mut cx = Cx::new(&mut host, width, 0, id);
+        view.write(&mut cx, address, width as u8, 0);
+        assert!(cx.is_unmodeled());
+        let mut cx = Cx::new(&mut host, width, 0, id);
+        view.read(&mut cx, address, width as u8);
+        assert!(cx.is_unmodeled());
+    }
+    let route_id = graph.at(0xff90e500).unwrap();
+    let mut cx = Cx::new(&mut host, 4, 0, route_id);
+    let route = &mut graph.nodes[route_id].device;
+    route.write(&mut cx, 0xff90e500, 4, 0x10012);
+    let checkpoint = route.checkpoint().unwrap();
+    route.write(&mut cx, 0xff90e500, 4, 0x10000);
+    route.restore_checkpoint(&checkpoint).unwrap();
+    assert_eq!(route.read(&mut cx, 0xff90e500, 4), 0x12);
+    assert_eq!(cx.refusal(), None);
+    assert!(graph.at(0xff930000).is_err());
+    assert!(host.core_irqs.is_empty());
+}
+
+#[test]
+fn dma_still_requires_companion_and_both_views() {
+    let dma = window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83}));
+    assert!(register_all(&mut DeviceGraph::new(), &[dma.clone()], None, Pins::shared()).is_err());
+    assert!(register_all(&mut DeviceGraph::new(), &[dma], Some(4), Pins::shared()).is_err());
 }
