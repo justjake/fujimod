@@ -163,6 +163,11 @@ impl Pair {
         self.read_windows = windows;
         self
     }
+    /// Global control reset state with the enable bit set (session assumption).
+    pub fn with_global_enable_at_reset(mut self) -> Self {
+        self.state.control = ENABLE;
+        self
+    }
     fn connection(&self, lane: usize, c: &Channel) -> Result<Option<&Connection>, String> {
         let routing = self.routing.lock().map_err(|_| "XDMAC routing poisoned")?;
         if routing.high != [0; 2] {

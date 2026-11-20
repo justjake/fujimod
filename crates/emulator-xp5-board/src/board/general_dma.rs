@@ -67,6 +67,9 @@ struct DmaWiring {
     /// companion NVIC line. Absent leaves the banks wired to the companion only.
     #[serde(default)]
     a53_irq_base: Option<u32>,
+    /// Reset value of each bank's global control enable bit; a session assumption, default off.
+    #[serde(default)]
+    global_enable_at_reset: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -271,11 +274,16 @@ pub fn register_all(
             pairs.push(bus.register(
                 base,
                 0x1000,
-                // Memory-to-memory copies read the serial-flash CPU aperture from its backing.
-                Box::new(
-                    Pair::new(base, route.clone(), connections.clone(), interrupts)?
-                        .with_read_windows(flash.map(flash_storage::Medium::read_window).into_iter().collect()),
-                ),
+                Box::new({
+                    // Memory-to-memory copies read the serial-flash CPU aperture from its backing.
+                    let pair = Pair::new(base, route.clone(), connections.clone(), interrupts)?
+                        .with_read_windows(flash.map(flash_storage::Medium::read_window).into_iter().collect());
+                    if wiring.global_enable_at_reset {
+                        pair.with_global_enable_at_reset()
+                    } else {
+                        pair
+                    }
+                }),
             )?);
         }
         // e560 is an M4-read retained word whose reset value is a session assumption.
