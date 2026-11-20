@@ -151,6 +151,35 @@ pub fn build(
         attachments(wiring.endpoints, Some(controls))?,
     )
 }
+/// Parse `XT5_POWER_REGISTERS="REGISTER=VALUE,..."` (numbers decimal or `0x` hexadecimal):
+/// power-controller registers a run sets at power-on in place of the part's defaults. A host input
+/// like `XT5_ADC`, kept outside the manifest. On the X-T5, register 0x32 is the battery
+/// temperature in 0.1 K (2982 = 25.0 C); it reads 0 with no battery data, and the battery driver
+/// then reports external power.
+fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
+    fn number(text: &str) -> Option<u32> {
+        let text = text.trim();
+        match text.strip_prefix("0x") {
+            Some(hex) => u32::from_str_radix(hex, 16).ok(),
+            None => text.parse().ok(),
+        }
+    }
+    spec.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| {
+            let (register, value) =
+                item.split_once('=').ok_or("XT5_POWER_REGISTERS needs REGISTER=VALUE[,...]")?;
+            let register = number(register)
+                .filter(|register| *register < 0x80)
+                .ok_or_else(|| format!("XT5_POWER_REGISTERS: invalid register in {item}"))?;
+            let value = number(value)
+                .and_then(|value| u16::try_from(value).ok())
+                .ok_or_else(|| format!("XT5_POWER_REGISTERS: invalid value in {item}"))?;
+            Ok((register as u8, value))
+        })
+        .collect()
+}
 fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
         Part::PowerController {
@@ -164,6 +193,11 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
                 let address = u8::from_str_radix(address.trim_start_matches("0x"), 16)
                     .map_err(|e| format!("power-controller register {address}: {e}"))?;
                 part.set_register(address, value);
+            }
+            if let Ok(spec) = std::env::var("XT5_POWER_REGISTERS") {
+                for (address, value) in parse_power_registers(&spec)? {
+                    part.set_register(address, value);
+                }
             }
             match controls
                 .map(|controls| (controls.driven_registers(), controls))
@@ -226,6 +260,15 @@ pub(super) fn gpio_wire(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn power_register_inputs_parse_decimal_and_hexadecimal() {
+        assert_eq!(parse_power_registers("0x32=2982, 3=600").unwrap(), [(0x32, 2982), (3, 600)]);
+        assert_eq!(parse_power_registers("").unwrap(), []);
+        assert!(parse_power_registers("0x32").unwrap_err().contains("REGISTER=VALUE"));
+        assert!(parse_power_registers("0x80=1").unwrap_err().contains("invalid register"));
+        assert!(parse_power_registers("3=0x10000").unwrap_err().contains("invalid value"));
+    }
     use fujimod_emulator_parts_controls::ladder_keys::{CountingDial, Ladder, LadderKeys, Options, RegisterSwitch, Rung, Wire};
     use fujimod_emulator_parts_controls::resistor_keys::Key;
     use fujimod_emulator_parts_io::serial::Frame;
