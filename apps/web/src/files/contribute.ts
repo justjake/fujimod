@@ -1,4 +1,5 @@
-import { isShareUrl } from './share-url';
+import { resolveShareUrl } from './share-url';
+import { sharingBase, sharingUrl } from '../sharing-server';
 
 export interface ContributionFile {
   model: string;
@@ -29,7 +30,7 @@ export async function contribute(
   progress: (p: ContributionProgress) => void,
   signal?: AbortSignal,
 ): Promise<{ id: string; shareUrl: string }> {
-  const base = `https://share.fujimod.com/contributions/${encodeURIComponent(input.id)}`;
+  const base = sharingUrl(`/contributions/${encodeURIComponent(input.id)}`);
   let done = 0;
   const total = input.files.reduce((sum, file) => sum + file.blob.size, 0);
   const update = () => progress({ done, total });
@@ -156,10 +157,11 @@ export async function contribute(
       if (receipt.id !== status.id) throw Error(failure);
       shareUrl = receipt.shareUrl;
     }
-    if (!isShareUrl(shareUrl)) throw Error(failure);
+    const link = resolveShareUrl(shareUrl, sharingBase());
+    if (!link) throw Error(failure);
     done = total;
     update();
-    return { id: status.id, shareUrl };
+    return { id: status.id, shareUrl: link };
   } catch (error) {
     signal?.throwIfAborted();
     throw Error(failure, { cause: error });

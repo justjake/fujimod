@@ -2,8 +2,9 @@ import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { createHash, randomFillSync } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { contribute, type ContributionProgress } from './contribute';
+import { sharingUrl } from '../sharing-server';
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const shareUrl = 'https://share.fujimod.com/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const shareUrl = sharingUrl('/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 function urlText(value: Parameters<typeof fetch>[0]) {
   return value instanceof Request ? value.url : value.toString();
 }

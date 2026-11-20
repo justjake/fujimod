@@ -6,6 +6,7 @@ import { createTestCameraModel, testCamera } from '../test-camera-model';
 import { fileDevice } from '../../device-files.test-helper';
 import { reportTar } from '../../bug/fixtures.test-helper';
 import type { UploadReport } from '../../bug/upload';
+import { sharingUrl } from '../../sharing-server';
 
 const selection = {
   firmware: { id: 'x70-110', version: '1.10' },
@@ -62,7 +63,7 @@ test('a connected camera lists its reports, and Report files one issue per repor
   flush();
   const upload = vi.fn<UploadReport>(async (_archive, link, _message, id) => ({
     id,
-    shareUrl: `https://share.fujimod.com/contribution/${link.path.slice(-12, -4)}`,
+    shareUrl: sharingUrl(`/contribution/${link.path.slice(-12, -4)}`),
     issueURL: 'https://github.com/justjake/fujimod/issues/1',
   }));
   const files: string[] = [];

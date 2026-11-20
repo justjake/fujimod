@@ -13,7 +13,7 @@ try {
   await page.context().routeWebSocket('**/*', () => {});
   page.on('pageerror', (error) => console.error('Page error:', error.message));
   const sources: string[] = [];
-  await page.route('https://share.fujimod.com/proxy?*', async (route) => {
+  await page.route(`${new URL(base).origin}/proxy?*`, async (route) => {
     const request = new URL(route.request().url());
     sources.push(request.searchParams.get('url') ?? '');
     if (!proxy) return route.continue();

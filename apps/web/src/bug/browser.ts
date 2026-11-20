@@ -47,7 +47,7 @@ try {
   context.on('request', (request) => {
     if (!['GET', 'HEAD'].includes(request.method())) sent.push(request.url());
   });
-  await context.route('https://share.fujimod.com/issue-reports', async (route) => {
+  await context.route(`${new URL(base).origin}/issue-reports`, async (route) => {
     const request = route.request();
     console.log(engine.name(), 'intercepted explicit upload');
     if (engine === chromium) {
@@ -157,7 +157,7 @@ try {
   assert.equal(captured.description, 'The menu stopped responding after a mod callback.');
   assert.equal(captured.metadata.archive, undefined);
   assert.equal(issues.length, 1);
-  assert.deepEqual(sent, ['https://share.fujimod.com/issue-reports']);
+  assert.deepEqual(sent, [`${new URL(base).origin}/issue-reports`]);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: `${output}/browser-ready-phone.png`, fullPage: true });
   await page.setViewportSize({ width: 1280, height: 960 });

@@ -1,6 +1,11 @@
 # Contributions
 
-The browser explicitly uploads contributions to `https://share.fujimod.com`.
+The browser explicitly uploads contributions to its configured sharing origin:
+`https://share.fujimod.com` in production, or the development preview's own
+origin, which proxies the local Worker. The `shareUrl` in a receipt uses
+`SHARING_ORIGIN` from the Worker configuration, and is site-relative when that
+setting is empty.
+
 No GitHub request is made. The existing private `ISSUE_REPORTS` R2 bucket holds
 individual gzip files and contribution metadata. Writes use the shared bucket
 helpers to index each completed object in `REPORTS_INDEX` (D1) as a

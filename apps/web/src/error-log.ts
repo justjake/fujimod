@@ -1,7 +1,9 @@
 import type { EngineFault } from '@fujimod/emulator-ui/engine/fault';
+import { sharingUrl } from './sharing-server';
+
 declare const __FUJIMOD_SIMULATOR_BUILD__: string;
 
-export const ERROR_LOG_URL = 'https://share.fujimod.com/error-logs';
+export const ERROR_LOG_URL = sharingUrl('/error-logs');
 const SITES = new Set(['fujimod.com', 'www.fujimod.com']);
 const LIMIT = 20;
 const TEXT = 4000;

@@ -8,12 +8,13 @@ import { tar, link, hash, reportTar } from './fixtures.test-helper';
 import { listedReport } from './report-link';
 import type { UploadReport } from './upload';
 import type { ReportConnection } from './usb';
+import { sharingUrl } from '../sharing-server';
 vi.mock('../dev-tools/Page', () => ({
   default: () => <p>Dev Tools connected</p>,
 }));
 const receipt = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  shareUrl: 'https://share.fujimod.com/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  shareUrl: sharingUrl('/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
   issueURL: 'https://github.com/justjake/fujimod/issues/123',
 };
 function mount(props: Parameters<typeof BugReport>[0]) {

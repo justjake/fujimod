@@ -82,7 +82,11 @@ export async function runtime(
               simple: { limit: 60, period: 60 },
             },
             ...Object.fromEntries(
-              Object.entries({ ALLOWED_ORIGINS: origin, ...options.bindings }).map(
+              Object.entries({
+                ALLOWED_ORIGINS: origin,
+                SHARING_ORIGIN: 'https://share.fujimod.com',
+                ...options.bindings,
+              }).map(
                 ([key, value]) => [key, { type: 'json', value }],
               ),
             ),

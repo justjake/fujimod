@@ -52,6 +52,16 @@ release notes and camera selection, and verifies a browser-built SD card
 download against every declared asset hash. Screenshots go to
 `build/homepage/`; set `FUJIMOD_REVIEW_OUTPUT` to choose another directory.
 
+## Sharing Worker
+
+Production sends the firmware download proxy, error logs, issue reports and
+contribution uploads to `https://share.fujimod.com`. The development preview
+starts [`apps/usb-sharing`](../usb-sharing/README.md) with `wrangler dev` and
+serves those paths under the preview's own origin, so `pnpm run dev` and
+`pnpm run preview` need no sharing hostname. It applies the Worker's local D1
+migrations before starting it. Set `FUJIMOD_SHARING_ORIGIN` to build against
+another sharing server.
+
 ## Camera sign-in
 
 A camera has no browser, so it signs in by device code. It asks for a code,
