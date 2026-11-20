@@ -230,12 +230,13 @@ irq_mask_set_masks = false
 # until bits 0 and 16 read 1, +0x300/+0x304 = 0x51, +0x004 = 1 (start). ISR 0x13c1af4 writes
 # +0x310 = 1 and reads no status. Users: recf steps 0x23/0x24 (0x2d7e17c -> 0x2d104b4 -> 0x2d3a3d4),
 # 0x2dd6d0c, the GUI image draw 0x147de3c (mode 0x10, YCbCr -> RGBA) and 0x30acdd8 -> 0x2e76710.
-# Reached by Q in playback (RAW CONVERSION). Completion only: no pixels are written to the
-# destination, so a converted GUI image is not drawn.
+# Reached by Q in playback (RAW CONVERSION thumbnail, GUI draw mode 0x10). kind imaging-fcnv is
+# this completion stub (same options) that also converts packed YCbCr 4:2:2 to RGB888 / RGBA with
+# the programmed matrix (emulator-xp5-imaging imaging_fcnv.rs); other modes write nothing.
 [[device]]
 base = 0xffd26000
 size = 0x1000
-kind = "completion-stub"
+kind = "imaging-fcnv"
 [device.options]
 registers = [
   { offset = 0x000, mode = "constant", value = 0x1 },
