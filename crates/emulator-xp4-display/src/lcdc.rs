@@ -575,4 +575,46 @@ mod tests {
         assert_eq!(d.next_deadline(0), None);
         assert_eq!(d.r(4), 0);
     }
+    #[test]
+    fn second_channel_publishes_scanout_with_declared_plane_layouts() {
+        let mut d = Lcdc::new(
+            0xfff7a000,
+            2,
+            [112, 113],
+            Some(Picture::Abgr8888Straight),
+            Some(Video::YyCbCr422),
+        )
+        .unwrap();
+        let mut h = Clock {
+            ram: vec![0; 64],
+            ..Clock::default()
+        };
+        h.ram[16..24].copy_from_slice(&[255, 30, 20, 10, 128, 100, 80, 60]);
+        for (offset, value) in [
+            (0x10, 8),
+            (0x14, 0x10004),
+            (0x18, 0x10002),
+            (0x1c, 5),
+            (0x20, 0x10002),
+            (0x24, 0x10001),
+            (0x44, 16),
+            (0x4c, 16),
+            (0x50, 0x10002),
+            (0x54, 0x10002),
+            (0x5c, 0x20004),
+            (0x60, 0x8000800),
+            (8, 0x11000),
+            (4, 1),
+        ] {
+            write(&mut d, &mut h, 0xdeadbeef, offset, value);
+        }
+        h.now = 80;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        d.advance(&mut cx);
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+        assert_eq!(h.images.len(), 1, "the second channel publishes a frame");
+        assert_eq!(h.images[0].output, 0);
+        assert_eq!(h.outputs.last().unwrap()["active"], true);
+        assert_eq!(h.outputs.last().unwrap()["format"], "abgr8888-straight");
+    }
 }
