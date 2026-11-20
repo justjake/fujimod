@@ -32,13 +32,18 @@ export const hash = (value = link) =>
     ),
   );
 /** A USTAR report like the camera writes: `files`, then a manifest. */
-export function reportTar(files: Record<string, Uint8Array>, capturedAt?: string) {
+export function reportTar(
+  files: Record<string, Uint8Array>,
+  capturedAt?: string,
+  recorded: Record<string, unknown> = {},
+) {
   const encoder = new TextEncoder();
   const manifest = encoder.encode(
     JSON.stringify({
       format_version: 1,
       firmware: 'x70-110',
       ...(capturedAt === undefined ? {} : { captured_at: capturedAt }),
+      ...recorded,
       files: Object.entries(files).map(([path, data]) => ({
         path,
         bytes: data.length,

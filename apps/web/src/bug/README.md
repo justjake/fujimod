@@ -11,8 +11,10 @@ platform-specific SD-card directions. After capture, the TAR's files replace the
 initial data categories, listed with the shared file list (each file downloads
 on its own). Nothing is sent automatically.
 
-A loaded report shows the camera's `screen.bmp` and the manifest's camera-local
-`captured_at` when present. Over USB, the page lists every `R*.TAR` in the
+A loaded report shows the camera's screen and the manifest's camera-local
+`captured_at` when present. The camera saves the screen's planes as they are
+(`screen.ts` lists the formats); the page composites them as the display stacks
+them. Over USB, the page lists every `R*.TAR` in the
 report's folder through the shared file service's folder listing; any listed
 report opens in place. Its file sizes are checked against the manifest. After
 an upload, the Contribute dialog offers
