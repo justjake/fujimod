@@ -170,6 +170,14 @@ impl Core {
             })?;
             e.cpu.hook_watched(hook, true)?;
             e.write_hook.set(Some(hook));
+            // The translation filter above watches every page this
+            // processor translates, and the shared memory watches it in
+            // every alias and peer. Stores to other pages can then keep the
+            // engine's inline path: only watched pages hold translated code
+            // or a live exclusive reservation.
+            if std::env::var_os("FUJIMOD_A64_ALL_STORES").is_none() {
+                e.cpu.set_page_hooks(true)?;
+            }
             if a32 {
                 e.cpu.install_hook(Hook::Exception {
                     callback: exception,
