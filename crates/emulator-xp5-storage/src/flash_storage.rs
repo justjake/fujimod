@@ -119,6 +119,15 @@ impl Storage {
         self.page(offset / PAGE as u64)[offset as usize % PAGE] = value;
         Ok(())
     }
+    /// Declared data seed from a file: the bytes land as if every byte had been seeded. Used for
+    /// optional private inputs (a stored-settings record) that must stay out of the repository.
+    pub fn seed_bytes(&mut self, offset: u64, bytes: &[u8]) -> Result<(), String> {
+        Self::extent(offset, bytes.len())?;
+        for (address, &byte) in (offset..).zip(bytes) {
+            self.page(address / PAGE as u64)[address as usize % PAGE] = byte;
+        }
+        Ok(())
+    }
     pub fn program(&mut self, offset: u64, bytes: &[u8]) -> Result<(), String> {
         Self::extent(offset, bytes.len())?;
         if bytes.is_empty()
@@ -200,6 +209,13 @@ impl Medium {
                 s.read_device(offset, n)
             }
             Medium::Nand(s) => s.lock().unwrap().read_device(offset, n),
+        }
+    }
+    /// File-backed seed bytes (NOR overlay only).
+    pub fn seed_bytes(&self, offset: u64, bytes: &[u8]) -> Result<(), String> {
+        match self {
+            Medium::Nor(s) => s.lock().unwrap().seed_bytes(offset, bytes),
+            Medium::Nand(_) => Err("serial NAND storage takes no data seeds".into()),
         }
     }
     /// Declared data seeds are a NOR-overlay concept; the NAND die takes none.
@@ -371,6 +387,16 @@ mod tests {
         assert!(aperture.restore(&invalid).is_err());
         assert!(storage.lock().unwrap().read_device(SIZE - 1, 2).is_err());
         assert_eq!(storage.lock().unwrap().session.reads.bytes, 4);
+    }
+    #[test]
+    fn seed_bytes_overlays_a_file_across_pages_without_touching_neighbours() {
+        let mut s = Storage::new(vec![0xa5; PAGE * 2]).unwrap();
+        let bytes: Vec<u8> = (0..16u8).collect();
+        s.seed_bytes(PAGE as u64 - 8, &bytes).unwrap();
+        assert_eq!(s.read(PAGE as u64 - 9, 18).unwrap()[0], 0xa5);
+        assert_eq!(s.read(PAGE as u64 - 8, 16).unwrap(), bytes);
+        assert_eq!(s.read(PAGE as u64 + 8, 1).unwrap(), [0xa5]);
+        assert!(s.seed_bytes(SIZE - 1, &[0, 1]).is_err());
     }
     #[test]
     fn nor_overlay_crosses_pages_and_restores_without_mutating_image() {
