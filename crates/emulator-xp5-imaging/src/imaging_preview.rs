@@ -46,6 +46,21 @@ pub struct Io(Arc<Mutex<State>>, Option<u64>);
 
 const QUEUE_IRQ: u32 = 230;
 
+/// Diagnostic trace of the RIFP register programming (`XT5_RIFP_TRACE=FILE`): each register
+/// list the I/O DMA performs (`Q address value` lines after a `queue` header) and each
+/// direct write to a RIFP sub-block page (`W address value`), with the guest time in ticks.
+fn trace(line: impl FnOnce() -> String) {
+    use std::io::Write;
+    static FILE: std::sync::OnceLock<Option<Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    let file = FILE.get_or_init(|| {
+        let path = std::env::var_os("XT5_RIFP_TRACE").filter(|path| !path.is_empty())?;
+        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(Mutex::new)
+    });
+    if let Some(file) = file {
+        let _ = writeln!(file.lock().unwrap(), "{}", line());
+    }
+}
+
 impl Io {
     /// Enable the register-list engine: ticks between a START and its done status. The
     /// queued writes themselves are performed at the START.
@@ -78,9 +93,11 @@ impl Io {
             cx.fail(format!("rifp-io register list at {address:#x}: {e}"));
             return false;
         }
+        trace(|| format!("queue {count} entries at {address:#x} t={}", cx.now()));
         for entry in entries.chunks_exact(8) {
             let value = u32::from_le_bytes(entry[..4].try_into().unwrap());
             let target = u32::from_le_bytes(entry[4..].try_into().unwrap());
+            trace(|| format!("Q {target:08x} {value:08x}"));
             cx.post_mmio_write(u64::from(target), 4, u64::from(value));
         }
         let Some(at) = cx.now().checked_add(self.1.unwrap_or(0)) else {
@@ -106,6 +123,9 @@ pub struct Rifp {
     source_luma: u8,
     /// Bring-up option: unmodeled aligned words read back their last write (in `state.regs`).
     retain_words: bool,
+    /// Bytes of the window ([`Preview::with_span`]): the RIFP top page, then the pages of
+    /// its sub-blocks (see [`super::colour`]).
+    span: u64,
     /// Opt-in still data path ([`Preview::with_still_path`]).
     still: Option<StillPath>,
 }
@@ -173,6 +193,7 @@ impl Preview {
                 delay,
                 source_luma,
                 retain_words,
+                span: 0x1000,
                 still: None,
             }));
         }
@@ -208,6 +229,41 @@ impl Preview {
                         rows: 16,
                         planes: Planes::Ae,
                     },
+                    // Focus (contrast AF) statistics, 13 x 9 cells: the cells (plane 0x21)
+                    // and the two per-cell planes 0xe and 0xf (`statistics::FocusFrame`).
+                    // X-T5 4.31: +0x418 / +0x420 are enabled by +0x04 bit 8 (driver
+                    // 0x1358cf4, setters 0x135c94c / 0x135ca70); the enable of +0x410
+                    // (setter 0x135f85c) is not decoded and is taken as the same bit.
+                    Output {
+                        enable_word: 0,
+                        bit: 1 << 8,
+                        low: 0x410,
+                        high: 0x414,
+                        high_mask: 7,
+                        columns: 13,
+                        rows: 9,
+                        planes: Planes::FocusCells,
+                    },
+                    Output {
+                        enable_word: 0,
+                        bit: 1 << 8,
+                        low: 0x418,
+                        high: 0x41c,
+                        high_mask: 7,
+                        columns: 13,
+                        rows: 9,
+                        planes: Planes::FocusLevels,
+                    },
+                    Output {
+                        enable_word: 0,
+                        bit: 1 << 8,
+                        low: 0x420,
+                        high: 0x424,
+                        high_mask: 7,
+                        columns: 13,
+                        rows: 9,
+                        planes: Planes::FocusSums,
+                    },
                 ],
                 reset_ticks: 0,
                 period_ticks: Some(delay),
@@ -225,6 +281,14 @@ impl Preview {
     pub fn with_still_path(mut self, still: StillPath) -> Self {
         if let Self::Rifp(rifp) = &mut self {
             rifp.still = Some(still);
+        }
+        self
+    }
+    /// RIFP: the window covers `span` bytes from 0xffd02000, so the retained words include the
+    /// sub-block pages that follow the top page (X-T5 4.31: 0xffd03000..0xffd0bfff).
+    pub fn with_span(mut self, span: u64) -> Self {
+        if let Self::Rifp(rifp) = &mut self {
+            rifp.span = span;
         }
         self
     }
@@ -304,7 +368,7 @@ impl Device for Rifp {
         self.advance(cx);
         let o = a.wrapping_sub(0xffd02000);
         if n != 4 || o & 3 != 0 || o > 0x14c {
-            if self.retain_words && n == 4 && o & 3 == 0 && o < 0x1000 {
+            if self.retain_words && n == 4 && o & 3 == 0 && o < self.span {
                 return u64::from(self.state.r(o));
             }
             cx.unmodeled();
@@ -327,7 +391,8 @@ impl Device for Rifp {
         let o = a.wrapping_sub(0xffd02000);
         let v = v as u32;
         if n != 4 || o & 3 != 0 || o > 0x14c {
-            if self.retain_words && n == 4 && o & 3 == 0 && o < 0x1000 {
+            if self.retain_words && n == 4 && o & 3 == 0 && o < self.span {
+                trace(|| format!("W {a:08x} {v:08x} t={}", cx.now()));
                 self.state.regs.insert(o, v);
             } else {
                 cx.unmodeled();
@@ -348,6 +413,7 @@ impl Device for Rifp {
                 .regs
                 .insert(0x144, self.state.r(0x144) & !(v & 1));
         } else {
+            trace(|| format!("W {a:08x} {v:08x} t={}", cx.now()));
             self.state.regs.insert(o, v);
             if o == 4 && v & 1 != 0 {
                 if let Some(still) = &self.still {

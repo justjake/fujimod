@@ -66,19 +66,8 @@ irq_mask_offset = 0x10c
 irq_mask_bit = 0
 irq_mask_set_masks = false
 
-# Register file of the recf develop sub-blocks between RIFP and RESZ. No INTID, no start.
-# Most writes to this window come from the recf register queue, which the RIFP I/O DMA at
-# 0xffd01000 (register-list mode, 50-imaging.toml) performs as bus-master MMIO writes.
-# 0xffd03000..0xffd03464 and 0xffd05000..0xffd050ec: RCIF register dumps 0x2c573d0 / 0x2c6024c
-# (called from 0x2c522b8). 0xffd07004, 0xffd0a020, 0xffd0b050: read-modify-write in the RIFP
-# band restart 0x2c531fc (ISR 0x2c517fc, more than 0x500 lines left). 0xffd04000, 0xffd06000:
-# a few sites in 0x1377848..0x1378adc. No poll on any of these pages was found.
-[[device]]
-base = 0xffd03000
-size = 0x9000
-kind = "completion-stub"
-[device.options]
-registers = []
+# The register pages of the recf develop sub-blocks between RIFP and RESZ
+# (0xffd03000..0xffd0bfff) belong to the imaging-rifp window (50-imaging.toml).
 
 # RESZ (standalone still step 0x2d3b658 -> run 0x1487bd4; stop 0x1487acc; ISR 0x1486738, shared
 # with RCIZ on logical 0xa). In this path every write is direct (queue pointer x1 = 0).
