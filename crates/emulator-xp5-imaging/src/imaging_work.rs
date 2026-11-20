@@ -13,6 +13,25 @@
 //! * Address setter 0x1361804: plane 0 address bits 34..32 -> +c0, bits 31..0 -> +c4; plane 1
 //!   address -> +c8/+cc; one stride -> +d0 for both planes. It requires both addresses
 //!   8-byte aligned and below 0x7fffffff0, and the stride a multiple of 4.
+//! * +d8 (setter 0x1361a04, called from 0x2c6b7d4 with the parameter block 0x4a5aeb0 + 0x860
+//!   / 0x928 / ...): bit 28 = parameter word 0 (0 or 1), bits 17..16 = word 1 (0..3), bits 3..0
+//!   = u16 at +8 (at most 15). Live view writes 0x10030001. In AF-S after S1 channel 0 writes
+//!   0x10030002 (run L4, 640x426, +08 0x100); S1 in MOVIE mode with AF-C writes the same value
+//!   for the 16:9 live view (640x360, +18 0x167027f, +08 0x100; scratch run h1/c1, H.264 and
+//!   H.265 alike). The earlier "MOVDC +0xd8 job" note (0x3051d84, task `hist`) is task code,
+//!   not this register; every +d8 register write goes through 0x1361a04. In AF-S after S1
+//!   channel 1 (960x640, +18 0x27f03bf) writes 0x10030003 (run M2).
+//!   The nibble is `1 + (v ? 0x1000 / v : 0)` for every channel: 0x2e896d8 (channel 0, u16 v =
+//!   [0x4a5aa7a] = +0x12 of the MvRec0 destination parameters 0x4a5aa68), 0x2e89b54 (channel 1,
+//!   v = [0x4a5aad2]), 0x2e89fd0 (channel 2, v = [0x4a5ab2a]). 0x1485a6c reads the channel 0 v as
+//!   a 1/8192 scale of a line count (`(lines * v + 0x1fff) >> 13`). So nibble 2 means
+//!   2048 < v <= 4096 (scale (0.25, 0.5]) and nibble 3 means 1365 < v <= 2048 [inferred: a
+//!   vertical input/transfer control that follows the source scale]. The XP4 MOVDC writes
+//!   nibble 2 for its plain packed 4:2:2 live view, which supports that the nibble does not
+//!   change the output pixel layout. The model accepts the observed nibbles 1, 2 and 3 with the
+//!   same output and refuses 0 and 4..15.
+//! * +f0 (setter 0x1361c84): a 4-bit value per frame from the parameter byte +0x1d8 / +0x230 /
+//!   +0x288 (channel 0 / 1 / 2). Live view and AF-S both write 0xb; other values are refused.
 //!
 //! MOVRSZ (X-T5 4.31 0xff982000, driver 0x2c4419c..0x2c44e64, logical IRQ 0x6e = INTID 200).
 //! The parameter block of set 0x2c44264 (static evidence) programs:
@@ -195,8 +214,11 @@ impl Work {
             // 1 is 8-bit two-plane 4:2:0 with the Cb,Cr plane at +c8/+cc (the FHD movie
             // encoder feed). Other formats are refused.
             let format = self.state.r(8) & 3;
+            // +d8 bits 3..0: 1 in live view, 2 or 3 after S1 (module notes); same output.
+            let d8 = self.state.r(0xd8);
             if self.state.r(0xf0) != 0xb
-                || self.state.r(0xd8) != 0x10030001
+                || d8 & !0xf != 0x10030000
+                || !matches!(d8 & 0xf, 1..=3)
                 || self.state.r(0x18) & !0x07ff07ff != 0
                 || self.state.r(0xc0) > 7
                 || format > 1
@@ -693,6 +715,66 @@ mod tests {
         work.event(&mut Cx::new(&mut host, 0, 0, 0), token);
         assert_eq!(work.next_deadline(host.now), None);
         assert_eq!(work.save()["state"]["frames"], 1);
+    }
+    /// +d8 nibbles 2 and 3 (X-T5 4.31 AF-S after S1, 0x10030002 / 0x10030003) write the same
+    /// output as nibble 1; nibble 0, nibbles above 3 and other high bits are still refused.
+    #[test]
+    fn movdc_d8_nibble_two_matches_live_view_output_and_others_are_refused() {
+        let run = |d8: u64| {
+            let mut work = Work::movdc(BASE, 1000, 128).unwrap();
+            let mut host = RecordingHost {
+                ram_base: 0x1_0000_0100,
+                ram: vec![0x55; 160],
+                ..Default::default()
+            };
+            setup(&mut work, &mut host, 0xb);
+            work.write(&mut Cx::new(&mut host, 0, 0, 0), BASE + 0xd8, 4, d8);
+            host.now = 1_000_000;
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            work.advance(&mut cx);
+            let refused = cx.refusal().is_some();
+            let frames = work.save()["state"]["frames"].as_u64().unwrap();
+            (refused, frames, host.ram, host.irqs.contains(&(171, true)))
+        };
+        let live = run(0x10030001);
+        assert_eq!((live.0, live.1, live.3), (false, 1, true));
+        assert_eq!(run(0x10030002), live);
+        assert_eq!(run(0x10030003), live);
+        for d8 in [0x10030000, 0x10030004, 0x1003000f, 0x10020002, 0x00030002] {
+            let (refused, frames, ram, irq) = run(d8);
+            assert!(refused, "{d8:#x}");
+            assert_eq!(frames, 0);
+            assert!(ram.iter().all(|v| *v == 0x55));
+            assert!(!irq);
+        }
+    }
+    /// The MOVIE-mode AF-C S1 programming (16:9 live view 640x360, packed 4:2:2, +d8
+    /// 0x10030002) produces a full frame and the completion interrupt.
+    #[test]
+    fn movdc_movie_af_c_s1_programming_produces_a_frame() {
+        if fujimod_emulator_imaging::frame::host_scene().is_some() {
+            return;
+        }
+        let mut work = Work::movdc(BASE, 1000, 77).unwrap();
+        let mut host = RecordingHost {
+            ram_base: 0x1_0000_0100,
+            ram: vec![0x55; 16 + 0x500 * 360],
+            ..Default::default()
+        };
+        setup(&mut work, &mut host, 0xb);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [(8, 0x100), (0x18, 0x167027f), (0xd0, 0x500), (0xd8, 0x10030002)] {
+            work.write(&mut cx, BASE + o, 4, v);
+        }
+        host.now = 1_000_000;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        work.advance(&mut cx);
+        assert!(cx.refusal().is_none());
+        let last = 16 + 0x500 * 359;
+        assert!(host.ram[16..16 + 1280].iter().all(|v| *v != 0x55));
+        assert!(host.ram[last..last + 1280].iter().all(|v| *v != 0x55));
+        assert_eq!(work.save()["state"]["frames"], 1);
+        assert!(host.irqs.contains(&(171, true)));
     }
     /// Format 1 (+08 bits 1..0, the FHD movie channel) writes a Y plane at +c0/+c4 and a
     /// half-height Cb,Cr plane at +c8/+cc, both with the +d0 stride. Without XT5_SCENE the
