@@ -7,7 +7,7 @@ import {
   expectedAssets,
   loadingStep,
 } from '@fujimod/emulator-ui/engine/download-progress';
-import { CameraStore, type CameraRecord, type LibraryFirmware } from '../cameras/store';
+import { CameraStore, type CameraRecord } from '../cameras/store';
 import type { FirmwareLibrary } from '../cameras/firmware-library';
 import { latestCamera } from '../cameras/selection';
 import '../home/site.css';
