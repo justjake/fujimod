@@ -243,6 +243,13 @@ impl Profile {
                 && v.address + physical - v.physical != address
         })
     }
+    /// Whether any byte of a physical range is RAM this processor maps.
+    pub(super) fn maps_physical(&self, physical: u64, size: usize) -> bool {
+        let end = physical.saturating_add(size as u64);
+        self.views
+            .iter()
+            .any(|v| physical < v.physical.saturating_add(v.size as u64) && v.physical < end)
+    }
     pub(super) fn take_alias_write(&mut self) -> bool {
         std::mem::take(&mut self.alias_write)
     }
