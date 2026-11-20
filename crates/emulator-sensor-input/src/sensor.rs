@@ -36,6 +36,9 @@ pub struct SensorState {
     /// The still channel's destination was programmed and no frame has used it yet.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub still_programmed: bool,
+    /// Emulator-only option: stream without the register-0 standby gate (see `streaming`).
+    #[serde(default)]
+    pub no_standby_gate: bool,
 }
 impl Default for SensorState {
     fn default() -> Self {
@@ -53,6 +56,7 @@ impl Default for SensorState {
             still_raw: None,
             earlier_still_raws: Vec::new(),
             still_programmed: false,
+            no_standby_gate: false,
         }
     }
 }
@@ -500,9 +504,16 @@ impl Sensor {
         self.1
             .is_some_and(|r| matches!(offset, 0x4..=0x34 | 0x140 | 0x144) || r.dma.is_some())
     }
+    /// X-H2S option: the X100VI-derived register-0 standby bit is not a modeled gate here. The
+    /// X-H2S never writes sensor register 0 (observed on the stock boot), so the receiver streams
+    /// once the sensor has been programmed (`writes != 0`). Labelled assumption, not a measurement.
+    pub fn set_no_standby_gate(&self, on: bool) {
+        self.0.lock().unwrap().no_standby_gate = on;
+    }
     pub fn streaming(&self) -> bool {
         let s = self.0.lock().unwrap();
-        s.writes != 0 && s.registers.get(&0).copied().unwrap_or(1) & 1 == 0
+        s.writes != 0
+            && (s.no_standby_gate || s.registers.get(&0).copied().unwrap_or(1) & 1 == 0)
     }
 }
 #[derive(Default, Serialize, Deserialize)]
