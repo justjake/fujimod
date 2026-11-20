@@ -55,7 +55,7 @@ pub(crate) struct Fragment {
     pub power_controller_registers: BTreeMap<String, u16>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WindowOptions {
     pub base: u64,
@@ -114,6 +114,9 @@ pub(crate) struct Handoff {
     /// A bring-up stub listed here answers before the fragment's stub of the same page.
     #[serde(default)]
     pub device: Vec<DeviceWindow>,
+    /// Options this firmware's ROM and SD card starts set on windows the boot manifest declares.
+    #[serde(default)]
+    pub window_options: Vec<WindowOptions>,
 }
 
 impl Handoff {
@@ -135,6 +138,17 @@ pub(crate) struct RomStart {
     pub card_present: bool,
     /// A raw SD card image in place of the in-memory FAT32 volume.
     pub card_image: Option<super::card_image::CardImage>,
+    /// Device windows the firmware's stock setup needs beyond the shared ROM-start fragment
+    /// (`card-handoff.toml` `[[device]]`). They apply to every start that runs that setup: the
+    /// mask ROM start as well as the SD card hand-off.
+    pub setup_windows: Vec<DeviceWindow>,
+    /// The firmware's own power-controller reset registers for a mask ROM start, when it declares
+    /// a hand-off (`card-handoff.toml`); they replace the shared fragment's, whose register 0x10
+    /// value follows another body's stage-one wake-cause mapping.
+    pub reset_registers: Option<BTreeMap<String, u16>>,
+    /// The firmware's own window options for these starts (`card-handoff.toml`
+    /// `[[window_options]]`), applied after the shared fragment's.
+    pub setup_window_options: Vec<WindowOptions>,
 }
 
 impl RomStart {
@@ -170,7 +184,23 @@ impl RomStart {
     }
 
     pub fn from_card_handoff(handoff: Handoff, files: Vec<(String, PathBuf)>) -> Result<Self, String> {
-        Self::with_media(Entry::CardHandoff(handoff), true, files, true)
+        let (setup_windows, window_options) = (handoff.device.clone(), handoff.window_options.clone());
+        let mut start = Self::with_media(Entry::CardHandoff(handoff), true, files, true)?;
+        start.setup_windows = setup_windows;
+        start.setup_window_options = window_options;
+        Ok(start)
+    }
+
+    /// Add the stock-setup windows and the power-controller reset registers `firmware` declares
+    /// for its ROM and SD card starts.
+    pub fn with_setup_windows_of(mut self, firmware: &str) -> Result<Self, String> {
+        if let Some(handoff) = Handoff::for_firmware(firmware) {
+            let handoff = handoff?;
+            self.setup_windows = handoff.device;
+            self.setup_window_options = handoff.window_options;
+            self.reset_registers = Some(handoff.power_controller_registers);
+        }
+        Ok(self)
     }
 
     fn with_media(
@@ -212,6 +242,9 @@ impl RomStart {
             card_files: files,
             card_present,
             card_image: None,
+            setup_windows: Vec::new(),
+            reset_registers: None,
+            setup_window_options: Vec::new(),
         })
     }
 
@@ -268,6 +301,24 @@ mod tests {
         extents.sort_unstable();
         assert!(extents.windows(2).all(|pair| pair[0].1 <= pair[1].0));
         assert!(Handoff::for_firmware("x100vi-131").is_none());
+    }
+
+    #[test]
+    fn a_mask_rom_start_takes_the_setup_windows_of_its_firmware() {
+        let xt5 = start(true, vec![]).unwrap().with_setup_windows_of("xt5-431").unwrap();
+        assert!(xt5.setup_windows.iter().any(|window| window.base == 0xfaf0_7000));
+        assert_eq!(xt5.reset_registers.as_ref().unwrap()["10"], 2);
+        assert!(start(true, vec![]).unwrap().reset_registers.is_none());
+        let handoff = Handoff::for_firmware("xt5-431").unwrap().unwrap();
+        let card = RomStart::from_card_handoff(handoff, vec![]).unwrap();
+        assert_eq!(card.setup_windows.len(), xt5.setup_windows.len());
+        // The stock setup programs the GPIO output enables, so these starts use the pad model
+        // that reads them.
+        let gpio = xt5.setup_window_options.iter().find(|options| options.base == 0xff90_7000).unwrap();
+        assert_eq!(gpio.set["pad_model"].as_str(), Some("data-latch"));
+        assert_eq!(card.setup_window_options.len(), xt5.setup_window_options.len());
+        // A firmware that declares none keeps the shared fragment alone.
+        assert!(start(true, vec![]).unwrap().with_setup_windows_of("x100vi-131").unwrap().setup_windows.is_empty());
     }
 
     #[test]

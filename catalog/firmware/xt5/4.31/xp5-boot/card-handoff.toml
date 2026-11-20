@@ -8,6 +8,18 @@ stage_max_bytes = 0x3c000
 "0" = 0x8202
 "10" = 0x0002
 
+# GPIO pad model of a start that runs the stock setup. The setup programs each port's +4 word
+# (output enables) and +8 word; the default "legacy" model reads +8 as the output mask and +4 as
+# the data, which holds only while both stay zero, as on the loader start. With the setup's
+# values it returns wrong pad levels (port 0 then reads the shutter pins and the lens detect pin
+# from +4, and the application never powers the lens or the sensor: REC with a black display).
+# "data-latch" (+4 output enable, +0 output data) is the model the X100VI manifest uses, inferred
+# from the same setup program. The loader start keeps its model: this option is set for ROM and
+# SD card starts only, so the default boot manifest and its snapshots do not change.
+[[window_options]]
+base = 0xff907000
+set = { pad_model = "data-latch" }
+
 # Windows the X-T5 SD card stage needs beyond the shared ROM-start fragment
 # (catalog/soc/xp5/rom-start.toml). They belong to this start only: the default loader start
 # never runs the stock setup, and its boot manifest and snapshots stay unchanged.
