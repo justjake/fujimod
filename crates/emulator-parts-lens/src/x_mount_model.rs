@@ -55,6 +55,12 @@ pub mod family {
     pub const APERTURE_STEP: u16 = 0x61;
     pub const APERTURE_DRIVE: u16 = 0x62;
     pub const READ_CATALOG: u16 = 0xc0;
+    /// Two-bit lens state request (X-T5 4.31 API 0x13e5ac0, message 0x18f3; the reply payload
+    /// is not decoded, handler 0x13ea0bc). PLAY sends payload 1 from the lens control layer
+    /// (0x156f5d8 -> 0x15356d0). Without a ready-line busy period after it the body never
+    /// leaves REC (LCD black); with one it switches the lens supplies off and shows playback
+    /// (scratch/regress runs a-cur and a-play). Which body wait needs the edge is inferred.
+    pub const STATE_REQUEST: u16 = 0x40;
 }
 use family::*;
 
@@ -843,6 +849,7 @@ impl Unit {
             || matches!(
                 family,
                 PARAMETERS | STATUS | DETAIL_STATUS | APERTURE_RING | FOCUS_RING | READ_CATALOG
+                    | STATE_REQUEST
             )
             || KNOWN_READS.contains(&family)
             || KNOWN_WRITES.contains(&family)
@@ -914,6 +921,12 @@ impl Unit {
             FOCUS_RING => self.spec.focus_ring,
             // The block count; the bulk read follows the reply.
             READ_CATALOG => self.spec.catalog(payload & 0xf).blocks,
+            // Echo and store it, and hold the ready line busy like an operation.
+            STATE_REQUEST => {
+                self.state.settings.insert(STATE_REQUEST, payload);
+                self.operation(now, Motion::at_rest(0));
+                payload
+            }
             f if KNOWN_WRITES.contains(&f) => {
                 self.state.settings.insert(f, payload);
                 payload
