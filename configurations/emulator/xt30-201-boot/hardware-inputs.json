@@ -217,6 +217,23 @@
         0,
         0
       ]
-    }
+    },
+    "sd_cards": [
+      {
+        "host_base": 4294721536,
+        "card": {
+          "basis": "Declared, not measured: an empty 8 GiB SDHC card with high speed, one FAT32 partition from sector 8192 with 32 KiB clusters, the layout xt3-discovery uses. The X-T30 driver polls present-state bit 16 at 0xFFFC4024 (0x01080e5c) and reads no GPIO for card detect; the slot contents, identity and size were not read.",
+          "format": {
+            "filesystem": "fat32",
+            "label": "CAMERA",
+            "partition_start": 8192,
+            "sectors_per_cluster": 64
+          },
+          "high_speed": true,
+          "rca": 1,
+          "sectors": 16777216
+        }
+      }
+    ]
   }
 }
