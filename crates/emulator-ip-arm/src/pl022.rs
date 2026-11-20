@@ -447,8 +447,8 @@ impl Device for Controller {
         self.publish(&mut e, cx);
         match result {
             Ok(value) => value,
-            Err(_) => {
-                cx.unmodeled();
+            Err(error) => {
+                cx.unsupported(error);
                 0
             }
         }
@@ -463,8 +463,8 @@ impl Device for Controller {
             .advance(cx.now())
             .and_then(|_| e.write(offset, value, cx.now()));
         self.publish(&mut e, cx);
-        if result.is_err() {
-            cx.unmodeled();
+        if let Err(error) = result {
+            cx.unsupported(error);
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
