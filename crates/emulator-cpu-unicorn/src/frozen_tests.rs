@@ -225,3 +225,46 @@ fn injected_initial_protection_failure_with_successful_rollback_releases_reserva
     unsafe{cpu.map_backing(ROM,4096,7,pointer(&source)).unwrap();}
     cpu.write_memory(ROM,&[1]).unwrap();
 }
+#[test]
+fn a_backing_write_discards_translations_only_when_this_processor_maps_the_backing() {
+    const RAM: u64 = 0x10000;
+    // add r0,r0,#1; b .-4
+    let mapped = words(&[0xe2800001, 0xeafffffd]);
+    let foreign = words(&[0]);
+    let cpu = test_support::library().open(Model::CortexA7, 1024 * 1024).unwrap();
+    unsafe { cpu.map_backing(RAM, 4096, 7, pointer(&mapped)).unwrap() };
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
+    // The pointer names the mapped host bytes, and only ranges one mapping covers.
+    assert_eq!(cpu.backing_pointer(RAM, 4096), Some(pointer(&mapped)));
+    assert_eq!(
+        cpu.backing_pointer(RAM + 8, 16).map(|p| p.as_ptr() as usize),
+        Some(mapped.as_ptr() as usize + 8)
+    );
+    assert_eq!(cpu.backing_pointer(RAM, 4097), None);
+    assert_eq!(cpu.backing_pointer(RAM - 4096, 4096), None);
+    let run = |begin| {
+        cpu.run(Run { begin, until: None, watchdog_us: 0, instructions: Some(10) }).unwrap();
+    };
+    let counter = |name| cpu.exit_counters().unwrap()[name];
+    run(RAM);
+    let (flushes, translations) = (counter("translation_flushes"), counter("translations"));
+    assert!(translations > 0);
+    // A write to backing this processor does not map leaves its translations alone.
+    unsafe { cpu.backing_written(0x9000_0000, pointer(&foreign), 4096).unwrap() };
+    assert_eq!(counter("translation_flushes"), flushes);
+    let mut pc = [0; 4];
+    cpu.read_register(Register::Pc, &mut pc).unwrap();
+    run(u64::from(u32::from_le_bytes(pc)));
+    assert_eq!(counter("translations"), translations);
+    // A write to its own backing discards them, wherever in the mapping it lands.
+    unsafe {
+        cpu.backing_written(RAM + 0x800, NonNull::new(mapped.as_ptr().add(0x800)).unwrap(), 4)
+            .unwrap()
+    };
+    assert_eq!(counter("translation_flushes"), flushes + 1);
+    // After an unmap the backing is foreign again.
+    cpu.unmap(RAM, 4096).unwrap();
+    unsafe { cpu.backing_written(RAM, pointer(&mapped), 4096).unwrap() };
+    assert_eq!(counter("translation_flushes"), flushes + 1);
+    assert_eq!(cpu.backing_pointer(RAM, 4096), None);
+}

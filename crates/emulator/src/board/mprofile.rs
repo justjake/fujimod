@@ -389,13 +389,22 @@ impl Profile {
         }
         self.nvic.wake_pending()
     }
-    pub fn before(&mut self, cpu: &dyn Cpu, pc: u64) -> Result<Entry, String> {
-        self.pending();
-        if let Some(exception) = self.nvic.next(
-            get(cpu, special(arm::Register::Primask))?,
-            get(cpu, special(arm::Register::Basepri))?,
-            get(cpu, special(arm::Register::Faultmask))?,
-        ) {
+    /// `fetched` is the instruction's first halfword when the owner already
+    /// read it from the processor's memory.
+    pub fn before(
+        &mut self,
+        cpu: &dyn Cpu,
+        pc: u64,
+        fetched: Option<u16>,
+    ) -> Result<Entry, String> {
+        // Without a ready exception the mask registers cannot select one.
+        if self.pending()
+            && let Some(exception) = self.nvic.next(
+                get(cpu, special(arm::Register::Primask))?,
+                get(cpu, special(arm::Register::Basepri))?,
+                get(cpu, special(arm::Register::Faultmask))?,
+            )
+        {
             self.enter(
                 cpu,
                 exception,
@@ -404,8 +413,30 @@ impl Profile {
             return Ok(Entry::Redirect);
         }
         let mut bytes = [0; 2];
-        cpu.read_memory(pc, &mut bytes)?;
-        let word = u16::from_le_bytes(bytes);
+        let word = match fetched {
+            Some(word) => {
+                // Debug builds check the owner's host read against the engine.
+                #[cfg(debug_assertions)]
+                {
+                    cpu.read_memory(pc, &mut bytes)?;
+                    debug_assert_eq!(word, u16::from_le_bytes(bytes));
+                }
+                word
+            }
+            None => {
+                cpu.read_memory(pc, &mut bytes)?;
+                u16::from_le_bytes(bytes)
+            }
+        };
+        // Only the encodings handled below need the condition state; every
+        // other instruction executes natively whether or not it passes.
+        if !(matches!(word, 0xbf30 | 0xbf20 | 0xf3ef | 0xf3bf)
+            || word & 0xff00 == 0xdf00
+            || word & 0xff87 == 0x4700
+            || matches!(word & 0xfff0, 0xe850 | 0xe840 | 0xe8d0 | 0xe8c0))
+        {
+            return Ok(Entry::Execute);
+        }
         let cpsr = get(cpu, special(arm::Register::Cpsr))?;
         if !arm::thumb::condition_passed(cpsr) {
             return Ok(Entry::Execute);
