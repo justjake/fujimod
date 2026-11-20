@@ -334,6 +334,63 @@ impl Direct {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
+    /// A moving textured picture: bars, a drifting gradient and noise.
+    fn textured(width: usize, height: usize, n: usize) -> Vec<u8> {
+        let mut frame = vec![0u8; width * height * 3 / 2];
+        let mut seed = 0x2545_f491u32;
+        for y in 0..height {
+            for x in 0..width {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let bar = ((x + 5 * n) * 8 / width % 8) as u32 * 24;
+                let ramp = ((x + 3 * n + 2 * y) % 97) as u32;
+                let noise = if (x / 64 + y / 64) % 3 == 0 { seed >> 28 } else { 0 };
+                frame[y * width + x] = (16 + bar + ramp / 2 + noise).min(235) as u8;
+            }
+        }
+        let (cw, ch) = (width / 2, height / 2);
+        for y in 0..ch {
+            for x in 0..cw {
+                frame[width * height + y * cw + x] = (64 + (x + 2 * n) * 128 / cw) as u8;
+                frame[width * height + cw * ch + y * cw + x] = (64 + (y + n) * 128 / ch) as u8;
+            }
+        }
+        frame
+    }
+    fn fnv(hash: &mut u64, bytes: &[u8]) {
+        for &b in bytes {
+            *hash = (*hash ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    /// The software encoder's output bytes are pinned: an intra picture and
+    /// inter pictures with motion, under rate control. Any change of the
+    /// encoder build (features, version, kernels) must leave them alone.
+    #[test]
+    fn the_direct_encoder_output_is_pinned() {
+        let (width, height, frames) = match std::env::var("FUJIMOD_H264_PIN").as_deref() {
+            Ok("4k") => (3840, 2160, 6),
+            _ => (640, 368, 8),
+        };
+        let mut encoder = super::Direct::new(super::DirectConfig {
+            width,
+            height,
+            frames_per_second: 30,
+            bitrate: if width > 1920 { 96_999_424 } else { 6_000_000 },
+            gop: 15,
+            level_idc: 51,
+        })
+        .unwrap();
+        encoder.request_keyframe();
+        let (mut hash, mut total) = (0xcbf2_9ce4_8422_2325u64, 0usize);
+        for n in 0..frames {
+            let unit = encoder.encode_i420(&textured(width, height, n)).unwrap();
+            total += unit.len();
+            fnv(&mut hash, &unit);
+        }
+        println!("pinned {width}x{height}: {total} bytes, hash {hash:#018x}");
+        if width == 640 {
+            assert_eq!((total, hash), (171_529, 0xe397_217f_5b69_cbdf));
+        }
+    }
     /// 1920x1080 codes as 1920x1088 with the SPS crop and decodes at 1080.
     #[test]
     fn the_direct_encoder_crops_1080() {
