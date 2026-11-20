@@ -694,6 +694,9 @@ impl super::State {
         pc: u64,
         cpu: &dyn Cpu,
     ) -> Result<bool, String> {
+        if self.entry_points[core].is_empty() {
+            return Ok(false);
+        }
         self.entry_points[core].retain(|entry| entry.strong_count() != 0);
         for entry in self.entry_points[core].iter().filter_map(Weak::upgrade) {
             if entry.hit(pc) {

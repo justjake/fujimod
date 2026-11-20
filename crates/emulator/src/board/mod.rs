@@ -2,6 +2,9 @@
 pub mod aprofile;
 pub mod armv7a;
 pub mod bus;
+mod code_shadow;
+#[cfg(test)]
+mod code_shadow_tests;
 pub mod continuation;
 pub mod decoder;
 #[cfg(test)]
@@ -195,11 +198,71 @@ struct State {
     // Consecutive resumes of this processor share unchanged external backing.
     // A peer run or host/DMA write requires resynchronizing Unicorn's code cache.
     code_run: Option<usize>,
+    // Host-only: proves an M-profile processor's translations still match
+    // memory after a peer ran, so its code cache survives the peer's slice.
+    code_shadow: Vec<Option<code_shadow::CodeShadow>>,
+    // Host-only: lets an instruction observer skip interrupt bookkeeping
+    // that provably has nothing to do.
+    settled: Settled,
     active_slice: Option<schedule::Slice>,
     parallel: Option<interactive::Epoch>,
     decoders: decoder::Decoders,
     memory_access: bool,
     mprofile_loops: loops::MProfileLoops,
+}
+/// Host-only record that pushing interrupt pins and refreshing processor
+/// deadlines is a fixed point.
+///
+/// An instruction observer repeats both before every instruction. Between two
+/// instructions of one run, their inputs change only through a device event,
+/// an MMIO or system access, an architectural entry the observer itself
+/// performs, or guest time reaching a generic timer compare. Every such
+/// change clears this record; while it stands, both calls would recompute the
+/// values already stored, so the observer skips them.
+struct Settled {
+    /// The last full pin push left every value as it found it, so repeating
+    /// it at the same timer outputs changes nothing.
+    pass: bool,
+    /// Both calls are a fixed point until guest time reaches `until`.
+    armed: bool,
+    until: u64,
+    /// Recompute every `verify`th skipped call and refuse any difference;
+    /// zero never verifies. Debug builds verify every skip.
+    verify: u32,
+    skipped: u32,
+    /// Observer entries that skipped, and that ran, the bookkeeping.
+    skips: u64,
+    full: u64,
+}
+impl Settled {
+    fn new() -> Self {
+        Self {
+            pass: false,
+            armed: false,
+            until: 0,
+            verify: std::env::var("FUJIMOD_VERIFY_SETTLED")
+                .ok()
+                .and_then(|period| period.parse().ok())
+                .unwrap_or(u32::from(cfg!(debug_assertions))),
+            skipped: 0,
+            skips: 0,
+            full: 0,
+        }
+    }
+    #[inline]
+    fn clear(&mut self) {
+        self.pass = false;
+        self.armed = false;
+    }
+    /// Whether to recompute this skipped call.
+    #[inline]
+    fn verifies(&mut self) -> bool {
+        if self.verify == 0 {
+            return false;
+        }
+        self.skipped = self.skipped.wrapping_add(1);
+        self.skipped.is_multiple_of(self.verify)
+    }
 }
 struct Binding {
     state: Rc<RefCell<State>>,
@@ -347,6 +410,10 @@ impl Board {
             return Err(error);
         }
         state.execution_policy = policy;
+        for shadow in state.code_shadow.iter_mut().flatten() {
+            shadow.invalidate();
+        }
+        state.settled.clear();
         self.slice_left.set(0);
         Ok(())
     }
@@ -448,6 +515,8 @@ impl Board {
             reset_contexts,
             exclusive,
             code_run: None,
+            code_shadow: (0..n).map(|_| None).collect(),
+            settled: Settled::new(),
             active_slice: None,
             parallel: None,
             decoders: decoder::Decoders::default(),
@@ -833,7 +902,9 @@ impl Board {
         }
         let profile = mprofile::Profile::new(config, self.state.borrow().exclusive.clone(), views)?;
         self.map_mmio(core, 0xe0000000, 0x100000, 0xe0000000)?;
-        self.state.borrow_mut().mprofile[core] = Some(profile);
+        let mut state = self.state.borrow_mut();
+        state.mprofile[core] = Some(profile);
+        state.code_shadow[core] = Some(Default::default());
         Ok(())
     }
     pub fn configure_aprofile(
@@ -1182,6 +1253,9 @@ impl Board {
             }
             if s.mprofile[core].as_ref().is_some_and(|p| p.needs_reset) {
                 s.code_run = None;
+                if let Some(shadow) = s.code_shadow[core].as_mut() {
+                    shadow.invalidate();
+                }
                 self.cpus[core].restore(
                     s.reset_contexts[core]
                         .as_deref()
@@ -1192,10 +1266,37 @@ impl Board {
                     .unwrap()
                     .reset(&*self.cpus[core])?;
             }
-            if s.mprofile[core].is_some() && s.code_run != Some(core) {
-                self.cpus[core].invalidate_code(None)?;
+            if s.mprofile[core].is_some() {
+                // A peer's guest stores are invisible to this engine, as are
+                // host and DMA writes between its slices. After any of them,
+                // keep the translations only while the shadow can prove
+                // their bytes. A write during this processor's own slice, an
+                // alias store, a decoder change or a reset discards them.
+                let exact = s.execution_policy == ExecutionPolicy::Exact;
+                let peer_ran = s.code_run != Some(core);
+                if !exact && let Some(shadow) = s.code_shadow[core].as_mut() {
+                    // Slices outside exact execution are not shadowed.
+                    shadow.invalidate();
+                }
+                let shadow = s.code_shadow[core].as_mut().filter(|_| exact);
+                let discard = match &shadow {
+                    Some(shadow) => shadow.changed() || peer_ran && shadow.unproven(),
+                    None => peer_ran,
+                };
+                if discard {
+                    self.cpus[core].invalidate_code(None)?;
+                }
+                if let Some(shadow) = shadow {
+                    if discard {
+                        shadow.discarded();
+                    } else if peer_ran {
+                        shadow.peer_ran();
+                    }
+                    shadow.begin_slice();
+                }
             }
             s.code_run = Some(core);
+            s.settled.clear();
             s.active_slice = Some(slice);
             let entered = s.instructions[core];
             s.mprofile_loops.begin_run(core, entered + budget as u64);
@@ -1209,7 +1310,7 @@ impl Board {
                 u8::try_from(core).unwrap_or(u8::MAX),
                 false,
             );
-            let result = cpu.run(Run {
+            let mut result = cpu.run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
                         cpu.model(),
@@ -1225,11 +1326,34 @@ impl Board {
                 watchdog_us: 0,
                 instructions: Some(budget),
             });
+            // The instruction observer found code a peer changed and stopped
+            // before entering it. Discard the translations and resume the
+            // same slice at once: the stop is host bookkeeping, not a
+            // scheduling boundary, so nothing else may run in between.
+            while result.is_ok() && self.code_resync(core)? {
+                let left = {
+                    let s = self.state.borrow();
+                    if s.error.is_some() {
+                        break;
+                    }
+                    (budget as u64).saturating_sub(s.instructions[core].saturating_sub(entered))
+                };
+                if left == 0 {
+                    break;
+                }
+                result = cpu.run(Run {
+                    begin: scalar(&**cpu, Register::Pc)? | 1,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(left as usize),
+                });
+            }
             engine_guard.stop();
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
             let mut s = self.state.borrow_mut();
             s.active_slice = None;
             s.mprofile_loops.end_run();
+            s.end_code_slice(&**cpu, core);
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {
                 return Err(error);
@@ -1305,6 +1429,22 @@ impl Board {
             }
         }
     }
+    /// Discard a processor's translations when its instruction observer
+    /// asked for it. Returns whether the stopped slice must resume.
+    fn code_resync(&self, core: usize) -> Result<bool, String> {
+        let mut s = self.state.borrow_mut();
+        let Some(shadow) = s.code_shadow[core].as_mut() else {
+            return Ok(false);
+        };
+        if !shadow.take_resync() {
+            return Ok(false);
+        }
+        self.cpus[core].invalidate_code(None)?;
+        shadow.discarded();
+        shadow.begin_slice();
+        s.settled.clear();
+        Ok(true)
+    }
     pub fn state(&self) -> Value {
         let bus = self.state.borrow().bus.state();
         self.state_with_bus(bus)
@@ -1369,6 +1509,20 @@ impl Board {
 }
 impl Drop for Board {
     fn drop(&mut self) {
+        // Host-only execution counters, on request.
+        if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some()
+            && let Ok(s) = self.state.try_borrow()
+        {
+            eprintln!(
+                "FUJIMOD execution counters: observer entries settled={} full={}",
+                s.settled.skips, s.settled.full
+            );
+            for (core, shadow) in s.code_shadow.iter().enumerate() {
+                if let Some(shadow) = shadow {
+                    eprintln!("FUJIMOD execution counters: CPU{core} code {}", shadow.counters());
+                }
+            }
+        }
         let _ = self.continuation_end();
         let _ = self.release_store_watch();
         // The board exclusively owns processors; bindings hold only Weak
@@ -1455,9 +1609,73 @@ impl State {
         }
         Ok(())
     }
+    /// Whether a whole page at `address` is checked shared RAM of an
+    /// M-profile processor.
+    fn code_page_checked(profile: &Option<mprofile::Profile>, address: u64) -> bool {
+        profile
+            .as_ref()
+            .is_some_and(|profile| profile.physical(address, 4096).is_ok())
+    }
+    /// Close a slice of the code shadow at the processor's stop PC.
+    fn end_code_slice(&mut self, cpu: &dyn Cpu, core: usize) {
+        let Self {
+            code_shadow,
+            code_run,
+            mprofile,
+            execution_policy,
+            ..
+        } = self;
+        if *execution_policy != ExecutionPolicy::Exact {
+            return;
+        }
+        if let Some(shadow) = code_shadow[core].as_mut() {
+            let profile = &mprofile[core];
+            shadow.end_slice(cpu, scalar(cpu, Register::Pc).ok().map(|pc| pc & !1), |address| {
+                Self::code_page_checked(profile, address)
+            });
+            // The copies just taken include any bytes a device, the host or
+            // an alias store wrote during this slice, which the engine did
+            // not track. Those translations can only be discarded.
+            if *code_run != Some(core) {
+                shadow.invalidate();
+            }
+        }
+    }
+    /// Prove the code about to be entered at `pc`, or stop the slice so the
+    /// owner discards the translations first. Returns whether to stop.
+    fn enter_code(&mut self, cpu: &dyn Cpu, core: usize, pc: u64) -> Result<bool, String> {
+        let Self {
+            code_shadow,
+            mprofile,
+            execution_policy,
+            ..
+        } = self;
+        if *execution_policy != ExecutionPolicy::Exact {
+            return Ok(false);
+        }
+        let Some(shadow) = code_shadow[core].as_mut() else {
+            return Ok(false);
+        };
+        let profile = &mprofile[core];
+        match shadow.touch(cpu, pc & !1, |address| Self::code_page_checked(profile, address)) {
+            code_shadow::Touch::Proven => Ok(false),
+            code_shadow::Touch::Unchecked => {
+                shadow.entered_unchecked();
+                Ok(false)
+            }
+            code_shadow::Touch::Changed => {
+                shadow.request_resync();
+                cpu.stop()?;
+                Ok(true)
+            }
+        }
+    }
     fn apply_memory(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
         if self.decoders.pending() {
             self.code_run = None;
+            for shadow in self.code_shadow.iter_mut().flatten() {
+                shadow.invalidate();
+            }
         }
         self.decoders.apply(cpus, &self.memory)
     }
@@ -1486,6 +1704,7 @@ impl State {
     }
     fn hint(&mut self, core: usize, hint: fujimod_emulator_cpu::Hint) {
         use fujimod_emulator_cpu::Hint;
+        self.settled.clear();
         match hint {
             Hint::WaitForInterrupt => {
                 self.waiting[core] = true;
@@ -1631,6 +1850,7 @@ impl State {
         }
         let mut count = 0;
         while let Some(event) = self.timeline.pop_due() {
+            self.settled.clear();
             count += 1;
             if count > 1_000_000 {
                 return Err("device events fail to advance time".into());
@@ -1694,8 +1914,10 @@ impl State {
             decoders,
             active_slice,
             memory_access,
+            settled,
             ..
         } = self;
+        settled.clear();
         let mut host = Services {
             execution_policy: *execution_policy,
             device_workers: *device_workers,
@@ -1748,8 +1970,13 @@ impl State {
     }
     fn push_pins(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<bool, String> {
         let mut changed = false;
+        // Whether this push left every value it touches as it found it.
+        let mut settled = self.execution_policy == ExecutionPolicy::Exact && self.parallel.is_none();
+        self.settled.pass = false;
         for (core, controller) in self.core_interrupts.iter().enumerate() {
             if let Some(controller) = controller {
+                // Device-owned controller inputs are not tracked here.
+                settled = false;
                 let high = self.interrupt_delivery[core] && controller.inputs.irq();
                 if self.pins[core] != (high, false) {
                     if cpus[core].features().architectural_exits {
@@ -1786,6 +2013,7 @@ impl State {
                     changed = true;
                 }
                 if pins.0 || pins.1 {
+                    settled &= !self.waiting[core] && !self.waiting_event[core] && self.events[core];
                     self.waiting[core] = false;
                     if self.waiting_event[core] {
                         self.waiting_event[core] = false;
@@ -1801,10 +2029,72 @@ impl State {
                 && self.released[core]
                 && p.pending()
             {
+                settled &= !self.waiting[core];
                 self.waiting[core] = false;
             }
         }
+        self.settled.pass = settled && !changed;
         Ok(changed)
+    }
+    /// Whether the instruction observer may skip its pin push and deadline
+    /// refresh: both are a fixed point and guest time is before the next
+    /// timer output change.
+    #[inline]
+    fn settled(&mut self) -> bool {
+        if self.settled.armed && self.timeline.now() >= self.settled.until {
+            self.settled.clear();
+        }
+        self.settled.armed
+    }
+    /// After a full pin push that changed nothing and a full deadline
+    /// refresh: record until when both stay a fixed point.
+    fn arm_settled(&mut self) -> Result<(), String> {
+        if !self.settled.pass {
+            return Ok(());
+        }
+        let now = self.timeline.now();
+        let mut until = u64::MAX;
+        for p in self.aprofile.iter().flatten() {
+            if let Some(at) = p.next_deadline(now)? {
+                until = until.min(at);
+            }
+        }
+        self.settled.until = until;
+        self.settled.armed = until > now;
+        Ok(())
+    }
+    /// Recompute what a settled observer skipped and refuse any difference.
+    fn verify_settled(&mut self, cpus: &[Rc<dyn Cpu>], pins: bool) -> Result<(), String> {
+        let saved = (self.settled.armed, self.settled.until);
+        let observe = |s: &Self| {
+            (
+                s.pins.clone(),
+                s.waiting.clone(),
+                s.waiting_event.clone(),
+                s.events.clone(),
+                s.processor_deadlines.clone(),
+                s.processor_generations.clone(),
+                s.interrupts.as_ref().map(|g| g.gic.save()),
+                s.mprofile
+                    .iter()
+                    .map(|p| p.as_ref().map(|p| p.state(s.timeline.now())))
+                    .collect::<Vec<_>>(),
+                s.timeline.save(),
+            )
+        };
+        let before = observe(self);
+        let changed = if pins {
+            self.push_pins(cpus)?
+        } else {
+            self.refresh_processors()?;
+            false
+        };
+        if changed || before != observe(self) {
+            return Err("settled interrupt bookkeeping changed state".into());
+        }
+        self.settled.pass = false;
+        (self.settled.armed, self.settled.until) = saved;
+        Ok(())
     }
     fn tighten(&self, cpu: &dyn Cpu, core: usize) -> Result<(), String> {
         if cpu.features().tighten_instruction_limit {
@@ -1834,6 +2124,7 @@ impl State {
         if self.decoders.pending() {
             return Err("MMIO requires committed memory decoding".into());
         }
+        self.settled.clear();
         self.sync(&*cpus[core], core)?;
         self.due(cpus)?;
         let pc = scalar(&*cpus[core], Register::Pc)?;
@@ -1868,6 +2159,7 @@ impl State {
         Ok(result)
     }
     fn system_register(&mut self, cpu: &dyn Cpu, core: usize, syndrome: u64) -> Result<(), String> {
+        self.settled.clear();
         let r = fujimod_emulator_cpu::arm::SystemRegister {
             op0: ((syndrome >> 20) & 3) as u8,
             op1: ((syndrome >> 14) & 7) as u8,
@@ -2143,7 +2435,25 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             cpu.stop()?;
             return Ok(());
         }
-        if s.push_pins(&cpus)? {
+        // Before anything below that is not repeatable: when this stops for
+        // a translation resync, the observer runs again for this entry, and
+        // repeating the catch-up above at an unchanged time does nothing.
+        if s.enter_code(cpu, b.core, pc)? {
+            return Ok(());
+        }
+        let settled = s.settled();
+        // One decision covers the pin push here and the deadline refresh below.
+        let verify = settled && s.settled.verifies();
+        if settled {
+            s.settled.skips += 1;
+        } else {
+            s.settled.full += 1;
+        }
+        if settled {
+            if verify {
+                s.verify_settled(&cpus, true)?;
+            }
+        } else if s.push_pins(&cpus)? {
             cpu.stop()?;
             return Ok(());
         }
@@ -2181,10 +2491,20 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             let entry = p.before(cpu, pc, now)?;
             if let armv7a::Entry::Hint(hint) = entry { s.hint(b.core, hint); }
         }
+        // The page just proven is mapped host memory: read the instruction
+        // there instead of through the engine.
+        let fetched = s.code_shadow[b.core]
+            .as_ref()
+            .and_then(|shadow| shadow.fetch(pc));
         if let Some(p) = &mut s.mprofile[b.core] {
-            let entry = p.before(cpu, pc)?;
+            let entry = p.before(cpu, pc, fetched)?;
             if p.take_alias_write() {
                 s.code_run = None;
+            }
+            let execute = matches!(entry, mprofile::Entry::Execute);
+            if !execute {
+                // The controller entered, returned from or emulated something.
+                s.settled.clear();
             }
             match entry {
                 mprofile::Entry::Redirect => return Ok(()),
@@ -2192,8 +2512,19 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
                 mprofile::Entry::Wait => s.waiting[b.core] = true,
                 mprofile::Entry::Execute => (),
             }
-            s.refresh_processors()?;
-            if matches!(entry, mprofile::Entry::Execute) && s.mprofile_loop(cpu, b.core, pc)? {
+            if settled && execute {
+                if verify {
+                    s.verify_settled(&cpus, false)?;
+                }
+            } else {
+                s.refresh_processors()?;
+                if execute {
+                    s.arm_settled()?;
+                }
+            }
+            if execute && s.mprofile_loop(cpu, b.core, pc)? {
+                // The window moved the processor and its clock.
+                s.settled.clear();
                 return Ok(());
             }
         }

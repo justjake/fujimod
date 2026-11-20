@@ -71,29 +71,36 @@ impl Nvic {
             .active
             .last()
             .map_or(256, |e| self.priority[*e as usize] as u16);
-        let mut ready = vec![];
+        // The lowest (priority, exception) among ready exceptions that may
+        // preempt. Exceptions are visited in ascending number, so a strict
+        // comparison keeps the lowest number among equal priorities.
+        let mut best: Option<(u8, u16)> = None;
+        let mut consider = |e: u16| {
+            let priority = self.priority[e as usize];
+            let p = priority as u16;
+            if p < active
+                && (basepri == 0 || p < basepri as u16)
+                && best.is_none_or(|(lowest, _)| priority < lowest)
+            {
+                best = Some((priority, e));
+            }
+        };
         let icsr = self.regs.get(&0xd04).copied().unwrap_or(0);
         if icsr & (1 << 28) != 0 {
-            ready.push(14)
+            consider(14)
         }
         if icsr & (1 << 26) != 0 {
-            ready.push(15)
+            consider(15)
         }
         for (i, (p, e)) in self.pending.iter().zip(&self.enabled).enumerate() {
             let mut bits = p & e;
             while bits != 0 {
                 let bit = bits.trailing_zeros();
-                ready.push((16 + i * 32 + bit as usize) as u16);
+                consider((16 + i * 32 + bit as usize) as u16);
                 bits &= bits - 1;
             }
         }
-        ready
-            .into_iter()
-            .filter(|e| {
-                let p = self.priority[*e as usize] as u16;
-                p < active && (basepri == 0 || p < basepri as u16)
-            })
-            .min_by_key(|e| (self.priority[*e as usize], *e))
+        best.map(|(_, e)| e)
     }
     pub fn enter(&mut self, e: u16) {
         if e >= 16 {

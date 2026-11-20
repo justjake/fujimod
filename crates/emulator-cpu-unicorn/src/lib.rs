@@ -766,11 +766,29 @@ impl Cpu for Core {
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self.cached_memory_regions()?.to_vec())
     }
+    fn backing_pointer(&self, address: u64, bytes: usize) -> Option<NonNull<u8>> {
+        frozen::pointer(self.identity, address, bytes)
+    }
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
         if self.has_engine_ram.get() {
             return Err("processor has engine-owned RAM outside the board checkpoint".into());
         }
         Ok(frozen::backings(self.identity))
+    }
+    unsafe fn backing_written(
+        &self,
+        _physical: u64,
+        backing: NonNull<u8>,
+        bytes: usize,
+    ) -> Result<(), String> {
+        // Refuse exactly where a full invalidation refuses.
+        self.check_tlbi_mutation()?;
+        // This engine translates only memory it maps. A write to backing it
+        // does not map cannot have changed any of its translations.
+        if !frozen::touches(self.identity, backing.as_ptr() as usize, bytes) {
+            return Ok(());
+        }
+        self.invalidate_code(None)
     }
     unsafe fn map_backing(
         &self,

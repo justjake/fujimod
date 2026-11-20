@@ -306,6 +306,17 @@ lto = "thin"
 codegen-units = 16
 strip = "debuginfo"
 
+# The native emulator executable for long boots: `cargo build --profile release-emulator
+# -p fujimod-emulator-cli --bin fujimod-emulator` (output in target/release-emulator). ThinLTO
+# inlines the execution core across crates, which `release` cannot. A separate profile, because
+# its builds are slower and `release` is tuned for fast rebuilds of every other artifact.
+[profile.release-emulator]
+inherits = "release"
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+incremental = false
+
 # Build executables stay unstripped; distribution profiles apply to libraries.
 # The binding generator's build scripts parse the App80 and service sources on
 # every USB or service edit, so they are optimized.

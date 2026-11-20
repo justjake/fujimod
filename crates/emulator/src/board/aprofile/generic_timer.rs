@@ -17,11 +17,18 @@ impl Clock {
     }
     pub fn count(self, now: u64) -> Result<u64, String> {
         self.validate()?;
+        // The common product fits 64 bits; the wide form is the same value.
+        if let Some(product) = now.checked_mul(self.counter_hz) {
+            return Ok(product / self.ticks_per_second);
+        }
         u64::try_from(now as u128 * self.counter_hz as u128 / self.ticks_per_second as u128)
             .map_err(|_| "architectural counter overflow".into())
     }
     fn at_count(self, count: u64) -> Result<u64, String> {
         self.validate()?;
+        if let Some(product) = count.checked_mul(self.ticks_per_second) {
+            return Ok(product.div_ceil(self.counter_hz));
+        }
         u64::try_from(
             (count as u128 * self.ticks_per_second as u128).div_ceil(self.counter_hz as u128),
         )
@@ -148,5 +155,43 @@ mod tests {
         let restored: Timer = serde_json::from_value(state).unwrap();
         assert_eq!(restored.next_deadline(clock, 1019).unwrap(), Some(1020));
         assert!(restored.asserted(1020));
+    }
+    #[test]
+    fn narrow_counter_arithmetic_equals_the_wide_form() {
+        let values = [
+            0u64,
+            1,
+            3,
+            999,
+            1 << 31,
+            62_000_000_000,
+            (1 << 40) + 7,
+            u64::MAX / 3,
+            u64::MAX,
+        ];
+        for (counter_hz, ticks_per_second) in [
+            (1u64, 1u64),
+            (3, 10),
+            (24_000_000, 1_000_000_000),
+            (u32::MAX as u64, 7),
+            (19_200_000, u64::MAX),
+        ] {
+            let clock = Clock {
+                counter_hz,
+                ticks_per_second,
+            };
+            for &value in &values {
+                let count = u64::try_from(
+                    value as u128 * counter_hz as u128 / ticks_per_second as u128,
+                )
+                .ok();
+                assert_eq!(clock.count(value).ok(), count);
+                let at = u64::try_from(
+                    (value as u128 * ticks_per_second as u128).div_ceil(counter_hz as u128),
+                )
+                .ok();
+                assert_eq!(clock.at_count(value).ok(), at);
+            }
+        }
     }
 }
