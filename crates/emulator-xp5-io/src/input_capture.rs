@@ -37,6 +37,11 @@ use std::sync::{Arc, Mutex};
 
 /// Most captures kept latched or in flight; a guest that never reads them refuses.
 const CAPTURE_DEPTH: usize = 16;
+/// A sample frame this long after the previous one starts a new settle window
+/// (`settle_frames`). The X-T5 4.31 A53 reloads and restarts the companion core
+/// at about 24.9 s; its servo then starts again after a pause far longer than
+/// this, while the running servo samples every 62.5 us.
+const SETTLE_GAP_NS: u64 = 50_000_000;
 
 /// Immediate-acceptance transmit port for a channel without a sequencer.
 pub struct TransmitSink;
@@ -76,12 +81,23 @@ pub struct SequencerOptions {
     #[serde(default)]
     pub drive_gain: [i32; 3],
     /// Host-time saving scenario: after this many sample frames the sensor stops
-    /// answering (segment ends latch no capture). The companion servo task then
+    /// answering (segment ends latch no capture) until a pause of at least 50 ms
+    /// in the frames (a companion restart) opens a new window. The companion servo task then
     /// waits on its sample semaphore with its last, settled errors, as it did
     /// before this model existed. Not a hardware behavior; absent = always answer.
     #[serde(default)]
     pub settle_frames: Option<u64>,
 }
+/// The settle limit in force: the manifest option, or the host override
+/// `XT5_IBIS_SETTLE_FRAMES=N` for quick development runs (read once). The override
+/// is a host-time saving only, never hardware behavior; strict records leave it unset.
+fn settle_limit(configured: Option<u64>) -> Option<u64> {
+    static OVERRIDE: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+    configured.or(*OVERRIDE.get_or_init(|| {
+        std::env::var("XT5_IBIS_SETTLE_FRAMES").ok().and_then(|value| value.parse().ok())
+    }))
+}
+
 impl SequencerOptions {
     fn validate(&self, channels: u64) -> Result<(), String> {
         if u64::from(self.channel) >= channels
@@ -119,6 +135,11 @@ struct SequencerState {
     words: u64,
     frames: u64,
     captures: u64,
+    /// Frames since the current settle window opened, and the last frame's tick.
+    #[serde(default)]
+    window_frames: u64,
+    #[serde(default)]
+    last_frame: Option<u64>,
 }
 
 /// The sequencer state shared by the channel registers and its DMA port.
@@ -182,11 +203,16 @@ impl Sequencer {
                     // One stage step per sample frame, before its first sample.
                     self.step_stage();
                     self.state.frames += 1;
+                    if self.state.last_frame.is_some_and(|at| now.saturating_sub(at) >= SETTLE_GAP_NS) {
+                        self.state.window_frames = 0;
+                    }
+                    self.state.window_frames += 1;
+                    self.state.last_frame = Some(now);
                 }
                 self.state.reads += 1;
                 self.state.shift = (self.state.shift << 16) | u32::from(self.sample(axis));
             }
-            0x0007 if self.options.settle_frames.is_some_and(|limit| self.state.frames > limit) => {
+            0x0007 if settle_limit(self.options.settle_frames).is_some_and(|limit| self.state.window_frames > limit) => {
                 self.state.shift = 0;
             }
             0x0007 => {
@@ -664,6 +690,16 @@ mod tests {
         }
         assert_eq!(captures, [2, 2, 0, 0]);
         assert_eq!(sequencer.next(), None);
+        // After a companion restart (a long pause) the sensor answers again.
+        for tick in 0..3u64 {
+            let at = SETTLE_GAP_NS + 400 + tick * 100;
+            for word in TABLE {
+                sequencer.word(at, word).unwrap();
+            }
+            sequencer.advance(at + 1000);
+            captures.push(sequencer.state.ready.drain(..).count());
+        }
+        assert_eq!(captures, [2, 2, 0, 0, 2, 2, 0]);
     }
 
     #[test]
