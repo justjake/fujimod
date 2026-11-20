@@ -82,6 +82,12 @@ impl Monitors {
     pub fn active(&self) -> bool {
         self.cores.values().any(|slot| slot.reservation.is_some())
     }
+    /// Whether an owner other than `core` holds a reservation.
+    pub fn active_except(&self, core: Owner) -> bool {
+        self.cores
+            .iter()
+            .any(|(owner, slot)| *owner != core && slot.reservation.is_some())
+    }
     pub fn load(&mut self, core: Owner, address: u64, size: usize) {
         self.cores
             .get_mut(&core)

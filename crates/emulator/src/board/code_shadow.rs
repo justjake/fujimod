@@ -11,7 +11,8 @@
 //! entered, and the pages of the stop PC when a slice ends, so every page that
 //! can hold a live translation has been touched. A page touched in a slice is
 //! copied when that slice ends, after the processor's own stores, which its
-//! engine already tracks. The first touch after a peer ran, or after the host
+//! engine already tracks; a store of its own into a copied page touches that
+//! page too, so its copy follows. The first touch after a peer ran, or after the host
 //! or a device wrote RAM, compares the copy with guest memory; a difference
 //! means code changed behind the engine and the owner must discard the
 //! translations before the instruction is entered.
@@ -24,6 +25,11 @@ use std::ptr::NonNull;
 
 const PAGE: u64 = 4096;
 type Bytes = [u8; PAGE as usize];
+const FILTER_WORDS: usize = 16;
+fn filter_bit(page: u64) -> (usize, u64) {
+    let index = (page / PAGE) as usize % (FILTER_WORDS * 64);
+    (index / 64, 1 << (index % 64))
+}
 
 struct Page {
     /// Bytes at the end of the last slice that touched the page.
@@ -63,9 +69,11 @@ impl Page {
     }
 }
 
-#[derive(Default)]
 pub(super) struct CodeShadow {
     pages: HashMap<u64, Page>,
+    /// One bit per low page number that some copied page has, to dismiss
+    /// most stores without a lookup.
+    filter: [u64; FILTER_WORDS],
     /// Pages to copy when the current slice ends.
     touched: Vec<u64>,
     /// The page of the previous instruction, with its host address; its touch
@@ -90,6 +98,27 @@ pub(super) struct CodeShadow {
     /// Pages found changed behind the engine, with how often.
     changed_pages: HashMap<u64, u64>,
     scratch: Option<Box<Bytes>>,
+}
+
+impl Default for CodeShadow {
+    fn default() -> Self {
+        Self {
+            pages: HashMap::new(),
+            filter: [0; FILTER_WORDS],
+            touched: Vec::new(),
+            last: None,
+            epoch: 0,
+            slice: 0,
+            unproven: false,
+            changed: false,
+            resync: false,
+            retained: 0,
+            discards: 0,
+            changes: 0,
+            changed_pages: HashMap::new(),
+            scratch: None,
+        }
+    }
 }
 
 /// What a touch found.
@@ -140,6 +169,7 @@ impl CodeShadow {
         self.discards += 1;
         self.changes += u64::from(self.changed);
         self.pages.clear();
+        self.filter = [0; FILTER_WORDS];
         self.touched.clear();
         self.last = None;
         self.unproven = false;
@@ -194,6 +224,21 @@ impl CodeShadow {
         Some(u16::from_le(unsafe {
             host?.as_ptr().add(offset as usize).cast::<u16>().read_unaligned()
         }))
+    }
+    /// `len` bytes of code at `address`, read from host memory, when they lie
+    /// in the page just touched and that page is mapped from external
+    /// backing. They are the bytes the processor's own memory read returns.
+    #[inline]
+    pub(super) fn code(&self, address: u64, len: usize) -> Option<&[u8]> {
+        let (page, host) = self.last?;
+        let offset = address.checked_sub(page)?;
+        if offset.checked_add(len as u64)? > PAGE {
+            return None;
+        }
+        // SAFETY: `host` addresses a whole mapped page of external backing
+        // and the range stays inside it; execution is serialized with the
+        // read, and the slice is used before the processor runs again.
+        Some(unsafe { std::slice::from_raw_parts(host?.as_ptr().add(offset as usize), len) })
     }
     /// Touch the pages an instruction at `pc` can occupy, and the page after
     /// its own: a translation that starts in one page ends within the next.
@@ -278,8 +323,55 @@ impl CodeShadow {
                 touched: slice,
             },
         );
+        let (word, bit) = filter_bit(address);
+        self.filter[word] |= bit;
         self.touched.push(address);
         (Touch::Proven, host)
+    }
+    /// This processor is about to store `bytes` at `address`; the bytes are
+    /// not written yet. A copied page it stores into is touched like a page
+    /// it executes from: compared if anything else may have written since
+    /// its copy, then copied again when the slice ends. Without this, a
+    /// store made in a slice that does not execute from the page would leave
+    /// the copy behind and a later comparison would report a change that
+    /// only this processor made.
+    #[inline]
+    pub(super) fn stored(&mut self, cpu: &dyn Cpu, address: u64, bytes: usize) {
+        if bytes == 0 || self.unproven || self.changed {
+            return;
+        }
+        let first = address & !(PAGE - 1);
+        let last = address.saturating_add(bytes as u64 - 1) & !(PAGE - 1);
+        let (word, bit) = filter_bit(first);
+        let (last_word, last_bit) = filter_bit(last);
+        if self.filter[word] & bit == 0 && self.filter[last_word] & last_bit == 0 {
+            return;
+        }
+        self.stored_slow(cpu, first, last);
+    }
+    #[cold]
+    fn stored_slow(&mut self, cpu: &dyn Cpu, first: u64, last: u64) {
+        let (epoch, slice) = (self.epoch, self.slice);
+        for address in [Some(first), (last != first).then_some(last)].into_iter().flatten() {
+            let Some(page) = self.pages.get_mut(&address) else {
+                continue;
+            };
+            if page.verified != epoch {
+                let scratch = self
+                    .scratch
+                    .get_or_insert_with(|| Box::new([0; PAGE as usize]));
+                if page.differs(cpu, address, scratch) {
+                    *self.changed_pages.entry(address).or_default() += 1;
+                    self.changed = true;
+                    return;
+                }
+                page.verified = epoch;
+            }
+            if page.touched != slice {
+                page.touched = slice;
+                self.touched.push(address);
+            }
+        }
     }
     /// A slice ended with the processor stopped before `pc`. The engine may
     /// already hold a translation for it. Copy every touched page: the copies

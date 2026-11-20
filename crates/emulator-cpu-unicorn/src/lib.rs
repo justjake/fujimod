@@ -766,6 +766,9 @@ impl Cpu for Core {
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self.cached_memory_regions()?.to_vec())
     }
+    fn hook_count(&self) -> Option<usize> {
+        Some(self.hooks.borrow().len())
+    }
     fn backing_pointer(&self, address: u64, bytes: usize) -> Option<NonNull<u8>> {
         frozen::pointer(self.identity, address, bytes)
     }

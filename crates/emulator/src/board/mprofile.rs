@@ -34,6 +34,15 @@ pub(super) struct Profile {
     owner: exclusive::Owner,
     views: Vec<MemoryView>,
     alias_write: bool,
+    /// Host-only: the last entry asked the engine to stop (an exclusive
+    /// instruction), as distinct from only moving the PC.
+    stopped: bool,
+    /// Host-only: this processor's store hook sees only watched pages, so a
+    /// new reservation's granule must be watched.
+    watch_reservations: bool,
+    /// Host-only: the last entry found an exception ready (pending and
+    /// enabled, whatever the masks).
+    ready: bool,
 }
 pub(super) enum Entry {
     Execute,
@@ -107,6 +116,9 @@ impl Profile {
             owner: _,
             views,
             alias_write,
+            stopped: _,
+            watch_reservations: _,
+            ready: _,
         } = self;
         Checkpoint {
             config: *config,
@@ -177,6 +189,9 @@ impl Profile {
             owner,
             views,
             alias_write: false,
+            stopped: false,
+            watch_reservations: false,
+            ready: false,
         })
     }
     fn ns(&self, now: u64) -> Result<u64, String> {
@@ -230,6 +245,41 @@ impl Profile {
     }
     pub(super) fn take_alias_write(&mut self) -> bool {
         std::mem::take(&mut self.alias_write)
+    }
+    /// Whether two of this processor's views show the same physical RAM. Its
+    /// stores through one view must then be seen for the other.
+    pub(super) fn aliased(&self) -> bool {
+        self.views.iter().enumerate().any(|(i, a)| {
+            self.views[..i].iter().any(|b| {
+                a.physical < b.physical + b.size as u64 && b.physical < a.physical + a.size as u64
+            })
+        })
+    }
+    /// Whether this processor's store hook must see every store of its next
+    /// slice for the exclusive monitors: another owner holds a reservation
+    /// (its granule is not watched on this engine), or this processor holds
+    /// one taken before it watched its granules. Reservations change only
+    /// while their owner runs, so the answer holds for the slice.
+    pub(super) fn monitors_need_every_store(&self) -> Result<bool, String> {
+        let monitors = self
+            .domain
+            .lock()
+            .map_err(|_| "exclusive monitors poisoned")?;
+        Ok(monitors.active_except(self.owner)
+            || !self.watch_reservations && monitors.reservation(self.owner).is_some())
+    }
+    /// From now on, watch the granule of every reservation this processor
+    /// takes (its store hook no longer sees every store).
+    pub(super) fn watch_reservations(&mut self) {
+        self.watch_reservations = true;
+    }
+    /// Whether the last entry found an exception ready.
+    pub(super) fn ready(&self) -> bool {
+        self.ready
+    }
+    /// Whether the last emulated entry stopped the engine itself.
+    pub(super) fn take_stopped(&mut self) -> bool {
+        std::mem::take(&mut self.stopped)
     }
     fn enter(&mut self, cpu: &dyn Cpu, exception: u16, pc: u32) -> Result<(), String> {
         mprofile::enter(cpu, &mut self.nvic, exception, pc)?;
@@ -285,6 +335,13 @@ impl Profile {
                     .lock()
                     .map_err(|_| "exclusive monitors poisoned")?;
                 if load {
+                    if self.watch_reservations {
+                        // This processor's own stores into the reserved
+                        // granule must reach the monitor.
+                        let first = address & !63;
+                        let last = (address + size as u64 - 1) | 63;
+                        cpu.watch_stores(first, last - first + 1)?;
+                    }
                     domain.load(self.owner, physical, size);
                     set(cpu, reg(data), u32::from_le_bytes(value))?;
                 } else {
@@ -305,6 +362,7 @@ impl Profile {
             arm::thumb::advance_it(cpsr),
         )?;
         set(cpu, Register::Pc, (pc as u32).wrapping_add(4) | 1)?;
+        self.stopped = true;
         cpu.stop()?;
         Ok(())
     }
@@ -390,15 +448,19 @@ impl Profile {
         self.nvic.wake_pending()
     }
     /// `fetched` is the instruction's first halfword when the owner already
-    /// read it from the processor's memory.
+    /// read it from the processor's memory. `idle` is the owner's knowledge
+    /// that no exception is ready and nothing changed the controller since:
+    /// the pending scan would find the same.
     pub fn before(
         &mut self,
         cpu: &dyn Cpu,
         pc: u64,
         fetched: Option<u16>,
+        idle: bool,
     ) -> Result<Entry, String> {
+        self.ready = !idle && self.pending();
         // Without a ready exception the mask registers cannot select one.
-        if self.pending()
+        if self.ready
             && let Some(exception) = self.nvic.next(
                 get(cpu, special(arm::Register::Primask))?,
                 get(cpu, special(arm::Register::Basepri))?,
@@ -430,11 +492,7 @@ impl Profile {
         };
         // Only the encodings handled below need the condition state; every
         // other instruction executes natively whether or not it passes.
-        if !(matches!(word, 0xbf30 | 0xbf20 | 0xf3ef | 0xf3bf)
-            || word & 0xff00 == 0xdf00
-            || word & 0xff87 == 0x4700
-            || matches!(word & 0xfff0, 0xe850 | 0xe840 | 0xe8d0 | 0xe8c0))
-        {
+        if !super::mprofile_blocks::observed(word) {
             return Ok(Entry::Execute);
         }
         let cpsr = get(cpu, special(arm::Register::Cpsr))?;
