@@ -136,10 +136,10 @@ pub(super) fn open_startup(
         }
         None
     };
+    // A ROM or SD card start drops the hand-off preload: stage one builds that block itself,
+    // from the power-controller registers the profile header also goes into.
     let profile = if camera_settings.is_empty() {
         None
-    } else if rom.is_some() {
-        return Err("camera settings apply to the loader start only".into());
     } else {
         Some(profile::place(&mut state, &firmware, configuration, &camera_settings)?)
     };

@@ -6,7 +6,9 @@ use std::{fs::File, io::{Read, Seek, SeekFrom, Write as _}, path::{Path, PathBuf
 /// Bounds backing storage even when the image describes a large sparse volume.
 const MAX_NONZERO_SECTORS: usize = 1 << 21;
 const SCAN_CHUNK: usize = 4 << 20;
-const MAX_FILE_BYTES: u64 = 64 << 20;
+/// Total bytes of caller files on the in-memory volume. An X-Processor 5 update file is about
+/// 105 MiB, and the stock updater reads it from this volume.
+const MAX_FILE_BYTES: u64 = 256 << 20;
 
 /// Load an image into an independent sparse medium. The source is opened read-only.
 pub fn read_image(path: &Path) -> Result<Card, String> {
@@ -41,15 +43,19 @@ pub fn read_image(path: &Path) -> Result<Card, String> {
 
 /// Read caller-supplied SD card files before editing the selected medium.
 pub fn read_files(files: &[(String, PathBuf)]) -> Result<Vec<(String, Vec<u8>)>, String> {
+    read_files_within(files, MAX_FILE_BYTES)
+}
+
+fn read_files_within(files: &[(String, PathBuf)], bound: u64) -> Result<Vec<(String, Vec<u8>)>, String> {
     let mut total = 0u64;
     files.iter().map(|(name, path)| {
         let mut file = File::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
         let mut bytes = Vec::new();
-        Read::by_ref(&mut file).take(MAX_FILE_BYTES - total + 1).read_to_end(&mut bytes)
+        Read::by_ref(&mut file).take(bound - total + 1).read_to_end(&mut bytes)
             .map_err(|error| format!("{}: {error}", path.display()))?;
         total += bytes.len() as u64;
-        if total > MAX_FILE_BYTES {
-            return Err("SD card files exceed 64 MiB total".into());
+        if total > bound {
+            return Err(format!("SD card files exceed {} MiB total", bound >> 20));
         }
         Ok((name.clone(), bytes))
     }).collect()
@@ -102,6 +108,24 @@ pub fn write_back(path: &Path, original: &Card, current: &Card) -> Result<usize,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn caller_files_are_read_up_to_the_total_bound() {
+        let directory = std::env::temp_dir().join(format!("media-read-files-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let (first, second) = (directory.join("a.bin"), directory.join("b.bin"));
+        std::fs::write(&first, vec![0x11u8; 3 << 20]).unwrap();
+        std::fs::write(&second, vec![0x22u8; 2 << 20]).unwrap();
+        let files = [("A.BIN".to_string(), first), ("B.BIN".to_string(), second)];
+        let read = read_files_within(&files, 5 << 20).unwrap();
+        assert_eq!(read.iter().map(|(name, bytes)| (name.as_str(), bytes.len())).collect::<Vec<_>>(),
+            [("A.BIN", 3 << 20), ("B.BIN", 2 << 20)]);
+        let error = read_files_within(&files, (5 << 20) - 1).unwrap_err();
+        assert_eq!(error, "SD card files exceed 4 MiB total");
+        // An X-Processor 5 update file (about 105 MiB) fits the shipped bound.
+        assert!(MAX_FILE_BYTES >= 128 << 20);
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
 
     #[test]
     fn write_back_writes_only_changed_sectors_and_keeps_the_length() {
