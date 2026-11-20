@@ -999,7 +999,13 @@ fn open_prepared_epoch(
     mode: Mode,
     epoch: Option<(u64, Vec<u64>, [u8; 16])>,
 ) -> Result<Session, String> {
+    // A browser allocates Wasm pages as they are first written: filling all of
+    // DRAM makes every page resident, past a phone tab's memory. Browser boots
+    // start RAM zeroed; native boots keep the measured power-on fill.
+    #[cfg(not(target_os = "emscripten"))]
     let ram_fill = power_on_ram_fill(&prepared);
+    #[cfg(target_os = "emscripten")]
+    let ram_fill: Option<u8> = None;
     prepared
         .update
         .check(&inputs.update)

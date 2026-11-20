@@ -173,12 +173,12 @@ export interface IdentifiedFirmware {
   version: string;
   sha256: string;
 }
-function libraryEntry(file: File, firmware: IdentifiedFirmware): LibraryFirmware {
+function libraryEntry(fileName: string, firmware: IdentifiedFirmware): LibraryFirmware {
   return {
     sha256: firmware.sha256,
     firmwareId: firmware.id,
     name: `${firmware.model} · ${firmware.version}`,
-    fileName: file.name,
+    fileName,
     addedAt: Date.now(),
   };
 }
@@ -201,8 +201,15 @@ export class CameraStore {
   /** Store an identified firmware update once; a repeat returns the stored entry. */
   async addFirmware(file: File, firmware: IdentifiedFirmware): Promise<LibraryFirmware> {
     // Store bytes rather than File/Blob handles: WebKit can fail their IndexedDB clone.
-    const bytes = await file.arrayBuffer();
-    const entry = libraryEntry(file, firmware);
+    return this.addFirmwareBytes(file.name, await file.arrayBuffer(), firmware);
+  }
+  /** Store downloaded firmware bytes once, without another copy as a File. */
+  addFirmwareBytes(
+    fileName: string,
+    bytes: ArrayBuffer,
+    firmware: IdentifiedFirmware,
+  ): Promise<LibraryFirmware> {
+    const entry = libraryEntry(fileName, firmware);
     return transaction(['library', 'library-bytes'], 'readwrite', (tx, result, fail) => {
       const existing = tx.objectStore('library').get(entry.sha256);
       existing.onsuccess = () => {
@@ -230,7 +237,10 @@ export class CameraStore {
     modEnabled: boolean,
   ): Promise<CameraRecord> {
     // Store bytes rather than File/Blob handles: WebKit can fail their IndexedDB clone.
-    const bytes = await file.arrayBuffer();
+    // Firmware already in the library is not read again.
+    const bytes = (await this.hasFirmware(firmware.sha256))
+      ? new ArrayBuffer(0)
+      : await file.arrayBuffer();
     const record: CameraRecord = {
       id: crypto.randomUUID(),
       name: `${firmware.model} · ${firmware.version}`,
@@ -243,10 +253,16 @@ export class CameraStore {
     };
     await transaction(['cameras', 'library', 'library-bytes'], 'readwrite', (tx, result, fail) => {
       tx.objectStore('cameras').add(record);
-      addToLibrary(tx, libraryEntry(file, firmware), bytes, fail);
+      addToLibrary(tx, libraryEntry(file.name, firmware), bytes, fail);
       result(undefined);
     });
     return record;
+  }
+  private hasFirmware(sha256: string): Promise<boolean> {
+    return transaction(['library-bytes'], 'readonly', (tx, result) => {
+      const request = tx.objectStore('library-bytes').getKey(sha256);
+      request.onsuccess = () => result(request.result !== undefined);
+    });
   }
   private firmwareValue(sha256: string): Promise<ArrayBuffer | Blob> {
     return transaction<unknown>(['library-bytes'], 'readonly', (tx, result) => {
