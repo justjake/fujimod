@@ -104,7 +104,8 @@ pub(super) fn open_startup(
                     .ok_or("this firmware declares no setup-stage start")??;
                 rom_start::RomStart::from_setup_handoff(handoff)?
             }
-            (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?,
+            (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?
+                .with_setup_windows_of(&firmware_id)?,
             (None, RunStart::SdCard) => {
                 let handoff = rom_start::Handoff::for_firmware(&firmware_id)
                     .ok_or("this SD card start requires --boot-rom")??;
