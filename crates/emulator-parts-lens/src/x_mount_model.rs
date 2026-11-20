@@ -922,8 +922,22 @@ impl Unit {
             // 0x56: a signed absolute target; the move starts here. A target equal to the
             // current position still holds the ready line busy for the shortest operation,
             // so the body sees the drive complete.
+            //
+            // 0x55 (lenscom 0x13e5d4c) carries request byte +2 in bit 0 and +5 in bit 9. The
+            // AF drives of an S1 contrast scan differ only in +2: 1 for the move to the scan
+            // start and for the final move, 0 for the sweep, whose target is the current
+            // position (amount 0) with the scan speed. The model reads +2 = 0 as a continuous
+            // drive at the requested speed toward the end bit 9 names (1: the high end, where
+            // nearer subjects lie), until the next request; inferred from those requests, not
+            // from lens documentation.
             FOCUS_TARGET => {
-                self.move_focus(now, payload as i16 as i64);
+                let flags = self.state.settings.get(&FOCUS_FLAGS).copied().unwrap_or(1);
+                let target = if flags & 1 == 0 {
+                    if flags & 0x200 != 0 { self.spec.focus.max as i64 } else { self.spec.focus.min as i64 }
+                } else {
+                    payload as i16 as i64
+                };
+                self.move_focus(now, target);
                 payload
             }
             FOCUS_DRIVE => {

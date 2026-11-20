@@ -180,6 +180,31 @@ fn focus_moves_to_its_target_and_feedback_reports_it() {
 }
 
 #[test]
+fn a_drive_without_the_absolute_flag_sweeps_toward_the_named_end() {
+    let mut port = lens();
+    let mut time = 0;
+    powered(&port, &mut time);
+    time += 20 * MS;
+    // The scan start: absolute (0x55 bit 0) to 200.
+    request(&mut port, FOCUS_FLAGS, 0x201, &mut time);
+    request(&mut port, FOCUS_TARGET, 200, &mut time);
+    time += 100 * MS;
+    assert_eq!(port.focus(time), (200, 200));
+    // The sweep: not absolute, toward the high end, at 6000 units per second.
+    request(&mut port, FOCUS_SPEED, 6000, &mut time);
+    request(&mut port, FOCUS_FLAGS, 0x200, &mut time);
+    request(&mut port, FOCUS_TARGET, 200, &mut time);
+    time += 100 * MS;
+    let (position, target) = port.focus(time);
+    assert_eq!(target, 4000);
+    assert!(position > 600 && position < 900, "{position}");
+    // The final move is absolute again and stops the sweep.
+    request(&mut port, FOCUS_FLAGS, 0x101, &mut time);
+    request(&mut port, FOCUS_TARGET, 300, &mut time);
+    assert_eq!(port.focus(time).1, 300);
+}
+
+#[test]
 fn aperture_setpoint_moves_the_index() {
     let mut port = lens();
     let mut time = 0;
