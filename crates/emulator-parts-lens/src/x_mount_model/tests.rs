@@ -75,7 +75,7 @@ fn packets_use_the_x_mount_framing_and_check() {
 
 #[test]
 fn identification_record_is_registered_and_sums_to_zero() {
-    for name in ["xf18-55", "prime"] {
+    for name in ["xf18-55", "prime", "xf23"] {
         let spec = Spec::preset(name).unwrap();
         let record = &spec.identification;
         assert_eq!(record.len(), 128);
@@ -162,7 +162,7 @@ fn focus_moves_to_its_target_and_feedback_reports_it() {
     request(&mut port, FOCUS_TARGET, 0xffff, &mut time);
     time += 200 * MS;
     assert_eq!(request(&mut port, FEEDBACK, 0, &mut time), 4000);
-    assert_eq!(request(&mut port, MOTION_STATE, 0, &mut time), 0);
+    assert_eq!(request(&mut port, ZOOM_STATE, 0, &mut time), 0, "zoom step 0");
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn checkpoints_restore_link_motion_and_power_exactly() {
 
 #[test]
 fn identification_satisfies_the_x_t5_startup_checks() {
-    for name in ["xf18-55", "prime"] {
+    for name in ["xf18-55", "prime", "xf23"] {
         let r = Spec::preset(name).unwrap().identification;
         assert!(r[8..16].iter().any(|b| *b != 0xff));
         assert_eq!(r[9], b'L');
@@ -289,17 +289,19 @@ fn family_0x96_starts_the_extended_record_bulk_read() {
 }
 
 #[test]
-fn catalog_6_serves_four_blocks_in_the_requested_order_with_the_marker() {
+fn catalog_6_serves_its_blocks_in_the_requested_order_with_the_marker() {
     let mut port = lens();
     let mut time = 0;
     powered(&port, &mut time);
     let query = Packet::encode(6, READ_CATALOG, false).0;
     exchange(&mut port, query, &mut time);
     let reply = exchange(&mut port, 0, &mut time);
-    assert_eq!((Packet(reply).family(), Packet(reply).payload()), (READ_CATALOG, 4));
+    assert_eq!((Packet(reply).family(), Packet(reply).payload()), (READ_CATALOG, 43));
     // The body names the next block it wants (as 0x13ed614 does), then 0xffff, then 0xff00.
     let mut headers = vec![];
-    for request in [1u16, 2, 3, 0xffff, 0xff00] {
+    let mut blocks = vec![];
+    let requests = (1u16..43).chain([0xffff, 0xff00]);
+    for request in requests {
         let mut bytes = request.to_be_bytes().to_vec();
         bytes.extend(vec![0; CATALOG_BLOCK_BYTES]);
         bytes.push(0x5a);
@@ -307,14 +309,104 @@ fn catalog_6_serves_four_blocks_in_the_requested_order_with_the_marker() {
         headers.push(u16::from_be_bytes([out[0], out[1]]));
         let sum = out[..CATALOG_BLOCK_BYTES + 2].iter().fold(0u8, |s, b| s.wrapping_add(*b));
         assert_eq!(out[CATALOG_BLOCK_BYTES + 2], sum);
-        if headers.len() == 1 {
-            assert_eq!((out[2 + 0x47], out[2 + 0x48]), (0x55, 0xaa), "marker in block 0");
-        }
+        blocks.push(out[2..CATALOG_BLOCK_BYTES + 2].to_vec());
     }
-    assert_eq!(headers, [0, 1, 2, 3, 0xffff]);
+    let expected: Vec<u16> = (0u16..43).chain([0xffff]).collect();
+    assert_eq!(headers, expected);
+    // Block count - 4 (39) is the first block stored at 0x720000; it carries the marker.
+    assert_eq!((blocks[39][0x47], blocks[39][0x48]), (0x55, 0xaa), "marker in block 39");
+    assert!(blocks[39][0x4a..].starts_with(b"XF18-55mmF2.8-4 R LM OIS\0"));
     assert_eq!(port.catalog_reads(), 1);
     assert_eq!(request(&mut port, STATUS, 0, &mut time), 0x04c0);
     // An undeclared selector serves one block.
     exchange(&mut port, Packet::encode(0, READ_CATALOG, false).0, &mut time);
     assert_eq!(Packet(exchange(&mut port, 0, &mut time)).payload(), 1);
+}
+
+/// The catalog as the X-T5 body stores it: configuration offset -> byte.
+fn configuration(catalog: &Catalog) -> impl Fn(u32) -> u8 + '_ {
+    let lens_blocks = catalog.blocks as u32 - 4;
+    move |config: u32| {
+        let at = if config >= 0x722000 {
+            config - 0x722000
+        } else {
+            lens_blocks * CATALOG_BLOCK_BYTES as u32 + config - 0x720000
+        };
+        let (block, offset) = (at / CATALOG_BLOCK_BYTES as u32, at % CATALOG_BLOCK_BYTES as u32);
+        assert!(block < catalog.blocks as u32);
+        if catalog.marker_block == Some(block as u16) && (offset == 0x47 || offset == 0x48) {
+            return [0x55, 0xaa][offset as usize - 0x47];
+        }
+        catalog.byte(block as u16, offset as usize)
+    }
+}
+fn u16_at(read: &impl Fn(u32) -> u8, config: u32) -> u16 {
+    u16::from_le_bytes([read(config), read(config + 1)])
+}
+
+#[test]
+fn the_lens_data_carries_identity_names_and_serial_where_the_body_reads_them() {
+    let spec = Spec::preset("xf23").unwrap();
+    let record = &spec.identification;
+    let read = configuration(&spec.catalogs[0]);
+    let bytes = |from: u32, n: u32| (from..from + n).map(&read).collect::<Vec<u8>>();
+    assert_eq!(bytes(0x720000, 8), record[0x10..0x18], "block +0 matches record +0x10");
+    assert_eq!(bytes(0x720014, 10), record[0x50..0x5a], "serial matches record +0x50");
+    assert_eq!(bytes(0x720038, 12), b"FUJIFILM\0\0\0\0", "Exif LensMake");
+    assert_eq!(bytes(0x72004a, 16), b"XF23mmF2.8 R WR\0", "Exif LensModel");
+    assert_eq!(read(0x720009), 0, "normal lens kind");
+}
+
+#[test]
+fn the_lens_data_gives_the_x_t5_focal_length_and_f_number_tables() {
+    // xf23: one zoom step, 23 mm, F2.8 to F16 in 1/3 stops (16 codes).
+    let spec = Spec::preset("xf23").unwrap();
+    let read = configuration(&spec.catalogs[0]);
+    assert_eq!((read(0x720f80), read(0x720f82)), (1, 16));
+    assert_eq!(u16_at(&read, 0x722134), 230, "focal length in 0.1 mm (Exif 23.0 mm)");
+    assert_eq!(u16_at(&read, 0x7221fd), 230);
+    assert_eq!((read(0x7222c8), read(0x72232d)), (0, 15), "widest and smallest code");
+    // 0x1537e4c: F x 100 = table[index[31z + c]].
+    let f = |z: u32, c: u32| u16_at(&read, 0x722530 + 2 * read(0x734600 + 31 * z + c) as u32);
+    assert_eq!(f(0, 0), 280, "F2.8 wide open");
+    assert_eq!(f(0, 15), 1600, "F16 smallest");
+    assert_eq!(read(0x734600 + 16), 0xff, "no code past the smallest aperture");
+    assert_eq!(u16_at(&read, 0x732400) as i16, 3000, "Av 3 at F2.8");
+    assert_eq!(u16_at(&read, 0x732400 + 2 * 15) as i16, 8000, "Av 8 at F16");
+
+    // xf18-55: 8 zoom steps from 18 to 55 mm, wide open F2.8 at the short end and F4 at the long end.
+    let spec = Spec::preset("xf18-55").unwrap();
+    let read = configuration(&spec.catalogs[0]);
+    assert_eq!((read(0x720f80), read(0x720f82)), (8, 19));
+    assert_eq!(u16_at(&read, 0x722134), 180);
+    assert_eq!(u16_at(&read, 0x722134 + 2 * 7), 550);
+    let f = |z: u32, c: u32| u16_at(&read, 0x722530 + 2 * read(0x734600 + 31 * z + c) as u32);
+    assert_eq!(f(0, read(0x7222c8) as u32), 280);
+    assert_eq!(f(7, read(0x7222c8 + 7) as u32), 400);
+    assert_eq!(f(7, read(0x72232d + 7) as u32), 2200);
+}
+
+#[test]
+fn the_lens_data_focus_tables_rise_from_infinity_inside_the_travel() {
+    let spec = Spec::preset("xf23").unwrap();
+    let read = configuration(&spec.catalogs[0]);
+    let infinity = u16_at(&read, 0x720317);
+    let offsets: Vec<u16> = [0x7203e0, 0x7204a9, 0x720572, 0x72063b, 0x720704, 0x7207cd]
+        .iter()
+        .map(|t| u16_at(&read, *t))
+        .collect();
+    assert!(offsets.windows(2).all(|w| w[0] < w[1]), "{offsets:?}");
+    assert!(infinity > spec.focus.min && infinity + offsets[5] < spec.focus.max);
+    // 0x1539228 uses the +0x63b and +0x704 tables only for zoom steps below +0x1213.
+    assert_eq!(read(0x721213), read(0x720f80));
+}
+
+#[test]
+fn every_preset_catalog_fits_the_x_t5_lens_data_window() {
+    for name in ["xf18-55", "prime", "xf23"] {
+        let catalog = &Spec::preset(name).unwrap().catalogs[0];
+        // 0x1494e70: the lens-data window ends at 0x735cff.
+        assert!(0x722000 + (catalog.blocks as u32 - 4) * CATALOG_BLOCK_BYTES as u32 <= 0x735d00);
+        assert_eq!(catalog.marker_block, Some(catalog.blocks - 4));
+    }
 }

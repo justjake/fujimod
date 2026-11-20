@@ -25,6 +25,7 @@ use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -38,7 +39,11 @@ pub mod family {
     pub const FEEDBACK: u16 = 0x21;
     pub const FOCUS_STATE: u16 = 0x22;
     pub const APERTURE_STATE: u16 = 0x23;
-    pub const MOTION_STATE: u16 = 0x24;
+    /// Zoom state (X-T5 decoder 0x13ea25c: flag bit 15, a 7-bit value in bits
+    /// 8..14 and a byte in bits 0..7). The 7-bit value is taken as the zoom step
+    /// index into the lens data tables (at most 100 steps); inferred, not traced
+    /// to its consumer.
+    pub const ZOOM_STATE: u16 = 0x24;
     pub const DETAIL_STATUS: u16 = 0x26;
     pub const APERTURE_RING: u16 = 0x30;
     pub const FOCUS_RING: u16 = 0x32;
@@ -117,18 +122,40 @@ pub struct Spec {
 }
 
 /// A family-0xc0 catalog of 2048-byte blocks. The content is generated: zero
-/// bytes, with the 0x55 0xaa marker at +0x47 of `marker_block`.
+/// bytes, the declared sections, and the 0x55 0xaa marker at +0x47 of
+/// `marker_block`.
 ///
 /// X-T5 4.31 (0x13ed614): the 0xc0 reply word is the block count. For selector 6
 /// the body treats the last four blocks as one section and requires the marker
 /// 0xaa55 (little-endian at +0x47) in the first of them (index count - 4),
 /// else the read fails and the lens is shut down (0x13f1754 -> 0x13f0084(6)).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
     pub selector: u16,
     pub blocks: u16,
     pub marker_block: Option<u16>,
+    /// Non-zero content, each at a byte offset in the whole catalog
+    /// (block * 2048 + offset in the block). Later sections win where they overlap.
+    #[serde(default)]
+    pub sections: Vec<Section>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Section {
+    pub offset: u32,
+    pub bytes: Vec<u8>,
+}
+impl Catalog {
+    /// Data byte `offset` of block `block`, without the marker.
+    fn byte(&self, block: u16, offset: usize) -> u8 {
+        let at = block as usize * CATALOG_BLOCK_BYTES + offset;
+        self.sections
+            .iter()
+            .rev()
+            .find_map(|s| at.checked_sub(s.offset as usize).and_then(|i| s.bytes.get(i)).copied())
+            .unwrap_or(0)
+    }
 }
 pub const CATALOG_BLOCK_BYTES: usize = 2048;
 
@@ -161,6 +188,23 @@ pub struct Identity<'a> {
     pub aperture: Axis,
     /// Closest focus distance in centimetres.
     pub closest_cm: u16,
+    /// Ten-character lens serial number (record +0x50, data block +0x14).
+    pub serial: [u8; 10],
+    /// Zoom steps in the lens data (1 for a prime).
+    pub zoom_steps: u8,
+}
+
+/// Nominal F-numbers x 100 in 1/3 stops from F1 (index = 1/3-stop count).
+const NOMINAL_F: [u16; 31] = [
+    100, 110, 120, 140, 160, 180, 200, 220, 250, 280, 320, 360, 400, 450, 500, 560, 640, 710,
+    800, 900, 1000, 1100, 1300, 1400, 1600, 1800, 2000, 2200, 2500, 2900, 3200,
+];
+/// The 1/3-stop index of an F-number given in 0.1 steps (nearest nominal value).
+fn thirds(f_tenths: u16) -> u8 {
+    let f = f_tenths as i32 * 10;
+    (0..NOMINAL_F.len())
+        .min_by_key(|&i| (NOMINAL_F[i] as i32 - f).abs())
+        .unwrap() as u8
 }
 impl Identity<'_> {
     pub fn record(&self) -> Vec<u8> {
@@ -168,16 +212,21 @@ impl Identity<'_> {
         let mut put = |offset: usize, value: u16| {
             r[offset..offset + 2].copy_from_slice(&value.to_be_bytes());
         };
-        put(0x10, self.focal.0);
-        put(0x12, self.focal.1);
-        put(0x14, self.f_numbers.0);
-        put(0x16, self.f_numbers.1);
-        put(0x18, self.f_numbers.2);
-        put(0x1a, self.focus.max);
-        put(0x1c, self.aperture.max);
-        put(0x1e, self.closest_cm);
+        // Invented scenario words; the body is not known to read them.
+        put(0x68, self.focal.0);
+        put(0x6a, self.focal.1);
+        put(0x6c, self.f_numbers.0);
+        put(0x6e, self.f_numbers.1);
+        put(0x70, self.f_numbers.2);
+        put(0x72, self.focus.max);
+        put(0x74, self.aperture.max);
+        put(0x76, self.closest_cm);
         r[0x00..0x08].copy_from_slice(&self.code);
         r[0x08..0x10].copy_from_slice(&self.class);
+        // The body copies +0x10..+0x17 and the serial at +0x50..+0x59 into its lens info
+        // (0x24ae428, 0x24ae468) and compares them with the lens data block (0x1536870).
+        r[0x10..0x18].copy_from_slice(&self.class);
+        r[0x50..0x5a].copy_from_slice(&self.serial);
         r[0x48] = u8::from(self.ois) | (u8::from(self.aperture_ring) << 1);
         r[0x62] = 1; // protocol version 1.00 (table 0x1971540 row 0)
         r[0x63] = 0;
@@ -194,6 +243,118 @@ impl Identity<'_> {
         r[IDENTIFICATION_BYTES - 1] = sum.wrapping_neg();
         r
     }
+    /// Zoom step `z` of `zoom_steps`: focal length in 0.1 mm (geometric
+    /// interpolation) and the widest aperture as a 1/3-stop index from F1.
+    fn zoom_step(&self, z: usize) -> (u16, u8) {
+        let last = (self.zoom_steps.max(1) - 1) as f64;
+        let t = if last == 0. { 0. } else { z as f64 / last };
+        let (short, long) = (self.focal.0 as f64, self.focal.1 as f64);
+        let focal = (short * (long / short).powf(t)).round() as u16;
+        let (open_short, open_long) = (thirds(self.f_numbers.0), thirds(self.f_numbers.1));
+        let open = (open_short as f64 + (open_long as f64 - open_short as f64) * t).round() as u8;
+        (focal, open)
+    }
+    /// Catalog 6, the lens data the X-T5 4.31 body stores in its configuration
+    /// memory. Content is generated from this identity; the layout is what the
+    /// body reads (static, 4.31 image):
+    ///
+    /// The read (0x13ed614, selector 6, count T from the 0xc0 reply) stores blocks
+    /// 0..T-5 at configuration offset 0x722000 + 0x800 * block and the last four
+    /// blocks at 0x720000. The body's lens-data window is 0x720000..0x735cff
+    /// (0x1494e70), so T - 4 is at most 39; this catalog uses all 39.
+    ///
+    /// Last four blocks (offset 0x720000):
+    /// - +0x00..+0x07 and +0x14..+0x1d: compared with record +0x10 and +0x50
+    ///   (0x1536870); +0x14..+0x1d is also the Exif LensSerialNumber (0x2d961c8);
+    /// - +0x09: lens kind; 0 is the normal case (1 disables the aperture tables
+    ///   in 0x1538958, 0x1538014 and others);
+    /// - +0x38..+0x43: Exif LensMake (copied by 0x2d96138);
+    /// - +0x47/+0x48: the marker (served by the marker rule);
+    /// - +0x4a..+0x89: Exif LensModel (0x2d96180);
+    /// - +0x317 + 2z (s16): focus position at infinity for zoom step z, and u16
+    ///   offsets from it at +0x3e0, +0x4a9, +0x572, +0x63b, +0x704, +0x7cd (+2z),
+    ///   the positions of nearer subject distances (0x1538f7c, 0x1539228;
+    ///   0x15397cc compares a position with them). The distances are not known;
+    ///   this catalog spreads the offsets from infinity to the closest focus.
+    ///   +0x63b and +0x704 apply only to zoom steps below the byte at +0x1213
+    ///   (else +0x572 or infinity is used), so +0x1213 is set to M;
+    /// - +0xf80: zoom step count M (1..100, 0x1539d08), +0xf82: aperture code
+    ///   count N (1..31, 0x1537c68).
+    ///
+    /// Blocks from offset 0x722000:
+    /// - 0x722134 + 2z and 0x7221fd + 2z (u16): focal length of zoom step z in
+    ///   0.1 mm (0x1538cec, 0x1538d40; the Exif FocalLength, LensSpecification
+    ///   and FocalLengthIn35mmFormat use the first);
+    /// - 0x7222c8 + z and 0x72232d + z (u8): the widest and the smallest
+    ///   aperture code at zoom step z (0x15383fc, 0x15384ac);
+    /// - 0x734600 + 31z + c (u8): index k of aperture code c at zoom step z into
+    ///   the F-number table, 0xff for none (0x1537e4c);
+    /// - 0x722530 + 2k (u16): F-number x 100 (0x1537e4c; the OSD, the Exif
+    ///   FNumber and LensSpecification use it);
+    /// - 0x732400 + 2(31z + c) (s16): aperture value x 1000 (APEX Av, 0x1537f68).
+    ///
+    /// Aperture code c is the 1/3-stop index from the lens's widest aperture at
+    /// the short end. Everything else in the catalog is zero; the body reads more
+    /// fields (correction and autofocus tables) whose meaning is not known.
+    pub fn lens_data(&self) -> Catalog {
+        const LENS_BLOCKS: u16 = 39;
+        let at = |config: u32| -> u32 {
+            match config {
+                0x722000.. => config - 0x722000,
+                _ => LENS_BLOCKS as u32 * CATALOG_BLOCK_BYTES as u32 + (config - 0x720000),
+            }
+        };
+        let mut sections = vec![];
+        let mut put = |config: u32, bytes: Vec<u8>| sections.push(Section { offset: at(config), bytes });
+        let le = |values: &[u16]| values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        // Identity, maker and model.
+        put(0x720000, self.class.to_vec());
+        put(0x720014, self.serial.to_vec());
+        put(0x720038, b"FUJIFILM".to_vec());
+        let name = self.model.as_bytes();
+        put(0x72004a, name[..name.len().min(63)].to_vec());
+        // Zoom steps and apertures.
+        let steps = self.zoom_steps.clamp(1, 100) as usize;
+        let open_short = thirds(self.f_numbers.0);
+        let smallest = thirds(self.f_numbers.2);
+        let count = (smallest - open_short + 1).min(31) as usize;
+        put(0x720f80, vec![steps as u8]);
+        put(0x720f82, vec![count as u8]);
+        let zoom: Vec<(u16, u8)> = (0..steps).map(|z| self.zoom_step(z)).collect();
+        let focal: Vec<u16> = zoom.iter().map(|(f, _)| *f).collect();
+        put(0x722134, le(&focal));
+        put(0x7221fd, le(&focal));
+        put(0x7222c8, zoom.iter().map(|(_, open)| open - open_short).collect());
+        put(0x72232d, vec![(count - 1) as u8; steps]);
+        let f_numbers: Vec<u16> = (0..count).map(|c| NOMINAL_F[open_short as usize + c]).collect();
+        put(0x722530, le(&f_numbers));
+        let mut index = vec![0xffu8; 31 * steps];
+        let mut av = vec![0u16; 31 * steps];
+        for z in 0..steps {
+            for c in 0..count {
+                index[31 * z + c] = c as u8;
+                av[31 * z + c] = (((open_short as u32 + c as u32) * 1000 + 1) / 3) as u16;
+            }
+        }
+        put(0x734600, index);
+        put(0x732400, le(&av));
+        // Focus positions: infinity near the low end of the travel, the closest
+        // distance near the high end (the direction the body drives for nearer
+        // subjects is not known).
+        let travel = (self.focus.max - self.focus.min) as u32;
+        let infinity = self.focus.min + (travel / 20) as u16;
+        put(0x720317, le(&vec![infinity; steps]));
+        let span = travel * 9 / 10;
+        for (i, table) in [0x7203e0u32, 0x7204a9, 0x720572, 0x72063b, 0x720704, 0x7207cd].iter().enumerate() {
+            // Offsets 1/32, 1/16, 1/8, 1/4, 1/2 and all of the span.
+            let offset = (span >> (5 - i)) as u16;
+            put(*table, le(&vec![offset; steps]));
+        }
+        // Zoom steps below which the nearest-distance tables (+0x63b, +0x704) apply
+        // (0x1539228, 0x153ea04; 0x1565360 reads it as a step count): all of them.
+        put(0x721213, vec![steps as u8]);
+        Catalog { selector: 6, blocks: LENS_BLOCKS + 4, marker_block: Some(LENS_BLOCKS), sections }
+    }
     /// Invented extended record: layout version 1, zero fill, zero byte sum.
     pub fn extended_record(&self) -> Vec<u8> {
         let mut r = vec![0u8; IDENTIFICATION_BYTES];
@@ -207,7 +368,7 @@ impl Spec {
     /// Named scenario lenses. Values are plausible public specifications;
     /// the identification layout and type ids are invented.
     pub fn preset(name: &str) -> Option<Self> {
-        let (model, code, class, focal, f_numbers, ois, ring, focus, aperture, closest) =
+        let (model, code, class, focal, f_numbers, ois, ring, focus, aperture, closest, serial, zoom_steps) =
             match name {
                 "xf18-55" => (
                     "XF18-55mmF2.8-4 R LM OIS",
@@ -221,6 +382,8 @@ impl Spec {
                     // Index 0 is wide open; 1/3-stop steps from F2.8 to F22.
                     Axis { min: 0, max: 18, initial: 0, units_per_ms: 2 },
                     30,
+                    *b"EMU1855001",
+                    8,
                 ),
                 "prime" => (
                     "XF35mmF2 R WR",
@@ -234,6 +397,24 @@ impl Spec {
                     // F2 to F16 in 1/3 stops.
                     Axis { min: 0, max: 18, initial: 0, units_per_ms: 2 },
                     35,
+                    *b"EMU3520001",
+                    1,
+                ),
+                // Public specification of the XF23mmF2.8 R WR (23 mm, F2.8..F16).
+                "xf23" => (
+                    "XF23mmF2.8 R WR",
+                    *b"EMX2328\0",
+                    *b"XLPSA001",
+                    (230, 230),
+                    (28, 28, 160),
+                    false,
+                    true,
+                    Axis { min: 0, max: 2000, initial: 1000, units_per_ms: 50 },
+                    // F2.8 to F16 in 1/3 stops.
+                    Axis { min: 0, max: 15, initial: 0, units_per_ms: 2 },
+                    20,
+                    *b"EMU2328001",
+                    1,
                 ),
                 _ => return None,
             };
@@ -248,6 +429,8 @@ impl Spec {
             focus,
             aperture,
             closest_cm: closest,
+            serial,
+            zoom_steps,
         };
         Some(Self {
             name: model.into(),
@@ -262,7 +445,7 @@ impl Spec {
             focus,
             aperture,
             replies: vec![],
-            catalogs: vec![Catalog { selector: 6, blocks: 4, marker_block: Some(0) }],
+            catalogs: vec![identity.lens_data()],
         })
     }
     fn validate(&self) -> Result<(), String> {
@@ -278,6 +461,9 @@ impl Spec {
                 || c.blocks == 0
                 || c.blocks >= BULK_FINISH
                 || c.marker_block.is_some_and(|m| m >= c.blocks)
+                || c.sections.iter().any(|s| {
+                    s.offset as usize + s.bytes.len() > c.blocks as usize * CATALOG_BLOCK_BYTES
+                })
                 || self.catalogs[..i].iter().any(|o| o.selector == c.selector)
             {
                 return Err("invalid X-mount lens catalog".into());
@@ -306,7 +492,6 @@ impl Spec {
                 | FEEDBACK
                 | FOCUS_STATE
                 | APERTURE_STATE
-                | MOTION_STATE
                 | FOCUS_TARGET
                 | FOCUS_SPEED
                 | FOCUS_STEP
@@ -316,12 +501,11 @@ impl Spec {
                 | APERTURE_DRIVE
         )
     }
-    fn catalog(&self, selector: u16) -> Catalog {
-        self.catalogs
-            .iter()
-            .copied()
-            .find(|c| c.selector == selector)
-            .unwrap_or(Catalog { selector, blocks: 1, marker_block: None })
+    fn catalog(&self, selector: u16) -> Cow<'_, Catalog> {
+        match self.catalogs.iter().find(|c| c.selector == selector) {
+            Some(c) => Cow::Borrowed(c),
+            None => Cow::Owned(Catalog { selector, blocks: 1, marker_block: None, sections: vec![] }),
+        }
     }
     fn declared(&self, family: u16) -> Option<u16> {
         self.replies
@@ -391,9 +575,6 @@ impl Motion {
         } else {
             self.from - step
         }
-    }
-    fn moving(self, now: u64, ticks_per_ms: u64) -> bool {
-        self.position(now, ticks_per_ms) != self.target
     }
     fn retarget(&mut self, now: u64, ticks_per_ms: u64, target: u16, units_per_ms: u16) {
         let from = self.position(now, ticks_per_ms);
@@ -503,6 +684,10 @@ const EVENT_REPLY_OVERFLOW: u32 = 0x1_0004;
 const EVENT_IDENTIFICATION: u32 = 0x1_0005;
 const EVENT_FIRST_FOCUS: u32 = 0x1_0006;
 const EVENT_FIRST_APERTURE: u32 = 0x1_0007;
+/// First of `MOVES_LOGGED` codes for logged focus moves, and for aperture moves.
+const EVENT_FOCUS_MOVES: u32 = 0x2_0000;
+const EVENT_APERTURE_MOVES: u32 = 0x3_0000;
+const MOVES_LOGGED: u32 = 64;
 const EVENT_FRAME_SHAPE: u32 = 0x1_0008;
 const EVENT_EXTENDED: u32 = 0x1_0009;
 /// Plus the selector (0..15).
@@ -514,6 +699,13 @@ struct Unit {
     state: State,
     /// Host log lines waiting for the board; never part of a checkpoint.
     logs: Vec<String>,
+}
+
+/// `XT5_LENS_STEP=speed`: family 0x56 sets the speed of the move family 0x54 started instead
+/// of adding a relative step (a host input, read once; see the 0x56 arm of `Unit::respond`).
+fn step_is_speed() -> bool {
+    static SPEED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SPEED.get_or_init(|| std::env::var("XT5_LENS_STEP").is_ok_and(|v| v == "speed"))
 }
 
 fn valid_word(word: u32) -> bool {
@@ -620,6 +812,16 @@ impl Unit {
         let focus = self.state.focus;
         self.operation(now, focus);
         self.log_once(EVENT_FIRST_FOCUS, || format!("first focus move {from} -> {target}"));
+        self.log_move(EVENT_FOCUS_MOVES, "focus", from, target, now);
+    }
+    /// Logs the first `MOVES_LOGGED` moves of an axis that change its target, with the board
+    /// time, so a run shows the body's focus and aperture sequence (AF scan, exposure).
+    fn log_move(&mut self, base: u32, axis: &str, from: u16, target: u16, now: u64) {
+        let n = self.state.logged.range(base..base + MOVES_LOGGED).count() as u32;
+        if n < MOVES_LOGGED && from != target {
+            let ms = now / self.timing.ticks_per_ms;
+            self.log_once(base + n, || format!("{axis} move {from} -> {target} at {ms} ms"));
+        }
     }
     fn move_aperture(&mut self, now: u64, target: i64) {
         let target = self.spec.aperture.clamp(target);
@@ -630,6 +832,7 @@ impl Unit {
         let aperture = self.state.aperture;
         self.operation(now, aperture);
         self.log_once(EVENT_FIRST_APERTURE, || format!("first aperture move {from} -> {target}"));
+        self.log_move(EVENT_APERTURE_MOVES, "aperture", from, target, now);
     }
     fn respond(&mut self, family: u16, payload: u16, now: u64) -> Option<u16> {
         let tpm = self.timing.ticks_per_ms;
@@ -654,9 +857,17 @@ impl Unit {
             SYNC | IDENTIFICATION | EXTENDED_IDENTIFICATION => 0,
             FEEDBACK | FOCUS_STATE => self.state.focus.position(now, tpm),
             APERTURE_STATE => self.state.aperture.position(now, tpm),
-            MOTION_STATE => {
-                u16::from(self.state.focus.moving(now, tpm))
-                    | (u16::from(self.state.aperture.moving(now, tpm)) << 1)
+            // Zoom step 0 (the short end); the lens has no zoom ring model.
+            ZOOM_STATE if self.spec.declared(ZOOM_STATE).is_none() => 0,
+            // AF agent, opt-in (`XT5_LENS_STEP=speed`): the 15-bit 0x54 payload is a signed
+            // position (0x156fc24 saturates `position + amount`), and 0x7fff is the body's
+            // "no target" value (wrapper 0x1535760 always sends it; the lens must not move).
+            FOCUS_TARGET if step_is_speed() => {
+                if payload & 0x7fff != 0x7fff {
+                    let target = ((payload << 1) as i16 >> 1) as i64;
+                    self.move_focus(now, target);
+                }
+                payload
             }
             FOCUS_TARGET | FOCUS_DRIVE => {
                 self.move_focus(now, payload as i64);
@@ -665,6 +876,19 @@ impl Unit {
             FOCUS_SPEED => {
                 if payload != 0 {
                     self.state.focus_speed = payload;
+                }
+                payload
+            }
+            // AF agent, opt-in (`XT5_LENS_STEP=speed`; see scratch/af/NOTE-for-lens-agent.md):
+            // the X-T5 4.31 AF drive 0x1572620 sends the target in 0x54 (0x156fc24) and the
+            // speed of that move in 0x56 (0x156f91c), in position units per second (unit
+            // inferred); 0 keeps the lens default speed.
+            FOCUS_STEP if step_is_speed() => {
+                if payload != 0 {
+                    let (target, speed) = (self.state.focus.target, (payload / 1000).max(1));
+                    self.state.focus.retarget(now, tpm, target, speed);
+                    let focus = self.state.focus;
+                    self.operation(now, focus);
                 }
                 payload
             }
@@ -733,11 +957,12 @@ impl Unit {
             Source::Identification => self.spec.identification[offset],
             Source::Extended => self.spec.extended[offset],
             Source::Catalog { selector } => {
-                let marked = self.spec.catalog(selector).marker_block == Some(block);
+                let catalog = self.spec.catalog(selector);
+                let marked = catalog.marker_block == Some(block);
                 match offset {
                     0x47 if marked => 0x55,
                     0x48 if marked => 0xaa,
-                    _ => 0,
+                    o => catalog.byte(block, o),
                 }
             }
         }
@@ -942,6 +1167,12 @@ impl Port {
         let unit = self.0.lock().unwrap();
         let s = unit.state.focus;
         (s.position(now, unit.timing.ticks_per_ms), s.target)
+    }
+    /// Lowest and highest focus position (the motor travel), for image models that turn the
+    /// position into defocus.
+    pub fn focus_range(&self) -> (u16, u16) {
+        let unit = self.0.lock().unwrap();
+        (unit.spec.focus.min, unit.spec.focus.max)
     }
     /// Aperture index and target at `now`.
     pub fn aperture(&self, now: u64) -> (u16, u16) {
