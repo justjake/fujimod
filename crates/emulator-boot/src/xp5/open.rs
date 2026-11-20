@@ -1013,6 +1013,42 @@ pub(crate) fn open_from(
             json!({"limit": dram.limit, "bus_drain": dram.bus_drain}),
         );
     }
+    // A DMA master reads memory, not bus devices, so a start without a ROM gets the ROM start's
+    // flash shadow: aperture memory filled from the flash storage and kept in step with
+    // programmed pages.
+    let dma_flash_shadow = rom.is_none()
+        && matches!(resources.storage, Some(flash_storage::Medium::Nor(_)))
+        && state.device.iter().any(|w| {
+            w.kind == "flash-storage" && w.base == FLASH_APERTURE_BASE && w.size as usize == FLASH_APERTURE_SIZE
+        });
+    if dma_flash_shadow {
+        let size = FLASH_APERTURE_SIZE;
+        // As in a ROM start, CPU reads then see the shadow (the CPU's view of flash is the
+        // image, not the controller's read-mode refusals); the bus device stays registered.
+        execution.peripherals = carve_out(
+            std::mem::take(&mut execution.peripherals),
+            FLASH_APERTURE_BASE,
+            size as u64,
+        );
+        for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
+            if processor.model == ProcessorModel::CortexA53 {
+                execution.mappings.push(board::factory::MemoryMap {
+                    core,
+                    address: FLASH_APERTURE_BASE,
+                    physical: FLASH_APERTURE_BASE,
+                    size,
+                    permissions: 5,
+                });
+            }
+        }
+        if !execution.ram.iter().any(|ram| ram.base == FLASH_APERTURE_BASE && ram.size == size) {
+            execution.ram.push(board::factory::Ram { base: FLASH_APERTURE_BASE, size });
+        }
+        execution.dma_mappings.push(board::memory::BusMapping {
+            permissions: 1,
+            ..board::memory::BusMapping::ram(FLASH_APERTURE_BASE, size)
+        });
+    }
     let storage = resources.storage.clone();
     let read_limit = execution.ram.iter().try_fold(0usize, |bytes, region| {
         bytes.checked_add(region.size).ok_or("XP5 RAM extent overflows")
@@ -1050,6 +1086,14 @@ pub(crate) fn open_from(
     // every other early start needs it.
     let setup_without_flash = storage.is_none()
         && rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
+    if dma_flash_shadow {
+        shadow_flash_aperture(storage.as_ref(), &mut session)?;
+        let storage = storage.clone().ok_or("flash backing is absent")?;
+        session.window_action = Some(fujimod_emulator_session::WindowAction {
+            interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
+            synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
+        });
+    }
     if rom.is_some() && !setup_without_flash {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.ok_or("early startup flash backing is absent")?;
