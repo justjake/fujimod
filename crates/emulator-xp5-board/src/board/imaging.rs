@@ -240,7 +240,12 @@ pub fn register_all(
         if w.base != buffer::BASE || w.size != 0x1000 {
             return Err("invalid input-buffer window".into());
         }
-        bus.register(w.base, w.size, Box::new(buffer::Buffer::default()))?;
+        // Option `completion_us`: a +0x40 start completes with interrupt 169 after that time.
+        let device = match w.options.get("completion_us") {
+            None => buffer::Buffer::default(),
+            Some(_) => buffer::Buffer::default().with_completion(ticks(&w.options, "completion_us")?)?,
+        };
+        bus.register(w.base, w.size, Box::new(device))?;
     }
     for w in windows.iter().filter(|w| w.kind == "imaging-table") {
         let Some(device) = table::Table::reset(w.base).filter(|_| w.size == 0x1000) else {
@@ -308,7 +313,7 @@ pub fn register_all(
     for w in windows.iter().filter(|w| {
         matches!(
             w.kind.as_str(),
-            "imaging-reset" | "movdc" | "imaging-resize" | "imaging-ibuf"
+            "imaging-reset" | "movdc" | "imaging-resize"
         )
     }) {
         if w.size != 0x1000 {
@@ -330,7 +335,6 @@ pub fn register_all(
                 u8::try_from(number("source_luma")?).map_err(|e| e.to_string())?,
             )?
             .with_exposure(sensor.exposure()),
-            "imaging-ibuf" => work::Work::ibuf(w.base, number("completion_us")?)?,
             _ => work::Work::resize(w.base, number("completion_us")?)?,
         };
         let work = if retain_words(&w.options)? {
