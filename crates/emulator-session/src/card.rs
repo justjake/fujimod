@@ -92,7 +92,7 @@ impl Session {
         max_bytes: usize,
     ) -> Result<Vec<u8>, String> {
         if !(1..=fat::MAX_BYTES).contains(&max_bytes) {
-            return Err("card reads require a bound of 1..64 MiB".into());
+            return Err("card reads require a bound of 1..96 MiB".into());
         }
         let bytes = self
             .board
