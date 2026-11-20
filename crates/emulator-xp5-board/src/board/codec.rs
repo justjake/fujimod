@@ -5,8 +5,27 @@
 //! The register contract is the X-T5 4.31 driver's (helpers 0x13cbee0..0x13cf474,
 //! open 0x13cfe84, configure 0x13d0220/0x13cf638, frame start 0x13d197c, ISR
 //! 0x13d1da0, completion task 0x13d200c). Register names below are the driver's
-//! own strings. Only the H.264 encode path is modelled: the HEVC core and the
-//! decode path keep plain register words.
+//! own strings. The H.264 and HEVC encode paths are modelled; the decode path
+//! (used only by the HEIF library, 0x2dd8a38 -> DecStart 0x13d14e0) keeps
+//! plain register words.
+//!
+//! HEVC (recmv opens codec 1 when rec+0x8390, copied from rec+0x40c4, is
+//! non-zero; the movie file-format setting 0x62b = 1 or 3 selects H.265):
+//! the frame start writes the image addresses (`IMG_WIDX`/`IMG_WADR`, shared
+//! with H.264), then `HEVC_CMD` 0x14100 bit 0; the flush/stop 0x13d1b0c
+//! (0x13d1bbc) writes the same bit without new image addresses (in decode
+//! mode the same command starts a decode, as H.264 bit 14 does). The close
+//! (H265Stop 0x13d15f0, task type 4) writes HEVC_CMD bit 1 / H264_CMD bit 12
+//! and waits for no interrupt. The picture size is read from
+//! 0x14310 (bits 13..0 width, bits 28..16 height, leaf 0x13ca18c; inferred
+//! from the field widths, not traced). Status is `0x14120` (pending) and
+//! `0x14124` (raw) with the H.264 bit layout (leaves 0x13c9c94/0x13c9da0);
+//! the shared ISR and task read both. The pictures are coded by the
+//! workspace I_PCM encoder ([`hevc`]): VPS, SPS and PPS (NALU types 32..34)
+//! every 15 pictures and one IDR_W_RADL (19) slice per picture, which the
+//! completion task accepts as VCL (0x13d178c: types 0, 1, 19, 21). The
+//! encoder ignores the HEVC_ENC_* rate, GOP, profile and 4:2:2 / 10-bit
+//! registers: the stream is 8-bit 4:2:0 Main, lossless and large.
 //!
 //! A start (`H264_CMD` bit 15) encodes one picture with the workspace software
 //! encoder ([`Direct`]) after `run_ticks`:
@@ -53,6 +72,7 @@ use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow, Mapping};
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_image_codecs::h264::{Direct, DirectConfig};
+use fujimod_emulator_image_codecs::hevc::{self, PcmConfig, PcmEncoder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -70,8 +90,19 @@ const ORIGIN: u64 = 0xffd0_0000;
 /// contract infers NV12 without a traced producer; flip this to read NV21.
 pub const CB_FIRST: bool = true;
 
+/// HEVC_CMD (leaf 0x13c9b54): bit 0 is written by both the frame start
+/// (0x13d1adc, after the image addresses) and the flush/stop 0x13d1b0c
+/// (0x13d1bbc); bit 1 is the close (0x13d28b8), which is stored only.
+const HEVC_CMD: u64 = 0x1_4100;
+const HEVC_GO: u32 = 1;
 const HEVC_STATUS: u64 = 0x1_4120;
 const HEVC_RAW_STATUS: u64 = 0x1_4124;
+const HEVC_INT_EN: u64 = 0x1_4128;
+const HEVC_CORESEL: u64 = 0x1_4200;
+/// Picture size: bits 13..0 width, bits 28..16 height (leaf 0x13ca18c).
+const HEVC_SIZE: u64 = 0x1_4310;
+/// Parameter sets precede every this many HEVC pictures (all are IDR).
+const HEVC_PARAMETER_INTERVAL: u32 = 15;
 const H264_CMD: u64 = 0x1_5100;
 const CMD_START: u32 = 1 << 15;
 const CMD_STOP: u32 = 1 << 14;
@@ -139,6 +170,19 @@ struct State {
     stream_position: u64,
     /// The stream bank of the next byte.
     bank: u32,
+    /// `0x14120`: HEVC pending status, write one to clear.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    hevc_pending: u32,
+    /// `0x14124`: HEVC raw status.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    hevc_raw: u32,
+    /// The start or stop waiting for `due` is for the HEVC core.
+    #[serde(default, skip_serializing_if = "is_false")]
+    hevc: bool,
+    /// `IMG_WADR` was written since the last HEVC command, so the next
+    /// HEVC_CMD go starts a picture; otherwise it is a stop.
+    #[serde(default, skip_serializing_if = "is_false")]
+    hevc_image: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     due: Option<u64>,
     /// A start is waiting for `due`.
@@ -155,9 +199,13 @@ pub struct Codec {
     scene: Option<SceneSource>,
     /// The open recording's encoder; refuses checkpoints while present.
     encoder: Option<Direct>,
+    /// The open HEVC recording's encoder; refuses checkpoints while present.
+    hevc_encoder: Option<PcmEncoder>,
     /// Bank-full bits collected while one picture is written; always zero
     /// between pictures, so it is not part of the device state.
     filled: u32,
+    /// `XT5_CODEC_TRACE` set: log every register write (host diagnostic).
+    trace: bool,
     state: State,
 }
 
@@ -166,7 +214,17 @@ impl Codec {
         if !(32..1020).contains(&irq) || ticks == 0 {
             return Err("invalid XP5 codec interrupt or run_ticks".into());
         }
-        Ok(Self { irq, ticks, scene: None, encoder: None, filled: 0, state: State::default() })
+        let trace = std::env::var_os("XT5_CODEC_TRACE").is_some();
+        Ok(Self {
+            irq,
+            ticks,
+            scene: None,
+            encoder: None,
+            hevc_encoder: None,
+            filled: 0,
+            trace,
+            state: State::default(),
+        })
     }
     /// Encodes the picture `scene` gives instead of the guest input when it
     /// gives one of the programmed size.
@@ -185,11 +243,17 @@ impl Codec {
         }
     }
     fn update_irq(&self, cx: &mut Cx<'_>) {
-        cx.set_irq(self.irq, self.state.pending & self.word(H264_INT_EN) != 0);
+        let h264 = self.state.pending & self.word(H264_INT_EN);
+        let hevc = self.state.hevc_pending & self.word(HEVC_INT_EN);
+        cx.set_irq(self.irq, h264 | hevc != 0);
+    }
+    fn recording(&self) -> bool {
+        self.encoder.is_some() || self.hevc_encoder.is_some()
     }
     /// A new open or configuration starts a new stream and a new sequence.
     fn restart_stream(&mut self) {
         self.encoder = None;
+        self.hevc_encoder = None;
         self.state.stream_position = 0;
         self.state.bank = 0;
     }
@@ -248,8 +312,43 @@ impl Codec {
         }
         let picture = self.picture(cx, settings.width, settings.height)?;
         let unit = self.encoder.as_mut().expect("encoder").encode_i420(&picture)?;
-        let nals = nal_units(&unit)?;
+        let nals: Vec<(u32, &[u8])> =
+            nal_units(&unit)?.into_iter().map(|nal| (u32::from(nal[0] & 31), nal)).collect();
+        self.publish(cx, &nals)
+    }
 
+    /// Code one HEVC picture (I_PCM, see [`hevc`]) and publish it.
+    fn encode_hevc(&mut self, cx: &mut Cx<'_>) -> Result<u32, String> {
+        if self.word(STR_BUF_MODE) != 0 {
+            return Err("STR_BUF_MODE 1 (no NALU table) is not modelled".into());
+        }
+        let size = self.word(HEVC_SIZE);
+        let (width, height) = ((size & 0x3fff) as usize, (size >> 16 & 0x1fff) as usize);
+        let settings = PcmConfig {
+            width,
+            height,
+            level_idc: PcmConfig::level_for(width, height),
+            parameter_interval: HEVC_PARAMETER_INTERVAL,
+        };
+        if self.hevc_encoder.as_ref().is_some_and(|e| e.config() != settings) {
+            cx.log("xp5-codec: HEVC parameters changed within a recording; new sequence");
+            self.hevc_encoder = None;
+        }
+        if self.hevc_encoder.is_none() {
+            let encoder = PcmEncoder::new(settings).map_err(|e| format!("HEVC size {size:#x}: {e}"))?;
+            cx.log(&format!("xp5-codec: HEVC sequence {settings:?} (I_PCM)"));
+            self.hevc_encoder = Some(encoder);
+        }
+        let picture = self.picture(cx, width, height)?;
+        let unit = self.hevc_encoder.as_mut().expect("encoder").encode_i420(&picture)?;
+        let nals: Vec<(u32, &[u8])> =
+            hevc::nal_units(&unit).into_iter().map(|nal| (u32::from(nal[0] >> 1 & 63), nal)).collect();
+        self.publish(cx, &nals)
+    }
+
+    /// Write typed NAL payloads with 4-byte start codes into the stream
+    /// banks and the NALU table. Returns the bank-full status bits.
+    fn publish(&mut self, cx: &mut Cx<'_>, nals: &[(u32, &[u8])]) -> Result<u32, String> {
         let size = u64::from(self.word(STR_BUF_SIZE));
         if !size.is_power_of_two() || !(0x1000..=0x1000_0000).contains(&size) {
             return Err(format!("STR_BUF_SIZE {size:#x} is not a power of two in 4 KiB..256 MiB"));
@@ -260,10 +359,9 @@ impl Codec {
         if first + u64::from(ENTRY) * (nals.len() as u64 + 1) > table_size {
             return Err(format!("NALU table of {table_size:#x} bytes is full"));
         }
-        for (index, nal) in nals.iter().enumerate() {
-            let kind = u32::from(nal[0] & 31);
+        for (index, &(kind, nal)) in nals.iter().enumerate() {
             let start = self.state.stream_position;
-            if matches!(kind, 7 | 8) && start % size + nal.len() as u64 + 4 >= size {
+            if matches!(kind, 7 | 8 | 32..=34) && start % size + nal.len() as u64 + 4 >= size {
                 cx.log(&format!(
                     "xp5-codec: parameter set type {kind} wraps across stream banks; the driver does not join it"
                 ));
@@ -304,7 +402,10 @@ impl Codec {
         match register {
             H264_STATUS => self.state.pending,
             H264_RAW_STATUS => self.state.raw,
-            HEVC_STATUS | HEVC_RAW_STATUS | PERI_STATUS => 0,
+            HEVC_STATUS => self.state.hevc_pending,
+            HEVC_RAW_STATUS => self.state.hevc_raw,
+            HEVC_CMD => self.word(HEVC_CMD) & !HEVC_GO,
+            PERI_STATUS => 0,
             STR_BANK => self.state.bank << 12,
             NALU_END => self.state.nalu_bytes,
             NALU_RESET => 0,
@@ -320,25 +421,56 @@ impl Codec {
                 self.state.raw &= !value;
                 self.update_irq(cx);
             }
+            HEVC_STATUS => {
+                self.state.hevc_pending &= !value;
+                self.state.hevc_raw &= !value;
+                self.update_irq(cx);
+            }
             // The ISR writes back what it read; nothing is ever pending here.
-            HEVC_STATUS | PERI_STATUS | STR_BANK => {}
+            PERI_STATUS | STR_BANK => {}
             NALU_RESET => {
                 if value & 1 != 0 {
                     self.state.nalu_bytes = 0;
                 }
             }
-            H264_INT_EN => {
+            H264_INT_EN | HEVC_INT_EN => {
                 self.set_word(register, value);
                 self.update_irq(cx);
             }
-            H264_CORESEL | STR_BUF_SIZE => {
+            H264_CORESEL | HEVC_CORESEL | STR_BUF_SIZE => {
                 self.set_word(register, value);
                 self.restart_stream();
             }
             IMG_WADR => {
                 let index = self.word(IMG_WIDX) & 0xff;
                 self.state.images.insert(index, value);
+                self.state.hevc_image = true;
                 self.set_word(register, value);
+            }
+            HEVC_CMD => {
+                if value & HEVC_GO != 0 {
+                    if self.state.due.is_some() && !self.state.hevc {
+                        return cx.fail("xp5-codec: HEVC command while an H.264 command is in flight");
+                    }
+                    if std::mem::take(&mut self.state.hevc_image) {
+                        if self.state.encode {
+                            return cx.fail("xp5-codec: HEVC start while a picture is in flight");
+                        }
+                        self.state.encode = true;
+                    } else {
+                        // The stop (0x13d1b0c) does not wait for the picture
+                        // in flight; it completes after that picture.
+                        self.state.stop = true;
+                    }
+                    self.state.hevc = true;
+                    if self.state.due.is_none() {
+                        match cx.now().checked_add(self.ticks) {
+                            Some(at) => self.state.due = Some(at),
+                            None => return cx.fail("xp5-codec deadline overflow"),
+                        }
+                    }
+                }
+                self.set_word(register, value & !HEVC_GO);
             }
             H264_CMD => {
                 if value & (CMD_START | CMD_STOP) != 0 {
@@ -371,13 +503,21 @@ impl Codec {
             || state.images.keys().any(|k| *k > 0xff)
             || state.bank > 1
             || state.nalu_bytes & !0x7ff_fff0 != 0
-            || (state.pending | state.raw) & !STATUS_BITS != 0
+            || (state.pending | state.raw | state.hevc_pending | state.hevc_raw) & !STATUS_BITS != 0
             || (state.encode || state.stop) != state.due.is_some()
+            || (state.hevc && state.due.is_none())
         {
             return Err("invalid XP5 codec checkpoint".into());
         }
         Ok(())
     }
+}
+
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn words(values: &[u32]) -> Vec<u8> {
@@ -481,6 +621,9 @@ impl Device for Codec {
         if size != 4 || address & 3 != 0 {
             return cx.unmodeled();
         }
+        if self.trace {
+            cx.log(&format!("xp5-codec: write {address:#x} = {value:#x}"));
+        }
         if (ADDRESS_HIGH..ADDRESS_HIGH + ADDRESS_HIGH_SIZE).contains(&address) {
             if value > 7 {
                 return cx.fail(format!("xp5-codec: address-high word {address:#x} = {value:#x} exceeds 3 bits"));
@@ -495,20 +638,36 @@ impl Device for Codec {
             return;
         }
         self.state.due = None;
+        let hevc = std::mem::take(&mut self.state.hevc);
         if std::mem::take(&mut self.state.encode) {
-            let filled = match self.encode(cx) {
+            let coded = if hevc { self.encode_hevc(cx) } else { self.encode(cx) };
+            let filled = match coded {
                 Ok(filled) => filled,
-                Err(error) => return cx.fail(format!("xp5-codec: H.264 encode failed: {error}")),
+                Err(error) => {
+                    let codec = if hevc { "HEVC" } else { "H.264" };
+                    return cx.fail(format!("xp5-codec: {codec} encode failed: {error}"));
+                }
             };
-            self.state.pending |= NALU_READY | filled;
-            self.state.raw |= NALU_READY | filled;
+            if hevc {
+                self.state.hevc_pending |= NALU_READY | filled;
+                self.state.hevc_raw |= NALU_READY | filled;
+            } else {
+                self.state.pending |= NALU_READY | filled;
+                self.state.raw |= NALU_READY | filled;
+            }
         }
         if std::mem::take(&mut self.state.stop) {
-            if self.encoder.take().is_some() {
+            let open = if hevc { self.hevc_encoder.take().is_some() } else { self.encoder.take().is_some() };
+            if open {
                 cx.log(&format!("xp5-codec: recording stopped after {} pictures", self.state.pictures));
             }
-            self.state.pending |= STOP_DONE;
-            self.state.raw |= STOP_DONE;
+            if hevc {
+                self.state.hevc_pending |= STOP_DONE;
+                self.state.hevc_raw |= STOP_DONE;
+            } else {
+                self.state.pending |= STOP_DONE;
+                self.state.raw |= STOP_DONE;
+            }
         }
         self.update_irq(cx);
     }
@@ -521,7 +680,7 @@ impl Device for Codec {
     fn diagnostic_state(&self) -> Value {
         let mut state = self.save();
         if let Value::Object(map) = &mut state {
-            map.insert("recording".into(), Value::Bool(self.encoder.is_some()));
+            map.insert("recording".into(), Value::Bool(self.recording()));
         }
         state
     }
@@ -530,10 +689,11 @@ impl Device for Codec {
         self.check(&state)?;
         self.state = state;
         self.encoder = None;
+        self.hevc_encoder = None;
         Ok(())
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        if self.encoder.is_some() {
+        if self.recording() {
             return Err(RECORDING.into());
         }
         Checkpoint::encode(self.name(), &self.state)
@@ -549,6 +709,7 @@ impl Device for Codec {
         self.validate_checkpoint(saved)?;
         self.state = saved.decode(self.name())?;
         self.encoder = None;
+        self.hevc_encoder = None;
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
@@ -861,6 +1022,101 @@ mod tests {
         let mut decoder = fujimod_emulator_image_codecs::h264::decode::Decoder::new(&[]).unwrap();
         let picture = decoder.decode(&unit).unwrap();
         assert!(picture.i420[..W * H].iter().all(|y| y.abs_diff(200) < 6));
+    }
+
+    /// The HEVC core: frame start (image addresses, then HEVC_CMD bit 0),
+    /// status on 0x14120/0x14124, VPS/SPS/PPS then IDR_W_RADL entries, and a
+    /// stop (HEVC_CMD bit 0 without new image addresses).
+    #[test]
+    fn hevc_pictures_and_stop_follow_the_driver_contract() {
+        let mut c = Codec::new(IRQ, 10).unwrap();
+        let mut h = host();
+        open_and_configure(&mut c, &mut h);
+        reg(&mut c, &mut h, HEVC_CORESEL, 1);
+        reg(&mut c, &mut h, HEVC_INT_EN, 0x010c_0000);
+        reg(&mut c, &mut h, HEVC_SIZE, (H as u32) << 16 | W as u32);
+        let mut expected = PcmEncoder::new(PcmConfig {
+            width: W,
+            height: H,
+            level_idc: PcmConfig::level_for(W, H),
+            parameter_interval: HEVC_PARAMETER_INTERVAL,
+        })
+        .unwrap();
+        for n in 0..2 {
+            frame(&mut h, n);
+            reg(&mut c, &mut h, IMG_WIDX, 0);
+            reg(&mut c, &mut h, IMG_WADR, Y_AT as u32);
+            reg(&mut c, &mut h, IMG_WIDX, 1);
+            reg(&mut c, &mut h, IMG_WADR, C_AT as u32);
+            reg(&mut c, &mut h, HEVC_CMD, HEVC_GO);
+            assert_eq!(get(&mut c, &mut h, HEVC_CMD), 0);
+            h.now = c.next_deadline(h.now).unwrap();
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            c.advance(&mut cx);
+            assert_eq!(cx.refusal(), None);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, true)));
+            let raw = get(&mut c, &mut h, HEVC_RAW_STATUS);
+            assert_eq!(raw & NALU_READY, NALU_READY);
+            assert_eq!(get(&mut c, &mut h, H264_STATUS), 0);
+            reg(&mut c, &mut h, HEVC_STATUS, raw);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, false)));
+            let end = get(&mut c, &mut h, NALU_END) as usize;
+            let table = h.bytes(NALU_AT, end + 16).unwrap();
+            let word = |i: usize| u32::from_le_bytes(table[i * 4..i * 4 + 4].try_into().unwrap());
+            let entries: Vec<[u32; 3]> =
+                (0..end / 16).map(|e| [word(e * 4), word(e * 4 + 1), word(e * 4 + 2)]).collect();
+            assert_eq!(word(end / 4), NALU_TERMINATOR);
+            reg(&mut c, &mut h, NALU_RESET, 1);
+            let types: Vec<u32> = entries.iter().map(|e| e[0]).collect();
+            assert_eq!(types, if n == 0 { vec![32, 33, 34, 19] } else { vec![19] });
+            let joined: Vec<u8> = entries.iter().flat_map(|e| nal_bytes(&h, *e)).collect();
+            let i420 = semi_planar_to_i420(
+                &h.bytes(Y_AT, PITCH * H).unwrap(),
+                &h.bytes(C_AT, PITCH * H / 2).unwrap(),
+                PITCH,
+                W,
+                H,
+            );
+            assert_eq!(joined, expected.encode_i420(&i420).unwrap());
+        }
+        assert_eq!(c.checkpoint().unwrap_err(), RECORDING);
+        reg(&mut c, &mut h, HEVC_CMD, HEVC_GO);
+        h.now = c.next_deadline(h.now).unwrap();
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        c.advance(&mut cx);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(get(&mut c, &mut h, HEVC_STATUS), STOP_DONE);
+        reg(&mut c, &mut h, HEVC_STATUS, STOP_DONE);
+        assert_eq!(h.irqs.last(), Some(&(IRQ, false)));
+        let saved = c.checkpoint().unwrap();
+        let mut restored = Codec::new(IRQ, 10).unwrap();
+        restored.restore_checkpoint(&saved).unwrap();
+        assert_eq!(restored.checkpoint().unwrap().state(), saved.state());
+    }
+
+    /// A stop written while the last HEVC picture is in flight completes
+    /// after that picture: NALU ready and stop done in one completion.
+    #[test]
+    fn an_hevc_stop_during_a_picture_waits_for_it() {
+        let mut c = Codec::new(IRQ, 10).unwrap();
+        let mut h = host();
+        open_and_configure(&mut c, &mut h);
+        reg(&mut c, &mut h, HEVC_INT_EN, 0x010c_0000);
+        reg(&mut c, &mut h, HEVC_SIZE, (H as u32) << 16 | W as u32);
+        frame(&mut h, 0);
+        reg(&mut c, &mut h, IMG_WIDX, 0);
+        reg(&mut c, &mut h, IMG_WADR, Y_AT as u32);
+        reg(&mut c, &mut h, IMG_WIDX, 1);
+        reg(&mut c, &mut h, IMG_WADR, C_AT as u32);
+        reg(&mut c, &mut h, HEVC_CMD, HEVC_GO);
+        reg(&mut c, &mut h, HEVC_CMD, HEVC_GO);
+        h.now = c.next_deadline(h.now).unwrap();
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        c.advance(&mut cx);
+        assert_eq!(cx.refusal(), None);
+        let raw = get(&mut c, &mut h, HEVC_RAW_STATUS);
+        assert_eq!(raw & (NALU_READY | STOP_DONE), NALU_READY | STOP_DONE);
+        assert!(c.checkpoint().is_ok(), "the recording is closed");
     }
 
     #[test]
