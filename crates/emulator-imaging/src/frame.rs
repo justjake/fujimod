@@ -68,22 +68,105 @@ enum View<'a> {
     Bilinear(live::Sampler<'a>),
 }
 
-/// Holds a live frame for the duration of one render, so every row comes from one frame.
+/// Holds the frame one render draws, so every row comes from one frame: the newest frame of a
+/// live scene, or, while the virtual lens is out of focus ([`crate::focus::blur`]), the scene
+/// blurred by the current blur circle ([`defocused`]). `None` for a sharp static scene.
 fn snapshot(scene: &Scene) -> (Option<std::sync::Arc<live::RgbFrame>>, &Scene) {
-    match scene {
-        Scene::Live(feed) => (feed.latest(), scene),
-        _ => (None, scene),
+    let frame = match scene {
+        Scene::Live(feed) => feed.latest(),
+        _ => None,
+    };
+    let blur = crate::focus::blur();
+    if blur > 0. {
+        if let Some(blurred) = defocused(scene, frame.as_deref(), blur) {
+            return (Some(blurred), scene);
+        }
     }
+    (frame, scene)
 }
 
 fn view<'a>(scene: &'a Scene, frame: Option<&'a live::RgbFrame>, width: usize) -> View<'a> {
     match (scene, frame) {
-        (Scene::Picture { width: pw, height: ph, rgb }, _) => {
+        // A live frame or a defocused raster ([`snapshot`]).
+        (_, Some(frame)) => View::Bilinear(live::Sampler::new(frame, width)),
+        (Scene::Picture { width: pw, height: ph, rgb }, None) => {
             View::Nearest { width: *pw, height: *ph, rgb }
         }
-        (Scene::Live(_), Some(frame)) => View::Bilinear(live::Sampler::new(frame, width)),
         _ => View::Bars,
     }
+}
+
+/// Widest raster a defocused scene is blurred at; wider pictures are reduced first (the blur
+/// removes the detail the reduction drops).
+const DEFOCUS_WIDTH: usize = 1920;
+
+/// `scene` as a raster no wider than [`DEFOCUS_WIDTH`], without blur and without the motion
+/// marker: colour bars at 960x640, a picture at its own size or reduced (nearest neighbour), a
+/// live scene's frame (`live`) or colour bars before its first frame.
+fn raster(scene: &Scene, live: Option<&live::RgbFrame>) -> live::RgbFrame {
+    let (source, width, height) = match (scene, live) {
+        (_, Some(frame)) => (View::Nearest { width: frame.width, height: frame.height, rgb: &frame.rgb }, frame.width, frame.height),
+        (Scene::Picture { width, height, rgb }, None) => {
+            (View::Nearest { width: *width, height: *height, rgb }, *width, *height)
+        }
+        _ => (View::Bars, 960, 640),
+    };
+    let (w, h) = if width > DEFOCUS_WIDTH {
+        (DEFOCUS_WIDTH, (height * DEFOCUS_WIDTH / width).max(1))
+    } else {
+        (width, height)
+    };
+    let mut rgb = vec![0u8; w * h * 3];
+    for (y, row) in rgb.chunks_exact_mut(w * 3).enumerate() {
+        rgb_line(&source, y, w, h, None, |x, pixel| row[x * 3..x * 3 + 3].copy_from_slice(&pixel));
+    }
+    live::RgbFrame { width: w, height: h, rgb }
+}
+
+/// `scene` blurred by a blur circle of `blur` picture widths ([`crate::focus`]); `None` when
+/// the circle is under one pixel of the working raster (the scene is drawn sharp). The newest
+/// result for a static scene is kept, because live view paints it again for every frame while
+/// the lens stands still.
+fn defocused(
+    scene: &Scene,
+    live: Option<&live::RgbFrame>,
+    blur: f64,
+) -> Option<std::sync::Arc<live::RgbFrame>> {
+    use std::sync::{Arc, Mutex};
+    static KEPT: Mutex<Option<((usize, usize, usize), Arc<live::RgbFrame>)>> = Mutex::new(None);
+    // A static scene is identified by its storage; a live frame is never kept.
+    let identity = match (scene, live) {
+        (_, Some(_)) => None,
+        (Scene::Picture { width, rgb, .. }, None) => Some((rgb.as_ptr() as usize, *width)),
+        _ => Some((0, 0)),
+    };
+    let width = match (scene, live) {
+        (_, Some(frame)) => frame.width,
+        (Scene::Picture { width, .. }, None) => *width,
+        _ => 960,
+    }
+    .min(DEFOCUS_WIDTH);
+    // Whole pixels of the working raster: nearby lens positions share one raster.
+    let diameter = (blur * width as f64).round() as usize;
+    if diameter < 2 {
+        // `blur_rgb` leaves such a raster unchanged.
+        return None;
+    }
+    let key = identity.map(|(storage, w)| (storage, w, diameter));
+    if let Some(key) = key {
+        if let Some((kept, frame)) = KEPT.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            if *kept == key {
+                return Some(frame.clone());
+            }
+        }
+    }
+    let mut frame = raster(scene, live);
+    crate::focus::blur_rgb(&mut frame.rgb, frame.width, frame.height, diameter as f64);
+    let frame = Arc::new(frame);
+    if let Some(key) = key {
+        *KEPT.lock().unwrap_or_else(|e| e.into_inner()) = Some((key, frame.clone()));
+    }
+    Some(frame)
 }
 
 fn bmp(name: &str) -> Option<Scene> {
@@ -342,12 +425,36 @@ pub fn render_rgb_lines(
     scene: &Scene,
     width: usize,
     height: usize,
+    line: impl FnMut(usize, &[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    render_rgb_lines_from(snapshot(scene), width, height, line)
+}
+
+/// [`render_rgb_lines`] of the scene in focus, whatever the lens position: the input of
+/// models that apply the defocus themselves (the focus statistics, which need a finer blur
+/// than the picture raster holds).
+pub fn render_sharp_rgb_lines(
+    scene: &Scene,
+    width: usize,
+    height: usize,
+    line: impl FnMut(usize, &[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    let frame = match scene {
+        Scene::Live(feed) => feed.latest(),
+        _ => None,
+    };
+    render_rgb_lines_from((frame, scene), width, height, line)
+}
+
+fn render_rgb_lines_from(
+    (frame, scene): (Option<std::sync::Arc<live::RgbFrame>>, &Scene),
+    width: usize,
+    height: usize,
     mut line: impl FnMut(usize, &[u8]) -> Result<(), String>,
 ) -> Result<(), String> {
     if width == 0 || height == 0 {
         return Err("empty scene picture".into());
     }
-    let (frame, scene) = snapshot(scene);
     let view = view(scene, frame.as_deref(), width);
     let mut row = vec![0u8; width * 3];
     let mut previous = None;
@@ -595,6 +702,8 @@ pub fn paint_scene_exposed(
 ) -> Result<bool, String> {
     let Some(scene) = host_scene() else { return Ok(false) };
     check_geometry(address, width, height, stride, layout)?;
+    // Live view follows the focus motor: every frame takes the lens position of its time.
+    crate::focus::sample(cx.now());
     let (w, h) = (width as usize, height as usize);
     let marker = (frame % w as u64) as usize * 8 % w;
     let (live, scene) = snapshot(scene);
@@ -827,5 +936,50 @@ mod tests {
                 host_scene().and_then(|scene| render_422(scene, width, height))
             );
         }
+    }
+
+    /// Squared horizontal differences of the first channel: a sharpness measure.
+    fn sharpness(frame: &live::RgbFrame) -> u64 {
+        frame
+            .rgb
+            .chunks_exact(frame.width * 3)
+            .map(|row| {
+                (1..frame.width)
+                    .map(|x| u64::from(row[x * 3].abs_diff(row[x * 3 - 3])).pow(2))
+                    .sum::<u64>()
+            })
+            .sum()
+    }
+
+    /// A defocused scene is the scene's raster blurred by the blur circle: less sharp for a
+    /// larger circle, the same size, and drawn through the bilinear view for every scene kind.
+    #[test]
+    fn a_defocused_scene_is_its_blurred_raster() {
+        let checker: Vec<u8> = (0..64 * 16)
+            .flat_map(|n| if (n % 64) / 8 % 2 == 0 { [230u8; 3] } else { [20u8; 3] })
+            .collect();
+        let picture = Scene::Picture { width: 64, height: 16, rgb: checker };
+        for scene in [&Scene::Bars, &picture] {
+            let sharp = raster(scene, None);
+            let soft = defocused(scene, None, 0.04).unwrap();
+            let softer = defocused(scene, None, 0.16).unwrap();
+            assert_eq!((soft.width, soft.height), (sharp.width, sharp.height));
+            assert!(sharpness(&soft) < sharpness(&sharp));
+            assert!(sharpness(&softer) < sharpness(&soft));
+            // The kept raster is reused for the same scene and circle.
+            assert!(std::sync::Arc::ptr_eq(
+                &defocused(scene, None, 0.16).unwrap(),
+                &defocused(scene, None, 0.16).unwrap()
+            ));
+            assert!(matches!(view(scene, Some(&softer), 32), View::Bilinear(_)));
+            // A circle under one raster pixel leaves the scene sharp.
+            assert!(defocused(scene, None, 0.0001).is_none());
+        }
+        assert!(matches!(view(&picture, None, 32), View::Nearest { .. }));
+        assert!(matches!(view(&Scene::Bars, None, 32), View::Bars));
+        // A wide picture is reduced before the blur.
+        let wide = Scene::Picture { width: 4000, height: 2, rgb: vec![9; 4000 * 2 * 3] };
+        let reduced = defocused(&wide, None, 0.01).unwrap();
+        assert_eq!((reduced.width, reduced.height), (DEFOCUS_WIDTH, 1));
     }
 }

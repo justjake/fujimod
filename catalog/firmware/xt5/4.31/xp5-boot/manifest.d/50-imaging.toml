@@ -134,9 +134,17 @@ kind = "imaging-rifp-io"
 [device.options]
 queue_completion_us = 5
 
+# The window also holds the register pages of the RIFP sub-blocks 0xffd03000..0xffd0bfff (the
+# recf develop blocks between RIFP and RESZ; no INTID, no start, no poll found). Most of their
+# writes come from the recf register queue. 0xffd03000..0xffd03464 and 0xffd05000..0xffd050ec:
+# RCIF register dumps 0x2c573d0 / 0x2c6024c (called from 0x2c522b8). 0xffd07004, 0xffd0a020,
+# 0xffd0b050: read-modify-write in the RIFP band restart 0x2c531fc (ISR 0x2c517fc, more than
+# 0x500 lines left). 0xffd04000, 0xffd06000: a few sites in 0x1377848..0x1378adc. The words
+# are retained; the still path reads the colour-path words of a run from them
+# (emulator-xp5-imaging imaging_colour.rs).
 [[device]]
 base = 0xffd02000
-size = 0x1000
+size = 0xa000
 kind = "imaging-rifp"
 [device.options]
 completion_us = 1000

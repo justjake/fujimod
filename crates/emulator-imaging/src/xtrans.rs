@@ -37,6 +37,16 @@ pub const XTRANS: [[u8; 6]; 6] = [
     [1, 1, 2, 1, 1, 0],
     [1, 1, 0, 1, 1, 2],
 ];
+/// Tile site (line, sample) of the first sample of an X-T5 RAF payload, and of the sensor
+/// frame it is cut from. The X-T5 4.31 RAF strip is 7872 x 5196 little-endian 16-bit samples;
+/// the payload (the RIFP RAW-to-RAW copy of the sensor frame from sample 24 of line 66, 7752 x
+/// 5184) starts at line 5, sample 0 of the strip (the same in the emulator's FINE+RAW file
+/// and in a camera file: lines 0..4 and samples 7752.. are zero). The RAF tag XTransLayout
+/// stores the strip's tile in reverse order: read back to front it is `GGRGGB GGBGGR BRGRBG
+/// GGBGGR GGRGGB RBGBRG` (checked against the green sites of a camera file), so line 5 of the
+/// strip is `RBGBRG`: site (0, 0) of [`XTRANS`]. 66 and 24 are whole tiles, so the sensor
+/// frame starts at the same site.
+pub const XT5_RAF_SITE: (u8, u8) = (0, 0);
 /// Declared sample of sRGB black.
 pub const BLACK: u16 = 1024;
 /// Declared sample of sRGB white (the 14-bit maximum).
@@ -362,6 +372,12 @@ impl<'a> Raw<'a> {
         }
         let i = y * self.pitch + 2 * x;
         u16::from_le_bytes([self.bytes[i], self.bytes[i + 1]])
+    }
+    /// The samples of the nearest site of each color (red, green, blue) of the pixel at
+    /// sample `x` of line `y`.
+    pub fn sites(&self, x: usize, y: usize) -> [u16; 3] {
+        let site = &nearest()[(y + self.phase.0) % 6][(x + self.phase.1) % 6];
+        [0, 1, 2].map(|c| self.sample(y as i64 + site[c].0, x as i64 + site[c].1))
     }
     /// sRGB of the pixel at sample `x` of line `y`, from the nearest site of each color.
     pub fn rgb(&self, x: usize, y: usize) -> [u8; 3] {
