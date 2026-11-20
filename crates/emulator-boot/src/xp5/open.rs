@@ -429,14 +429,18 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         options,
     });
     let mut fragment = rom_start::Fragment::bundled()?;
-    let mut windows = Vec::new();
+    // The firmware's own stock-setup windows come first, so their stub registers answer before
+    // the shared fragment's registers of the same page.
+    let mut windows = rom.setup_windows.clone();
     let slot_base = match &rom.entry {
-        Entry::MaskRom(_) => Some(0xff9b_0000),
+        Entry::MaskRom(_) => {
+            if let Some(registers) = &rom.reset_registers {
+                fragment.power_controller_registers.clone_from(registers);
+            }
+            Some(0xff9b_0000)
+        }
         Entry::CardHandoff(handoff) => {
             fragment.power_controller_registers.clone_from(&handoff.power_controller_registers);
-            // The firmware's own SD card stage windows come first, so their stub registers
-            // answer before the shared fragment's registers of the same page.
-            windows.extend(handoff.device.iter().cloned());
             Some(handoff.slot)
         }
         Entry::SetupHandoff(_) => {
@@ -477,7 +481,7 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             }
         }
     }
-    for options in fragment.window_options {
+    for options in fragment.window_options.into_iter().chain(rom.setup_window_options.iter().cloned()) {
         let window = state
             .device
             .iter_mut()
