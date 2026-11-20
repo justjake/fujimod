@@ -37,8 +37,14 @@ pub mod family {
     pub const EXTENDED_IDENTIFICATION: u16 = 0x96;
     pub const STATUS: u16 = 0x20;
     pub const FEEDBACK: u16 = 0x21;
-    pub const FOCUS_STATE: u16 = 0x22;
-    pub const APERTURE_STATE: u16 = 0x23;
+    /// Aperture state (X-T5 4.31 API 0x13e51cc, message 0x18e8; decoder 0x13ea1f8: bit 15 a
+    /// flag, 14-bit value). 0x1536b64 copies it to 0x256e7b8 when the flag is clear and 0x156fd08
+    /// takes the high byte as the lens's aperture code (to 0x221b994) and the low byte as
+    /// 1/256 of a code.
+    pub const APERTURE_STATE: u16 = 0x22;
+    /// Focus state (message 0x18e9; decoder 0x13ea224: a flag and a signed 15-bit value,
+    /// stored at 0x24abfe0). Its consumer is not traced; answered with the focus position.
+    pub const FOCUS_STATE: u16 = 0x23;
     /// Zoom state (X-T5 decoder 0x13ea25c: flag bit 15, a 7-bit value in bits
     /// 8..14 and a byte in bits 0..7). The 7-bit value is taken as the zoom step
     /// index into the lens data tables (at most 100 steps); inferred, not traced
@@ -60,6 +66,9 @@ pub mod family {
     pub const FOCUS_DRIVE: u16 = 0x58;
     pub const APERTURE_TARGET: u16 = 0x60;
     pub const APERTURE_STEP: u16 = 0x61;
+    /// Aperture setpoint (wrapper 0x15359e8 -> lenscom 0x13e61b0, message 0x18fd): request +6,
+    /// 12 bits, is the aperture code times 64 (0x156f7ec: (code & 0x3ff) << 6), plus four flag
+    /// bits that the model ignores. 0x61 (request +0) is 0 on every X-T5 call site.
     pub const APERTURE_DRIVE: u16 = 0x62;
     pub const READ_CATALOG: u16 = 0xc0;
     /// Two-bit lens state request (X-T5 4.31 API 0x13e5ac0, message 0x18f3; the reply payload
@@ -351,18 +360,46 @@ impl Identity<'_> {
         }
         put(0x734600, index);
         put(0x732400, le(&av));
-        // Focus positions: infinity near the low end of the travel, the closest
-        // distance near the high end (the direction the body drives for nearer
-        // subjects is not known).
+        // Focus positions (static, X-T5 4.31): infinity is the s16 at +0x317 + 2z
+        // (0x1538f7c) and nearer subjects lie above it; 0x1539228 adds the u16 offsets of
+        // +0x3e0 .. +0x7cd to it. The contrast scan's far limit is infinity and its near
+        // limit infinity + [+0x572] (0x153b6b8 -> 0x1539a30, AF worker 0x2fbdb20); the range
+        // table 0x1ae9678 also uses +0x63b as the near end of an extended range and the
+        // margins below (0x153e704). Infinity sits near the low end of the travel and the
+        // ordinary range reaches the closest focus near the high end. No public lens data
+        // gives these values; they are generated from the travel.
         let travel = (self.focus.max - self.focus.min) as u32;
         let infinity = self.focus.min + (travel / 20) as u16;
         put(0x720317, le(&vec![infinity; steps]));
         let span = travel * 9 / 10;
-        for (i, table) in [0x7203e0u32, 0x7204a9, 0x720572, 0x72063b, 0x720704, 0x7207cd].iter().enumerate() {
-            // Offsets 1/32, 1/16, 1/8, 1/4, 1/2 and all of the span.
-            let offset = (span >> (5 - i)) as u16;
-            put(*table, le(&vec![offset; steps]));
+        // Offsets from infinity: 1/8, 1/2, 17/18, then the whole span for the extended and
+        // nearest tables (each table at least as far as the one before).
+        let offsets = [span / 8, span / 2, span * 17 / 18, span, span, span];
+        for (table, offset) in [0x7203e0u32, 0x7204a9, 0x720572, 0x72063b, 0x720704, 0x7207cd].iter().zip(offsets) {
+            put(*table, le(&vec![offset as u16; steps]));
         }
+        // Three more offset tables (0x1539ac8; the AF worker clamps the fourth scan limit
+        // with the first): the ordinary near end.
+        for table in [0x7207f7u32, 0x7208c0, 0x720989] {
+            put(table, le(&vec![offsets[2] as u16; steps]));
+        }
+        // Scan margins beyond the limits (0x153e704: pairs 0x720cd2/0x720d9b and
+        // 0x720b40/0x720c09), 1/80 of the travel, so infinity - margin stays in the travel.
+        for table in [0x720cd2u32, 0x720d9b, 0x720b40, 0x720c09] {
+            put(table, le(&vec![(travel / 80) as u16; steps]));
+        }
+        // Drive speeds: 0x1539fb4 reads a u16 from one of fourteen tables (0x1aeb5c0) and
+        // shifts it by the byte at +0x162f (0 here); zero means "no limit" (0xffff, then
+        // 0x7fff). 0x1539c98 / 0x1539cd0 read the limits at +0x15a6 / +0x15a8. The body
+        // sends the result as family 0x54, which the model takes as units per second: scans
+        // at 1.5 travels per second, limits at the lens's own speed.
+        let scan = (travel * 3 / 2).min(0x7ffe) as u16;
+        for table in [0x721674u32, 0x7216c4, 0x721714, 0x721764, 0x7217b4, 0x721804, 0x721854, 0x7218a4,
+                      0x7218f4, 0x721944, 0x721994, 0x7219e4, 0x721a34, 0x721a84] {
+            put(table, le(&vec![scan; steps]));
+        }
+        let fastest = (self.focus.units_per_ms as u32 * 1000).min(0x7ffe) as u16;
+        put(0x7215a6, le(&[fastest, fastest]));
         // Zoom steps below which the nearest-distance tables (+0x63b, +0x704) apply
         // (0x1539228, 0x153ea04; 0x1565360 reads it as a step count): all of them.
         put(0x721213, vec![steps as u8]);
@@ -863,7 +900,8 @@ impl Unit {
         Some(match family {
             SYNC | IDENTIFICATION | EXTENDED_IDENTIFICATION => 0,
             FEEDBACK | FOCUS_STATE => self.state.focus.position(now, tpm),
-            APERTURE_STATE => self.state.aperture.position(now, tpm),
+            // The code in the high byte, no fraction, flag clear.
+            APERTURE_STATE => (self.state.aperture.position(now, tpm) & 0x3f) << 8,
             // Zoom step 0 (the short end); the lens has no zoom ring model.
             ZOOM_STATE if self.spec.declared(ZOOM_STATE).is_none() => 0,
             // 0x54: the speed of the next move. 0x7fff is the saturated rate (0x156f91c) and
@@ -892,7 +930,11 @@ impl Unit {
                 self.move_focus(now, payload as i64);
                 payload
             }
-            APERTURE_TARGET | APERTURE_DRIVE => {
+            APERTURE_DRIVE => {
+                self.move_aperture(now, ((payload & 0xfff) >> 6) as i64);
+                payload
+            }
+            APERTURE_TARGET => {
                 self.move_aperture(now, payload as i64);
                 payload
             }

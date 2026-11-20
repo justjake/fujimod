@@ -187,7 +187,15 @@ fn aperture_setpoint_moves_the_index() {
     request(&mut port, APERTURE_TARGET, 6, &mut time);
     assert_eq!(port.aperture(time).1, 6);
     time += 10 * MS;
-    assert_eq!(request(&mut port, APERTURE_STATE, 0, &mut time), 6);
+    // Family 0x22 reports the code in the high byte.
+    assert_eq!(request(&mut port, APERTURE_STATE, 0, &mut time), 6 << 8);
+    // Family 0x62 carries the code times 64 in 12 bits (0x480 = code 18).
+    request(&mut port, APERTURE_DRIVE, 0x480 | 0x5000, &mut time);
+    time += 20 * MS;
+    assert_eq!(port.aperture(time), (18, 18));
+    request(&mut port, APERTURE_DRIVE, 6 << 6, &mut time);
+    time += 20 * MS;
+    assert_eq!(port.aperture(time), (6, 6));
     request(&mut port, APERTURE_STEP, (-2i16) as u16, &mut time);
     time += 10 * MS;
     assert_eq!(port.aperture(time), (4, 4));
@@ -427,8 +435,20 @@ fn the_lens_data_focus_tables_rise_from_infinity_inside_the_travel() {
         .iter()
         .map(|t| u16_at(&read, *t))
         .collect();
-    assert!(offsets.windows(2).all(|w| w[0] < w[1]), "{offsets:?}");
+    assert!(offsets.windows(2).all(|w| w[0] <= w[1]), "{offsets:?}");
     assert!(infinity > spec.focus.min && infinity + offsets[5] < spec.focus.max);
+    // The contrast scan runs from infinity to infinity + [+0x572] (0x153b6b8, 0x1539a30): most
+    // of the travel, with margins (0x153e704) that keep infinity - margin inside it.
+    let travel = spec.focus.max - spec.focus.min;
+    assert!(offsets[2] > travel * 3 / 4, "{offsets:?}");
+    for margin in [0x720cd2, 0x720d9b, 0x720b40, 0x720c09] {
+        let margin = u16_at(&read, margin);
+        assert!(margin > 0 && infinity - margin >= spec.focus.min);
+    }
+    // Nonzero scan speeds (0x1539fb4) and speed limits (0x1539c98, 0x1539cd0).
+    for table in [0x721674, 0x721a84, 0x7215a6, 0x7215a8] {
+        assert!(u16_at(&read, table) > 0);
+    }
     // 0x1539228 uses the +0x63b and +0x704 tables only for zoom steps below +0x1213.
     assert_eq!(read(0x721213), read(0x720f80));
 }
