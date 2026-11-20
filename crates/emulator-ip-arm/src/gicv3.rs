@@ -190,6 +190,12 @@ impl Gic {
             }
         }
     }
+    /// Whether an SGI (ids 0..16) is latched for `core`, whatever its enable or priority.
+    /// Wakes a core that waits for a software interrupt before its own CPU interface runs.
+    pub fn sgi_pending(&self, core: usize) -> Result<bool, String> {
+        self.core(core)?;
+        Ok((0..16).any(|id| self.state.private[core][id].pending()))
+    }
     /// Group0 signals FIQ; Group1 signals IRQ. This never acknowledges an ID.
     pub fn pins(&self, core: usize) -> Result<(bool, bool), String> {
         self.core(core)?;
@@ -676,6 +682,9 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
     fn pins(&self, core: usize) -> Result<(bool, bool), String> {
         Gic::pins(self, core)
     }
+    fn sgi_pending(&self, core: usize) -> Result<bool, String> {
+        Gic::sgi_pending(self, core)
+    }
     fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
         Gic::set_spi(self, id, high)
     }
@@ -831,6 +840,34 @@ mod tests {
         assert_eq!(g.system(0, 0xc660, None).unwrap(), 34);
         g.set_spi(35, true).unwrap();
         assert_eq!(g.system(0, 0xc662, None).unwrap(), 1023);
+    }
+    #[test]
+    fn sgi_pending_reports_a_latched_sgi_even_with_the_cpu_interface_disabled() {
+        let mut g = enabled(vec![0, 1, 2, 3, 4]);
+        for core in 0..5 {
+            assert!(!g.sgi_pending(core).unwrap());
+        }
+        g.system(0, 0xc65f, Some(0xe)).unwrap();
+        for core in 0..5 {
+            assert_eq!(g.sgi_pending(core).unwrap(), (1..=3).contains(&core));
+        }
+    }
+    #[test]
+    fn group_zero_sgi_targets_only_selected_secondary_affinities() {
+        let mut g = enabled(vec![0, 1, 2, 3, 4]);
+        for core in 0..5 {
+            g.redistributor(core, 0x10100, 4, Some(1)).unwrap();
+            g.redistributor(core, 0x10400, 1, Some(0x40)).unwrap();
+        }
+        g.system(0, 0xc65f, Some(0xe)).unwrap();
+        for core in 0..5 {
+            assert_eq!(g.pins(core).unwrap(), (false, (1..=3).contains(&core)));
+        }
+        for core in 1..=3 {
+            assert_eq!(g.system(core, 0xc640, None).unwrap(), 0);
+            g.system(core, 0xc641, Some(0)).unwrap();
+            assert_eq!(g.pins(core).unwrap(), (false, false));
+        }
     }
     #[test]
     fn sgi_affinity_broadcast_groups_and_private_banks() {

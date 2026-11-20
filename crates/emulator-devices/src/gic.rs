@@ -6,6 +6,11 @@ use serde_json::Value;
 pub trait InterruptController: Send {
     /// The (IRQ, FIQ) outputs to one core. Inspection never acknowledges.
     fn pins(&self, core: usize) -> Result<(bool, bool), String>;
+    /// Whether an SGI is latched for `core`, regardless of enable or priority (a wake
+    /// request for a core parked before its own CPU interface runs). Default: never.
+    fn sgi_pending(&self, _core: usize) -> Result<bool, String> {
+        Ok(false)
+    }
     fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String>;
     fn set_ppi(&mut self, core: usize, id: usize, high: bool) -> Result<(), String>;
     /// A guest CPU interface system-register access that trapped.

@@ -97,6 +97,7 @@ impl State {
         let Self {
             execution_policy,
             device_workers: _,
+            parked_until_sgi: _,
             host_pause: _,
             clock_limit: _,
             power_off,

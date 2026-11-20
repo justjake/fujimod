@@ -184,6 +184,8 @@ struct State {
     interrupt_changed: Vec<bool>,
     released: Vec<bool>,
     waiting: Vec<bool>,
+    /// Released cores that wait in WFI until an SGI is pending for them (see factory).
+    parked_until_sgi: Vec<bool>,
     waiting_event: Vec<bool>,
     events: Vec<bool>,
     pins: Vec<(bool, bool)>,
@@ -552,6 +554,7 @@ impl Board {
             interrupt_changed: vec![false; n],
             released,
             waiting: vec![false; n],
+            parked_until_sgi: vec![false; n],
             waiting_event: vec![false; n],
             events: vec![false; n],
             pins: vec![(false, false); n],
@@ -2534,6 +2537,11 @@ impl State {
                         cpus[core].set_interrupt(Interrupt::Fiq, pins.1)?;
                     }
                     self.pins[core] = pins;
+                    changed = true;
+                }
+                if self.parked_until_sgi[core] && g.gic.sgi_pending(core)? {
+                    self.parked_until_sgi[core] = false;
+                    self.waiting[core] = false;
                     changed = true;
                 }
                 if pins.0 || pins.1 {

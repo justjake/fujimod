@@ -18,6 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct ProcessorStart {
     pub processor_id: String,
     pub released: bool,
+    /// A released secondary that waits in WFI at its start state until a GIC SGI is
+    /// pending for it (assumed boot-ROM wait); false for every other start.
+    pub parked_until_sgi: bool,
     pub registers: Vec<(Register, u64)>,
 }
 
@@ -111,6 +114,7 @@ fn build_processor(
     model: ProcessorModel,
     registers: &[(Register, u64)],
     released: bool,
+    parked_until_sgi: bool,
     mprofile: Option<fujimod_emulator::board::mprofile::Config>,
     rprofile: Option<&fujimod_catalog::reference::RProfileState>,
     architecture: ProcessorArchitecture,
@@ -158,6 +162,7 @@ fn build_processor(
         model,
         registers: registers.to_vec(),
         released,
+        parked_until_sgi,
         mprofile,
         rprofile,
     })
@@ -345,6 +350,7 @@ pub fn assemble_with_starts(
                             soc.id, processor.id
                         )
                     })?,
+                start.is_some_and(|state| state.parked_until_sgi),
                 mprofile,
                 processor.rprofile.as_ref(),
                 soc.architecture.clone(),
@@ -664,6 +670,7 @@ mod tests {
             model,
             registers: vec![],
             released: true,
+            parked_until_sgi: false,
             mprofile: None,
             rprofile: None,
         };
@@ -944,6 +951,7 @@ mod tests {
                 .map(|processor| ProcessorStart {
                     processor_id: processor.id.clone(),
                     released: processor.id == "core0",
+                    parked_until_sgi: false,
                     registers: vec![],
                 })
                 .collect();
@@ -987,6 +995,7 @@ mod tests {
             .map(|processor| ProcessorStart {
                 processor_id: processor.id.clone(),
                 released: false,
+                parked_until_sgi: false,
                 registers: vec![],
             })
             .collect();

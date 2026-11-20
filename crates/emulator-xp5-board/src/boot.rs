@@ -92,6 +92,9 @@ pub fn startup_from_profile(
         .cpu
         .as_ref()
         .ok_or("selected firmware profile has no CPU startup state")?;
+    // The experimental X-H2S reset profile releases every A53 at the common reset state
+    // (assumption); the profile's own `running` flags only gate the generic path.
+    let experiment = profile.rom_basis.as_deref() == Some("xh2s-reset-experiment");
     let processors = cpus
         .iter()
         .map(|cpu| {
@@ -129,7 +132,10 @@ pub fn startup_from_profile(
             insert_start_register(&mut registers, "MPIDR_EL1", *affinity)?;
             Ok(fujimod_emulator_board_graph::ProcessorStart {
                 processor_id: processor.id.clone(),
-                released: cpu.running,
+                released: cpu.running || experiment,
+                // Assumption (boot-ROM wait): the experimental profile's secondaries
+                // wait in WFI at the common reset state until an SGI is pending for them.
+                parked_until_sgi: experiment && cpu.id != 0,
                 registers,
             })
         })

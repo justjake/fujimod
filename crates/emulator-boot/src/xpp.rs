@@ -1049,6 +1049,7 @@ pub fn definition(
         .map(|(processor, registers)| ProcessorStart {
             processor_id: processor.id.clone(),
             released: true,
+            parked_until_sgi: false,
             registers,
         })
         .collect();
@@ -1086,6 +1087,7 @@ mod tests {
             .map(|id| ProcessorStart {
                 processor_id: id.into(),
                 released: true,
+                parked_until_sgi: false,
                 registers: vec![(Register::Pc, 0), (Register::Pstate, 0xd3)],
             })
             .into()
