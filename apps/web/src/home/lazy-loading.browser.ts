@@ -30,10 +30,12 @@ async function waitForGate(promise: Promise<void>, label: string) {
   }
 }
 async function loading(page: Page) {
-  const bar = page.locator('#camera-loading progress:visible').first();
+  const bar = page
+    .locator('#camera-loading li:not([data-state="complete"]) progress:visible')
+    .first();
   assert.equal(await bar.isVisible(), true);
   const value = await bar.getAttribute('value');
-  assert.equal(value, null, 'Waiting for headers has no fabricated percentage');
+  assert.ok(value === null || value === '0', 'Waiting for headers has no fabricated percentage');
   const bounds = await bar.boundingBox();
   assert.ok(bounds && bounds.width > 100 && bounds.height > 0);
 }

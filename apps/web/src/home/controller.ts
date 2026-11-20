@@ -514,7 +514,7 @@ export function startHome(
       }
       if (disposed) return;
       setState((s) => {
-        s.catalog = catalog;
+        Object.assign(s.catalog, catalog);
         s.release = release;
       });
       if (disposed) return;
