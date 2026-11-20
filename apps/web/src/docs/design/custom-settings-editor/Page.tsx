@@ -66,7 +66,7 @@ function App() {
   const openFilm = () => {
     const name = FILMS[settings().recipe.film].name;
     const base = baseFilm(FILM_BASE[name] ?? 0);
-    setFilm(initial({ film: base, opened: base, from: name, name: 'NEW FILM' }));
+    setFilm(initial({ film: base, opened: base, from: name, name: 'NEW FILM', area: 'rail', railOn: 'film' }));
     setOpen(true);
   };
 

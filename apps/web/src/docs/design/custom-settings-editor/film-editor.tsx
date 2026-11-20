@@ -1982,7 +1982,7 @@ export function Editor(props: {
             />
           </Section>
         </Show>
-        <Section ref={(element) => (sections.custom = element)} title="CUSTOM SETTING">
+        <Section ref={(element) => (sections.custom = element)} title="PREVIEW WITH CUSTOM SETTING" long>
           <Switch
             items={['OFF', 'ON']}
             value={s().custom ? 1 : 0}

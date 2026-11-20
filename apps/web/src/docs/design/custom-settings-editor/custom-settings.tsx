@@ -264,8 +264,6 @@ const ROW = 57;
 const ICON_COLUMN = 58;
 const WIDTH = 280;
 const COMPARE_WIDTH = 300;
-/** FUJIMOD SET-UP's selection: a white outline just outside the cell. */
-const SELECTED = 'outline-[3px] outline-offset-[2px] outline-white';
 
 
 
@@ -282,6 +280,12 @@ type Action =
 export type Send = (action: Action) => void;
 
 /* ---- Rows -------------------------------------------------------------------- */
+
+/** An option icon's size. White balance icons carry wide empty margins, so
+ * they are drawn at the row icon size; AUTO fills the whole canvas, so it keeps its full width. */
+function artClass(setting: string, size: string): string {
+  return setting === 'wb' ? 'h-[36px] w-[60px]' : size;
+}
 
 /** Words for row icons where the artwork is not published. */
 const ICON_WORDS: Record<string, string> = {
@@ -343,7 +347,7 @@ function SettingRow(props: {
     props.setting.kind === 'choice'
       ? props.setting.choices.map((choice): ChoiceItem => {
           const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
-          return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class="h-[24px] w-[40px]" color={ink} /> };
+          return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class={artClass(props.setting.id, "h-[24px] w-[40px]")} color={ink} /> };
         })
       : [];
   return (
@@ -511,55 +515,40 @@ function RowExtension(props: {
   );
 }
 
-/** WB SHIFT: R on the horizontal axis, B on the vertical, -9 to +9 as stock. */
+/** WB SHIFT's map, as the camera draws it: 19 by 19 colored dots (green to
+ * the left, red to the right, blue at the top, yellow at the bottom, white in
+ * the middle), white center axes, and a hollow white square at R and B. */
 function ShiftGrid(props: { r: number; b: number; send: Send }) {
-  const cell = 11;
-  const size = cell * 19;
-  const pos = (v: number) => (v + 9) * cell;
+  const PITCH = 12;
+  const size = PITCH * 19;
+  const center = (v: number) => (v + 9) * PITCH + PITCH / 2;
+  const mix = (a: number[], b: number[], t: number) => a.map((c, i) => Math.round(c + (b[i] - c) * t));
+  const dot = (r: number, b: number) => {
+    const across = mix([255, 255, 255], r < 0 ? [40, 220, 40] : [235, 40, 70], Math.abs(r) / 9);
+    const [red, green, blue] = mix(across, b > 0 ? [40, 110, 255] : [240, 215, 0], Math.abs(b) / 12);
+    return `rgb(${red} ${green} ${blue})`;
+  };
+  const steps = Array.from({ length: 19 }, (_, i) => i - 9);
   return (
-    <div
-      class="relative"
-      style={{ width: `${size}px`, height: `${size}px` }}
+    <svg
+      width={size}
+      height={size}
+      class="block"
       onClick={(e) => {
         const box = e.currentTarget.getBoundingClientRect();
-        const scale = box.width / size;
-        const r = Math.floor((e.clientX - box.left) / scale / cell) - 9;
-        const b = 9 - Math.floor((e.clientY - box.top) / scale / cell);
+        const k = size / box.width;
+        const r = Math.floor(((e.clientX - box.left) * k) / PITCH) - 9;
+        const b = 9 - Math.floor(((e.clientY - box.top) * k) / PITCH);
         props.send({ shift: [Math.max(-9, Math.min(9, r)), Math.max(-9, Math.min(9, b))] });
       }}
     >
-      <div
-        class="absolute inset-0"
-        style={{
-          background:
-            'linear-gradient(to right, rgb(60 200 120 / 0.6), transparent 50%, rgb(240 70 80 / 0.6)), linear-gradient(to top, rgb(240 200 60 / 0.6), transparent 50%, rgb(60 110 255 / 0.6))',
-        }}
-      />
-      <div class="absolute inset-y-0 left-1/2 w-[1px] bg-white/60" />
-      <div class="absolute inset-x-0 top-1/2 h-[1px] bg-white/60" />
-      <div
-        class={`absolute ${SELECTED}`}
-        style={{
-          left: `${pos(props.r)}px`,
-          top: `${pos(-props.b)}px`,
-          width: `${cell}px`,
-          height: `${cell}px`,
-          background: '#fff',
-        }}
-      />
-      <span class="absolute -top-[4px] left-1/2 -translate-x-1/2 -translate-y-full text-[15px]">
-        B
-      </span>
-      <span class="absolute top-1/2 -right-[6px] translate-x-full -translate-y-1/2 text-[15px]">
-        R
-      </span>
-      <span class="absolute -bottom-[4px] left-1/2 -translate-x-1/2 translate-y-full text-[15px]">
-        Y
-      </span>
-      <span class="absolute top-1/2 -left-[6px] -translate-x-full -translate-y-1/2 text-[15px]">
-        G
-      </span>
-    </div>
+      <For each={steps}>
+        {(b) => <For each={steps}>{(r) => <rect x={center(r) - 1.5} y={center(-b) - 1.5} width={3} height={3} fill={dot(r, b)} />}</For>}
+      </For>
+      <line x1={size / 2} x2={size / 2} y1={0} y2={size} stroke="rgb(255 255 255 / 0.85)" stroke-width={1.5} />
+      <line y1={size / 2} y2={size / 2} x1={0} x2={size} stroke="rgb(255 255 255 / 0.85)" stroke-width={1.5} />
+      <rect x={center(props.r) - 6} y={center(-props.b) - 6} width={12} height={12} fill="none" stroke="#fff" stroke-width={2} />
+    </svg>
   );
 }
 
@@ -663,7 +652,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
                 const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
                 return {
                   label: choice.name,
-                  art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class="h-[30px] w-[50px]" color={ink} />,
+                  art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class={artClass(setting().id, "h-[30px] w-[50px]")} color={ink} />,
                   more: setting().id === 'wb' ? () => send({ shiftFor: setting().choices.indexOf(choice) }) : undefined,
                 };
               })}

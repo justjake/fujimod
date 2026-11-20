@@ -35,7 +35,7 @@ const LOOKS = {
     --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.55), 0 2px 4px rgb(0 0 0 / 0.7);
     --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
     --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
-    --m-mark: #fff;
+    --m-mark: #e5333a;
     --m-accent: #d4282f; --m-confirm: linear-gradient(#d83a40, #a91d23);
     --m-title: linear-gradient(#262626, #121212); --m-text-area: rgb(0 0 0 / 0.82); --m-tray: linear-gradient(#141414, #050505);
     --m-key: linear-gradient(#4a4a4a, #333); --m-key-special: linear-gradient(#2c2c2c, #1e1e1e);

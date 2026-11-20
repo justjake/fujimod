@@ -212,7 +212,7 @@ export function Choice(props: {
           </Show>
         </span>
       </Show>
-      <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL }}>
+      <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL, 'border-radius': props.name === undefined ? 'inherit' : '0 0 13px 13px' }}>
         {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
         <span
           class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
@@ -230,7 +230,7 @@ export function Choice(props: {
               const ink = () => `rgb(255 255 255 / ${distance() < 0.5 ? 1 : 0.7})`;
               return (
                 <span
-                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[7px]' : 'w-[46px]'}`}
+                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[7px]' : 'px-[3px]'}`}
                   style={{ color: ink() }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}
@@ -323,7 +323,7 @@ export function Dial(props: {
       </Show>
       {/* The scale: a recessed strip along the bottom, the track's colors on
           its bottom edge, labels over the major ticks, the mark at the center. */}
-      <div class="absolute inset-x-0 bottom-0" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge)' }}>
+      <div class="absolute inset-x-0 bottom-0" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL, 'border-radius': props.name === undefined ? 'inherit' : '0 0 13px 13px' }}>
         <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
           <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out', 'will-change': 'transform' }}>
             <For each={Array.from({ length: count() }, (_, i) => i)}>
