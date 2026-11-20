@@ -55,9 +55,12 @@ impl Gates {
                 0x510 | 0xb00 | 0xb04 | 0xb08 | 0xb0c | 0xb10 | 0xb1c | 0xb44
             )
         } else {
+            // 0x110: the fourth register write of the X-T5 boot header (0xff90c110 = 0xc, after
+            // 0xff90c150 and 0xff90c154), which an SD card stage repeats. A latch like those two;
+            // its meaning is not known.
             (0x300..=0x334).contains(&o)
                 || (0x900..=0x944).contains(&o)
-                || matches!(o, 0x150 | 0x154 | 0x600 | 0x604 | 0x608 | 0x700)
+                || matches!(o, 0x110 | 0x150 | 0x154 | 0x600 | 0x604 | 0x608 | 0x700)
         }
     }
     fn status(&self, o: u64) -> Option<u64> {
@@ -166,6 +169,26 @@ mod tests {
         gates.restore(&state).unwrap();
         assert_eq!(state, gates.save());
         assert_eq!(host.resets, [(4, false), (4, true)]);
+    }
+
+    #[test]
+    fn boot_header_register_writes_latch_and_other_offsets_stay_unmodeled() {
+        let mut gates = Gates::new(false);
+        let mut host = RecordingHost::default();
+        for (offset, value) in [(0x150u64, 0x1fu64), (0x154, 0x1f), (0x110, 0xc)] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            gates.write(&mut cx, 0xff90c000 + offset, 4, value);
+            assert!(!cx.is_unmodeled(), "{offset:#x}");
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            assert_eq!(gates.read(&mut cx, 0xff90c000 + offset, 4), value);
+            assert!(!cx.is_unmodeled(), "{offset:#x}");
+        }
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gates.write(&mut cx, 0xff90c114, 4, 1);
+        assert!(cx.is_unmodeled());
+        let state = gates.save();
+        gates.restore(&state).unwrap();
+        assert_eq!(state, gates.save());
     }
 
     #[test]

@@ -110,6 +110,10 @@ pub(crate) struct Handoff {
     pub slot: u64,
     pub stage_max_bytes: usize,
     pub power_controller_registers: BTreeMap<String, u16>,
+    /// Device windows this firmware's SD card stage needs beyond the shared ROM-start fragment.
+    /// A bring-up stub listed here answers before the fragment's stub of the same page.
+    #[serde(default)]
+    pub device: Vec<DeviceWindow>,
 }
 
 impl Handoff {
@@ -243,6 +247,27 @@ mod tests {
         let start = RomStart::from_setup_handoff(handoff).unwrap();
         assert_eq!(start.source_straps, 1);
         assert!(!start.card_present && start.card_files.is_empty());
+    }
+
+    #[test]
+    fn the_xt5_card_handoff_lists_its_own_setup_windows() {
+        let handoff = Handoff::for_firmware("xt5-431").unwrap().unwrap();
+        assert_eq!((handoff.pc, handoff.sp, handoff.slot), (0xff80_0000, 0xff83_c000, 0xff9b_0000));
+        // The memory-controller status the X-T5 setup polls without writing it first.
+        let status = handoff.device.iter().find(|window| window.base == 0xfaf0_7000).unwrap();
+        assert_eq!(status.kind, "bringup-stub");
+        let registers = status.options["registers"].as_array().unwrap();
+        assert!(registers.iter().any(|register| {
+            register["offset"].as_integer() == Some(0x780)
+                && register["mode"].as_str() == Some("constant")
+                && register["value"].as_integer() == Some(1)
+        }));
+        // No window is declared twice, and none overlaps another.
+        let mut extents: Vec<(u64, u64)> =
+            handoff.device.iter().map(|window| (window.base, window.base + window.size)).collect();
+        extents.sort_unstable();
+        assert!(extents.windows(2).all(|pair| pair[0].1 <= pair[1].0));
+        assert!(Handoff::for_firmware("x100vi-131").is_none());
     }
 
     #[test]
