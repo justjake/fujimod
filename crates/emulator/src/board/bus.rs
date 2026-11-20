@@ -750,6 +750,28 @@ impl Bus {
         }
         result
     }
+    /// Whether repeated reads of this register in a poll loop may be left
+    /// out (`Device::poll_stable`). Never while accesses are logged or outside
+    /// strict mode.
+    pub fn poll_stable(&self, address: u64, size: u8) -> bool {
+        if self.transactions.is_some() || self.mode != Mode::Strict {
+            return false;
+        }
+        let Some(end) = address.checked_add(size as u64) else {
+            return false;
+        };
+        self.pages
+            .get(&(address >> 20))
+            .and_then(|pages| {
+                pages[((address >> 12) & 255) as usize].iter().copied().find(|&id| {
+                    self.windows[id]
+                        .mappings
+                        .iter()
+                        .any(|m| address >= m.base && end <= m.base + m.size)
+                })
+            })
+            .is_some_and(|id| self.windows[id].device.poll_stable(address, size))
+    }
     fn dispatch(
         &mut self,
         host: &mut dyn Host,
