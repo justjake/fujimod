@@ -19,6 +19,10 @@ pub struct Session {
     pub program_mode: bool,
     #[serde(default)]
     pub controller_complete: bool,
+    /// Set by the controller when its latched read opcode/dummy setup is one the
+    /// part does not answer; the next aperture or DMA read through it fails.
+    #[serde(default)]
+    pub aperture_fault: Option<String>,
     pub reads: StorageReads,
 }
 impl Session {
@@ -188,7 +192,13 @@ pub enum Medium {
 impl Medium {
     pub(crate) fn read_device(&self, offset: u64, n: usize) -> Result<Vec<u8>, String> {
         match self {
-            Medium::Nor(s) => s.lock().unwrap().read_device(offset, n),
+            Medium::Nor(s) => {
+                let mut s = s.lock().unwrap();
+                if let Some(fault) = &s.session.aperture_fault {
+                    return Err(fault.clone());
+                }
+                s.read_device(offset, n)
+            }
             Medium::Nand(s) => s.lock().unwrap().read_device(offset, n),
         }
     }
