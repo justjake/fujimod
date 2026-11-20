@@ -75,6 +75,8 @@ pub struct Gic {
     state: State,
     // Derived pin outputs, excluded from architectural/checkpoint state.
     eligible: Vec<[Option<usize>; 2]>,
+    /// Scratch of `refresh`; no state.
+    candidates: Vec<usize>,
 }
 impl Gic {
     pub fn new(affinities: Vec<u32>, lines: usize) -> Result<Self, String> {
@@ -105,6 +107,7 @@ impl Gic {
                 interfaces: vec![Interface::default(); cores],
             },
             eligible: vec![[None; 2]; cores],
+            candidates: Vec::new(),
         })
     }
     fn core(&self, core: usize) -> Result<(), String> {
@@ -132,6 +135,25 @@ impl Gic {
         (route as u32 & 0xffffff) | ((route >> 8) as u32 & 0xff000000)
     }
     fn refresh(&mut self) {
+        // Shared lines that can be eligible for some processor, in ID order.
+        // The per-processor search below applies its whole condition to
+        // them and to every private line, so it finds what a search of all
+        // lines finds.
+        let mut candidates = std::mem::take(&mut self.candidates);
+        candidates.clear();
+        candidates.extend(
+            self.state
+                .shared
+                .iter()
+                .enumerate()
+                .skip(32)
+                .filter(|(_, line)| line.enabled && !line.active && line.pending())
+                .map(|(id, _)| id),
+        );
+        self.refresh_from(&candidates);
+        self.candidates = candidates;
+    }
+    fn refresh_from(&mut self, candidates: &[usize]) {
         for core in 0..self.eligible.len() {
             for group in 0..2 {
                 let interface = &self.state.interfaces[core];
@@ -149,7 +171,8 @@ impl Gic {
                 {
                     None
                 } else {
-                    (0..self.state.shared.len())
+                    (0..self.state.shared.len().min(32))
+                        .chain(candidates.iter().copied())
                         .filter(|&id| {
                             let line = self.line(core, id);
                             line.enabled
