@@ -2,10 +2,11 @@ import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import { ContributeDialog, type ContributeReceipt } from './ContributeDialog';
+import { sharingUrl } from '../sharing-server';
 
 const receipt: ContributeReceipt = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-  shareUrl: 'https://share.fujimod.com/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  shareUrl: sharingUrl('/contribution/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
 };
 let dispose: (() => void) | undefined;
 afterEach(() => {

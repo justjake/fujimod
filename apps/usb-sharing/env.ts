@@ -11,6 +11,8 @@ export interface Env {
   ERROR_LIMIT: RateLimit;
   CONNECTIONS: RateLimit;
   ALLOWED_ORIGINS?: string;
+  /** Public origin for share links; empty means site-relative. */
+  SHARING_ORIGIN?: string;
   TURN_TTL_SECONDS?: string;
   TURN_DAILY_ISSUE_LIMIT?: string;
   SHARE_IDLE_SECONDS?: string;

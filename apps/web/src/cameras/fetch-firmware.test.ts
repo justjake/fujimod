@@ -3,6 +3,7 @@ import type { Firmware } from '../catalog';
 import { sha256 } from '../patch/patcher';
 import { fetchFirmware } from './fetch-firmware';
 import { firmwareMirrors } from './firmware-mirrors';
+import { sharingUrl } from '../sharing-server';
 const bytes = new Uint8Array([0, 4, 255, 16]);
 const firmware: Firmware = {
   id: 'x70-110',
@@ -19,7 +20,7 @@ test('fetches the French mirror through the proxy and returns verified bytes', a
   vi.stubGlobal('fetch', request);
   const file = await fetchFirmware(firmware);
   expect(request).toHaveBeenCalledWith(
-    `https://share.fujimod.com/proxy?url=${encodeURIComponent(firmwareMirrors[firmware.id])}`,
+    sharingUrl(`/proxy?url=${encodeURIComponent(firmwareMirrors[firmware.id])}`),
   );
   expect(file.name).toBe('FPUPDATE.DAT');
   expect(new Uint8Array(await file.arrayBuffer())).toEqual(bytes);

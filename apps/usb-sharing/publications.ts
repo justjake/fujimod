@@ -31,7 +31,8 @@ export async function publishUpload(env: Env, id: string, files: PublishedFile[]
     .bind(id)
     .first<{ token: string }>();
   if (!stored) throw Error('Share link was not saved');
-  return `https://share.fujimod.com/contribution/${stored.token}`;
+  const origin = (env.SHARING_ORIGIN || '').replace(/\/+$/, '');
+  return `${origin}/contribution/${stored.token}`;
 }
 
 export async function publishedUpload(request: Request, env: Env): Promise<Response> {

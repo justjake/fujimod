@@ -16,6 +16,7 @@ import { simulatorReports } from './scripts/local-reports.ts';
 import { directoryRoute } from './src/directory-route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { siteSdkDocs } from './scripts/sdk-docs.ts';
+import { SHARING_WORKER_ORIGIN, SHARING_WORKER_PATHS } from './scripts/sharing-worker.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { createGzip } from 'node:zlib';
@@ -23,6 +24,29 @@ import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 await prepareDefaultScene();
+
+// The development preview starts the sharing Worker from apps/usb-sharing with
+// wrangler dev and serves its public paths under the preview's own origin.
+const sharingWorker = {
+  target: SHARING_WORKER_ORIGIN,
+  changeOrigin: true,
+  // Every public Worker route checks Origin, including the firmware proxy.
+  headers: { Origin: SHARING_WORKER_ORIGIN },
+};
+const sharingProxies = Object.fromEntries(
+  SHARING_WORKER_PATHS.map((route) => [route, sharingWorker]),
+);
+
+/** The sharing Worker's origin: the public server, or the preview's own origin
+ * (empty, so the client sends site-relative URLs through the preview server). */
+function sharingOrigin(mode: string, command: string): string {
+  const configured = loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SHARING_ORIGIN;
+  if (configured) return new URL(configured).origin;
+  // Tests check the production contract; preview builds and servers use theirs.
+  return mode === 'test' || (command === 'build' && mode !== 'local-preview')
+    ? 'https://share.fujimod.com'
+    : '';
+}
 
 // Set these before custom routes can finish a response, including proof pages
 // and runtime mounts that bypass Vite's static-response headers.
@@ -240,6 +264,7 @@ export default defineConfig(({ mode, command }) => ({
     __FUJIMOD_SIGNAL_URL__: JSON.stringify(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SIGNAL_URL || '',
     ),
+    __FUJIMOD_SHARING_ORIGIN__: JSON.stringify(sharingOrigin(mode, command)),
     __FUJIMOD_LOCAL_DAT__:
       (command === 'serve' || mode === 'local-preview') &&
       Boolean(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_DAT),
@@ -351,12 +376,18 @@ export default defineConfig(({ mode, command }) => ({
         '**/browser-bug-reports/**',
       ],
     },
-    proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
+    proxy: {
+      '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true },
+      ...sharingProxies,
+    },
     host: '127.0.0.1',
     fs: { strict: true, allow: [resolve('../..')] },
   },
   preview: {
-    proxy: { '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true } },
+    proxy: {
+      '/usb-proxy': { target: 'http://127.0.0.1:5202', ws: true },
+      ...sharingProxies,
+    },
     host: '127.0.0.1',
     allowedHosts: ['.ts.net'],
   },

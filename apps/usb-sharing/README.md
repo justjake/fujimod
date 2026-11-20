@@ -14,6 +14,13 @@ configured TURN credential lifetime, including when TURN is not enabled.
 Persistent rooms outlive their owner's connection until ended or idle; see
 [persistent links](../../crates/usb-proxy/SHARING.md#persistent-links-and-the-native-owner).
 
+## Local preview
+
+`apps/web` starts this Worker with `wrangler dev` on `127.0.0.1:8787` and proxies
+its public routes under the preview's own origin. That server supplies
+`ALLOWED_ORIGINS` and leaves `SHARING_ORIGIN` empty, so share links are
+site-relative. Production sets `SHARING_ORIGIN` in `wrangler.jsonc`.
+
 ## Deploy
 
 Use a Cloudflare account with Workers and SQLite Durable Objects available.

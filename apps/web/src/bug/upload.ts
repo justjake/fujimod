@@ -1,5 +1,6 @@
 import type { ReportLink } from './report-link';
-import { isShareUrl } from '../files/share-url';
+import { resolveShareUrl } from '../files/share-url';
+import { sharingBase, sharingUrl } from '../sharing-server';
 export interface UploadReceipt {
   id: string;
   shareUrl: string;
@@ -17,7 +18,7 @@ export const uploadReport: UploadReport = async (archive, link, description, id)
   body.set('report', archive, link.path.split('\\').at(-1)!);
   body.set('metadata', JSON.stringify({ ...link, archive: undefined }));
   body.set('description', description);
-  const response = await fetch('https://share.fujimod.com/issue-reports', {
+  const response = await fetch(sharingUrl('/issue-reports'), {
     method: 'POST',
     body,
     headers: { 'Idempotency-Key': id },
@@ -30,12 +31,13 @@ export const uploadReport: UploadReport = async (archive, link, description, id)
         : 'Upload failed. Your report is still on this device. Try again.',
     );
   const receipt = (await response.json()) as UploadReceipt;
+  const shareUrl = resolveShareUrl(receipt.shareUrl, sharingBase());
   if (
     receipt.id !== id ||
-    !isShareUrl(receipt.shareUrl) ||
+    !shareUrl ||
     (receipt.issueURL &&
       !/^https:\/\/github\.com\/justjake\/fujimod\/issues\/[1-9][0-9]*$/.test(receipt.issueURL))
   )
     throw Error('The server did not confirm that your report was saved.');
-  return receipt;
+  return { ...receipt, shareUrl };
 };

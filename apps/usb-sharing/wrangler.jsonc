@@ -6,6 +6,7 @@
   "compatibility_date": "2026-10-17",
   "workers_dev": false,
   "routes": [{ "pattern": "share.fujimod.com", "custom_domain": true }],
+  "dev": { "port": 8787 },
   "observability": { "enabled": true },
   "durable_objects": {
     "bindings": [
@@ -44,6 +45,7 @@
   ],
   "vars": {
     "ALLOWED_ORIGINS": "https://fujimod.com,https://www.fujimod.com",
+    "SHARING_ORIGIN": "https://share.fujimod.com",
     "TURN_TTL_SECONDS": "86400",
     "TURN_DAILY_ISSUE_LIMIT": "50",
     "SHARE_IDLE_SECONDS": "604800",
