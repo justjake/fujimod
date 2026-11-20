@@ -287,6 +287,114 @@
     "lcd_touchscreen": {
       "label": "Screen",
       "text": "Screen"
+    },
+    "main_command_dial": {
+      "label": "Main command dial",
+      "text": "Main dial"
+    },
+    "main_command_dial.increase": {
+      "label": "Main command dial right",
+      "text": "Main dial right"
+    },
+    "main_command_dial.decrease": {
+      "label": "Main command dial left",
+      "text": "Main dial left"
+    },
+    "on_off_switch": {
+      "label": "Power",
+      "text": "Power"
+    },
+    "fn_button": {
+      "label": "Fn",
+      "text": "Fn"
+    },
+    "sub_command_dial": {
+      "label": "Sub-command dial",
+      "text": "Sub-command dial"
+    },
+    "sub_command_dial.increase": {
+      "label": "Sub-command dial right",
+      "text": "Sub-command right"
+    },
+    "sub_command_dial.decrease": {
+      "label": "Sub-command dial left",
+      "text": "Sub-command left"
+    },
+    "lcd_monitor": {
+      "label": "LCD monitor",
+      "text": "Screen"
+    },
+    "display_back_button": {
+      "label": "DISP / BACK",
+      "text": "DISP/BACK"
+    },
+    "focus_assist_button": {
+      "label": "Focus assist",
+      "text": "FOCUS ASSIST"
+    },
+    "metering_dial": {
+      "label": "Metering dial",
+      "text": "Metering"
+    },
+    "sensitivity_dial": {
+      "label": "ISO sensitivity dial",
+      "text": "ISO"
+    },
+    "sensitivity_dial_lock_release": {
+      "label": "ISO dial lock release",
+      "text": "ISO lock"
+    },
+    "shutter_speed_dial_lock_release": {
+      "label": "Shutter speed dial lock release",
+      "text": "Shutter speed lock"
+    },
+    "ae_l_button": {
+      "label": "AE-L",
+      "text": "AE-L"
+    },
+    "af_l_button": {
+      "label": "AF-L",
+      "text": "AF-L"
+    },
+    "q_button": {
+      "label": "Q",
+      "text": "Q"
+    },
+    "memory_card_slot_cover_latch": {
+      "label": "Memory card slot cover latch",
+      "text": "Card cover"
+    },
+    "focus_stick": {
+      "label": "Focus stick",
+      "text": "Focus stick"
+    },
+    "focus_stick.press": {
+      "label": "Focus stick press",
+      "text": "Focus stick press"
+    },
+    "connector_cover_latch": {
+      "label": "Connector cover latch",
+      "text": "Connector cover"
+    },
+    "movie_recording_button": {
+      "label": "Movie recording",
+      "icon": "record"
+    },
+    "focus_stick.up": {
+      "label": "Focus stick up",
+      "icon": "up"
+    },
+    "focus_stick.down": {
+      "label": "Focus stick down",
+      "icon": "down"
+    },
+    "focus_stick.left": {
+      "label": "Focus stick left",
+      "icon": "left"
+    },
+    "focus_stick.right": {
+      "label": "Focus stick right",
+      "icon": "right"
     }
   },
   "icons": {
