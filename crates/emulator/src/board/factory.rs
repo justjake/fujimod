@@ -11,6 +11,8 @@ pub struct Processor {
     pub model: Model,
     pub registers: Vec<(Register, u64)>,
     pub released: bool,
+    #[serde(default)]
+    pub parked_until_sgi: bool,
     pub mprofile: Option<super::mprofile::Config>,
     pub rprofile: Option<fujimod_emulator_cpu_unicorn::rprofile::core::Options>,
 }
@@ -498,6 +500,15 @@ impl Graph {
             start_tick,
             previous_instructions,
         )?;
+        {
+            let mut state = board.state.borrow_mut();
+            for (core, processor) in self.processors.iter().enumerate() {
+                if processor.released && processor.parked_until_sgi {
+                    state.parked_until_sgi[core] = true;
+                    state.waiting[core] = true;
+                }
+            }
+        }
         board.translation_cache_size_bytes = translation_cache_size_bytes;
         board.state.borrow_mut().decoders = super::decoder::Decoders::new(self.decoders);
         board.mappings = self.mappings.clone();

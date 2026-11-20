@@ -294,7 +294,7 @@ pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result
                 return Err("X-Processor Pro startup plan core count differs from the selected SoC".into());
             }
             let starts = body.soc.processors.iter().zip(registers).map(|(processor, registers)| {
-                ProcessorStart { processor_id: processor.id.clone(), released: true, registers }
+                ProcessorStart { processor_id: processor.id.clone(), released: true, parked_until_sgi: false, registers }
             }).collect::<Vec<_>>();
             let mut assets = named(directory, assets)?;
             let assembly = xpp::assemble(resolved, &xpp::Inputs {
