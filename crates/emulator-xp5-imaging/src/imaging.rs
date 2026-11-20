@@ -28,6 +28,8 @@ pub mod still;
 
 #[path = "imaging_movie.rs"]
 pub mod movie;
+#[path = "imaging_fcnv.rs"]
+pub mod fcnv;
 
 #[path = "imaging_mix.rs"]
 pub mod mix;
