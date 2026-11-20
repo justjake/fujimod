@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import { launchFujimod } from '../src/cameras/launch.playwright.ts';
 
 interface ObservedState {
   inputQueue?: { completed: number; pending: number; active: unknown };
@@ -81,8 +82,7 @@ try {
   assert.match(String(result.csp), /'wasm-unsafe-eval'/);
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length > 0);
   if (values.dat) {
-    await page.locator('#firmware-file').setInputFiles(values.dat);
-    await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+    await launchFujimod(page, values.dat);
   }
   await page.waitForFunction(() => window.cameraPerformance || window.speedTestFault, undefined, {
     timeout: 240000,

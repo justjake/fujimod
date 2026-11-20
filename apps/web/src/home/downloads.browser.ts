@@ -2,6 +2,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { launchFujimod } from '../cameras/launch.playwright.ts';
 
 const url = process.env.FUJIMOD_WEB_URL;
 const dat = process.env.FUJIMOD_TEST_DAT;
@@ -33,8 +34,7 @@ try {
       downloadThroughput: 400000,
       uploadThroughput: 1000000,
     });
-    await page.locator('#firmware-file').setInputFiles(dat);
-    await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+    await launchFujimod(page, dat);
     await page.waitForFunction(
       () => {
         const bar = document.querySelector<HTMLProgressElement>(

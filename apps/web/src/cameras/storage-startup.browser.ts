@@ -13,7 +13,6 @@ for (const type of [chromium, webkit]) {
   try {
     const context = await browser.newContext({ ...devices['iPhone 13'] });
     await context.routeWebSocket('**/*', () => {});
-    await context.route('**/releases/current', (route) => route.fulfill({ status: 404 }));
     // Exercise the published page's storage behavior without development reporting.
     await context.route('**/*', async (route) => {
       if (route.request().resourceType() !== 'document') return route.fallback();
@@ -61,7 +60,7 @@ for (const type of [chromium, webkit]) {
       });
     assert.equal(await page.locator('html').getAttribute('data-camera-reads'), '2');
     assert.equal(await page.locator('html').getAttribute('data-firmware-reads'), '2');
-    assert.equal(await page.locator('.camera-storage-status.error').count(), 0);
+    assert.equal(await page.locator('.launch-error').count(), 0);
     assert.equal(await page.locator('#lcd-source').isVisible(), false);
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     const bounds = await page.locator('#viewer').boundingBox();
@@ -79,8 +78,8 @@ for (const type of [chromium, webkit]) {
     const before = await page.evaluate(() => scrollY);
     if (type === chromium) {
       const session = await context.newCDPSession(page);
-      // Swipe on the steps: the supported-camera list scrolls on its own.
-      const steps = (await page.locator('.file-drop').boundingBox())!;
+      // Swipe on the launcher: the page scrolls.
+      const steps = (await page.locator('.launcher').boundingBox())!;
       const x = steps.x + 8;
       const y = steps.y + steps.height / 2;
       await session.send('Input.dispatchTouchEvent', {
@@ -99,9 +98,6 @@ for (const type of [chromium, webkit]) {
     }
     await page.waitForFunction((previous) => scrollY > previous + 50, before);
     await page.locator('#workspace').scrollIntoViewIfNeeded();
-    const chooser = page.waitForEvent('filechooser');
-    await page.locator('label.file-drop-choose').click();
-    await (await chooser).setFiles([]);
     await page.screenshot({ path: new URL(`${type.name()}-idle.png`, output).pathname });
 
     const result = await page.evaluate(async () => {
@@ -142,15 +138,12 @@ for (const type of [chromium, webkit]) {
     const failing = new URL(base);
     failing.searchParams.set('abort-reads', '1');
     await page.goto(failing.href);
-    await page.locator('.camera-storage-status.error').waitFor();
+    await page.locator('.launch-error').waitFor();
     assert.equal(await page.locator('html').getAttribute('data-camera-reads'), '2');
     assert.equal(await page.locator('html').getAttribute('data-firmware-reads'), '2');
     await page.goto(base);
-    await page
-      .getByRole('radio', { name: 'Storage test · 1', exact: true })
-      .waitFor({ state: 'attached' });
-    assert.equal(await page.getByRole('radio').count(), 1);
-    assert.equal(await page.locator('.camera-storage-status.error').count(), 0);
+    await page.locator('.launcher:not(.launcher-pending)').waitFor();
+    assert.equal(await page.locator('.launch-error').count(), 0);
     assert.deepEqual(errors, []);
 
     await page.setViewportSize({ width: 1440, height: 1080 });
@@ -164,7 +157,7 @@ for (const type of [chromium, webkit]) {
     });
     assert.ok(desktop && desktopLauncher && desktop.height <= desktopLauncher.height + margins + 2);
     console.log(
-      `${type.name()}: transient read recovered; persistent error shown; write atomic and unrepeated; idle viewer fits the launcher, scrolls and opens chooser`,
+      `${type.name()}: transient read recovered; persistent error shown; write atomic and unrepeated; idle viewer fits the launcher and scrolls`,
     );
     await context.close();
 

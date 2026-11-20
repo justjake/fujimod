@@ -18,7 +18,6 @@ for (const type of [chromium, webkit].filter(
     const context = await browser.newContext({ viewport: { width: 1440, height: 1080 } });
     // Keep concurrent development edits from navigating away during an IndexedDB write.
     await context.routeWebSocket('**/*', () => {});
-    await context.route('**/releases/current', (route) => route.fulfill({ status: 404 }));
     const page = await context.newPage();
     page.setDefaultTimeout(60000);
     const errors: string[] = [],
@@ -50,11 +49,7 @@ for (const type of [chromium, webkit].filter(
       await page.waitForFunction(() =>
         document.querySelector<HTMLElement>('#viewer')?.style.getPropertyValue('--body-preview'),
       );
-      assert.equal(
-        await page.getByRole('radio').count(),
-        new Set(expected.map((camera) => camera.firmwareHash)).size,
-      );
-      assert.equal(await page.locator('.start-fresh').count(), expected.length ? 1 : 0);
+      assert.equal(await page.locator('.launch-fujimod').count(), 1);
       assert.equal(await page.locator('#camera-exit').count(), 0);
       assert.equal(await page.locator('#live-label').innerText(), '');
       assert.deepEqual(await records(), expected);

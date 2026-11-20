@@ -1,8 +1,7 @@
-/** Exercise release actions, shared browser firmware and both download formats without hardware. */
+/** Exercise the launcher's release states and shared browser firmware without hardware. */
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, readdir } from 'node:fs/promises';
 import { chromium, webkit } from 'playwright';
-import { unzipSync } from 'fflate';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { sha256 } from '../patch/patcher.ts';
@@ -11,12 +10,12 @@ import type { PatchIndex } from '../patch/catalog';
 
 const base = process.env.FUJIMOD_WEB_URL;
 assert.ok(base, 'Set FUJIMOD_WEB_URL to the development server.');
-const output = new URL('../../build/release-downloads/', import.meta.url);
+const output = new URL('../../build/launcher-release/', import.meta.url);
 assert.ok(
   process.env.FUJIMOD_REVIEW_DIR,
   'Set FUJIMOD_REVIEW_DIR to an external review directory.',
 );
-const review = pathToFileURL(join(process.env.FUJIMOD_REVIEW_DIR, 'release-downloads') + '/');
+const review = pathToFileURL(join(process.env.FUJIMOD_REVIEW_DIR, 'launcher-release') + '/');
 await mkdir(output, { recursive: true });
 await mkdir(review, { recursive: true });
 const source = new Uint8Array([1, 2, 3, 4]);
@@ -76,9 +75,7 @@ for (const engine of [chromium, webkit].filter(
         acceptDownloads: true,
       });
       await context.routeWebSocket('**/*', () => {});
-      let sd_boot_v1_installable = false,
-        showNotes = true,
-        releaseError = false;
+      let releaseError = false;
       const catalogResponse = await context.request.get(new URL('runtime/catalog.json', base).href);
       const catalog: Catalog = await catalogResponse.json();
       const firmware = catalog.firmwares.find((entry) => entry.id === 'x70-110');
@@ -119,8 +116,9 @@ for (const engine of [chromium, webkit].filter(
           return route.fulfill({
             json: {
               ...index,
-              ...(showNotes ? {} : { notes: undefined }),
-              firmwares: [{ ...entry, downloads: { sd_boot_v1: true, sd_boot_v1_installable } }],
+              firmwares: [
+                { ...entry, downloads: { sd_boot_v1: true, sd_boot_v1_installable: false } },
+              ],
             },
           });
         if (path.endsWith('/notes.md'))
@@ -170,29 +168,9 @@ for (const engine of [chromium, webkit].filter(
       }
       await page.goto(base);
       await ready();
-      assert.equal(await page.locator('.release-hit:disabled').count(), 4);
-      assert.equal(await page.locator('.release-gate').isVisible(), device === 'desktop');
-      assert.equal(await page.locator('.release-actions').isVisible(), device === 'desktop');
-      await screenshot('empty');
-      await page.locator('#firmware-file').setInputFiles({
-        name: 'FPUPDATE.DAT',
-        mimeType: 'application/octet-stream',
-        buffer: Buffer.from(source),
-      });
-      await page
-        .getByRole('radio', { name: 'X70 · 1.10', exact: true })
-        .waitFor({ state: 'attached' });
-      assert.equal(
-        await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).isChecked(),
-        true,
-      );
-      assert.equal(
-        await page
-          .getByRole('button', { name: 'Download FujiMod installable', exact: true })
-          .isDisabled(),
-        true,
-      );
-      await page.evaluate(async () => {
+      assert.equal(await page.locator('.launch-fujimod').isEnabled(), true);
+      await screenshot('ready');
+      await page.evaluate(async (hash) => {
         const { CameraStore }: typeof import('./store') = await import(
           '/src/' + 'cameras/store.ts'
         );
@@ -202,122 +180,21 @@ for (const engine of [chromium, webkit].filter(
           version: '1.11',
           sha256: 'b'.repeat(64),
         });
-      });
-      await page.reload();
-      await ready();
-      // Most recently added firmware is selected, even when this browser cannot emulate it.
-      assert.equal(
-        await page.getByRole('radio', { name: 'X-E2S · 1.11', exact: true }).isChecked(),
-        true,
-      );
-      await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).check();
-      await screenshot('chosen');
-      await page.evaluate(async (hash) => {
-        const { CameraStore }: typeof import('./store') = await import(
-          '/src/' + 'cameras/store.ts'
+        await new CameraStore().addFirmware(
+          new File([new Uint8Array([1, 2, 3, 4])], 'FPUPDATE.DAT'),
+          {
+            id: 'x70-110',
+            model: 'X70',
+            version: '1.10',
+            sha256: hash,
+          },
         );
-        const store = new CameraStore(),
-          file = new File([new Uint8Array([1, 2, 3, 4])], 'FPUPDATE.DAT');
-        const identity = { id: 'x70-110', model: 'X70', version: '1.10', sha256: hash };
-        await store.create(file, identity, false);
-        await store.create(file, identity, true);
       }, hash);
-      await page.reload();
-      await ready();
-      await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).check();
-      assert.equal(await page.getByRole('button', { name: 'Start fresh', exact: true }).count(), 2);
-      await screenshot('saved-cameras');
-      await page.getByRole('button', { name: 'Download FujiMod SD boot v1', exact: true }).click();
-      await page.locator('dialog[open] .power-combo-keys').waitFor();
-      assert.equal(await page.locator('dialog .recovery-steps > li').count(), 3);
-      assert.equal(await page.locator('dialog .power-combo-keys').count(), 1);
-      assert.equal(
-        await page
-          .locator('dialog code')
-          .allTextContents()
-          .then((names) => names.join(',')),
-        'ffsys.bin,ffboot.bin',
-      );
-      const disclaimer = await page.locator('.download-disclaimer').innerText();
-      assert.equal(
-        disclaimer,
-        'No custom firmware is completely safe. FujiMod is tested in our emulator and spot-checked on real camera hardware before each release, and we believe SD card dual boot is very low risk. We still do not guarantee this software for any purpose expressed or implied.',
-      );
-      await screenshot('sd-modal', true);
-      if (device === 'phone') {
-        await page
-          .getByRole('heading', { name: 'Boot from the SD card', exact: true })
-          .scrollIntoViewIfNeeded();
-        await page.getByRole('button', { name: 'Close', exact: true }).scrollIntoViewIfNeeded();
-        await screenshot('sd-modal-bottom', true);
-      }
-      const sdDownload = page.waitForEvent('download');
-      await page.getByRole('button', { name: 'Download SD card files', exact: true }).click();
-      const sd = await sdDownload;
-      assert.match(
-        sd.suggestedFilename(),
-        /^fujimod-modified-sd-boot-v1-x70-1\.10-build-[a-f0-9]{8}\.zip$/,
-      );
-      assert.deepEqual(Object.keys(unzipSync(await readFile((await sd.path())!))).sort(), [
-        'ffboot.bin',
-        'ffsys.bin',
-      ]);
-      await page.getByRole('button', { name: 'Close', exact: true }).click();
-      sd_boot_v1_installable = true;
-      await page.reload();
-      await ready();
-      await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).check();
-      await screenshot('downloads-available');
-      await page.getByRole('button', { name: 'Download FujiMod installable', exact: true }).click();
-      await page.locator('dialog[open] .power-combo-keys').first().waitFor();
-      assert.equal(await page.locator('dialog .recovery-steps > li').count(), 5);
-      assert.equal(await page.locator('dialog .power-combo-keys').count(), 2);
-      await screenshot('installable-modal', true);
-      if (device === 'phone') {
-        await page
-          .getByRole('heading', { name: 'Hide the FujiMod overlay', exact: true })
-          .scrollIntoViewIfNeeded();
-        await screenshot('installable-modal-bottom', true);
-      }
-      const installDownload = page.waitForEvent('download');
-      await page
-        .getByRole('button', { name: 'Download FujiMod installable', exact: true })
-        .last()
-        .click();
-      const install = await installDownload;
-      assert.deepEqual(Object.keys(unzipSync(await readFile((await install.path())!))).sort(), [
-        'FPUPDATE.DAT',
-        'ffboot.bin',
-        'ffsys.bin',
-      ]);
-      await page.getByRole('button', { name: 'Close', exact: true }).click();
-      await page.getByRole('radio', { name: 'X-E2S · 1.11', exact: true }).check();
-      await screenshot('unsupported');
-      showNotes = false;
-      await page.reload();
-      await ready();
-      assert.equal(await page.locator('.release-notes').count(), 0);
-      await screenshot('no-notes');
       releaseError = true;
       await page.reload();
       await ready();
-      await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).check();
-      assert.match(
-        await page.locator('.launcher .camera-storage-status.error').innerText(),
-        /Current release unavailable/,
-      );
-      assert.equal(
-        await page
-          .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
-          .isEnabled(),
-        true,
-      );
-      assert.equal(
-        await page
-          .getByRole('button', { name: 'Run FujiMod in your browser', exact: true })
-          .isDisabled(),
-        true,
-      );
+      assert.match(await page.locator('.launch-error').innerText(), /Current release unavailable/);
+      assert.equal(await page.locator('.launch-fujimod').isDisabled(), true);
       assert.equal(await page.locator('#fault-heading').isVisible(), false);
       await screenshot('release-error');
       await page.goto(new URL('recovery/', base).href);
@@ -328,9 +205,6 @@ for (const engine of [chromium, webkit].filter(
       await page
         .getByRole('radio', { name: 'X70 · 1.10', exact: true })
         .waitFor({ state: 'detached' });
-      await page.goto(base);
-      await ready();
-      assert.equal(await page.getByRole('radio', { name: 'X70 · 1.10', exact: true }).count(), 0);
       assert.equal(
         await page.getByRole('radio', { name: 'X-E2S · 1.11', exact: true }).isChecked(),
         true,
@@ -353,10 +227,10 @@ for (const engine of [chromium, webkit].filter(
           library: (await store.library()).length,
         };
       });
-      assert.deepEqual(retained, { retained: [7], cameras: 3, library: 2 });
+      assert.deepEqual(retained, { retained: [7], cameras: 1, library: 2 });
       assert.deepEqual(errors, []);
       console.log(
-        `${engine.name()} ${device}: empty, chosen, download modals and ZIPs, unsupported, no notes, shared removal and retained firmware passed`,
+        `${engine.name()} ${device}: ready, release error, shared removal and retained firmware passed`,
       );
       await context.close();
     }
@@ -366,7 +240,7 @@ for (const engine of [chromium, webkit].filter(
 }
 await writeFile(
   new URL('index.html', review),
-  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Release downloads review</title><style>body{background:#000;color:#eee;font:16px system-ui;margin:24px}a{color:#64b5ff}img{display:block;max-width:100%;height:auto;border:1px solid #333;margin:12px 0 40px}section{max-width:1280px;margin:auto}</style><section><h1>Release downloads</h1><p><a href="/#workspace">Open launcher</a></p>${(
+  `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Launcher release review</title><style>body{background:#000;color:#eee;font:16px system-ui;margin:24px}a{color:#64b5ff}img{display:block;max-width:100%;height:auto;border:1px solid #333;margin:12px 0 40px}section{max-width:1280px;margin:auto}</style><section><h1>Launcher release states</h1><p><a href="/#workspace">Open launcher</a></p>${(
     await readdir(review)
   )
     .filter((name) => name.endsWith('.png'))

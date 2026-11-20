@@ -10,9 +10,7 @@ import {
 import { CameraStore, type CameraRecord, type LibraryFirmware } from '../cameras/store';
 import type { FirmwareLibrary } from '../cameras/firmware-library';
 import { latestCamera } from '../cameras/selection';
-import type { FirmwareDownloadFormat } from '../firmware-download';
 import '../home/site.css';
-import { modifiedDownload } from '../patch/download';
 import type { PatchResult } from '../patch/patcher';
 import { validateCatalog, type Catalog, type Firmware } from '../catalog';
 import { verifyPatch, type PatchFirmware } from '../patch/catalog';
@@ -28,8 +26,6 @@ import type { ReplayScenario } from '../scenarios';
 import { DEVICE_PANEL_SCHEMA, type DevicePanel } from '@fujimod/emulator-ui/ui/layout';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 
-import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
-import { reportDownload } from '../downloads/report.ts';
 import type { HomeState, PreviewCredit } from './state';
 import type { HomeSetter } from './state';
 
@@ -163,9 +159,11 @@ export function startHome(
     const firmware = index?.firmwares.find((entry) => entry.sha256 === selected.sha256);
     if (!index || !firmware || !index.patches[selected.sha256])
       return { identities: Promise.resolve([]), load: async () => [] };
-    const camera = releaseCameras(index.firmwares, catalog.firmwares, index.sd_card_files ?? []).find(
-      (entry) => entry.id === sdBootV2Firmware(firmware.id),
-    );
+    const camera = releaseCameras(
+      index.firmwares,
+      catalog.firmwares,
+      index.sd_card_files ?? [],
+    ).find((entry) => entry.id === sdBootV2Firmware(firmware.id));
     return camera ? sdBootV2Media(index, camera) : patchMedia(index, firmware, file);
   }
   /** The release's SD boot v2 SD card for one camera, as the downloaded SD card holds it. */
@@ -461,36 +459,6 @@ export function startHome(
       });
     }
   }
-  async function downloadFirmware(source: LibraryFirmware, format: FirmwareDownloadFormat) {
-    const index = release;
-    const entry = index?.firmwares.find((entry) => entry.sha256 === source.sha256);
-    if (
-      !index ||
-      !entry ||
-      !(format === 'installable' ? entry.downloads.sd_boot_v1_installable : entry.downloads.sd_boot_v1)
-    )
-      throw Error('This download is unavailable for the selected firmware.');
-    const file = new File([await cameras.firmware(source.sha256)], source.fileName);
-    const result = await new Promise<PatchResult>((resolve, reject) => {
-      const worker = new Worker(new URL('../patch/worker.ts', import.meta.url), { type: 'module' });
-      worker.onmessage = ({ data }) => {
-        if (data.stage) return;
-        worker.terminate();
-        if (data.error || data.unsupported)
-          reject(Error(data.error ?? 'No release patch is available for this firmware.'));
-        else resolve(data.result);
-      };
-      worker.onerror = (error) => {
-        worker.terminate();
-        reject(Error(error.message));
-      };
-      worker.postMessage({ file, index, artifactBase: index.assetBase });
-    });
-    const download = await modifiedDownload(format, result, entry, __FUJIMOD_BUILD_SHA__);
-    downloadBlob(download.blob, download.name);
-    if (format === 'installable' || format === 'sd-boot-v1')
-      reportDownload({ release: index.tag, kind: format, firmware: entry.sha256, cameras: 1 });
-  }
   async function closeCamera() {
     if (state.cameraBusy) return;
     setState((s) => {
@@ -632,7 +600,6 @@ export function startHome(
     selectMod,
     saveLayout,
     runCamera,
-    downloadFirmware,
     closeCamera,
     selectFile: (file?: File) => {
       manualSelection = true;

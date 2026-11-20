@@ -1,7 +1,8 @@
-/** Real firmware execution: Run resumes the latest matching camera, Start fresh creates one. */
+/** Real firmware execution: Launch Fujimod creates one camera and resumes it afterward. */
 import assert from 'node:assert/strict';
 import { chromium, webkit } from 'playwright';
 import { mkdir } from 'node:fs/promises';
+import { serveFirmware } from './launch.playwright.ts';
 const base = process.env.FUJIMOD_WEB_URL,
   dat = process.env.FUJIMOD_TEST_DAT;
 assert.ok(base && dat, 'Set FUJIMOD_WEB_URL and FUJIMOD_TEST_DAT.');
@@ -15,8 +16,7 @@ for (const engine of [chromium, webkit].filter(
   try {
     const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
     await context.routeWebSocket('**/*', () => {});
-    // Stock emulation is independent of whether a release is currently published.
-    await context.route('**/releases/current', (route) => route.fulfill({ status: 404 }));
+    await serveFirmware(context, dat);
     const page = await context.newPage();
     page.setDefaultTimeout(60000);
     const errors: string[] = [];
@@ -27,9 +27,7 @@ for (const engine of [chromium, webkit].filter(
     });
     await page.goto(base);
     await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
-    await page.locator('#firmware-file').setInputFiles(dat);
-    await page.getByRole('radio').waitFor();
-    const run = page.getByRole('button', { name: 'Run unmodified in your browser', exact: true });
+    const run = page.locator('.launch-fujimod:not([disabled])');
     async function records() {
       return page.evaluate(async () => {
         const { CameraStore }: typeof import('./store') = await import(
@@ -57,43 +55,26 @@ for (const engine of [chromium, webkit].filter(
       await page.getByRole('button', { name: 'Save & Exit', exact: true }).click();
       await run.waitFor();
     }
-    assert.equal((await records()).length, 0, 'Adding firmware never creates a camera');
+    assert.equal((await records()).length, 0, 'Opening the page never creates a camera');
     await run.click();
     await live();
     const first = (await records())[0];
-    assert.equal(first.modEnabled, false);
-    await exit();
-    await run.click();
-    await live();
-    assert.deepEqual(
-      (await records()).map((record) => record.id),
-      [first.id],
-    );
-    await exit();
-    await page.getByRole('button', { name: 'Start fresh', exact: true }).click();
-    await live();
-    const fresh = (await records()).find((record) => record.id !== first.id);
-    assert.ok(fresh);
-    assert.equal(fresh.modEnabled, false);
+    assert.equal(first.modEnabled, true);
     await exit();
     const before = await records();
-    const latest = before.find((record) => record.id === fresh.id)!;
     await run.click();
     await live();
     await exit();
     const after = await records();
-    assert.equal(after.length, 2);
-    assert.ok(after.find((record) => record.id === fresh.id)!.revision > latest.revision);
-    assert.equal(
-      after.find((record) => record.id === first.id)!.revision,
-      before.find((record) => record.id === first.id)!.revision,
+    assert.deepEqual(
+      after.map((record) => record.id),
+      [first.id],
     );
+    assert.ok(after[0].revision > before[0].revision);
     assert.deepEqual(errors, []);
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     await page.screenshot({ path: new URL(`${engine.name()}.png`, output).pathname });
-    console.log(
-      `${engine.name()}: real stock boot, save, resume, Start fresh and latest-camera resume passed`,
-    );
+    console.log(`${engine.name()}: real Fujimod boot, save and resume passed`);
   } finally {
     await browser.close();
   }

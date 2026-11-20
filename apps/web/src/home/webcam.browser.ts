@@ -2,6 +2,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { launchFujimod } from '../cameras/launch.playwright.ts';
 
 declare global {
   interface Window {
@@ -58,10 +59,7 @@ try {
   await page.goto(new URL('#workspace', url).href);
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   console.log('Viewer ready; selecting firmware.');
-  const chooser = page.waitForEvent('filechooser');
-  await page.locator('label.file-drop-choose').click();
-  await (await chooser).setFiles(dat);
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+  await launchFujimod(page, dat);
   console.log('Firmware selected; waiting for the real camera boot.');
   await page.waitForFunction(
     () => document.querySelector('#live-label')?.textContent === 'LIVE',

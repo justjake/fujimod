@@ -2,6 +2,7 @@
 import { chromium, webkit, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { launchFujimod } from '../cameras/launch.playwright.ts';
 
 const base = process.env.FUJIMOD_WEB_URL;
 const dat = process.env.FUJIMOD_TEST_DAT;
@@ -70,10 +71,7 @@ try {
     true,
   );
   await page.locator('#feedback-dialog button[value="cancel"]').click();
-  const chooser = page.waitForEvent('filechooser');
-  await page.locator('label.file-drop-choose').click();
-  await (await chooser).setFiles(dat);
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+  await launchFujimod(page, dat);
   await ready(page);
   console.log('Created first camera from native file chooser and booted firmware');
   assert.equal(await page.locator('#camera-exit').isVisible(), true);

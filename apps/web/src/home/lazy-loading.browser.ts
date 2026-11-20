@@ -2,6 +2,7 @@
 import { chromium, webkit, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { launchFujimod } from '../cameras/launch.playwright.ts';
 
 const base = process.env.FUJIMOD_WEB_URL;
 const dat = process.env.FUJIMOD_TEST_DAT;
@@ -82,10 +83,7 @@ for (const type of [chromium, webkit]) {
     assert.equal(workers.length, 0, 'The idle page must not create an emulator worker');
     assert.equal(await page.locator('#boot-progress').isVisible(), false);
     console.log(`${type.name()}: idle page has no emulator downloads or worker`);
-    const chooser = page.waitForEvent('filechooser');
-    await page.locator('label.file-drop-choose').click();
-    await (await chooser).setFiles(dat);
-    await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+    await launchFujimod(page, dat);
     await waitForGate(moduleReady.promise, 'the lazy engine import');
     await loading(page);
     assert.equal(workers.length, 0);

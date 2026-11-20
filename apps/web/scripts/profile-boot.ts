@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { summarizeProfile, type CpuProfile } from './profile-summary.ts';
 import type { EmulatorModule } from '../../../bindings/javascript/emulator/module.ts';
+import { launchFujimod } from '../src/cameras/launch.playwright.ts';
 
 const { values } = parseArgs({
   options: {
@@ -235,10 +236,7 @@ try {
     null,
     { timeout: 240_000 },
   );
-  await page.locator('input[type=file]').first().setInputFiles(values.update);
-  await page
-    .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
-    .click({ timeout: 240_000 });
+  await launchFujimod(page, values.update);
   await page.waitForFunction(
     () =>
       performance.getEntriesByName('camera-engine-ready').length > 0 ||
