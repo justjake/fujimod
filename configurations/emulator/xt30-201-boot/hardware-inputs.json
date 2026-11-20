@@ -67,6 +67,7 @@
             "5": 0,
             "6": 0,
             "16": 0,
+            "21": 1,
             "24": 165,
             "27": 0,
             "32": 0,
@@ -75,7 +76,7 @@
           },
           "rtc_ticks_per_second": 54000000,
           "ambient_celsius": 25,
-          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 keeps the headphone bits clear and reports the battery-only power-source class. Selector 27 declares the battery monitor's raw sample word as zero: the firmware reads it once per five-phase poll at 0109ad3c and stores it at 0150b692, which no main-image function reads, so any word is inert and no measured value exists.",
+          "basis": "Declared virtual startup inputs for a bounded application-boot scenario. Selector 24 declares a virtual accessory status word: 0x00a5 keeps the headphone bits clear and reports the battery-only power-source class. Selector 27 declares the battery monitor's raw sample word as zero: the firmware reads it once per five-phase poll at 0109ad3c and stores it at 0150b692, which no main-image function reads, so any word is inert and no measured value exists. Selector 21 is the USB port detection result: the usbcont cable action 0x01ea3af4 reaches 0x01ea3954, which writes register 20 = 0xb00, reads register 21 and accepts (v & 0xfd) == 1 before it installs the FF80 command window, so the debug USB attach needs it (the X-T3 xt3-discovery profile already declares 21: 1, justjake/fujimod#357). The value is declared from the code path, not read from a controller.",
           "rtc_basis": "Virtual unset RTC. The counter advances from guest ticks after a stock start command."
         }
       },
@@ -172,6 +173,50 @@
         "signal_shift": 2
       },
       "basis": "Explicit virtual uniform-gray scene and frame timing."
+    },
+    "usb_cable": {
+      "basis": "No VBUS pin is read as a key on the X-T30: the declared input leaves bank 15 at 0 and no located control samples it. The stock USB driver polls only the condition strap at 0xfff4a300, which follows this cable, but its usbcont cable action 0x01ea3af4 additionally runs the power-controller port detection 0x01ea3954. A host negotiates high speed.",
+      "vbus_bank": 15,
+      "vbus_pin": 15,
+      "speed": "high"
+    },
+    "usb_phy_input": {
+      "basis": "Declared from the code path only. 0x01d172dc writes every PHY register and re-reads 0xffb23c00, using only the bits it masks (0xf0, 0x9f, 0xcf, 0x7f, 0x8f, 0xf3, 0xfc), so a zero register file cannot change the sequence. No X-T30 camera PHY read exists; the X-T3 value 0x00000dcc is not transferred.",
+      "parallel": 0,
+      "registers": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
     }
   }
 }

@@ -45,3 +45,17 @@ fn xt1_rec_inputs_release_contacts_and_select_idle_positions() {
     assert_eq!(gpio.get("12"), Some(&160)); // Idle input GPIO12.5 high.
     assert_eq!(reset.mcu_packet_hex, "00000000d00700ff008000040000aafc");
 }
+
+#[test]
+fn xt30_boot_inputs_declare_the_usb_port_and_its_port_detection() {
+    let inputs = HardwareInputs::bundled("xt30-201-boot").unwrap();
+    let cable = inputs.reset.usb_cable.expect("declared USB cable");
+    assert_eq!((cable.vbus_bank, cable.vbus_pin), (15, 15));
+    assert_eq!(cable.speed, "high");
+    let phy = inputs.reset.usb_phy_input.expect("declared USB PHY");
+    assert_eq!(phy.parallel, 0);
+    assert_eq!(phy.registers, vec![0; 32]);
+    let power = inputs.reset.spi_inputs.expect("declared power registers");
+    let registers = power["1"].power_registers.as_ref().unwrap();
+    assert_eq!(registers.inputs.get("21"), Some(&1));
+}
