@@ -170,19 +170,12 @@ export default function Home() {
             <Show when={state.promptVisible}>
               <CameraLauncher
                 ready={state.savedCamerasRead && library.ready()}
-                cameras={state.savedCameras}
                 library={library}
-                release={state.release}
                 supported={state.cameras}
                 busy={state.cameraBusy}
                 message={state.storageMessage}
                 error={state.storageError}
                 run={(firmware, mod, fresh) => void runtime()?.runCamera(firmware, mod, fresh)}
-                download={(firmware, format) => {
-                  const app = runtime();
-                  if (!app) return Promise.reject(Error('The launcher is not ready.'));
-                  return app.downloadFirmware(firmware, format);
-                }}
               />
             </Show>
           </EmulatorWorkspace>

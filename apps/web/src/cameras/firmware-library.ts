@@ -41,7 +41,10 @@ export function createFirmwareLibrary(identifyFile?: (file: File) => Promise<Ide
       setBusy(false);
     }
   }
-  async function get(firmware: Firmware): Promise<LibraryFirmware> {
+  async function get(
+    firmware: Firmware,
+    progress?: (received: number) => void,
+  ): Promise<LibraryFirmware> {
     const saved = entries().find((entry) => entry.sha256 === firmware.sha256);
     if (saved) {
       setSelected(saved.sha256);
@@ -51,7 +54,7 @@ export function createFirmwareLibrary(identifyFile?: (file: File) => Promise<Ide
     setBusy(true);
     setError('');
     try {
-      const file = await fetchFirmware(firmware);
+      const file = await fetchFirmware(firmware, progress);
       const entry = await store.addFirmware(file, firmware);
       await refresh();
       setSelected(entry.sha256);
@@ -128,6 +131,6 @@ export interface FirmwareLibrary {
   error(): string;
   select(sha256: string | undefined): void;
   add(file?: File): Promise<void>;
-  get(firmware: Firmware): Promise<LibraryFirmware>;
+  get(firmware: Firmware, progress?: (received: number) => void): Promise<LibraryFirmware>;
   remove(sha256: string): Promise<void>;
 }
