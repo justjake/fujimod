@@ -1,3 +1,4 @@
+import { screenBitmap, type ReportScreen } from './screen';
 export const MAX_REPORT_BYTES = 64 * 1024 * 1024;
 export interface ReportLink {
   v: 1;
@@ -136,8 +137,8 @@ export function validateReport(bytes: Uint8Array<ArrayBuffer>, link: ReportLink)
 export interface ReportDetails {
   /** Camera-local date and time of capture, `YYYY-MM-DDTHH:MM:SS`. */
   capturedAt?: string;
-  /** The screen when the report was captured. */
-  screen?: ReportEntry;
+  /** The screen when the report was captured, as a BMP. */
+  screen?: Uint8Array<ArrayBuffer>;
 }
 interface ManifestFile {
   path: string;
@@ -151,20 +152,21 @@ function manifest(bytes: Uint8Array<ArrayBuffer>, entries: readonly ReportEntry[
     new TextDecoder().decode(bytes.subarray(entry.offset, entry.offset + entry.bytes)),
   );
   return value && typeof value === 'object'
-    ? (value as { captured_at?: unknown; files?: ManifestFile[] })
+    ? (value as { captured_at?: unknown; files?: ManifestFile[]; screen?: ReportScreen })
     : undefined;
 }
 export function reportDetails(
   bytes: Uint8Array<ArrayBuffer>,
   entries: readonly ReportEntry[],
 ): ReportDetails {
-  const capturedAt = manifest(bytes, entries)?.captured_at;
+  const recorded = manifest(bytes, entries);
+  const capturedAt = recorded?.captured_at;
   return {
     capturedAt:
       typeof capturedAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$/.test(capturedAt)
         ? capturedAt
         : undefined,
-    screen: entries.find((entry) => entry.name === 'screen.bmp'),
+    screen: screenBitmap(bytes, entries, recorded?.screen),
   };
 }
 /** A camera-local capture time as the reader's locale shows dates. */
@@ -192,8 +194,7 @@ export function listedReport(
   for (const file of files) {
     if (file.status !== 0) continue;
     const entry = entries.find((candidate) => candidate.name === file.path);
-    if (!entry || entry.bytes !== file.bytes)
-      throw Error('The report is incomplete or damaged.');
+    if (!entry || entry.bytes !== file.bytes) throw Error('The report is incomplete or damaged.');
   }
   const link = parseReportMetadata({
     v: 1,
