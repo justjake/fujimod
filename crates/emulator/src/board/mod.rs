@@ -1272,13 +1272,13 @@ impl Board {
                 // keep the translations only while the shadow can prove
                 // their bytes. A write during this processor's own slice, an
                 // alias store, a decoder change or a reset discards them.
-                let exact = s.execution_policy == ExecutionPolicy::Exact;
+                // This holds under either execution policy: a slice on this
+                // path runs alone (a concurrent window never holds a
+                // processor whose slices come here, and it clears `code_run`
+                // when it ends), and the instruction observer runs before
+                // every instruction of this engine whatever the policy.
                 let peer_ran = s.code_run != Some(core);
-                if !exact && let Some(shadow) = s.code_shadow[core].as_mut() {
-                    // Slices outside exact execution are not shadowed.
-                    shadow.invalidate();
-                }
-                let shadow = s.code_shadow[core].as_mut().filter(|_| exact);
+                let shadow = s.code_shadow[core].as_mut();
                 let discard = match &shadow {
                     Some(shadow) => shadow.changed() || peer_ran && shadow.unproven(),
                     None => peer_ran,
@@ -1622,12 +1622,8 @@ impl State {
             code_shadow,
             code_run,
             mprofile,
-            execution_policy,
             ..
         } = self;
-        if *execution_policy != ExecutionPolicy::Exact {
-            return;
-        }
         if let Some(shadow) = code_shadow[core].as_mut() {
             let profile = &mprofile[core];
             shadow.end_slice(cpu, scalar(cpu, Register::Pc).ok().map(|pc| pc & !1), |address| {
@@ -1647,12 +1643,8 @@ impl State {
         let Self {
             code_shadow,
             mprofile,
-            execution_policy,
             ..
         } = self;
-        if *execution_policy != ExecutionPolicy::Exact {
-            return Ok(false);
-        }
         let Some(shadow) = code_shadow[core].as_mut() else {
             return Ok(false);
         };
@@ -1970,8 +1962,10 @@ impl State {
     }
     fn push_pins(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<bool, String> {
         let mut changed = false;
-        // Whether this push left every value it touches as it found it.
-        let mut settled = self.execution_policy == ExecutionPolicy::Exact && self.parallel.is_none();
+        // Whether this push left every value it touches as it found it. A
+        // concurrent window changes these values from other threads, so only
+        // an ordered slice, under either execution policy, can be a fixed point.
+        let mut settled = self.parallel.is_none();
         self.settled.pass = false;
         for (core, controller) in self.core_interrupts.iter().enumerate() {
             if let Some(controller) = controller {

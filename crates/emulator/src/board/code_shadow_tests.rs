@@ -8,7 +8,7 @@ use fujimod_emulator_cpu::Model;
 /// own view of the same RAM. The patch replaces `adds r0,#1` with
 /// `adds r1,#1`, so R0 freezes at the M4 instruction where the store landed.
 fn run(quantum: usize, retain: bool, patch: u32) -> (Value, [u64; 2], u64) {
-    run_with(quantum, retain, patch, None)
+    run_with(quantum, retain, patch, None, ExecutionPolicy::Exact)
 }
 
 /// As `run`, with an optional host write of `adds r2,#1` over the M4 loop
@@ -18,6 +18,7 @@ fn run_with(
     retain: bool,
     patch: u32,
     host_write_at: Option<u64>,
+    policy: ExecutionPolicy,
 ) -> (Value, [u64; 2], u64) {
     use factory::*;
     let graph = Graph {
@@ -90,6 +91,7 @@ fn run_with(
         )
         .unwrap();
     let mut board = board;
+    board.set_execution_policy(policy).unwrap();
     if !retain {
         board.state.borrow_mut().code_shadow[0] = None;
     }
@@ -163,11 +165,29 @@ fn retained_translations_run_the_instructions_that_discarded_translations_run() 
 fn a_host_write_between_run_windows_reaches_retained_translations() {
     for quantum in [1, 3, 8, 64] {
         // The peer rewrites the instruction unchanged; only the host patches it.
-        let (discarded, discarded_registers, _) = run_with(quantum, false, 0x3001, Some(150));
-        let (kept, kept_registers, retained) = run_with(quantum, true, 0x3001, Some(150));
+        let (discarded, discarded_registers, _) = run_with(quantum, false, 0x3001, Some(150), ExecutionPolicy::Exact);
+        let (kept, kept_registers, retained) = run_with(quantum, true, 0x3001, Some(150), ExecutionPolicy::Exact);
         assert_eq!(kept_registers, discarded_registers, "quantum {quantum}");
         assert_eq!(kept, discarded, "quantum {quantum}");
         assert!(retained > 0, "quantum {quantum} never kept a translation");
         assert!(kept_registers[0] > 0 && kept_registers[1] > 0, "quantum {quantum}");
+    }
+}
+
+/// The interactive policy runs these two private-engine processors in ordered
+/// slices too, so the shadow keeps translations there with the same result.
+#[test]
+fn the_interactive_policy_keeps_translations_with_the_same_result() {
+    let policy = ExecutionPolicy::Interactive;
+    for quantum in [1, 3, 8, 64] {
+        for (patch, host_write_at) in [(0x3101, None), (0x3001, None), (0x3001, Some(150))] {
+            let (discarded, discarded_registers, _) =
+                run_with(quantum, false, patch, host_write_at, policy);
+            let (kept, kept_registers, retained) = run_with(quantum, true, patch, host_write_at, policy);
+            assert_eq!(kept_registers, discarded_registers, "quantum {quantum} patch {patch:#x}");
+            assert_eq!(kept, discarded, "quantum {quantum} patch {patch:#x}");
+            assert!(retained > 0, "quantum {quantum} never kept a translation");
+            assert!(kept_registers[1] > 0 || patch == 0x3001 && host_write_at.is_none());
+        }
     }
 }
