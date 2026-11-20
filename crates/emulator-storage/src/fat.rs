@@ -10,7 +10,9 @@ use fujimod_emulator_devices::parts::sd_card::{Card, Options as CardOptions};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-pub const MAX_BYTES: usize = 64 * 1024 * 1024;
+/// Bound of one card file read. 96 MiB admits an X-T5 uncompressed 14-bit RAF
+/// (82,569,728 bytes, 7872x5196 sensor data plus the embedded JPEG).
+pub const MAX_BYTES: usize = 96 * 1024 * 1024;
 /// Complete startup cards include both boot images and an official update.
 /// Host file reads retain their separate per-request bound.
 pub const MAX_PRELOAD_BYTES: usize = 512 * 1024 * 1024;
@@ -279,7 +281,7 @@ impl<'a> Reader<'a> {
     }
     pub fn read(&self, path: &str, max_bytes: usize) -> Result<Vec<u8>, String> {
         if !(1..=MAX_BYTES).contains(&max_bytes) {
-            return err("File read bound must be 1..64 MiB");
+            return err("File read bound must be 1..96 MiB");
         }
         let path = normalize_path(path, true)?;
         let parts: Vec<_> = path.split('/').collect();
@@ -773,8 +775,8 @@ mod tests {
     }
 
     #[test]
-    fn startup_card_can_place_the_update_after_a_boot_file_larger_than_64_mib() {
-        let boot_size = 65 * 1024 * 1024;
+    fn startup_card_can_place_the_update_after_a_boot_file_larger_than_the_read_bound() {
+        let boot_size = MAX_BYTES + 1024 * 1024;
         let card = format(
             &options(),
             &[
