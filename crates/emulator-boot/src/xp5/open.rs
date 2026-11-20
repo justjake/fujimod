@@ -821,8 +821,8 @@ pub(crate) fn open_from(
             }
         }
     }
-    // The boot-control latch the ROM reads and writes outside the manifest's windows.
-    if rom.is_some() {
+    // Boot control also owns a secondary window outside its manifest entry.
+    if state.device.iter().any(|window| window.kind == "boot-control") {
         for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
             if processor.model != ProcessorModel::CortexA53 {
                 continue;
