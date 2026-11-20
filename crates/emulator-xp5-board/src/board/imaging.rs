@@ -102,6 +102,10 @@ pub fn register_all(
         if window.options.get("standby_gate").and_then(toml::Value::as_bool) == Some(false) {
             sensor.set_no_standby_gate(true);
         }
+        // X-H2S assumption: reads are not gated on register 0x59 (`read_gate = false`).
+        if window.options.get("read_gate").and_then(toml::Value::as_bool) == Some(false) {
+            sensor.set_no_read_gate(true);
+        }
         bus.register(
             window.base,
             window.size,
