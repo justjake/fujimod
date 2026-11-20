@@ -22,6 +22,14 @@ impl super::serial::Endpoint for PowerController {
         self.advance(now_ns);
         self.exchange(frame.word as u8).into()
     }
+    fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
+        if register > 0x7f || value & !mask != 0 {
+            return Err("power-controller input bits outside the register or mask".into());
+        }
+        let old = self.register(register);
+        self.set_register(register, (old & !mask) | value);
+        Ok(())
+    }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         Checkpoint::encode(self.name(), self)
     }
@@ -299,6 +307,18 @@ impl crate::i2c::Registers for FuelGauge {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn external_input_bits_change_only_their_mask() {
+        use crate::serial::Endpoint;
+        let mut m = PowerController::new();
+        m.set_register(0x12, 0xc305);
+        m.set_input_bits(0x12, 0x30, 0x10).unwrap();
+        assert_eq!(m.register(0x12), 0xc315);
+        m.set_input_bits(0x12, 0x30, 0).unwrap();
+        assert_eq!(m.register(0x12), 0xc305);
+        assert!(m.set_input_bits(0x12, 0x30, 0x40).is_err());
+        assert!(m.set_input_bits(0x80, 0x30, 0x10).is_err());
+    }
     #[test]
     fn byte_order_checksum_and_rejected_write() {
         let mut m = PowerController::new();

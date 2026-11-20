@@ -28,6 +28,11 @@ pub trait Endpoint: Send {
     }
     fn save(&self) -> Value;
     fn restore(&mut self, state: &Value) -> Result<(), String>;
+    /// An external line that sets bits of one part register (for example a
+    /// cable's supply detection). Parts without such inputs refuse it.
+    fn set_input_bits(&mut self, _register: u8, _mask: u16, _value: u16) -> Result<(), String> {
+        Err(format!("{} has no external register inputs", self.name()))
+    }
 }
 
 /// A wire transaction may latch chip selection at the first serial edge.

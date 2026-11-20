@@ -27,6 +27,7 @@ pub mod lz;
 pub mod renderer;
 pub mod serial;
 pub mod sd;
+pub mod usb;
 
 pub struct Companion {
     pub pins: mailbox::Pins,
@@ -118,6 +119,12 @@ fn register_with_resources(
                     true,
                 )?),
             )?;
+        }
+        "usb-device-controller" => {
+            bus.register(window.base, window.size, Box::new(usb::controller(window)?))?;
+        }
+        "usb-phy" => {
+            bus.register(window.base, window.size, Box::new(usb::phy(window)?))?;
         }
         "hdmi-hot-plug-status" => {
             if window.options.keys().any(|key| key != "connected_level") {

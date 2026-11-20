@@ -320,6 +320,18 @@ impl Spi {
             shifting_until: Arc::new(AtomicU64::new(0)),
         })
     }
+    /// Drive external input bits of the one attached part named `part` (an
+    /// external line into that part, not a serial transfer).
+    pub fn set_part_input(&mut self, part: &str, register: u8, mask: u16, value: u16) -> Result<(), String> {
+        let mut parts = self.attachments.iter_mut().filter(|a| a.endpoint.name() == part);
+        match (parts.next(), parts.next()) {
+            (Some(attachment), None) => attachment.endpoint.set_input_bits(register, mask, value),
+            _ => Err(format!("SPI controller {:#x} has no single {part} part", self.base)),
+        }
+    }
+    pub fn has_part(&self, part: &str) -> bool {
+        self.attachments.iter().any(|a| a.endpoint.name() == part)
+    }
     fn frame(&self, word: u16) -> Frame {
         Frame {
             bits: ((self.state.control & 15) + 1) as u8,
