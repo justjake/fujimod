@@ -3,6 +3,7 @@ import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import type { ControlNode, DevicePanel } from '@fujimod/emulator-ui/ui/layout';
+import { launchFujimod } from '../cameras/launch.playwright.ts';
 
 const base = process.env.FUJIMOD_WEB_URL;
 if (!base) throw Error('Set FUJIMOD_WEB_URL to the managed web URL.');
@@ -24,7 +25,7 @@ async function ready(page: Page, timeout = 240000) {
       live: document.querySelector('#live-label')?.textContent,
       status: document.querySelector('#status')?.textContent,
       fault: document.querySelector('#fault-raw')?.textContent,
-      prompt: document.querySelector('label.file-drop-choose')?.textContent,
+      launcher: document.querySelector('.launcher')?.textContent,
       dialogs: [...document.querySelectorAll('dialog')].map((dialog) => ({
         open: dialog.open,
         text: dialog.innerText,
@@ -177,10 +178,7 @@ try {
   await page.goto(appUrl.href, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
-  const chooser = page.waitForEvent('filechooser');
-  await page.locator('label.file-drop-choose').click();
-  await (await chooser).setFiles(firmwarePath);
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+  await launchFujimod(page, firmwarePath);
   await ready(page, 60000);
   const initialCameras = await cameraRecords(page);
   assert.equal(initialCameras.length, 1);
@@ -205,10 +203,10 @@ try {
   await page.goto(appUrl.href, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
-  await page.locator('.start-fresh').waitFor();
+  await page.locator('.launch-fujimod:not([disabled])').waitFor();
   const afterReload = await cameraRecords(page);
   assert.equal(nodeAtPath(afterReload[0]?.layout, savedEdit.path)?.caption, 'Saved layout');
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+  await launchFujimod(page);
   await ready(page);
   await page.waitForFunction(
     ({ binding, caption }) =>

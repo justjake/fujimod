@@ -24,13 +24,11 @@ try {
     await route.fulfill({ response });
   });
   await page.goto(base);
-  const camera = page.getByRole('combobox', { name: 'Camera', exact: true });
-  await camera.selectOption({ label: 'X70 · 1.10' });
   const output = new URL('../../build/automatic-download/', import.meta.url);
   await mkdir(output, { recursive: true });
   await page.locator('.launcher').scrollIntoViewIfNeeded();
   await page.screenshot({ path: new URL('launcher.png', output).pathname });
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+  await page.locator('.launch-fujimod:not([disabled])').click();
   // Poll from Node: an async browser predicate can be mistaken for a truthy Promise.
   const deadline = Date.now() + 120000;
   let stored = false;
@@ -47,21 +45,12 @@ try {
   assert.equal(sources.length, 1);
   assert.equal(new URL(sources[0]).hostname, 'fichiers.touslesdrivers.com');
   await page.reload();
-  await page
-    .locator('.firmware-saved-row')
-    .filter({ hasText: 'X70 · 1.10' })
-    .waitFor({ state: 'attached' });
-  await camera.selectOption({ label: 'X70 · 1.10' });
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
-  await page.waitForFunction(
-    () =>
-      !document.querySelector('.launcher') ||
-      document.querySelector('.camera-storage-status')?.textContent !== '',
-  );
+  await page.locator('.launch-fujimod:not([disabled])').click();
+  await page.locator('.launcher').waitFor({ state: 'detached' });
   assert.equal(sources.length, 1, 'Stored firmware must be reused without another download');
   await page.unrouteAll({ behavior: 'wait' });
   console.log(
-    'Passed: camera selection, real mirror transfer through Worker, verified local import, and reuse.',
+    'Passed: Launch Fujimod, real mirror transfer through Worker, verified local import, and reuse.',
   );
 } finally {
   await browser.close();

@@ -1,4 +1,4 @@
-import { For, Show, Switch, Match } from 'solid-js';
+import { For, Show, Switch, Match, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 import { Icon } from './icons';
 import type { ControlPart, Marking } from './control-part';
@@ -82,7 +82,7 @@ function Actuator(props: {
         </span>
       }
     >
-      {(render) => render()(props.action, props.class, props.children)}
+      {(render) => untrack(() => render()(props.action, props.class, props.children))}
     </Show>
   );
 }

@@ -97,9 +97,7 @@ for (const engine of [chromium, webkit]) {
         await page.locator('#workspace .release-notes, #workspace .release-heading').count(),
         0,
       );
-      await page
-        .locator('#workspace button[aria-label="Run unmodified in your browser"]')
-        .waitFor({ state: 'attached' });
+      await page.locator('#workspace .launch-fujimod').waitFor({ state: 'attached' });
       for (const href of await page
         .locator('main .manual-feature-link')
         .evaluateAll((links) => links.map((link) => link.getAttribute('href')!))) {

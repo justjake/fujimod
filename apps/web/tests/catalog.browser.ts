@@ -1,4 +1,4 @@
-/** Qualify generated camera capabilities through the ordinary upload and panel UI. */
+/** Qualify generated camera capabilities through the stock-boot development URL and panel UI. */
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -47,7 +47,11 @@ try {
     }
     if (!installed)
       await context.route('**/runtime/catalog.json', (route) => route.fulfill({ json: catalog }));
-    await context.route('**/local/firmware/**', (route) => route.fulfill({ status: 404 }));
+    await context.route('**/local/firmware/**', (route) =>
+      new URL(route.request().url()).pathname === `/local/firmware/${firmware.id}.dat`
+        ? route.fulfill({ path: files[firmware.id] })
+        : route.fulfill({ status: 404 }),
+    );
     await context.addInitScript(() => {
       const OriginalWorker = window.Worker;
       window.Worker = class extends OriginalWorker {
@@ -91,15 +95,8 @@ try {
       if (message.text().startsWith('catalog progress:')) console.log(message.text());
     });
     try {
-      console.log(`${firmware.id}: opening website`);
-      await page.goto(url);
-      console.log(`${firmware.id}: choosing DAT`);
-      const chooser = page.waitForEvent('filechooser');
-      await page.locator('label.file-drop-choose').click();
-      await (await chooser).setFiles(files[firmware.id]);
-      await page
-        .getByRole('button', { name: 'Run unmodified in your browser', exact: true })
-        .click();
+      console.log(`${firmware.id}: opening website with its stock firmware`);
+      await page.goto(new URL(`/?scenario=camera-rec&firmware=${firmware.id}#workspace`, url).href);
       console.log(`${firmware.id}: waiting for cold boot`);
       await page.waitForFunction(
         () =>

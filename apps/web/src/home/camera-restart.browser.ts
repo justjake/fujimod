@@ -2,6 +2,7 @@
 import { chromium, webkit } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { launchFujimod } from '../cameras/launch.playwright.ts';
 
 const base = process.env.FUJIMOD_WEB_URL,
   dat = process.env.FUJIMOD_TEST_DAT;
@@ -22,10 +23,7 @@ try {
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
   await page.waitForFunction(() => performance.getEntriesByName('camera-catalog-ready').length);
-  const chooser = page.waitForEvent('filechooser');
-  await page.locator('label.file-drop-choose').click();
-  await (await chooser).setFiles(dat);
-  await page.getByRole('button', { name: 'Run unmodified in your browser', exact: true }).click();
+  await launchFujimod(page, dat);
   async function ready() {
     await page.waitForFunction(
       () =>
