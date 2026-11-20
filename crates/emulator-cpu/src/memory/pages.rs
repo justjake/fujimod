@@ -119,6 +119,19 @@ impl Tracker {
     fn dirty(&self, page: usize) -> bool {
         self.dirty[page / 64].load(Ordering::Relaxed) & (1 << (page % 64)) != 0
     }
+    /// Take a backing that holds `byte` in every cell as the first keyframe,
+    /// so the next capture reads only flagged pages. Untouched pages stay
+    /// unread: on Apple systems even reading a fresh page makes it resident.
+    /// Every write since the backing was filled must have been flagged.
+    pub fn assume_uniform(&self, byte: u8) {
+        let page = uniform(byte);
+        self.set_base(&Image {
+            len: self.len,
+            pages: (0..self.len.div_ceil(PAGE_BYTES))
+                .map(|_| page.clone())
+                .collect(),
+        });
+    }
     fn set_base(&self, image: &Image) {
         for flag in self.dirty.iter() {
             flag.store(0, Ordering::Relaxed);
@@ -220,6 +233,21 @@ impl Tracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_uniform_backing_reads_only_flagged_pages_at_its_first_capture() {
+        let mut ram = vec![0xff; PAGE_BYTES * 2 + 7];
+        let tracker = Tracker::new(ram.len());
+        tracker.assume_uniform(0xff);
+        ram[1] = 1;
+        ram[PAGE_BYTES * 2 + 6] = 2;
+        tracker.mark(PAGE_BYTES * 2 + 6, 1).unwrap();
+        let image = unsafe { tracker.capture(ram.as_ptr()) };
+        // The unflagged first page was never read.
+        assert!(Arc::ptr_eq(&image.pages[0], uniform(0xff)));
+        assert!(Arc::ptr_eq(&image.pages[1], uniform(0xff)));
+        assert_eq!(image.page(2).unwrap()[6], 2);
+        assert_eq!(image.page(2).unwrap().len(), 7);
+    }
     #[test]
     fn dirty_versions_share_pages_restore_branches_and_track_partial_pages() {
         let mut ram = vec![0; PAGE_BYTES * 3 + 7];

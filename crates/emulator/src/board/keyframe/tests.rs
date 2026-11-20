@@ -264,6 +264,13 @@ fn replay_restores_pending_dma_deadlines_aliases_private_ram_and_partial_schedul
     );
 }
 #[test]
+fn the_first_keyframe_reads_only_written_pages_and_still_holds_every_write() {
+    let mut board = board();
+    board.run_until(13, 17).unwrap();
+    let saved = board.checkpoint(None).unwrap();
+    assert_eq!(saved.memory, board.complete_state().unwrap().memory);
+}
+#[test]
 fn independent_cpu_allocations_refuse_instead_of_omitting_live_ram() {
     let mut board = board();
     let saved = board.checkpoint(None).unwrap();

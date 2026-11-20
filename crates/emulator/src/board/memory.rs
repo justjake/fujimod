@@ -247,6 +247,17 @@ impl Memory {
         }
         Ok(())
     }
+    /// Flag processor writes from the first instruction on RAM that holds
+    /// `fill` everywhere, so keyframes never read pages the guest left
+    /// untouched. Boards whose processors cannot be observed keep reading
+    /// every page at their first keyframe.
+    pub(super) fn track_from_fill(&self, cpus: &[Rc<dyn Cpu>], fill: u8) {
+        if self.rearm(cpus).is_ok() {
+            for tracker in &self.trackers {
+                tracker.assume_uniform(fill);
+            }
+        }
+    }
     pub(super) fn checkpoint(&self) -> Checkpoint {
         Checkpoint {
             regions: self

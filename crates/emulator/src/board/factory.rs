@@ -521,6 +521,11 @@ impl Graph {
                 })?;
         }
         board.retained_engines = Some(engines);
+        board
+            .state
+            .borrow()
+            .memory
+            .track_from_fill(&board.cpus, options.ram_fill.unwrap_or(0));
         Ok(board)
     }
 }
