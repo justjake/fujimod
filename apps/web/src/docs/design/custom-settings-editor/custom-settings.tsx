@@ -616,7 +616,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
         <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} raw={s().mode === 'raw'} send={send} />
         <Show when={s().list !== undefined && focused().kind === 'choice' ? (focused() as ChoiceSetting) : undefined}>
           {(setting) => (
-            <FlyOut left={WIDTH} rowTop={rowTop()} rowHeight={ROW} height={flyOutListHeight(setting().choices.length)}>
+            <FlyOut left={WIDTH} rowTop={rowTop()} height={flyOutListHeight(setting().choices.length)}>
             <PickerList
               options={setting().choices.map((choice) => {
                 const wb = setting().id === 'wb';
@@ -651,7 +651,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
           </div>
         </Show>
         <Show when={s().fly === 'shift'}>
-          <FlyOut left={WIDTH} rowTop={rowTop()} rowHeight={ROW} height={SHIFT_GRID + 46}>
+          <FlyOut left={WIDTH} rowTop={rowTop()} height={SHIFT_GRID + 46}>
             <div class="flex flex-col items-center gap-[6px] px-[10px] pt-[8px]">
               <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} send={send} />
               <span class="text-[17px] leading-none font-medium tabular-nums">

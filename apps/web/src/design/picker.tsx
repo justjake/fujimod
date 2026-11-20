@@ -1,9 +1,9 @@
-import { For, Show, createEffect } from 'solid-js';
+import { For, Show, createEffect, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { reveal } from './column';
 import { Chevron } from './controls';
-import { ACCENT, GLASS, SELECTED, SMALL } from './materials';
+import { ACCENT, SELECTED, SMALL } from './materials';
 
 /** One choice in a picker: its name, and artwork drawn in the given ink. */
 export interface PickerOption {
@@ -11,25 +11,6 @@ export interface PickerOption {
   art?: (ink: string) => JSX.Element;
   /** A screen past this choice, reached with RIGHT or a tap on its ›. */
   more?: () => void;
-}
-
-/** A sheet over the picture choosing one of many, under its title. UP, DOWN
- * and the dial move the cursor, OK chooses, BACK closes. */
-export function Picker(props: {
-  title: string;
-  options: PickerOption[];
-  at: number;
-  current?: number;
-  columns?: number;
-  choose: (index: number) => void;
-  style?: JSX.CSSProperties;
-}) {
-  return (
-    <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', ...props.style }}>
-      <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>{props.title}</div>
-      <PickerList options={props.options} at={props.at} current={props.current} columns={props.columns} choose={props.choose} />
-    </div>
-  );
 }
 
 /** The choices of a picker, in whatever holds them (a sheet, or a row's
@@ -112,14 +93,14 @@ export function PickerList(props: {
 }
 
 /** What comes out of a row: a panel flush against the column, as wide as its
- * content, centered on the row it comes from and kept on screen, in the
- * look's fly-out material. `height` is the content's height; content taller
- * than the screen scrolls. */
-export function FlyOut(props: { left: number; rowTop: number; rowHeight: number; height: number; children: JSX.Element; screenHeight?: number }) {
+ * content, its top level with the top of the row it comes from (raised only
+ * as far as it must be to stay on screen), in the look's fly-out material.
+ * `height` is the content's height; content taller than the screen scrolls. */
+export function FlyOut(props: { left: number; rowTop: number; height: number; children: JSX.Element; screenHeight?: number }) {
   const MARGIN = 8;
   const screen = () => props.screenHeight ?? 480;
   const height = () => Math.min(props.height, screen() - 2 * MARGIN);
-  const top = () => Math.max(MARGIN, Math.min(screen() - MARGIN - height(), props.rowTop + props.rowHeight / 2 - height() / 2));
+  const top = () => Math.max(MARGIN, Math.min(screen() - MARGIN - height(), props.rowTop));
   return (
     <div
       class="absolute flex w-max min-w-[220px] flex-col overflow-hidden p-[6px]"
@@ -136,6 +117,32 @@ export function FlyOut(props: { left: number; rowTop: number; rowHeight: number;
     >
       {props.children}
     </div>
+  );
+}
+
+/** A fly-out from the element marked `data-anchor={anchor}` on the same
+ * screen: its top level with that element's top. */
+export function AnchoredFlyOut(props: { anchor: string; left: number; height: number; children: JSX.Element }) {
+  const [top, setTop] = createSignal<number>();
+  const measure = (probe: HTMLElement) =>
+    requestAnimationFrame(() => {
+      const screen = probe.closest('.fm-screen');
+      const anchor = screen?.querySelector(`[data-anchor="${props.anchor}"]`);
+      if (!screen || !anchor) return setTop(8);
+      const box = screen.getBoundingClientRect();
+      setTop((anchor.getBoundingClientRect().top - box.top) * (720 / box.width));
+    });
+  return (
+    <>
+      <span ref={measure} class="hidden" />
+      <Show when={top()}>
+        {(rowTop) => (
+          <FlyOut left={props.left} rowTop={rowTop()} height={props.height}>
+            {props.children}
+          </FlyOut>
+        )}
+      </Show>
+    </>
   );
 }
 

@@ -75,11 +75,14 @@ export function Button(props: {
   /** Nothing to do yet. */
   idle?: boolean;
   class?: string;
+  /** The name a fly-out opened from this button anchors to. */
+  anchor?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
+      data-anchor={props.anchor}
       class={`flex h-[47px] items-center justify-center px-[10px] font-semibold whitespace-nowrap ${SMALL} ${props.class ?? ''}`}
       style={{
         ...TRACK(props.focused),

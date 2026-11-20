@@ -1,7 +1,7 @@
 import PHOTO from '../../../engine/assets/default-scene.png';
 import { Artwork, Monogram, filmArtwork, stockArtwork } from '../../../design/artwork';
 import { Button, Scroller, Section } from '../../../design/column';
-import { Picker, pickerStep } from '../../../design/picker';
+import { AnchoredFlyOut, PickerList, flyOutListHeight, pickerStep } from '../../../design/picker';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
@@ -880,6 +880,7 @@ const ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-hi', 'pro
 /** Our own letters: 1 to 4, capitals or small capitals (typed small), in the tile. */
 const MONOGRAM_LIMIT = 4;
 const ICON_COLUMNS = 6;
+const ICON_CELL = 60;
 const BASE_ICONS = ['provia', 'velvia', 'astia', 'classic-chrome', 'pro-neg-std', 'eterna', 'classic-neg'];
 
 function FilmIcon(props: { slug: string; size: number; color: string }) {
@@ -1836,7 +1837,7 @@ export function Editor(props: {
             <div class="absolute" style={{ left: `${PICTURE_LEFT + 8}px`, top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
               <KeyHint glyph="A" label={s().name} />
             </div>
-            <div class="absolute right-[10px]" style={{ top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
+            <div class="absolute right-[10px]" data-anchor="compare" style={{ top: `${s().crop ? stripMetrics(s().strip).band + 8 : 10}px` }}>
               <KeyHint glyph="B" label={c().b === 'opened' ? 'AS OPENED' : BASES[c().b as number].name} tap={() => update(openPicker(s(), { kind: 'compare' }))} />
             </div>
           </>
@@ -1894,6 +1895,7 @@ export function Editor(props: {
           <div class="mb-[8px] flex gap-[8px]">
             <button
               type="button"
+              data-anchor="icon"
               class="flex size-[57px] shrink-0 items-center justify-center"
               style={TRACK(s().area === 'icon')}
               onClick={() => update(openPicker({ ...s(), area: 'icon', railOn: null, header: false, inside: false }, { kind: 'icon' }))}
@@ -1921,6 +1923,7 @@ export function Editor(props: {
               {([area, label]) => (
                 <Button
                   label={label}
+                  anchor={area}
                   class={area === 'saveas' ? 'grow' : 'grow basis-0'}
                   focused={s().area === area}
                   idle={area === 'save' && same(s().film, s().opened)}
@@ -2012,6 +2015,7 @@ export function Editor(props: {
                 accessory={
                   <button
                     type="button"
+                    data-anchor={`copy-${tool}`}
                     class={`flex h-[36px] shrink-0 items-center gap-[6px] rounded-[10px] pr-[8px] pl-[10px] whitespace-nowrap text-[18px] leading-none font-medium`}
                     style={{ background: 'var(--m-chip)', color: 'rgb(255 255 255 / 0.85)', 'box-shadow': headerFocused(tool) ? 'var(--m-focus-edge), 0 0 0 2px #fff' : 'var(--m-chip-edge)' }}
                     onClick={() => update(openPicker({ ...s(), focus: index(tool), header: true, area: 'rows' }, { kind: 'copy', tool }))}
@@ -2159,12 +2163,19 @@ export function Editor(props: {
         {(picker) => {
           const p = () => picker();
           const options = () => pickerOptions(p());
+          const grid = () => p().kind === 'icon';
+          const anchor = () => {
+            const q = p();
+            return q.kind === 'copy' ? `copy-${q.tool}` : q.kind;
+          };
           return (
-            <Picker
-              title={(() => {
-                const q = p();
-                return q.kind === 'icon' ? 'ICON' : q.kind === 'copy' ? `COPY ${TOOL_NAMES[q.tool]} FROM` : q.kind === 'open' ? 'OPEN FILM' : 'COMPARE WITH';
-              })()}
+            <AnchoredFlyOut
+              anchor={anchor()}
+              left={PICTURE_LEFT}
+              height={grid() ? Math.ceil(options().length / ICON_COLUMNS) * (ICON_CELL + 4) + 12 : flyOutListHeight(options().length)}
+            >
+            <div style={grid() ? { width: `${ICON_COLUMNS * ICON_CELL}px` } : {}} class="flex min-h-0 grow flex-col">
+            <PickerList
               options={options().map((k) =>
                 p().kind === 'icon'
                   ? { label: String(k), art: (ink: string) => <FilmIcon slug={ICONS[k as number]} size={36} color={ink} /> }
@@ -2177,8 +2188,9 @@ export function Editor(props: {
               })()}
               columns={p().kind === 'icon' ? ICON_COLUMNS : undefined}
               choose={(i) => update(choose(s(), p(), options()[i]))}
-              style={{ left: `${PICTURE_LEFT + 8}px`, right: '8px' }}
             />
+            </div>
+            </AnchoredFlyOut>
           );
         }}
       </Show>
