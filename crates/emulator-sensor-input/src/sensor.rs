@@ -39,6 +39,9 @@ pub struct SensorState {
     /// Emulator-only option: stream without the register-0 standby gate (see `streaming`).
     #[serde(default)]
     pub no_standby_gate: bool,
+    /// Emulator-only option: sensor reads are not gated on register 0x59 (see `set_no_read_gate`).
+    #[serde(default)]
+    pub no_read_gate: bool,
 }
 impl Default for SensorState {
     fn default() -> Self {
@@ -57,6 +60,7 @@ impl Default for SensorState {
             earlier_still_raws: Vec::new(),
             still_programmed: false,
             no_standby_gate: false,
+            no_read_gate: false,
         }
     }
 }
@@ -510,6 +514,13 @@ impl Sensor {
     pub fn set_no_standby_gate(&self, on: bool) {
         self.0.lock().unwrap().no_standby_gate = on;
     }
+    /// X-H2S option: the X100VI's register-0x59 read gate is not a modeled gate here. The X-H2S
+    /// reads sensor registers without having written 0x59 bit 2 (observed: the strict run refuses
+    /// the first read). Reads then return the stored register value, zero if never written.
+    /// Labelled assumption, not a measurement.
+    pub fn set_no_read_gate(&self, on: bool) {
+        self.0.lock().unwrap().no_read_gate = on;
+    }
     pub fn streaming(&self) -> bool {
         let s = self.0.lock().unwrap();
         s.writes != 0
@@ -952,7 +963,9 @@ impl Device for Command {
                 wrote = true;
             } else {
                 let (gate, mask) = self.sensor.2;
-                if sensor.registers.get(&gate).copied().unwrap_or(0) & mask == 0 {
+                if !sensor.no_read_gate
+                    && sensor.registers.get(&gate).copied().unwrap_or(0) & mask == 0
+                {
                     cx.fail(format!(
                         "sensor read while register {gate:#x} gate is closed"
                     ));
@@ -1508,6 +1521,26 @@ mod tests {
         }
         let expected = experiment(0, 0, false);
         assert_eq!(experiment(3, 0xabad, true), expected);
+    }
+    #[test]
+    fn no_read_gate_option_lets_a_read_packet_run_with_register_0x59_unwritten() {
+        for (option, closed) in [(false, true), (true, false)] {
+            let sensor = Sensor::new(None, (0x59, 4));
+            sensor.set_no_read_gate(option);
+            let mut command = Command::new(0xfff6c000, sensor, 17_000).unwrap();
+            let mut host = RecordingHost {
+                ram_base: 0x1000,
+                ram: vec![0x82, 0, 0x10, 0, 0, 0, 0, 0],
+                ..Default::default()
+            };
+            for (offset, value) in [(0x208, 0x10401), (0x210, 0x1000), (0x218, 8), (0x204, 1)] {
+                command.write(&mut Cx::new(&mut host, 0, 0, 0), 0xfff6c000 + offset, 4, value);
+            }
+            host.now = 17_000;
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            command.advance(&mut cx);
+            assert_eq!(cx.refusal().is_some(), closed, "option {option}");
+        }
     }
     #[test]
     fn command_window_words_the_submit_never_reads_accept_writes_while_busy() {
