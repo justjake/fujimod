@@ -138,6 +138,12 @@ pub fn register_all(
                     // No lens: the receive line idles high.
                     None => Box::new(InputLevel(true)),
                 };
+                if let Some(port) = &port {
+                    // Virtual focus: the image models read the focus motor position
+                    // (fujimod_emulator_imaging::focus).
+                    let (motor, (min, max)) = (port.clone(), port.focus_range());
+                    fujimod_emulator_imaging::focus::attach_lens(move |now| motor.focus(now).0, min, max);
+                }
                 lens = Some((options, choice, port));
                 wire
             }

@@ -5,6 +5,7 @@ pub mod analysis;
 pub mod exposure;
 pub mod exr2_isp;
 pub mod film;
+pub mod focus;
 pub mod frame;
 pub mod optics;
 pub mod radiometric;
