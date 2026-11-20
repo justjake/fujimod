@@ -203,3 +203,31 @@ kind = "completion-stub"
 registers = [
   { offset = 0x000, mode = "constant", value = 0x1 },
 ]
+
+# FCNV colour-space converter (YCbCr 4:2:2 <-> RGB; BT.601 Q10 matrices 0x1c09228 / 0x1c09210),
+# driver 0x13c0ef8..0x13c2fb8, state 0x2027370; logical 0xbf -> INTID 217 (record 0x18eb508, level).
+# Open 0x13c1e54: +0x000 = 0, then poll +0x000 until it reads 1. Config 0x13c1a68: mode +0x08,
+# pitches +0x40..+0x4c, size +0x50, matrix +0x204..+0x218, alpha +0x21c (read back, so they keep
+# their writes). Start 0x13c1bb0: addresses +0x20..+0x3c, +0x30c = 1 (interrupt enable), poll +0x308
+# until bits 0 and 16 read 1, +0x300/+0x304 = 0x51, +0x004 = 1 (start). ISR 0x13c1af4 writes
+# +0x310 = 1 and reads no status. Users: recf steps 0x23/0x24 (0x2d7e17c -> 0x2d104b4 -> 0x2d3a3d4),
+# 0x2dd6d0c, the GUI image draw 0x147de3c (mode 0x10, YCbCr -> RGBA) and 0x30acdd8 -> 0x2e76710.
+# Reached by Q in playback (RAW CONVERSION). Completion only: no pixels are written to the
+# destination, so a converted GUI image is not drawn.
+[[device]]
+base = 0xffd26000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x308, mode = "constant", value = 0x10001 },
+]
+irq = 217
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x310, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c" }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false
