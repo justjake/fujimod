@@ -90,6 +90,200 @@
     },
     "derived_fields": [
       {
+        "store": "main",
+        "offset": 1040,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 533,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x314 from configuration key 0x215: 1 or 2 kept, else 0."
+      },
+      {
+        "store": "main",
+        "offset": 1055,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 534,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x323 from configuration key 0x216: 1 -> 1, else 0."
+      },
+      {
+        "store": "main",
+        "offset": 1146,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 35427
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x37e..+0x37e from configuration key 0x8a63."
+      },
+      {
+        "store": "main",
+        "offset": 1353,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 535,
+          "mask": 255,
+          "values": [
+            {
+              "input": 0,
+              "output": 2
+            },
+            {
+              "input": 1,
+              "output": 2
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 2
+            },
+            {
+              "input": 4,
+              "output": 1
+            },
+            {
+              "input": 5,
+              "output": 1
+            },
+            {
+              "input": 6,
+              "output": 1
+            },
+            {
+              "input": 129,
+              "output": 1
+            },
+            {
+              "input": 130,
+              "output": 2
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x44d from configuration key 0x217: 0..3 -> 2, 4..6 -> 1, 0x81 -> 1, 0x82 -> 2, else 0."
+      },
+      {
+        "store": "main",
+        "offset": 1355,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 537,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 1
+            },
+            {
+              "input": 2,
+              "output": 2
+            },
+            {
+              "input": 3,
+              "output": 3
+            }
+          ],
+          "otherwise": 0
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x44f from configuration key 0x219: 1, 2 or 3 kept, else 0."
+      },
+      {
+        "store": "main",
+        "offset": 1356,
+        "bytes": 1,
+        "source": {
+          "kind": "bank_map",
+          "offset": 536,
+          "mask": 255,
+          "values": [
+            {
+              "input": 1,
+              "output": 0
+            }
+          ],
+          "otherwise": 1
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x450 from configuration key 0x218: 1 -> 0, else 1."
+      },
+      {
+        "store": "main",
+        "offset": 2649,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 339
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x95d..+0x960 from configuration keys 0x153..0x156 (Adobe RGB file name prefix)."
+      },
+      {
+        "store": "main",
+        "offset": 2653,
+        "bytes": 4,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 331
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x961..+0x964 from configuration keys 0x14b..0x14e (file name prefix)."
+      },
+      {
+        "store": "main",
+        "offset": 2657,
+        "bytes": 32,
+        "source": {
+          "kind": "bank_copy",
+          "offset": 35394
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x965..+0x984 from configuration keys 0x8a42..0x8a61 (device name)."
+      },
+      {
+        "store": "main",
+        "offset": 2689,
+        "bytes": 32,
+        "source": {
+          "kind": "fill",
+          "value": 0
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x985..+0x9a4 cleared."
+      },
+      {
+        "store": "main",
+        "offset": 2721,
+        "bytes": 8,
+        "source": {
+          "kind": "fill",
+          "value": 0
+        },
+        "basis": "Stock main defaults builder 0x149adb0: store +0x9a5..+0x9ac cleared."
+      },
+      {
         "store": "system",
         "offset": 430,
         "bytes": 1,
