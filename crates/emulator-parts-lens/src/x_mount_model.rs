@@ -47,9 +47,16 @@ pub mod family {
     pub const DETAIL_STATUS: u16 = 0x26;
     pub const APERTURE_RING: u16 = 0x30;
     pub const FOCUS_RING: u16 = 0x32;
-    pub const FOCUS_TARGET: u16 = 0x54;
-    pub const FOCUS_SPEED: u16 = 0x55;
-    pub const FOCUS_STEP: u16 = 0x56;
+    /// Focus drive request (X-T5 4.31 lenscom 0x13e5d4c, message 0x18f8): 0x54 carries
+    /// request +0x0, 0x55 the flag bytes +0x2..+0x8, 0x56 request +0xa. The AF drive
+    /// 0x1572620 -> 0x156fb08 -> 0x1535814 puts the speed (0x156f91c: a shifted rate that
+    /// saturates to 0x7fff) at +0x0 and the absolute target (0x156fc24: the body's lens
+    /// position [0x221b98c] plus the amount, saturated to 16 bits) at +0xa. 0x1535760 sends
+    /// 0x7fff at +0x0 with a signed target at +0xa. So 0x54 is the speed and 0x56 the
+    /// signed absolute target; the three families arrive in that order.
+    pub const FOCUS_SPEED: u16 = 0x54;
+    pub const FOCUS_FLAGS: u16 = 0x55;
+    pub const FOCUS_TARGET: u16 = 0x56;
     pub const FOCUS_DRIVE: u16 = 0x58;
     pub const APERTURE_TARGET: u16 = 0x60;
     pub const APERTURE_STEP: u16 = 0x61;
@@ -498,9 +505,9 @@ impl Spec {
                 | FEEDBACK
                 | FOCUS_STATE
                 | APERTURE_STATE
-                | FOCUS_TARGET
                 | FOCUS_SPEED
-                | FOCUS_STEP
+                | FOCUS_FLAGS
+                | FOCUS_TARGET
                 | FOCUS_DRIVE
                 | APERTURE_TARGET
                 | APERTURE_STEP
@@ -707,13 +714,6 @@ struct Unit {
     logs: Vec<String>,
 }
 
-/// `XT5_LENS_STEP=speed`: family 0x56 sets the speed of the move family 0x54 started instead
-/// of adding a relative step (a host input, read once; see the 0x56 arm of `Unit::respond`).
-fn step_is_speed() -> bool {
-    static SPEED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *SPEED.get_or_init(|| std::env::var("XT5_LENS_STEP").is_ok_and(|v| v == "speed"))
-}
-
 fn valid_word(word: u32) -> bool {
     let packet = Packet(word);
     word == 0
@@ -866,42 +866,30 @@ impl Unit {
             APERTURE_STATE => self.state.aperture.position(now, tpm),
             // Zoom step 0 (the short end); the lens has no zoom ring model.
             ZOOM_STATE if self.spec.declared(ZOOM_STATE).is_none() => 0,
-            // AF agent, opt-in (`XT5_LENS_STEP=speed`): the 15-bit 0x54 payload is a signed
-            // position (0x156fc24 saturates `position + amount`), and 0x7fff is the body's
-            // "no target" value (wrapper 0x1535760 always sends it; the lens must not move).
-            FOCUS_TARGET if step_is_speed() => {
-                if payload & 0x7fff != 0x7fff {
-                    let target = ((payload << 1) as i16 >> 1) as i64;
-                    self.move_focus(now, target);
-                }
-                payload
-            }
-            FOCUS_TARGET | FOCUS_DRIVE => {
-                self.move_focus(now, payload as i64);
-                payload
-            }
+            // 0x54: the speed of the next move. 0x7fff is the saturated rate (0x156f91c) and
+            // 0 is taken as no request; both select the lens's own speed. Other values are
+            // taken as position units per second (the unit is inferred, not measured).
             FOCUS_SPEED => {
-                if payload != 0 {
-                    self.state.focus_speed = payload;
-                }
+                self.state.focus_speed = if payload == 0 || payload == 0x7fff {
+                    self.spec.focus.units_per_ms
+                } else {
+                    ((payload / 1000).max(1)).min(self.spec.focus.units_per_ms)
+                };
                 payload
             }
-            // AF agent, opt-in (`XT5_LENS_STEP=speed`; see scratch/af/NOTE-for-lens-agent.md):
-            // the X-T5 4.31 AF drive 0x1572620 sends the target in 0x54 (0x156fc24) and the
-            // speed of that move in 0x56 (0x156f91c), in position units per second (unit
-            // inferred); 0 keeps the lens default speed.
-            FOCUS_STEP if step_is_speed() => {
-                if payload != 0 {
-                    let (target, speed) = (self.state.focus.target, (payload / 1000).max(1));
-                    self.state.focus.retarget(now, tpm, target, speed);
-                    let focus = self.state.focus;
-                    self.operation(now, focus);
-                }
+            FOCUS_FLAGS => {
+                self.state.settings.insert(FOCUS_FLAGS, payload);
                 payload
             }
-            FOCUS_STEP => {
-                let target = self.state.focus.target as i64 + payload as i16 as i64;
-                self.move_focus(now, target);
+            // 0x56: a signed absolute target; the move starts here. A target equal to the
+            // current position still holds the ready line busy for the shortest operation,
+            // so the body sees the drive complete.
+            FOCUS_TARGET => {
+                self.move_focus(now, payload as i16 as i64);
+                payload
+            }
+            FOCUS_DRIVE => {
+                self.move_focus(now, payload as i64);
                 payload
             }
             APERTURE_TARGET | APERTURE_DRIVE => {
