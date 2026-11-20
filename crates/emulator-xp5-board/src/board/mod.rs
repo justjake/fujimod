@@ -631,7 +631,6 @@ pub fn register_all(
             | "imaging-reset"
             | "movdc"
             | "imaging-resize"
-            | "imaging-ibuf"
             | "imaging-statistics"
             | "imaging-paf"
             | "imaging-resz"
