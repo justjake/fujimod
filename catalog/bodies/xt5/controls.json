@@ -76,7 +76,9 @@
       "manual_page": 322,
       "face": "Fn1",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "FACE DETECTION ON/OFF.",
@@ -97,7 +99,9 @@
       "manual_page": 6,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-7"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Choose an exposure compensation amount; C transfers adjustment to a command dial.",
@@ -227,7 +231,10 @@
       "manual_page": 55,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to set focus and exposure; press fully to take a photograph in STILL mode or start and stop movie recording in MOVIE mode.",
@@ -263,7 +270,9 @@
       "manual_page": 72,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-13"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Select shutter speed; A selects automatic shutter speed, T selects time exposures, and B selects bulb exposures.",
@@ -370,7 +379,9 @@
       "manual_page": 96,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-12"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Set sensitivity to AUTO or a manual value from ISO 125 to 12800; at C, use the front command dial to select AUTO1–AUTO3 or ISO 64–51200.",
@@ -429,7 +440,9 @@
       "manual_page": 6,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Select Panorama, Advanced Filter, Bracketing, High-speed burst, Low-speed burst, Single frame, or HDR drive mode.",
@@ -543,7 +556,9 @@
       "manual_page": 83,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-11"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Choose single AF, continuous AF, or manual focus.",
@@ -619,7 +634,9 @@
       "manual_page": 322,
       "face": "Fn2",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "DRIVE SETTING.",
@@ -640,7 +657,9 @@
       "manual_page": 5,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Select STILL for photographs or MOVIE for movie recording.",
@@ -686,7 +705,10 @@
       "manual_page": 7,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-encoder-0-9-0-10",
+        "controls-gpio-0-14"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to select menu tabs or page through menus, adjust aperture, exposure compensation, or sensitivity, and view pictures during playback. Press to switch between aperture and sensitivity; press and hold to choose the configured command dial setting.",
@@ -720,7 +742,9 @@
       "manual_page": 46,
       "face": "ON/OFF",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-00"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Turn the camera on or off.",
@@ -766,7 +790,9 @@
       "manual_page": 59,
       "face": null,
       "icon": "delete",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete pictures during playback.",
@@ -787,7 +813,9 @@
       "manual_page": 56,
       "face": null,
       "icon": "playback",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-11"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback to view pictures.",
@@ -808,7 +836,9 @@
       "manual_page": 322,
       "face": "VIEW/MODE",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "VIEW MODE SETTING.",
@@ -829,7 +859,9 @@
       "manual_page": 321,
       "face": "AFON",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AF-ON.",
@@ -847,7 +879,10 @@
       "manual_page": 321,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-36",
+        "controls-gpio-0-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to highlight menu items, select program shift or shutter speed, adjust quick-menu settings or focus-frame size, and zoom during playback. Press for FOCUS CHECK or to zoom on the active focus point; its DIAL function button default is FOCUS CHECK.",
@@ -881,7 +916,9 @@
       "manual_page": 321,
       "face": "Q",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "QUICK MENU.",
@@ -902,7 +939,9 @@
       "manual_page": 321,
       "face": "AEL",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-34"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AE LOCK ONLY.",
@@ -920,7 +959,10 @@
       "manual_page": 4,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-14",
+        "controls-power-controller-34"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Tilt or press to select the focus area and navigate menus; its role can be changed in FOCUS LEVER SETTING.",
@@ -976,7 +1018,9 @@
       "manual_page": 322,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-35"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move up in menus; default function button assignment: PHOTOMETRY.",
@@ -998,7 +1042,9 @@
       "manual_page": 322,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-35"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move right in menus; default function button assignment: WHITE BALANCE.",
@@ -1020,7 +1066,9 @@
       "manual_page": 322,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-35"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move down in menus; default function button assignment: PERFORMANCE.",
@@ -1042,7 +1090,9 @@
       "manual_page": 322,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-35"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move left in menus; default function button assignment: FILM SIMULATION.",
@@ -1064,7 +1114,9 @@
       "manual_page": 24,
       "face": "MENU/OK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-34"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display menus and confirm selections.",
@@ -1101,7 +1153,9 @@
       "manual_page": 249,
       "face": "DISP/BACK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-power-controller-34"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Change display information or return to the previous screen; press x in shooting mode to open Bluetooth options, or hold x during playback to continue to Bluetooth connection setup.",
