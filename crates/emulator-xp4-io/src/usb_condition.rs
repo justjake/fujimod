@@ -1,7 +1,11 @@
 //! X-Processor 4 USB condition register: bit 0 reports the USB cable present.
-//! The stock service entry and the boot's USB task both read it
-//! (`FUN_01d8a330`/`FUN_01d8a34c`/`FUN_011655a8` read `0xfff4a300`). It is a
-//! board strap, not a writable register.
+//! It is a board strap, not a writable register, and the DWC3 driver's only
+//! cable source: the X-T3's `0x01d8a330`/`0x01d8a34c` and `0x011655a8` and
+//! the X-T30's `0x01d184bc`/`0x01d184d8` and `0x01150f24` all read
+//! `0xfff4a300`. The X-T30 usbcont cable action `0x01ea3af4` additionally runs
+//! the power-controller port detection `0x01ea3954`, which writes register 20
+//! = `0xb00`, reads register 21 and proceeds only when `(value & 0xfd) == 1`,
+//! so its emulated attach also needs a declared register 21.
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
 use std::sync::{
