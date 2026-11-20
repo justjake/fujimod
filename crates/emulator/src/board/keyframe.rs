@@ -138,6 +138,7 @@ impl State {
             code_shadow: _,
             blocks: _,
             run_entries: _,
+            polls: _,
             settled: _,
             active_slice: _,
             parallel: _,

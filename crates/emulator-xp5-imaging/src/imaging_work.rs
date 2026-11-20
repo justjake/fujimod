@@ -650,6 +650,11 @@ impl Device for Work {
             .chain(self.state.frame_deadline)
             .min()
     }
+    fn poll_stable(&self, address: u64, size: u8) -> bool {
+        // The ready word follows the reset deadline, and a retained word its
+        // last write: both change only at a write or at a deadline above.
+        size == 4 && address == self.base
+    }
     fujimod_emulator_devices::checkpoint_fields!(state: State);
     fn save(&self) -> Value {
         json!({"state":self.state})
