@@ -754,23 +754,48 @@ impl Bus {
     /// out (`Device::poll_stable`). Never while accesses are logged or outside
     /// strict mode.
     pub fn poll_stable(&self, address: u64, size: u8) -> bool {
-        if self.transactions.is_some() || self.mode != Mode::Strict {
-            return false;
-        }
-        let Some(end) = address.checked_add(size as u64) else {
-            return false;
-        };
-        self.pages
-            .get(&(address >> 20))
-            .and_then(|pages| {
-                pages[((address >> 12) & 255) as usize].iter().copied().find(|&id| {
-                    self.windows[id]
-                        .mappings
-                        .iter()
-                        .any(|m| address >= m.base && end <= m.base + m.size)
-                })
+        self.transactions.is_none()
+            && self.mode == Mode::Strict
+            && self
+                .window_at(address, size)
+                .is_some_and(|id| self.windows[id].device.poll_stable(address, size))
+    }
+    /// The model that answers an access, as `dispatch` finds it.
+    fn window_at(&self, address: u64, size: u8) -> Option<usize> {
+        let end = address.checked_add(size as u64)?;
+        self.pages.get(&(address >> 20)).and_then(|pages| {
+            pages[((address >> 12) & 255) as usize].iter().copied().find(|&id| {
+                self.windows[id]
+                    .mappings
+                    .iter()
+                    .any(|m| address >= m.base && end <= m.base + m.size)
             })
-            .is_some_and(|id| self.windows[id].device.poll_stable(address, size))
+        })
+    }
+    /// A poll loop fast-forward left `count` reads of a `poll_stable`
+    /// register out. Each would have run a wake pass that finds no dependent
+    /// due and marks the model and its dependents with a new generation.
+    /// Keep those marks as the reads would have left them, so a checkpoint
+    /// taken afterwards holds the same bytes.
+    pub fn left_out_reads(&mut self, address: u64, size: u8, count: u64) {
+        let Some(source) = self.window_at(address, size) else {
+            return;
+        };
+        if count == 0 {
+            return;
+        }
+        let (generation, wrapped) = self.wake_generation.overflowing_add(count);
+        self.wake_generation = generation;
+        if wrapped || generation == 0 {
+            // The pass that wraps clears every mark and starts again at one.
+            self.visited.fill(0);
+            self.wake_generation = generation.wrapping_add(1);
+        }
+        self.visited[source] = self.wake_generation;
+        for index in 0..self.dependents[source].len() {
+            let id = self.dependents[source][index];
+            self.visited[id] = self.wake_generation;
+        }
     }
     fn dispatch(
         &mut self,

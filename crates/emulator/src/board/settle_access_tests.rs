@@ -53,6 +53,28 @@ impl Device for Transfer {
     fn poll_stable(&self, _: u64, _: u8) -> bool {
         self.1
     }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        let p = self.0.lock().unwrap();
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(p.due, p.status, &p.reads),
+        )?)
+    }
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        let _: (Option<u64>, u64, Vec<(u64, u64)>) = saved.decode(self.name())?;
+        Ok(())
+    }
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        let mut p = self.0.lock().unwrap();
+        (p.due, p.status, p.reads) = saved.decode(self.name())?;
+        Ok(())
+    }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let mut p = self.0.lock().unwrap();
         if p.due.is_some_and(|at| at <= cx.now()) {
@@ -84,6 +106,8 @@ struct Outcome {
     accesses: u64,
     served: u64,
     left_out: u64,
+    /// The portable checkpoint of the final state.
+    checkpoint: Vec<u8>,
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
@@ -153,6 +177,7 @@ fn run_with(quantum: usize, blocks: bool, windows: &[u64], stable: bool, fast_fo
     let m4 = board.cpu(0).unwrap();
     let mut registers: Vec<u64> = (0..5).map(|r| scalar(m4, arm32(r)).unwrap()).collect();
     registers.push(scalar(m4, Register::Pc).unwrap());
+    let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
     let s = board.state.borrow();
     Outcome {
         state: board.state(),
@@ -162,6 +187,7 @@ fn run_with(quantum: usize, blocks: bool, windows: &[u64], stable: bool, fast_fo
         accesses: board.mmio_callback_counts.borrow()[0],
         served: probe.lock().unwrap().count,
         left_out: s.blocks[0].as_ref().map_or(0, |blocks| blocks.poll_reads),
+        checkpoint,
     }
 }
 
@@ -215,6 +241,11 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
                 let all = run_with(quantum, blocks, windows, true, fast_forward);
                 assert!(all.state == reference.state);
                 assert_eq!((all.served, all.left_out), (reference.served, 0));
+                // The portable checkpoint is the same bytes with and without
+                // the fast-forward.
+                if blocks {
+                    assert!(all.checkpoint == got.checkpoint, "quantum {quantum}: checkpoint differs");
+                }
             }
         }
     }
@@ -292,6 +323,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         .into_iter()
         .map(|r| scalar(cpu, r).unwrap())
         .collect();
+    let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
     let s = board.state.borrow();
     Outcome {
         state: board.state(),
@@ -301,6 +333,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         accesses: board.mmio_callback_counts.borrow()[0],
         served: probe.lock().unwrap().count,
         left_out: s.polls.reads[0],
+        checkpoint,
     }
 }
 
@@ -328,6 +361,10 @@ fn an_aarch64_poll_loop_through_a_read_helper_is_fast_forwarded_with_the_same_re
             let all = run_a64(quantum, windows, false, true);
             assert!(all.state == reference.state);
             assert_eq!((all.served, all.left_out), (reference.served, 0));
+            // The portable checkpoint is the same bytes with and without the
+            // fast-forward.
+            let off = run_a64(quantum, windows, true, false);
+            assert!(off.checkpoint == got.checkpoint, "quantum {quantum}: checkpoint differs");
         }
     }
 }
