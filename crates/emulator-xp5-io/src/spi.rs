@@ -283,7 +283,7 @@ impl Spi {
             || decoded.enable & !0xa != 0
             || decoded.divider != 0
                 && (!(2..=254).contains(&decoded.divider) || decoded.divider & 1 != 0)
-            || decoded.irq_enable != 0
+            || decoded.irq_enable & !3 != 0
             || decoded.causes != 0
         {
             return Err("invalid SPI checkpoint transfer state".into());
@@ -342,6 +342,11 @@ impl Spi {
     fn start(&mut self, cx: &mut Cx<'_>, value: u64) -> Result<(), String> {
         if self.state.enable & 2 == 0 || self.state.divider == 0 {
             return Err("SPI transfer requires an enabled master and divider".into());
+        }
+        if self.state.irq_enable != 0 {
+            // The interrupt output is not wired: an enabled mask is retained, but no cause bit
+            // or line is ever raised, so an interrupt-driven transfer must not silently proceed.
+            return Err("interrupt-driven SPI transfer is not modeled".into());
         }
         if self.state.pending.is_some() || self.state.rx.is_some() {
             return Err("SPI streaming beyond one polled word is not modeled".into());
@@ -453,7 +458,7 @@ impl Device for Spi {
                 self.state.divider = value as u32
             }
             0x14 if value & !15 == 0 => self.state.causes &= !(value as u32),
-            0x24 if value == 0 => self.state.irq_enable = 0,
+            0x24 if value & !3 == 0 => self.state.irq_enable = value as u32,
             0x20 if value & !3 == 0 => {
                 if value & 1 != 0 {
                     self.state.rx = None;
@@ -844,6 +849,24 @@ mod tests {
             0xa0
         );
         assert!(spi.restore(&json!({})).is_err());
+        assert!(host.irqs.is_empty());
+    }
+    #[test]
+    fn interrupt_enable_mask_is_retained_but_an_interrupt_driven_transfer_refuses() {
+        let (mut spi, mut gpio, mut host) = fixture(false);
+        pins(&mut gpio, &mut host, false, true);
+        setup(&mut spi, &mut host, 15, 6);
+        write(&mut spi, &mut host, 0x24, 3);
+        assert_eq!(spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0x24, 4), 3);
+        let saved = spi.save();
+        spi.restore(&saved).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 6);
+        spi.write(&mut cx, BASE + 8, 4, 0x2280);
+        assert!(cx.refusal().unwrap().contains("interrupt-driven"));
+        let mut cx = Cx::new(&mut host, 0, 0, 6);
+        spi.write(&mut cx, BASE + 0x24, 4, 4);
+        assert!(cx.refusal().unwrap().contains("unsupported SPI register"));
+        write(&mut spi, &mut host, 0x24, 0);
         assert!(host.irqs.is_empty());
     }
 }
