@@ -310,16 +310,15 @@ fn register_with_resources(
             )?;
         }
         "write-only-registers" => {
-            if !window.options.is_empty() {
-                return Err("write-only-registers takes no options".into());
+            let readback = window.options.get("readback").and_then(toml::Value::as_bool) == Some(true);
+            if window.options.len() > usize::from(window.options.contains_key("readback")) {
+                return Err("write-only-registers takes only the readback option".into());
             }
+            let registers = write_only_registers::WriteOnlyRegisters::new(window.base, window.size)?;
             bus.register(
                 window.base,
                 window.size,
-                Box::new(write_only_registers::WriteOnlyRegisters::new(
-                    window.base,
-                    window.size,
-                )?),
+                Box::new(if readback { registers.with_readback() } else { registers }),
             )?;
         }
         "audio-spi-sink" => {
