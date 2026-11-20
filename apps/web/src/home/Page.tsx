@@ -22,7 +22,6 @@ import { initialize } from 'fujimod';
 import { identify } from '../recovery/identify';
 import { EmulatorFeedback } from '@fujimod/emulator-ui/Feedback';
 import { ViewportControls } from '@fujimod/emulator-ui/ViewportControls';
-import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import '../home/site.css';
 
 export default function Home() {
@@ -115,8 +114,7 @@ export default function Home() {
                 disabled={state.cameraBusy}
                 onClick={() => void runtime()?.closeCamera()}
               >
-                <Icon name="power" size={14} />
-                Save & Exit
+                Close
               </button>
             </Show>
           </div>

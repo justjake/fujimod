@@ -52,7 +52,7 @@ for (const engine of [chromium, webkit].filter(
       assert.equal(await page.locator('#camera-loading').isVisible(), false);
     }
     async function exit() {
-      await page.getByRole('button', { name: 'Save & Exit', exact: true }).click();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
       await run.waitFor();
     }
     assert.equal((await records()).length, 0, 'Opening the page never creates a camera');
