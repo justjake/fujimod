@@ -13,10 +13,14 @@ pub fn banks() -> Banks {
 
 pub struct AddressHigh {
     banks: Banks,
+    standalone: bool,
 }
 impl AddressHigh {
     pub fn new(banks: Banks) -> Self {
-        Self { banks }
+        Self { banks, standalone: false }
+    }
+    pub fn standalone(banks: Banks) -> Self {
+        Self { banks, standalone: true }
     }
     fn words(&self) -> [u32; 16] {
         std::array::from_fn(|i| self.banks[i / 2].lock().unwrap().high(i % 2))
@@ -64,15 +68,28 @@ impl Device for AddressHigh {
             .map_err(|e| format!("DMA address-high checkpoint: {e}"))?;
         self.apply(words)
     }
-    // XDMAC channel pairs own the routing state seen through this view.
+    // The channel pairs own this state when present; otherwise the view owns it.
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Checkpoint::encode(self.name(), &())
+        if self.standalone {
+            Checkpoint::encode(self.name(), &self.words())
+        } else {
+            Checkpoint::encode(self.name(), &())
+        }
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        saved.decode(self.name())
+        if self.standalone {
+            let words: [u32; 16] = saved.decode(self.name())?;
+            self.candidates(words).map(|_| ())
+        } else {
+            saved.decode(self.name())
+        }
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
-        self.validate_checkpoint(saved)
+        self.validate_checkpoint(saved)?;
+        if self.standalone {
+            self.apply(saved.decode(self.name())?)?;
+        }
+        Ok(())
     }
 }
 impl AddressHigh {
@@ -97,10 +114,14 @@ impl AddressHigh {
 }
 pub struct RequestRouting {
     banks: Banks,
+    standalone: bool,
 }
 impl RequestRouting {
     pub fn new(banks: Banks) -> Self {
-        Self { banks }
+        Self { banks, standalone: false }
+    }
+    pub fn standalone(banks: Banks) -> Self {
+        Self { banks, standalone: true }
     }
     fn words(&self) -> [u32; 8] {
         std::array::from_fn(|i| {
@@ -154,15 +175,28 @@ impl Device for RequestRouting {
             .map_err(|e| format!("DMA routing checkpoint: {e}"))?;
         self.apply(words)
     }
-    // XDMAC channel pairs own the routing state seen through this view.
+    // The channel pairs own this state when present; otherwise the view owns it.
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Checkpoint::encode(self.name(), &())
+        if self.standalone {
+            Checkpoint::encode(self.name(), &self.words())
+        } else {
+            Checkpoint::encode(self.name(), &())
+        }
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        saved.decode(self.name())
+        if self.standalone {
+            let words: [u32; 8] = saved.decode(self.name())?;
+            self.candidates(words).map(|_| ())
+        } else {
+            saved.decode(self.name())
+        }
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
-        self.validate_checkpoint(saved)
+        self.validate_checkpoint(saved)?;
+        if self.standalone {
+            self.apply(saved.decode(self.name())?)?;
+        }
+        Ok(())
     }
 }
 impl RequestRouting {
@@ -229,5 +263,24 @@ mod tests {
         assert_eq!(route.next_deadline(0), None);
         assert!(host.events.is_empty());
         assert!(host.irqs.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod standalone_tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+    #[test]
+    fn high_view_shares_state_with_the_channel_routing_bank() {
+        let shared = banks();
+        let mut view = AddressHigh::standalone(shared.clone());
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 4, 0, 0);
+        view.write(&mut cx, 0xff90e74c, 4, 0x12340001);
+        assert_eq!(shared[0].lock().unwrap().high(1), 0x12340001);
+        shared[0].lock().unwrap().set_high(1, 0x43210002).unwrap();
+        assert_eq!(view.read(&mut cx, 0xff90e74c, 4), 0x43210002);
+        assert!(!cx.is_unmodeled());
     }
 }

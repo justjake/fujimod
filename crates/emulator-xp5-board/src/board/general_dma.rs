@@ -290,16 +290,24 @@ pub fn register_all(
         }
         let device: Box<dyn fujimod_emulator_devices::Device> = match w.kind.as_str() {
             "dma-address-high" if w.base == 0xff90e748 && w.size == 0x40 => {
-                Box::new(dma_registers::AddressHigh::new(banks.clone()))
+                if pairs.is_empty() {
+                    Box::new(dma_registers::AddressHigh::standalone(banks.clone()))
+                } else {
+                    Box::new(dma_registers::AddressHigh::new(banks.clone()))
+                }
             }
             "dma-request-routing" if w.base == 0xff90e500 && w.size == 0x20 => {
-                Box::new(dma_registers::RequestRouting::new(banks.clone()))
+                if pairs.is_empty() {
+                    Box::new(dma_registers::RequestRouting::standalone(banks.clone()))
+                } else {
+                    Box::new(dma_registers::RequestRouting::new(banks.clone()))
+                }
             }
             _ => return Err("invalid DMA register-view window".into()),
         };
         views.push(bus.register(w.base, w.size, device)?);
     }
-    if pairs.is_empty() && (!serials.is_empty() || !views.is_empty()) {
+    if pairs.is_empty() && !serials.is_empty() {
         return Err("serial DMA wiring requires the channel banks".into());
     }
     if !pairs.is_empty() && views.len() != 2 {
