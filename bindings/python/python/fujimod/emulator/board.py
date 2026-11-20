@@ -711,6 +711,14 @@ class Session:
             raise TypeError("XP5 key must have a name")
         self._native_board().xp5_key(at_ns, key, pressed)
 
+    def xp5_set_position(self, at_ns: int, dial: str, position: str) -> None:
+        """Queue a latched dial or switch position at an absolute guest nanosecond."""
+        if type(at_ns) is not int or not 0 <= at_ns < 1 << 64:
+            raise TypeError("XP5 position change needs an unsigned time")
+        if not isinstance(dial, str) or not dial or not isinstance(position, str) or not position:
+            raise TypeError("XP5 position change needs a dial name and a position name")
+        self._native_board().xp5_set_position(at_ns, dial, position)
+
     def set_adc_samples(self, node: str, samples: Sequence[int]) -> None:
         """Replace the ADC channels with unsigned 16-bit sample values."""
         if isinstance(samples, (str, bytes, bytearray)) or not isinstance(
