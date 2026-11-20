@@ -97,6 +97,11 @@ pub fn register_all(
         if window.base != 0xff948000 || window.size != 0x1000 {
             return Err("invalid imaging sensor window".into());
         }
+        // X-H2S assumption: no register-0 standby gate (`standby_gate = false`); see
+        // Sensor::set_no_standby_gate. Default keeps the X100VI behavior.
+        if window.options.get("standby_gate").and_then(toml::Value::as_bool) == Some(false) {
+            sensor.set_no_standby_gate(true);
+        }
         bus.register(
             window.base,
             window.size,

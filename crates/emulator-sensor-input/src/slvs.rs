@@ -451,6 +451,22 @@ mod tests {
         assert!(cx.refusal().is_none());
     }
     #[test]
+    fn no_standby_gate_option_arms_without_register_zero_write() {
+        // Sensor programmed (writes != 0) but register 0 never written (reset value 1 = standby).
+        for (option, armed) in [(false, false), (true, true)] {
+            let (sensor, mut receiver, mut host) = rig(false);
+            sensor.0.lock().unwrap().writes = 1;
+            sensor.set_no_standby_gate(option);
+            enable(&mut receiver, &mut host);
+            assert_eq!(receiver.next_deadline(0).is_some(), armed, "option {option}");
+        }
+        // The option does not stream an unprogrammed sensor.
+        let (sensor, mut receiver, mut host) = rig(false);
+        sensor.set_no_standby_gate(true);
+        enable(&mut receiver, &mut host);
+        assert_eq!(receiver.next_deadline(0), None);
+    }
+    #[test]
     fn standby_dma_high_address_irq_ack_and_cancel() {
         let (sensor, mut receiver, mut host) = rig(false);
         enable(&mut receiver, &mut host);
