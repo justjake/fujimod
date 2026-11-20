@@ -21,6 +21,14 @@ impl Clock {
         if let Some(product) = now.checked_mul(self.counter_hz) {
             return Ok(product / self.ticks_per_second);
         }
+        // floor((a * t + b) * h / t) = a * h + floor(b * h / t) for b < t.
+        let (whole, rest) = (now / self.ticks_per_second, now % self.ticks_per_second);
+        if let Some(count) = rest
+            .checked_mul(self.counter_hz)
+            .and_then(|part| whole.checked_mul(self.counter_hz)?.checked_add(part / self.ticks_per_second))
+        {
+            return Ok(count);
+        }
         u64::try_from(now as u128 * self.counter_hz as u128 / self.ticks_per_second as u128)
             .map_err(|_| "architectural counter overflow".into())
     }
@@ -28,6 +36,13 @@ impl Clock {
         self.validate()?;
         if let Some(product) = count.checked_mul(self.ticks_per_second) {
             return Ok(product.div_ceil(self.counter_hz));
+        }
+        // ceil((a * h + b) * t / h) = a * t + ceil(b * t / h) for b < h.
+        let (whole, rest) = (count / self.counter_hz, count % self.counter_hz);
+        if let Some(tick) = rest.checked_mul(self.ticks_per_second).and_then(|part| {
+            whole.checked_mul(self.ticks_per_second)?.checked_add(part.div_ceil(self.counter_hz))
+        }) {
+            return Ok(tick);
         }
         u64::try_from(
             (count as u128 * self.ticks_per_second as u128).div_ceil(self.counter_hz as u128),
@@ -101,6 +116,34 @@ impl Timer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// The 64-bit forms of the conversions equal the wide forms where the
+    /// plain product overflows.
+    #[test]
+    fn split_conversions_equal_the_wide_forms() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        for (hz, tps) in [
+            (24_000_000u64, 1_000_000_000u64),
+            (1_000_000_000, 24_000_000),
+            (u32::MAX as u64, 1_000_000_007),
+            (3, 10),
+            (62_500_000, u64::MAX / 3),
+        ] {
+            let clock = Clock { counter_hz: hz, ticks_per_second: tps };
+            for round in 0..4000 {
+                let value = next() >> (round % 40);
+                let wide = u64::try_from(value as u128 * hz as u128 / tps as u128).ok();
+                assert_eq!(clock.count(value).ok(), wide, "count {value} {hz} {tps}");
+                let wide = u64::try_from((value as u128 * tps as u128).div_ceil(hz as u128)).ok();
+                assert_eq!(clock.at_count(value).ok(), wide, "at_count {value} {hz} {tps}");
+            }
+        }
+    }
     #[test]
     fn compare_channels_share_fractional_clock_without_deadline_drift() {
         let clock = Clock {
