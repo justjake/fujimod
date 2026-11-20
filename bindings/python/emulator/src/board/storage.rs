@@ -78,7 +78,7 @@ impl CardMedium {
         max_bytes: usize,
     ) -> PyResult<Bound<'py, PyBytes>> {
         if !(1..=fat::MAX_BYTES).contains(&max_bytes) {
-            return Err(error("Card read bound must be 1..64 MiB".into()));
+            return Err(error("Card read bound must be 1..96 MiB".into()));
         }
         let bytes = fat::Reader::new(&self.0)
             .map_err(error)?
