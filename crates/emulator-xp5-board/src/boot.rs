@@ -617,6 +617,24 @@ pub fn assemble_devices(
         causes.push(control_source);
         graph.depend_on(device, causes)?;
     }
+    let usb = windows
+        .iter()
+        .find(|window| window.kind == "usb-device-controller")
+        .map(|controller| -> Result<_, String> {
+            let at = |kind: &str| {
+                windows
+                    .iter()
+                    .filter(|window| window.kind == kind)
+                    .map(|window| graph.at(window.base))
+                    .collect::<Result<Vec<_>, _>>()
+            };
+            Ok(crate::session::UsbWiring {
+                controller: graph.at(controller.base)?,
+                status: at("usb-connection-status")?.first().copied(),
+                serial: at("spi-controller")?,
+            })
+        })
+        .transpose()?;
     let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
         contacts,
@@ -626,6 +644,7 @@ pub fn assemble_devices(
             controls,
             gpio_devices,
             control_source,
+            usb,
         ),
         nodes,
     })
