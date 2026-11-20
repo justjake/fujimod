@@ -382,19 +382,47 @@
     },
     "focus_stick.up": {
       "label": "Focus stick up",
-      "icon": "up"
+      "icon": "up",
+      "text": "Focus stick up"
     },
     "focus_stick.down": {
       "label": "Focus stick down",
-      "icon": "down"
+      "icon": "down",
+      "text": "Focus stick down"
     },
     "focus_stick.left": {
       "label": "Focus stick left",
-      "icon": "left"
+      "icon": "left",
+      "text": "Focus stick left"
     },
     "focus_stick.right": {
       "label": "Focus stick right",
-      "icon": "right"
+      "icon": "right",
+      "text": "Focus stick right"
+    },
+    "dial_lock_release": {
+      "label": "Dial lock",
+      "text": "Dial lock"
+    },
+    "still_movie_mode_dial": {
+      "label": "Still / movie",
+      "text": "STILL/MOVIE"
+    },
+    "af_on_button": {
+      "label": "AF-ON",
+      "text": "AF-ON"
+    },
+    "ael_button": {
+      "label": "AE-L",
+      "text": "AE-L"
+    },
+    "disp_back_bluetooth_button": {
+      "label": "DISP / BACK",
+      "text": "DISP/BACK"
+    },
+    "lcd_tilt_lock_release": {
+      "label": "Screen tilt lock",
+      "text": "Screen tilt lock"
     }
   },
   "icons": {
