@@ -641,7 +641,8 @@ pub fn register_all(
             | "imaging-statistics"
             | "imaging-paf"
             | "imaging-resz"
-            | "imaging-rzl2" => continue,
+            | "imaging-rzl2"
+            | "imaging-filter-scaler" => continue,
             "clock-banks" => {
                 let specialized: Vec<u64> = windows
                     .iter()
