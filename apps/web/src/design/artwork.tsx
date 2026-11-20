@@ -17,13 +17,75 @@ export const modArtwork = (slug: string) => local(`recipe-editor/mod-icons/${slu
 /** A FILM ICONS pack icon by its slug. */
 export const filmArtwork = (slug: string) => local(`film-icons/a-${slug}.svg`);
 
+/** Where an artwork's ink sits on its canvas, as fractions of the canvas. */
+interface Ink {
+  aspect: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
+const inks = new Map<string, Promise<Ink>>();
+
+/** Measures an artwork's ink once per URL. */
+function measureInk(url: string): Promise<Ink> {
+  let ink = inks.get(url);
+  if (ink === undefined) {
+    ink = (async () => {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const w = image.naturalWidth * 4;
+      const h = image.naturalHeight * 4;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const context = canvas.getContext('2d');
+      if (context === null) throw new Error('no 2d canvas');
+      context.drawImage(image, 0, 0, w, h);
+      const alpha = context.getImageData(0, 0, w, h).data;
+      let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++)
+          if (alpha[(y * w + x) * 4 + 3] > 40) {
+            x0 = Math.min(x0, x);
+            x1 = Math.max(x1, x);
+            y0 = Math.min(y0, y);
+            y1 = Math.max(y1, y);
+          }
+      if (x1 < 0) return { aspect: w / h, width: 1, height: 1, centerX: 0.5, centerY: 0.5 };
+      return { aspect: w / h, width: (x1 - x0 + 1) / w, height: (y1 - y0 + 1) / h, centerX: (x0 + x1 + 1) / 2 / w, centerY: (y0 + y1 + 1) / 2 / h };
+    })();
+    inks.set(url, ink);
+  }
+  return ink;
+}
+
+/** Scales an artwork so its ink, not its canvas, fills the element's box. */
+async function fitInk(element: HTMLElement, url: string) {
+  const ink = await measureInk(url);
+  if (!element.isConnected) await new Promise(requestAnimationFrame);
+  const boxW = element.clientWidth;
+  const boxH = element.clientHeight;
+  const canvasW = Math.min(boxW, boxH * ink.aspect);
+  const canvasH = canvasW / ink.aspect;
+  const scale = Math.min(boxW / (ink.width * canvasW), boxH / (ink.height * canvasH));
+  element.style.transform = `scale(${scale}) translate(${(0.5 - ink.centerX) * canvasW}px, ${(0.5 - ink.centerY) * canvasH}px)`;
+}
+
 /** Artwork drawn as the Q tiles draw it: its ink in one color, counters cut
- * through to the surface beneath. Without a URL it draws `fallback`. */
-export function Artwork(props: { src: string | undefined; class?: string; size?: number; color: string; fallback?: JSX.Element }) {
+ * through to the surface beneath. Without a URL it draws `fallback`. With
+ * `fillInk`, the ink is scaled to fill the box, for artwork whose canvas has
+ * wide empty margins. */
+export function Artwork(props: { src: string | undefined; class?: string; size?: number; color: string; fallback?: JSX.Element; fillInk?: boolean }) {
   return (
     <Show when={props.src} fallback={props.fallback}>
       {(src) => (
         <span
+          ref={(element: HTMLElement) => {
+            if (props.fillInk && props.src !== undefined) void fitInk(element, props.src);
+          }}
           class={`block shrink-0 ${props.class ?? ''}`}
           style={{
             ...(props.size ? { width: `${props.size}px`, height: `${props.size}px` } : {}),

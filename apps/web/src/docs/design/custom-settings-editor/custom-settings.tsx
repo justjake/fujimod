@@ -281,12 +281,6 @@ export type Send = (action: Action) => void;
 
 /* ---- Rows -------------------------------------------------------------------- */
 
-/** An option icon's size. White balance icons carry wide empty margins, so
- * they are drawn at the row icon size; AUTO fills the whole canvas, so it keeps its full width. */
-function artClass(setting: string, size: string): string {
-  return setting === 'wb' ? 'h-[36px] w-[60px]' : size;
-}
-
 /** Words for row icons where the artwork is not published. */
 const ICON_WORDS: Record<string, string> = {
   [0x5f3]: 'Film',
@@ -347,7 +341,7 @@ function SettingRow(props: {
     props.setting.kind === 'choice'
       ? props.setting.choices.map((choice): ChoiceItem => {
           const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
-          return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class={artClass(props.setting.id, "h-[24px] w-[40px]")} color={ink} /> };
+          return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class="h-[24px] w-[40px]" fillInk={props.setting.id === 'wb'} color={ink} /> };
         })
       : [];
   return (
@@ -649,10 +643,11 @@ export function Editor(props: { state: EditorState; send?: Send }) {
             <Picker
               title={setting().name}
               options={setting().choices.map((choice) => {
+                const wb = setting().id === 'wb';
                 const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
                 return {
                   label: choice.name,
-                  art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class={artClass(setting().id, "h-[30px] w-[50px]")} color={ink} />,
+                  art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class="h-[30px] w-[50px]" fillInk={wb} color={ink} />,
                   more: setting().id === 'wb' ? () => send({ shiftFor: setting().choices.indexOf(choice) }) : undefined,
                 };
               })}
