@@ -101,7 +101,7 @@ impl ImageInput {
             || options
                 .command_controls
                 .iter()
-                .any(|v| ![0, 2, 0x1000000, 0x1030000].contains(v))
+                .any(|v| ![0, 2, 0x30000, 0x1000000, 0x1030000].contains(v))
         {
             return Err("image input timing/command options are invalid".into());
         }
