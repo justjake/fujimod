@@ -156,12 +156,12 @@ export function DesignFrame(props: { title: string; children: JSX.Element }) {
               onInput={(e) => setPxPerInch(Number(e.currentTarget.value))}
             />
           </label>
-          {/* A bank card, upright: 54.0 by 85.6 mm. Hold one against this outline. */}
+          {/* A credit card, upright: 54.0 by 85.6 mm. Hold one against this outline. */}
           <div
             class="flex items-center justify-center rounded-[8px] border-2 border-dashed border-white/60 text-[14px] text-white/70"
             style={{ width: `${(53.98 / 25.4) * pxPerInch()}px`, height: `${(85.6 / 25.4) * pxPerInch()}px` }}
           >
-            Bank card
+            Credit card
           </div>
         </Show>
       </div>
