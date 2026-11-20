@@ -127,6 +127,12 @@ impl Endpoint for LadderDriven {
         self.refresh();
         Ok(())
     }
+    fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
+        if self.registers.contains(&register) {
+            return Err("power-controller register is driven by the body controls".into());
+        }
+        Endpoint::set_input_bits(&mut self.inner, register, mask, value)
+    }
 }
 
 pub fn build(
