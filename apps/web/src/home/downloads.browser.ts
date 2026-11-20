@@ -28,13 +28,15 @@ try {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Network.enable');
     await cdp.send('Network.setBlockedURLs', { urls: ['wss://*', 'ws://*'] });
+    // Throttle only the camera's assets: the firmware download finishes first.
+    await launchFujimod(page, dat);
+    await page.locator('.launcher').waitFor({ state: 'detached' });
     await cdp.send('Network.emulateNetworkConditions', {
       offline: false,
       latency: 20,
       downloadThroughput: 400000,
       uploadThroughput: 1000000,
     });
-    await launchFujimod(page, dat);
     await page.waitForFunction(
       () => {
         const bar = document.querySelector<HTMLProgressElement>(

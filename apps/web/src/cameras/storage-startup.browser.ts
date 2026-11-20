@@ -65,7 +65,11 @@ for (const type of [chromium, webkit]) {
     await page.locator('#workspace').scrollIntoViewIfNeeded();
     const bounds = await page.locator('#viewer').boundingBox();
     const launcher = await page.locator('.launcher').boundingBox();
-    assert.ok(bounds && launcher && bounds.height <= launcher.height + 80);
+    const launcherMargins = await page.locator('.launcher').evaluate((element) => {
+      const style = getComputedStyle(element);
+      return parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+    });
+    assert.ok(bounds && launcher && bounds.height <= launcher.height + launcherMargins + 2);
     assert.equal(
       await page.locator('#workspace').evaluate((el) => getComputedStyle(el).borderTopWidth),
       '0px',
