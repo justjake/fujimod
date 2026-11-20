@@ -170,12 +170,11 @@ export default function Home() {
             <Show when={state.promptVisible}>
               <CameraLauncher
                 ready={state.savedCamerasRead && library.ready()}
-                library={library}
                 supported={state.cameras}
                 busy={state.cameraBusy}
                 message={state.storageMessage}
                 error={state.storageError}
-                run={(firmware, mod, fresh) => void runtime()?.runCamera(firmware, mod, fresh)}
+                launch={(firmware) => void runtime()?.launch(firmware)}
               />
             </Show>
           </EmulatorWorkspace>

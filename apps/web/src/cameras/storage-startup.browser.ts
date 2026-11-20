@@ -69,7 +69,14 @@ for (const type of [chromium, webkit]) {
       const style = getComputedStyle(element);
       return parseFloat(style.marginTop) + parseFloat(style.marginBottom);
     });
-    assert.ok(bounds && launcher && bounds.height <= launcher.height + launcherMargins + 2);
+    const minimum = await page
+      .locator('#viewer')
+      .evaluate((element) => parseFloat(getComputedStyle(element).minHeight) || 0);
+    assert.ok(
+      bounds &&
+        launcher &&
+        bounds.height <= Math.max(minimum, launcher.height + launcherMargins) + 2,
+    );
     assert.equal(
       await page.locator('#workspace').evaluate((el) => getComputedStyle(el).borderTopWidth),
       '0px',
@@ -159,7 +166,14 @@ for (const type of [chromium, webkit]) {
       const style = getComputedStyle(element);
       return parseFloat(style.marginTop) + parseFloat(style.marginBottom);
     });
-    assert.ok(desktop && desktopLauncher && desktop.height <= desktopLauncher.height + margins + 2);
+    const desktopMinimum = await page
+      .locator('#viewer')
+      .evaluate((element) => parseFloat(getComputedStyle(element).minHeight) || 0);
+    assert.ok(
+      desktop &&
+        desktopLauncher &&
+        desktop.height <= Math.max(desktopMinimum, desktopLauncher.height + margins) + 2,
+    );
     console.log(
       `${type.name()}: transient read recovered; persistent error shown; write atomic and unrepeated; idle viewer fits the launcher and scrolls`,
     );

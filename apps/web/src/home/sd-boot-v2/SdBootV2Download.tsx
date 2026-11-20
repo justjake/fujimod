@@ -55,6 +55,13 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
   const included = createMemo(
     () => recipes().filter((recipe) => !excluded().has(recipe.path)).length,
   );
+  const [recipeToggle, setRecipeToggle] = createSignal<HTMLInputElement>();
+  createEffect(
+    () => [recipeToggle(), included() > 0 && included() < recipes().length] as const,
+    ([input, mixed]) => {
+      if (input) input.indeterminate = mixed;
+    },
+  );
   const loaded = createMemo(() => {
     const map = new Map<string, SdBootV2Release>();
     for (const [id, value] of releases()) if (!(value instanceof Error)) map.set(id, value);
@@ -96,7 +103,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
     try {
       const zip = await buildCard(plan().files, {
         assetBase: release.assetBase,
-        progress: (done, total) => setProgress(`${done} of ${total} files`),
+        progress: (done, total) => setProgress(`${formatBytes(done)} of ${formatBytes(total)}`),
       });
       downloadBlob(zip, `fujimod-sd-card-${release.release}.zip`);
       reportDownload({ release: release.release, kind: 'sd-card', cameras: chosen().length });
@@ -152,14 +159,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
               <input
                 type="checkbox"
                 checked={included() === recipes().length}
-                ref={(input) =>
-                  createEffect(
-                    () => included() > 0 && included() < recipes().length,
-                    (mixed) => {
-                      input.indeterminate = mixed;
-                    },
-                  )
-                }
+                ref={setRecipeToggle}
                 onChange={(event) =>
                   setExcluded(
                     recipes().map((recipe) => recipe.path),

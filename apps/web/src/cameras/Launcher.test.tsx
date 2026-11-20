@@ -1,92 +1,56 @@
 import { render } from '@solidjs/web';
-import { flush } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vite-plus/test';
 import type { Firmware } from '../catalog';
 import type { CameraSupport } from '../home/state';
 import { CameraLauncher } from './Launcher';
-import type { FirmwareLibrary } from './firmware-library';
-import type { LibraryFirmware } from './store';
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
   dispose?.();
   document.body.replaceChildren();
 });
-function support(model: string, hash: string, mod: boolean, emu = true): CameraSupport {
+function support(id: string, model: string, mod: boolean): CameraSupport {
   return {
-    firmware: {
-      id: model === 'X70' ? 'x70-110' : model.toLowerCase(),
-      model,
-      version: '1.10',
-      sha256: hash,
-      bytes: 4,
-    } as Firmware,
+    firmware: { id, model, version: '1.10', sha256: id, bytes: 4 } as Firmware,
     mod,
-    emu,
+    emu: true,
   };
 }
-const entry: LibraryFirmware = {
-  sha256: 'x70',
-  firmwareId: 'x70-110',
-  name: 'X70 · 1.10',
-  fileName: 'FPUPDATE.DAT',
-  addedAt: 1,
-};
-function mount(get: FirmwareLibrary['get']) {
-  const run = vi.fn();
-  const library = { busy: () => false, get } as unknown as FirmwareLibrary;
+function mount(props: { busy?: boolean; message?: string; error?: boolean } = {}) {
+  const launch = vi.fn();
   const root = document.createElement('div');
   document.body.append(root);
   dispose = render(
     () => (
       <CameraLauncher
         ready
-        supported={[support('X-M1', 'xm1', false), support('X70', 'x70', true)]}
-        library={library}
-        busy={false}
-        message=""
-        error={false}
-        run={run}
+        supported={[support('xm1-150', 'X-M1', false), support('x70-110', 'X70', true)]}
+        busy={props.busy ?? false}
+        message={props.message ?? ''}
+        error={props.error ?? false}
+        launch={launch}
       />
     ),
     root,
   );
-  return { run, button: () => document.querySelector<HTMLButtonElement>('.launch-fujimod') };
+  return { launch, button: document.querySelector<HTMLButtonElement>('.launch-fujimod')! };
 }
 
-test('one button downloads the Fujimod camera firmware and starts it with Fujimod', async () => {
-  let progress: ((received: number) => void) | undefined;
-  let finish: (value: LibraryFirmware) => void = () => {};
-  const get = vi.fn((firmware: Firmware, report?: (received: number) => void) => {
-    progress = report;
-    return new Promise<LibraryFirmware>((resolve) => (finish = resolve));
-  });
-  const { run, button } = mount(get);
-  expect(button()?.textContent).toBe('Launch Fujimod');
-  button()!.click();
-  flush();
-  expect(get.mock.calls[0][0].model).toBe('X70');
-  progress!(2);
-  flush();
-  expect(document.querySelector('progress')?.value).toBe(2);
-  expect(document.querySelector('.launch-progress')?.textContent).toContain(
-    'Downloading X70 1.10 firmware',
-  );
-  finish(entry);
-  await Promise.resolve();
-  await Promise.resolve();
-  expect(run).toHaveBeenCalledWith(entry, true, false);
+test('one button launches the X70', () => {
+  const { launch, button } = mount();
+  expect(button.textContent).toBe('Launch Fujimod');
+  button.click();
+  expect(launch.mock.calls[0][0].model).toBe('X70');
 });
 
-test('a failed download shows its error and offers the button again', async () => {
-  const { run, button } = mount(() => Promise.reject(Error('Firmware download failed (404).')));
-  button()!.click();
-  await Promise.resolve();
-  await Promise.resolve();
-  flush();
+test('a failed launch shows its error and offers the button again', () => {
+  const { button } = mount({ message: 'Firmware download failed (404).', error: true });
   expect(document.querySelector('.launch-error')?.textContent).toBe(
     'Firmware download failed (404).',
   );
-  expect(button()?.disabled).toBe(false);
-  expect(run).not.toHaveBeenCalled();
+  expect(button.disabled).toBe(false);
+});
+
+test('the button waits while a camera is busy', () => {
+  expect(mount({ busy: true }).button.disabled).toBe(true);
 });

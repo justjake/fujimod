@@ -28,17 +28,19 @@ function label(url: string) {
   );
 }
 
-/** A non-download loading step: verification, patching, construction or boot. */
+/** A loading step: firmware or SD card download, verification, patching, construction or boot. */
 export function loadingStep(
-  id: 'verify' | 'patch' | 'build' | 'boot',
+  id: 'download' | 'verify' | 'patch' | 'card' | 'build' | 'boot',
   status: AssetProgress['status'],
   bytes?: number,
 ): AssetProgress {
   return {
     url: `step:${id}`,
     label: {
+      download: 'Camera firmware',
       verify: 'Verifying firmware',
       patch: 'Patching firmware',
+      card: 'Fujimod SD card',
       build: 'Building camera',
       boot: 'Booting camera',
     }[id],

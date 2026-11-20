@@ -159,12 +159,16 @@ export function startHome(
     const firmware = index?.firmwares.find((entry) => entry.sha256 === selected.sha256);
     if (!index || !firmware || !index.patches[selected.sha256])
       return { identities: Promise.resolve([]), load: async () => [] };
-    const camera = releaseCameras(
-      index.firmwares,
-      catalog.firmwares,
-      index.sd_card_files ?? [],
-    ).find((entry) => entry.id === sdBootV2Firmware(firmware.id));
+    const camera = sdBootV2Camera(firmware);
     return camera ? sdBootV2Media(index, camera) : patchMedia(index, firmware, file);
+  }
+  /** The release's SD boot v2 camera for a firmware, when its processor has SD boot v2. */
+  function sdBootV2Camera(firmware: { id: string }) {
+    return release
+      ? releaseCameras(release.firmwares, catalog.firmwares, release.sd_card_files ?? []).find(
+          (entry) => entry.id === sdBootV2Firmware(firmware.id),
+        )
+      : undefined;
   }
   /** The release's SD boot v2 SD card for one camera, as the downloaded SD card holds it. */
   function sdBootV2Media(index: LoadedRelease, camera: CardCamera): BootMedia {
@@ -178,6 +182,19 @@ export function startHome(
       if (problems.length) throw Error(problems[0]);
       return files;
     });
+    const step = (loaded: number, total: number) => ({
+      ...loadingStep('card', 'loading'),
+      loaded,
+      total,
+    });
+    // Start at once: the SD card downloads alongside the camera runtime.
+    const files = plan.then((planned) =>
+      cardFiles(planned, {
+        assetBase: index.assetBase,
+        progress: (received, total) => progress(state.message, undefined, [step(received, total)]),
+      }),
+    );
+    files.catch(() => {});
     return {
       identities: plan.then((files) =>
         Promise.all(
@@ -188,10 +205,10 @@ export function startHome(
         ),
       ),
       load: async () => {
-        progress(state.message, undefined, [loadingStep('patch', 'loading')]);
-        const files = await cardFiles(await plan, { assetBase: index.assetBase });
-        progress(state.message, undefined, [loadingStep('patch', 'complete')]);
-        return files.map(({ path, bytes }) => ({ path: `/${path}`, bytes }));
+        const loaded = await files;
+        const bytes = loaded.reduce((sum, file) => sum + file.bytes.length, 0);
+        progress(state.message, undefined, [loadingStep('card', 'complete', bytes)]);
+        return loaded.map(({ path, bytes }) => ({ path: `/${path}`, bytes }));
       },
     };
   }
@@ -342,15 +359,17 @@ export function startHome(
       if (camera && !restart) modEnabled = camera.modEnabled;
       const modSupported =
         'sdCardBoot' in device && !!device.sdCardBoot && !!release?.patches[entry.sha256];
-      // A FujiMod boot patches the firmware before the camera is built.
-      if (modSupported && modEnabled)
+      // A Fujimod boot downloads its SD card, or patches the firmware, before the camera is built.
+      if (modSupported && modEnabled) {
+        const media = loadingStep(sdBootV2Camera(entry) ? 'card' : 'patch', 'waiting');
         setState((s) => {
-          if (s.loadingAssets.some((asset) => asset.url === 'step:patch')) return;
+          if (s.loadingAssets.some((asset) => asset.url === media.url)) return;
           const rows = s.loadingAssets.map((asset) => ({ ...asset }));
           const build = rows.findIndex((asset) => asset.url === 'step:build');
-          rows.splice(build < 0 ? rows.length : build, 0, loadingStep('patch', 'waiting'));
+          rows.splice(build < 0 ? rows.length : build, 0, media);
           reconcile(rows, 'url')(s.loadingAssets);
         });
+      }
       progress('Loading emulator…');
       if (!replayScenario && !activeCamera) {
         activeCamera = await cameras.create(file, entry, modEnabled);
@@ -440,18 +459,41 @@ export function startHome(
         reconcile(records, 'id')(s.savedCameras);
       });
   }
-  /** Resume the latest matching camera, or create an independent camera from the selected DAT. */
-  async function runCamera(source: LibraryFirmware, enabled: boolean, fresh: boolean) {
+  /** Download the camera's official firmware, then resume or create its Fujimod camera. */
+  async function launch(firmware: Firmware) {
     manualSelection = true;
     if (state.cameraBusy) return;
     setState((s) => {
       s.cameraBusy = true;
     });
+    const current = ++generation;
+    const download = (loaded: number) => ({
+      ...loadingStep('download', loaded < firmware.bytes ? 'loading' : 'complete'),
+      loaded,
+      total: firmware.bytes,
+    });
     try {
-      const camera = fresh ? undefined : latestCamera(await cameras.list(), source.sha256, enabled);
-      const read = async () => new File([await cameras.firmware(source.sha256)], source.fileName);
-      await processFile(await read(), false, undefined, camera ? undefined : read, camera, enabled);
+      reset();
+      storageStatus('');
+      runningLayout();
+      setState((s) => {
+        s.loadingAssets = [download(0)];
+      });
+      progress('Downloading firmware…', undefined, [download(0)]);
+      const entry = await library.get(firmware, (received) =>
+        progress('Downloading firmware…', undefined, [download(received)]),
+      );
+      progress('Downloading firmware…', undefined, [download(firmware.bytes)]);
+      if (current !== generation) return;
+      const camera = latestCamera(await cameras.list(), entry.sha256, true);
+      const read = async () => new File([await cameras.firmware(entry.sha256)], entry.fileName);
+      const file = await read();
+      await processFile(file, false, await file.arrayBuffer(), camera ? undefined : read, camera, true);
     } catch (error) {
+      if (current === generation) {
+        ++generation;
+        reset();
+      }
       storageStatus(shownError(error), true);
     } finally {
       setState((s) => {
@@ -599,7 +641,7 @@ export function startHome(
     ...session,
     selectMod,
     saveLayout,
-    runCamera,
+    launch,
     closeCamera,
     selectFile: (file?: File) => {
       manualSelection = true;
