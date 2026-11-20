@@ -35,6 +35,7 @@ export function CameraKeys(props: { send: (key: CameraKey) => void }) {
     <button
       type="button"
       class="flex h-[52px] min-w-[52px] items-center justify-center rounded-[14px] bg-[#2c2c2e] px-[10px] text-[17px] font-semibold text-white active:bg-[#48484a]"
+      aria-label={key}
       onClick={() => props.send(key)}
     >
       {label}
@@ -103,9 +104,11 @@ export function States<T>(props: { title: string; states: { id: string; title: s
         {(entry) => (
           <section id={entry.id} class="mt-[28px]">
             <h3 class="mb-[10px] text-[17px] font-semibold">{entry.title}</h3>
-            <Fit>
-              <CameraScreen>{props.render(entry.state)}</CameraScreen>
-            </Fit>
+            <Lazy>
+              <Fit>
+                <CameraScreen>{props.render(entry.state)}</CameraScreen>
+              </Fit>
+            </Lazy>
           </section>
         )}
       </For>
@@ -118,6 +121,32 @@ export function CameraScreen(props: { style?: JSX.CSSProperties; children: JSX.E
   return (
     <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans text-white select-none" style={props.style}>
       {props.children}
+    </div>
+  );
+}
+
+/** Builds its children once they come near the viewport, and keeps them;
+ * until then holds a screen's space. */
+function Lazy(props: { children: JSX.Element }) {
+  const [shown, setShown] = createSignal(false);
+  let box: HTMLDivElement | undefined;
+  onSettled(() => {
+    if (!box) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setShown(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '400px 0px' },
+    );
+    observer.observe(box);
+    return () => observer.disconnect();
+  });
+  return (
+    <div ref={(element) => (box = element)} style={{ 'aspect-ratio': '3 / 2' }}>
+      <Show when={shown()}>{props.children}</Show>
     </div>
   );
 }

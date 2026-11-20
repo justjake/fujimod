@@ -12,7 +12,6 @@ export const SMALL = 'text-[21px] leading-none';
 export const GLASS: JSX.CSSProperties = {
   background: 'var(--m-chip)',
   'box-shadow': 'var(--m-chip-edge)',
-  'backdrop-filter': 'var(--m-blur)',
   color: '#fff',
 };
 
@@ -20,7 +19,6 @@ export const GLASS: JSX.CSSProperties = {
 export const COLUMN: JSX.CSSProperties = {
   background: 'var(--m-column)',
   'box-shadow': 'var(--m-column-edge)',
-  'backdrop-filter': 'var(--m-blur)',
   color: '#fff',
 };
 

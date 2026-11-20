@@ -1,5 +1,5 @@
 import PHOTO from '../../../engine/assets/default-scene.png';
-import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
+import { For, Show, createEffect, createSignal, onSettled, untrack } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { Choice, Dial, type ChoiceItem } from '../../../design/controls';
@@ -276,7 +276,9 @@ type Action =
   | { key: string }
   | { focus: number; side?: Side }
   | { set: string; value: number; focus: number; side?: Side }
-  | { shift: [number, number] };
+  | { shift: [number, number] }
+  /** A white balance chosen and its WB SHIFT opened, from the list. */
+  | { shiftFor: number };
 export type Send = (action: Action) => void;
 
 /* ---- Rows -------------------------------------------------------------------- */
@@ -336,6 +338,14 @@ function SettingRow(props: {
   const controlHeight = ROW - INSET.top - INSET.bottom;
   const pick = (value: number) => props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   const focus = () => props.send({ focus: props.index, side: props.side });
+  /* A row's choices never change: built once, so its strip keeps its cells. */
+  const items: ChoiceItem[] =
+    props.setting.kind === 'choice'
+      ? props.setting.choices.map((choice): ChoiceItem => {
+          const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
+          return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class="h-[24px] w-[40px]" color={ink} /> };
+        })
+      : [];
   return (
     <div
       class="relative flex items-stretch"
@@ -345,10 +355,7 @@ function SettingRow(props: {
         when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
         fallback={
           <Choice
-            items={(props.setting as ChoiceSetting).choices.map((choice): ChoiceItem => {
-              const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
-              return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class="h-[24px] w-[46px]" color={ink} /> };
-            })}
+            items={items}
             value={props.recipe[props.setting.id]}
             width={controlWidth()}
             height={controlHeight}
@@ -443,7 +450,7 @@ function Column(props: {
     () => props.focus,
     (focus) => {
       if (!scroller || props.active === false) return;
-      reveal(scroller, focus * ROW, (focus + 1) * ROW, ROW, opened);
+      reveal(scroller, focus * ROW, (focus + 1) * ROW, ROW, opened, { top: untrack(() => props.scroll), height: 480 });
       opened = true;
     },
   );
@@ -574,6 +581,8 @@ export interface EditorState {
   list?: number;
   /** Saved since the last change. */
   saved?: boolean;
+  /** WB SHIFT's R and B as it opened, for BACK. */
+  shiftFrom?: [number, number];
   /** The compare column that takes edits. */
   side: Side;
 }
@@ -596,7 +605,6 @@ export function Editor(props: { state: EditorState; send?: Send }) {
   const hints = () => {
     const list: { glyph: string; label: string; key: string }[] = [];
     if (compare()) list.push({ glyph: 'AEL', label: 'A/B', key: 'Tab' });
-    else if (focused().id === 'wb' && s().fly === 'none') list.push({ glyph: '▲', label: 'SHIFT', key: 's' });
     if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
     else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
     list.push({ glyph: 'OK', label: focused().kind === 'choice' && !compare() ? 'SELECT' : s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
@@ -653,7 +661,11 @@ export function Editor(props: { state: EditorState; send?: Send }) {
               title={setting().name}
               options={setting().choices.map((choice) => {
                 const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
-                return { label: choice.name, art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class="h-[30px] w-[50px]" color={ink} /> };
+                return {
+                  label: choice.name,
+                  art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class="h-[30px] w-[50px]" color={ink} />,
+                  more: setting().id === 'wb' ? () => send({ shiftFor: setting().choices.indexOf(choice) }) : undefined,
+                };
               })}
               at={s().list ?? 0}
               current={s().recipe[setting().id]}
@@ -725,50 +737,62 @@ function step(state: EditorState, delta: number): EditorState {
   }));
 }
 
-export function onKey(state: EditorState, key: string): EditorState {
-  const id = SETTINGS[state.focus].id;
+export function onKey(state: EditorState, input: string): EditorState {
   const setting = SETTINGS[state.focus];
+  const dial = input === 'DialLeft' ? -1 : input === 'DialRight' ? 1 : 0;
+  /* An option list, as stock's: UP, DOWN and the dial move; MENU/OK and LEFT
+     choose; RIGHT on a white balance opens its WB SHIFT; BACK closes. */
   if (state.list !== undefined && setting.kind === 'choice') {
-    const keyName = ({ ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'dial-', ArrowRight: 'dial+' } as Record<string, string>)[key];
+    const keyName = ({ ArrowUp: 'up', ArrowDown: 'down', DialLeft: 'dial-', DialRight: 'dial+' } as Record<string, string>)[input];
     const at = keyName === undefined ? undefined : pickerStep(state.list, setting.choices.length, keyName);
     if (at !== undefined) return { ...state, list: at };
     const chosen = state.list;
-    if (key === 'Enter') return { ...edit(state, (r) => ({ ...r, [setting.id]: chosen })), list: undefined };
-    if (key === 'Escape') return { ...state, list: undefined };
+    const picked = { ...edit(state, (r) => ({ ...r, [setting.id]: chosen })), list: undefined };
+    if (input === 'Enter' || input === 'ArrowLeft') return picked;
+    if (input === 'ArrowRight' && setting.id === 'wb') return openShift(picked);
+    if (input === 'Escape') return { ...state, list: undefined };
     return state;
   }
-  if (key === 'Enter' && setting.kind === 'choice' && state.fly === 'none' && !state.comparing)
-    return { ...state, list: state.recipe[setting.id] };
-  if (key === 'save' || (key === 'Enter' && state.fly === 'none')) return { ...state, saved: true };
+  /* WB SHIFT, as stock's grid: the arrows move the point, the dial does
+     nothing, MENU/OK keeps the shift, BACK puts back what it opened with. */
   if (state.fly === 'shift') {
     const clamp = (n: number) => Math.max(-9, Math.min(9, n));
-    if (key === 'ArrowLeft') return edit(state, (r) => ({ ...r, shiftR: clamp(r.shiftR - 1) }));
-    if (key === 'ArrowRight') return edit(state, (r) => ({ ...r, shiftR: clamp(r.shiftR + 1) }));
-    if (key === 'ArrowUp') return edit(state, (r) => ({ ...r, shiftB: clamp(r.shiftB + 1) }));
-    if (key === 'ArrowDown') return edit(state, (r) => ({ ...r, shiftB: clamp(r.shiftB - 1) }));
-    if (key === 'Enter' || key === 'Escape') return { ...state, fly: 'none' };
+    if (input === 'ArrowLeft') return edit(state, (r) => ({ ...r, shiftR: clamp(r.shiftR - 1) }));
+    if (input === 'ArrowRight') return edit(state, (r) => ({ ...r, shiftR: clamp(r.shiftR + 1) }));
+    if (input === 'ArrowUp') return edit(state, (r) => ({ ...r, shiftB: clamp(r.shiftB + 1) }));
+    if (input === 'ArrowDown') return edit(state, (r) => ({ ...r, shiftB: clamp(r.shiftB - 1) }));
+    if (input === 'Enter') return { ...state, fly: 'none', shiftFrom: undefined };
+    if (input === 'Escape') {
+      const [shiftR, shiftB] = state.shiftFrom ?? [state.recipe.shiftR, state.recipe.shiftB];
+      return { ...edit(state, (r) => ({ ...r, shiftR, shiftB })), fly: 'none', shiftFrom: undefined };
+    }
     return state;
   }
+  const key = dial < 0 ? 'ArrowLeft' : dial > 0 ? 'ArrowRight' : input;
+  if (key === 'Fn' && setting.id === 'wb' && state.fly === 'none') return openShift(state);
+  if (key === 'Enter' && setting.kind === 'choice' && !state.comparing) return { ...state, list: state.recipe[setting.id] };
+  if (key === 'save' || key === 'Enter') return { ...state, saved: true };
   if (key === 'ArrowUp' || key === 'ArrowDown') {
-    const focus = Math.max(
-      0,
-      Math.min(SETTINGS.length - 1, state.focus + (key === 'ArrowUp' ? -1 : 1)),
-    );
+    const focus = Math.max(0, Math.min(SETTINGS.length - 1, state.focus + (key === 'ArrowUp' ? -1 : 1)));
     return { ...state, focus, fly: 'none' };
   }
   if (key === 'ArrowLeft') return step(state, -1);
   if (key === 'ArrowRight') return step(state, 1);
-  if (key === 's' && id === 'wb' && !state.comparing) return { ...state, fly: 'shift' };
   if (key === 'a') return { ...state, snapshot: { ...state.recipe }, comparing: false, side: 'b' };
-  if (key === 'q' && state.snapshot)
-    return { ...state, comparing: !state.comparing, fly: 'none', side: 'b' };
+  if (key === 'q' && state.snapshot) return { ...state, comparing: !state.comparing, fly: 'none', side: 'b' };
   if (key === 'Tab' && state.comparing) return { ...state, side: state.side === 'a' ? 'b' : 'a' };
   if (key === 'Escape') return { ...state, fly: 'none', comparing: false };
   return state;
 }
 
+function openShift(state: EditorState): EditorState {
+  const r = state.comparing && state.side === 'a' && state.snapshot ? state.snapshot : state.recipe;
+  return { ...state, fly: 'shift', shiftFrom: [r.shiftR, r.shiftB] };
+}
+
 export function apply(state: EditorState, action: Action): EditorState {
   if ('key' in action) return onKey(state, action.key);
+  if ('shiftFor' in action) return openShift({ ...edit(state, (r) => ({ ...r, wb: action.shiftFor })), list: undefined });
   if ('shift' in action)
     return edit(state, (r) => ({ ...r, shiftR: action.shift[0], shiftB: action.shift[1] }));
   const moved = {
@@ -826,7 +850,7 @@ export const SETTINGS_STATES: { id: string; title: string; state: EditorState }[
   { id: 'film-list', title: 'FILM SIMULATION list, opened with OK', state: { ...INITIAL, focus: 0, list: 3 } },
   { id: 'wb-list', title: 'WHITE BALANCE list', state: { ...INITIAL, focus: 1, list: 2 } },
   { id: 'grain-size', title: 'GRAIN SIZE under the grain icon', state: { ...INITIAL, focus: 13, recipe: EDITED } },
-  { id: 'wb-shift', title: 'WB SHIFT', state: { ...INITIAL, focus: 1, fly: 'shift' } },
+  { id: 'wb-shift', title: 'WB SHIFT, opened with RIGHT from the WHITE BALANCE list', state: { ...INITIAL, focus: 1, fly: 'shift', shiftFrom: [0, 0] } },
   {
     id: 'compare-b',
     title: 'Compare, editing B',

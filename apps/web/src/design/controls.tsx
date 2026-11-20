@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { ACCENT, SELECTED, SMALL, TRACK, WELL } from './materials';
@@ -171,7 +171,6 @@ export function Choice(props: {
     const i = Math.floor(p);
     return c[i][key] + (c[i + 1][key] - c[i][key]) * (p - i);
   };
-  let offsetNow = 0;
   const dial = useDialGesture({
     count: () => props.items.length,
     index: () => props.value,
@@ -180,7 +179,7 @@ export function Choice(props: {
     onFocus: () => props.onFocus?.(),
     /* A tap chooses the cell under the finger. */
     tap: (x, box) => {
-      const local = (x - box.left) * (props.width / box.width) + offsetNow;
+      const local = (x - box.left) * (props.width / box.width) + offset();
       const c = cells();
       if (c.length === 0) return;
       let best = 0;
@@ -191,7 +190,8 @@ export function Choice(props: {
     },
   });
   /* The chosen cell always sits under the fixed plate in the middle. */
-  const offset = () => (offsetNow = at(dial.shown(), 'center') - props.width / 2);
+  const offset = createMemo(() => at(dial.shown(), 'center') - props.width / 2);
+  const plate = createMemo(() => at(dial.shown(), 'width'));
   const ends = (): [boolean, boolean] => {
     const c = cells();
     const o = offset();
@@ -216,20 +216,21 @@ export function Choice(props: {
         {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
         <span
           class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
-          style={{ width: `${at(dial.shown(), 'width')}px`, ...SELECTED, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
+          style={{ width: `${plate()}px`, ...SELECTED, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
         />
+        <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
         <div
           ref={(element) => (track = element)}
-          class="absolute inset-y-0 left-0 flex items-stretch gap-[4px] py-[5px]"
-          style={{ transform: `translateX(${-offset()}px)`, transition: motion() }}
+          class="absolute inset-y-0 left-0 flex items-stretch gap-[2px] py-[5px]"
+          style={{ transform: `translateX(${-offset()}px)`, transition: motion(), 'will-change': 'transform' }}
         >
           <For each={[...props.items]}>
             {(item, i) => {
               const distance = () => Math.abs(i() - dial.shown());
-              const ink = () => `rgb(255 255 255 / ${Math.max(0.35, 1 - distance() * 0.3)})`;
+              const ink = () => `rgb(255 255 255 / ${distance() < 0.5 ? 1 : 0.7})`;
               return (
                 <span
-                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[12px]' : 'w-[56px]'}`}
+                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[7px]' : 'w-[46px]'}`}
                   style={{ color: ink() }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}
@@ -238,10 +239,11 @@ export function Choice(props: {
             }}
           </For>
         </div>
+        </div>
         <For each={[0, 1] as const}>
           {(side) => (
             <Show when={ends()[side]}>
-              <span class="pointer-events-none absolute inset-y-0 flex items-center px-[3px] text-white/80" style={{ [side ? 'right' : 'left']: '0', background: `linear-gradient(to ${side ? 'left' : 'right'}, rgb(0 0 0 / 0.55), transparent)` }}>
+              <span class="pointer-events-none absolute inset-y-0 flex items-center px-[3px] text-white/80" style={{ [side ? 'right' : 'left']: '0' }}>
                 <Chevron dir={side ? 'right' : 'left'} size={14} />
               </span>
             </Show>
@@ -323,7 +325,7 @@ export function Dial(props: {
           its bottom edge, labels over the major ticks, the mark at the center. */}
       <div class="absolute inset-x-0 bottom-0" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge)' }}>
         <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
-          <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out' }}>
+          <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out', 'will-change': 'transform' }}>
             <For each={Array.from({ length: count() }, (_, i) => i)}>
               {(i) => {
                 const major = () => (i - Math.round(zero())) % MAJOR === 0;

@@ -28,11 +28,14 @@ export function Scroller(props: {
 
 /** Scrolls `scroller` the least that shows `top` to `bottom` with `margin`
  * to spare: smoothly once the screen is showing, at once when it opens. */
-export function reveal(scroller: HTMLElement, top: number, bottom: number, margin: number, smooth: boolean) {
+/** `view` is the scroll position and height when the caller knows them, so
+ * moving the focus reads no layout. */
+export function reveal(scroller: HTMLElement, top: number, bottom: number, margin: number, smooth: boolean, view?: { top: number; height: number }) {
   const behavior = smooth ? 'smooth' : 'auto';
-  if (top < scroller.scrollTop + margin / 2) scroller.scrollTo({ top: top - margin, behavior });
-  else if (bottom > scroller.scrollTop + scroller.clientHeight - margin / 2)
-    scroller.scrollTo({ top: bottom - scroller.clientHeight + margin, behavior });
+  const at = view?.top ?? scroller.scrollTop;
+  const height = view?.height ?? scroller.clientHeight;
+  if (top < at + margin / 2) scroller.scrollTo({ top: top - margin, behavior });
+  else if (bottom > at + height - margin / 2) scroller.scrollTo({ top: bottom - height + margin, behavior });
 }
 
 /** A titled group of rows, divided from the group above. */

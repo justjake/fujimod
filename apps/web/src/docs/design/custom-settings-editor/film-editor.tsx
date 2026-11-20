@@ -1150,7 +1150,7 @@ function Keyboard(props: { s: State; t: Typing; update: (s: State) => void }) {
           {t().text.slice(t().cursor)}
         </span>
       </div>
-      <div class="relative h-[330px] shrink-0" style={{ background: 'var(--m-tray)', 'backdrop-filter': 'var(--m-blur)' }}>
+      <div class="relative h-[330px] shrink-0" style={{ background: 'var(--m-tray)' }}>
         <For each={caps()}>
           {(cap, i) => {
             const special = cap.kind !== 'char' && cap.kind !== 'space';

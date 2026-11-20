@@ -32,6 +32,7 @@ import {
 
 const SPRING = '460ms cubic-bezier(0.22, 1, 0.36, 1)';
 const FILM_ROW = 0;
+const WB_ROW = 1;
 
 /** The film editor's starting point for each stock film the custom setting can name. */
 const FILM_BASE: Record<string, number> = {
@@ -48,9 +49,10 @@ const SETTINGS_KEYS: Partial<Record<CameraKey, string>> = {
   down: 'ArrowDown',
   left: 'ArrowLeft',
   right: 'ArrowRight',
-  'dial-': 'ArrowLeft',
-  'dial+': 'ArrowRight',
+  'dial-': 'DialLeft',
+  'dial+': 'DialRight',
   ok: 'Enter',
+  fn: 'Fn',
   back: 'Escape',
   q: 'q',
 };
@@ -97,6 +99,11 @@ function App() {
             <Show when={settings().focus === FILM_ROW}>
               <div class="absolute top-[10px] right-[10px]">
                 <KeyHint glyph="Fn" label="EDIT FILM" tap={openFilm} />
+              </div>
+            </Show>
+            <Show when={settings().focus === WB_ROW && settings().fly === 'none' && settings().list === undefined}>
+              <div class="absolute top-[10px] right-[10px]">
+                <KeyHint glyph="Fn" label="WB SHIFT" tap={() => setSettings(onKey(settings(), 'Fn'))} />
               </div>
             </Show>
           </div>

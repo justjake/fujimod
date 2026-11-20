@@ -14,7 +14,6 @@ const LOOKS = {
   /* Drawn from its two dials: glassVars. */
   glass: '',
   contrast: `
-    --m-blur: none;
     --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
     --m-rail: #000; --m-panel: #000;
     --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
@@ -29,7 +28,6 @@ const LOOKS = {
      top edge and a dark bottom edge, engraved dividers, recessed wells for
      scales, and focus as a brighter raised plate with a fine light rim. */
   fujimod: `
-    --m-blur: none;
     --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
     --m-rail: linear-gradient(90deg, #2e2e2e, #232323); --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
@@ -55,7 +53,6 @@ function glassVars(opacity: number, contrast: number): string {
   const fill = (a: number) => mix(a, Math.min(0.97, a + 0.3), opacity);
   const edge = (a: number) => mix(a, Math.min(1, a * 2.2), contrast);
   return `
-    --m-blur: blur(${mix(12, 20, opacity)}px) saturate(1.25);
     --m-column: rgb(${mix(22, 12, opacity)} ${mix(22, 12, opacity)} ${mix(24, 14, opacity)} / ${fill(0.5)});
     --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
     --m-rail: rgb(16 16 18 / ${fill(0.72)}); --m-panel: rgb(26 26 28 / ${fill(0.84)});

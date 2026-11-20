@@ -2,12 +2,15 @@ import { For, Show, createEffect } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { reveal } from './column';
+import { Chevron } from './controls';
 import { ACCENT, GLASS, SELECTED, SMALL } from './materials';
 
 /** One choice in a picker: its name, and artwork drawn in the given ink. */
 export interface PickerOption {
   label: string;
   art?: (ink: string) => JSX.Element;
+  /** A screen past this choice, reached with RIGHT or a tap on its ›. */
+  more?: () => void;
 }
 
 /** A sheet over the picture choosing one of many: a list of names (with
@@ -67,6 +70,19 @@ export function Picker(props: {
                   <span class="absolute top-[3px] right-[3px] size-[8px] rounded-full" style={{ background: ACCENT }} />
                 ) : (
                   <span>✓</span>
+                )}
+              </Show>
+              <Show when={option.more}>
+                {(more) => (
+                  <span
+                    class="-mr-[6px] flex h-full items-center px-[6px]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      more()();
+                    }}
+                  >
+                    <Chevron dir="right" size={16} />
+                  </span>
                 )}
               </Show>
             </button>
