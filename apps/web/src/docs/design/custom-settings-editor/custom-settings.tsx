@@ -3,10 +3,10 @@ import { For, Show, createEffect, createSignal, onSettled, untrack } from 'solid
 import type { JSX } from '@solidjs/web';
 
 import { Choice, Dial, type ChoiceItem } from '../../../design/controls';
-import { COLUMN, SMALL, TRACK } from '../../../design/materials';
+import { SMALL } from '../../../design/materials';
 import { Artwork, Wordmark, modArtwork, stockArtwork } from '../../../design/artwork';
 import { Button, Scroller, reveal } from '../../../design/column';
-import { PickerList, pickerStep } from '../../../design/picker';
+import { FlyOut, PickerList, flyOutListHeight, pickerStep } from '../../../design/picker';
 import { Card, Fit, KeyHint } from '../../../design/screen';
 import '../../../design/design.css';
 
@@ -483,61 +483,14 @@ function Column(props: {
 
 /* ---- Fly-outs ---------------------------------------------------------------- */
 
-/** The focused row continued past the column, in the column's material: a
- * band level with the row, its card the row card's height, naming the setting
- * and its value; the body hangs below the band, or rises above it when it
- * only fits there, and shrinks to the roomier side when it fits on neither. */
-function RowExtension(props: {
-  top: number;
-  left: number;
-  width: number;
-  title: string;
-  value?: string;
-  bodyHeight: number;
-  children: JSX.Element;
-  onClick?: () => void;
-}) {
-  const MARGIN = 8;
-  const roomBelow = () => 480 - MARGIN - props.top - ROW;
-  const roomAbove = () => props.top - MARGIN;
-  const below = () => roomBelow() >= props.bodyHeight || (roomAbove() < props.bodyHeight && roomBelow() >= roomAbove());
-  const body = () => Math.min(props.bodyHeight, below() ? roomBelow() : roomAbove());
-  return (
-    <div
-      class={`absolute flex overflow-hidden ${below() ? 'flex-col' : 'flex-col-reverse'}`}
-      style={{
-        ...COLUMN,
-        left: `${props.left}px`,
-        width: `${props.width}px`,
-        top: `${below() ? props.top : props.top - body()}px`,
-        height: `${ROW + body()}px`,
-        'border-radius': '0 16px 16px 0',
-      }}
-    >
-      <div
-        class="flex shrink-0 items-center justify-between px-[16px]"
-        style={{ height: `${ROW}px`, ...(below() ? {} : { 'box-shadow': 'var(--m-divider)' }) }}
-        onClick={() => props.onClick?.()}
-      >
-        <span class={`truncate font-semibold ${SMALL}`}>{props.title}</span>
-        <span class={`tabular-nums ${SMALL}`}>{props.value}</span>
-      </div>
-      <div
-        class="flex min-h-0 grow flex-col px-[6px]"
-        style={{ height: `${body()}px`, ...(below() ? { 'box-shadow': 'var(--m-divider)', 'padding-top': '6px', 'padding-bottom': '6px' } : { 'padding-top': '6px' }) }}
-      >
-        {props.children}
-      </div>
-    </div>
-  );
-}
-
 /** WB SHIFT's map, as the camera draws it: 19 by 19 colored dots (green to
  * the left, red to the right, blue at the top, yellow at the bottom, white in
  * the middle), white center axes, and a hollow white square at R and B. */
+const SHIFT_GRID = 190;
+
 function ShiftGrid(props: { r: number; b: number; send: Send }) {
-  const PITCH = 12;
-  const size = PITCH * 19;
+  const PITCH = SHIFT_GRID / 19;
+  const size = SHIFT_GRID;
   const center = (v: number) => (v + 9) * PITCH + PITCH / 2;
   const mix = (a: number[], b: number[], t: number) => a.map((c, i) => Math.round(c + (b[i] - c) * t));
   const dot = (r: number, b: number) => {
@@ -564,7 +517,7 @@ function ShiftGrid(props: { r: number; b: number; send: Send }) {
       </For>
       <line x1={size / 2} x2={size / 2} y1={0} y2={size} stroke="rgb(255 255 255 / 0.85)" stroke-width={1.5} />
       <line y1={size / 2} y2={size / 2} x1={0} x2={size} stroke="rgb(255 255 255 / 0.85)" stroke-width={1.5} />
-      <rect x={center(props.r) - 6} y={center(-props.b) - 6} width={12} height={12} fill="none" stroke="#fff" stroke-width={2} />
+      <rect x={center(props.r) - PITCH / 2} y={center(-props.b) - PITCH / 2} width={PITCH} height={PITCH} fill="none" stroke="#fff" stroke-width={2} />
     </svg>
   );
 }
@@ -663,7 +616,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
         <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} raw={s().mode === 'raw'} send={send} />
         <Show when={s().list !== undefined && focused().kind === 'choice' ? (focused() as ChoiceSetting) : undefined}>
           {(setting) => (
-            <RowExtension top={rowTop()} left={WIDTH} width={720 - WIDTH - 8} title={setting().name} value={valueName(setting(), s().recipe)} bodyHeight={setting().choices.length * 44 + 12} onClick={() => send({ key: 'Escape' })}>
+            <FlyOut left={WIDTH} rowTop={rowTop()} rowHeight={ROW} height={flyOutListHeight(setting().choices.length)}>
             <PickerList
               options={setting().choices.map((choice) => {
                 const wb = setting().id === 'wb';
@@ -678,7 +631,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
               current={s().recipe[setting().id]}
               choose={(value) => send({ set: setting().id, value, focus: s().focus })}
             />
-            </RowExtension>
+            </FlyOut>
           )}
         </Show>
         <Show when={s().fly === 'none' && s().list === undefined}>
@@ -698,19 +651,14 @@ export function Editor(props: { state: EditorState; send?: Send }) {
           </div>
         </Show>
         <Show when={s().fly === 'shift'}>
-          <RowExtension
-            top={rowTop()}
-            left={WIDTH}
-            width={270}
-            title="WB SHIFT"
-            value={`R${fmt(s().recipe.shiftR)} B${fmt(s().recipe.shiftB)}`}
-            bodyHeight={274}
-            onClick={() => send({ key: 'Escape' })}
-          >
-            <div class="flex h-full items-center justify-center">
+          <FlyOut left={WIDTH} rowTop={rowTop()} rowHeight={ROW} height={SHIFT_GRID + 46}>
+            <div class="flex flex-col items-center gap-[6px] px-[10px] pt-[8px]">
               <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} send={send} />
+              <span class="text-[17px] leading-none font-medium tabular-nums">
+                R {fmt(s().recipe.shiftR)}&ensp;B {fmt(s().recipe.shiftB)}
+              </span>
             </div>
-          </RowExtension>
+          </FlyOut>
         </Show>
       </Show>
 

@@ -89,14 +89,12 @@ function App() {
           <div
             class="absolute inset-0"
             style={{
-              transform: open() ? 'translateX(48px)' : 'none',
-              opacity: open() ? 0 : 1,
-              transition: `transform ${SPRING}, opacity ${open() ? '220ms' : '320ms 140ms'} ease-out, visibility 0s linear ${open() ? '460ms' : '0ms'}`,
+              transition: `visibility 0s linear ${open() ? '460ms' : '0ms'}`,
               visibility: open() ? 'hidden' : 'visible',
             }}
           >
             <SettingsEditor state={settings()} send={(action) => setSettings(apply(settings(), action))} />
-            <Show when={settings().focus === FILM_ROW}>
+            <Show when={settings().focus === FILM_ROW && settings().list === undefined}>
               <div class="absolute top-[10px] right-[10px]">
                 <KeyHint glyph="Fn" label="EDIT FILM" tap={openFilm} />
               </div>

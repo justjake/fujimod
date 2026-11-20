@@ -70,21 +70,26 @@ export function PickerList(props: {
               class={
                 props.columns
                   ? 'relative flex aspect-square items-center justify-center rounded-[10px]'
-                  : `flex h-[44px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-left ${SMALL}`
+                  : `flex h-[44px] w-full items-center gap-[10px] rounded-[10px] pr-[12px] pl-[6px] text-left whitespace-nowrap ${SMALL}`
               }
-              style={props.at === i() ? { ...SELECTED, color: '#fff' } : { color: '#fff' }}
+              style={{
+                color: '#fff',
+                ...(props.at === i() ? SELECTED : {}),
+                ...(props.columns || i() === 0 || props.at === i() || props.at === i() - 1 ? {} : { 'box-shadow': 'inset 0 1px 0 var(--m-separator)', 'border-radius': '0' }),
+              }}
               onClick={() => props.choose(i())}
             >
+              <Show when={!props.columns}>
+                <span class="w-[20px] shrink-0 text-center" style={{ color: 'var(--m-check)' }}>
+                  {props.current === i() ? '✓' : ''}
+                </span>
+              </Show>
               {option.art?.(ink(i()))}
               <Show when={!props.columns}>
-                <span class="grow truncate">{option.label}</span>
+                <span class="grow">{option.label}</span>
               </Show>
-              <Show when={props.current === i()}>
-                {props.columns ? (
-                  <span class="absolute top-[3px] right-[3px] size-[8px] rounded-full" style={{ background: ACCENT }} />
-                ) : (
-                  <span>✓</span>
-                )}
+              <Show when={props.columns && props.current === i()}>
+                <span class="absolute top-[3px] right-[3px] size-[8px] rounded-full" style={{ background: ACCENT }} />
               </Show>
               <Show when={option.more}>
                 {(more) => (
@@ -105,6 +110,37 @@ export function PickerList(props: {
       </div>
   );
 }
+
+/** What comes out of a row: a panel flush against the column, as wide as its
+ * content, centered on the row it comes from and kept on screen, in the
+ * look's fly-out material. `height` is the content's height; content taller
+ * than the screen scrolls. */
+export function FlyOut(props: { left: number; rowTop: number; rowHeight: number; height: number; children: JSX.Element; screenHeight?: number }) {
+  const MARGIN = 8;
+  const screen = () => props.screenHeight ?? 480;
+  const height = () => Math.min(props.height, screen() - 2 * MARGIN);
+  const top = () => Math.max(MARGIN, Math.min(screen() - MARGIN - height(), props.rowTop + props.rowHeight / 2 - height() / 2));
+  return (
+    <div
+      class="absolute flex w-max min-w-[220px] flex-col overflow-hidden p-[6px]"
+      style={{
+        left: `${props.left}px`,
+        top: `${top()}px`,
+        height: `${height()}px`,
+        'max-width': `${720 - props.left - MARGIN}px`,
+        background: 'var(--m-popup)',
+        'box-shadow': 'var(--m-popup-edge)',
+        'border-radius': '0 16px 16px 0',
+        color: '#fff',
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+/** A fly-out list's height for `count` rows. */
+export const flyOutListHeight = (count: number) => count * 44 + 12;
 
 /** The cursor after a key in a picker of `count` options; undefined for keys a picker does not take. */
 export function pickerStep(at: number, count: number, key: string, columns = 1): number | undefined {

@@ -15,6 +15,7 @@ const LOOKS = {
   glass: '',
   contrast: `
     --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
+    --m-popup: #000; --m-popup-edge: inset 0 0 0 2px #fff; --m-separator: rgb(255 255 255 / 0.4); --m-check: #fff;
     --m-panel: #000;
     --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
     --m-track: rgb(255 255 255 / 0.1); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
@@ -28,6 +29,7 @@ const LOOKS = {
      top edge and a dark bottom edge, engraved dividers, recessed wells for
      scales, and focus as a brighter raised plate with a fine light rim. */
   fujimod: `
+    --m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-separator: #323235; --m-check: #2a7fff;
     --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
     --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
@@ -60,6 +62,8 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
   return `
     --m-column: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)});
     --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
+    --m-popup: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)}); --m-popup-edge: inset 0 0 0 1px rgb(255 255 255 / ${edge(0.16)});
+    --m-separator: rgb(255 255 255 / ${edge(0.12)}); --m-check: #fff;
     --m-panel: rgb(${gray(26, 2)} / ${fill(0.84)});
     --m-chip: rgb(${gray(20, 2)} / ${fill(0.52)});
     --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
