@@ -579,6 +579,7 @@ pub fn rifp_run(
     let out = rifp_lines(cx, &word, raw, Some(out_pitch), |cx, y, line| {
         cx.ram_write(output + (y * out_pitch) as u64, line)
     })?;
+    capture_run(cx, &word, output, out_pitch, out)?;
     Ok(YcPicture {
         address: output,
         pitch: out_pitch as u64,
@@ -588,9 +589,65 @@ pub fn rifp_run(
     })
 }
 
+/// Observation of the image processor's input and output (`XT5_RIFP_CAPTURE=DIR`): each RIFP
+/// still run with an output picture writes `rifp-N.json` (the run's geometry, mode word and
+/// colour path words), `rifp-N-input.bin` (the input buffer as the run read it from DRAM,
+/// input pitch) and `rifp-N-output.bin` (the output picture read back from DRAM, output
+/// pitch; packed 4:2:2 for a develop run) into the directory. `N` counts runs from 0.
+fn capture_run(
+    cx: &mut Cx<'_>,
+    word: &impl Fn(u64) -> u32,
+    output: u64,
+    out_pitch: usize,
+    out: (usize, usize),
+) -> Result<(), String> {
+    static RUNS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let Some(directory) = std::env::var_os("XT5_RIFP_CAPTURE").filter(|path| !path.is_empty())
+    else {
+        return Ok(());
+    };
+    let directory = std::path::PathBuf::from(directory);
+    let run = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let input = u64::from(word(0x0c)) | (u64::from(word(0x10) & 7) << 32);
+    let pitch = word(0x1c) as usize;
+    let (width, lines) = pixels_lines(word(0x20));
+    let write = |name: String, bytes: &[u8]| {
+        std::fs::create_dir_all(&directory)
+            .and_then(|()| std::fs::write(directory.join(&name), bytes))
+            .map_err(|e| format!("XT5_RIFP_CAPTURE {name}: {e}"))
+    };
+    if lines != 0 && pitch != 0 {
+        write(format!("rifp-{run}-input.bin"), &cx.ram_bytes(input, pitch * lines)?)?;
+    }
+    if out.1 != 0 && out_pitch != 0 {
+        write(format!("rifp-{run}-output.bin"), &cx.ram_bytes(output, out_pitch * out.1)?)?;
+    }
+    let colour: Vec<String> = (0x4000u64..0xa000)
+        .step_by(4)
+        .filter(|offset| word(*offset) != 0)
+        .map(|offset| format!("\"{:#x}\":\"{:#x}\"", 0xffd02000 + offset, word(offset)))
+        .collect();
+    let json = format!(
+        "{{\"run\":{run},\"ticks\":{},\"mode\":\"{:#x}\",\"input\":{{\"address\":\"{input:#x}\",\"pitch\":{pitch},\
+         \"width\":{width},\"lines\":{lines}}},\"output\":{{\"address\":\"{output:#x}\",\"pitch\":{out_pitch},\
+         \"width\":{},\"lines\":{}}},\"words\":{{{}}}}}\n",
+        cx.now(),
+        word(0x08),
+        out.0,
+        out.1,
+        colour.join(",")
+    );
+    write(format!("rifp-{run}.json"), json.as_bytes())
+}
+
 /// Mode word (+0x08) bit of a RIFP run that writes RAW samples instead of developing them (see
 /// the module notes).
 pub const RIFP_MODE_RAW_OUTPUT: u32 = 1 << 2;
+/// Mode word (+0x08) bits 18..16 of a RIFP run whose input is RAW samples: every observed RAW
+/// run has 2 there (0x11220000, 0x11220004, 0x11221000, 0x10220010) and the packed 4:2:2 copy
+/// has 0 (0x10002002). The setter 0x2c52590 builds the word from eleven fields: bits 1..0,
+/// 2 (RAW output), 4 (inline to RESZ), 8, 13..12, 14, 18..16, 21..19, 24 (output DMA), 28.
+pub const RIFP_MODE_INPUT_RAW: u32 = 2;
 
 /// One RIFP RAW-to-RAW run (see the module notes): when the mode sets
 /// [`RIFP_MODE_RAW_OUTPUT`], the run has an output address and its input is inside `raw`, copy
@@ -723,11 +780,31 @@ fn rifp_lines(
     let (input, pitch) = (address(0x0c, 0x10), word(0x1c) as usize);
     let output = address(0x40, 0x44);
     let ((width, lines), origin, crop, out) = rifp_window(word);
-    let develop = raw.filter(|r| {
-        r.pitch as usize == pitch
-            && input >= r.address
-            && input < r.address + r.pitch * u64::from(r.lines)
-    });
+    let develop = raw
+        .filter(|r| {
+            r.pitch as usize == pitch
+                && input >= r.address
+                && input < r.address + r.pitch * u64::from(r.lines)
+        })
+        // A RAW the still channel did not write (in-camera RAW conversion: the RAF payload,
+        // read from the card and copied by CopyCropRaw): the mode word says RAW input.
+        .or_else(|| {
+            (word(0x08) >> 16 & 7 == RIFP_MODE_INPUT_RAW && pitch >= 2 * width && width != 0).then(|| {
+                StillRaw {
+                    address: input,
+                    pitch: pitch as u64,
+                    width: width as u32,
+                    lines: lines as u32,
+                    packed12: false,
+                    // The RAF payload starts where the RAW-to-RAW copy of the sensor frame
+                    // started; taken as the first sample of this input.
+                    phase: xtrans::XT5_RAF_SITE,
+                    // The exposure of the session's last still picture, if any (a RAF this
+                    // run recorded); the file's own exposure is not read.
+                    exposure: raw.map_or(1., |r| r.exposure),
+                }
+            })
+        });
     // An input in the still RAW takes its layout; any other input with a pitch of 1.5 up to
     // (not including) 2 bytes a sample would be packed 12-bit RAW (see the module notes).
     let packed12 = develop.map_or(2 * pitch >= 3 * width && pitch < 2 * width, |r| r.packed12);
@@ -785,16 +862,27 @@ fn rifp_lines(
         }
         .map_err(|e| format!("{}: {e}", geometry()))?
         .with_response(xtrans::Response::xt5(r.exposure));
+        // The colour path words of this run (RIFP sub-block pages); a path the firmware left
+        // at the declared law keeps the declared development.
+        let path = super::colour::ColourPath::from_words(word);
         cx.log(&format!(
-            "{} develops {} RAW at site {phase:?}, exposure {:.3} x reference",
+            "{} develops {} RAW at site {phase:?}, exposure {:.3} x reference; colour path: {}{}",
             geometry(),
             if packed12 { "packed 12-bit" } else { "16-bit" },
-            r.exposure
+            r.exposure,
+            path.describe(),
+            if path.is_declared() { " (declared law)" } else { "" }
         ));
+        let levels = (!path.is_declared())
+            .then(|| super::colour::linear_levels(&xtrans::Response::xt5(r.exposure)));
         for y in 0..out.1 {
-            let line = xtrans::develop_422_line(&raw, origin.1 + y * crop.1 / out.1, out.0, |x| {
-                origin.0 + x * crop.0 / out.0
-            });
+            let (line_y, column) = (origin.1 + y * crop.1 / out.1, |x| origin.0 + x * crop.0 / out.0);
+            let line = match &levels {
+                Some(levels) => {
+                    super::colour::develop_422_line(&raw, &path, levels, line_y, out.0, column)
+                }
+                None => xtrans::develop_422_line(&raw, line_y, out.0, column),
+            };
             emit(cx, y, &line)?;
         }
     } else {
@@ -1040,6 +1128,130 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         let short = |o| if o == 0x1c { 32 } else { words(o) };
         assert!(rifp_run(&mut cx, short, Some(raw)).is_err());
+    }
+
+    /// In-camera RAW conversion: the input is a RAW the still channel did not write (the RAF
+    /// payload). A run whose mode word says RAW input develops it from site (0, 0); the
+    /// programmed tone curves (switch 0xffd06200 bit 16) then decide the output.
+    #[test]
+    fn a_raw_input_mode_develops_a_raw_the_still_channel_did_not_write() {
+        let colour = [40u8, 180, 90];
+        let mut ram = vec![0u8; 0x4000];
+        let lut = xtrans::Response::xt5(1.).mosaic_lut();
+        for y in 0..12 {
+            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &lut);
+        }
+        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
+        let words = rifp_words(RAM, RAM + 0x1000);
+        // Mode 0x11220000 (bits 18..16 = 2): RAW input. No still picture at all.
+        let raw_mode = |o| if o == 0x08 { 0x1122_0000 } else { words(o) };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), raw_mode, None).unwrap();
+        let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
+        assert_eq!(&host.ram[0x1000..0x1000 + 48], [y, y, cb, cr].repeat(12).as_slice());
+        // The same input without the RAW mode is a packed 4:2:2 copy.
+        let copy = |o| if o == 0x1c { 48 } else { words(o) };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), copy, None).unwrap();
+        assert_eq!(host.ram[0x1000..0x1000 + 48], host.ram[..48]);
+        // Straight tone curves, evenly spaced, on all three colours: the output is the linear
+        // level, darker than the declared sRGB encoding, and it follows the curve.
+        let words = &words;
+        let curve = |scale: u32| {
+            move |o: u64| match o {
+                0x08 => 0x1122_0000,
+                0x4200 => 1 << 16,
+                0x4224..0x42e4 if (o - 0x4224) % 0x40 < 0x3d => {
+                    let point = ((o - 0x4224) % 0x40 / 2) as u32;
+                    let level = |point: u32| (point * 0x3fff / 30).min(0x3fff) * scale / 4;
+                    level(point) | if point < 30 { level(point + 1) << 16 } else { 0 }
+                }
+                _ => words(o),
+            }
+        };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), curve(4), None).unwrap();
+        let straight = host.ram[0x1000];
+        assert!(straight < y, "linear {straight} is darker than sRGB {y}");
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), curve(2), None).unwrap();
+        let half = host.ram[0x1000];
+        assert!((i32::from(half) - i32::from(straight) / 2).abs() <= 1, "{half} {straight}");
+    }
+
+    /// Host check of the RAW conversion develop on a real file (not run by default; the file
+    /// stays outside the repository): `XT5_TEST_RAF=FILE.RAF XT5_TEST_RAF_STRIP=OFFSET
+    /// XT5_TEST_RAF_OUT=OUT.ppm cargo test -p fujimod-emulator-xp5-imaging develops_a_raf_file
+    /// -- --ignored`. It develops the payload (7752 x 5184 from line 5 of the 7872 x 5196
+    /// strip) as a RAW-input RIFP run and writes the picture, one pixel in eight, as a PPM.
+    /// `XT5_TEST_RAF_WORDS=FILE` adds RIFP sub-block register words, one `ADDRESS VALUE` pair
+    /// of hexadecimal numbers a line (the colour path a firmware job would program). The test
+    /// prints the mean Y, Cb, Cr of the centre 512 x 512 pixels.
+    #[test]
+    #[ignore = "needs a RAF file outside the repository"]
+    fn develops_a_raf_file() {
+        let (Ok(path), Ok(strip), Ok(out)) = (
+            std::env::var("XT5_TEST_RAF"),
+            std::env::var("XT5_TEST_RAF_STRIP"),
+            std::env::var("XT5_TEST_RAF_OUT"),
+        ) else {
+            return;
+        };
+        let (pitch, strip_lines, top, width, lines) = (2 * 7872usize, 5196usize, 5usize, 7752usize, 5184usize);
+        let file = std::fs::read(path).unwrap();
+        let strip: usize = strip.parse().unwrap();
+        let mut ram = file[strip..strip + pitch * strip_lines].to_vec();
+        let output = ram.len();
+        ram.resize(output + pitch * lines, 0);
+        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
+        let (input, output_address) = (RAM + (top * pitch) as u64, RAM + output as u64);
+        let mut programmed = std::collections::BTreeMap::new();
+        if let Ok(path) = std::env::var("XT5_TEST_RAF_WORDS") {
+            for line in std::fs::read_to_string(path).unwrap().lines() {
+                let mut pair = line.split_whitespace().map(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).unwrap());
+                if let (Some(address), Some(value)) = (pair.next(), pair.next()) {
+                    programmed.insert(address - 0xffd0_2000, value as u32);
+                }
+            }
+        }
+        let words = move |o| match o {
+            0x08 => 0x1122_0000,
+            0x0c => input as u32,
+            0x1c => pitch as u32,
+            0x20 => (lines << 16 | width) as u32,
+            0x40 => output_address as u32,
+            0x50 => pitch as u32,
+            _ => programmed.get(&o).copied().unwrap_or(0),
+        };
+        rifp_run(&mut Cx::new(&mut host, 0, 0, 0), words, None).unwrap();
+        let mut sums = [0u64; 3];
+        for y in lines / 2 - 256..lines / 2 + 256 {
+            for pair in width / 4 - 128..width / 4 + 128 {
+                let at = output + y * pitch + pair * 4;
+                sums[0] += u64::from(host.ram[at]) + u64::from(host.ram[at + 1]);
+                sums[1] += u64::from(host.ram[at + 2]);
+                sums[2] += u64::from(host.ram[at + 3]);
+            }
+        }
+        let count = 512. * 256.;
+        println!(
+            "centre Y {:.1} Cb {:.1} Cr {:.1}",
+            sums[0] as f64 / (2. * count),
+            sums[1] as f64 / count,
+            sums[2] as f64 / count
+        );
+        let (w, h) = (width / 8, lines / 8);
+        let mut ppm = format!("P6 {w} {h} 255\n").into_bytes();
+        for y in 0..h {
+            for x in 0..w {
+                let at = output + 8 * y * pitch + (8 * x) / 2 * 4;
+                let (luma, cb, cr) = (
+                    f64::from(host.ram[at + (8 * x) % 2]),
+                    f64::from(host.ram[at + 2]) - 128.,
+                    f64::from(host.ram[at + 3]) - 128.,
+                );
+                for v in [luma + 1.402 * cr, luma - 0.344136 * cb - 0.714136 * cr, luma + 1.772 * cb] {
+                    ppm.push(v.round().clamp(0., 255.) as u8);
+                }
+            }
+        }
+        std::fs::write(out, ppm).unwrap();
     }
 
     /// A RAW-output run (mode bit 2) copies the crop's samples unchanged (14-bit) and returns

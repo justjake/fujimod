@@ -31,3 +31,6 @@ pub mod movie;
 
 #[path = "imaging_mix.rs"]
 pub mod mix;
+
+#[path = "imaging_colour.rs"]
+pub mod colour;

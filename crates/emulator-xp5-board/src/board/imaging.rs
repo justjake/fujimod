@@ -199,7 +199,9 @@ pub fn register_all(
             "imaging-rifp-io" => 0xffd01000,
             _ => 0xff974000,
         };
-        if w.base != expected || w.size != 0x1000 {
+        // The RIFP window may also hold the pages of its sub-blocks (0xffd03000..0xffd0bfff).
+        let pages = if w.kind == "imaging-rifp" { 1..=10 } else { 1..=1 };
+        if w.base != expected || w.size % 0x1000 != 0 || !pages.contains(&(w.size / 0x1000)) {
             return Err("invalid preview/RIFP window".into());
         }
         let device: Box<dyn fujimod_emulator_devices::Device> = if w.kind == "imaging-rifp-io" {
@@ -222,6 +224,7 @@ pub fn register_all(
             }
         } else {
             let device = preview::Preview::new(w.kind == "imaging-rifp", io.clone(), &w.options)?
+                .with_span(w.size)
                 .with_statistics(statistics.clone());
             Box::new(if still_path || movie_path {
                 device.with_still_path(preview::StillPath {
