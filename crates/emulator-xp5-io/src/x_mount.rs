@@ -13,7 +13,7 @@
 //!
 //! The wrapped serial controller (PL022 at 0xff910000) carries the lens
 //! protocol to [`x_mount_model::Port`]. Which lens is attached is a run input:
-//! the manifest names a default and `XT5_LENS=none|xf18-55|prime` overrides it.
+//! the manifest names a default and `XT5_LENS=none|xf18-55|xf23|prime` overrides it.
 //! Electrical meanings and timings are inferred, not measured.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::pins::Pin;
@@ -101,8 +101,12 @@ pub fn build_lens(options: &Options, choice: &str, ticks_per_second: u64) -> Res
         return Ok(None);
     }
     let mut spec = Spec::preset(choice)
-        .ok_or_else(|| format!("{LENS_ENV}={choice}: expected none, xf18-55 or prime"))?;
-    spec.replies = options.replies.clone();
+        .ok_or_else(|| format!("{LENS_ENV}={choice}: expected none, xf18-55, xf23 or prime"))?;
+    // Manifest replies add to the preset's declared replies and override them per family.
+    for reply in &options.replies {
+        spec.replies.retain(|r| r.family != reply.family);
+        spec.replies.push(*reply);
+    }
     let (startup_us, busy_us) = match std::env::var(READY_ENV) {
         Ok(value) => {
             let parse = |s: &str| s.trim().parse::<u64>().map_err(|_| format!("{READY_ENV} needs STARTUP_US,BUSY_US"));
