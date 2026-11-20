@@ -932,14 +932,8 @@ fn render_draw(
         });
         pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &bindings, &[]);
-        pass.set_viewport(
-            0.0,
-            0.0,
-            extent.width as f32,
-            extent.height as f32,
-            0.0,
-            1.0,
-        );
+        let [x, y, width, height] = draw.state.viewport.rectangle();
+        pass.set_viewport(x, y, width, height, 0.0, 1.0);
         pass.set_scissor_rect(left, top, right - left, bottom - top);
         pass.set_index_buffer(buffers.indices(index), wgpu::IndexFormat::Uint32);
         let index_count = u32::try_from(draw.vertex.indices.len())

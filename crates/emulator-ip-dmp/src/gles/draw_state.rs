@@ -25,6 +25,15 @@ pub(super) struct Viewport {
 }
 
 impl Viewport {
+    pub(super) fn rectangle(&self) -> [f32; 4] {
+        [
+            self.x_origin as f32,
+            self.y_origin as f32,
+            self.x_scale.value() * 2.,
+            self.y_scale.value() * 2.,
+        ]
+    }
+
     pub(super) fn project(&self, position: [f32; 4], point: bool) -> [f32; 4] {
         let w = if point { 1. } else { position[3] };
         [

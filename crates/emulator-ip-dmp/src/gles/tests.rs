@@ -284,6 +284,21 @@ fn host_gpu_and_cpu_produce_identical_pixels_and_preserve_constant_alpha() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn host_gpu_matches_offset_viewport_smaller_than_target() {
+    // The RGBA mask uses native blending; RGB-only uses the packed fragment path.
+    for color_mask in [0xf00, 0x700] {
+        let words = triangle_list(&[
+            (0x241, 0x428000), // half-width 12: viewport width 24 in a 32-pixel target
+            (0x243, 0x420000), // half-height 8: viewport height 16
+            (0x268, 4 << 16 | 2), // viewport origin (2, 4)
+            (0x307, color_mask),
+        ]);
+        assert_host_gpu_matches_cpu(&words, |_, length| vec![0; length]);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn host_render_path_matches_cpu_snapshots_and_written_ranges() {
     let mut words = setup();
     for position in [
