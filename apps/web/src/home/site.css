@@ -137,3 +137,33 @@ footer a {
 .home-release-notes .release-notes a:not(.manual-feature-link) {
   color: #64d2ff;
 }
+.emulator-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.camera-storage-status {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.camera-storage-status.error {
+  color: #ff453a;
+}
+.camera-exit {
+  margin-left: auto;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: #0a84ff;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.camera-exit:disabled {
+  color: var(--dim);
+  cursor: default;
+}
