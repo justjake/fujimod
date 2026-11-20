@@ -259,6 +259,8 @@ export class WasmEngine implements Engine {
     this.sceneInput = config.sceneInput;
     this.firmwareId = config.firmwareId;
     progress('Loading Wasm runtime…');
+    // The runtime downloads while the SD card files download.
+    this.prepare(config);
     const [files, seedIdentity] = await Promise.all([
       media?.load() ?? Promise.resolve([]),
       media?.identities ?? Promise.resolve([]),
