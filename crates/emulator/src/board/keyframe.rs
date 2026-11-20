@@ -135,6 +135,8 @@ impl State {
             reset_contexts: _,
             exclusive: _,
             code_run,
+            code_shadow: _,
+            settled: _,
             active_slice: _,
             parallel: _,
             decoders: _,
