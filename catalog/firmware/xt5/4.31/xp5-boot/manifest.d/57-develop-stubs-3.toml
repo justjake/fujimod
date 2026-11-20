@@ -185,3 +185,21 @@ registers = [
   { offset = 0x000, mode = "constant", value = 0x1 },
   { offset = 0x830, mode = "constant", value = 0x01110111 },
 ]
+
+# CONDITIONAL, NOT DECODED: 0xff983000. Plain register file, same treatment as 0xff981000.
+# Reached when the drive dial selects ADV (advanced filter): the strict run stopped on the
+# first write (0xff983000 = 0, through the 32-bit helper 0x5dd28).
+# Driver accessors 0x13bf368..0x13c0000 (one function per field, offsets 0x000..0x104).
+# Open 0x1488860 (users: MOVDC 0x2eaff20 and Recf 0x2d3b968), clocks 0x13ab5d0(0xa, ...).
+#  +0x000 0x1488330 writes 0 (0x13bf398), then loops on 0x13bf368 until bit 0 reads 1 -> constant 1.
+#         This is the only busy wait on the block in the driver.
+#  +0x010 read once by 0x14887c4; when non-zero the driver reads +0xd4/+0xd8 as one 64-bit value.
+# Start, status, acknowledge and interrupt are unknown; the other words read back their writes.
+[[device]]
+base = 0xff983000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+]
