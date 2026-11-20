@@ -6,7 +6,7 @@ import { Choice, Dial, type ChoiceItem } from '../../../design/controls';
 import { COLUMN, SMALL, TRACK } from '../../../design/materials';
 import { Artwork, Wordmark, modArtwork, stockArtwork } from '../../../design/artwork';
 import { Button, Scroller, reveal } from '../../../design/column';
-import { Picker, pickerStep } from '../../../design/picker';
+import { PickerList, pickerStep } from '../../../design/picker';
 import { Card, Fit, KeyHint } from '../../../design/screen';
 import '../../../design/design.css';
 
@@ -483,8 +483,10 @@ function Column(props: {
 
 /* ---- Fly-outs ---------------------------------------------------------------- */
 
-/** The focused row continued past the column: a title band level with the
- * row, the body hanging from it (or rising above it near the bottom). */
+/** The focused row continued past the column, in the column's material: a
+ * band level with the row, its card the row card's height, naming the setting
+ * and its value; the body hangs below the band, or rises above it when it
+ * only fits there, and shrinks to the roomier side when it fits on neither. */
 function RowExtension(props: {
   top: number;
   left: number;
@@ -495,16 +497,37 @@ function RowExtension(props: {
   children: JSX.Element;
   onClick?: () => void;
 }) {
-  const below = () => props.top + ROW + props.bodyHeight <= 480 - 8;
+  const MARGIN = 8;
+  const roomBelow = () => 480 - MARGIN - props.top - ROW;
+  const roomAbove = () => props.top - MARGIN;
+  const below = () => roomBelow() >= props.bodyHeight || (roomAbove() < props.bodyHeight && roomBelow() >= roomAbove());
+  const body = () => Math.min(props.bodyHeight, below() ? roomBelow() : roomAbove());
   return (
-    <div class="absolute" style={{ left: `${props.left}px`, width: `${props.width}px`, top: `${props.top}px`, height: `${ROW}px` }}>
-      <div class="flex h-full items-center justify-between pr-[12px] pl-[10px]" style={{ ...COLUMN, ...TRACK(true) }} onClick={() => props.onClick?.()}>
+    <div
+      class={`absolute flex overflow-hidden ${below() ? 'flex-col' : 'flex-col-reverse'}`}
+      style={{
+        ...COLUMN,
+        left: `${props.left}px`,
+        width: `${props.width}px`,
+        top: `${below() ? props.top : props.top - body()}px`,
+        height: `${ROW + body()}px`,
+        'border-radius': '0 16px 16px 0',
+      }}
+    >
+      <div
+        class="flex shrink-0 items-center justify-between px-[16px]"
+        style={{ height: `${ROW}px`, ...(below() ? {} : { 'box-shadow': 'var(--m-divider)' }) }}
+        onClick={() => props.onClick?.()}
+      >
         <span class={`truncate font-semibold ${SMALL}`}>{props.title}</span>
         <span class={`tabular-nums ${SMALL}`}>{props.value}</span>
       </div>
-      <Card class="absolute inset-x-0 px-[12px] py-[10px]" style={{ height: `${props.bodyHeight}px`, top: below() ? `${ROW}px` : `${-props.bodyHeight}px` }}>
+      <div
+        class="flex min-h-0 grow flex-col px-[6px]"
+        style={{ height: `${body()}px`, ...(below() ? { 'box-shadow': 'var(--m-divider)', 'padding-top': '6px', 'padding-bottom': '6px' } : { 'padding-top': '6px' }) }}
+      >
         {props.children}
-      </Card>
+      </div>
     </div>
   );
 }
@@ -640,8 +663,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
         <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} raw={s().mode === 'raw'} send={send} />
         <Show when={s().list !== undefined && focused().kind === 'choice' ? (focused() as ChoiceSetting) : undefined}>
           {(setting) => (
-            <Picker
-              title={setting().name}
+            <RowExtension top={rowTop()} left={WIDTH} width={720 - WIDTH - 8} title={setting().name} value={valueName(setting(), s().recipe)} bodyHeight={setting().choices.length * 44 + 12} onClick={() => send({ key: 'Escape' })}>
+            <PickerList
               options={setting().choices.map((choice) => {
                 const wb = setting().id === 'wb';
                 const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
@@ -654,8 +677,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
               at={s().list ?? 0}
               current={s().recipe[setting().id]}
               choose={(value) => send({ set: setting().id, value, focus: s().focus })}
-              style={{ left: `${WIDTH + 8}px`, right: '8px' }}
             />
+            </RowExtension>
           )}
         </Show>
         <Show when={s().fly === 'none' && s().list === undefined}>

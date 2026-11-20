@@ -13,12 +13,29 @@ export interface PickerOption {
   more?: () => void;
 }
 
-/** A sheet over the picture choosing one of many: a list of names (with
- * their artwork) or, with `columns`, a grid of artwork. The cursor is lit
- * white; the current choice is marked. UP, DOWN and the dial move the
- * cursor, OK chooses, BACK closes. */
+/** A sheet over the picture choosing one of many, under its title. UP, DOWN
+ * and the dial move the cursor, OK chooses, BACK closes. */
 export function Picker(props: {
   title: string;
+  options: PickerOption[];
+  at: number;
+  current?: number;
+  columns?: number;
+  choose: (index: number) => void;
+  style?: JSX.CSSProperties;
+}) {
+  return (
+    <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', ...props.style }}>
+      <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>{props.title}</div>
+      <PickerList options={props.options} at={props.at} current={props.current} columns={props.columns} choose={props.choose} />
+    </div>
+  );
+}
+
+/** The choices of a picker, in whatever holds them (a sheet, or a row's
+ * fly-out): a list of names (with their artwork) or, with `columns`, a grid of
+ * artwork. The cursor is the selected plate; the current choice is marked. */
+export function PickerList(props: {
   options: PickerOption[];
   /** The cursor. */
   at: number;
@@ -26,7 +43,6 @@ export function Picker(props: {
   current?: number;
   columns?: number;
   choose: (index: number) => void;
-  style?: JSX.CSSProperties;
 }) {
   let list: HTMLDivElement | undefined;
   const rows: HTMLElement[] = [];
@@ -41,8 +57,6 @@ export function Picker(props: {
   );
   const ink = (_i: number) => '#fff';
   return (
-    <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', ...props.style }}>
-      <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>{props.title}</div>
       <div
         ref={(element) => (list = element)}
         class={`relative grow overflow-y-auto overscroll-contain ${props.columns ? 'grid content-start gap-[4px]' : ''}`}
@@ -89,7 +103,6 @@ export function Picker(props: {
           )}
         </For>
       </div>
-    </div>
   );
 }
 
