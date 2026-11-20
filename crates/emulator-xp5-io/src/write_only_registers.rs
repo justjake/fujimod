@@ -14,6 +14,9 @@ struct State {
 
 pub struct WriteOnlyRegisters {
     state: State,
+    /// Emulator-only option (`readback = true`): a read returns the last write, zero before one,
+    /// instead of refusing. Labelled assumption for blocks whose registers are unidentified.
+    readback: bool,
 }
 
 impl WriteOnlyRegisters {
@@ -27,7 +30,13 @@ impl WriteOnlyRegisters {
                 size,
                 registers: BTreeMap::new(),
             },
+            readback: false,
         })
+    }
+
+    pub fn with_readback(mut self) -> Self {
+        self.readback = true;
+        self
     }
 
     fn valid_word_offset(&self, offset: u64) -> bool {
@@ -53,7 +62,15 @@ impl Device for WriteOnlyRegisters {
         "write-only-registers"
     }
 
-    fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+    fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if self.readback && size == 4 {
+            if let Some(offset) = address
+                .checked_sub(self.state.base)
+                .filter(|offset| self.valid_word_offset(*offset))
+            {
+                return u64::from(self.state.registers.get(&offset).copied().unwrap_or(0));
+            }
+        }
         cx.unmodeled();
         0
     }
@@ -101,5 +118,28 @@ impl Device for WriteOnlyRegisters {
         self.validate_state(&state)?;
         self.state = state;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+    #[test]
+    fn readback_option_returns_the_last_write_and_default_still_refuses() {
+        let mut host = RecordingHost::default();
+        let mut plain = WriteOnlyRegisters::new(0xff960000, 0x10000).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        plain.write(&mut cx, 0xff96cb30, 4, 7);
+        assert!(cx.refusal().is_none() && !cx.is_unmodeled());
+        plain.read(&mut cx, 0xff96cb30, 4);
+        assert!(cx.is_unmodeled());
+        let mut kept = WriteOnlyRegisters::new(0xff960000, 0x10000).unwrap().with_readback();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(kept.read(&mut cx, 0xff96cb30, 4), 0);
+        kept.write(&mut cx, 0xff96cb30, 4, 7);
+        assert_eq!(kept.read(&mut cx, 0xff96cb30, 4), 7);
+        assert!(!cx.is_unmodeled());
     }
 }
