@@ -36,3 +36,11 @@ export const WELL: JSX.CSSProperties = {
   background: 'var(--m-well)',
   'box-shadow': 'var(--m-well-edge)',
 };
+
+/** The chosen or focused item inside a card: a lighter plate and a rim, its
+ * ink unchanged (as iOS's segmented control and list selection), never an
+ * inversion. */
+export const SELECTED: JSX.CSSProperties = {
+  background: 'var(--m-selected, rgb(255 255 255 / 0.24))',
+  'box-shadow': 'var(--m-selected-edge, inset 0 0 0 2px rgb(255 255 255 / 0.85))',
+};

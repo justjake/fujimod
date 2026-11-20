@@ -2,7 +2,7 @@ import { For, Show, createEffect } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { reveal } from './column';
-import { ACCENT, GLASS, SMALL } from './materials';
+import { ACCENT, GLASS, SELECTED, SMALL } from './materials';
 
 /** One choice in a picker: its name, and artwork drawn in the given ink. */
 export interface PickerOption {
@@ -36,7 +36,7 @@ export function Picker(props: {
       opened = true;
     },
   );
-  const ink = (i: number) => (props.at === i ? '#000' : '#fff');
+  const ink = (_i: number) => '#fff';
   return (
     <div class="absolute top-[8px] bottom-[8px] flex flex-col overflow-hidden rounded-[16px] p-[8px]" style={{ ...GLASS, background: 'var(--m-panel)', ...props.style }}>
       <div class={`px-[8px] pt-[6px] pb-[10px] font-semibold ${SMALL}`}>{props.title}</div>
@@ -55,7 +55,7 @@ export function Picker(props: {
                   ? 'relative flex aspect-square items-center justify-center rounded-[10px]'
                   : `flex h-[44px] w-full items-center gap-[10px] rounded-[10px] px-[10px] text-left ${SMALL}`
               }
-              style={props.at === i() ? { background: '#fff', color: '#000' } : { color: '#fff' }}
+              style={props.at === i() ? { ...SELECTED, color: '#fff' } : { color: '#fff' }}
               onClick={() => props.choose(i())}
             >
               {option.art?.(ink(i()))}

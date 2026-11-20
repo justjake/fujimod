@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { ACCENT, SMALL, TRACK } from './materials';
+import { ACCENT, SELECTED, SMALL, TRACK, WELL } from './materials';
 
 /* The editors' row controls: the choice strip and the slider card, shared by
    the custom settings editor and the film editor. Both take touch (a tap
@@ -146,44 +146,58 @@ export function Choice(props: {
   onFocus?: () => void;
 }) {
   let track: HTMLDivElement | undefined;
-  /** Each cell's center along the strip, measured once laid out. */
-  const [centers, setCenters] = createSignal<number[]>([]);
-  const [length, setLength] = createSignal(0);
+  /** Each cell's center and width along the strip, measured once laid out. */
+  const [cells, setCells] = createSignal<{ center: number; width: number }[]>([]);
   createEffect(
     () => [props.width, props.items] as const,
     () => {
       requestAnimationFrame(() => {
-        const cells = track ? (Array.from(track.children) as HTMLElement[]) : [];
-        setCenters(cells.map((c) => c.offsetLeft + c.offsetWidth / 2));
-        setLength(track?.scrollWidth ?? 0);
+        const list = track ? (Array.from(track.children) as HTMLElement[]) : [];
+        setCells(list.map((c) => ({ center: c.offsetLeft + c.offsetWidth / 2, width: c.offsetWidth })));
       });
     },
   );
+  const spacing = () => {
+    const c = cells();
+    return c.length > 1 ? (c[c.length - 1].center - c[0].center) / (c.length - 1) : 60;
+  };
+  /** A cell's center or width at a fractional position, extended past the ends. */
+  const at = (p: number, key: 'center' | 'width') => {
+    const c = cells();
+    if (c.length === 0) return key === 'width' ? 56 : 0;
+    const last = c.length - 1;
+    if (p <= 0) return key === 'center' ? c[0].center + p * spacing() : c[0].width;
+    if (p >= last) return key === 'center' ? c[last].center + (p - last) * spacing() : c[last].width;
+    const i = Math.floor(p);
+    return c[i][key] + (c[i + 1][key] - c[i][key]) * (p - i);
+  };
+  let offsetNow = 0;
   const dial = useDialGesture({
     count: () => props.items.length,
     index: () => props.value,
-    spacing: () => (centers().length > 1 ? (centers()[centers().length - 1] - centers()[0]) / (centers().length - 1) : 60),
+    spacing,
     commit: (i) => props.pick(i),
     onFocus: () => props.onFocus?.(),
+    /* A tap chooses the cell under the finger. */
+    tap: (x, box) => {
+      const local = (x - box.left) * (props.width / box.width) + offsetNow;
+      const c = cells();
+      if (c.length === 0) return;
+      let best = 0;
+      c.forEach((cell, i) => {
+        if (Math.abs(cell.center - local) < Math.abs(c[best].center - local)) best = i;
+      });
+      props.pick(best);
+    },
   });
-  /** The strip's center at a fractional cell, past the ends by one spacing per cell. */
-  const centerAt = (p: number) => {
-    const c = centers();
-    if (c.length === 0) return 0;
-    const last = c.length - 1;
-    const step = last > 0 ? (c[last] - c[0]) / last : 0;
-    if (p <= 0) return c[0] + p * step;
-    if (p >= last) return c[last] + (p - last) * step;
-    const i = Math.floor(p);
-    return c[i] + (c[i + 1] - c[i]) * (p - i);
+  /* The chosen cell always sits under the fixed plate in the middle. */
+  const offset = () => (offsetNow = at(dial.shown(), 'center') - props.width / 2);
+  const ends = (): [boolean, boolean] => {
+    const c = cells();
+    const o = offset();
+    return [c.length > 0 && c[0].center - c[0].width / 2 < o, c.length > 0 && c[c.length - 1].center + c[c.length - 1].width / 2 > o + props.width];
   };
-  const max = () => Math.max(0, length() - props.width);
-  const offset = () => {
-    const raw = centerAt(dial.shown()) - props.width / 2;
-    return dial.active() ? raw : Math.max(0, Math.min(max(), raw));
-  };
-  const ends = (): [boolean, boolean] => [offset() > 1, offset() < max() - 1];
-  const chosen = () => Math.max(0, Math.min(props.items.length - 1, Math.round(dial.shown())));
+  const motion = () => (dial.active() ? 'none' : 'transform 150ms ease-out, width 150ms ease-out');
   return (
     <div
       class="relative shrink-0 overflow-hidden select-none"
@@ -198,28 +212,28 @@ export function Choice(props: {
           </Show>
         </span>
       </Show>
-      <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge)' }}>
+      <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL }}>
+        {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
+        <span
+          class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
+          style={{ width: `${at(dial.shown(), 'width')}px`, ...SELECTED, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
+        />
         <div
           ref={(element) => (track = element)}
-          class="absolute inset-y-0 left-0 flex items-stretch gap-[4px] px-[6px] py-[5px]"
-          style={{ transform: `translateX(${-offset()}px)`, transition: dial.active() ? 'none' : 'transform 150ms ease-out' }}
+          class="absolute inset-y-0 left-0 flex items-stretch gap-[4px] py-[5px]"
+          style={{ transform: `translateX(${-offset()}px)`, transition: motion() }}
         >
           <For each={[...props.items]}>
             {(item, i) => {
-              const on = () => i() === chosen();
-              const fade = () => Math.max(0.35, 0.85 - Math.abs(i() - dial.shown()) * 0.15);
-              const ink = () => (on() ? '#000' : `rgb(255 255 255 / ${fade()})`);
+              const distance = () => Math.abs(i() - dial.shown());
+              const ink = () => `rgb(255 255 255 / ${Math.max(0.35, 1 - distance() * 0.3)})`;
               return (
-                <button
-                  type="button"
-                  class={`relative flex shrink-0 items-center justify-center rounded-[9px] font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[12px]' : 'w-[56px]'}`}
-                  style={on() ? { background: '#fff', color: ink() } : { color: ink() }}
-                  onClick={() => {
-                    if (!dial.dragged()) props.pick(i());
-                  }}
+                <span
+                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[12px]' : 'w-[56px]'}`}
+                  style={{ color: ink() }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}
-                </button>
+                </span>
               );
             }}
           </For>
@@ -325,6 +339,11 @@ export function Dial(props: {
                       class="fm-round absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1.5px]"
                       style={{ left: `${i * SPACING}px`, height: `${major() ? 20 : 12}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
                     />
+                    <Show when={i < count() - 1 && SPACING >= 15}>
+                      <For each={[1, 2]}>
+                        {(third) => <span class="fm-round absolute bottom-[6px] h-[7px] w-[2px] -translate-x-1/2 rounded-[1px]" style={{ left: `${(i + third / 3) * SPACING}px`, background: 'rgb(255 255 255 / 0.28)' }} />}
+                      </For>
+                    </Show>
                   </>
                 );
               }}
@@ -352,7 +371,7 @@ export function Switch(props: { items: readonly string[]; value: number; focused
           <button
             type="button"
             class={`flex h-[37px] grow basis-0 items-center justify-center rounded-[10px] font-medium ${SMALL}`}
-            style={props.value === i() ? { background: '#fff', color: '#000' } : { color: 'rgb(255 255 255 / 0.6)' }}
+            style={props.value === i() ? { ...SELECTED, color: '#fff' } : { color: 'rgb(255 255 255 / 0.6)' }}
             onClick={() => props.pick(i())}
           >
             {item}

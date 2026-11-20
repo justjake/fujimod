@@ -7,7 +7,7 @@ import type { JSX } from '@solidjs/web';
 
 import { Chevron, Choice, Dial, Switch, signed } from '../../../design/controls';
 import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
-import { ACCENT, COLUMN, GLASS, SMALL, TEXT, TRACK } from '../../../design/materials';
+import { ACCENT, COLUMN, GLASS, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
 import '../../../design/design.css';
 
 /* FILM EDITOR redesign mock: a tool rail down the left edge beside one tall
@@ -1864,14 +1864,14 @@ export function Editor(props: {
               <button
                 type="button"
                 class="relative flex size-[52px] items-center justify-center rounded-[14px]"
-                style={lit() ? { background: '#fff' } : chosen() ? { background: 'var(--m-focus)' } : {}}
+                style={lit() ? SELECTED : chosen() ? { background: 'var(--m-focus)' } : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
                   const on = tool === 'film' || tool === 'raw' || tool === 'custom' ? tool : null;
                   update({ ...s(), focus: on ? s().focus : index(tool as Tool), railOn: on, area: 'rail', header: false, inside: false, bend: false, scrollTo: undefined });
                 }}
               >
-                <ToolIcon tool={tool} color={lit() ? '#000' : '#fff'} />
+                <ToolIcon tool={tool} color="#fff" />
                 <Show when={tool !== 'film' && tool !== 'raw' && tool !== 'custom' && edited(tool)}>
                   <span class="absolute top-[5px] right-[5px] size-[9px] rounded-full" style={{ background: ACCENT, 'box-shadow': '0 0 0 2px #1c1c1e' }} />
                 </Show>
@@ -2068,7 +2068,7 @@ export function Editor(props: {
                         <button
                           type="button"
                           class={`flex h-[40px] flex-1 items-center justify-center gap-[7px] rounded-[9px] font-medium ${SMALL}`}
-                          style={s().primary === p() ? { background: '#fff', color: '#000' } : { color: 'rgb(255 255 255 / 0.75)' }}
+                          style={s().primary === p() ? { ...SELECTED, color: '#fff' } : { color: 'rgb(255 255 255 / 0.75)' }}
                           onClick={() => update({ ...s(), primary: p() })}
                         >
                           <Swatch film={s().film} mix={p()} />
