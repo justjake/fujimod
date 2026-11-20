@@ -108,6 +108,31 @@
 //! The first pass reads every other line of the main picture (0x2d1776c doubles the source
 //! pitch and halves its lines), which the programmed words already express. RZL2 has no inline
 //! source: a start with source address 0 refuses.
+//!
+//! # Advanced-filter scaler 0xff983000 (the same [`Resz`] with [`FILTER`])
+//!
+//! The third scaler of the family, next to RZL2 and with its register layout. Its X-T5 4.31
+//! driver (0x1488264..0x1489428, one accessor per word at 0x13bf368..0x13c0000) serves the
+//! live view of the drive dial's ADV position (MOVDC 0x2eafcc8 / 0x2eafefc) and the still
+//! develop queue (0x2d3b93c):
+//!
+//! * reset 0x1488330 writes +0x00 = 0 and polls until bit 0 reads 1; the stop 0x1488680(0)
+//!   clears the two port enables (+0xf8 / +0xfc bit 28) and polls +0x100 until bits 24 and 8
+//!   read 1;
+//! * start 0x1488748: parameters (0x1488360 -> setter 0x13bf6d8: +0x10..+0x4c with the RZL2
+//!   meaning of +0x10..+0x28, the filter coefficients +0x2c..+0x4c, the pitches +0xdc and
+//!   +0xf0, the port words +0xf4..+0xfc, +0x114 and +0x11c), addresses (0x14885f4 -> 0x13bf4f4:
+//!   +0xcc / +0xd0 source, +0xd4 / +0xd8 source second plane, +0xe0 / +0xe4 destination,
+//!   +0xe8 / +0xec destination second plane), interrupt enable +0x10c = 7 (0x13bfe78) and the
+//!   handler 0x14893c8 on interrupt-table entry 0xb (INTID 204), then the port enables and
+//!   +0x04 = 1 (0x13bf400);
+//! * the handler reads +0x104 (bit 0 done, bits 1 and 2 errors, passed to the caller's
+//!   callback as 1 and 2), acknowledges with +0x108 = 7 (0x13bfdcc) and sets the driver state
+//!   to "done".
+//!
+//! Each start scales as RZL2 does, whatever the still path: its live-view user reads the
+//! destination as the panel picture. The filter itself (the coefficient words +0x2c..+0x4c
+//! and the table the setter loads) is not applied: the destination is the scaled source.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::xtrans;
@@ -190,6 +215,15 @@ pub static RESZ: Layout = Layout {
 pub static RZL2: Layout = Layout {
     block: "RZL2",
     kind: "imaging-rzl2",
+    source: 0xcc,
+    output: 0xe0,
+    inline: false,
+};
+
+/// The advanced-filter scaler 0xff983000 (see the module notes): the RZL2 address layout.
+pub static FILTER: Layout = Layout {
+    block: "advanced-filter scaler",
+    kind: "imaging-filter-scaler",
     source: 0xcc,
     output: 0xe0,
     inline: false,
@@ -1761,6 +1795,72 @@ mod tests {
             rzl2.write(&mut cx, base + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_some());
+    }
+
+    /// The advanced-filter scaler: the X-T5 4.31 ADV live-view start shape (source size, crop
+    /// and output equal, RZL2 address words). The start copies the picture, completes with
+    /// status +0x104 bit 0 and interrupt 204, and the handler's acknowledge (+0x108 = 7) lowers
+    /// the line; +0x00 and +0x100 read the driver's reset and stop poll values.
+    #[test]
+    fn the_filter_scaler_copies_its_source_and_completes_on_interrupt_204() {
+        let options = toml::from_str(
+            "irq = 204\n\
+             registers = [{ offset = 0x00, mode = \"constant\", value = 0x1 },\n\
+                          { offset = 0x100, mode = \"constant\", value = 0x01000100 }]\n\
+             starts = [{ offset = 0x04, mask = 0x1 }]\n\
+             delay_us = 200\n\
+             completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]\n\
+             ack = { offset = 0x108, mode = \"w1c\", status_offset = 0x104, bits = 0x7 }\n\
+             irq_mask_offset = 0x10c\n\
+             irq_mask_bit = 0\n\
+             irq_mask_set_masks = false",
+        )
+        .unwrap();
+        let base = 0xff983000;
+        let mut filter = Resz::with_layout(
+            &FILTER,
+            base,
+            CompletionStub::new(base, 0x1000, options, 1000).unwrap(),
+            Some(YcOutput::default()),
+        );
+        assert_eq!(filter.name(), "imaging-filter-scaler");
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        };
+        host.ram[..80].copy_from_slice(&picture(8, 4, 20));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(filter.read(&mut cx, base, 4), 1);
+        assert_eq!(filter.read(&mut cx, base + 0x100, 4), 0x0100_0100);
+        for (o, v) in [
+            (0x10c, 7),
+            (0x14, 3 << 16 | 7),
+            (0x1c, 3 << 16 | 7),
+            (0x20, 3 << 16 | 7),
+            (0x24, 0x1000),
+            (0x28, 0x1000),
+            (0xd0, RAM as u32),
+            (0xdc, 20),
+            (0xe4, RAM as u32 + 0x1000),
+            (0xf0, 32),
+            (0x04, 1),
+        ] {
+            filter.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_none());
+        for line in 0..4 {
+            assert_eq!(host.ram[0x1000 + line * 32..][..16], host.ram[line * 20..][..16]);
+        }
+        assert!(!host.irqs.contains(&(204, true)));
+        host.now = filter.next_deadline(0).unwrap();
+        filter.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4), 1);
+        assert_eq!(filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x04, 4), 0);
+        assert_eq!(host.irqs.last(), Some(&(204, true)));
+        filter.write(&mut Cx::new(&mut host, 0, 0, 0), base + 0x108, 4, 7);
+        assert_eq!(filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4), 0);
+        assert_eq!(host.irqs.last(), Some(&(204, false)));
     }
 
     /// Colour bars through the X-T5 4.31 preview and playback scalers (run45 words): RZL2

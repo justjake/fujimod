@@ -186,23 +186,41 @@ registers = [
   { offset = 0x830, mode = "constant", value = 0x01110111 },
 ]
 
-# CONDITIONAL, NOT DECODED: 0xff983000. Plain register file, same treatment as 0xff981000.
-# Reached when the drive dial selects ADV (advanced filter): the strict run stopped on the
-# first write (0xff983000 = 0, through the 32-bit helper 0x5dd28).
-# Driver accessors 0x13bf368..0x13c0000 (one function per field, offsets 0x000..0x104).
-# Open 0x1488860 (users: MOVDC 0x2eaff20 and Recf 0x2d3b968), clocks 0x13ab5d0(0xa, ...).
-#  +0x000 0x1488330 writes 0 (0x13bf398), then loops on 0x13bf368 until bit 0 reads 1 -> constant 1.
-#         This is the only busy wait on the block in the driver.
-#  +0x010 read once by 0x14887c4; when non-zero the driver reads +0xd4/+0xd8 as one 64-bit value.
-# Start, status, acknowledge and interrupt are unknown; the other words read back their writes.
+# 0xff983000: the advanced-filter scaler (drive dial ADV), a sibling of RZL2 0xff984000 with
+# the same register layout. Driver 0x1488264..0x1489428, accessors 0x13bf368..0x13c0000;
+# users: MOVDC 0x2eafcc8 / 0x2eafefc (live view at ADV, callback 0x2eaf860) and the still
+# develop queue 0x2d3b93c.
+#  +0x000 reset 0x1488330 writes 0 (0x13bf398), then loops on 0x13bf368 until bit 0 reads 1
+#         -> constant 1.
+#  +0x100 stop 0x1488680(0) clears +0xf8 / +0xfc bit 28 (0x13bf468), then polls 0x13bfd04
+#         until bit 24 and bit 8 read 1 -> constant.
+#  +0x004 start 0x14886dc -> 0x13bf400 writes 1, after the parameters (0x13bf6d8), the
+#         addresses (0x13bf4f4) and the port enables.
+#  +0x104 status, read by the handler 0x14893c8 (0x13bfd4c): bit 0 done, bits 1 and 2 errors.
+#  +0x108 acknowledge, the handler writes 7 (0x1489398 -> 0x13bfdcc).
+#  +0x10c interrupt enable: 7 at start (0x14886fc -> 0x13bfe78), 0 at stop (0x1488808).
+#  +0x110 error counters (0x13bfee4), never set here.
+#  Interrupt-table entry 0xb (0x139f424(0xb), table 0x18ea918 + 0xb * 16) = INTID 204.
+# imaging-filter-scaler is this completion stub; each start also scales the packed 4:2:2 source
+# (+0xcc / +0xd0, pitch +0xdc) to the destination (+0xe0 / +0xe4, pitch +0xf0) as RZL2 does.
+# The filter itself is not applied (emulator-xp5-imaging imaging_still.rs).
 [[device]]
 base = 0xff983000
 size = 0x1000
-kind = "completion-stub"
+kind = "imaging-filter-scaler"
 [device.options]
 registers = [
   { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x01000100 },
 ]
+irq = 204
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x7 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
 
 # FCNV colour-space converter (YCbCr 4:2:2 <-> RGB; BT.601 Q10 matrices 0x1c09228 / 0x1c09210),
 # driver 0x13c0ef8..0x13c2fb8, state 0x2027370; logical 0xbf -> INTID 217 (record 0x18eb508, level).
