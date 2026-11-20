@@ -59,3 +59,19 @@ fn xt30_boot_inputs_declare_the_usb_port_and_its_port_detection() {
     let registers = power["1"].power_registers.as_ref().unwrap();
     assert_eq!(registers.inputs.get("21"), Some(&1));
 }
+
+#[test]
+fn xt30_boot_inputs_declare_the_sd_host_slot() {
+    let inputs = HardwareInputs::bundled("xt30-201-boot").unwrap();
+    let cards = inputs.reset.sd_cards;
+    assert_eq!(cards.len(), 1);
+    let slot = &cards[0];
+    // Host 0, port 0: the only SDHCI window the X-T30 slot API opens.
+    assert_eq!(slot.host_base, 0xFFFC_4000);
+    assert_eq!(slot.card.sectors, 16_777_216);
+    assert!(slot.card.high_speed);
+    assert_eq!(slot.card.rca, 1);
+    assert_eq!(slot.card.format.filesystem, "fat32");
+    assert_eq!(slot.card.format.partition_start, 8192);
+    assert_eq!(slot.card.format.sectors_per_cluster, 64);
+}
