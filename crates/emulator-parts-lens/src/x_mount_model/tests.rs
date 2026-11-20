@@ -183,6 +183,24 @@ fn aperture_setpoint_moves_the_index() {
 }
 
 #[test]
+fn state_request_echoes_and_holds_ready_low_for_one_operation() {
+    let mut port = lens();
+    let mut time = 0;
+    powered(&port, &mut time);
+    time += 20 * MS;
+    port.tick(time, true);
+    assert!(port.ready_high());
+    port.take_logs();
+    assert_eq!(request(&mut port, STATE_REQUEST, 1, &mut time), 1, "payload echo");
+    port.tick(time, true);
+    assert!(!port.ready_high(), "the request holds ready low");
+    time = port.next_event_tick(time, true).unwrap();
+    port.tick(time, true);
+    assert!(port.ready_high(), "ready rises after the minimum operation time");
+    assert!(!port.take_logs().iter().any(|l| l.contains("unmodeled family")));
+}
+
+#[test]
 fn every_family_answers_and_unknown_families_log_once() {
     let mut port = lens();
     let mut time = 0;
