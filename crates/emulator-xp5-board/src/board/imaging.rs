@@ -258,12 +258,18 @@ pub fn register_all(
     }
     // RESZ 0xffd0c000 and RZL2 0xff984000: the completion stubs of 55-develop-stubs.toml that
     // also scale with the still path.
-    for w in windows.iter().filter(|w| matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2")) {
+    // The advanced-filter scaler 0xff983000 is the same stub; it scales at every start, with
+    // or without the still path (its live-view user reads the destination as the panel picture).
+    for w in windows.iter().filter(|w| {
+        matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2" | "imaging-filter-scaler")
+    }) {
         use fujimod_emulator_xp5_imaging::imaging::still;
         let (layout, base) = match w.kind.as_str() {
             "imaging-resz" => (&still::RESZ, 0xffd0c000),
-            _ => (&still::RZL2, 0xff984000),
+            "imaging-rzl2" => (&still::RZL2, 0xff984000),
+            _ => (&still::FILTER, 0xff983000),
         };
+        let always = w.kind == "imaging-filter-scaler";
         if w.base != base || w.size != 0x1000 {
             return Err(format!("invalid {} window", w.kind));
         }
@@ -282,9 +288,9 @@ pub fn register_all(
                     layout,
                     w.base,
                     stub,
-                    still_path.then(|| yc_output.clone()),
+                    (still_path || always).then(|| yc_output.clone()),
                 );
-                if movie_path {
+                if movie_path && !always {
                     resz.with_movie_path(yc_output.clone())
                 } else {
                     resz
@@ -422,5 +428,28 @@ mod tests {
         let mut moved = windows[1].clone();
         moved.base = 0xff983000;
         assert!(register_all(&mut DeviceGraph::new(), &[moved], &fujimod_emulator_devices::xp5::pins::Pins::shared()).is_err());
+    }
+
+    /// The X-T5 4.31 manifest's 0xff983000 window registers as the advanced-filter scaler, and
+    /// only at that base.
+    #[test]
+    fn the_xt5_filter_scaler_window_registers() {
+        #[derive(serde::Deserialize)]
+        struct Fragment {
+            device: Vec<DeviceWindow>,
+        }
+        let fragment: Fragment = toml::from_str(include_str!(
+            "../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/57-develop-stubs-3.toml"
+        ))
+        .unwrap();
+        let windows: Vec<_> =
+            fragment.device.into_iter().filter(|w| w.kind == "imaging-filter-scaler").collect();
+        assert_eq!(windows.iter().map(|w| w.base).collect::<Vec<_>>(), [0xff983000]);
+        assert_eq!(windows[0].options.get("irq").and_then(toml::Value::as_integer), Some(204));
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
+        register_all(&mut DeviceGraph::new(), &windows, &pins).unwrap();
+        let mut moved = windows[0].clone();
+        moved.base = 0xff984000;
+        assert!(register_all(&mut DeviceGraph::new(), &[moved], &pins).is_err());
     }
 }

@@ -34,6 +34,20 @@
 //! The single still (drive dial S) runs MIX once with mode 0x25, two-plane input 0 = output
 //! (in place); that mode is not modelled here and writes nothing, as before.
 //!
+//! # Live view with the drive dial at ADV (advanced filter)
+//!
+//! Each live-view frame runs MIX once and then the advanced-filter scaler 0xff983000 (see
+//! `imaging_still.rs`), in place on the panel picture (strict run from a drive dial S start,
+//! `--set drive=ADV`, end state of the MIX and scaler pages):
+//!
+//! | +0x08 | size +0x84 | input 0 | input 1 | map | output |
+//! |---|---|---|---|---|---|
+//! | 0x2000022 | 968x640 | panel picture 0x20307000, pitch 0xa00 | 0x2a4c2000, pitch 0x780 | 0x2a71a000, pitch 0x500 | 0x20a0f000, pitch 0xa00 |
+//!
+//! The scaler then reads 960x640 at 0x20a0f000 and writes the panel picture 0x20307000 again.
+//! Input 1 is narrower than the picture (pitch 0x780 = 960 pixels), so it is not a second
+//! frame of the same layout; what it and the map hold is not decoded.
+//!
 //! # Model (GUESSES, marked as such)
 //!
 //! * mode 0x20 (motion-corrected blend of two frames by a map): GUESS: the output is input 0
@@ -42,6 +56,9 @@
 //! * mode 0x32 (HDR composite of three frames by the HDRCR map): GUESS: the output is the
 //!   per-byte average of inputs 0, 1 and 2 (Y, Cb and Cr alike, rounded). The tone mapping
 //!   and the per-pixel weights of the map are not modelled.
+//! * mode 0x2000022 (the ADV live-view blend, with or without the still path): GUESS: the
+//!   output is input 0, as for mode 0x20. Input 1 and the map are not read, so the filter's
+//!   effect on the preview is not modelled; the panel picture passes through unchanged.
 //! * mode 0x3100020 (an 8-bit blend map from two frames and the MAP motion map): nothing is
 //!   written (the only reader the model has, mode 0x20, ignores the map).
 //! * other modes: nothing is written, as with the plain stub.
@@ -59,6 +76,8 @@ pub const MIX_BASE: u64 = 0xffd2_2000;
 const MODE_BLEND_MAP: u32 = 0x0310_0020;
 const MODE_BLEND: u32 = 0x20;
 const MODE_HDR_COMPOSITE: u32 = 0x32;
+/// The live-view blend of the drive dial's ADV position (module notes).
+const MODE_FILTER_BLEND: u32 = 0x0200_0022;
 
 /// One picture group: address, second-plane address, pitch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,8 +103,8 @@ enum Job {
 }
 
 /// MIX 0xffd22000: the completion stub of 57-develop-stubs-3.toml (same options) that, with
-/// the still path ([`Mix::with_still_path`]), writes the HDR modes at each start (see the
-/// module notes). The device name and checkpoint are the stub's, so snapshots taken with the
+/// the still path ([`Mix::with_still_path`]), writes the HDR modes at each start, and always
+/// the ADV live-view blend (see the module notes). The device name and checkpoint are the stub's, so snapshots taken with the
 /// plain stub stay valid.
 pub struct Mix {
     stub: CompletionStub,
@@ -133,6 +152,41 @@ impl Mix {
             pitch: u64::from(self.stub.word(0x64)),
         };
         let output = self.group(0x70, 0x80)?;
+        if mode == MODE_FILTER_BLEND {
+            let row = width * 2;
+            let geometry = format!(
+                "MIX mode {mode:#x} {width}x{lines}: input {:#x} pitch {:#x} (input 1 {:#x} pitch {:#x}, \
+                 map {:#x} pitch {:#x} not read) -> output {:#x} pitch {:#x}",
+                inputs[0].address,
+                inputs[0].pitch,
+                inputs[1].address,
+                inputs[1].pitch,
+                map.address,
+                map.pitch,
+                output.address,
+                output.pitch
+            );
+            let bad = width == 0
+                || width % 2 != 0
+                || lines == 0
+                || output.address == 0
+                || output.second != 0
+                || output.pitch < row
+                || inputs[0].address == 0
+                || inputs[0].pitch < row
+                || inputs.iter().any(|g| g.second != 0)
+                || inputs[2..].iter().any(|g| g.address != 0);
+            if bad {
+                return Err(format!("{geometry} is outside the decoded packed 4:2:2 layout"));
+            }
+            // GUESS (module notes): the blend is input 0.
+            return Ok(Job::Average {
+                inputs: inputs[..1].to_vec(),
+                output,
+                width,
+                lines,
+            });
+        }
         let used = match mode {
             MODE_BLEND => 2,
             MODE_HDR_COMPOSITE => 3,
@@ -225,7 +279,9 @@ impl Mix {
                 .join(", "),
             output.address,
             output.pitch,
-            if count == 1 {
+            if self.stub.word(0x08) == MODE_FILTER_BLEND {
+                "advanced-filter preview as input 0; input 1 and map not read"
+            } else if count == 1 {
                 "aligned static frames, the blend is input 0; map not read"
             } else {
                 "HDR composite as the plain average; HDRCR map not read"
@@ -243,7 +299,8 @@ impl Device for Mix {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         // As for TNR and RESZ: a start while a completion is due is ignored by the stub, and here.
-        let start = self.model
+        // The ADV live-view blend runs with or without the still path.
+        let start = (self.model || self.stub.word(0x08) == MODE_FILTER_BLEND)
             && address & 0xfff == 4
             && size == 4
             && value & 1 != 0
@@ -353,6 +410,37 @@ mod tests {
             (0x70, RAM + 0x1000),
             (0x80, 32),
         ]
+    }
+
+    /// The ADV live-view blend (mode 0x2000022) copies input 0 to the output without the still
+    /// path too, although input 1 is narrower than the picture; input 1 and the map are not
+    /// read. A second plane refuses.
+    #[test]
+    fn the_filter_blend_copies_input_0_without_the_still_path() {
+        let words = vec![
+            (0x08, 0x0200_0022),
+            (0x0c, RAM),
+            (0x1c, 16),
+            // Pitch 6 is less than a 4-pixel line (8 bytes).
+            (0x20, RAM + 0x100),
+            (0x30, 6),
+            (0x5c, RAM + 0x800),
+            (0x64, 4),
+            (0x84, 2 << 16 | 4),
+            (0x70, RAM + 0x1000),
+            (0x80, 32),
+        ];
+        let mut host = host();
+        assert_eq!(program(&mut Mix::new(mix_stub()), &mut host, &words), None);
+        for y in 0..2 {
+            for x in 0..8 {
+                assert_eq!(host.ram[0x1000 + y * 32 + x], 10 * y as u8 + x as u8);
+            }
+            assert_eq!(host.ram[0x1000 + y * 32 + 8], 0xee);
+        }
+        let mut second_plane = words.clone();
+        second_plane.push((0x78, RAM + 0x1800));
+        assert!(program(&mut Mix::new(mix_stub()), &mut host, &second_plane).is_some());
     }
 
     /// The HDR composite (mode 0x32) writes the rounded average of the three inputs at the
