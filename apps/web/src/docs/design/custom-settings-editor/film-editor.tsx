@@ -1855,7 +1855,7 @@ export function Editor(props: {
           transition: [props.column?.transition, 'opacity 200ms ease-out'].filter(Boolean).join(', '),
         }}
       >
-      <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px`, background: 'var(--m-rail)' }}>
+      <div class="absolute inset-y-0 left-0 flex flex-col items-center gap-[4px] pt-[8px]" style={{ ...COLUMN, width: `${RAIL}px` }}>
         <For each={railSections(s())}>
           {(tool) => {
             const chosen = () => (s().area === 'rows' ? inView() : currentSection(s())) === tool;

@@ -15,7 +15,7 @@ const LOOKS = {
   glass: '',
   contrast: `
     --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
-    --m-rail: #000; --m-panel: #000;
+    --m-panel: #000;
     --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
     --m-track: rgb(255 255 255 / 0.1); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
     --m-focus: rgb(255 255 255 / 0.2); --m-focus-edge: inset 0 0 0 3px #ffd60a;
@@ -29,7 +29,7 @@ const LOOKS = {
      scales, and focus as a brighter raised plate with a fine light rim. */
   fujimod: `
     --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
-    --m-rail: linear-gradient(90deg, #2e2e2e, #232323); --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
+    --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
     --m-track: linear-gradient(#262626, #1a1a1a); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(0 0 0 / 0.9);
     --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.55), 0 2px 4px rgb(0 0 0 / 0.7);
@@ -55,7 +55,7 @@ function glassVars(opacity: number, contrast: number): string {
   return `
     --m-column: rgb(${mix(22, 12, opacity)} ${mix(22, 12, opacity)} ${mix(24, 14, opacity)} / ${fill(0.5)});
     --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
-    --m-rail: rgb(16 16 18 / ${fill(0.72)}); --m-panel: rgb(26 26 28 / ${fill(0.84)});
+    --m-panel: rgb(26 26 28 / ${fill(0.84)});
     --m-chip: rgb(20 20 22 / ${fill(0.52)});
     --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
     --m-track: rgb(255 255 255 / ${mix(0.05, 0.1, contrast)}); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / ${mix(0, 0.12, contrast)});
