@@ -510,6 +510,11 @@ impl Device for Controller {
         self.offset(address, size)
             .is_some_and(|o| matches!(o, 0 | 4 | 0xc | 0x10 | 0x14 | 0x18 | 0x1c | 0x24))
     }
+    fn poll_stable(&self, address: u64, size: u8) -> bool {
+        // SSPSR follows the FIFOs and the frame in flight. They change at a
+        // data register access and when a frame ends, which is a deadline.
+        self.offset(address, size) == Some(0xc)
+    }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
         Ok(Checkpoint::encode(self.name(), &(e.clock, self.base, &self.interrupts, &e.state))?

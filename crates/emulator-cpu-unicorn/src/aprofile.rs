@@ -592,6 +592,12 @@ impl CodeOwner for Execution {
                 false,
             )?;
             self.wide_code_watch.set(true);
+            if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some() {
+                eprintln!(
+                    "FUJIMOD execution counters: CPU{} observes every store from now on: code at {address:#x} is beyond the store watch bitmap",
+                    self.id.get()
+                );
+            }
             Ok(())
         } else {
             self.cpu.watch_stores(address, bytes)

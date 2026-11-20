@@ -455,6 +455,15 @@ pub trait Device: Send + std::any::Any {
     fn pollable(&self, _address: u64, _size: u8) -> bool {
         false
     }
+    /// True only for a read that has no effect at all and whose value changes
+    /// only at this model's own accesses and at device events the timeline
+    /// delivers (deadlines of this or another model): never with guest time
+    /// alone. The execution core may then leave out reads of a poll loop that
+    /// repeats without change, up to the next event. Checking this predicate
+    /// must itself be observational.
+    fn poll_stable(&self, _address: u64, _size: u8) -> bool {
+        false
+    }
     /// Observational checkpoint state; restoring does not perform guest work.
     fn save(&self) -> serde_json::Value {
         serde_json::Value::Null

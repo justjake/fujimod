@@ -10,6 +10,8 @@ mod mprofile_blocks_tests;
 mod code_shadow_tests;
 #[cfg(test)]
 mod store_hook_tests;
+#[cfg(test)]
+mod settle_access_tests;
 pub mod continuation;
 pub mod decoder;
 #[cfg(test)]
@@ -324,6 +326,10 @@ pub struct Board {
     /// Host run control: M-profile processors may run in block execution.
     /// `FUJIMOD_MPROFILE_INSTRUCTIONS` starts a board with it off.
     block_execution: Cell<bool>,
+    /// Host run control: poll loops of M-profile processors in block
+    /// execution are fast-forwarded. `FUJIMOD_POLL_LOOPS=0` starts a board
+    /// with it off.
+    poll_loops: Cell<bool>,
     /// Per core: its board store hook is installed only while it has work,
     /// and the installed hook.
     store_hooks_on_demand: Vec<Option<Option<HookId>>>,
@@ -599,6 +605,9 @@ impl Board {
             store_hooks: vec![None; n],
             block_execution: Cell::new(
                 std::env::var_os("FUJIMOD_MPROFILE_INSTRUCTIONS").is_none(),
+            ),
+            poll_loops: Cell::new(
+                std::env::var_os("FUJIMOD_POLL_LOOPS").is_none_or(|v| v != "0"),
             ),
             store_hooks_on_demand: vec![None; n],
             store_hook_installs: Cell::new(0),
@@ -1600,6 +1609,11 @@ impl Board {
     pub fn set_block_execution(&self, on: bool) {
         self.block_execution.set(on);
     }
+    /// Allow or forbid the fast-forward of poll loops (`mprofile_blocks::Poll`).
+    /// Both ways give the same guest results; this exists to compare them.
+    pub fn set_poll_loops(&self, on: bool) {
+        self.poll_loops.set(on);
+    }
     /// Choose, before a processor runs, between the per-instruction observer
     /// and block execution (`mprofile_blocks`), and set the engine up for the
     /// choice. Block execution needs exact execution, an M-profile
@@ -1743,6 +1757,9 @@ impl Board {
         blocks.room = budget;
         blocks.pending = None;
         blocks.resume = false;
+        // Anything may have happened since the last run.
+        blocks.poll = None;
+        blocks.poll_enabled = wanted && self.poll_loops.get();
         Ok(wanted)
     }
     /// Discard a processor's translations when its instruction observer
@@ -1843,12 +1860,15 @@ impl Drop for Board {
             for (core, blocks) in s.blocks.iter().enumerate() {
                 if let Some(blocks) = blocks {
                     eprintln!(
-                        "FUJIMOD execution counters: CPU{core} blocks observed={} admitted-entries={} shortened={} fast-stores={} watched-pages={}",
+                        "FUJIMOD execution counters: CPU{core} blocks observed={} admitted-entries={} shortened={} (unsettled, instruction, run, peer, deadline: {:?}) fast-stores={} watched-pages={} poll-fast-forwards={} poll-reads-left-out={}",
                         blocks.observed,
                         blocks.admitted,
                         blocks.shortened,
+                        blocks.shortened_by,
                         blocks.fast_stores,
-                        blocks.watched.len()
+                        blocks.watched.len(),
+                        blocks.poll_skips,
+                        blocks.poll_reads
                     );
                 }
             }
@@ -1864,6 +1884,7 @@ impl Drop for Board {
                 }
             }
         }
+        access_histogram::report();
         let _ = self.continuation_end();
         let _ = self.release_store_watch();
         // The board exclusively owns processors; bindings hold only Weak
@@ -1874,6 +1895,41 @@ impl Drop for Board {
         for (core, base, bytes, _) in self.mmio.drain(..) {
             let _ = self.cpus[core].unmap(base, bytes);
         }
+    }
+}
+/// Host-only diagnostic: with `FUJIMOD_ACCESS_HISTOGRAM` set, count device
+/// accesses by processor, address, PC and direction, and print the most
+/// frequent ones when a board is dropped.
+mod access_histogram {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    type Counts = HashMap<(usize, u64, u64, bool), u64>;
+    thread_local! {
+        static COUNTS: RefCell<Option<Counts>> = RefCell::new(
+            std::env::var_os("FUJIMOD_ACCESS_HISTOGRAM").map(|_| HashMap::new()),
+        );
+    }
+    #[inline]
+    pub(super) fn count(core: usize, address: u64, pc: u64, write: bool) {
+        COUNTS.with(|counts| {
+            if let Some(counts) = counts.borrow_mut().as_mut() {
+                *counts.entry((core, address, pc, write)).or_default() += 1;
+            }
+        });
+    }
+    pub(super) fn report() {
+        COUNTS.with(|counts| {
+            if let Some(counts) = counts.borrow_mut().as_mut() {
+                let mut rows: Vec<_> = counts.drain().collect();
+                rows.sort_by_key(|&(key, n)| (std::cmp::Reverse(n), key));
+                for ((core, address, pc, write), n) in rows.into_iter().take(32) {
+                    eprintln!(
+                        "FUJIMOD access histogram: CPU{core} {} {address:#x} pc={pc:#x} count={n}",
+                        if write { "write" } else { "read" }
+                    );
+                }
+            }
+        });
     }
 }
 fn scalar(cpu: &dyn Cpu, r: Register) -> Result<u64, String> {
@@ -2547,9 +2603,13 @@ impl State {
         // Block execution: a device access is the last instruction of its
         // block, so the whole block has been entered.
         self.settle_block(core, None)?;
+        // Any access ends a poll loop candidate, unless it is the loop's own
+        // read coming round again (`poll_round`).
+        let poll = self.blocks[core].as_mut().and_then(|blocks| blocks.poll.take());
         self.sync(&*cpus[core], core)?;
         self.due(cpus)?;
         let pc = scalar(&*cpus[core], Register::Pc)?;
+        access_histogram::count(core, address, pc, value.is_some());
         if let Some(p) = &mut self.mprofile[core]
             && (0xe0000000..0xe0100000).contains(&address)
         {
@@ -2577,8 +2637,137 @@ impl State {
         self.refresh_processors()?;
         self.due(cpus)?;
         self.push_pins(cpus)?;
+        self.settle_access(core)?;
+        if value.is_none() {
+            self.poll_round(&*cpus[core], core, pc & !1, address, size, result, poll)?;
+        }
         self.tighten(&*cpus[core], core)?;
         Ok(result)
+    }
+    /// After a device read of an M-profile processor in block execution:
+    /// recognise a poll loop that came round unchanged and account the rounds
+    /// that must follow, up to the next device event, the peer's turn or the
+    /// end of the run (`mprofile_blocks::Poll`). Their reads are left out;
+    /// the processor then executes the rest of the last round itself.
+    #[allow(clippy::too_many_arguments)]
+    fn poll_round(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        address: u64,
+        size: u8,
+        value: u64,
+        last: Option<mprofile_blocks::Poll>,
+    ) -> Result<(), String> {
+        if !self.blocks[core]
+            .as_ref()
+            .is_some_and(|blocks| blocks.active && blocks.poll_enabled)
+            || self.error.is_some()
+        {
+            return Ok(());
+        }
+        let instructions = self.instructions[core];
+        let last = last.filter(|p| p.pc == pc && p.address == address && p.size == size);
+        let period = match last {
+            Some(last) => last.period,
+            None if self.bus.poll_stable(address, size) => {
+                let mut buffer = Vec::new();
+                self.block_code(cpu, core, pc, 34, &mut buffer)
+                    .ok()
+                    .and_then(mprofile_blocks::poll_period)
+            }
+            None => None,
+        };
+        let mut poll = mprofile_blocks::Poll {
+            pc,
+            address,
+            size,
+            period,
+            value,
+            instructions,
+            registers: None,
+        };
+        // One whole round since the last read, the same value, and nothing
+        // ready that the next block entry would take.
+        let round = match (last, period) {
+            (Some(last), Some(period))
+                if last.value == value
+                    && last.instructions.checked_add(period) == Some(instructions)
+                    && self.settled.armed
+                    && self.settled.idle == Some(core) =>
+            {
+                Some((last.registers, period))
+            }
+            _ => None,
+        };
+        if let Some((before, period)) = round {
+            let mut registers = [0; 16];
+            for (index, slot) in registers.iter_mut().enumerate() {
+                *slot = scalar(
+                    cpu,
+                    Register::Arm32(if index < 15 {
+                        fujimod_emulator_cpu::arm::Register::R(index as u8)
+                    } else {
+                        fujimod_emulator_cpu::arm::Register::Cpsr
+                    }),
+                )?;
+            }
+            poll.registers = Some(registers);
+            if before == Some(registers) {
+                // The bound of a block admission, less one entry. An admitted
+                // entry begins before the next deadline. A read happens after
+                // its entry is accounted, so a read left out must also end
+                // before that deadline: at the deadline itself the device
+                // event comes first and the read could return a new value.
+                let until = self.clock_limit.unwrap_or(u64::MAX).min(self.settled.until);
+                let room = self.blocks[core].as_ref().map_or(0, |blocks| blocks.room);
+                let rounds = room
+                    .min(self.timeline.processor_budget(core, u64::MAX, Some(until))?)
+                    .min(self.scheduler_room(core))
+                    .saturating_sub(1)
+                    / period;
+                if rounds != 0 {
+                    let entries = rounds * period;
+                    self.account(core, entries)?;
+                    self.instructions[core] = self.instructions[core]
+                        .checked_add(entries)
+                        .ok_or("instruction counter overflow")?;
+                    poll.instructions = self.instructions[core];
+                    let blocks = self.blocks[core].as_mut().unwrap();
+                    blocks.room -= entries;
+                    blocks.admitted += entries;
+                    blocks.skipped_reads += rounds;
+                    blocks.poll_skips += 1;
+                    blocks.poll_reads += rounds;
+                }
+            }
+        }
+        self.blocks[core].as_mut().unwrap().poll = Some(poll);
+        Ok(())
+    }
+    /// After a device access of an M-profile processor: when the pin push
+    /// that ended the access left every value as it found it, the observer of
+    /// the processor's next instruction would repeat that push and the
+    /// deadline refresh on unchanged inputs. Do the refresh here, in the
+    /// observer's order, and record the fixed point, so that the next entry
+    /// is a settled one. Most device accesses of a servo loop are status
+    /// reads that change nothing.
+    fn settle_access(&mut self, core: usize) -> Result<(), String> {
+        if !self.settled.pass || self.mprofile[core].is_none() || self.decoders.pending() {
+            return Ok(());
+        }
+        self.refresh_processors()?;
+        self.arm_settled()?;
+        if self.settled.armed
+            && let Some(p) = self.mprofile[core].as_mut()
+            && !p.pending()
+        {
+            // The push above already ran this pending scan; no exception is
+            // ready, as the next observer would find.
+            self.settled.idle = Some(core);
+        }
+        Ok(())
     }
     fn system_register(&mut self, cpu: &dyn Cpu, core: usize, syndrome: u64) -> Result<(), String> {
         self.settled.clear();
@@ -3083,8 +3272,20 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             return Ok(());
         }
         if limit < entries {
+            let reason = if !settled {
+                0
+            } else if limit == unit {
+                1
+            } else if limit == room {
+                2
+            } else if limit == s.scheduler_room(core) {
+                3
+            } else {
+                4
+            };
             if let Some(blocks) = s.blocks[core].as_mut() {
                 blocks.shortened += 1;
+                blocks.shortened_by[reason] += 1;
             }
             return cpu.retry_block(limit as u32);
         }
@@ -3129,6 +3330,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         let execute = matches!(entry, mprofile::Entry::Execute);
         if !execute {
             s.settled.clear();
+            s.blocks[core].as_mut().unwrap().poll = None;
         }
         match entry {
             mprofile::Entry::Redirect => {
@@ -3231,6 +3433,10 @@ unsafe fn written(
                     return cpus[b.core].request_restart();
                 }
                 state.settle_block(b.core, None)?;
+                // A store this hook sees ends a poll loop candidate.
+                if let Some(blocks) = state.blocks[b.core].as_mut() {
+                    blocks.poll = None;
+                }
                 let address =
                     cpus[b.core].translate(address, fujimod_emulator_cpu::Access::Write)?;
                 if state.memory.watching_writes() {
@@ -3273,9 +3479,18 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
         if let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core) {
             *count = count.saturating_add(1);
         }
-        b.state
-            .borrow_mut()
-            .access(&cpus, b.core, address, size, value)
+        let mut state = b.state.borrow_mut();
+        let result = state.access(&cpus, b.core, address, size, value);
+        // Reads a poll loop fast-forward left out count as serviced.
+        if let Some(skipped) = state.blocks[b.core]
+            .as_mut()
+            .map(|blocks| std::mem::take(&mut blocks.skipped_reads))
+            .filter(|&skipped| skipped != 0)
+            && let Some(count) = b.mmio_callback_counts.borrow_mut().get_mut(b.core)
+        {
+            *count = count.saturating_add(skipped);
+        }
+        result
     })();
     match result {
         Ok(v) => v,

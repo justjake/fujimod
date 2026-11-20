@@ -82,7 +82,7 @@ fn board(blocks: bool) -> Board {
         peripherals: vec![],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
-    let mut board = graph
+    let board = graph
         .build(
             Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             Bus::new(bus::Mode::Strict),
