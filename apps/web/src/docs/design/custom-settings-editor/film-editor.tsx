@@ -2172,7 +2172,7 @@ export function Editor(props: {
             <AnchoredFlyOut
               anchor={anchor()}
               left={PICTURE_LEFT}
-              height={grid() ? Math.ceil(options().length / ICON_COLUMNS) * (ICON_CELL + 4) + 12 : flyOutListHeight(options().length)}
+              height={grid() ? Math.ceil(options().length / ICON_COLUMNS) * (ICON_CELL + 4) + 2 : flyOutListHeight(options().length)}
             >
             <div style={grid() ? { width: `${ICON_COLUMNS * ICON_CELL}px` } : {}} class="flex min-h-0 grow flex-col">
             <PickerList

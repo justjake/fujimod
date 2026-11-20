@@ -3,7 +3,10 @@ import type { JSX } from '@solidjs/web';
 
 import { reveal } from './column';
 import { Chevron } from './controls';
-import { ACCENT, SELECTED, SMALL } from './materials';
+import { ACCENT, SELECTED } from './materials';
+
+/** A fly-out row's height: the camera menu's row pitch. */
+const FLY_ROW = 57;
 
 /** One choice in a picker: its name, and artwork drawn in the given ink. */
 export interface PickerOption {
@@ -51,17 +54,22 @@ export function PickerList(props: {
               class={
                 props.columns
                   ? 'relative flex aspect-square items-center justify-center rounded-[10px]'
-                  : `flex h-[44px] w-full items-center gap-[10px] rounded-[10px] pr-[12px] pl-[6px] text-left whitespace-nowrap ${SMALL}`
+                  : `flex w-full items-center gap-[10px] pr-[16px] pl-[12px] text-left text-[35px] leading-none font-normal whitespace-nowrap`
               }
-              style={{
-                color: '#fff',
-                ...(props.at === i() ? SELECTED : {}),
-                ...(props.columns || i() === 0 || props.at === i() || props.at === i() - 1 ? {} : { 'box-shadow': 'inset 0 1px 0 var(--m-separator)', 'border-radius': '0' }),
-              }}
+              style={
+                props.columns
+                  ? { color: '#fff', ...(props.at === i() ? SELECTED : {}) }
+                  : {
+                      color: '#fff',
+                      height: `${FLY_ROW}px`,
+                      'box-shadow': [props.at === i() ? 'var(--m-cursor-edge)' : '', i() > 0 ? 'inset 0 1px 0 var(--m-separator)' : ''].filter(Boolean).join(', ') || 'none',
+                      ...(props.at === i() ? { background: 'var(--m-cursor)' } : {}),
+                    }
+              }
               onClick={() => props.choose(i())}
             >
               <Show when={!props.columns}>
-                <span class="w-[20px] shrink-0 text-center" style={{ color: 'var(--m-check)' }}>
+                <span class="-mr-[10px] w-[36px] shrink-0 text-[25px]" style={{ color: 'var(--m-check)' }}>
                   {props.current === i() ? '✓' : ''}
                 </span>
               </Show>
@@ -75,7 +83,7 @@ export function PickerList(props: {
               <Show when={option.more}>
                 {(more) => (
                   <span
-                    class="-mr-[6px] flex h-full items-center px-[6px]"
+                    class="-mr-[10px] flex h-full items-center px-[10px]"
                     onClick={(e) => {
                       e.stopPropagation();
                       more()();
@@ -101,14 +109,19 @@ export function FlyOut(props: { left: number; rowTop: number; height: number; ch
   const screen = () => props.screenHeight ?? 480;
   const height = () => Math.min(props.height, screen() - 2 * MARGIN);
   const top = () => Math.max(MARGIN, Math.min(screen() - MARGIN - height(), props.rowTop));
+  /* A panel wider than the room beside the column moves left over the
+     column, as the camera's option list overlaps its row. */
+  const [width, setWidth] = createSignal(0);
+  const left = () => Math.max(MARGIN, Math.min(props.left, 720 - MARGIN - width()));
   return (
     <div
-      class="absolute flex w-max min-w-[220px] flex-col overflow-hidden p-[6px]"
+      ref={(panel: HTMLDivElement) => requestAnimationFrame(() => setWidth(panel.offsetWidth))}
+      class="absolute flex w-max min-w-[220px] flex-col overflow-hidden p-[1px]"
       style={{
-        left: `${props.left}px`,
+        left: `${left()}px`,
         top: `${top()}px`,
         height: `${height()}px`,
-        'max-width': `${720 - props.left - MARGIN}px`,
+        'max-width': `${720 - 2 * MARGIN}px`,
         background: 'var(--m-popup)',
         'box-shadow': 'var(--m-popup-edge)',
         'border-radius': '0 16px 16px 0',
@@ -146,8 +159,8 @@ export function AnchoredFlyOut(props: { anchor: string; left: number; height: nu
   );
 }
 
-/** A fly-out list's height for `count` rows. */
-export const flyOutListHeight = (count: number) => count * 44 + 12;
+/** A fly-out list's height for `count` rows, inside its 1-pixel border. */
+export const flyOutListHeight = (count: number) => count * FLY_ROW + 2;
 
 /** The cursor after a key in a picker of `count` options; undefined for keys a picker does not take. */
 export function pickerStep(at: number, count: number, key: string, columns = 1): number | undefined {

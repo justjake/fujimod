@@ -1,4 +1,6 @@
-import { For, Show, createSignal } from 'solid-js';
+import { For, Show, createSignal, onSettled } from 'solid-js';
+
+import { actualSize, loadCalibration, pxPerInch, setActualSize, setPxPerInch } from './screen';
 import type { JSX } from '@solidjs/web';
 
 /* Looks: each names how every role is drawn (the column, the rail, rows and
@@ -15,7 +17,7 @@ const LOOKS = {
   glass: '',
   contrast: `
     --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
-    --m-popup: #000; --m-popup-edge: inset 0 0 0 2px #fff; --m-separator: rgb(255 255 255 / 0.4); --m-check: #fff;
+    --m-popup: #000; --m-popup-edge: inset 0 0 0 2px #fff; --m-cursor: rgb(255 255 255 / 0.2); --m-cursor-edge: inset 0 0 0 3px #ffd60a; --m-separator: rgb(255 255 255 / 0.4); --m-check: #fff;
     --m-panel: #000;
     --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
     --m-track: rgb(255 255 255 / 0.1); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
@@ -29,7 +31,7 @@ const LOOKS = {
      top edge and a dark bottom edge, engraved dividers, recessed wells for
      scales, and focus as a brighter raised plate with a fine light rim. */
   fujimod: `
-    --m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-separator: #323235; --m-check: #2a7fff;
+    --m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-cursor: #3a3a3c; --m-cursor-edge: inset 0 0 0 0 transparent; --m-separator: #323235; --m-check: #2a7fff;
     --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
     --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
@@ -64,6 +66,7 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
     --m-popup: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)}); --m-popup-edge: inset 0 0 0 1px rgb(255 255 255 / ${edge(0.16)});
     --m-separator: rgb(255 255 255 / ${edge(0.12)}); --m-check: #fff;
+    --m-cursor: rgb(255 255 255 / 0.24); --m-cursor-edge: inset 0 0 0 2px rgb(255 255 255 / 0.85);
     --m-panel: rgb(${gray(26, 2)} / ${fill(0.84)});
     --m-chip: rgb(${gray(20, 2)} / ${fill(0.52)});
     --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
@@ -112,6 +115,7 @@ export function DesignFrame(props: { title: string; children: JSX.Element }) {
   const [opacity, setOpacity] = createSignal(GLASS_DEFAULT.opacity);
   const [contrast, setContrast] = createSignal(GLASS_DEFAULT.contrast);
   const [lightness, setLightness] = createSignal(GLASS_DEFAULT.lightness);
+  onSettled(loadCalibration);
   return (
     <div
       class={`design-frame touch-manipulation bg-[#111] px-[12px] py-[16px] font-sans text-[15px] text-[#ddd] ${rounded() ? '' : 'fm-square'} ${upper() ? 'fm-upper' : ''} fm-look-${look()}`}
@@ -137,6 +141,29 @@ export function DesignFrame(props: { title: string; children: JSX.Element }) {
             </button>
           )}
         </For>
+      </div>
+      <div class="mb-[14px] flex flex-col gap-[10px]">
+        <Toggle label="Actual size" on={actualSize()} set={setActualSize} />
+        <Show when={actualSize()}>
+          <label class="flex h-[44px] max-w-[720px] items-center gap-[12px] text-[16px] font-semibold text-white">
+            <span class="w-[84px]">Calibrate</span>
+            <input
+              type="range"
+              min="80"
+              max="220"
+              value={pxPerInch()}
+              class="h-[44px] grow accent-white"
+              onInput={(e) => setPxPerInch(Number(e.currentTarget.value))}
+            />
+          </label>
+          {/* A bank card, upright: 54.0 by 85.6 mm. Hold one against this outline. */}
+          <div
+            class="flex items-center justify-center rounded-[8px] border-2 border-dashed border-white/60 text-[14px] text-white/70"
+            style={{ width: `${(53.98 / 25.4) * pxPerInch()}px`, height: `${(85.6 / 25.4) * pxPerInch()}px` }}
+          >
+            Bank card
+          </div>
+        </Show>
       </div>
       <Show when={look() === 'glass'}>
         <div class="mb-[14px] flex max-w-[720px] flex-col gap-[6px]">

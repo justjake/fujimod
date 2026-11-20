@@ -6,19 +6,76 @@ import { ACCENT, GLASS, SMALL } from './materials';
 /** The camera's screen, in its own pixels. */
 export const SCREEN = { width: 720, height: 480 } as const;
 
-/** A camera screen at its own size, scaled down to fit a narrow page. */
+/** The X70's screen is 3.0 inches across its diagonal at 3:2: 2.50 by 1.66
+ * inches, 288 camera pixels to the inch. */
+const SCREEN_INCHES = (3 * 3) / Math.sqrt(13);
+
+const CALIBRATION_KEY = 'fujimod-design-css-px-per-inch';
+
+/** CSS pixels per physical inch on this display. Browsers do not report it,
+ * so it starts from the usual figure for the kind of display (an iPhone's
+ * 460-ppi panel at 3 device pixels per CSS pixel is 153; an iPad's 264 at 2
+ * is 132; a Mac laptop's is near 113) and the viewer can calibrate it. */
+function estimatePxPerInch(): number {
+  if (typeof window === 'undefined') return 113;
+  try {
+    const saved = Number(window.localStorage.getItem(CALIBRATION_KEY));
+    if (saved > 0) return saved;
+  } catch {
+    /* No storage: use the estimate. */
+  }
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  if (touch && Math.min(window.screen.width, window.screen.height) < 500) return 153;
+  if (touch) return 132;
+  return 113;
+}
+
+/** Whether prototype screens are drawn at the camera screen's physical size. */
+export const [actualSize, setActualSize] = createSignal(false);
+
+const [pxPerInchValue, setPxPerInchValue] = createSignal(113);
+/** This display's CSS pixels per inch. */
+export const pxPerInch = pxPerInchValue;
+
+/** Calibrates the display's CSS pixels per inch, remembered on this device. */
+export function setPxPerInch(value: number) {
+  setPxPerInchValue(value);
+  try {
+    window.localStorage.setItem(CALIBRATION_KEY, String(value));
+  } catch {
+    /* No storage: the calibration lasts for this visit. */
+  }
+}
+
+/** Loads this device's calibration; called once a page is in the browser. */
+export function loadCalibration() {
+  setPxPerInchValue(estimatePxPerInch());
+}
+
+/** A camera screen at its own size, scaled down to fit a narrow page; with
+ * ACTUAL SIZE on, at the camera screen's physical size. */
 export function Fit(props: { children: JSX.Element }) {
   let host: HTMLDivElement | undefined;
-  const [scale, setScale] = createSignal(1);
+  const [fitScale, setFitScale] = createSignal(1);
   onSettled(() => {
     const element = host;
     if (!element) return;
-    const observer = new ResizeObserver(() => setScale(Math.min(1, element.clientWidth / SCREEN.width)));
+    const observer = new ResizeObserver(() => setFitScale(Math.min(1, element.clientWidth / SCREEN.width)));
     observer.observe(element);
     return () => observer.disconnect();
   });
+  const scale = () => (actualSize() ? (SCREEN_INCHES * pxPerInch()) / SCREEN.width : fitScale());
   return (
-    <div ref={(element) => (host = element)} class="w-full max-w-[720px] overflow-hidden" style={{ height: `${SCREEN.height * scale()}px` }}>
+    <div
+      ref={(element) => (host = element)}
+      class="overflow-hidden"
+      style={
+        actualSize()
+          ? /* Centered on the page, past its side padding if it must be. */
+            { width: `${SCREEN.width * scale()}px`, height: `${SCREEN.height * scale()}px`, 'margin-left': `calc(50% - ${(SCREEN.width * scale()) / 2}px)` }
+          : { width: '100%', 'max-width': `${SCREEN.width}px`, height: `${SCREEN.height * scale()}px` }
+      }
+    >
       <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: `${SCREEN.width}px` }}>
         {props.children}
       </div>

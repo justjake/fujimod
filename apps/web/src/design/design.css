@@ -104,3 +104,11 @@
   font-family: var(--font-focal);
   -webkit-font-smoothing: antialiased;
 }
+
+/* The site's button reset is outside every layer, so it would beat each text
+   size a prototype sets on a button. Inside a prototype, buttons take the
+   layered styles again. */
+.design-frame button {
+  font: revert-layer;
+  color: revert-layer;
+}
