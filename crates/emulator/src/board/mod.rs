@@ -2791,6 +2791,7 @@ impl State {
                         .checked_add(entries)
                         .ok_or("instruction counter overflow")?;
                     poll.instructions = self.instructions[core];
+                    self.bus.left_out_reads(address, size, rounds);
                     self.polls.skipped_reads += rounds;
                     self.polls.skips[core] += 1;
                     self.polls.reads[core] += rounds;
@@ -2895,6 +2896,7 @@ impl State {
                     blocks.admitted += entries;
                     blocks.skipped_reads += rounds;
                     blocks.poll_skips += 1;
+                    self.bus.left_out_reads(address, size, rounds);
                     blocks.poll_reads += rounds;
                 }
             }
