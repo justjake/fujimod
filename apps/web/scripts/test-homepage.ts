@@ -6,7 +6,12 @@ import { chromium, webkit, devices } from 'playwright';
 import { unzipSync, strFromU8 } from 'fflate';
 import { manualPageAt } from '../src/docs/manual-data.ts';
 import { loadRelease } from '../src/patch/release.ts';
-import { loadOtaRelease, sdBootV2Firmware, storeName } from '../src/ota/release.ts';
+import {
+  loadOtaRelease,
+  sdBootV2Firmware,
+  sdBootV2SystemFolder,
+  storeName,
+} from '../src/ota/release.ts';
 import type { FeatureMedia } from '../src/home/feature-media.ts';
 
 const base = process.env.FUJIMOD_WEB_URL || 'http://127.0.0.1:5201/';
@@ -247,7 +252,7 @@ for (const engine of [chromium, webkit]) {
         for (const camera of release.firmwares) {
           const firmware = sdBootV2Firmware(camera.id);
           const manifest = await loadOtaRelease(release.assetBase, firmware);
-          const root = `FUJIMOD/SYSTEM/${firmware}`;
+          const root = `FUJIMOD/SYSTEM/${sdBootV2SystemFolder(firmware)}`;
           const initial = JSON.parse(strFromU8(files[`${root}/A.JSN`]));
           assert.equal(initial.version, manifest.version);
           assert.ok(files[`${root}/STATE.JSN`]);

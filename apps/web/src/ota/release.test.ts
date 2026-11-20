@@ -1,5 +1,5 @@
 import { expect, test } from 'vite-plus/test';
-import { loadOtaRelease, sdBootV2Firmware } from './release';
+import { loadOtaRelease, sdBootV2Firmware, sdBootV2SystemFolder } from './release';
 
 const manifest = {
   firmware: 'X70-110',
@@ -41,6 +41,13 @@ test('a missing manifest is reported as unavailable', async () => {
   ).rejects.toThrow('unavailable');
 });
 
-test('the card directory is the firmware id in upper case', () => {
+test('the release identity is the firmware id in upper case', () => {
   expect(sdBootV2Firmware('x70-110')).toBe('X70-110');
+});
+
+test('the card directory is an 8.3 name', () => {
+  expect(sdBootV2SystemFolder('X70-110')).toBe('X70-110');
+  expect(sdBootV2SystemFolder('XE2S-111')).toBe('XE2S-111');
+  expect(sdBootV2SystemFolder('X100T-111')).toBe('X100T111');
+  expect(() => sdBootV2SystemFolder('X100VI-131')).toThrow('no SD card folder name');
 });
