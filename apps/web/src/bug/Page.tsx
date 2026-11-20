@@ -105,14 +105,7 @@ export default function BugReport(props: {
     if (previous) URL.revokeObjectURL(previous);
     setScreen(
       shown.screen
-        ? URL.createObjectURL(
-            new Blob(
-              [bytes.subarray(shown.screen.offset, shown.screen.offset + shown.screen.bytes)],
-              {
-                type: 'image/bmp',
-              },
-            ),
-          )
+        ? URL.createObjectURL(new Blob([shown.screen], { type: 'image/bmp' }))
         : undefined,
     );
     setDetails(shown);
@@ -327,8 +320,8 @@ export default function BugReport(props: {
                         <details>
                           <summary>After restarting the camera</summary>
                           <p>
-                            Open the issue QR screen again, or enable SET UP → DEVTOOLS →
-                            USB DEBUGGING, then reconnect USB.
+                            Open the issue QR screen again, or enable SET UP → DEVTOOLS → USB
+                            DEBUGGING, then reconnect USB.
                           </p>
                         </details>
                       </Show>

@@ -54,7 +54,14 @@ test('the camera QR carries only compact retrieval metadata', () => {
         '#?report=' + base64url(new TextEncoder().encode(JSON.stringify({ ...wire, ...changes }))),
       ),
     ).toThrow();
-  const checksumLink = { v: 1, b: link.commit, r: '1234567', n: tar.length, c: '00000000', f: link.files };
+  const checksumLink = {
+    v: 1,
+    b: link.commit,
+    r: '1234567',
+    n: tar.length,
+    c: '00000000',
+    f: link.files,
+  };
   expect(() =>
     parseReportLink(
       '#?report=' + base64url(new TextEncoder().encode(JSON.stringify(checksumLink))),
@@ -62,10 +69,11 @@ test('the camera QR carries only compact retrieval metadata', () => {
   ).toThrow();
 });
 test('a listed report uses manifest sizes and its file name', () => {
-  const screen = Uint8Array.of(0x42, 0x4d, 1, 2, 3);
+  const video = Uint8Array.of(100, 200, 128, 128);
   const bytes = reportTar(
-    { 'screen.bmp': screen, 'state.json': Uint8Array.of(123, 125) },
+    { 'screen/video.yuv': video, 'state.json': Uint8Array.of(123, 125) },
     '2026-10-27T14:04:05',
+    { screen: { video: 'screen/video.yuv', width: 2, height: 1 } },
   );
   const { link: listed } = listedReport(bytes, link, 'R00000AB.TAR');
   expect(listed.path).toBe('A:\\FUJIMOD\\REPORTS\\R00000AB.TAR');
@@ -73,11 +81,9 @@ test('a listed report uses manifest sizes and its file name', () => {
   const entries = reportEntries(bytes, listed);
   const details = reportDetails(bytes, entries);
   expect(details.capturedAt).toBe('2026-10-27T14:04:05');
-  expect(
-    bytes.subarray(details.screen!.offset, details.screen!.offset + details.screen!.bytes),
-  ).toEqual(screen);
+  expect([...details.screen!.subarray(54, 60)]).toEqual([100, 100, 100, 200, 200, 200]);
   const damaged = bytes.slice();
-  damaged[details.screen!.offset + 2] ^= 1;
+  damaged[entries.find((entry) => entry.name === 'screen/video.yuv')!.offset + 2] ^= 1;
   expect(listedReport(damaged, link, 'R00000AB.TAR').link.bytes).toBe(damaged.length);
   expect(() => listedReport(bytes, link, 'NOTES.TXT')).toThrow();
 });

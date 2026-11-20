@@ -39,7 +39,7 @@ function records(entries: [string, number][]) {
 }
 
 test('a connected camera lists its reports, and Report files one issue per report then deletes them', async () => {
-  const tar = reportTar({ 'screen.bmp': new Uint8Array(64) }, '2026-10-26T12:00:00Z');
+  const tar = reportTar({ 'screen/video.yuv': new Uint8Array(64) }, '2026-10-26T12:00:00Z');
   const device = fileDevice(
     tar,
     0xaaaaaaaa,

@@ -177,7 +177,11 @@ test('failed upload retains USB report; retry reuses ID and deletes only after d
 test("USB reports show their screen and time, list the camera's others and offer the next", async () => {
   if (!URL.createObjectURL) URL.createObjectURL = () => 'blob:screen';
   if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
-  const first = reportTar({ 'screen.bmp': Uint8Array.of(0x42, 0x4d, 1) }, '2026-10-27T14:04:05');
+  const first = reportTar(
+    { 'screen/video.yuv': Uint8Array.of(16, 16, 128, 128) },
+    '2026-10-27T14:04:05',
+    { screen: { video: 'screen/video.yuv', width: 2, height: 1 } },
+  );
   const qr = { ...link, bytes: first.length };
   const second = reportTar({ 'state.json': Uint8Array.of(123, 125) }, '2026-10-26T09:30:00');
   const listing = [
