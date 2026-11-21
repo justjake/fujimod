@@ -530,12 +530,42 @@ pub(crate) fn open_from(
     let mut startup = if rom.is_some() {
         // Reset state: the interrupt controller and CPU interfaces start unprogrammed.
         let mut profile = firmware_profile.clone();
+        let setup_start = rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
         profile.gic_initial = None;
-        profile.gic_redistributor_initial = None;
+        // The parked cores' redistributors are awake (the profile's WAKER words for cores other
+        // than 0): the SGI that starts the reset stage's workers cannot reach a sleeping one, and
+        // the stage wakes only its own. INFERRED for the uncaptured boot ROM, like the CPU
+        // interface below.
+        profile.gic_redistributor_initial = profile
+            .gic_redistributor_initial
+            .take()
+            .filter(|_| setup_start)
+            .map(|words| {
+                let mut kept: Vec<_> = words.into_iter().filter(|word| word.core != 0).collect();
+                // SGI 0 enabled in each parked core's SGI frame (ISENABLER0 at +0x10100), the
+                // wake-up the reset stage sends them; INFERRED like the words above.
+                let enables: Vec<_> = kept
+                    .iter()
+                    .filter(|word| word.offset == 0x14)
+                    .cloned()
+                    .map(|mut word| {
+                        word.offset = 0x10100;
+                        word.value = 1;
+                        word
+                    })
+                    .collect();
+                kept.extend(enables);
+                kept
+            });
         for cpu in profile.cpu.iter_mut().flatten() {
-            cpu.sysregs.icc_pmr_el1 = 0;
-            cpu.sysregs.icc_igrpen0_el1 = 0;
-            cpu.sysregs.icc_igrpen1_el1 = 0;
+            // A core other than 0 parks in the setup stage's trampoline (wfi) and can only take
+            // the SGI that wakes it if its CPU interface is enabled. The stage never enables it,
+            // so the uncaptured boot ROM must have. INFERRED: the values are the ones the loader
+            // hand-off profile carries (priority mask 0xff, both groups enabled).
+            let parked = setup_start && cpu.id != 0;
+            cpu.sysregs.icc_pmr_el1 = if parked { 0xff } else { 0 };
+            cpu.sysregs.icc_igrpen0_el1 = u32::from(parked).into();
+            cpu.sysregs.icc_igrpen1_el1 = u32::from(parked).into();
         }
         xp5_boot::startup_from_profile(&resolved, &profile, ticks_per_second)?
     } else {
@@ -579,7 +609,10 @@ pub(crate) fn open_from(
                         (Register::Pstate, rom_start::ROM_PSTATE),
                         (Register::Sp, handoff.sp),
                     ];
-                    start.released = primary;
+                    // Every core enters the stage at its base: a core other than 0 skips `main`
+                    // and parks in the stage's trampoline (wfi) until the reset stage wakes it
+                    // with an SGI, so the reset stage's worker loop has a core to run on.
+                    start.released = true;
                     primary = false;
                 }
             }
