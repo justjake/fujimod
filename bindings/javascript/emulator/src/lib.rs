@@ -133,6 +133,9 @@ pub fn memory_bytes() -> f64 {
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
 pub struct Status {
+    /// Whether the modeled power controller is supplying the board.
+    #[wasm_bindgen(readonly, js_name = supplyOn)]
+    pub supply_on: bool,
     #[wasm_bindgen(readonly)]
     pub ticks: u64,
     #[wasm_bindgen(readonly)]
