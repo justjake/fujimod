@@ -61,7 +61,7 @@ fn register_with_resources(
         }
         "sd-interface" => {
             if window.size != 8 || !window.options.is_empty() {return Err("Invalid SD interface window".into());}
-            bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::new(window.base)?))?;
+            bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::for_slot(window.base, resources.sd.get(&(window.base & !0xfff)).map(|slot| slot.contacts.clone()))?))?;
         }
         "sdhci" => sd::register(bus, window, &mut resources.sd)?,
         "sdhci-uhs2" => sd::register_uhs2(bus, window, &resources.sd)?,

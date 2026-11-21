@@ -70,11 +70,13 @@ pub struct Options {
     #[serde(default)]
     pub address_high: Option<u64>,
     /// SD clock dividers (clock control bits 15..6) a stock driver programs
-    /// for a card in default speed and in high speed. A command at a smaller
-    /// divider, which is a faster clock than the stock driver gives that card,
-    /// refuses: the clock's frequency is not known from a measured part.
-    /// Divider 0 selects the undivided base clock, the fastest setting, and
-    /// refuses with either step.
+    /// for a card in default speed and in high speed, under the interface
+    /// clock configuration that driver selects. Under that configuration a
+    /// command at a smaller divider, which is a faster clock than the stock
+    /// driver gives that card, refuses: the clock's frequency is not known
+    /// from a measured part. Divider 0 selects the undivided base clock, the
+    /// fastest setting, and refuses with either step. Under another interface
+    /// clock configuration nothing is known and no step applies.
     #[serde(default)]
     pub speed_dividers: Option<SpeedDividers>,
 }
@@ -82,6 +84,8 @@ pub struct Options {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct SpeedDividers {
+    /// Clock configuration field of the slot's interface block (0..=3).
+    pub interface: u8,
     pub default_speed: u16,
     pub high_speed: u16,
 }
@@ -776,7 +780,8 @@ impl SdHost {
         if self.regs.get(0x3e) & 0x107 == 0x107 {
             return Err("SD command with UHS-II mode selected".into());
         }
-        if let Some(steps) = self.options.speed_dividers.filter(|_| !rom) {
+        let stock_clock = |steps: &SpeedDividers| self.contacts.interface_clock() == steps.interface;
+        if let Some(steps) = self.options.speed_dividers.filter(|steps| !rom && stock_clock(steps)) {
             let divider = (clock >> 8 & 0xff | (clock >> 6 & 3) << 8) as u16;
             let (mode, step) = if self.access_mode == 1 {
                 ("high speed", steps.high_speed)
@@ -1802,9 +1807,13 @@ mod tests {
     #[test]
     fn command_refuses_a_clock_faster_than_the_declared_stock_step() {
         let mut m = host(Protocol::Sdhc);
-        m.options.speed_dividers = Some(SpeedDividers { default_speed: 4, high_speed: 2 });
+        m.options.speed_dividers = Some(SpeedDividers { interface: 2, default_speed: 4, high_speed: 2 });
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
+        // Another interface clock configuration: no step is known, any divider runs.
+        command(&mut m, &mut h, 0, 0);
+        due(&mut m, &mut h);
+        m.contacts.select_interface_clock(2);
         for (clock, accepted) in [(0x0005, false), (0x0105, false), (0x0205, false), (0x0405, true), (0xfa05, true)] {
             // The card clock stops before its divider changes.
             write(&mut m, &mut h, 0x2c, 2, 1);
