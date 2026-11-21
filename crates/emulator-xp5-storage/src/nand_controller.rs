@@ -49,6 +49,10 @@ struct State {
     #[serde(default)]
     cached_row: Option<u32>,
     configuration_complete: bool,
+    /// Offset of the address register written last among 0x44, 0x48 and 0x50: the loader gives
+    /// a feature address in 0x44/0x48, the setup stage in 0x50.
+    #[serde(default)]
+    last_address_register: u64,
 }
 
 pub struct NandController {
@@ -71,6 +75,7 @@ impl NandController {
                 features: BTreeMap::new(),
                 cached_row: None,
                 configuration_complete: false,
+                last_address_register: 0,
             },
             nand,
             jedec,
@@ -82,6 +87,9 @@ impl NandController {
             o,
             0 | 4
                 | 8
+                // Two-bit mode word the setup stage writes (0xff815250) and reads back
+                // (0xff815244); kept as a latch, no other effect is evidenced.
+                | 0xc
                 | 0x10
                 | 0x14
                 | 0x18
@@ -131,7 +139,23 @@ impl NandController {
     /// byte-swapped into 0x44 or directly into 0x48 depending on the device
     /// table entry, so accept both encodings; 0xc0 (status) is the fallback
     /// the polls need if neither latched.
+    /// Set Feature (0x1f) and the 0x81 write the setup stage sends with the same shape: an
+    /// address register, one data byte through the FIFO (0xff810fd8). That 0x81 is a feature
+    /// write is inferred from this shape, not from the part's documentation.
+    fn is_feature_write(cmd: u8) -> bool {
+        matches!(cmd, 0x1f | 0x81)
+    }
+
     fn feature_addr(&self) -> u8 {
+        if self.state.last_address_register == 0x50 {
+            // The setup stage writes the address at 0x50; in the 16-bit (octal) command form
+            // the byte sits in bits 15..8 (0xc000 for feature 0xc0), as the opcode does.
+            let a50 = self.state.regs[0x50 / 4];
+            let byte = if self.state.regs[0] & 3 == 1 { a50 as u8 } else { (a50 >> 8) as u8 };
+            if byte != 0 {
+                return byte;
+            }
+        }
         let a44 = self.state.regs[0x44 / 4];
         let a48 = self.state.regs[0x48 / 4];
         let swapped = (a44 >> 8) as u8;
@@ -148,6 +172,10 @@ impl NandController {
 
     /// The 32-bit row (page number) of 0x13/0x0b, direct from 0x48 or 0x44.
     fn row(&self) -> u32 {
+        // Single-byte form: the setup stage gives the row at 0x50 (0x7d00 for block 500).
+        if self.state.last_address_register == 0x50 && self.state.regs[0] & 3 == 1 {
+            return self.state.regs[0x50 / 4];
+        }
         let a48 = self.state.regs[0x48 / 4];
         let a44 = self.state.regs[0x44 / 4];
         if a48 != 0 {
@@ -210,6 +238,9 @@ impl NandController {
                     .collect();
                 self.state.complete = true;
             }
+            // Set Feature: the value arrives through the FIFO and `stop` stores it, so the
+            // transaction stays active and incomplete until then.
+            0x1f | 0x81 => {}
             0x13 => {
                 self.state.cached_row = Some(self.row());
                 self.state.complete = true;
@@ -243,10 +274,15 @@ impl NandController {
     }
 
     fn stop(&mut self) -> Result<(), String> {
-        if self.cmd() == 0x1f && !self.state.tx.is_empty() {
+        if Self::is_feature_write(self.cmd()) && !self.state.tx.is_empty() {
             self.state
                 .features
                 .insert(self.feature_addr(), self.state.tx[0]);
+        }
+        // The setup stage sends Write Enable, waits for WEL, writes with 0x81 and then waits for
+        // status bits 1..0 to clear (0xff811298), so the write ends with WEL clear.
+        if self.cmd() == 0x81 {
+            self.nand.lock().unwrap().session.write_enable = false;
         }
         self.state.active = false;
         self.state.complete = true;
@@ -313,6 +349,10 @@ impl Device for NandController {
             return 0;
         }
         match o {
+            // The setup stage sends a byte with a read-modify-write of this register
+            // (ldr/bfxil/str at 0xff815944..0xff81594c), so a read during a transmit
+            // transaction is accepted and carries nothing.
+            0x80 if self.state.active && Self::is_feature_write(self.cmd()) => 0,
             0x80 => match self.rx() {
                 Ok(b) => b as u64,
                 Err(e) => {
@@ -321,19 +361,27 @@ impl Device for NandController {
                 }
             },
             0xe0 => {
-                // FUN_014a1dc8 decode: 0x18 sets the bit4/bit3 family that
-                // states 3/4/5 require while the master enable is set; 8 is
-                // the idle state the init and release polls expect.
-                let mode = if self.state.regs[0xfc / 4] & 1 != 0 {
-                    0x18
-                } else {
+                // Bits 4..3 follow the configuration register at +0x10: both drivers write
+                // it and wait for the matching state. The loader sets bits 0 and 16 together
+                // from its argument (FUN_014a200c) and waits for state 3 (8 in these bits)
+                // when set and state 2 (0x18, decoded by FUN_014a1dc8) when clear; the setup
+                // stage waits for 8 when `value & 0x10001` is nonzero and 0x18 otherwise
+                // (0xff813be0..0xff813c00).
+                let enabled = self.state.regs[0xfc / 4] & 1 != 0;
+                let mode = if self.state.regs[0x10 / 4] & 0x10001 != 0 {
                     8
-                };
-                mode | if self.state.configuration_complete {
-                    1 << 23
                 } else {
-                    0
-                }
+                    0x18
+                };
+                // Bit 7 acknowledges the master enable: the setup stage writes the enable
+                // bit (0xff8163d4) and then waits for bit 7 to equal it (0xff8139e8 with
+                // mask and expected value 0x80), with no timeout.
+                mode | if enabled { 0x80 } else { 0 }
+                    | if self.state.configuration_complete {
+                        1 << 23
+                    } else {
+                        0
+                    }
             }
             0xa0 => (self.state.regs[0xa0 / 4] & 0x7fff) as u64,
             0xf0 => {
@@ -341,7 +389,18 @@ impl Device for NandController {
                     || (self.state.active
                         && matches!(self.cmd(), 0x9f | 0x0f | 0xa5 | 0x0b));
                 let complete = self.state.complete;
-                4 | if receive { 2 } else { 0 } | complete as u64
+                // Bit 2 requests transmit data. The setup stage's FIFO service routine
+                // (0xff8146a0) sends when bit 2 is set and bytes remain, so it must stay clear
+                // during a read transaction such as Get Feature; the loader's driver only waits
+                // for bit 0 (FUN_014a25b8).
+                let transmit = self.state.active && Self::is_feature_write(self.cmd());
+                // Bit 8 accompanies completion: the setup stage's service routine finishes a
+                // transaction only when this bit is set and the last chunk was moved
+                // (0xff81470c..0xff81479c).
+                (if transmit { 4u64 } else { 0 })
+                    | (if receive { 2 } else { 0 })
+                    | complete as u64
+                    | (complete as u64) << 8
             }
             0xd0 => 0,
             _ => self.state.regs[o as usize / 4] as u64,
@@ -354,10 +413,17 @@ impl Device for NandController {
             return;
         }
         let v = v as u32;
+        if matches!(o, 0x44 | 0x48 | 0x50) {
+            self.state.last_address_register = o;
+        }
         let result = match o {
             0x80 => {
-                if !self.state.active || self.cmd() != 0x1f {
-                    Err("unsupported serial-NAND FIFO write".into())
+                if !self.state.active || !Self::is_feature_write(self.cmd()) {
+                    Err(format!(
+                        "unsupported serial-NAND FIFO write (command {:#x}, transaction {})",
+                        self.cmd(),
+                        if self.state.active { "active" } else { "not started" },
+                    ))
                 } else {
                     self.state.tx.push(v as u8);
                     if self.state.tx.len() == (self.state.regs[0xa0 / 4] & 0x7ff) as usize + 1 {
@@ -379,7 +445,10 @@ impl Device for NandController {
                 Ok(())
             }
             0xd0 => {
-                if v & !0x101 != 0 {
+                // Self-clearing resets: bits 0, 8 and 9 (reads return 0). The setup stage
+                // sets bit 8 (0xff815ebc) and bit 9 (0xff815ee4) and polls them back
+                // (0xff815eb0, 0xff815ed8).
+                if v & !0x301 != 0 {
                     Err("unsupported serial-NAND FIFO reset".into())
                 } else {
                     Ok(())
@@ -548,16 +617,98 @@ mod tests {
     fn bus_state_decode_matches_loader_expectations() {
         let mut c = controller(vec![0xff; PAGE + 2]);
         let mut host = RecordingHost::default();
-        // Master enable set (per-transaction): states 3/5 must decode.
-        c.state.regs[0xfc / 4] = 1;
-        assert_eq!(
-            c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0e0, 4) & 0x18,
-            0x18
-        );
-        // Master enable clear (init/release): idle state family.
+        let mut read = |c: &mut NandController| {
+            c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0e0, 4) as u32
+        };
+        // Configuration bits 0/16 clear: the 0x18 family (loader state 2, setup wait for 0x18).
+        c.state.regs[0x10 / 4] = 0;
+        assert_eq!(read(&mut c) & 0x18, 0x18);
+        // Either bit set: the idle family 8 (loader state 3, setup wait for 8).
+        c.state.regs[0x10 / 4] = 1;
+        assert_eq!(read(&mut c) & 0x18, 8);
+        c.state.regs[0x10 / 4] = 0x10000;
+        assert_eq!(read(&mut c) & 0x18, 8);
+        // Bit 7 follows the master enable.
         c.state.regs[0xfc / 4] = 0;
-        let idle = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0e0, 4) as u32;
-        assert_eq!(idle & 0x18, 8, "idle must satisfy the state-8 poll");
+        assert_eq!(read(&mut c) & 0x80, 0);
+        c.state.regs[0xfc / 4] = 1;
+        assert_eq!(read(&mut c) & 0x80, 0x80);
+    }
+
+    #[test]
+    fn status_requests_transmit_only_for_set_feature_and_flags_completion() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        c.state.regs[0] = 1;
+        let mut status = |c: &mut NandController| {
+            c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0f0, 4) as u32
+        };
+        // Get Feature: receive data and completion (bits 1, 0 and 8), no transmit request.
+        c.state.regs[0x40 / 4] = 0x0f;
+        c.state.regs[0xa0 / 4] = 0x8000;
+        c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        assert_eq!(status(&mut c), 0x103);
+        // The driver reads the feature byte, then ends the transaction.
+        c.read(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a080, 4);
+        // Set Feature: transmit requested until the byte arrives, not complete.
+        c.state.regs[0x40 / 4] = 0x1f;
+        c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        assert_eq!(status(&mut c), 0x4);
+        // The send routine's read-modify-write read of the FIFO register carries nothing.
+        assert_eq!(c.read(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a080, 4), 0);
+        c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a080, 4, 0x10);
+        assert_eq!(status(&mut c), 0x101, "complete after the byte, no transmit request");
+    }
+
+    #[test]
+    fn feature_address_follows_the_register_written_last() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        c.state.regs[0] = 1;
+        let mut strobe_cmd = |c: &mut NandController, cmd: u32| {
+            c.state.regs[0x40 / 4] = cmd;
+            c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        };
+        strobe_cmd(&mut c, 0x06);
+        // A stale value in 0x44 must not hide the setup stage's address in 0x50.
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a044, 4, 0xb);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 0xc0);
+        strobe_cmd(&mut c, 0x0f);
+        let status = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4) as u8;
+        assert_eq!(status & 2, 2, "WEL must read back from the status feature");
+    }
+
+    #[test]
+    fn octal_form_reads_the_feature_address_from_the_high_byte() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        // Octal format word: low bits not 1, opcode in bits 15..8.
+        c.state.regs[0] = 2;
+        c.state.regs[0x40 / 4] = 0x0600;
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0c0, 4, 1);
+        c.state.regs[0x40 / 4] = 0x0f00;
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 0xc000);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0c0, 4, 1);
+        let status = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4) as u8;
+        assert_eq!(status & 2, 2, "status feature 0xc0 must read back with WEL set");
+    }
+
+    #[test]
+    fn write_enable_clears_when_the_0x81_write_completes() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        c.state.regs[0] = 1;
+        let mut run = |c: &mut NandController, cmd: u32| {
+            c.state.regs[0x40 / 4] = cmd;
+            c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        };
+        run(&mut c, 0x06);
+        run(&mut c, 0x81);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4, 0xe7);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 0xc0);
+        run(&mut c, 0x0f);
+        let status = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4) as u8;
+        assert_eq!(status & 3, 0, "idle and write-disabled after the 0x81 write");
     }
 
     #[test]

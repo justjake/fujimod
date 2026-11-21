@@ -1,0 +1,16 @@
+# Power controller on SPI8, the first device the reset stage talks to. Chip select GPIO 15.15
+# active-high, source_hz 48 MHz and the RTC value are the X-T5 board's declaration (the X-M5 notes
+# give the same select); all three are UNVERIFIED for the X-E5. The RTC value is a virtual input
+# (seconds since 2000-01-01), not a captured value.
+[[device]]
+base = 0xff918000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 15, pin = 15, active_high = true }
+[device.options.endpoints.part]
+kind = "power-controller"
+rtc_seconds = 0x325ffea2
+rtc_valid = true

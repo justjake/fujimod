@@ -1,0 +1,5 @@
+# Reload timer channels; the loader reads channel 15's current count at 0xff908388.
+[[device]]
+base = 0xff908000
+size = 0x1000
+kind = "timer"

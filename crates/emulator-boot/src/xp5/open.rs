@@ -23,7 +23,7 @@ use fujimod_emulator_xp5_board::{
     session::Inputs,
 };
 use fujimod_emulator_xp5_io::mailbox;
-use fujimod_emulator_xp5_storage::flash_storage;
+use fujimod_emulator_xp5_storage::{flash_storage, nand_storage};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{
@@ -181,9 +181,20 @@ fn devices_and_resources(
                     usize::try_from(number("dat_origin")?).map_err(|error| error.to_string())?;
                 let xor = u8::try_from(number("xor")?).map_err(|error| error.to_string())?;
                 let image = firmware.dat_payload(origin, xor)?;
-                resources.storage = Some(flash_storage::Medium::Nor(Arc::new(Mutex::new(
-                    flash_storage::Storage::new(image)?,
-                ))));
+                let medium = window
+                    .options
+                    .get("medium")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or("nor");
+                resources.storage = Some(match medium {
+                    "nor" => flash_storage::Medium::Nor(Arc::new(Mutex::new(
+                        flash_storage::Storage::new(image)?,
+                    ))),
+                    "serial-nand" => flash_storage::Medium::Nand(Arc::new(Mutex::new(
+                        nand_storage::NandStorage::new(image)?,
+                    ))),
+                    other => return Err(format!("unknown flash storage medium {other}")),
+                });
                 window.options.remove("dat_origin");
                 window.options.remove("xor");
             }
@@ -207,18 +218,27 @@ fn devices_and_resources(
     Ok((windows, resources, controls))
 }
 
-/// Write the flash image into the RAM that backs the CPU's flash aperture in a ROM start.
+/// Write the flash image into the RAM that backs the CPU's flash aperture in a ROM start. A DMA
+/// transfer reads RAM only, so the setup stage's copy from the aperture needs this content for
+/// serial NAND as well (its linear main area).
 fn shadow_flash_aperture(
     storage: Option<&flash_storage::Medium>,
     session: &mut Session,
 ) -> Result<(), String> {
-    let Some(flash_storage::Medium::Nor(storage)) = storage else {
-        return Err("ROM start needs the NOR flash image to back the aperture".into());
+    let bytes = match storage {
+        Some(flash_storage::Medium::Nor(storage)) => {
+            let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
+            let bytes = storage.read(0, FLASH_APERTURE_SIZE)?;
+            // The seeds are already in `bytes`; only later changes are new.
+            storage.take_dirty_pages();
+            bytes
+        }
+        Some(flash_storage::Medium::Nand(storage)) => storage
+            .lock()
+            .map_err(|_| "flash storage lock poisoned")?
+            .read(0, FLASH_APERTURE_SIZE)?,
+        None => return Err("ROM start needs the flash image to back the aperture".into()),
     };
-    let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
-    let bytes = storage.read(0, FLASH_APERTURE_SIZE)?;
-    // The seeds are already in `bytes`; only later changes are new.
-    storage.take_dirty_pages();
     session.board.write_physical(FLASH_APERTURE_BASE, &bytes)
 }
 
@@ -510,12 +530,42 @@ pub(crate) fn open_from(
     let mut startup = if rom.is_some() {
         // Reset state: the interrupt controller and CPU interfaces start unprogrammed.
         let mut profile = firmware_profile.clone();
+        let setup_start = rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
         profile.gic_initial = None;
-        profile.gic_redistributor_initial = None;
+        // The parked cores' redistributors are awake (the profile's WAKER words for cores other
+        // than 0): the SGI that starts the reset stage's workers cannot reach a sleeping one, and
+        // the stage wakes only its own. INFERRED for the uncaptured boot ROM, like the CPU
+        // interface below.
+        profile.gic_redistributor_initial = profile
+            .gic_redistributor_initial
+            .take()
+            .filter(|_| setup_start)
+            .map(|words| {
+                let mut kept: Vec<_> = words.into_iter().filter(|word| word.core != 0).collect();
+                // SGI 0 enabled in each parked core's SGI frame (ISENABLER0 at +0x10100), the
+                // wake-up the reset stage sends them; INFERRED like the words above.
+                let enables: Vec<_> = kept
+                    .iter()
+                    .filter(|word| word.offset == 0x14)
+                    .cloned()
+                    .map(|mut word| {
+                        word.offset = 0x10100;
+                        word.value = 1;
+                        word
+                    })
+                    .collect();
+                kept.extend(enables);
+                kept
+            });
         for cpu in profile.cpu.iter_mut().flatten() {
-            cpu.sysregs.icc_pmr_el1 = 0;
-            cpu.sysregs.icc_igrpen0_el1 = 0;
-            cpu.sysregs.icc_igrpen1_el1 = 0;
+            // A core other than 0 parks in the setup stage's trampoline (wfi) and can only take
+            // the SGI that wakes it if its CPU interface is enabled. The stage never enables it,
+            // so the uncaptured boot ROM must have. INFERRED: the values are the ones the loader
+            // hand-off profile carries (priority mask 0xff, both groups enabled).
+            let parked = setup_start && cpu.id != 0;
+            cpu.sysregs.icc_pmr_el1 = if parked { 0xff } else { 0 };
+            cpu.sysregs.icc_igrpen0_el1 = u32::from(parked).into();
+            cpu.sysregs.icc_igrpen1_el1 = u32::from(parked).into();
         }
         xp5_boot::startup_from_profile(&resolved, &profile, ticks_per_second)?
     } else {
@@ -559,7 +609,10 @@ pub(crate) fn open_from(
                         (Register::Pstate, rom_start::ROM_PSTATE),
                         (Register::Sp, handoff.sp),
                     ];
-                    start.released = primary;
+                    // Every core enters the stage at its base: a core other than 0 skips `main`
+                    // and parks in the stage's trampoline (wfi) until the reset stage wakes it
+                    // with an SGI, so the reset stage's worker loop has a core to run on.
+                    start.released = true;
                     primary = false;
                 }
             }
@@ -930,13 +983,17 @@ pub(crate) fn open_from(
     // every other early start needs it.
     let setup_without_flash = storage.is_none()
         && rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
+    let serial_nand = matches!(storage, Some(flash_storage::Medium::Nand(_)));
     if rom.is_some() && !setup_without_flash {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.ok_or("early startup flash backing is absent")?;
-        session.window_action = Some(fujimod_emulator_session::WindowAction {
-            interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
-            synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
-        });
+        // Serial NAND refuses program and erase, so its shadow never changes.
+        if !serial_nand {
+            session.window_action = Some(fujimod_emulator_session::WindowAction {
+                interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
+                synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
+            });
+        }
     }
     Ok(Opened {
         session,
