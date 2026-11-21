@@ -161,6 +161,10 @@ declare class Status {
     [Symbol.dispose](): void;
     readonly failed: boolean;
     readonly instructions: bigint;
+    /**
+     * Whether the modeled power controller is supplying the board.
+     */
+    readonly supplyOn: boolean;
     readonly ticks: bigint;
 }
 
