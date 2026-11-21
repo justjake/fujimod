@@ -368,6 +368,8 @@ impl Devices {
         inputs: BTreeMap<u8, u16>,
         rtc_ticks: u64,
         command_output: Option<fujimod_emulator_xp4_io::power_serial::ExactCommandOutput>,
+        bank_inputs: Vec<(bool, u8, u16)>,
+        eye_commit: bool,
     ) -> Result<(), String> {
         let pins = self
             .pins
@@ -383,7 +385,9 @@ impl Devices {
             inputs,
             rtc_ticks,
             command_output,
-        )?;
+        )?
+        .with_bank_inputs(bank_inputs)?
+        .with_eye_commit(eye_commit);
         self.spi_input(base, Box::new(part))
     }
 
