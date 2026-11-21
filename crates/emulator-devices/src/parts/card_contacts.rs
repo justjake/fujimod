@@ -1,9 +1,12 @@
 //! An SD card slot's physical contacts: card presence and write protection,
-//! and which of the slot's two host interfaces drives them.
+//! which of the slot's two host interfaces drives them, and the clock
+//! configuration the slot's interface block feeds its UHS-I host.
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+const CONTACTS: u8 = 3;
 const UHS2_INTERFACE: u8 = 4;
+const INTERFACE_CLOCK: u8 = 0x30;
 
 /// Shared physical contacts, also readable by the board's GPIO input wiring.
 #[derive(Clone)]
@@ -12,7 +15,7 @@ impl Contacts {
     /// Presence and write protection. The interface selection is the UHS-II
     /// port's state and is restored by that port.
     pub fn checkpoint_level(&self) -> u8 {
-        self.0.load(Ordering::Relaxed) & !UHS2_INTERFACE
+        self.0.load(Ordering::Relaxed) & CONTACTS
     }
     pub fn restore_level(&self, bits: u8) {
         self.set(bits & 1 != 0, bits & 2 != 0);
@@ -32,7 +35,7 @@ impl Contacts {
         let level = present as u8 | (protected as u8) << 1;
         self.0
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
-                Some(bits & UHS2_INTERFACE | level)
+                Some(bits & !CONTACTS | level)
             })
             .ok();
     }
@@ -40,6 +43,18 @@ impl Contacts {
     /// lines then belong to the UHS-II PHY, not to the 4-bit SD interface.
     pub fn uhs2_interface(&self) -> bool {
         self.0.load(Ordering::Relaxed) & UHS2_INTERFACE != 0
+    }
+    /// The clock configuration field of the slot's interface block (0..=3):
+    /// which base clock the UHS-I host divides.
+    pub fn interface_clock(&self) -> u8 {
+        (self.0.load(Ordering::Relaxed) & INTERFACE_CLOCK) >> 4
+    }
+    pub fn select_interface_clock(&self, field: u8) {
+        self.0
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
+                Some(bits & !INTERFACE_CLOCK | (field & 3) << 4)
+            })
+            .ok();
     }
     pub fn select_uhs2_interface(&self, enabled: bool) {
         if enabled {
