@@ -4,9 +4,10 @@
 //! frame protocol. Guest execution stays on this process's session thread;
 //! WebSocket clients submit host input and receive the latest LCD image.
 
+mod controls;
+pub mod launch;
 mod protocol;
 mod server;
-mod controls;
 
 pub use protocol::GuiOptions;
 pub use server::{Endpoint, Host, Socket, bind, open, serve};

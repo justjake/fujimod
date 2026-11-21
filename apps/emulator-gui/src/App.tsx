@@ -9,16 +9,15 @@ import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
-import { commandLineLaunch, desktopLaunch, type DesktopBridge, type RunConfiguration } from './launch';
+import { commandLineLaunch, type DesktopBridge, type RunConfiguration } from './launch';
 import { desktopBridge } from './desktop';
 import './app.css';
 
 export default function App() {
   const bridge = desktopBridge();
-  const commandLine = commandLineLaunch() ?? desktopLaunch();
+  const commandLine = commandLineLaunch();
   const [state, setState] = createSignal(sessionState(), { equals: false });
   const [camera, setCamera] = createSignal<NativeCamera>();
-  const [native, setNative] = createSignal<NativeState>();
   const [catalog, setCatalog] = createSignal<NativeCatalog>();
   const [configurations, setConfigurations] = createSignal<RunConfiguration[]>([]);
   const [selected, setSelected] = createSignal('');
@@ -58,7 +57,6 @@ export default function App() {
     let nativeState: NativeState | undefined;
     const stopState = photo.state((latest) => {
       nativeState = latest;
-      setNative(latest);
       if (catalog) void boot(latest, catalog);
     });
     let sessionInitialized = false;
@@ -105,6 +103,8 @@ export default function App() {
           } satisfies EngineConfig,
         }));
         session.panel.synchronize(initial.positions);
+        session.panel.setPowered(initial.poweredOn);
+        session.viewer.powered(initial.poweredOn);
         updateState((value) => {
           value.live = 'LIVE';
           value.message = 'Camera ready';
