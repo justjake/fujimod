@@ -147,7 +147,7 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
                     onChange={(event) => choose(camera(), event.currentTarget.checked)}
                   />
                   <span>{camera().model}</span>
-                  <small>{camera().version}</small>
+                  <small>Requires firmware {camera().version}</small>
                 </label>
               )}
             </For>
@@ -170,25 +170,38 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
               <span>Recipes</span>
               <small>{recipes().length}</small>
             </label>
-            <details>
-              <summary>Choose recipes</summary>
-              <div class="home-recipe-list">
-                <For each={recipes()}>
-                  {(recipe) => (
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={!excluded().has(recipe.path)}
-                        onChange={(event) =>
-                          setExcluded([recipe.path], !event.currentTarget.checked)
-                        }
-                      />
+            <div class="home-recipe-list">
+              <For each={recipes()}>
+                {(recipe) => (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={!excluded().has(recipe.path)}
+                      onChange={(event) => setExcluded([recipe.path], !event.currentTarget.checked)}
+                    />
+                    <span class="home-recipe">
                       <span>{recipe.title ?? recipe.path.split('/').at(-1)}</span>
-                    </label>
-                  )}
-                </For>
-              </div>
-            </details>
+                      <Show when={recipe.author}>
+                        {(author) => (
+                          <Show when={recipe.source} fallback={<small>{author()}</small>}>
+                            {(source) => (
+                              <a
+                                class="sd-source"
+                                href={source()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {author()}
+                              </a>
+                            )}
+                          </Show>
+                        )}
+                      </Show>
+                    </span>
+                  </label>
+                )}
+              </For>
+            </div>
           </fieldset>
         </Show>
       </div>
@@ -206,8 +219,8 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
           Fujimod.
         </p>
         <p>
-          Fujimod is not approved or endorsed by Fujifilm in any way, and using it will probably void
-          your warranty. We are not responsible for any damages to your camera.
+          Fujimod is not approved or endorsed by Fujifilm in any way, and using it will probably
+          void your warranty. We are not responsible for any damages to your camera.
         </p>
       </div>
       <Show when={installing()}>

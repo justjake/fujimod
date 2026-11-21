@@ -71,19 +71,23 @@ export default function Home() {
           <ReleasePersonalNote />
           <FeatureReels recipeCount={recipeCatalog(state.release?.sd_card_files).length} />
           <section class="home-release">
+            <Show when={releaseData.current}>
+              {(release) => (
+                <h2 class="home-release-title">
+                  Fujimod {release().version}
+                  <time datetime={release().publishedAt}>
+                    {new Intl.DateTimeFormat('en-US', {
+                      dateStyle: 'long',
+                      timeZone: 'UTC',
+                    }).format(new Date(release().publishedAt))}
+                  </time>
+                </h2>
+              )}
+            </Show>
             <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
             <Show when={releaseData.current}>
               {(release) => (
                 <article class="home-release-notes">
-                  <h2>
-                    Fujimod {release().version}
-                    <time datetime={release().publishedAt}>
-                      {new Intl.DateTimeFormat('en-US', {
-                        dateStyle: 'long',
-                        timeZone: 'UTC',
-                      }).format(new Date(release().publishedAt))}
-                    </time>
-                  </h2>
                   <ReleaseNotes title={`Fujimod ${release().version}`} text={release().notes} />
                   <p class="home-release-history">
                     <a href="/releases">All releases →</a>
