@@ -5,6 +5,7 @@
 /bindings/javascript/pkg/
 /bindings/javascript/dist/
 /bindings/javascript/node_modules/
+/apps/emulator-gui/dist/
 
 __pycache__/
 .pytest_cache/
