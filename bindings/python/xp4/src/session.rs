@@ -225,6 +225,12 @@ impl Xp4Session {
     pub fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>> {
         observation::state(py, self.inner.state(observations))
     }
+    pub fn scheduler_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        observation::scheduler_state(py, self.inner.scheduler_state())
+    }
+    pub fn failure(&self) -> Option<String> {
+        self.inner.failure()
+    }
     pub fn frontier(&self, by_count: bool) -> Vec<fujimod_python_base::discovery::FrontierEntry> {
         self.inner
             .frontier(by_count)
@@ -438,6 +444,12 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>> {
         Xp4Session::state(self, py, observations)
+    }
+    fn scheduler_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        Xp4Session::scheduler_state(self, py)
+    }
+    fn failure(&self) -> Option<String> {
+        Xp4Session::failure(self)
     }
     fn frontier(&self, by_count: bool) -> Vec<fujimod_python_base::discovery::FrontierEntry> {
         Xp4Session::frontier(self, by_count)

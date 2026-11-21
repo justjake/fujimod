@@ -48,6 +48,26 @@ pub(super) fn state<'py>(
     Ok(out)
 }
 
+pub(super) fn scheduler_state<'py>(
+    py: Python<'py>,
+    saved: observation::SchedulerState,
+) -> PyResult<Bound<'py, PyDict>> {
+    let out = PyDict::new(py);
+    out.set_item("instructions", saved.instructions)?;
+    out.set_item("virtual_ticks", saved.virtual_ticks)?;
+    out.set_item("per_core", saved.per_core)?;
+    out.set_item("waiting", saved.waiting)?;
+    out.set_item("irq_entries", saved.irq_entries)?;
+    out.set_item("undefined_entries", saved.undefined_entries)?;
+    out.set_item("prefetch_aborts", saved.prefetch_aborts)?;
+    out.set_item("data_aborts", saved.data_aborts)?;
+    out.set_item("next_device_tick", saved.next_device_tick)?;
+    out.set_item("eligible_irqs", saved.eligible_irqs)?;
+    out.set_item("failure", saved.failure)?;
+    out.set_item("cbar_reads", saved.cbar_reads)?;
+    Ok(out)
+}
+
 pub(super) fn frames<'py>(
     py: Python<'py>,
     saved: Vec<observation::Frame>,

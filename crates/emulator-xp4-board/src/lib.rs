@@ -1295,12 +1295,14 @@ impl Session {
             storage_immutable_prefix,
             storage_mapped_read,
             storage_write_protect,
+            storage_write_ranges,
             storage_strict_backing,
             storage_erased_ranges,
             standalone_dma,
             storage_dma_routes,
             spi_inputs,
             control_requests,
+            request_fff4f01c_ticks,
             xp4_functional_system_control,
             storage_geometry,
             storage_irq,
@@ -1551,6 +1553,14 @@ impl Session {
         if !storage_erased_ranges.is_empty() && !storage_strict_backing {
             return Err("Erased NOR ranges require strict read backing".into());
         }
+        if storage_write_protect && !storage_write_ranges.is_empty() {
+            return Err("NOR write ranges contradict whole-array write protection".into());
+        }
+        if !storage_write_ranges.is_empty()
+            && (storage_jedec.is_none() || !storage_strict_backing)
+        {
+            return Err("NOR write ranges require an XP4 NOR owner and strict read backing".into());
+        }
         if storage_mapped_read.is_some() && storage_immutable_prefix.is_some() {
             // The prefix is mapped as memory, so its reads would bypass the gate.
             return Err("A mapped NOR read gate cannot be combined with an immutable executable prefix".into());
@@ -1572,6 +1582,7 @@ impl Session {
                 storage_immutable_prefix.map(|p| fujimod_emulator_xp4_storage::storage::ImmutablePrefix::new(p.bytes)).transpose()?,
                 storage_mapped_read,
                 storage_write_protect,
+                storage_write_ranges,
                 storage_strict_backing,
                 storage_erased_ranges,
                 storage_dma_audio,
@@ -2095,6 +2106,11 @@ impl Session {
         }
         for input in byte_i2c {
             devices.get_or_insert_with(devices::Devices::empty).byte_i2c(input)?;
+        }
+        if let Some(ticks) = request_fff4f01c_ticks {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .request_fff4f01c(ticks)?;
         }
         let timer = timer_layout
             .map(|layout| timer::Timer::new(layout, &timer_routes))
@@ -2979,9 +2995,9 @@ impl Session {
                 .unwrap_or_default()
         }
     }
-    pub fn state(&self, observations: bool) -> observation::State {
+    pub fn scheduler_state(&self) -> observation::SchedulerState {
         let s = unsafe { &*self.inner.state.get() };
-        observation::State {
+        observation::SchedulerState {
             instructions: s.instructions,
             virtual_ticks: s.ticks,
             per_core: s.per_core.clone(),
@@ -3006,6 +3022,28 @@ impl Session {
                 .collect(),
             failure: s.failure.clone(),
             cbar_reads: s.cbar_reads,
+        }
+    }
+    /// Current sticky failure without constructing an execution snapshot.
+    pub fn failure(&self) -> Option<String> {
+        unsafe { (&*self.inner.state.get()).failure.clone() }
+    }
+    pub fn state(&self, observations: bool) -> observation::State {
+        let saved = self.scheduler_state();
+        let s = unsafe { &*self.inner.state.get() };
+        observation::State {
+            instructions: saved.instructions,
+            virtual_ticks: saved.virtual_ticks,
+            per_core: saved.per_core,
+            waiting: saved.waiting,
+            irq_entries: saved.irq_entries,
+            undefined_entries: saved.undefined_entries,
+            prefetch_aborts: saved.prefetch_aborts,
+            data_aborts: saved.data_aborts,
+            next_device_tick: saved.next_device_tick,
+            eligible_irqs: saved.eligible_irqs,
+            failure: saved.failure,
+            cbar_reads: saved.cbar_reads,
             gpio: s
                 .devices
                 .as_ref()

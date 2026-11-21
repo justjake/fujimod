@@ -13,6 +13,23 @@ pub struct Call {
     pub result: Option<u32>,
 }
 
+/// Scheduler counters and deadlines without device-register or history export.
+#[derive(Serialize)]
+pub struct SchedulerState {
+    pub instructions: u64,
+    pub virtual_ticks: u64,
+    pub per_core: Vec<u64>,
+    pub waiting: Vec<bool>,
+    pub irq_entries: Vec<u64>,
+    pub undefined_entries: Vec<u64>,
+    pub prefetch_aborts: Vec<u64>,
+    pub data_aborts: Vec<u64>,
+    pub next_device_tick: Option<u64>,
+    pub eligible_irqs: Vec<Option<usize>>,
+    pub failure: Option<String>,
+    pub cbar_reads: u64,
+}
+
 #[derive(Serialize)]
 pub struct State {
     pub instructions: u64,

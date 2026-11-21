@@ -686,6 +686,18 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn request_fff4f01c(&mut self, ticks: u64) -> Result<(), String> {
+        use fujimod_emulator_xp4_io::request_fff4f01c::{ADDRESS, RequestWord, WIDTH};
+        let end = ADDRESS + u64::from(WIDTH);
+        if self.windows.iter().any(|&(lo, hi, _)| ADDRESS < hi && lo < end) {
+            return Err("Overlapping XP4 0xfff4f01c request window".into());
+        }
+        let model = RequestWord::new(ticks)?;
+        let id = self.models.len();
+        self.windows.push((ADDRESS, end, id));
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn countdown_timers(
         &mut self,
         base: u64,
@@ -1144,6 +1156,7 @@ impl Devices {
         prefix: Option<storage::ImmutablePrefix>,
         mapped_read: Option<storage::MappedReadGate>,
         write_protect: bool,
+        write_ranges: Vec<storage::WriteRange>,
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
         audio: Option<storage::AudioPacing>,
@@ -1171,6 +1184,7 @@ impl Devices {
         if write_protect { nor = nor.with_write_protect(); }
         if strict_backing { nor = nor.with_strict_backing(); }
         if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
+        if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
         let view = nor.immutable_view();
         let port = storage::port_from_nor(nor);
         let mut dma = DmaController::new(port.clone(), routes).with_audio(audio)?;
