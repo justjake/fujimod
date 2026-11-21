@@ -174,6 +174,26 @@ optional runtime binding initializes the card and serves checked descriptor
 reads from that namespace; it uses the card’s retained training data and
 does not initialize the serial NOR controller.
 
+A recipe whose body does not boot the preloaded reset stage names a **stock-selector startup**
+(`xp5.stock_selector`, `xp5::StockSelector`), and `sd-boot-v1-startup` and `Recipe::build_startup`
+then build that one (X-T5 4.31). The installed flash stays attached and the image keeps the
+update's own selector word (1), so the stock reset stage loads its section table and sections
+from the flash as on a flash boot. The loader is the default card loader; the prelude sets up
+and scans the installed flash as in stage one, and the card start's setup tables are not put in
+SRAM. The loader holds, gates and wakes no core. Under selector 1 the reset stage's
+secondary-core entry returns at once and the core goes on into the stage's own work, so the stage
+wakes the parked cores itself when it is ready; a wake at the hand-off (what the internal-flash
+build below does for the preloaded selector) ran them beside core 0 too early in the emulator.
+The packager first checks the image against the stock reset image as for every startup, then
+zeroes the recipe's `cleared` extents (whole words after the reset stage, inside the image,
+overlapping neither each other nor an edit), applies its `ram_edits` (each old word checked, none
+on the selector) and puts the stock selector back; the CRC the loader checks covers the result.
+For X-T5 4.31 the one edit sends the reset stage's decode of section 4 to scratch DRAM, so the
+card's copy of section 4 stays and runs, and the cleared extents are the controller payload
+cache and the overlays. An image of this shape, behind a hand-made loader that set up the flash
+at entry and woke no core, booted an X-T5 body from an SD card; the files this builder writes
+have run in the emulator only.
+
 `sd-boot-v1-ram-startup FIRMWARE DAT NEW_DIRECTORY [--fallback-wait-seconds N]` (XP5) writes only
 the two files the boot ROM and the loader read, `marble_init.bin` and `ffboot.bin`, and never the
 update. The installed flash stays attached: the prelude initializes and scans it as
