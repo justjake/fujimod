@@ -1,0 +1,918 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: FujiMod\n"
+"Report-Msgid-Bugs-To: https://github.com/justjake/fujimod/issues\n"
+"POT-Creation-Date: 2026-11-14 12:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: FujiMod i18n\n"
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "1"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "2"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ACTION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ADD RATIO"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AE-L/AF-L"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AE/AF & SCENE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AE/AF-LOCK BUTTON"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AE/AF-LOCK MODE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AF MISS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AF MODE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AF RANGE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ANY COLOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ANY MONOCHROME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "APERTURE RING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ASPECT RATIO"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AUTO LEVER"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "AUTO-UPDATE CURRENT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BORDERS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BUG REPORT SHORTCUT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BUILD OVERLAY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BY AUTHOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BY FILM SIMULATION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BY NAME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CIRCLE OF CONFUSION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CLARITY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COLOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COLOR CHROME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COLOR CHROME EFFECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COLOR CHROME FX BLUE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COMMAND CONTROL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COMMAND PRESS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COMPARE WITH CURRENT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CONTROL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CONTROL RING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CONTROL RING SETTING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COPY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "COPY TO"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CORNER"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CREATE NEW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CURRENT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CURRENT SETTINGS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CUSTOM SETTING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CUSTOM SETTINGS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CUSTOM SETTINGS BKT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "D RANGE PRIORITY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DATE FOLDERS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DATE STAMP"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DELETE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DESQUEEZE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DESQUEEZE JPEG"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DEVTOOLS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DIGITAL FOCAL LENGTH"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DISPOSABLE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DRANGE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DRIVE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DRIVE BUTTON"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EDIT ASPECT RATIOS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EDIT CUSTOM NAME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EDIT RATIO"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EDIT/CHECK"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EDIT/SAVE CUSTOM SETTING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ENABLED"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ENTER AUTHOR INFO"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ERASE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ERASE HIDDEN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EV DIAL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EXPIRED"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "EXPOSURE COMP."
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "F-Log RECORDING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FACEDETECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FAVORITES"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM 1"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM 2"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM 3"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM BORDERS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM EDITOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM EFFECTS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM ICONS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FILM SIMULATION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FLASH"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FLASH COM"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FOCUS MODE SELECTOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FORMAT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FORMAT CARD NAME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FRAMING GUIDELINE"
+msgstr ""
+
+#. menu.page in FujiMod's camera interface.
+msgctxt "menu.page"
+msgid "FUJIMOD"
+msgstr ""
+
+#. menu.page in FujiMod's camera interface.
+msgctxt "menu.page"
+msgid "FUJIMOD SET-UP"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FUNCTION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "GRAIN EFFECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HALATION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HDMI OUTPUT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HIDDEN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HIDE FILMS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HIGHLIGHT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HIGHLIGHT TONE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "HUD LAYOUT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "IMAGE QUALITY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "IMAGE SIZE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "INDICATOR OPACITY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ISO"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "LEAKS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "LIBRARY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "LIGHT LEAKS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MENU ANIMATIONS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MENU OPACITY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MENU STYLE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MF ASSIST AND PEAKING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MF SNAP FOCUS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MOVE TO HIDDEN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MOVE TO LIBRARY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MY RECIPES"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NAME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NEGATIVE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NOISE REDUCTION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NONE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "OVERLAY RENDERING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "PHOTOMETRY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "PHOTOMETRYMODE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "PIXEL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "PIXEL MAPPING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "POSITION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "PROTECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Q BUTTON"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "QUALITY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "QUICK START"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RAW VIEW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "REC ADV MODE FILTER"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RECIPE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RECIPE IN EXIF"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RESET THE CHANGES"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ROLL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SAVE ALL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SAVE CURRENT AS NEW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SAVE THE CHANGES"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SCENE POSITION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SELECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SELECT AS CURRENT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SELECT CUSTOM SETTING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SELECT FOR BRACKETING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SELFTIMER"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SET HYPERFOCAL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SETTING CONTROL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHADOW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHADOW TONE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHAPE & ASPECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHARPNESS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHOW IN AF"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHUTTER DIAL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHUTTER SPEED"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SHUTTER TYPE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SIZE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SNAP FOCUS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SOFTWARE ND"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "STAMP"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "START NEW ROLL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "STILLCOLOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "STRENGTH"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "STYLE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SURROUND VIEW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "TELECONVERTER"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "TONE CURVE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "UNITS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "UNLOCKED CONTROLS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "UNSELECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "URL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "USB DEBUGGING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "USES CUSTOM FILM"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "VALUE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "WB KELVIN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "WB SHIFT B"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "WB SHIFT R"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "WHITE BALANCE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ZONE FOCUS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ZONE READOUT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "film_chroma_source"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "film_colour_source"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "film_icon_choice"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "film_luma_source"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "film_tone_source"
+msgstr ""
