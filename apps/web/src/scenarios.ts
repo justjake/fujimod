@@ -10,6 +10,13 @@ export interface ReplayScenario {
 
 // Camera-specific input policy lives here, outside the reusable execution adapter.
 const scenarios: Record<string, ReplayScenario> = {
+  'x70-idle': {
+    firmwareId: 'x70-110',
+    firmwarePath: '/local/firmware.dat',
+    clockSeconds2000: 845000000,
+    interactive: false,
+    steps: [{ action: 'advance', ticks: 1_800_000_000 }],
+  },
   'x70-movie': {
     firmwareId: 'x70-110',
     firmwarePath: '/local/firmware.dat',

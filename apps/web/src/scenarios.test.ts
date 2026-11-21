@@ -17,3 +17,10 @@ test('body routes refuse missing and invalid firmware identifiers', () => {
       scenarioFromUrl('?scenario=camera-rec&firmware=' + encodeURIComponent(id)),
     ).toThrow('Invalid simulator firmware ID');
 });
+
+test('idle review advances the real camera past automatic power-off', () => {
+  const scenario = scenarioFromUrl('?scenario=x70-idle');
+  expect(scenario.firmwareId).toBe('x70-110');
+  expect(scenario.interactive).toBe(false);
+  expect(scenario.steps).toEqual([{ action: 'advance', ticks: 1_800_000_000 }]);
+});
