@@ -514,7 +514,9 @@ export class WasmWorkerRuntime {
   private async loadSnapshot(bytes: Uint8Array, config: EngineConfig) {
     if (this.camera) throw Error('Wasm worker already booted.');
     this.config = config;
-    const { module, manifest, identity, loadTimings, dmpWebGpu } = await this.prepare(config.bundle);
+    const { module, manifest, identity, loadTimings, dmpWebGpu } = await this.prepare(
+      config.bundle,
+    );
     this.loadTimings = loadTimings;
     this.module = module;
     this.dmpWebGpu = dmpWebGpu;
@@ -549,10 +551,12 @@ export class WasmWorkerRuntime {
   ) {
     if (this.camera) throw Error('Wasm worker already booted.');
     this.config = config;
-    const saved = config.camera ? await this.cameras.saved(config.camera.id) : undefined;
+    let saved = config.camera ? await this.cameras.saved(config.camera.id) : undefined;
     this.scene = scene && 'rgb' in scene ? scene : undefined;
     this.send({ type: 'progress', message: 'Loading Wasm runtime…' });
-    const { module, manifest, identity, loadTimings, dmpWebGpu } = await this.prepare(config.bundle);
+    const { module, manifest, identity, loadTimings, dmpWebGpu } = await this.prepare(
+      config.bundle,
+    );
     this.loadTimings = loadTimings;
     this.module = module;
     this.dmpWebGpu = dmpWebGpu;
@@ -595,6 +599,7 @@ export class WasmWorkerRuntime {
             1000,
         );
     const preferredLanguages = this.replayMode ? [] : [...navigator.languages];
+    let create: () => ReturnType<typeof createCamera>;
     if (manifest.construction === 'prepared') {
       const prepared = manifest.prepared;
       if (!prepared || !config.bundle) throw Error('Prepared camera has no bundle files.');
@@ -602,17 +607,16 @@ export class WasmWorkerRuntime {
         prepared,
         new URL('wasm.json', config.bundle),
       );
-      this.camera = this.timings.measure('create', () =>
+      create = () =>
         createCamera(
           module,
           JSON.stringify({ document: text, clockSeconds2000, preferredLanguages }),
           new Uint8Array(dat),
           'prepared',
           inputs,
-        ),
-      );
+        );
     } else
-      this.camera = this.timings.measure('create', () =>
+      create = () =>
         createCamera(
           module,
           manifest.construction === 'resolved'
@@ -628,11 +632,21 @@ export class WasmWorkerRuntime {
               },
           new Uint8Array(dat),
           manifest.construction,
-        ),
-      );
-    const session = this.camera;
+        );
+    let session = (this.camera = this.timings.measure('create', create));
     if (manifest.construction !== 'resolved') {
-      if (saved) this.observe(session.restoreDurable(new Uint8Array(saved.durable)));
+      if (saved) {
+        try {
+          this.observe(session.restoreDurable(new Uint8Array(saved.durable)));
+        } catch (error) {
+          // A save from an emulator with another storage format cannot be read:
+          // the camera starts with fresh storage, which replaces the save.
+          console.warn('Starting with fresh camera storage:', error);
+          session.free();
+          session = this.camera = this.timings.measure('create', create);
+          saved = undefined;
+        }
+      }
       if (files.length) {
         const packed = packFiles(files);
         this.observe(session.replaceCard(packed.rows, packed.bytes, config.bootInputs ?? []));

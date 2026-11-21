@@ -15,6 +15,7 @@ export function testCameraModule(shared = false) {
     failed = false,
     createError = '',
     commandError = '',
+    restoreError = '',
     frameEnabled = false,
     prepared: (request: string, camera?: Uint8Array) => void = () => {};
   const calls: { action: string; options: Record<string, unknown>; bytes: number[] }[] = [];
@@ -45,6 +46,7 @@ export function testCameraModule(shared = false) {
   const point = () => ({ tick: String(ticks), instructions: [String(ticks * 2n)] });
   const created = () => {
     if (createError) throw Error(createError);
+    calls.push({ action: 'create', options: {}, bytes: [] });
     return new TestCamera() as unknown as Camera;
   };
   const disposable = { free() {}, [Symbol.dispose]() {} };
@@ -305,6 +307,7 @@ export function testCameraModule(shared = false) {
     }
     restoreDurable(durable: Uint8Array) {
       record('restore_durable', {}, durable);
+      if (restoreError) throw Error(restoreError);
       return state;
     }
   }
@@ -325,6 +328,9 @@ export function testCameraModule(shared = false) {
     },
     commandError(value: string) {
       commandError = value;
+    },
+    restoreError(value: string) {
+      restoreError = value;
     },
     /** Observe the prepared construction request text. */
     prepared(hook: (request: string, camera?: Uint8Array) => void) {
