@@ -345,8 +345,8 @@
           "id": "stock/ibis",
           "label": "IBIS",
           "stage": "stock",
-          "result": "fail",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -361,8 +361,8 @@
           "id": "stock/card-slots",
           "label": "Card slots",
           "stage": "stock",
-          "result": "fail",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -1309,9 +1309,9 @@
       "total": 3
     },
     "ibis": {
-      "result": "fail",
-      "passed": 0,
-      "total": 1
+      "result": "pass",
+      "passed": 3,
+      "total": 3
     },
     "sd": {
       "result": "pass",
@@ -1319,8 +1319,8 @@
       "total": 2
     },
     "card-slots": {
-      "result": "fail",
-      "passed": 0,
+      "result": "pass",
+      "passed": 2,
       "total": 2
     },
     "control-layout": {
