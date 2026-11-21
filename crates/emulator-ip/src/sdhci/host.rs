@@ -69,6 +69,21 @@ pub struct Options {
     /// are DMA address bits 34..32; the SDMA system address holds bits 31..0.
     #[serde(default)]
     pub address_high: Option<u64>,
+    /// SD clock dividers (clock control bits 15..6) a stock driver programs
+    /// for a card in default speed and in high speed. A command at a smaller
+    /// divider, which is a faster clock than the stock driver gives that card,
+    /// refuses: the clock's frequency is not known from a measured part.
+    /// Divider 0 selects the undivided base clock, the fastest setting, and
+    /// refuses with either step.
+    #[serde(default)]
+    pub speed_dividers: Option<SpeedDividers>,
+}
+/// See [`Options::speed_dividers`].
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SpeedDividers {
+    pub default_speed: u16,
+    pub high_speed: u16,
 }
 fn dram_alias_default() -> bool {
     true
@@ -760,6 +775,24 @@ impl SdHost {
         }
         if self.regs.get(0x3e) & 0x107 == 0x107 {
             return Err("SD command with UHS-II mode selected".into());
+        }
+        if let Some(steps) = self.options.speed_dividers.filter(|_| !rom) {
+            let divider = (clock >> 8 & 0xff | (clock >> 6 & 3) << 8) as u16;
+            let (mode, step) = if self.access_mode == 1 {
+                ("high speed", steps.high_speed)
+            } else {
+                ("default speed", steps.default_speed)
+            };
+            if divider == 0 || divider < step {
+                return Err(format!(
+                    "SD command at clock divider {divider}: the stock driver's {mode} step is {step}"
+                ));
+            }
+        }
+        if self.contacts.uhs2_interface() {
+            // The slot's lines belong to the UHS-II PHY. What a card then sees of a
+            // command on the 4-bit interface is not known from a measured part.
+            return Err("SD command while the slot's UHS-II interface is enabled".into());
         }
         if !self.contacts.present() {
             // No card answers the command: the controller reports a command
@@ -1747,6 +1780,51 @@ mod tests {
         m.write(&mut cx, BASE + 0x3e, 2, 0x1400);
         assert!(cx.refusal().is_some());
     }
+    /// The slot's UHS-II port owns the lines while its interface enable is set:
+    /// a command on this host then refuses, and runs again once the bit clears.
+    #[test]
+    fn command_refuses_while_the_slots_uhs2_interface_is_enabled() {
+        let mut m = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.contacts.select_uhs2_interface(true);
+        write(&mut m, &mut h, 8, 4, 0);
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 12, 4, 0);
+        assert!(cx.refusal().is_some_and(|r| r.contains("UHS-II interface")));
+        m.contacts.select_uhs2_interface(false);
+        command(&mut m, &mut h, 0, 0);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 1, 1);
+    }
+    /// With declared stock clock steps, a default-speed card accepts a command
+    /// at the default-speed divider or a slower one, and no faster clock.
+    #[test]
+    fn command_refuses_a_clock_faster_than_the_declared_stock_step() {
+        let mut m = host(Protocol::Sdhc);
+        m.options.speed_dividers = Some(SpeedDividers { default_speed: 4, high_speed: 2 });
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        for (clock, accepted) in [(0x0005, false), (0x0105, false), (0x0205, false), (0x0405, true), (0xfa05, true)] {
+            // The card clock stops before its divider changes.
+            write(&mut m, &mut h, 0x2c, 2, 1);
+            write(&mut m, &mut h, 0x2c, 2, clock & !4);
+            write(&mut m, &mut h, 0x2c, 2, clock);
+            h.now += 2;
+            m.advance(&mut h.cx());
+            write(&mut m, &mut h, 0x30, 2, 0xffff);
+            write(&mut m, &mut h, 8, 4, 0);
+            let mut cx = h.cx();
+            m.write(&mut cx, BASE + 12, 4, 0);
+            let refusal = cx.refusal();
+            assert_eq!(refusal.is_none(), accepted, "clock {clock:#x}: {refusal:?}");
+            if accepted {
+                due(&mut m, &mut h);
+            } else {
+                assert!(refusal.unwrap().contains("clock divider"));
+            }
+        }
+    }
     #[test]
     fn status_enables_control_latching_and_reset_clears_enables() {
         let mut m = host(Protocol::Sdhc);
@@ -1794,6 +1872,7 @@ mod tests {
                 ram_banks: vec![],
                 dram_alias: true,
                 address_high: None,
+                speed_dividers: None,
             },
             Wiring {
                 card: Card::new(sd_card::Options {
