@@ -1,0 +1,95 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 3,
+  "id": "xt30-201-restart",
+  "firmware_id": "xt30-201",
+  "product": "X-T30",
+  "internal_version": "1.64",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "sender",
+      "address": 30807456,
+      "size": 236,
+      "sha256": "2bbfd9396a26ee4acda21c70ba5feffaf4701b111228f54a310e2b4a6796f6cf"
+    }
+  ],
+  "mechanism": {
+    "kind": "xp4-wake-deadline",
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 44322708,
+      "callback_offset": 12,
+      "stock_callback": 30905584,
+      "output_fields": 45974336,
+      "output_bytes": 8,
+      "tag_decoder": 30525592,
+      "forward": 30540524
+    },
+    "sender": 30807456,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "deadline": {
+      "payload_offset": 8,
+      "unit": "epoch-seconds"
+    },
+    "queue": {
+      "id": 2,
+      "sender": 30805656,
+      "enqueue": 17965320,
+      "payload_bytes": 16,
+      "parameters": {
+        "0": 0,
+        "8": 4,
+        "12": 8
+      },
+      "uninitialized_payload_offsets": [
+        4
+      ]
+    },
+    "request_conversion": {
+      "source": 281,
+      "target": 134
+    },
+    "configuration_override": {
+      "enable_key": 949,
+      "delay_keys": [
+        946,
+        947,
+        948
+      ]
+    },
+    "clock": {
+      "reader": 17415252,
+      "writer": 17415336,
+      "register_reader": 17410376,
+      "register_writer": 17410456,
+      "transaction": 17406664,
+      "bank_pointer": 22066744,
+      "registers": {
+        "control": 32,
+        "low": 34,
+        "high": 35
+      },
+      "read_order": [
+        34,
+        35,
+        34
+      ],
+      "start_value": 32768,
+      "stop_value": 0
+    },
+    "ui": {
+      "mode_address": 25606448,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 25606451,
+      "menu_active_address": 24679884
+    },
+    "power_off": null,
+    "parameter_storage": null,
+    "runtime_qualified": false
+  }
+}

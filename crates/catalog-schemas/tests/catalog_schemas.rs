@@ -90,6 +90,42 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
 }
 
 #[test]
+fn x_processor_4_restart_document_validates_its_generated_schema() {
+    let package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fixture = package.join("../catalog-restart/tests/fixtures/xp4-wake-deadline.json");
+    let document: Value = serde_json::from_slice(
+        &fs::read(&fixture).unwrap_or_else(|error| panic!("{}: {error}", fixture.display())),
+    )
+    .expect("restart fixture");
+    assert_eq!(document["schema"], 3);
+
+    let path = package.join("../../catalog/schemas/restart.generated.schema.json");
+    let schema: Value = serde_json::from_slice(
+        &fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display())),
+    )
+    .expect("restart schema");
+    let validator =
+        validator_for(&schema).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    let errors: Vec<_> = validator.iter_errors(&document).collect();
+    assert!(
+        errors.is_empty(),
+        "{}: {}",
+        fixture.display(),
+        errors
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("; ")
+    );
+    assert!(
+        serde_json::to_string(&schema)
+            .unwrap()
+            .contains("xp4-wake-deadline"),
+        "the schema names the schema 3 mechanism"
+    );
+}
+
+#[test]
 fn bundled_reference_records_resolve_by_identity() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().expect("bundled references");
     for (body, firmware) in [
