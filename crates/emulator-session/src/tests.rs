@@ -55,6 +55,7 @@ fn card_session_with_power_alias_and_fill(
             ram_banks: vec![],
             dram_alias: true,
             address_high: None,
+            speed_dividers: None,
         },
         sdhc::Wiring {
             card,

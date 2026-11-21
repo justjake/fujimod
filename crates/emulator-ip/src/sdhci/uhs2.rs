@@ -8,6 +8,13 @@
 //! PHY and uses the UHS-I host. A UHS-II packet, tuning, 1.8 V signaling, preset
 //! values and the PHY settings area refuse.
 //!
+//! Host control 2 bit 8 (UHS-II interface enable) selects which interface owns
+//! the slot's lines: set, the UHS-II PHY; clear, the 4-bit SD interface of the
+//! UHS-I host (SD Host Controller specification 4, host control 2). The port
+//! publishes the bit on the slot's shared contacts, and the UHS-I host refuses
+//! a command while it is set. A stock driver clears the bit at the end of its
+//! PHY power-down, before its first command on the UHS-I host.
+//!
 //! Register file, relative to `host`: present state `+0x24`, host and power
 //! control `+0x28/+0x29`, clock control `+0x2c` (the shared settling model),
 //! timeout and software reset `+0x2e/+0x2f`, status and enables
@@ -49,6 +56,7 @@ const HOST_SIZE: u64 = 0x100;
 /// version 4 enable, ADMA2 26-bit length and asynchronous interrupt enable.
 const HOST_CONTROL2: u16 = 0x7107;
 const UHS2_MODE: u16 = 7;
+const UHS2_INTERFACE_ENABLE: u16 = 0x100;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -134,8 +142,15 @@ impl Port {
             | if present && !self.contacts.protected() { 0x80000 } else { 0 }
     }
 
+    /// Publish which interface owns the slot's lines.
+    fn select_interface(&self) {
+        self.contacts
+            .select_uhs2_interface(self.state.host.host_control2 & UHS2_INTERFACE_ENABLE != 0);
+    }
+
     fn reset_all(&mut self, cx: &mut Cx<'_>) {
         self.state.host = Host::default();
+        self.select_interface();
         self.clocks.write(cx, self.options.host + 0x2c, 2, 0);
     }
 
@@ -264,6 +279,7 @@ impl Port {
             )),
             _ => cx.unmodeled(),
         }
+        self.select_interface();
     }
 
     fn validate(&self, state: &State) -> Result<(), String> {
@@ -338,6 +354,7 @@ impl Device for Port {
         self.validate(&saved.state)?;
         self.clocks.restore(&saved.clocks)?;
         self.state = saved.state;
+        self.select_interface();
         Ok(())
     }
 }
@@ -385,6 +402,7 @@ mod tests {
         let mut host = RecordingHost::default();
         write(&mut port, &mut host, PHY + 0x80, 4, 0xf00);
         write(&mut port, &mut host, HOST + 0x3e, 2, 0x1100);
+        assert!(contacts.uhs2_interface());
         write(&mut port, &mut host, PHY + 0x78, 2, 1);
         write(&mut port, &mut host, PHY + 0xec, 4, 1);
         assert_eq!(read(&mut port, &mut host, PHY + 0x7c, 4) & 1, 0);
@@ -405,6 +423,7 @@ mod tests {
         assert_eq!(read(&mut port, &mut host, HOST + 0x2c, 2), 0);
         assert_eq!(read(&mut port, &mut host, PHY + 0x7c, 4) & 1, 1);
         write(&mut port, &mut host, HOST + 0x3e, 2, 0x1007);
+        assert!(!contacts.uhs2_interface());
         let saved = port.save();
         let mut restored = self::port(contacts.clone());
         restored.restore(&saved).unwrap();
@@ -445,12 +464,16 @@ mod tests {
 
     #[test]
     fn software_reset_all_clears_registers_and_stops_the_clock() {
-        let mut port = port(Contacts::new(false, false));
+        let contacts = Contacts::new(false, false);
+        let mut port = port(contacts.clone());
         let mut host = RecordingHost::default();
         write(&mut port, &mut host, HOST + 0x2c, 2, 1);
         write(&mut port, &mut host, HOST + 0x34, 4, 0xffff_ffff);
         write(&mut port, &mut host, HOST + 0x3e, 2, 0x1100);
+        contacts.set(true, false);
+        assert!(contacts.uhs2_interface() && contacts.present());
         write(&mut port, &mut host, HOST + 0x2f, 1, 1);
+        assert!(!contacts.uhs2_interface());
         assert_eq!(read(&mut port, &mut host, HOST + 0x2c, 2), 0);
         assert_eq!(read(&mut port, &mut host, HOST + 0x34, 4), 0);
         assert_eq!(read(&mut port, &mut host, HOST + 0x3e, 2), 0);

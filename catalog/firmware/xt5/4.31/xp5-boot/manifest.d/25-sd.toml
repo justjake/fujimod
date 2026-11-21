@@ -45,6 +45,11 @@ dram_alias = false
 # (buffer >> 32) & 7 here before each block transfer (0x13a1f3c, 0x13a37c8), so the
 # SDMA system address holds only bits 31..0 (movie recording writes from 0x1d0ec6bc0).
 address_high = 0xff90e7d8
+# SD clock steps of the stock driver (0x13a7474: a fixed ladder by speed mode, written to clock
+# control bits 15..8). Modes 0..3 use divider 0xfa (identification), mode 4 uses 4, mode 5 uses 2,
+# mode 6 uses 1 and higher modes use 0, the base clock. The stock boot runs a default-speed card at
+# divider 4. The base clock frequency is not measured, so a faster clock than the stock step refuses.
+speed_dividers = { default_speed = 4, high_speed = 2 }
 
 [[device]]
 base = 0xff9b01e0
@@ -80,6 +85,8 @@ dram_alias = false
 # (buffer >> 32) & 7 here before each block transfer (0x13a1f3c, 0x13a37c8), so the
 # SDMA system address holds only bits 31..0 (movie recording writes from 0x1d0ec6bc0).
 address_high = 0xff90e7e4
+# The stock clock steps, as for slot 0.
+speed_dividers = { default_speed = 4, high_speed = 2 }
 
 [[device]]
 base = 0xff9b41e0
