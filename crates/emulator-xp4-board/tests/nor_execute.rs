@@ -182,3 +182,93 @@ fn gate_applies_on_both_sides_of_executable_range() {
         assert_eq!(out, expected);
     }
 }
+fn store(base: u32, offset: u32, value: u32) -> [u32; 3] {
+    let (lo, hi) = (value & 0xffff, value >> 16);
+    [
+        0xe3001000 | (lo >> 12) << 16 | (lo & 0xfff), // MOVW r1, lo
+        0xe3401000 | (hi >> 12) << 16 | (hi & 0xfff), // MOVT r1, hi
+        0xe5801000 | base << 16 | offset,             // STR r1, [base, #offset]
+    ]
+}
+
+fn delay(count: u32) -> [u32; 3] {
+    [
+        0xe3008000 | (count >> 12) << 16 | (count & 0xfff),
+        0xe2588001,
+        0x1afffffd,
+    ]
+}
+
+// Calls r2 `count` times, keeping its translation live across the program.
+fn call_loop(count: u32) -> [u32; 4] {
+    [
+        0xe3008000 | (count >> 12) << 16 | (count & 0xfff),
+        0xe12fff32,
+        0xe2588001,
+        0x1afffffc,
+    ]
+}
+
+#[test]
+fn mutable_executable_range_program_invalidates_translated_code() {
+    let target = FLASH + 0x1000;
+    let source = 0x2000u32;
+    let mut d = definition(1, 0);
+    d.as_object_mut()
+        .unwrap()
+        .remove("storage_immutable_prefix");
+    d["storage_executable_range"] = json!({"offset":4096,"bytes":61440});
+    d["storage_strict_backing"] = json!(true);
+    d["initial_registers"] = json!([[
+        [{"Arm32":{"R":15}},0], [{"Arm32":{"R":0}},0x8000],
+        [{"Arm32":{"R":2}},target], [{"Arm32":{"R":3}},0xfffd8000u32],
+        [{"Arm32":{"R":4}},0xfffe0000u32], [{"Arm32":{"R":5}},0xfff4a500u32],
+    ]]);
+    // MOV r7,#3; BX lr. Programming clears bit 0 of the first word: MOV r7,#2.
+    let s = session(d, image(target, &[0xe3a07003, 0xe12fff1e])).unwrap();
+    let mut replacement = vec![0xff; 32];
+    replacement[..8]
+        .copy_from_slice(&[0xe3a07002u32.to_le_bytes(), 0xe12fff1eu32.to_le_bytes()].concat());
+    s.write(source as usize, &replacement).unwrap();
+    let target = target as u32;
+    let mut program = vec![0xe12fff32u32, 0xe5807000]; // BLX r2; STR r7,[r0]
+    program.extend(store(3, 0x90, 0x06000001));
+    program.extend(delay(64));
+    for (offset, value) in [
+        (0x14, source),
+        (0x18, target),
+        (0x10, 31),
+        (0x1c, 0x30f00),
+        (0x20, 0x30f04),
+        (0x24, 0),
+        (0x28, 0x10201011),
+    ] {
+        program.extend(store(4, offset, value));
+    }
+    program.extend(store(5, 0, 0x12c2b));
+    for (offset, value) in [(0x20, 0x202), (0x78, target), (0x7c, 32), (0x70, 1)] {
+        program.extend(store(3, offset, value));
+    }
+    program.extend(call_loop(256));
+    program.extend([0xe5807004, 0xe320f003]); // STR r7,[r0,#4]; WFI
+    let bytes: Vec<u8> = program.iter().flat_map(|word| word.to_le_bytes()).collect();
+    s.write(0, &bytes).unwrap();
+    for _ in 0..16 {
+        s.run(0, 256).unwrap();
+    }
+    assert!(
+        s.state(false).failure.is_none(),
+        "{:?}",
+        s.state(false).failure
+    );
+    let mut out = [0; 8];
+    s.read(0x8000, &mut out).unwrap();
+    assert_eq!(&out[..4], &3u32.to_le_bytes());
+    assert_eq!(
+        &out[4..],
+        &2u32.to_le_bytes(),
+        "stale translated code returned after program"
+    );
+    s.read(FLASH + 0x1000, &mut out[..4]).unwrap();
+    assert_eq!(out[..4], 0xe3a07002u32.to_le_bytes());
+}

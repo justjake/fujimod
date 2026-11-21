@@ -186,6 +186,15 @@ impl Session {
                 device.restore_checkpoint(data)?;
             }
             header.restore(self);
+            // Restored NOR bytes replace the executable window outside a device boundary.
+            if let Some(view) = &self.inner.executable_nor
+                && view.dirty()
+            {
+                for cpu in &self.inner.cpus {
+                    cpu.invalidate_code(None)?;
+                }
+                unsafe { view.clear_dirty() };
+            }
             Ok(())
         })();
         result.map_err(|error| self.inner.retain_failure(error))
