@@ -56,7 +56,7 @@ fn arm_and_aarch64_engines_run_side_by_side() {
 }
 
 #[test]
-fn a_fresh_engine_of_each_architecture_opens_after_both_ran() {
+fn a_fresh_engine_of_each_architecture_opens_after_both_closed() {
     let library = test_support::library();
     drop(engine(&library, Model::CortexA7, &ARM_CODE));
     drop(engine(&library, Model::ArmV8A, &AARCH64_CODE));
