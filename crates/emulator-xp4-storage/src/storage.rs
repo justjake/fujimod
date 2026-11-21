@@ -308,6 +308,13 @@ impl Nor {
         if self.executable.is_some() || prefix.bytes() > self.bytes.len() || !prefix.bytes().is_multiple_of(self.geometry.page_bytes) {
             return Err("Immutable NOR prefix exceeds source or page boundary".into());
         }
+        if self
+            .write_ranges
+            .iter()
+            .any(|range| range.offset < prefix.bytes() as u64)
+        {
+            return Err("NOR write range intersects immutable prefix".into());
+        }
         self.prefix = Some(prefix);
         Ok(self)
     }
@@ -4169,6 +4176,37 @@ mod write_range_tests {
             Ok(())
         );
         assert_eq!(ranged.check_command(0x0600_0000, 0), Ok(()));
+    }
+
+    #[test]
+    fn immutable_prefix_and_write_ranges_validate_in_either_order() {
+        let prefix = || ImmutablePrefix::new(0x1000).unwrap();
+        let declare = |ranges: Vec<WriteRange>, prefix_first: bool| {
+            if prefix_first {
+                strict()
+                    .with_immutable_prefix(prefix())?
+                    .with_write_ranges(ranges)
+            } else {
+                strict()
+                    .with_write_ranges(ranges)?
+                    .with_immutable_prefix(prefix())
+            }
+        };
+        for ranges in [
+            vec![range(0, PAGE as u64)],
+            vec![range(0xf00, PAGE as u64)],
+            vec![range(0x2000, PAGE as u64), range(0x800, PAGE as u64)],
+        ] {
+            for prefix_first in [true, false] {
+                let error = declare(ranges.clone(), prefix_first).err().unwrap();
+                assert!(error.contains("intersects immutable prefix"), "{error}");
+            }
+        }
+        let ranges = vec![range(0x2000, PAGE as u64), range(0x1000, PAGE as u64)];
+        let [first, second] = [true, false]
+            .map(|prefix_first| declare(ranges.clone(), prefix_first).unwrap().snapshot());
+        assert_eq!(first, second);
+        assert_eq!(first["immutable_prefix"], json!(0x1000));
     }
 
     #[test]
