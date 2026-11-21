@@ -6,6 +6,7 @@ import type {
   WasmWorkerRequest,
 } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 import { testConfig } from './test-fixtures';
+import { testCameraModule } from './wasm-test-module';
 
 function setup() {
   Object.assign(globalThis, { document: { baseURI: 'https://example.invalid/' } });
@@ -223,4 +224,25 @@ test('the X70 boots and restores its default with original RAF bytes', async () 
     globalThis.fetch = original;
     f.engine.dispose();
   }
+});
+
+test('power listeners reflect supply loss even while the physical switch remains on', () => {
+  const f = setup(),
+    state = testCameraModule().state;
+  const changes: boolean[] = [],
+    late: boolean[] = [];
+  f.engine.powerChanges((on) => changes.push(on));
+  f.reply({ type: 'state', state, supplyOn: true });
+  f.reply({ type: 'state', state, supplyOn: false });
+  f.reply({ type: 'state', state, supplyOn: false });
+  f.engine.powerChanges((on) => late.push(on));
+  assert.deepEqual(changes, [true, false]);
+  assert.deepEqual(late, [false]);
+  assert.equal(state.poweredOn, true);
+  f.reply({ type: 'state', state: { ...state, poweredOn: false }, supplyOn: true });
+  assert.deepEqual(changes, [true, false]);
+  f.reply({ type: 'state', state, supplyOn: true });
+  assert.deepEqual(changes, [true, false, true]);
+  assert.deepEqual(late, [false, true]);
+  f.engine.dispose();
 });

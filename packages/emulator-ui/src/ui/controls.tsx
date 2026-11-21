@@ -359,7 +359,6 @@ export class ControlSession {
   }
   setPowered(on: boolean) {
     this.powered = on;
-    if (this.powerID) this.positions.set(this.powerID, on ? 'ON' : 'OFF');
     this.changed();
   }
   synchronize(positions: Record<string, string>) {

@@ -49,7 +49,7 @@ export type WasmWorkerEvent =
   | { type: 'reply'; serial: number; result?: unknown }
   | { type: 'error'; serial?: number; error: string; fault?: EngineFault }
   | { type: 'progress'; message: string; percent?: number; assets?: AssetProgress[] }
-  | { type: 'state'; state: SessionState }
+  | { type: 'state'; state: SessionState; supplyOn: boolean }
   | { type: 'metrics'; metrics: CameraPerformance }
   | { type: 'saved'; savedAt?: number; revision?: number; error?: string }
   | { type: 'frame'; bitmap: ImageBitmap; width: number; height: number; sequence: number }

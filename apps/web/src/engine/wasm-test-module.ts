@@ -177,12 +177,14 @@ export function testCameraModule(shared = false) {
     }
     power(on: boolean) {
       record('power', { on });
+      supplyOn = on;
       state.poweredOn = on;
       ticks = 0n;
       return state;
     }
     powerCycle(inputs: BootInput[]) {
       record('power_cycle', { inputs });
+      supplyOn = true;
       state.poweredOn = true;
       ticks = 0n;
       return state;

@@ -152,9 +152,10 @@ export class WasmEngine implements Engine {
       case 'progress':
         this.progress?.(event.message, event.percent, event.assets);
         return;
-      case 'state':
-        if (event.state.poweredOn !== this.latestPower) {
-          this.latestPower = event.state.poweredOn;
+      case 'state': {
+        const powered = event.state.poweredOn && event.supplyOn;
+        if (powered !== this.latestPower) {
+          this.latestPower = powered;
           this.powerListeners.emit(this.latestPower);
         }
         this.latestCard = event.state.card;
@@ -163,6 +164,7 @@ export class WasmEngine implements Engine {
         this.cardListeners.emit(event.state.card);
         this.connectionListeners.emit([]);
         return;
+      }
       case 'metrics':
         this.metricListeners.emit({
           ...event.metrics,

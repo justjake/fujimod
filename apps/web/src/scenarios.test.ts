@@ -21,6 +21,6 @@ test('body routes refuse missing and invalid firmware identifiers', () => {
 test('idle review advances the real camera past automatic power-off', () => {
   const scenario = scenarioFromUrl('?scenario=x70-idle');
   expect(scenario.firmwareId).toBe('x70-110');
-  expect(scenario.interactive).toBe(false);
+  expect(scenario.interactive).toBe(true);
   expect(scenario.steps).toEqual([{ action: 'advance', ticks: 1_800_000_000 }]);
 });
