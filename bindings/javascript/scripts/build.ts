@@ -17,8 +17,16 @@ function run(command: string, args: string[]) {
 const testing = process.argv.includes('--testing');
 const crate = testing ? 'fujimod-javascript-testing' : 'fujimod-javascript';
 const evidence = fileURLToPath(new URL('../.tools/webusb', import.meta.url));
-const args = ['rustc', '--locked', '-p', crate, '--profile', 'release-web',
-  '--target', 'wasm32-unknown-unknown'];
+const args = [
+  'rustc',
+  '--locked',
+  '-p',
+  crate,
+  '--profile',
+  'release-web',
+  '--target',
+  'wasm32-unknown-unknown',
+];
 let linked: string[] | undefined;
 if (testing) {
   run('cargo', args);
