@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 )]
 #[derive(Default)]
 pub struct RunFactoryOptions {
+    /// Declared XP4 still-development RAW source and its backing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xp4_still_capture: Option<RunXp4StillCapture>,
     /// Connect physical sensor frames using the selected clock source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensor_frame_clock: Option<RunSensorFrameClock>,
@@ -708,8 +711,46 @@ pub enum RunWifiSdioProfile {
     DeclaredWifiSdioOneFunctionEnumerationUnmeasured,
 }
 
+/// Opt-in XP4 still-engine inputs and bounded physical RAW backing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunXp4StillCapture {
+    pub raw_address: u64,
+    pub raw_pitch: u64,
+    pub raw_site: (u8, u8),
+    pub memory_base: u64,
+    pub memory_size: u64,
+    pub basis: String,
+}
+
 impl RunFactoryOptions {
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(still) = &self.xp4_still_capture {
+            let end = still.memory_base.checked_add(still.memory_size);
+            if still.basis.trim().is_empty()
+                || still.raw_pitch < 12
+                || still.raw_pitch % 2 != 0
+                || still.raw_site.0 > 5
+                || still.raw_site.1 > 5
+                || still.memory_base % 4096 != 0
+                || still.memory_size == 0
+                || still.memory_size % 4096 != 0
+                || end.is_none_or(|end| {
+                    end > 0x1_0000_0000
+                        || still.raw_address < still.memory_base
+                        || still.raw_address >= end
+                })
+            {
+                return Err("invalid XP4 still-capture declaration".into());
+            }
+        }
         if self.auxiliary_control_ticks == Some(0) {
             return Err("run auxiliary_control_ticks must be positive".into());
         }
@@ -872,7 +913,24 @@ pub enum RunAudioInputProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::{RunFactoryOptions, RunFaceResultProfile};
+    use super::{RunFaceResultProfile, RunFactoryOptions};
+
+    #[test]
+    fn xp4_still_capture_requires_bounded_raw_and_basis() {
+        let mut value = serde_json::json!({"xp4_still_capture": {
+            "raw_address": 8192, "raw_pitch": 128, "raw_site": [5, 1],
+            "memory_base": 8192, "memory_size": 4096, "basis": "Declared test input"
+        }});
+        let options: RunFactoryOptions = serde_json::from_value(value.clone()).unwrap();
+        assert!(options.validate().is_ok());
+        value["xp4_still_capture"]["raw_address"] = 16384.into();
+        let options: RunFactoryOptions = serde_json::from_value(value.clone()).unwrap();
+        assert!(options.validate().is_err());
+        value["xp4_still_capture"]["raw_address"] = 8192.into();
+        value["xp4_still_capture"]["basis"] = " ".into();
+        let options: RunFactoryOptions = serde_json::from_value(value).unwrap();
+        assert!(options.validate().is_err());
+    }
 
     #[test]
     fn face_result_profile_accepts_known_profiles_and_rejects_unknown() {
@@ -888,9 +946,11 @@ mod tests {
             assert_eq!(options.face_result_profile, Some(expected));
         }
 
-        assert!(serde_json::from_value::<RunFactoryOptions>(serde_json::json!({
-            "face_result_profile": "not-a-profile"
-        }))
-        .is_err());
+        assert!(
+            serde_json::from_value::<RunFactoryOptions>(serde_json::json!({
+                "face_result_profile": "not-a-profile"
+            }))
+            .is_err()
+        );
     }
 }
