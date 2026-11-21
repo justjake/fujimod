@@ -85,6 +85,7 @@ test('power-off on boot remains visible, a power-cycle wakes it, and reset drops
     expect(powerCycle).toHaveBeenCalledWith([], expect.any(Function));
     expect(state.poweredOn).toBe(true);
     expect(state.live).toBe('LIVE');
+    expect(state.message).toBe('Camera ready');
     expect(lcd.style.visibility).toBe('');
     expect(runtime.panel.ready).toBe(true);
     expect(runtime.panel.powered).toBe(true);
