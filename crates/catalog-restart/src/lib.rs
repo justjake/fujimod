@@ -76,9 +76,31 @@ pub struct RestartMechanism {
     /// present only when its locator qualified a callback timer on the same
     /// firmware; delivery and callback placement remain separate mechanisms.
     pub deferred_timer: Option<DeferredTimer>,
+    /// Named configuration ranges required in both RAM and stored views.
+    /// These checks apply to immediate requests, including recovery requests;
+    /// they never change or save configuration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub configuration_checks: Vec<ConfigurationCheck>,
     /// Freestanding restart before the operating system, when located.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub early_boot: Option<EarlyBootMechanism>,
+}
+
+/// One exact configuration prerequisite, checked in RAM and storage on page 0.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify)
+)]
+pub struct ConfigurationCheck {
+    /// Name used to identify a failed prerequisite.
+    pub name: String,
+    /// Byte offset within configuration page 0.
+    pub offset: u32,
+    /// Required bytes, between 1 and 64 bytes long.
+    pub expected: Vec<u8>,
 }
 
 /// A processor-specific freestanding power-controller transport.
@@ -420,6 +442,40 @@ impl FirmwareRestart {
             return fail("stock code checks are required");
         }
         let m = &self.mechanism;
+        if !m.configuration_checks.is_empty() {
+            if m.transport.is_none() || m.deferred_timer.is_some() || m.early_boot.is_some() {
+                return fail(
+                    "configuration prerequisites require an immediate request without deferred or early-boot mechanisms",
+                );
+            }
+            if m.configuration_checks.len() > 16 {
+                return fail("at most 16 configuration prerequisites are supported");
+            }
+            let mut names = Vec::new();
+            let mut spans = Vec::new();
+            let mut total = 0;
+            for check in &m.configuration_checks {
+                if check.name.trim().is_empty() || names.contains(&check.name.as_str()) {
+                    return fail("configuration prerequisites need distinct nonempty names");
+                }
+                names.push(check.name.as_str());
+                if check.expected.is_empty() || check.expected.len() > 64 {
+                    return fail("configuration prerequisites contain 1 to 64 bytes");
+                }
+                total += check.expected.len();
+                let Some(end) = check.offset.checked_add(check.expected.len() as u32) else {
+                    return fail("configuration prerequisite range overflows");
+                };
+                spans.push((check.offset, end));
+            }
+            if total > 128 {
+                return fail("configuration prerequisites contain at most 128 bytes in total");
+            }
+            spans.sort_unstable();
+            if spans.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+                return fail("configuration prerequisite ranges overlap");
+            }
+        }
         let request = (
             m.sender,
             m.request,
@@ -432,9 +488,7 @@ impl FirmwareRestart {
                 return fail("a fixed-interval wake takes no request");
             }
             (None, None) => {
-                return fail(
-                    "a restart needs either a request transport or a fixed-interval wake",
-                );
+                return fail("a restart needs either a request transport or a fixed-interval wake");
             }
             (None, Some(interval)) => {
                 if request != (None, None, None, None, None)
@@ -518,9 +572,9 @@ impl FirmwareRestart {
                 return fail("invalid deferred callback timer");
             }
             let covered = |routine: &TimerRoutine| {
-                self.code_checks.iter().any(|check| {
-                    check.address == routine.address && check.size == routine.size
-                })
+                self.code_checks
+                    .iter()
+                    .any(|check| check.address == routine.address && check.size == routine.size)
             };
             if !covered(&timer.start) || !covered(&timer.cancel) {
                 return fail("deferred timer routines need matching code checks");
