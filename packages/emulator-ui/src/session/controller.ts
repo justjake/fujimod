@@ -334,13 +334,11 @@ export function startSession(
     finishLoading();
     options.ready();
     setState((s) => {
-      s.live = 'LIVE';
-    });
-    setState((s) => {
-      if (s.poweredOn === false) s.live = 'OFF';
+      s.live = s.poweredOn === false ? 'OFF' : 'LIVE';
+      s.message = s.poweredOn === false ? 'Camera is powered off' : 'Camera ready';
+      s.error = false;
     });
     refs.viewer.dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
-    status(state.poweredOn === false ? 'Camera is powered off' : 'Camera ready');
   }
   async function replay(steps: readonly ReplayStep[]) {
     panel.disable();
