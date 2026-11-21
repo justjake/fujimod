@@ -242,7 +242,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "not-run"
+          "result": "partial"
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
@@ -273,8 +273,8 @@
           "id": "stock/record-picture",
           "label": "Record picture",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -289,8 +289,8 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -337,8 +337,8 @@
           "id": "stock/playback-picture",
           "label": "Playback picture",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -361,8 +361,8 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -1290,17 +1290,17 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "stale",
-      "passed": 0,
+      "result": "pass",
+      "passed": 1,
       "total": 1
     },
     "record-movie": {
       "result": "not-run"
     },
     "control-input": {
-      "result": "stale",
-      "passed": 52,
-      "total": 52
+      "result": "pass",
+      "passed": 53,
+      "total": 53
     },
     "focus": {
       "result": "not-run"
@@ -1314,9 +1314,9 @@
       "total": 11
     },
     "playback-picture": {
-      "result": "stale",
-      "passed": 0,
-      "total": 3
+      "result": "pass",
+      "passed": 4,
+      "total": 4
     },
     "playback-movie": {
       "result": "not-run"
@@ -1325,8 +1325,8 @@
       "result": "not-run"
     },
     "sd": {
-      "result": "stale",
-      "passed": 0,
+      "result": "pass",
+      "passed": 2,
       "total": 2
     },
     "control-layout": {
