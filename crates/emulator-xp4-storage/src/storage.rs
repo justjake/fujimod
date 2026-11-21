@@ -494,6 +494,10 @@ impl Nor {
         Ok(())
     }
     fn check_command(&self, command: u32, address: u32) -> Result<(), String> {
+        // Without a prefix or write ranges there is no extent policy to apply.
+        if self.prefix.is_none() && self.write_ranges.is_empty() {
+            return Ok(());
+        }
         let size = match (command >> 24) as u8 {
             0xdc => self.geometry.erase_bytes,
             0x21 => 4096,
@@ -4131,6 +4135,40 @@ mod write_range_tests {
         let p = shared(ranges).unwrap();
         let flash = SerialFlashController::new(p.clone(), 37);
         (p, flash, host())
+    }
+
+    #[test]
+    fn erase_extent_checks_apply_only_with_an_extent_policy() {
+        let commands = [0x2100_0000u32, 0xdc00_0000, 0x0600_0000, 0x0200_0000];
+        let addresses = [
+            0u32,
+            FLASH as u32 - 1,
+            (FLASH + FLASH_SIZE - 1) as u32,
+            u32::MAX,
+        ];
+        for nor in [strict(), strict().with_write_protect()] {
+            for command in commands {
+                for address in addresses {
+                    assert_eq!(nor.check_command(command, address), Ok(()));
+                }
+            }
+        }
+        let ranged = strict()
+            .with_write_ranges(vec![range(0x1000, ERASE as u64)])
+            .unwrap();
+        for address in [0u32, u32::MAX] {
+            assert!(ranged.check_command(0x2100_0000, address).is_err());
+        }
+        assert!(
+            ranged
+                .check_command(0x2100_0000, (FLASH + 0x2000) as u32)
+                .is_err()
+        );
+        assert_eq!(
+            ranged.check_command(0x2100_0000, (FLASH + 0x1004) as u32),
+            Ok(())
+        );
+        assert_eq!(ranged.check_command(0x0600_0000, 0), Ok(()));
     }
 
     #[test]
