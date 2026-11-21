@@ -424,7 +424,116 @@
           "device-6",
           "device-7",
           "device-8"
-        ]
+        ],
+        "imaging": {
+          "sensor_capture": {
+            "width": 4992,
+            "height": 3362,
+            "period_ticks": 1200000,
+            "dma_ticks": 1000,
+            "cfa_origin": [
+              0,
+              62
+            ]
+          },
+          "capture_color": {
+            "black": 0,
+            "full_scale": 16380,
+            "reference_white": [
+              568,
+              302,
+              558
+            ],
+            "initial_rgb": [
+              128,
+              128,
+              128
+            ],
+            "sensor_cfa": [
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              0,
+              2,
+              1,
+              2,
+              0,
+              1,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              2,
+              0,
+              1,
+              0,
+              2,
+              1
+            ],
+            "processing_cfa": [
+              0,
+              2,
+              1,
+              2,
+              0,
+              1,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              2,
+              0,
+              1,
+              0,
+              2,
+              1,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2
+            ],
+            "sensor_image_area": [
+              0,
+              62,
+              4992,
+              3300
+            ],
+            "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase, spectral response, exposure and physical cadence are unmeasured on this body."
+          }
+        }
       },
       "xt10-131-browser-usb": {
         "graph": {
