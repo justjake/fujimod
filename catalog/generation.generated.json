@@ -8140,6 +8140,10 @@
           "status": "available",
           "errors": []
         },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
+        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -8154,7 +8158,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "RestartCatalogError: Console callback facts need a running camera: executable arena; arena translation root and path; cache-ready words; normal-mode UI cell and value"
+              "reason": "RestartCatalogError: Console callback facts need a running camera: normal-mode UI cell and value"
             }
           ]
         },
