@@ -444,9 +444,19 @@ pub struct Cleared {
 /// stage's secondary-core entry waits for one; under the update's selector that entry returns at
 /// once and the core goes on into the stage's own work, so the stage wakes the cores itself when
 /// it is ready for them. A wake at the hand-off runs them beside core 0 too early.
+///
+/// The loader keeps the card host as the boot ROM left it after reading the loader from this
+/// card: none of the recipe's board operations run. Those operations are the stock driver's
+/// bring-up of a slot it finds unconfigured. On a body with a UHS-II slot they also enable the
+/// slot's UHS-II interface, which the stock driver turns off again before its first command on
+/// the UHS-I host and the loader does not.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StockSelector {
+    /// SD clock divider the loader reads the card with, in place of the loader's own divider 1:
+    /// the divider the body's stock driver programs for a default-speed card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transfer_clock_divider: Option<u8>,
     /// Word edits of the RAM image, checked against it.
     pub ram_edits: Vec<image::Edit>,
     /// Extents of the RAM image after the reset stage that the card carries as zeros: data the
@@ -663,6 +673,8 @@ pub(crate) fn package_stock_selector(
         copies: Vec::new(),
         edits: Vec::new(),
     };
+    // The boot ROM read the loader from this card: its card routing stays.
+    setup.board.operations = Vec::new();
     package_inner(
         inverted,
         &setup,
@@ -1150,6 +1162,30 @@ fn clear_ram(
     Ok(())
 }
 
+/// Give the loader's card read the SD clock divider `divider` in place of its own divider 1.
+/// The loader sets its transfer clock in one place: it writes clock control (host `+0x2c`) with
+/// the divider in bits 15..8 and the internal clock enable, `mov w1, #0x101` and, within the next
+/// eight instructions, `strh w1, [xN, #0x2c]`. The loader must hold that word exactly once and
+/// the store after it, or nothing changes.
+fn bind_transfer_clock(program: &mut [u8], divider: u8) -> Result<()> {
+    const MOV_W1_DIVIDER_1: u32 = 0x52802021;
+    require(
+        (1..=0x80).contains(&divider) && divider.is_power_of_two(),
+        "Invalid XP5 transfer clock divider",
+    )?;
+    let words = || (0..program.len() / 4).map(|n| n * 4);
+    let sites: Vec<usize> =
+        words().filter(|&at| word(program, at).is_ok_and(|w| w == MOV_W1_DIVIDER_1)).collect();
+    let stored = sites.len() == 1
+        && (1..=8).any(|n| {
+            // strh w1, [xN, #0x2c]
+            word(program, sites[0] + 4 * n).is_ok_and(|w| w & 0xfffffc1f == 0x79005801)
+        });
+    require(stored, "XP5 loader transfer clock differs")?;
+    // mov w1, #(divider << 8 | 1)
+    put(program, sites[0], 0x52800001 | (u32::from(divider) << 8 | 1) << 5)
+}
+
 /// Apply checked word edits to the RAM image: every old word must match, none may repeat or
 /// touch the preloaded selector, and nothing changes unless all of them pass.
 fn edit_ram(ram: &mut [u8], edits: &[image::Edit], selector: usize) -> Result<()> {
@@ -1617,6 +1653,9 @@ fn package_inner(
             put(&mut program, at + 12, op.value)?;
             put(&mut program, at + 16, op.kind)?;
         }
+        if let Some(divider) = stock_selector.and_then(|stock| stock.transfer_clock_divider) {
+            bind_transfer_clock(&mut program, divider)?;
+        }
         let request = loader.sd_request;
         require(
             extent(&program, request, 40)? == [1u64, 0, 0, 0, 0].map(u64::to_le_bytes).concat(),
@@ -1922,6 +1961,7 @@ mod tests {
         let (data, mut setup, mut ram) = fixture();
         ram.extend(std::iter::repeat_n(0x5a, 0x2000));
         setup.stock_selector = Some(StockSelector {
+            transfer_clock_divider: None,
             ram_edits: vec![image::Edit {
                 address: 0x100,
                 old: 0xffff_ffff,
@@ -1969,11 +2009,49 @@ mod tests {
         assert_eq!((word(raw, source).unwrap(), word(stock, source).unwrap()), (0, 1));
         assert_eq!(word(stock, request + 8).unwrap() as usize, expected.len());
         assert_eq!(word(stock, request + 16).unwrap(), crate::xp4::crc32(&expected));
-        let differing: Vec<usize> = (0..raw.len()).filter(|&at| raw[at] != stock[at]).map(|at| at & !7).collect();
+        // The stock-selector loader runs none of the recipe's board operations: the boot ROM's
+        // card routing stays. The plain card start keeps them.
+        let board = 0xc000 + template::SETUP_SD_BOARD;
+        let operations = 16 + 24 * plain.board.operations.len();
+        assert!(!plain.board.operations.is_empty());
+        assert_eq!(word(raw, board + 12).unwrap() as usize, plain.board.operations.len());
+        assert_eq!(word(stock, board + 12).unwrap(), 0);
+        assert!(stock[board + 16..board + operations].iter().all(|b| *b == 0));
+        assert_eq!(stock[board..board + 12], raw[board..board + 12]);
+        let differing: Vec<usize> = (0..raw.len())
+            .filter(|&at| raw[at] != stock[at] && !(board + 12..board + operations).contains(&at))
+            .map(|at| at & !7)
+            .collect();
         assert!(differing.iter().all(|at| [source, request + 16].contains(at)), "{differing:x?}");
         // It is not the internal-flash build, which holds and wakes the parked cores.
         let flash = package_internal_flash(&data, &with_frames(plain), ram.clone(), 0, None).unwrap();
         assert_ne!(flash[0].bytes.len(), stock.len());
+    }
+
+    /// A recipe's transfer clock divider changes one instruction of the loader, the divider
+    /// of its clock control write, and a loader without that one write refuses.
+    #[test]
+    fn stock_selector_startup_binds_the_recipes_transfer_clock_divider() {
+        let (data, mut setup, ram) = stock_selector_fixture();
+        let own = package_stock_selector(&data, &setup, ram.clone(), 0).unwrap();
+        setup.stock_selector.as_mut().unwrap().transfer_clock_divider = Some(4);
+        let bound = package_stock_selector(&data, &setup, ram.clone(), 0).unwrap();
+        assert_eq!(own[1].bytes, bound[1].bytes);
+        let (own, bound) = (&own[0].bytes, &bound[0].bytes);
+        let differing: Vec<usize> = (0..own.len()).filter(|&at| own[at] != bound[at]).map(|at| at & !3).collect();
+        assert!(!differing.is_empty() && differing.iter().all(|at| *at == differing[0]), "{differing:x?}");
+        // mov w1, #0x101 becomes mov w1, #0x401.
+        assert_eq!(word(own, differing[0]).unwrap(), 0x52802021);
+        assert_eq!(word(bound, differing[0]).unwrap(), 0x52808021);
+        for divider in [0, 3, 0xff] {
+            setup.stock_selector.as_mut().unwrap().transfer_clock_divider = Some(divider);
+            assert!(package_stock_selector(&data, &setup, ram.clone(), 0).is_err(), "{divider}");
+        }
+        let mut program = template::IMAGE.to_vec();
+        bind_transfer_clock(&mut program, 4).unwrap();
+        // The bound loader no longer holds the divider-1 write.
+        assert!(bind_transfer_clock(&mut program, 4).is_err());
+        assert!(bind_transfer_clock(&mut [0; 64], 4).is_err());
     }
 
     #[test]
