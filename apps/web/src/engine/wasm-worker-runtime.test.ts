@@ -649,18 +649,27 @@ test('boot holds release through native contacts when the ordinary scanner is un
   }
 });
 
-
 test('idle supply-off advances time without checkpoints and resumes capture after wake', async () => {
   const f = setup();
-  await f.send({action: 'boot', config: f.config, dat: new ArrayBuffer(1), files: [], seedIdentity: []});
-  const before = f.calls.filter(c => c.action === 'checkpoint').length;
+  await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  const before = f.calls.filter((c) => c.action === 'checkpoint').length;
   f.supply(false);
-  const advance = () => f.send({action: 'replay', steps: [{action: 'advance', ticks: 36000000}]});
+  const advance = () =>
+    f.send({ action: 'replay', steps: [{ action: 'advance', ticks: 36000000 }] });
   assert.equal((await advance()).type, 'reply');
   assert.equal((await advance()).type, 'reply');
-  assert.equal(f.calls.filter(c => c.action === 'checkpoint').length, before);
-  assert.equal(f.events.some(e => e.type === 'error'), false);
+  assert.equal(f.calls.filter((c) => c.action === 'checkpoint').length, before);
+  assert.equal(
+    f.events.some((e) => e.type === 'error'),
+    false,
+  );
   f.supply(true);
   assert.equal((await advance()).type, 'reply');
-  assert.ok(f.calls.filter(c => c.action === 'checkpoint').length > before);
+  assert.ok(f.calls.filter((c) => c.action === 'checkpoint').length > before);
 });
