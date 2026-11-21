@@ -9,6 +9,10 @@ cargo build --release -p fujimod-mcp
 target/release/fujimod-mcp [--modules camera] [--output DIR]
 ```
 
+All compiled-in modules are enabled by default, including `camera`. Omit
+`--modules` to include new modules automatically as they are added. Pass
+`--modules camera` only to restrict the server to that module.
+
 The server speaks MCP over standard input and output. `--output` receives
 large results such as profiles; it defaults to a directory under the
 system temporary directory. Register it with an MCP client as a stdio
