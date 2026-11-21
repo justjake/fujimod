@@ -426,6 +426,33 @@ pub struct Lamp {
     pub red_port: u32,
     pub pin: u32,
 }
+/// An extent of the RAM image that a stock-selector startup leaves zero.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Cleared {
+    pub address: usize,
+    pub size: usize,
+    pub what: String,
+}
+/// A startup that keeps the installed flash attached and runs the reset stage with the update's
+/// own selector (1), not the preloaded one (0). The stock stage then loads the section table and
+/// its sections from the installed flash as on a flash boot. What the card supplies is the reset
+/// stage and whatever `ram_edits` keep the stage from loading over. A recipe names this when the
+/// preloaded selector does not boot its body.
+///
+/// The loader sends the cores the boot ROM parks no wake. Under the preloaded selector the reset
+/// stage's secondary-core entry waits for one; under the update's selector that entry returns at
+/// once and the core goes on into the stage's own work, so the stage wakes the cores itself when
+/// it is ready for them. A wake at the hand-off runs them beside core 0 too early.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StockSelector {
+    /// Word edits of the RAM image, checked against it.
+    pub ram_edits: Vec<image::Edit>,
+    /// Extents of the RAM image after the reset stage that the card carries as zeros: data the
+    /// running firmware loads from the installed flash itself.
+    pub cleared: Vec<Cleared>,
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Setup {
@@ -455,6 +482,9 @@ pub struct Setup {
     /// whose other differences from the update's own selector have to be undone here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub internal_flash_ram_edits: Vec<image::Edit>,
+    /// When present, `Recipe::build_startup` builds the stock-selector startup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stock_selector: Option<StockSelector>,
 }
 fn put64(data: &mut [u8], at: usize, value: u64) -> Result<()> {
     extent(data, at, 8)?;
@@ -558,7 +588,7 @@ pub(crate) fn package_with_storage(
     inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
     storage: Option<&[u8]>,
 ) -> Result<Vec<File>> {
-    package_inner(inverted, setup, ram, success_hold_units, storage, None, None)
+    package_inner(inverted, setup, ram, success_hold_units, storage, None, None, None)
 }
 
 /// Startup with the installed flash left attached: the card supplies the RAM
@@ -607,6 +637,41 @@ pub(crate) fn package_internal_flash(
             secondary_sgi,
         }),
         None,
+        None,
+    )
+}
+
+/// The recipe's stock-selector startup (`Setup::stock_selector`): the card loader, with the
+/// prelude's installed-flash setup and scan as in stage one and without the card start's setup
+/// tables in SRAM, and a RAM image changed after the reset-copy comparison. The preloaded
+/// selector goes back to the update's own word, the recipe's edits are applied and its cleared
+/// extents are zeroed; the CRC the loader checks covers the result. The loader holds, gates and
+/// wakes no core.
+pub(crate) fn package_stock_selector(
+    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64,
+) -> Result<Vec<File>> {
+    let mut setup = setup.clone();
+    let stock = setup.stock_selector.take().ok_or_else(|| {
+        image::Error::Invalid("The recipe names no stock-selector startup".into())
+    })?;
+    require(
+        setup.card_boot.is_none(),
+        "A stock-selector startup excludes a card-resident setup",
+    )?;
+    setup.internal_flash_ram_edits = Vec::new();
+    setup.banks = Banks {
+        copies: Vec::new(),
+        edits: Vec::new(),
+    };
+    package_inner(
+        inverted,
+        &setup,
+        Some(ram),
+        success_hold_units,
+        None,
+        None,
+        None,
+        Some(&stock),
     )
 }
 
@@ -630,6 +695,7 @@ pub(crate) fn package_read_only(
         None,
         None,
         Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, exif: None, hook: None, file: None }),
+        None,
     )
 }
 
@@ -700,6 +766,7 @@ pub(crate) fn package_marker(
             hook: None,
             file: None,
         }),
+        None,
     )
 }
 
@@ -778,6 +845,7 @@ pub(crate) fn package_checked_redirect(
         None,
         None,
         Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, exif: None, hook: None, file: None }),
+        None,
     )
 }
 
@@ -828,6 +896,7 @@ pub(crate) fn package_copy_stub(
         None,
         None,
         Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, exif: None, hook: None, file: None }),
+        None,
     )
 }
 
@@ -897,6 +966,7 @@ pub(crate) fn package_exif(
             hook: None,
             file: Some(file),
         }),
+        None,
     )
 }
 
@@ -956,6 +1026,7 @@ pub(crate) fn package_hook(
             hook: Some(hook),
             file: Some(file),
         }),
+        None,
     )
 }
 
@@ -1017,6 +1088,7 @@ pub(crate) fn package_os(
             hook: None,
             file: Some(head),
         }),
+        None,
     )
 }
 
@@ -1050,6 +1122,32 @@ struct InternalFlash {
     secondary_sgi: [u64; 3],
     /// Word edits of the RAM image, checked against it after the reset-copy comparison.
     ram_edits: Vec<image::Edit>,
+}
+
+/// Zero the cleared extents of a stock-selector image. Each is whole words after the reset
+/// stage and inside the image; none overlaps another or an edit.
+fn clear_ram(
+    ram: &mut [u8], cleared: &[Cleared], edits: &[image::Edit], reset_copy_size: usize,
+) -> Result<()> {
+    let mut taken: Vec<(usize, usize)> = edits.iter().map(|edit| (edit.address, edit.address + 4)).collect();
+    for extent in cleared {
+        let end = extent.address.checked_add(extent.size).filter(|end| {
+            extent.size != 0
+                && extent.address.is_multiple_of(4)
+                && extent.size.is_multiple_of(4)
+                && extent.address >= reset_copy_size
+                && *end <= ram.len()
+        });
+        let end = end.filter(|end| taken.iter().all(|&(low, high)| *end <= low || extent.address >= high));
+        let end = end.ok_or_else(|| {
+            image::Error::Invalid("Invalid cleared extent of the XP5 RAM image".into())
+        })?;
+        taken.push((extent.address, end));
+    }
+    for extent in cleared {
+        ram[extent.address..extent.address + extent.size].fill(0);
+    }
+    Ok(())
 }
 
 /// Apply checked word edits to the RAM image: every old word must match, none may repeat or
@@ -1179,10 +1277,20 @@ fn bind_read_only(
 fn package_inner(
     inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
     storage: Option<&[u8]>, internal_flash: Option<InternalFlash>, read_only: Option<ReadOnly>,
+    stock_selector: Option<&StockSelector>,
 ) -> Result<Vec<File>> {
     require(
         internal_flash.is_none() || read_only.is_none(),
         "An XP5 startup is internal-flash or read-only, not both",
+    )?;
+    require(
+        stock_selector.is_none()
+            || (internal_flash.is_none()
+                && read_only.is_none()
+                && ram.is_some()
+                && storage.is_none()
+                && setup.card_boot.is_none()),
+        "The stock-selector startup is a card-loader startup without card-resident setup",
     )?;
     let prefix = setup.verify(inverted)?;
     let loader = if let Some(read_only) = &read_only {
@@ -1335,7 +1443,13 @@ fn package_inner(
     put64(
         &mut program,
         cfg + 200,
-        u64::from(ram.is_none() || internal_flash.is_some() || read_only.is_some()),
+        // The prelude sets up and scans the installed flash whenever it stays in use.
+        u64::from(
+            ram.is_none()
+                || internal_flash.is_some()
+                || read_only.is_some()
+                || stock_selector.is_some(),
+        ),
     )?;
     if let Some(flash) = &internal_flash {
         bind_internal_flash(&mut program, loader, setup, flash, ram.as_deref(), inverted)?;
@@ -1442,6 +1556,12 @@ fn package_inner(
         )?;
         if let Some(flash) = &internal_flash {
             edit_ram(&mut ram, &flash.ram_edits, setup.selector)?;
+        }
+        if let Some(stock) = stock_selector {
+            clear_ram(&mut ram, &stock.cleared, &stock.ram_edits, setup.reset_copy_size)?;
+            edit_ram(&mut ram, &stock.ram_edits, setup.selector)?;
+            // Checked above: the stock word is 1 and the plan's image carries 0.
+            put64(&mut ram, setup.selector, 1)?;
         }
         require(
             word(&prefix, setup.bootstrap_offset + 36)?
@@ -1673,6 +1793,7 @@ mod tests {
             },
             card_boot: None,
             internal_flash_ram_edits: vec![],
+            stock_selector: None,
         };
         let mut ram = data[0x40000..].to_vec();
         put64(&mut ram, 0x40, 0).unwrap();
@@ -1793,6 +1914,100 @@ mod tests {
         let bare = package(&data, &plain, Some(ram), 0).unwrap();
         assert_eq!(bare[1].bytes, flash[1].bytes);
         assert_eq!(flag(&bare[0].bytes, template::XP5_SETUP_CONFIGURATION), 0);
+    }
+
+    /// A recipe that names a stock-selector startup, and a RAM image with data after the reset
+    /// stage (the fixture's image is the reset stage alone).
+    fn stock_selector_fixture() -> (Vec<u8>, Setup, Vec<u8>) {
+        let (data, mut setup, mut ram) = fixture();
+        ram.extend(std::iter::repeat_n(0x5a, 0x2000));
+        setup.stock_selector = Some(StockSelector {
+            ram_edits: vec![image::Edit {
+                address: 0x100,
+                old: 0xffff_ffff,
+                new: 0xd2a4_0000,
+                what: "decode the section to scratch DRAM".into(),
+            }],
+            cleared: vec![Cleared {
+                address: 0x2000,
+                size: 0x800,
+                what: "loaded from the installed flash".into(),
+            }],
+        });
+        (data, setup, ram)
+    }
+
+    #[test]
+    fn stock_selector_startup_keeps_the_updates_selector_and_the_installed_flash() {
+        let (data, setup, ram) = stock_selector_fixture();
+        let files = package_stock_selector(&data, &setup, ram.clone(), 0).unwrap();
+        assert_eq!(
+            files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
+            ["marble_init.bin", "ffboot.bin"]
+        );
+        // The image: the update's own selector, the edit, the cleared extent, nothing else.
+        let mut expected = ram.clone();
+        put64(&mut expected, setup.selector, 1).unwrap();
+        put(&mut expected, 0x100, 0xd2a4_0000).unwrap();
+        expected[0x2000..0x2800].fill(0);
+        assert_eq!(files[1].bytes, expected);
+        assert_eq!(&files[1].bytes[..0x1000], {
+            let mut reset = data[0x40000..0x41000].to_vec();
+            put(&mut reset, 0x100, 0xd2a4_0000).unwrap();
+            reset
+        });
+        // The loader is the card loader of a plain card start of the same recipe. Two things
+        // differ in its file: the prelude sets up and scans the installed flash, and the request
+        // carries the changed image's CRC.
+        let mut plain = setup.clone();
+        plain.stock_selector = None;
+        let card = package(&data, &plain, Some(ram.clone()), 0).unwrap();
+        let (raw, stock) = (&card[0].bytes, &files[0].bytes);
+        assert_eq!(raw.len(), stock.len());
+        let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
+        let request = 0xc000 + template::SETUP_SD_REQUEST;
+        assert_eq!((word(raw, source).unwrap(), word(stock, source).unwrap()), (0, 1));
+        assert_eq!(word(stock, request + 8).unwrap() as usize, expected.len());
+        assert_eq!(word(stock, request + 16).unwrap(), crate::xp4::crc32(&expected));
+        let differing: Vec<usize> = (0..raw.len()).filter(|&at| raw[at] != stock[at]).map(|at| at & !7).collect();
+        assert!(differing.iter().all(|at| [source, request + 16].contains(at)), "{differing:x?}");
+        // It is not the internal-flash build, which holds and wakes the parked cores.
+        let flash = package_internal_flash(&data, &with_frames(plain), ram.clone(), 0, None).unwrap();
+        assert_ne!(flash[0].bytes.len(), stock.len());
+    }
+
+    #[test]
+    fn stock_selector_startup_refuses_what_it_cannot_check() {
+        let (data, setup, ram) = stock_selector_fixture();
+        let with = |change: &dyn Fn(&mut StockSelector)| {
+            let mut setup = setup.clone();
+            change(setup.stock_selector.as_mut().unwrap());
+            package_stock_selector(&data, &setup, ram.clone(), 0)
+        };
+        assert!(with(&|_| {}).is_ok());
+        // An edit whose old word differs, or one of the selector.
+        assert!(with(&|s| s.ram_edits[0].old = 0x1234_5678).is_err());
+        let selector = setup.selector;
+        assert!(with(&|s| s.ram_edits[0].address = selector).is_err());
+        // A cleared extent inside the reset stage, past the image, unaligned, empty or overlapping.
+        assert!(with(&|s| s.cleared[0].address = 0x800).is_err());
+        assert!(with(&|s| s.cleared[0].size = 0x2000).is_err());
+        assert!(with(&|s| s.cleared[0].address = 0x2002).is_err());
+        assert!(with(&|s| s.cleared[0].size = 0).is_err());
+        assert!(with(&|s| {
+            let again = s.cleared[0].clone();
+            s.cleared.push(again);
+        })
+        .is_err());
+        assert!(with(&|s| s.ram_edits[0].address = 0x2400).is_err());
+        // A recipe without the startup, or with a card-resident setup as well.
+        let mut plain = setup.clone();
+        plain.stock_selector = None;
+        assert!(package_stock_selector(&data, &plain, ram.clone(), 0).is_err());
+        assert!(package_stock_selector(&data, &with_frames(setup.clone()), ram.clone(), 0).is_err());
+        // Nothing of it reaches the other startups of the same recipe.
+        let card = package(&data, &setup, Some(ram.clone()), 0).unwrap();
+        assert_eq!(card[1].bytes, ram);
     }
 
     #[test]
