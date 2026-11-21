@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { test } from 'vitest';
+import { test } from 'vite-plus/test';
 import { cycloneDx, type Component } from '../scripts/sbom/bom.ts';
 import { cargoComponents } from '../scripts/sbom/cargo.ts';
 import { writeLicenseIndex } from '../scripts/sbom/licenses.ts';
