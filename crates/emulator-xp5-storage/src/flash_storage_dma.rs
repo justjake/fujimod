@@ -53,8 +53,17 @@ impl Dma {
         }
     }
     fn copy(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
+        // +0x2c is 3 on channel 0 and 5 elsewhere where a driver programs it (the NOR loader, the
+        // NAND stage's channel 2 fill). The NAND stage's own flash read channel never writes it, so
+        // its reset value 0 is also accepted for the serial-NAND medium.
+        let programmed = if n == 0 { 3 } else { 5 };
+        let reset_mode_accepted = matches!(&self.medium, crate::flash_storage::Medium::Nand(_));
         let r = &mut self.state.channels[n];
-        if r[0] != 0 || r[12] != 2 || r[13] != 0 || r[11] != if n == 0 { 3 } else { 5 } {
+        if r[0] != 0
+            || r[12] != 2
+            || r[13] != 0
+            || !(r[11] == programmed || (reset_mode_accepted && r[11] == 0))
+        {
             return Err("unsupported DMA channel mode".into());
         }
         let src = r[2] as u64 | ((r[1] & 7) as u64) << 32;
@@ -413,6 +422,49 @@ mod tests {
         assert_eq!(&h.ram[20..24], &[4, 5, 6, 7]);
         assert_eq!(rd(&mut bus, &mut h, 0x18), 1);
         assert!(h.irq);
+    }
+    #[test]
+    fn serial_nand_channel_copies_with_the_reset_mode_word() {
+        let mut image = vec![0xff; 0x20000];
+        image[0x10000..0x10004].copy_from_slice(&[1, 2, 3, 4]);
+        let storage = std::sync::Arc::new(std::sync::Mutex::new(
+            crate::nand_storage::NandStorage::new(image).unwrap(),
+        ));
+        let mut bus = TestBus::default();
+        bus.register(
+            0xff939000,
+            0x1000,
+            Box::new(Dma::new(crate::flash_storage::Medium::Nand(storage))),
+        )
+        .unwrap();
+        let mut h = RecordingHost {
+            ram: vec![0; 32],
+            events: vec![],
+            irq: false,
+            ..RecordingHost::default()
+        };
+        // One 4-byte row from flash offset 0x10000 to RAM 8; +0x2c is never written.
+        for (o, v) in [
+            (0x108, flash_storage::BASE + 0x10000),
+            (0x10c, 4),
+            (0x110, 4),
+            (0x114, 1),
+            (0x11c, 8),
+            (0x120, 4),
+            (0x124, 4),
+            (0x128, 1),
+            (0x130, 2),
+            (0x10, 3),
+            (0x20, 0x10001),
+            (4, 1),
+        ] {
+            wr(&mut bus, &mut h, o, v);
+        }
+        let (d, at, t) = h.events[0];
+        h.now = at;
+        bus.event(&mut Cx::new(&mut h, 0, 0, 0), d, t).unwrap();
+        assert_eq!(&h.ram[8..12], &[1, 2, 3, 4]);
+        assert_eq!(rd(&mut bus, &mut h, 0x18), 1);
     }
     #[test]
     fn disable_cancels_deadline_and_stale_start_is_not_latched() {

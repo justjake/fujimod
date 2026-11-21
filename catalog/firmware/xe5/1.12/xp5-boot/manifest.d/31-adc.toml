@@ -1,0 +1,9 @@
+# ADC (the SoC's `adc` block, 15 channels at 0xff906010 + 4 * channel). Channel 0's 2713 is the X-T5
+# thermistor sample and every other channel reads 4095 (no key on any ladder). All values are
+# declared bring-up inputs, INHERITED from the X-T5 and X-H2 boards and UNVERIFIED for the X-E5.
+[[device]]
+base = 0xff906000
+size = 0x1000
+kind = "adc"
+[device.options]
+samples = [2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
