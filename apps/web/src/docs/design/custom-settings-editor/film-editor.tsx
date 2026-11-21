@@ -385,6 +385,9 @@ interface CurveProps {
   picked?: number;
   set: (film: Film) => void;
   focusKnot: (knot: number) => void;
+  /** Entered: drags edit it. Until then a drag scrolls the column and a tap
+   * enters it on the nearest knot. */
+  active: boolean;
   /** Lines and knots only, for drawing over the picture. */
   bare?: boolean;
 }
@@ -401,6 +404,8 @@ function CurveGraph(props: CurveProps) {
   const Yh = (d: number) => pad + (1 - d) * h();
   const changed = (i: number) => Math.abs(props.film.knots[i] - props.opened.knots[i]) > 1e-4 || props.film.tilt[i] !== 0;
   let drag: { kind: 'knot' | 'handle'; knot: number; y: number; start: number } | undefined;
+  /** A press on the graph before it is entered: a tap if it ends where it began. */
+  let press: { x: number; y: number } | undefined;
   const local = (e: PointerEvent, element: Element) => {
     const box = element.getBoundingClientRect();
     return { x: ((e.clientX - box.left) / box.width) * props.width, y: ((e.clientY - box.top) / box.height) * props.height };
@@ -425,11 +430,16 @@ function CurveGraph(props: CurveProps) {
     <svg
       width={props.width}
       height={props.height}
-      class="block touch-none"
+      class="block"
+      style={{ 'touch-action': props.active ? 'none' : 'pan-y' }}
       onPointerDown={(e) => {
         const element = e.currentTarget;
-        element.setPointerCapture(e.pointerId);
         const p = local(e, element);
+        if (!props.active) {
+          press = { x: e.clientX, y: e.clientY };
+          return;
+        }
+        element.setPointerCapture(e.pointerId);
         if (props.bend) {
           const near = handlePoints().find((q) => Math.hypot(X(q.u) - p.x, Y(q.v) - p.y) < 22);
           if (near) {
@@ -457,7 +467,20 @@ function CurveGraph(props: CurveProps) {
           props.set({ ...props.film, tilt });
         }
       }}
-      onPointerUp={() => (drag = undefined)}
+      onPointerUp={(e) => {
+        drag = undefined;
+        const tap = press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 8;
+        press = undefined;
+        if (!tap) return;
+        const p = local(e, e.currentTarget);
+        let knot = 0;
+        for (let i = 1; i < 10; i++) if (Math.abs(X(US[i]) - p.x) < Math.abs(X(US[knot]) - p.x)) knot = i;
+        props.focusKnot(knot);
+      }}
+      onPointerCancel={() => {
+        drag = undefined;
+        press = undefined;
+      }}
     >
       <Show when={!props.bare}>
         <path d={histogramPath()} fill="rgb(255 255 255 / 0.13)" />
@@ -693,6 +716,9 @@ function ToneGraph(props: { film: Film; opened: Film; width: number; height: num
     return `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
   };
   let drag: { band: number; y: number; start: number } | undefined;
+  /** A press before the graph is entered: a tap if it ends where it began. */
+  let press: { x: number; y: number } | undefined;
+  const bandAt = (x: number) => Math.max(0, Math.min(4, Math.floor(x / (cw() + gap))));
   const local = (e: PointerEvent, element: Element) => {
     const box = element.getBoundingClientRect();
     return { x: ((e.clientX - box.left) / box.width) * props.width, y: ((e.clientY - box.top) / box.height) * props.height };
@@ -701,12 +727,17 @@ function ToneGraph(props: { film: Film; opened: Film; width: number; height: num
     <svg
       width={props.width}
       height={props.height}
-      class="block touch-none"
+      class="block"
+      style={{ 'touch-action': props.inside ? 'none' : 'pan-y' }}
       onPointerDown={(e) => {
         const element = e.currentTarget;
+        if (!props.inside) {
+          press = { x: e.clientX, y: e.clientY };
+          return;
+        }
         element.setPointerCapture(e.pointerId);
         const p = local(e, element);
-        const band = Math.max(0, Math.min(4, Math.floor(p.x / (cw() + gap))));
+        const band = bandAt(p.x);
         props.focusBand(band);
         drag = { band, y: p.y, start: props.film.bands[band] };
       }}
@@ -718,7 +749,16 @@ function ToneGraph(props: { film: Film; opened: Film; width: number; height: num
         bands[drag.band] = Math.max(-100, Math.min(100, Math.round(pct / 5) * 5));
         props.set({ ...props.film, bands });
       }}
-      onPointerUp={() => (drag = undefined)}
+      onPointerUp={(e) => {
+        drag = undefined;
+        const tap = press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 8;
+        press = undefined;
+        if (tap) props.focusBand(bandAt(local(e, e.currentTarget).x));
+      }}
+      onPointerCancel={() => {
+        drag = undefined;
+        press = undefined;
+      }}
     >
       <For each={[0, 1, 2, 3, 4]}>
         {(i) => {
@@ -1640,19 +1680,8 @@ function Scope(props: { film: Film; crop: number; chosen: number; choose: (p: nu
   return (
     <div
       ref={box}
-      class="relative mx-auto touch-none"
-      style={{ width: `${SCOPE}px`, height: `${SCOPE}px` }}
-      onPointerDown={(e) => {
-        const [x, y] = local(e);
-        const near = [0, 1, 2].reduce((best, i) => (Math.hypot(handle(i)[0] - x, handle(i)[1] - y) < Math.hypot(handle(best)[0] - x, handle(best)[1] - y) ? i : best), props.chosen);
-        props.choose(near);
-        e.currentTarget.setPointerCapture(e.pointerId);
-      }}
-      onPointerMove={(e) => {
-        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-        const [x, y] = local(e);
-        moveTo(props.chosen, x, y);
-      }}
+      class="relative mx-auto"
+      style={{ width: `${SCOPE}px`, height: `${SCOPE}px`, 'touch-action': 'pan-y' }}
     >
       <div class="fm-round absolute inset-[10px] rounded-full" style={{ background: 'var(--m-well)', 'box-shadow': 'var(--m-well-edge), 0 0 0 1px rgb(255 255 255 / 0.14)' }} />
       <canvas ref={dots} width={SCOPE} height={SCOPE} class="absolute inset-0" />
@@ -1665,6 +1694,24 @@ function Scope(props: { film: Film; crop: number; chosen: number; choose: (p: nu
           {(i) => <circle cx={handle(i)[0]} cy={handle(i)[1]} r={props.chosen === i ? 13 : 10} fill={PRIMARY_INKS[i]} stroke="#fff" stroke-width={props.chosen === i ? 3 : 1.5} />}
         </For>
       </svg>
+      {/* Only a handle takes a drag; anywhere else a finger scrolls the column. */}
+      <For each={[0, 1, 2]}>
+        {(i) => (
+          <div
+            class="absolute size-[44px] -translate-x-1/2 -translate-y-1/2 touch-none rounded-full"
+            style={{ left: `${handle(i)[0]}px`, top: `${handle(i)[1]}px` }}
+            onPointerDown={(e) => {
+              props.choose(i);
+              e.currentTarget.setPointerCapture(e.pointerId);
+            }}
+            onPointerMove={(e) => {
+              if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+              const [x, y] = local(e);
+              moveTo(i, x, y);
+            }}
+          />
+        )}
+      </For>
     </div>
   );
 }
@@ -1691,13 +1738,8 @@ function ColorWheel(props: { film: Film; set: (film: Film) => void }) {
   return (
     <div
       ref={box}
-      class="relative mx-auto touch-none"
-      style={{ width: `${D}px`, height: `${D}px` }}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        set(e);
-      }}
-      onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && set(e)}
+      class="relative mx-auto"
+      style={{ width: `${D}px`, height: `${D}px`, 'touch-action': 'pan-y' }}
     >
       <div
         class="fm-round absolute inset-[6px] rounded-full"
@@ -1709,6 +1751,13 @@ function ColorWheel(props: { film: Film; set: (film: Film) => void }) {
         <line x1={c} y1={c} x2={c + radius() * Math.cos(angle())} y2={c + radius() * Math.sin(angle())} stroke="#fff" stroke-width="2" stroke-linecap="round" />
         <circle cx={c + radius() * Math.cos(angle())} cy={c + radius() * Math.sin(angle())} r="11" fill="var(--m-mark)" stroke="#fff" stroke-width="2.5" />
       </svg>
+      {/* Only the handle takes a drag; anywhere else a finger scrolls the column. */}
+      <div
+        class="absolute size-[44px] -translate-x-1/2 -translate-y-1/2 touch-none rounded-full"
+        style={{ left: `${c + radius() * Math.cos(angle())}px`, top: `${c + radius() * Math.sin(angle())}px` }}
+        onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+        onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && set(e)}
+      />
     </div>
   );
 }
@@ -2092,7 +2141,7 @@ export function Editor(props: {
                 }
               >
                 <Show when={tool === 'curve'}>
-                  <div ref={(element) => (rows[0] = element)} class="relative rounded-[14px] p-[2px]" style={frame(0)} onPointerDown={() => focusControl(0)}>
+                  <div ref={(element) => (rows[0] = element)} class="relative rounded-[14px] p-[2px]" style={frame(0)} onClick={() => focusControl(0)}>
                     <button
                       type="button"
                       class="absolute top-[10px] left-[10px] z-10 flex size-[36px] items-center justify-center rounded-[10px]"
@@ -2112,6 +2161,7 @@ export function Editor(props: {
                       bend={s().inside && isFocused(0) && s().bend}
                       set={(film) => update({ ...s(), film })}
                       focusKnot={(knot) => update({ ...s(), knot, focus: 0, area: 'rows', header: false, inside: true })}
+                      active={s().inside && isFocused(0)}
                     />
                     <div class={`h-[31px] px-[10px] pt-[2px] pb-[8px] font-medium tabular-nums ${SMALL}`}>{s().inside && isFocused(0) ? knotReadout(s().film, s().knot, s().bend) : ''}</div>
                   </div>
@@ -2148,7 +2198,7 @@ export function Editor(props: {
                   {numbersRow(index('mix', 3), 'mix')}
                 </Show>
                 <Show when={tool === 'tone'}>
-                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={frame(index('tone'))} onPointerDown={() => focusControl(index('tone'))}>
+                  <div ref={(element) => (rows[index('tone')] = element)} class="rounded-[14px] p-[6px]" style={frame(index('tone'))} onClick={() => focusControl(index('tone'))}>
                     <ToneGraph
                       film={s().film}
                       opened={s().opened}
@@ -2188,6 +2238,7 @@ export function Editor(props: {
               bend={s().bend}
               set={(film) => update({ ...s(), film })}
               focusKnot={(knot) => update({ ...s(), knot })}
+              active
             />
           </div>
           <button
