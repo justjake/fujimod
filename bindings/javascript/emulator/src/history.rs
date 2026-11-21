@@ -366,14 +366,18 @@ mod tests {
     fn supply_off_ends_history_without_a_guest_failure() {
         use fujimod_catalog_configuration::RunEngine;
         use fujimod_emulator::board::{bus::{Bus, Mode}, factory::{Graph, Options}};
-        struct SupplyOff;
+        struct SupplyOff { due: Option<u64> }
         impl fujimod_emulator_devices::Device for SupplyOff {
             fn name(&self) -> &'static str { "test-supply" }
             fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 { 0 }
             fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
-            fn next_deadline(&self, _: u64) -> Option<u64> { Some(5) }
+            fn next_deadline(&self, _: u64) -> Option<u64> { self.due }
+            fujimod_emulator_devices::checkpoint_fields! { due: Option<u64> }
             fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
-                if cx.now() >= 5 { cx.power_off().unwrap(); }
+                if self.due.is_some_and(|due| cx.now() >= due) {
+                    self.due = None;
+                    cx.power_off().unwrap();
+                }
             }
         }
         let mut session = session(ExecutionPolicy::Interactive);
@@ -385,7 +389,7 @@ mod tests {
             "peripherals":[],"decoders":[],"instructions_per_tick":[1,1]
         })).unwrap();
         let mut bus = Bus::new(Mode::Strict);
-        bus.attach(Box::new(SupplyOff));
+        bus.attach(Box::new(SupplyOff { due: Some(5) }));
         session.core.board = graph.build(Options::new(RunEngine::Unicorn)
             .with_translation_cache_size_bytes(1 << 20), bus, None).unwrap();
         session.core.board.write_memory(0, 65536, &0xeafffffeu32.to_le_bytes()).unwrap();
