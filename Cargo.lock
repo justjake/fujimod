@@ -2965,6 +2965,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-multishot"
+version = "0.1.0"
+dependencies = [
+ "fujimod-workspace-hack",
+ "png",
+ "serde",
+ "serde_json",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "fujimod-perf"
 version = "0.1.0"
 dependencies = [
