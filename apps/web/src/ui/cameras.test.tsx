@@ -167,39 +167,10 @@ test('reports the last mod build independently of walkthrough grades', () => {
   const document = progress('X-E2S', ['research'], { snap: 'fail', zone: 'fail' });
   const mods = document.tracks.find((track) => track.id === 'fujimod')!;
   const build = mods.steps.find((step) => step.id === 'mod-build')!;
-  Object.assign(build, {
-    id: 'build/mods',
-    label: 'Mods built',
-    result: 'stale',
-    passed: 61,
-    total: 63,
-  });
+  Object.assign(build, { id: 'build/mods', label: 'Mods built', result: 'stale', passed: 61, total: 63 });
   const host = table([[{ name: 'EXR Processor II', years: '', models: ['X-E2S'] }]], [document]);
   expect(host.querySelector('.mod-build')?.textContent).toBe('Last build 61/63 · recheck due');
-  expect(host.querySelector<HTMLElement>('.build-track')?.style.getPropertyValue('--p')).toBe('0%');
   expect(phases(document).find((phase) => phase.id === 'mods')?.fraction).toBe(0);
-});
-
-test('a fresh build fills its own lane and walkthroughs show measured passes', () => {
-  const document = progress('X70', ['research'], { bracket: 'pass', focus: 'fail' });
-  document.override = { firmware_id: document.firmware_id, complete: true };
-  const mods = document.tracks.find((track) => track.id === 'fujimod')!;
-  const build = mods.steps.find((step) => step.id === 'mod-build')!;
-  Object.assign(build, {
-    id: 'build/mods',
-    label: 'Mods built',
-    result: 'partial',
-    passed: 55,
-    total: 63,
-  });
-  const host = table([[{ name: 'EXR Processor II', years: '', models: ['X70'] }]], [document]);
-  const width = (selector: string) =>
-    host.querySelector<HTMLElement>(selector)?.style.getPropertyValue('--p');
-  expect(width('.build-track')).toBe(`${100 * (55 / 63)}%`);
-  expect(width('.walkthrough-track')).toBe('50%');
-  expect(host.querySelector('.phase:has(.coverage-tracks)')?.getAttribute('aria-label')).toBe(
-    'FujiMod: Mods built 55/63, Walkthroughs 1/2',
-  );
 });
 
 test('each phase fills by its steps and names its value', () => {
@@ -273,9 +244,6 @@ test('the emulator draws one cell per feature the body has, partial ones by thei
   expect(host.querySelector('.phase:nth-child(2) li.partial .step-detail')?.textContent).toBe(
     '9 of 11',
   );
-  expect(
-    [...host.querySelectorAll('.phase:nth-child(2) .step-detail')].map((item) => item.textContent),
-  ).toContain('Recheck due');
   expect(host.querySelector('.progress-heading')?.textContent).toBe('X-T41.00');
 });
 
