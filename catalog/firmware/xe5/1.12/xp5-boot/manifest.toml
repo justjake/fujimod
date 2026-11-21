@@ -6,3 +6,9 @@ load_firmware = true
 [[ram]]
 base = 0
 size = 0x67f00000
+
+# M-core SRAM, as on the other XP5 bodies. The extent and the source of the
+# stock M-core image copy are UNVERIFIED for the X-E5.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
