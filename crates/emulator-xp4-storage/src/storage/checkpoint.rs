@@ -48,7 +48,8 @@ impl Nor {
     fn capture_state(&self) -> NorState {
         NorState {
             immutable_prefix: self.prefix.map(|prefix| prefix.bytes()),
-            write_protect: self.write_protect, read_backing: self.read_backing.clone(),
+            write_protect: self.write_protect, write_ranges: self.write_ranges.clone(),
+            read_backing: self.read_backing.clone(),
             jedec: self.jedec, write_enable: self.write_enable,
             pending: self.pending.as_ref().map(|(at, mutation)| match mutation {
                 Mutation::Erase { address, size } => Pending::Erase {
