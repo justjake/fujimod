@@ -145,6 +145,39 @@ fn crc32_matches_the_transfer_polynomial() {
     assert_eq!(xp4::crc32(b"123456789"), 0xcbf43926);
     assert_eq!(xp4::crc32(b""), 0);
 }
+/// The X-T5 4.31 startup keeps the update's selector: the preloaded selector leaves its body
+/// black. The recipe's facts are checked here against its own RAM image plan.
+#[test]
+fn xt5_431_startup_is_the_stock_selector_startup() {
+    let recipe = Recipe::bundled("xt5-431").unwrap().unwrap();
+    let setup = recipe.xp5.as_ref().unwrap();
+    assert!(setup.card_boot.is_none());
+    let stock = setup.stock_selector.as_ref().expect("X-T5 4.31 names a stock-selector startup");
+    // One edit, in the reset stage: `ldr x0, [x0, #8]` becomes `mov x0, #0x20000000`.
+    let edits: Vec<_> = stock.ram_edits.iter().map(|e| (e.address, e.old, e.new)).collect();
+    assert_eq!(edits, [(0x2ec4, 0xf940_0400, 0xd2a4_0000)]);
+    assert!(0x2ec4 < setup.reset_copy_size && setup.selector == 0x11a00);
+    // The cleared extents are whole regions of the plan: the controller payload cache and the
+    // overlays, which end the image.
+    let plan = recipe.plan.as_ref().unwrap();
+    let region = |name: &str| {
+        let region = plan.regions.iter().find(|r| r.name == name).unwrap();
+        (region.address, region.source.decoded_size)
+    };
+    let cleared: Vec<_> = stock.cleared.iter().map(|c| (c.address, c.size)).collect();
+    assert_eq!(cleared, [region("controller payload cache"), region("overlays")]);
+    assert_eq!(cleared[1].0 + cleared[1].1, plan.size);
+    assert!(stock.ram_edits.iter().all(|e| !e.what.is_empty()));
+    assert!(stock.cleared.iter().all(|c| !c.what.is_empty()));
+    // No other bundled recipe names one.
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
+    for id in catalog.firmware_ids().filter(|id| *id != "xt5-431") {
+        if let Some(other) = Recipe::bundled(id).unwrap() {
+            assert!(other.xp5.is_none_or(|setup| setup.stock_selector.is_none()), "{id}");
+        }
+    }
+}
+
 #[test]
 fn recipes_match_catalog_identities_and_generation() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
