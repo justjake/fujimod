@@ -40,17 +40,17 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "fail"
         },
         {
           "id": "restart-facts",
@@ -60,7 +60,7 @@
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "controls",
@@ -70,7 +70,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "sd-facts",
@@ -126,7 +126,7 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 0
         },
@@ -134,7 +134,7 @@
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 0
         },
@@ -142,7 +142,7 @@
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
+          "result": "fail",
           "passed": 0,
           "total": 0
         },
@@ -158,7 +158,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 0
         },
@@ -174,7 +174,7 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 0
         },
@@ -557,7 +557,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "not-run"
+          "result": "fail"
         },
         {
           "id": "mod-target",
@@ -595,7 +595,7 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 0
         },
