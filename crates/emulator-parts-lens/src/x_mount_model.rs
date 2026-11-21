@@ -5,7 +5,7 @@
 //! acknowledgment frames with the same 5-bit check, replies queued for the
 //! next exchange, and a 128-byte bulk read after the lens sends its
 //! family-0x14 (identification) or family-0x96 (extended record) reply. Unlike that bounded part, this model answers
-//! every request family. Focus (0x54..0x56, 0x58) and aperture (0x60..0x62)
+//! every request family. Focus (0x54..0x56; 0x58 stops) and aperture (0x60..0x62)
 //! requests start motion that advances with board time; 0x21 reports the focus
 //! position. Other families answer a declared or default payload, and the first
 //! request of a family outside the known X-T5 set is logged once. Malformed or
@@ -940,8 +940,15 @@ impl Unit {
                 self.move_focus(now, target);
                 payload
             }
+            // 0x58 (lenscom 0x13e5f7c, message 0x18fa, wrapper 0x1535968): one bit from the
+            // request byte. The AF sends it with 0 when its contrast scan has passed the
+            // peak (0x1570140 sets [0x221bd20] = 1, sends it, then waits for the drive event
+            // 0x200), so the model takes it as a stop: the focus holds the position it has
+            // reached, and the ready line pulses for the shortest operation. Bit 0 = 1 is
+            // not sent by any located caller and is treated the same.
             FOCUS_DRIVE => {
-                self.move_focus(now, payload as i64);
+                let here = self.state.focus.position(now, self.timing.ticks_per_ms);
+                self.move_focus(now, here as i64);
                 payload
             }
             APERTURE_DRIVE => {
