@@ -4712,9 +4712,9 @@
       ],
       "type": "object"
     },
-    "ContactPosition": {
+    "ContactCamPosition": {
       "additionalProperties": false,
-      "description": "A pin drive position and its resulting contact states.",
+      "description": "A contact cam position along motor run time and its contact states.",
       "properties": {
         "contacts": {
           "description": "Resulting contact states.",
@@ -4732,6 +4732,30 @@
       },
       "required": [
         "run_ticks",
+        "contacts"
+      ],
+      "type": "object"
+    },
+    "ContactPosition": {
+      "additionalProperties": false,
+      "description": "A pin drive position and its resulting contact states.",
+      "properties": {
+        "contacts": {
+          "description": "Resulting contact states.",
+          "items": {
+            "type": "boolean"
+          },
+          "type": "array"
+        },
+        "drive": {
+          "description": "Drive value applied to the actuator.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "drive",
         "contacts"
       ],
       "type": "object"
@@ -13537,6 +13561,16 @@
             "null"
           ]
         },
+        "contact_cams": {
+          "description": "Declared motor-driven contact cams.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "serial_outputs": {
           "description": "Declared serial outputs.",
           "items": {
@@ -18573,64 +18607,30 @@
         },
         {
           "additionalProperties": false,
-          "description": "A motor-driven contact cam with a release latch. The attachment's\ninitial position is its run time at reset.",
+          "description": "A multi-pin contact actuator.",
           "properties": {
-            "hold_drives": {
-              "description": "Drive values that hold the cam still.",
-              "items": {
-                "format": "uint32",
-                "minimum": 0,
-                "type": "integer"
-              },
-              "type": "array"
-            },
             "kind": {
               "const": "contact-actuator",
               "type": "string"
             },
-            "latch_overrun_ticks": {
-              "description": "Run time past the latch tolerated before the drive stops.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
             "positions": {
-              "description": "Contact states along motor run time, ascending from 0; the last\nis the release latch.",
+              "description": "Supported drive values and resulting contact state.",
               "items": {
                 "$ref": "#/$defs/ContactPosition"
               },
               "type": "array"
             },
-            "release_drives": {
-              "description": "Hold drives under which a release input edge releases the latch.",
-              "items": {
-                "format": "uint32",
-                "minimum": 0,
-                "type": "integer"
-              },
-              "type": "array"
-            },
-            "release_ticks": {
-              "description": "Release input edge to the return to run time 0.",
+            "settle_ticks": {
+              "description": "Time required for a contact transition to settle.",
               "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "run_drive": {
-              "description": "Drive value that runs the motor.",
-              "format": "uint32",
               "minimum": 0,
               "type": "integer"
             }
           },
           "required": [
             "kind",
-            "run_drive",
-            "hold_drives",
-            "release_drives",
             "positions",
-            "latch_overrun_ticks",
-            "release_ticks"
+            "settle_ticks"
           ],
           "type": "object"
         },
@@ -18912,6 +18912,69 @@
           "required": [
             "kind",
             "interface"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A motor-driven contact cam with a release latch. The attachment's\ninitial position is its run time at reset.",
+          "properties": {
+            "hold_drives": {
+              "description": "Drive values that hold the cam still.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "contact-cam",
+              "type": "string"
+            },
+            "latch_overrun_ticks": {
+              "description": "Run time past the latch tolerated before the drive stops.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "positions": {
+              "description": "Contact states along motor run time, ascending from 0; the last\nis the release latch.",
+              "items": {
+                "$ref": "#/$defs/ContactCamPosition"
+              },
+              "type": "array"
+            },
+            "release_drives": {
+              "description": "Hold drives under which a release input edge releases the latch.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "release_ticks": {
+              "description": "Release input edge to the return to run time 0.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "run_drive": {
+              "description": "Drive value that runs the motor.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "run_drive",
+            "hold_drives",
+            "release_drives",
+            "positions",
+            "latch_overrun_ticks",
+            "release_ticks"
           ],
           "type": "object"
         }

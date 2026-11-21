@@ -332,6 +332,10 @@ pub enum Model {
     ContactActuator {
         options: serde_json::Value,
         gpio: String,
+    },
+    ContactCam {
+        options: serde_json::Value,
+        gpio: String,
         /// Logic-level wire whose rising edge releases the cam's latch.
         #[serde(default)]
         release: Option<String>,
@@ -582,6 +586,7 @@ impl Model {
             Model::Adc { .. } => "adc",
             Model::Gpio { .. } => "gpio",
             Model::ContactActuator { .. } => "contact-actuator",
+            Model::ContactCam { .. } => "contact-cam",
             Model::PulseUnit { .. } => "exr2-pulse",
             Model::SerialChannel { .. } => "serial-channel",
             Model::SpiController { .. } => "spi-controller",
@@ -631,7 +636,9 @@ impl Model {
     pub fn node_references(&self) -> Vec<&str> {
         let mut refs = vec![];
         match self {
-            Self::Power { gpio, .. } | Self::ContactActuator { gpio, .. } => {
+            Self::Power { gpio, .. }
+            | Self::ContactActuator { gpio, .. }
+            | Self::ContactCam { gpio, .. } => {
                 refs.push(gpio.as_str())
             }
             Self::SdHost {

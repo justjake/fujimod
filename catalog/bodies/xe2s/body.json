@@ -540,8 +540,8 @@
           "serial_part": [
             "banked-lens"
           ],
-          "contact_actuators": [
-            "acquisition-contacts"
+          "contact_cams": [
+            "xe2s-acquisition-contacts"
           ]
         },
         "control_bus_order": [
@@ -999,8 +999,8 @@
           "serial_part": [
             "banked-lens"
           ],
-          "contact_actuators": [
-            "acquisition-contacts"
+          "contact_cams": [
+            "xe2s-acquisition-contacts"
           ]
         },
         "control_bus_order": [
@@ -1227,8 +1227,8 @@
           "serial_part": [
             "banked-lens"
           ],
-          "contact_actuators": [
-            "acquisition-contacts"
+          "contact_cams": [
+            "xe2s-acquisition-contacts"
           ]
         },
         "control_bus_order": [
@@ -1472,8 +1472,8 @@
           "serial_part": [
             "banked-lens"
           ],
-          "contact_actuators": [
-            "acquisition-contacts"
+          "contact_cams": [
+            "xe2s-acquisition-contacts"
           ]
         },
         "controllers": {
@@ -2207,7 +2207,7 @@
     "sd-card",
     "banked-lens",
     "x70-image-sensor",
-    "acquisition-contacts"
+    "xe2s-acquisition-contacts"
   ],
   "wiring": [
     {

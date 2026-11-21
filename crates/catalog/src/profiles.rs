@@ -20,6 +20,9 @@ pub struct PartAssemblies {
     /// Declared contact actuators.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contact_actuators: Option<Vec<String>>,
+    /// Declared motor-driven contact cams.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact_cams: Option<Vec<String>>,
     /// Declared serial outputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_outputs: Option<Vec<String>>,
