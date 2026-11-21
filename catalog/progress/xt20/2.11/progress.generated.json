@@ -40,7 +40,7 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
@@ -55,12 +55,12 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "controls",
@@ -70,7 +70,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -125,9 +125,9 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "flash-reader",
@@ -149,7 +149,7 @@
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -157,7 +157,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -173,9 +173,9 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "sd-facts",
@@ -556,7 +556,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-target",
@@ -594,9 +594,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-target",
