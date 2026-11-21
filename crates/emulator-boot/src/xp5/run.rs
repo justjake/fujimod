@@ -186,6 +186,10 @@ pub struct Run {
     /// Files on the SD card, as `(name, path)`: the startup card of a ROM or SD start, or the
     /// slot-1 card of the loader start.
     pub card_files: Vec<(String, PathBuf)>,
+    /// The loader start's card in SD slot 2: a raw image (changed sectors are written back at
+    /// the end of the run) or files for an in-memory volume.
+    pub second_card_image: Option<PathBuf>,
+    pub second_card_files: Vec<(String, PathBuf)>,
     /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
     pub keys: Option<String>,
     pub gpio: Option<String>,
@@ -244,6 +248,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         boot_rom: rom_path,
         card_image: sd_image,
         card_files,
+        second_card_image,
+        second_card_files,
         keys: key_script,
         gpio: gpio_spec,
         pokes,
@@ -337,6 +343,8 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         boot_rom: rom_path,
         card_image: sd_image,
         card_files,
+        second_card_image,
+        second_card_files,
         scene,
         output: Some(run_directory.clone()),
         viewer_port,
@@ -571,7 +579,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
-    let card_write = card_write_back.as_ref().map_or(Ok(()), |back| back.write(&session));
+    let card_write = card_write_back.iter().try_for_each(|back| back.write(&session));
     let output_finish = screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
     let state = session.board.state();
     let state_write = serde_json::to_vec_pretty(&state)

@@ -21,8 +21,9 @@ EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --cl
 Run output and limits: --output DIR, --seconds N (guest time), --wall-seconds N (host time), --status-every N (guest time), --viewer-port PORT.\n\
 Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
---card-image IMAGE, --card-file NAME=PATH.\n\
-XP5 loader starts put the card in slot 1 and write changed sectors back into IMAGE at the end of the run.\n\
+--card-image IMAGE, --card-file NAME=PATH, --card-image-2 IMAGE, --card-file-2 NAME=PATH.\n\
+XP5 loader starts put the card in slot 1 and write changed sectors back into IMAGE at the end of the run;\n\
+the -2 options put a second card in slot 2 of a body that has one.\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,ADDR:LEN...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 XP5 --gpio also takes PORT:PIN=0|1@MS: the level applies MS guest milliseconds after the run starts.\n\
@@ -39,7 +40,7 @@ Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FIL
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 41] = [
+const VALUED: [&str; 43] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -66,6 +67,8 @@ const VALUED: [&str; 41] = [
     "--scene",
     "--card-image",
     "--card-file",
+    "--card-image-2",
+    "--card-file-2",
     "--manifest",
     "--application-plan",
     "--watch-pcs",
@@ -91,6 +94,7 @@ struct Boot {
     stubs: Vec<String>,
     mods: Vec<String>,
     card_files: Vec<String>,
+    second_card_files: Vec<String>,
     pokes: Vec<String>,
     discovery: bool,
 }
@@ -113,6 +117,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
         stubs: Vec::new(),
         mods: Vec::new(),
         card_files: Vec::new(),
+        second_card_files: Vec::new(),
         pokes: Vec::new(),
         discovery: false,
     };
@@ -138,6 +143,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
             "--stub" => boot.stubs.push(text(value, "stub")?),
             "--mod" => boot.mods.push(text(value, "mod manifest")?),
             "--card-file" => boot.card_files.push(text(value, "card file")?),
+            "--card-file-2" => boot.second_card_files.push(text(value, "card file")?),
             "--poke" => boot.pokes.push(text(value, "memory write")?),
             "--overlay" => {
                 let id = text(value, "overlay ID")?;
@@ -205,12 +211,30 @@ impl Boot {
     }
 
     fn sd_files(&self) -> Result<Vec<(String, PathBuf)>, String> {
-        self.card_files.iter().map(|specification| {
+        Self::named_files(&self.card_files, "--card-file")
+    }
+
+    fn second_sd_files(&self) -> Result<Vec<(String, PathBuf)>, String> {
+        Self::named_files(&self.second_card_files, "--card-file-2")
+    }
+
+    fn named_files(specifications: &[String], option: &str) -> Result<Vec<(String, PathBuf)>, String> {
+        specifications.iter().map(|specification| {
             specification.split_once('=')
                 .filter(|(name, path)| !name.is_empty() && !path.is_empty())
                 .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
-                .ok_or("--card-file needs NAME=PATH".into())
+                .ok_or(format!("{option} needs NAME=PATH"))
         }).collect()
+    }
+
+    /// The second card slot is modeled for XP5 loader starts only.
+    fn refuse_second_card(&self, generation: &str) -> Result<(), String> {
+        self.refuse(generation, &["--card-image-2"])?;
+        if self.second_card_files.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("--card-file-2 does not apply to {generation} runs"))
+        }
     }
 
     fn pc_trace(&mut self) -> Result<Option<boot::TraceOutput>, String> {
@@ -276,6 +300,7 @@ fn prepare_mod(
 }
 
 fn run_exr2(mut boot_options: Boot, mut resolved: ResolvedConfiguration) -> Result<Outcome, String> {
+    boot_options.refuse_second_card("EXR II")?;
     boot_options.refuse(
         "EXR II",
         &["--application-plan", "--manifest", "--watch-pcs", "--watch-writes", "--dump", "--hash", "--set",
@@ -437,6 +462,8 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         boot_rom: boot_options.path("--boot-rom"),
         card_image: boot_options.path("--card-image"),
         card_files,
+        second_card_image: boot_options.path("--card-image-2"),
+        second_card_files: boot_options.second_sd_files()?,
         keys: boot_options.text("--keys")?,
         gpio: boot_options.text("--gpio")?,
         pokes: std::mem::take(&mut boot_options.pokes),
@@ -479,6 +506,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
 
 fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     options.refuse("application-profile", &["--set", "--camera-settings"])?;
+    options.refuse_second_card("application-profile")?;
     let request = boot::application::Startup {
         update: options.required("--update")?.into(),
         plan: options.required("--application-plan")?.into(),
@@ -721,6 +749,25 @@ mod tests {
         let boot = parse(args(&["boot", "--nand", "image.bin"])).unwrap().unwrap();
         assert!(boot.refuse("XP5", &["--nand"]).unwrap_err().contains("does not apply to XP5"));
         assert!(boot.refuse("XP5", &["--settings"]).is_ok());
+    }
+
+    #[test]
+    fn second_card_options_parse_and_are_refused_outside_xp5() {
+        let mut boot = parse(args(&[
+            "boot", "--card-image-2", "second.img", "--card-file-2", "A.TXT=a.txt", "--card-file-2", "B.TXT=b.txt",
+            "--card-file", "A.TXT=first.txt",
+        ])).unwrap().unwrap();
+        assert_eq!(boot.sd_files().unwrap(), [("A.TXT".to_owned(), PathBuf::from("first.txt"))]);
+        assert_eq!(
+            boot.second_sd_files().unwrap(),
+            [("A.TXT".to_owned(), PathBuf::from("a.txt")), ("B.TXT".to_owned(), PathBuf::from("b.txt"))]
+        );
+        assert!(boot.refuse_second_card("EXR II").unwrap_err().contains("--card-image-2 does not apply"));
+        assert_eq!(boot.path("--card-image-2"), Some(PathBuf::from("second.img")));
+        assert!(boot.refuse_second_card("EXR II").unwrap_err().contains("--card-file-2 does not apply"));
+        let files = parse(args(&["boot", "--card-file-2", "A.TXT"])).unwrap().unwrap();
+        assert!(files.second_sd_files().unwrap_err().contains("--card-file-2 needs NAME=PATH"));
+        assert!(parse(args(&["boot"])).unwrap().unwrap().refuse_second_card("EXR II").is_ok());
     }
 
     #[test]

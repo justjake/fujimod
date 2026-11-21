@@ -119,7 +119,7 @@ fn devices_and_resources(
     viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
-    card_image: Option<&fujimod_emulator_devices::parts::sd_card::Card>,
+    card_images: &[(u64, &fujimod_emulator_devices::parts::sd_card::Card)],
     companion_core: Option<usize>,
 ) -> Result<
     (
@@ -156,13 +156,13 @@ fn devices_and_resources(
         displays: BTreeMap::new(),
         pwm: Default::default(),
     };
-    if let Some(card) = card_image {
-        // A raw card image (`--card-image`) replaces the formatted volume of slot 1, in the ROM
-        // start and in the loader start.
+    for &(base, card) in card_images {
+        // A raw card image replaces the formatted volume of its slot: `--card-image` in slot 1,
+        // in the ROM start and in the loader start, and `--card-image-2` in slot 2.
         let slot = resources
             .sd
-            .get_mut(&0xff9b_0000)
-            .ok_or("a card image needs the SD slot at 0xff9b0000")?;
+            .get_mut(&base)
+            .ok_or_else(|| format!("a card image needs the SD slot at {base:#x}"))?;
         slot.card = Some(card.clone());
     }
     // With the viewer on, every display bank publishes into the primary display's directory,
@@ -550,7 +550,7 @@ pub(crate) fn open_from(
     mode: Mode,
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
-    loader_card: Option<&super::loader_card::LoaderCard>,
+    loader_cards: &[super::loader_card::LoaderCard],
     viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     profile: Option<&super::profile::Placed>,
 ) -> Result<Opened, String> {
@@ -948,11 +948,13 @@ pub(crate) fn open_from(
         &outputs,
         viewer_keys,
         windows,
-        &rom.map(RomStart::assets)
-            .or_else(|| loader_card.map(|card| card.assets.clone()))
-            .unwrap_or_default(),
-        rom.and_then(|rom| rom.card_image.as_ref()).map(|image| &image.card)
-            .or_else(|| loader_card.and_then(|card| card.card.as_ref())),
+        &rom.map(RomStart::assets).unwrap_or_else(|| {
+            loader_cards.iter().flat_map(|card| card.assets.clone()).collect()
+        }),
+        &rom.map_or_else(
+            || loader_cards.iter().filter_map(|card| Some((card.slot, card.card.as_ref()?))).collect(),
+            |rom| rom.card_image.iter().map(|image| (super::loader_card::SLOT, &image.card)).collect::<Vec<_>>(),
+        ),
         reference.soc.processors.iter()
             .position(|processor| processor.model == ProcessorModel::CortexM4),
     )?;

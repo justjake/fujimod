@@ -23,7 +23,13 @@
 # catalog/soc/xp5/rom-start.toml [[window_options]]). The ROM start and the
 # loader start with --card-image/--card-file add it at run time
 # (crates/emulator-boot/src/xp5/loader_card.rs), so a run without a card keeps
-# this wiring and its snapshots. Slot 2 (0xff9b4000) has no known line.
+# this wiring and its snapshots. Slot 2 is the host at 0xff9b4000, INTID 269: the
+# driver registers its handlers by interrupt source (0x13a41ec: instance 0 takes
+# source 0x84 for port 0 and 0x85 for port 1, instance 1 takes 0x86 and 0x87), and
+# the source table at 0x18ea918 (16-byte rows, INTID first) holds 262, 267, 269 and
+# 274 for them. The loader start with --card-image-2/--card-file-2 inserts a card
+# there and adds the line in the same way. The UHS-II port lines (267, 274) stay
+# unwired: no UHS-II interface is detected, so the driver uses port 0.
 
 [[device]]
 base = 0xff9b0000
