@@ -148,9 +148,12 @@ impl NandController {
 
     fn feature_addr(&self) -> u8 {
         if self.state.last_address_register == 0x50 {
-            let a50 = self.state.regs[0x50 / 4] as u8;
-            if a50 != 0 {
-                return a50;
+            // The setup stage writes the address at 0x50; in the 16-bit (octal) command form
+            // the byte sits in bits 15..8 (0xc000 for feature 0xc0), as the opcode does.
+            let a50 = self.state.regs[0x50 / 4];
+            let byte = if self.state.regs[0] & 3 == 1 { a50 as u8 } else { (a50 >> 8) as u8 };
+            if byte != 0 {
+                return byte;
             }
         }
         let a44 = self.state.regs[0x44 / 4];
@@ -169,6 +172,10 @@ impl NandController {
 
     /// The 32-bit row (page number) of 0x13/0x0b, direct from 0x48 or 0x44.
     fn row(&self) -> u32 {
+        // Single-byte form: the setup stage gives the row at 0x50 (0x7d00 for block 500).
+        if self.state.last_address_register == 0x50 && self.state.regs[0] & 3 == 1 {
+            return self.state.regs[0x50 / 4];
+        }
         let a48 = self.state.regs[0x48 / 4];
         let a44 = self.state.regs[0x44 / 4];
         if a48 != 0 {
@@ -271,6 +278,11 @@ impl NandController {
             self.state
                 .features
                 .insert(self.feature_addr(), self.state.tx[0]);
+        }
+        // The setup stage sends Write Enable, waits for WEL, writes with 0x81 and then waits for
+        // status bits 1..0 to clear (0xff811298), so the write ends with WEL clear.
+        if self.cmd() == 0x81 {
+            self.nand.lock().unwrap().session.write_enable = false;
         }
         self.state.active = false;
         self.state.complete = true;
@@ -664,6 +676,39 @@ mod tests {
         strobe_cmd(&mut c, 0x0f);
         let status = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4) as u8;
         assert_eq!(status & 2, 2, "WEL must read back from the status feature");
+    }
+
+    #[test]
+    fn octal_form_reads_the_feature_address_from_the_high_byte() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        // Octal format word: low bits not 1, opcode in bits 15..8.
+        c.state.regs[0] = 2;
+        c.state.regs[0x40 / 4] = 0x0600;
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0c0, 4, 1);
+        c.state.regs[0x40 / 4] = 0x0f00;
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 0xc000);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0c0, 4, 1);
+        let status = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4) as u8;
+        assert_eq!(status & 2, 2, "status feature 0xc0 must read back with WEL set");
+    }
+
+    #[test]
+    fn write_enable_clears_when_the_0x81_write_completes() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        c.state.regs[0] = 1;
+        let mut run = |c: &mut NandController, cmd: u32| {
+            c.state.regs[0x40 / 4] = cmd;
+            c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        };
+        run(&mut c, 0x06);
+        run(&mut c, 0x81);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4, 0xe7);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 0xc0);
+        run(&mut c, 0x0f);
+        let status = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a080, 4) as u8;
+        assert_eq!(status & 3, 0, "idle and write-disabled after the 0x81 write");
     }
 
     #[test]
