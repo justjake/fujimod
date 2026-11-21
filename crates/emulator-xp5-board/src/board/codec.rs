@@ -5,9 +5,9 @@
 //! The register contract is the X-T5 4.31 driver's (helpers 0x13cbee0..0x13cf474,
 //! open 0x13cfe84, configure 0x13d0220/0x13cf638, frame start 0x13d197c, ISR
 //! 0x13d1da0, completion task 0x13d200c). Register names below are the driver's
-//! own strings. The H.264 and HEVC encode paths are modelled; the decode path
-//! (used only by the HEIF library, 0x2dd8a38 -> DecStart 0x13d14e0) keeps
-//! plain register words.
+//! own strings. The H.264 and HEVC encode paths and the H.264 decode path are
+//! modelled; an HEVC decode (the HEIF library, 0x2dd8a38 -> DecStart
+//! 0x13d14e0, and H.265 movie playback) is not.
 //!
 //! HEVC (recmv opens codec 1 when rec+0x8390, copied from rec+0x40c4, is
 //! non-zero; the movie file-format setting 0x62b = 1 or 3 selects H.265):
@@ -65,6 +65,53 @@
 //! - A stop (`H264_CMD` bit 14) ends the recording: the encoder is dropped and
 //!   bit 19 (stop done) is reported after `run_ticks`.
 //!
+//! H.264 decode (movie playback, play stream 0x56f33bc / 0x57140cc: open
+//! 0x13cfe84 with codec 0 and encode 0, configure 0x13d0dbc, DecStart
+//! 0x13d14e0 -> task type 2 -> 0x13d1b0c). Register writes of one X-T5 4.31
+//! decode (strict run, PLAY on a recorded 4K MOV; FHD differs in the sizes):
+//! `H264_CORESEL` = 0 (1 when encoding), `H264_INT_EN` = 0x2803 (bits 13, 11,
+//! 1, 0), `0x15ee0` = 1 (image banks), `IMG_WIDX` 0 / 1 and 0x20 / 0x21 = the Y
+//! and C addresses of bank 0 for both field sets (0x14a31000 / 0x15229000, one
+//! 3840x2176 plane apart), `IMG_LINE_OFS` = 0xf00, `BADR_STR0` = the stream,
+//! `STR_BUF_SIZE` = 0x2000000, `STR_BUF_MODE` = 1 (no NALU table), then
+//! `H264_CMD` bit 14. The driver arms a 600 ms timeout (0x13d17d4).
+//!
+//! That is the first-frame session of the playback standby screen. The play
+//! session (PMOVDECODE 0x5714364) programs `0x15ee0` = 2 with four pictures
+//! (`IMG_WIDX` 0..3 and 0x20..0x23: two banks in each of two sets, all
+//! different), `BADR_STR0` / `BADR_STR1` = 0x83ee9000 / 0x87ee9000 and
+//! `STR_BUF_SIZE` = 0x4000000: two of the three 64 MiB windows of the stream
+//! ring that PMOVFRAME fills, and calls DecStart once per access unit.
+//!
+//! - The stream is Annex B (MOV_IF_SetStartCodeSlice2 0x56eb83c writes
+//!   4-byte start codes): the access units follow each other from the start
+//!   of bank 0, as the encoder writes them, and continue in the other bank at
+//!   the end of a bank. The first-frame session ends its one unit with a
+//!   start code and a zero byte, a NAL of type 0.
+//! - Each `H264_CMD` bit 14 in decode mode decodes the unit at the stream
+//!   position with the workspace decoder after `run_ticks` and moves the
+//!   position past it. A unit ends at the type 0 NAL or at the first NAL of
+//!   the next unit (a start code is required after the slice; the hardware
+//!   needs none, a limit of the model). The picture is written as two-plane
+//!   8-bit 4:2:0 (Y, then interleaved Cb, Cr, [`CB_FIRST`]) at the pitch
+//!   `IMG_LINE_OFS` into an image bank: picture n of a session goes to bank
+//!   n modulo the bank count of set 0, then of set 1 (the hardware's order
+//!   is not traced; the driver takes whichever `0x15ef0` names).
+//! - A unit that reaches the end of a stream bank sets that bank's status
+//!   bit (bit 0 or 1) with the picture's; the completion task then gives the
+//!   bank its next window (0x13d163c: `BADR_STR0` / `BADR_STR1`, `0x15e64`).
+//! - Completion is status bit 11 in `0x15120` / `0x15124`. The completion
+//!   task (0x13d2620) then reads `0x15ef0` (leaf 0x13ce77c: bit 5 the set,
+//!   bits 2..0 the `IMG_WIDX` of the luma plane, so bank = bits 2..1),
+//!   looks the bank's addresses up and calls the DecStart callback with
+//!   {id, Y address, C address}. Bit 13 is the decode error (0x13d2510);
+//!   the model never raises it: a stream it cannot decode stops the run.
+//! - The close (`H264_CMD` bit 12), a halt and a new core select end the
+//!   session and drop the decoder.
+//!
+//! The decoder holds reference pictures, so an exact checkpoint is refused
+//! while a decode session is open, as while a movie is recording.
+//!
 //! Halt (`0x15ff4` bit 0, leaf 0x13cf43c): the terminate 0x13d0e60 (recmv
 //! 0x2db994c after a recording, the HEIF library 0x2dd890c / 0x2dda6b4), the
 //! suspend 0x13d0f84 and the error path of the completion task (0x13d2510) write
@@ -82,6 +129,7 @@
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow, Mapping};
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_image_codecs::h264::decode::{Bounds, Decoder};
 use fujimod_emulator_image_codecs::h264::{Direct, DirectConfig};
 use fujimod_emulator_image_codecs::hevc::{self, PcmConfig, PcmEncoder};
 use serde::{Deserialize, Serialize};
@@ -116,11 +164,16 @@ const HEVC_SIZE: u64 = 0x1_4310;
 const HEVC_PARAMETER_INTERVAL: u32 = 15;
 const H264_CMD: u64 = 0x1_5100;
 const CMD_START: u32 = 1 << 15;
+/// Bit 14: the encoder flush / stop, or, in decode mode, the decode start.
 const CMD_STOP: u32 = 1 << 14;
+/// Bit 12: the close (0x13d28b8), which waits for no interrupt.
+const CMD_CLOSE: u32 = 1 << 12;
 const H264_STATUS: u64 = 0x1_5120;
 const H264_RAW_STATUS: u64 = 0x1_5124;
 const H264_INT_EN: u64 = 0x1_5128;
+/// 1 selects the encoder, 0 the decoder.
 const H264_CORESEL: u64 = 0x1_5200;
+const CORESEL_DECODE: u32 = 0;
 const PAR_WIDTH: u64 = 0x1_5300;
 const PAR_HEIGHT: u64 = 0x1_5304;
 const PAR_FPS: u64 = 0x1_530c;
@@ -138,8 +191,12 @@ const BADR_NALU: u64 = 0x1_5e90;
 const NALU_RESET: u64 = 0x1_5ea0;
 const NALU_BUF_SIZE: u64 = 0x1_5eb0;
 const NALU_END: u64 = 0x1_5ebc;
+/// The number of image banks (leaf 0x13ce5dc, 1..4).
+const IMG_BANKS: u64 = 0x1_5ee0;
 const IMG_WIDX: u64 = 0x1_5ee4;
 const IMG_WADR: u64 = 0x1_5ee8;
+/// Read: the image bank of the last decoded picture (leaf 0x13ce77c).
+const IMG_DECODED: u64 = 0x1_5ef0;
 const IMG_LINE_OFS: u64 = 0x1_5f10;
 const PERI_STATUS: u64 = 0x1_5fd0;
 /// Raw peripheral status (leaf 0x13ceeec); bit 0 reports a completed halt.
@@ -153,13 +210,20 @@ const PERI_HALT: u64 = 0x1_5ff4;
 const BANK_FULL: u32 = 3;
 const NALU_READY: u32 = 1 << 18;
 const STOP_DONE: u32 = 1 << 19;
-const STATUS_BITS: u32 = BANK_FULL | NALU_READY | STOP_DONE;
+/// Decode mode: one picture decoded (task 0x13d2620).
+const PICTURE_DECODED: u32 = 1 << 11;
+const STATUS_BITS: u32 = BANK_FULL | NALU_READY | STOP_DONE | PICTURE_DECODED;
+/// The decode stream is read in pieces of this size until its end marker.
+const STREAM_PIECE: usize = 0x10_0000;
 const NALU_TERMINATOR: u32 = 0x3f;
 const ENTRY: u32 = 16;
 /// The driver caches at most this many bytes of an SPS and of a PPS (avcC
 /// builder 0x2dbca5c).
 const SPS_LIMIT: usize = 64;
 const PPS_LIMIT: usize = 32;
+
+const DECODING: &str = "xp5-codec: the H.264 decoder holds reference pictures that cannot be \
+     checkpointed while a decode session is open; leave movie playback first";
 
 const RECORDING: &str = "xp5-codec: the H.264 encoder holds reference pictures and rate-control \
      state that cannot be checkpointed while a movie is recording; stop the recording first";
@@ -199,6 +263,15 @@ struct State {
     /// HEVC_CMD go starts a picture; otherwise it is a stop.
     #[serde(default, skip_serializing_if = "is_false")]
     hevc_image: bool,
+    /// A decode is waiting for `due`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    decode: bool,
+    /// `0x15ef0`: the image bank of the last decoded picture.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    decoded: u32,
+    /// Pictures decoded in this decode session.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    decoded_pictures: u32,
     /// A halt (`0x15ff4` bit 0) completed and no open or command followed.
     #[serde(default, skip_serializing_if = "is_false")]
     halted: bool,
@@ -220,6 +293,8 @@ pub struct Codec {
     encoder: Option<Direct>,
     /// The open HEVC recording's encoder; refuses checkpoints while present.
     hevc_encoder: Option<PcmEncoder>,
+    /// The open decode session's decoder; refuses checkpoints while present.
+    decoder: Option<Decoder>,
     /// Bank-full bits collected while one picture is written; always zero
     /// between pictures, so it is not part of the device state.
     filled: u32,
@@ -240,6 +315,7 @@ impl Codec {
             scene: None,
             encoder: None,
             hevc_encoder: None,
+            decoder: None,
             filled: 0,
             trace,
             state: State::default(),
@@ -276,6 +352,151 @@ impl Codec {
         self.state.stream_position = 0;
         self.state.bank = 0;
     }
+    fn end_decode(&mut self) {
+        self.decoder = None;
+        self.state.decoded_pictures = 0;
+    }
+
+    /// Read `length` stream bytes at `position` (bytes since the configuration):
+    /// the banks are a ping-pong pair, as for the encoder.
+    fn read_stream(&self, cx: &mut Cx<'_>, position: u64, length: usize, size: u64) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::with_capacity(length);
+        let mut at = position;
+        while bytes.len() < length {
+            let bank = if (at / size).is_multiple_of(2) { BADR_STR0 } else { BADR_STR1 };
+            let base = self.high(3) | u64::from(self.word(bank));
+            if base == 0 {
+                return Err(format!("the stream continues in bank {} at {at:#x}, which has no address", (at / size) % 2));
+            }
+            let count = (length - bytes.len()).min((size - at % size) as usize);
+            bytes.extend(cx.ram_bytes(base + at % size, count)?);
+            at += count as u64;
+        }
+        Ok(bytes)
+    }
+
+    /// The Annex B access unit at the stream position: its NALs up to the next
+    /// access unit (a parameter set, SEI, delimiter or slice after this unit's
+    /// slice) or up to the end marker (a NAL of type 0).
+    fn decode_unit(&self, cx: &mut Cx<'_>) -> Result<Vec<u8>, String> {
+        let size = u64::from(self.word(STR_BUF_SIZE));
+        if !size.is_power_of_two() || !(0x1000..=0x1000_0000).contains(&size) {
+            return Err(format!("STR_BUF_SIZE {size:#x} is not a power of two in 4 KiB..256 MiB"));
+        }
+        let start = self.state.stream_position;
+        let mut unit: Vec<u8> = Vec::new();
+        let mut scanned = 0;
+        let mut slice = false;
+        // A unit is far smaller than a bank; the bound stops a stream without a next start code.
+        while (unit.len() as u64) < size {
+            let piece = (STREAM_PIECE as u64).min(size - unit.len() as u64) as usize;
+            unit.extend(self.read_stream(cx, start + unit.len() as u64, piece, size)?);
+            while scanned + 4 <= unit.len() {
+                // 0x000000 and 0x000002 cannot occur inside a NAL unit (H.264 7.4.1), so
+                // after the slice they end it: the last unit of a file is followed by
+                // padding, not by a start code. A four-byte start code is left to the
+                // three-byte match one byte on.
+                if slice
+                    && unit[scanned..scanned + 2] == [0, 0]
+                    && matches!(unit[scanned + 2], 0 | 2)
+                    && unit[scanned + 2..scanned + 4] != [0, 1]
+                {
+                    unit.truncate(scanned);
+                    return Ok(unit);
+                }
+                if unit[scanned..scanned + 3] != [0, 0, 1] {
+                    scanned += 1;
+                    continue;
+                }
+                let kind = unit[scanned + 3] & 31;
+                if kind == 0 || (slice && matches!(kind, 1 | 5..=9)) {
+                    // Start codes have four bytes here.
+                    let end = if scanned > 0 && unit[scanned - 1] == 0 { scanned - 1 } else { scanned };
+                    unit.truncate(end);
+                    return Ok(unit);
+                }
+                slice |= matches!(kind, 1 | 5);
+                scanned += 3;
+            }
+        }
+        Err(format!(
+            "the stream at position {start:#x} has no {} in {size:#x} bytes",
+            if slice { "start code after its slice" } else { "slice" }
+        ))
+    }
+
+    /// Decode the access unit at the stream position and write the picture into
+    /// the next image bank. Returns the value of `0x15ef0` and the status bits
+    /// of the stream banks the unit finished.
+    fn decode_picture(&mut self, cx: &mut Cx<'_>) -> Result<(u32, u32), String> {
+        if self.word(STR_BUF_MODE) != 1 {
+            return Err("a decode with STR_BUF_MODE 0 is not modelled".into());
+        }
+        let banks = self.word(IMG_BANKS) & 7;
+        if !(1..=4).contains(&banks) {
+            return Err(format!("{banks} image banks"));
+        }
+        let unit = self.decode_unit(cx)?;
+        if self.trace {
+            cx.log(&format!(
+                "xp5-codec: decode unit of {:#x} bytes at stream position {:#x}, first bytes {:02x?}",
+                unit.len(),
+                self.state.stream_position,
+                &unit[..unit.len().min(8)]
+            ));
+        }
+        let opened = self.decoder.is_none();
+        if opened {
+            self.decoder = Some(Decoder::new_movie_bounded(&[], Bounds::UHD)?);
+            self.state.decoded_pictures = 0;
+        }
+        let picture = self.decoder.as_mut().expect("decoder").decode_movie_unit(&unit)?;
+        let (width, height) = (picture.sequence.width, picture.sequence.height);
+        // Picture n goes to bank n of set 0, then of set 1 (`IMG_WIDX` bit 5).
+        let n = self.state.decoded_pictures;
+        let (set, bank) = ((n / banks) % 2, n % banks);
+        let index = set << 5 | bank << 1;
+        let y = self.state.images.get(&index).copied().ok_or("no luma address for the image bank")?;
+        let c = self.state.images.get(&(index | 1)).copied().ok_or("no chroma address for the image bank")?;
+        let pitch = self.word(IMG_LINE_OFS) as usize;
+        if pitch < width || width % 2 != 0 || height % 2 != 0 {
+            return Err(format!("IMG_LINE_OFS {pitch} for a {width}x{height} picture"));
+        }
+        let high = self.high(2);
+        let (luma, chroma) = picture.i420.split_at(width * height);
+        let (cb, cr) = chroma.split_at(width * height / 4);
+        for row in 0..height {
+            cx.ram_write((high | u64::from(y)) + (row * pitch) as u64, &luma[row * width..][..width])?;
+        }
+        let (first, second) = if CB_FIRST { (cb, cr) } else { (cr, cb) };
+        let half = width / 2;
+        let mut line = vec![0; width];
+        for row in 0..height / 2 {
+            for col in 0..half {
+                line[col * 2] = first[row * half + col];
+                line[col * 2 + 1] = second[row * half + col];
+            }
+            cx.ram_write((high | u64::from(c)) + (row * pitch) as u64, &line)?;
+        }
+        if opened {
+            cx.log(&format!(
+                "xp5-codec: H.264 decode {width}x{height} (coded {}x{}), {banks} image bank(s), Y {y:#x} C {c:#x} pitch {pitch:#x}",
+                picture.sequence.coded_width, picture.sequence.coded_height
+            ));
+        }
+        self.state.decoded_pictures = n.wrapping_add(1) % (2 * banks);
+        // A unit that reaches the end of a stream bank finishes that bank.
+        let size = u64::from(self.word(STR_BUF_SIZE));
+        let (before, after) = (self.state.stream_position, self.state.stream_position + unit.len() as u64);
+        let mut finished = 0;
+        for crossed in before / size..after / size {
+            finished |= 1 << (crossed % 2);
+        }
+        self.state.stream_position = after;
+        self.state.bank = ((after / size) % 2) as u32;
+        Ok((index, finished))
+    }
+
     /// The halt request: the work in flight and the open recording end here.
     fn halt(&mut self, cx: &mut Cx<'_>) {
         if self.state.due.take().is_some() {
@@ -284,6 +505,8 @@ impl Codec {
         self.state.encode = false;
         self.state.stop = false;
         self.state.hevc = false;
+        self.state.decode = false;
+        self.end_decode();
         if self.recording() {
             cx.log(&format!("xp5-codec: halt ends the recording after {} pictures", self.state.pictures));
         }
@@ -441,6 +664,7 @@ impl Codec {
             HEVC_CMD => self.word(HEVC_CMD) & !HEVC_GO,
             PERI_STATUS | PERI_HALT => 0,
             PERI_RAW_STATUS => u32::from(self.state.halted) * PERI_HALTED,
+            IMG_DECODED => self.state.decoded,
             STR_BANK => self.state.bank << 12,
             NALU_END => self.state.nalu_bytes,
             NALU_RESET => 0,
@@ -481,6 +705,7 @@ impl Codec {
                 // A core select is the first write of an open.
                 if register != STR_BUF_SIZE {
                     self.state.halted = false;
+                    self.end_decode();
                 }
                 self.set_word(register, value);
                 self.restart_stream();
@@ -527,7 +752,14 @@ impl Codec {
                         self.state.encode = true;
                     }
                     if value & CMD_STOP != 0 {
-                        self.state.stop = true;
+                        if self.word(H264_CORESEL) == CORESEL_DECODE {
+                            if self.state.decode {
+                                return cx.fail("xp5-codec: H.264 decode start while a picture is in flight");
+                            }
+                            self.state.decode = true;
+                        } else {
+                            self.state.stop = true;
+                        }
                     }
                     if self.state.due.is_none() {
                         match cx.now().checked_add(self.ticks) {
@@ -535,6 +767,9 @@ impl Codec {
                             None => return cx.fail("xp5-codec deadline overflow"),
                         }
                     }
+                }
+                if value & CMD_CLOSE != 0 {
+                    self.end_decode();
                 }
                 self.set_word(register, value & !(CMD_START | CMD_STOP));
             }
@@ -550,7 +785,8 @@ impl Codec {
             || state.bank > 1
             || state.nalu_bytes & !0x7ff_fff0 != 0
             || (state.pending | state.raw | state.hevc_pending | state.hevc_raw) & !STATUS_BITS != 0
-            || (state.encode || state.stop) != state.due.is_some()
+            || (state.encode || state.stop || state.decode) != state.due.is_some()
+            || state.decoded & !0x27 != 0
             || (state.hevc && state.due.is_none())
         {
             return Err("invalid XP5 codec checkpoint".into());
@@ -702,6 +938,17 @@ impl Device for Codec {
                 self.state.raw |= NALU_READY | filled;
             }
         }
+        if std::mem::take(&mut self.state.decode) {
+            let finished = match self.decode_picture(cx) {
+                Ok((index, finished)) => {
+                    self.state.decoded = index;
+                    finished
+                }
+                Err(error) => return cx.fail(format!("xp5-codec: H.264 decode failed: {error}")),
+            };
+            self.state.pending |= PICTURE_DECODED | finished;
+            self.state.raw |= PICTURE_DECODED | finished;
+        }
         if std::mem::take(&mut self.state.stop) {
             let open = if hevc { self.hevc_encoder.take().is_some() } else { self.encoder.take().is_some() };
             if open {
@@ -727,6 +974,7 @@ impl Device for Codec {
         let mut state = self.save();
         if let Value::Object(map) = &mut state {
             map.insert("recording".into(), Value::Bool(self.recording()));
+            map.insert("decoding".into(), Value::Bool(self.decoder.is_some()));
         }
         state
     }
@@ -736,11 +984,15 @@ impl Device for Codec {
         self.state = state;
         self.encoder = None;
         self.hevc_encoder = None;
+        self.decoder = None;
         Ok(())
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         if self.recording() {
             return Err(RECORDING.into());
+        }
+        if self.decoder.is_some() {
+            return Err(DECODING.into());
         }
         Checkpoint::encode(self.name(), &self.state)
     }
@@ -756,6 +1008,7 @@ impl Device for Codec {
         self.state = saved.decode(self.name())?;
         self.encoder = None;
         self.hevc_encoder = None;
+        self.decoder = None;
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
@@ -1163,6 +1416,239 @@ mod tests {
         let raw = get(&mut c, &mut h, HEVC_RAW_STATUS);
         assert_eq!(raw & (NALU_READY | STOP_DONE), NALU_READY | STOP_DONE);
         assert!(c.checkpoint().is_ok(), "the recording is closed");
+    }
+
+    const DEC_STR_AT: u64 = RAM + 0x38_0000;
+    const DEC_Y: [u64; 2] = [RAM + 0x8000, RAM + 0xc000];
+    const DEC_C: [u64; 2] = [RAM + 0xa000, RAM + 0xe000];
+
+    /// The access units of `count` pictures coded by the encode path (GOP 2), each
+    /// as Annex B bytes with 4-byte start codes.
+    fn coded_units(count: usize) -> Vec<Vec<u8>> {
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_and_configure(&mut c, &mut h);
+        (0..count)
+            .map(|n| {
+                frame(&mut h, n);
+                encode_one(&mut c, &mut h).iter().flat_map(|entry| nal_bytes(&h, *entry)).collect()
+            })
+            .collect()
+    }
+
+    /// The playback open and configure (codec 0, decode) for `banks` image banks.
+    fn open_decode(c: &mut Codec, h: &mut RecordingHost, banks: u32) {
+        reg(c, h, 0x1_4088, 1);
+        reg(c, h, 0x1_4080, 0x7_0001);
+        reg(c, h, 0x1_4008, 0x8000_0006);
+        reg(c, h, H264_CORESEL, CORESEL_DECODE);
+        reg(c, h, H264_INT_EN, 0x2803);
+        reg(c, h, 0x1_5fd8, 0x7_7770);
+        for address in [0xff90_e710, 0xff90_e714, 0xff90_e718, 0xff90_e71c] {
+            write(c, h, address, 0);
+        }
+        reg(c, h, 0x1_5ef4, 1);
+        reg(c, h, IMG_BANKS, banks);
+        for set in 0..2 {
+            for bank in 0..banks {
+                reg(c, h, IMG_WIDX, (set << 5) | (bank * 2));
+                reg(c, h, IMG_WADR, DEC_Y[bank as usize] as u32);
+                reg(c, h, IMG_WIDX, (set << 5) | (bank * 2 + 1));
+                reg(c, h, IMG_WADR, DEC_C[bank as usize] as u32);
+            }
+        }
+        reg(c, h, IMG_LINE_OFS, PITCH as u32);
+        reg(c, h, 0x1_5e00, 0x9100_0000);
+        reg(c, h, 0x1_5e04, 0x9100_0000);
+        reg(c, h, 0x1_5f14, 0);
+        reg(c, h, BADR_STR0, DEC_STR_AT as u32);
+        reg(c, h, BADR_STR1, 0);
+        reg(c, h, STR_BUF_SIZE, 0x1_0000);
+        reg(c, h, STR_BUF_MODE, 1);
+        reg(c, h, 0x1_5ed4, 0);
+        reg(c, h, 0x1_5ed8, 0);
+    }
+
+    /// A configure (0x13d0dbc, which starts the stream at bank 0 again) and
+    /// DecStart: the unit and its end marker in the stream, H264_CMD bit 14, the
+    /// deadline. Returns the refusal, if any.
+    fn decode_start(c: &mut Codec, h: &mut RecordingHost, unit: &[u8], marker: bool) -> Option<String> {
+        reg(c, h, STR_BUF_SIZE, 0x1_0000);
+        let at = (DEC_STR_AT - RAM) as usize;
+        h.ram[at..at + 0x1_0000].fill(0xff);
+        h.ram[at..at + unit.len()].copy_from_slice(unit);
+        if marker {
+            h.ram[at + unit.len()..at + unit.len() + 8].copy_from_slice(&[0, 0, 0, 1, 0, 0, 0, 0]);
+        }
+        reg(c, h, H264_CMD, CMD_STOP);
+        assert_eq!(get(c, h, H264_STATUS), 0);
+        h.now = c.next_deadline(h.now).expect("a decode deadline");
+        let mut cx = Cx::new(h, 0, 0, 0);
+        c.advance(&mut cx);
+        cx.refusal().map(str::to_owned)
+    }
+
+    /// The picture in image bank `bank` as tight I420.
+    fn bank_i420(h: &RecordingHost, bank: usize) -> Vec<u8> {
+        let luma = h.bytes(DEC_Y[bank], PITCH * H).unwrap();
+        let chroma = h.bytes(DEC_C[bank], PITCH * H / 2).unwrap();
+        semi_planar_to_i420(&luma, &chroma, PITCH, W, H)
+    }
+
+    /// Movie playback decodes the pictures the encode path wrote: each DecStart
+    /// decodes the unit in the stream bank up to its end marker, writes the
+    /// picture into the image bank as two-plane 4:2:0 at the programmed pitch and
+    /// completes with status bit 11, the interrupt and the bank in 0x15ef0. The
+    /// bytes are the workspace decoder's; a P picture needs the session's
+    /// reference picture, so the session refuses a checkpoint until the close.
+    #[test]
+    fn decode_writes_the_coded_pictures_into_the_image_bank() {
+        let units = coded_units(3);
+        let mut reference = Decoder::new_movie(&[]).unwrap();
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_decode(&mut c, &mut h, 1);
+        c.checkpoint().expect("an open without a decoded picture is idle");
+        for (n, unit) in units.iter().enumerate() {
+            let expected = reference.decode_movie_unit(unit).unwrap();
+            assert_eq!(decode_start(&mut c, &mut h, unit, true), None);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, true)));
+            // ISR 0x13d1da0 and task 0x13d2620.
+            assert_eq!(get(&mut c, &mut h, 0x1_5fd0), 0);
+            assert_eq!(get(&mut c, &mut h, H264_STATUS), PICTURE_DECODED);
+            assert_eq!(get(&mut c, &mut h, H264_RAW_STATUS), PICTURE_DECODED);
+            reg(&mut c, &mut h, H264_STATUS, PICTURE_DECODED);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, false)));
+            // One bank: set 0, then set 1, which has the same addresses.
+            assert_eq!(get(&mut c, &mut h, IMG_DECODED), (n as u32 % 2) << 5);
+            assert_eq!(bank_i420(&h, 0), expected.i420, "picture {n}");
+            // The picture is the coded one: the gradient of `frame` and its chroma.
+            let luma = h.bytes(DEC_Y[0], PITCH * H).unwrap();
+            let original = |x: usize, row: usize| (16 + (x * 3 + row + n * 4) % 200) as u8;
+            let error: u32 = (0..H)
+                .flat_map(|row| (0..W).map(move |x| (x, row)))
+                .map(|(x, row)| u32::from(luma[row * PITCH + x].abs_diff(original(x, row))))
+                .sum();
+            assert!(error / ((W * H) as u32) < 8, "mean luma error {}", error / ((W * H) as u32));
+            let chroma = h.bytes(DEC_C[0], PITCH * H / 2).unwrap();
+            assert!(chroma[20].abs_diff(90) < 12 && chroma[21].abs_diff(170) < 12);
+            // Bytes past the picture width are untouched.
+            assert_eq!(luma[W..PITCH], vec![0; PITCH - W]);
+            assert_eq!(c.checkpoint().unwrap_err(), DECODING);
+        }
+        // Close (H265Stop 0x13d15f0): no interrupt, the session ends.
+        reg(&mut c, &mut h, H264_CMD, CMD_CLOSE);
+        assert_eq!(c.next_deadline(h.now), None);
+        let saved = c.checkpoint().unwrap();
+        let mut restored = Codec::new(IRQ, 1000).unwrap();
+        restored.restore_checkpoint(&saved).unwrap();
+        assert_eq!(restored.checkpoint().unwrap().state(), saved.state());
+        // A new session starts with an IDR again; a P picture alone has no reference.
+        assert!(decode_start(&mut c, &mut h, &units[1], true).unwrap().contains("H.264 decode failed"));
+    }
+
+    /// The play session: the units follow each other in the stream, across the
+    /// end of bank 0 into bank 1, and each DecStart decodes the unit at the stream
+    /// position without a new configuration. With two image banks picture n goes
+    /// to bank n modulo 2 of set 0, then of set 1, and 0x15ef0 names set and bank.
+    /// The unit that reaches the end of stream bank 0 reports that bank (bit 0)
+    /// next to the picture.
+    #[test]
+    fn decode_follows_the_stream_across_units_and_banks() {
+        let units = coded_units(16);
+        let stream: Vec<u8> = units.iter().flatten().copied().chain([0, 0, 0, 1, 0, 0, 0, 0]).collect();
+        let bank = 0x1000usize;
+        assert!(units[0].len() < bank && stream.len() > bank && stream.len() < 2 * bank, "{}", stream.len());
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_decode(&mut c, &mut h, 2);
+        let second = DEC_STR_AT + 0x4_0000;
+        reg(&mut c, &mut h, BADR_STR1, second as u32);
+        reg(&mut c, &mut h, STR_BUF_SIZE, bank as u32);
+        let at = (DEC_STR_AT - RAM) as usize;
+        h.ram[at..at + bank].copy_from_slice(&stream[..bank]);
+        let at = (second - RAM) as usize;
+        h.ram[at..at + stream.len() - bank].copy_from_slice(&stream[bank..]);
+        let mut reference = Decoder::new_movie(&[]).unwrap();
+        let mut position = 0;
+        let mut reported = 0;
+        for (n, unit) in units.iter().enumerate() {
+            let expected = reference.decode_movie_unit(unit).unwrap();
+            reg(&mut c, &mut h, H264_CMD, CMD_STOP);
+            h.now = c.next_deadline(h.now).expect("a decode deadline");
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            c.advance(&mut cx);
+            assert_eq!(cx.refusal(), None, "picture {n}");
+            let crossed = position / bank != (position + unit.len()) / bank;
+            position += unit.len();
+            let status = get(&mut c, &mut h, H264_STATUS);
+            assert_eq!(status, PICTURE_DECODED | u32::from(crossed), "picture {n}");
+            assert_eq!(get(&mut c, &mut h, H264_RAW_STATUS), status);
+            reported += u32::from(crossed);
+            reg(&mut c, &mut h, H264_STATUS, status);
+            assert_eq!(h.irqs.last(), Some(&(IRQ, false)));
+            let n = n as u32;
+            assert_eq!(get(&mut c, &mut h, IMG_DECODED), ((n / 2) % 2) << 5 | (n % 2) << 1);
+            assert_eq!(bank_i420(&h, n as usize % 2), expected.i420, "picture {n}");
+            assert_eq!(get(&mut c, &mut h, STR_BANK) >> 12, u32::from(position >= bank));
+        }
+        assert_eq!(reported, 1);
+        // The stream ends at the marker: a further DecStart finds no slice.
+        reg(&mut c, &mut h, H264_CMD, CMD_STOP);
+        h.now = c.next_deadline(h.now).unwrap();
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        c.advance(&mut cx);
+        assert!(cx.refusal().unwrap().contains("H.264 decode failed"));
+    }
+
+    /// The last unit of a file has no start code after it, only padding: zero
+    /// bytes (and 0x000002) cannot occur inside a NAL unit, so they end it.
+    #[test]
+    fn padding_after_the_last_unit_ends_it() {
+        let units = coded_units(2);
+        let mut reference = Decoder::new_movie(&[]).unwrap();
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_decode(&mut c, &mut h, 1);
+        for (n, (unit, pad)) in units.iter().zip([[0u8, 0, 0, 0], [0, 0, 2, 0xff]]).enumerate() {
+            let expected = reference.decode_movie_unit(unit).unwrap();
+            reg(&mut c, &mut h, STR_BUF_SIZE, 0x1_0000);
+            let at = (DEC_STR_AT - RAM) as usize;
+            h.ram[at..at + 0x1_0000].fill(0xff);
+            h.ram[at..at + unit.len()].copy_from_slice(unit);
+            h.ram[at + unit.len()..at + unit.len() + 4].copy_from_slice(&pad);
+            reg(&mut c, &mut h, H264_CMD, CMD_STOP);
+            h.now = c.next_deadline(h.now).expect("a decode deadline");
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            c.advance(&mut cx);
+            assert_eq!(cx.refusal(), None, "unit {n}");
+            reg(&mut c, &mut h, H264_STATUS, PICTURE_DECODED);
+            assert_eq!(bank_i420(&h, 0), expected.i420, "picture {n}");
+        }
+    }
+
+    /// A stream without the end marker, a stream that is not H.264, and a decode
+    /// in NALU-table mode stop the run instead of completing.
+    #[test]
+    fn a_stream_the_decoder_cannot_follow_stops_the_run() {
+        let units = coded_units(1);
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_decode(&mut c, &mut h, 1);
+        assert!(decode_start(&mut c, &mut h, &units[0], false).unwrap().contains("no start code after its slice"));
+        open_decode(&mut c, &mut h, 1);
+        let garbage = [0, 0, 0, 1, 0x65, 0x88, 0x84, 0x00, 0x12, 0x34];
+        assert!(decode_start(&mut c, &mut h, &garbage, true).unwrap().contains("H.264 decode failed"));
+        open_decode(&mut c, &mut h, 1);
+        reg(&mut c, &mut h, STR_BUF_MODE, 0);
+        assert!(decode_start(&mut c, &mut h, &units[0], true).unwrap().contains("STR_BUF_MODE"));
+        // In encode mode bit 14 is still the stop.
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        open_and_configure(&mut c, &mut h);
+        reg(&mut c, &mut h, H264_CMD, CMD_STOP);
+        h.now = c.next_deadline(h.now).unwrap();
+        c.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(get(&mut c, &mut h, H264_STATUS), STOP_DONE);
     }
 
     /// The terminate 0x13d0e60 after a recording: the halt request (0x15ff4 = 1) is
