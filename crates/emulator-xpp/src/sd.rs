@@ -66,6 +66,7 @@ impl Controller {
             ram_banks: options.ram_banks.clone(),
             dram_alias: true,
             address_high: None,
+            speed_dividers: None,
         };
         let host = if let Some(irq) = irq {
             SdHost::new(
