@@ -3,6 +3,7 @@ import solid from '@solidjs/vite-plugin';
 
 export default defineConfig({
   clearScreen: false,
+  base: './',
   resolve: { dedupe: ['solid-js', '@solidjs/web', '@solidjs/signals'] },
   server: { port: 1420, strictPort: true },
   build: { target: 'es2022' },
