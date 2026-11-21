@@ -13,6 +13,20 @@
 //! * Address setter 0x1361804: plane 0 address bits 34..32 -> +c0, bits 31..0 -> +c4; plane 1
 //!   address -> +c8/+cc; one stride -> +d0 for both planes. It requires both addresses
 //!   8-byte aligned and below 0x7fffffff0, and the stride a multiple of 4.
+//!   The addresses are latched at the frame start: a write during a frame takes effect with
+//!   the next frame. X-T5 4.31 FHD recording (strict run, channel 2, addresses A0, A1, .. 0x5d9000
+//!   apart): the driver writes A0 and starts the channel; 32.0 ms later, 1.3 ms before the end
+//!   of the first frame period, it writes A1, and again 22 ms into the second period; then A2
+//!   the same way. After the first frame's completion interrupt it gives A0 to RIFP as that
+//!   frame, after the second A1. So frame n is in the address that was programmed when frame
+//!   n started, not in the one written while it was in progress. For the two-plane output
+//!   (format 1) the model latches +c0..+cc at the start and at each frame end for the next
+//!   frame; a start with no plane 0 address programmed yet takes the words at the frame end
+//!   instead. The packed live-view output (format 0) gets the same write pattern from the
+//!   same driver, so it probably latches too, but which buffer the driver shows after each
+//!   frame is not traced: the model still writes those frames to the address in the words at
+//!   the frame end. A latch there would put every live-view frame on the panel one frame
+//!   period earlier.
 //! * +d8 (setter 0x1361a04, called from 0x2c6b7d4 with the parameter block 0x4a5aeb0 + 0x860
 //!   / 0x928 / ...): bit 28 = parameter word 0 (0 or 1), bits 17..16 = word 1 (0..3), bits 3..0
 //!   = u16 at +8 (at most 15). Live view writes 0x10030001. In AF-S after S1 channel 0 writes
@@ -99,6 +113,11 @@ struct State {
     reset_deadline: Option<u64>,
     frame_deadline: Option<u64>,
     frames: u64,
+    /// MOVDC, two-plane output: the address words +c0, +c4, +c8, +cc of the frame in
+    /// progress, latched at its start (module notes). Absent for the packed output and in
+    /// checkpoints taken before the latch existed: that frame takes the words at its end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    latched: Option<[u32; 4]>,
 }
 impl State {
     fn r(&self, o: u64) -> u32 {
@@ -186,7 +205,14 @@ impl Work {
     fn ready(&self) -> bool {
         self.state.reset_deadline.is_none()
     }
+    /// MOVDC: latch the output addresses for the frame that starts now, if its output is
+    /// two-plane (+08 bits 1..0 = 1, module notes).
+    fn latch(&mut self) {
+        self.state.latched = (self.kind == Kind::Movdc && self.state.r(8) & 3 == 1)
+            .then(|| [0xc0, 0xc4, 0xc8, 0xcc].map(|o| self.state.r(o)));
+    }
     fn cancel_frame(&mut self) {
+        self.state.latched = None;
         self.state.frame_deadline = None;
         self.state.frame_generation = self.state.frame_generation.wrapping_add(1);
     }
@@ -201,6 +227,7 @@ impl Work {
                 .ok_or("imaging frame deadline overflow")?;
             self.state.frame_generation = self.state.frame_generation.wrapping_add(1);
             self.state.frame_deadline = Some(at);
+            self.latch();
             cx.schedule(at, self.state.frame_generation | (1 << 63));
         }
         Ok(())
@@ -216,20 +243,26 @@ impl Work {
             let format = self.state.r(8) & 3;
             // +d8 bits 3..0: 1 in live view, 2 or 3 after S1 (module notes); same output.
             let d8 = self.state.r(0xd8);
+            // The addresses latched at the frame start (module notes).
+            let current = [0xc0, 0xc4, 0xc8, 0xcc].map(|o| self.state.r(o));
+            let [high, low, chroma_high, chroma_low] = match self.state.latched {
+                Some(latched) if latched[0] != 0 || latched[1] != 0 => latched,
+                _ => current,
+            };
             if self.state.r(0xf0) != 0xb
                 || d8 & !0xf != 0x10030000
                 || !matches!(d8 & 0xf, 1..=3)
                 || self.state.r(0x18) & !0x07ff07ff != 0
-                || self.state.r(0xc0) > 7
+                || high > 7
                 || format > 1
-                || (format == 1 && self.state.r(0xc8) > 7)
+                || (format == 1 && chroma_high > 7)
             {
                 return Err(format!(
                     "unsupported MOVDC output mode/size/address: +08 {:#x} +18 {:#x} +c0 {:#x} +c8 {:#x} +d8 {:#x} +f0 {:#x}",
                     self.state.r(8),
                     self.state.r(0x18),
-                    self.state.r(0xc0),
-                    self.state.r(0xc8),
+                    high,
+                    chroma_high,
                     self.state.r(0xd8),
                     self.state.r(0xf0)
                 ));
@@ -237,7 +270,7 @@ impl Work {
             let size = self.state.r(0x18);
             let width = (size & 0x7ff) + 1;
             let height = ((size >> 16) & 0x7ff) + 1;
-            let address = (u64::from(self.state.r(0xc0)) << 32) | u64::from(self.state.r(0xc4));
+            let address = (u64::from(high) << 32) | u64::from(low);
             if address == 0 || address & 7 != 0 {
                 return Err("MOVDC output DMA requires a nonzero 8-byte-aligned address".into());
             }
@@ -246,7 +279,7 @@ impl Work {
             let layout = if format == 0 {
                 YuvLayout::Packed422
             } else {
-                let chroma = (u64::from(self.state.r(0xc8)) << 32) | u64::from(self.state.r(0xcc));
+                let chroma = (u64::from(chroma_high) << 32) | u64::from(chroma_low);
                 if chroma == 0 || chroma & 7 != 0 {
                     return Err(format!(
                         "MOVDC two-plane output requires a nonzero 8-byte-aligned chroma address, not {chroma:#x}"
@@ -637,8 +670,10 @@ impl Device for Work {
                     return;
                 };
                 self.state.frame_deadline = Some(next);
+                self.latch();
                 cx.schedule(next, self.state.frame_generation | (1 << 63));
             } else {
+                self.state.latched = None;
                 self.state.regs.insert(4, 0);
             }
         }
@@ -720,6 +755,74 @@ mod tests {
         work.event(&mut Cx::new(&mut host, 0, 0, 0), token);
         assert_eq!(work.next_deadline(host.now), None);
         assert_eq!(work.save()["state"]["frames"], 1);
+    }
+    /// The two-plane output latches its addresses at the frame start: addresses written while
+    /// a frame is in progress are the next frame's. A checkpoint without a latch (taken before
+    /// the latch existed) takes the addresses at the frame end, and so does the packed output.
+    #[test]
+    fn movdc_two_plane_output_goes_to_the_addresses_programmed_at_the_frame_start() {
+        if fujimod_emulator_imaging::frame::host_scene().is_some() {
+            return;
+        }
+        // 8x4 frames with stride 8: Y at 0x40 * n, C 0x20 after it.
+        let planes = |work: &mut Work, host: &mut RecordingHost, n: u64| {
+            let mut cx = Cx::new(host, 0, 0, 0);
+            for (o, v) in [(0xc4, 0x100 + 0x40 * n), (0xc8, 1), (0xcc, 0x120 + 0x40 * n)] {
+                work.write(&mut cx, BASE + o, 4, v);
+            }
+        };
+        let written = |ram: &[u8], n: usize| ram[0x40 * n..0x40 * n + 0x30].iter().all(|v| *v != 0x55);
+        let clean = |ram: &[u8], n: usize| ram[0x40 * n..0x40 * n + 0x40].iter().all(|v| *v == 0x55);
+        let mut host = RecordingHost {
+            ram_base: 0x1_0000_0100,
+            ram: vec![0x55; 0x200],
+            ..Default::default()
+        };
+        let mut work = Work::movdc(BASE, 1000, 128).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in [(8, 0x101), (0x18, (3 << 16) | 7), (0xc0, 1), (0xd0, 8), (0xd8, 0x10030001), (0xf0, 0xb)] {
+            work.write(&mut cx, BASE + o, 4, v);
+        }
+        planes(&mut work, &mut host, 0);
+        work.write(&mut Cx::new(&mut host, 0, 0, 0), BASE + 4, 4, 1);
+        // During the first frame the driver programs the second frame's addresses.
+        host.now = 900_000;
+        planes(&mut work, &mut host, 1);
+        host.now = 1_000_000;
+        work.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert!(written(&host.ram, 0) && clean(&host.ram, 1) && clean(&host.ram, 2));
+        host.now = 1_900_000;
+        planes(&mut work, &mut host, 2);
+        host.now = 2_000_000;
+        work.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert!(written(&host.ram, 1) && clean(&host.ram, 2));
+        // An older checkpoint: no latch for the frame in progress.
+        let mut saved = work.save();
+        assert_eq!(saved["state"]["latched"], json!([1, 0x180, 1, 0x1a0]));
+        saved["state"].as_object_mut().unwrap().remove("latched");
+        work.restore(&saved).unwrap();
+        planes(&mut work, &mut host, 3);
+        host.now = 3_000_000;
+        work.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert!(written(&host.ram, 3) && clean(&host.ram, 2));
+        // A stop drops the latch.
+        work.write(&mut Cx::new(&mut host, 0, 0, 0), BASE + 4, 4, 0);
+        assert!(work.save()["state"].get("latched").is_none());
+
+        // The packed output: the address in the words at the frame end.
+        let mut host = RecordingHost {
+            ram_base: 0x1_0000_0100,
+            ram: vec![0x55; 0x200],
+            ..Default::default()
+        };
+        let mut work = Work::movdc(BASE, 1000, 128).unwrap();
+        setup(&mut work, &mut host, 0xb);
+        assert!(work.save()["state"].get("latched").is_none());
+        work.write(&mut Cx::new(&mut host, 0, 0, 0), BASE + 0xc4, 4, 0x190);
+        host.now = 1_000_000;
+        work.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert!(host.ram[..0x80].iter().all(|v| *v == 0x55));
+        assert!(host.ram[0x90..0xa0].iter().all(|v| *v == 128));
     }
     /// +d8 nibbles 2 and 3 (X-T5 4.31 AF-S after S1, 0x10030002 / 0x10030003) write the same
     /// output as nibble 1; nibble 0, nibbles above 3 and other high bits are still refused.
