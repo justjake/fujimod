@@ -80,9 +80,13 @@ test('power-off on boot remains visible, a power-cycle wakes it, and reset drops
     expect(state.message).toBe('Camera is powered off');
     expect(lcd.style.visibility).toBe('hidden');
     expect(runtime.panel.positions.get('power_switch')).toBe('ON');
+    runtime.panel.positions.set('power_switch', 'OFF');
     await runtime.turnOn();
     flush();
-    expect(powerCycle).toHaveBeenCalledWith([], expect.any(Function));
+    expect(powerCycle).toHaveBeenCalledWith(
+      [{ id: 'power_switch', position: 'ON' }],
+      expect.any(Function),
+    );
     expect(state.poweredOn).toBe(true);
     expect(state.live).toBe('LIVE');
     expect(state.message).toBe('Camera ready');

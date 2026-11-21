@@ -213,7 +213,8 @@ export function startSession(
   }
   async function turnOn() {
     if (!engine || state.loading || state.poweredOn !== false) return;
-    await restartOperation(() => engine!.powerCycle([], progress));
+    const inputs = panel.powerID ? [{ id: panel.powerID, position: 'ON' }] : [];
+    await restartOperation(() => engine!.powerCycle(inputs, progress));
   }
   function reset() {
     ++generation;
