@@ -218,18 +218,27 @@ fn devices_and_resources(
     Ok((windows, resources, controls))
 }
 
-/// Write the flash image into the RAM that backs the CPU's flash aperture in a ROM start.
+/// Write the flash image into the RAM that backs the CPU's flash aperture in a ROM start. A DMA
+/// transfer reads RAM only, so the setup stage's copy from the aperture needs this content for
+/// serial NAND as well (its linear main area).
 fn shadow_flash_aperture(
     storage: Option<&flash_storage::Medium>,
     session: &mut Session,
 ) -> Result<(), String> {
-    let Some(flash_storage::Medium::Nor(storage)) = storage else {
-        return Err("ROM start needs the NOR flash image to back the aperture".into());
+    let bytes = match storage {
+        Some(flash_storage::Medium::Nor(storage)) => {
+            let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
+            let bytes = storage.read(0, FLASH_APERTURE_SIZE)?;
+            // The seeds are already in `bytes`; only later changes are new.
+            storage.take_dirty_pages();
+            bytes
+        }
+        Some(flash_storage::Medium::Nand(storage)) => storage
+            .lock()
+            .map_err(|_| "flash storage lock poisoned")?
+            .read(0, FLASH_APERTURE_SIZE)?,
+        None => return Err("ROM start needs the flash image to back the aperture".into()),
     };
-    let mut storage = storage.lock().map_err(|_| "flash storage lock poisoned")?;
-    let bytes = storage.read(0, FLASH_APERTURE_SIZE)?;
-    // The seeds are already in `bytes`; only later changes are new.
-    storage.take_dirty_pages();
     session.board.write_physical(FLASH_APERTURE_BASE, &bytes)
 }
 
@@ -941,16 +950,17 @@ pub(crate) fn open_from(
     // every other early start needs it.
     let setup_without_flash = storage.is_none()
         && rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
-    // Serial NAND has no CPU-executable aperture to shadow: the controller and its DMA read the
-    // storage directly.
     let serial_nand = matches!(storage, Some(flash_storage::Medium::Nand(_)));
-    if rom.is_some() && !setup_without_flash && !serial_nand {
+    if rom.is_some() && !setup_without_flash {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.ok_or("early startup flash backing is absent")?;
-        session.window_action = Some(fujimod_emulator_session::WindowAction {
-            interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
-            synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
-        });
+        // Serial NAND refuses program and erase, so its shadow never changes.
+        if !serial_nand {
+            session.window_action = Some(fujimod_emulator_session::WindowAction {
+                interval: std::num::NonZeroU64::new((ticks_per_second / 1_000).max(1)).unwrap(),
+                synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
+            });
+        }
     }
     Ok(Opened {
         session,
