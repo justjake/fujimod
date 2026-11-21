@@ -71,7 +71,7 @@ for (const engine of [chromium, webkit]) {
       else assert.ok(cardGeometry.x > sectionGeometry.x);
       assert.equal(
         await page.locator('.release-personal-note time').getAttribute('datetime'),
-        await page.locator('.home-release-notes time').getAttribute('datetime'),
+        await page.locator('.home-release-title time').getAttribute('datetime'),
       );
       assert.ok(
         await page
@@ -81,7 +81,7 @@ for (const engine of [chromium, webkit]) {
       );
       assert.match(await page.locator('.home-sd-card').innerText(), /lives on your SD card/);
       assert.equal(await page.locator('.home-release-notes a[href="/releases"]').count(), 1);
-      const releaseHeading = page.locator('.home-release-notes h2');
+      const releaseHeading = page.locator('.home-release-title');
       const title = await releaseHeading.evaluate((heading) =>
         heading.firstChild?.textContent?.trim(),
       );

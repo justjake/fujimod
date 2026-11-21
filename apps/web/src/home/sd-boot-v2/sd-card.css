@@ -66,21 +66,40 @@
   height: 16px;
   margin: 0;
 }
-.home-sd-card details {
-  margin-inline-start: 26px;
-  font-size: 13px;
-  color: var(--dim);
-}
-.home-sd-card summary {
-  cursor: pointer;
-}
 .home-recipe-list {
-  max-height: min(220px, 32vh);
+  max-height: min(240px, 36vh);
+  margin-top: 6px;
+  padding: 2px 10px;
   overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 22%);
 }
 .home-recipe-list label {
   font-size: 13px;
   color: #c7c7cc;
+}
+.home-recipe {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.home-recipe .sd-source,
+.home-recipe small {
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sd-source {
+  text-decoration: underline;
+  text-decoration-color: rgb(235 235 245 / 30%);
+  text-underline-offset: 3px;
+}
+.sd-source:hover {
+  color: #64d2ff;
 }
 .home-download-button {
   display: block;
