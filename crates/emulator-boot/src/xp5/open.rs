@@ -188,7 +188,11 @@ fn devices_and_resources(
                 let origin =
                     usize::try_from(number("dat_origin")?).map_err(|error| error.to_string())?;
                 let xor = u8::try_from(number("xor")?).map_err(|error| error.to_string())?;
-                let image = firmware.dat_payload(origin, xor)?;
+                let mut image = firmware.dat_payload(origin, xor)?;
+                // A host input: extents of the installed image that start erased.
+                if let Ok(spec) = std::env::var("XT5_FLASH_ERASED") {
+                    flash_storage::erase_installed(&mut image, &spec)?;
+                }
                 resources.storage = Some(flash_storage::Medium::Nor(Arc::new(Mutex::new(
                     flash_storage::Storage::new(image)?,
                 ))));
