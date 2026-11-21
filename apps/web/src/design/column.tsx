@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
+import { Chevron } from './controls';
 import { ACCENT, COLUMN, HEADING, TEXT, TRACK } from './materials';
 
 /* The column every editor screen draws its rows in, and the pieces inside it. */
@@ -92,6 +93,24 @@ export function Button(props: {
       onClick={() => props.onClick()}
     >
       {props.label}
+    </button>
+  );
+}
+
+/** A menu row: its name, then its value and a chevron; OK or a tap opens its
+ * options in a fly-out, as the camera's menu rows do. */
+export function OptionRow(props: { name: string; value: string; focused: boolean; anchor?: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      data-anchor={props.anchor}
+      class={`flex h-[57px] w-full items-center gap-[10px] pr-[10px] pl-[12px] font-medium whitespace-nowrap ${TEXT}`}
+      style={TRACK(props.focused)}
+      onClick={() => props.onClick()}
+    >
+      <span class="grow text-left">{props.name}</span>
+      <span>{props.value}</span>
+      <Chevron dir="right" size={16} />
     </button>
   );
 }

@@ -12,6 +12,9 @@ import type { JSX } from '@solidjs/web';
    screen on the page. Round marks (knots, swatches, dots) stay round. */
 /* Materials: each look names how every role is drawn (the column, the rail,
    rows and their focus, chips, panels, the keyboard), not just two colors. */
+/** The camera menus' option panel: the fly-outs in Glass and the Fujimod menu look. */
+const POPUP = '--m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-cursor: #3a3a3c; --m-cursor-edge: inset 0 0 0 0 transparent; --m-separator: #323235; --m-check: #2a7fff;';
+
 const LOOKS = {
   /* Drawn from its two dials: glassVars. */
   glass: '',
@@ -31,7 +34,7 @@ const LOOKS = {
      top edge and a dark bottom edge, engraved dividers, recessed wells for
      scales, and focus as a brighter raised plate with a fine light rim. */
   fujimod: `
-    --m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-cursor: #3a3a3c; --m-cursor-edge: inset 0 0 0 0 transparent; --m-separator: #323235; --m-check: #2a7fff;
+    ${POPUP}
     --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
     --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
@@ -66,9 +69,8 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
   return `
     --m-column: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)});
     --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
-    --m-popup: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)}); --m-popup-edge: inset 0 0 0 1px rgb(255 255 255 / ${edge(0.16)});
-    --m-separator: rgb(255 255 255 / ${edge(0.12)}); --m-check: #fff;
-    --m-cursor: rgb(255 255 255 / 0.24); --m-cursor-edge: inset 0 0 0 2px rgb(255 255 255 / 0.85);
+    /* Fly-outs are the camera menus' option panel, solid, in every look but High contrast. */
+    ${POPUP}
     --m-panel: rgb(${gray(26, 2)} / ${fill(0.84)});
     --m-chip: rgb(${gray(20, 2)} / ${fill(0.52)});
     --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});

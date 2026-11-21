@@ -1,11 +1,11 @@
 import PHOTO from '../../../engine/assets/default-scene.png';
 import { Artwork, Monogram, filmArtwork, stockArtwork } from '../../../design/artwork';
-import { Button, Scroller, Section } from '../../../design/column';
+import { Button, OptionRow, Scroller, Section } from '../../../design/column';
 import { AnchoredFlyOut, PickerList, flyOutListHeight, pickerStep } from '../../../design/picker';
 import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { Chevron, Choice, Dial, Switch, signed } from '../../../design/controls';
+import { Chevron, Choice, Dial, signed } from '../../../design/controls';
 import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
 import { ACCENT, COLUMN, DETAIL, GLASS, HEADING, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
 import '../../../design/design.css';
@@ -863,7 +863,7 @@ const EDITED: Film = (() => {
   };
 })();
 
-type PickerState = { kind: 'icon'; at: number } | { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
+type PickerState = { kind: 'custom'; at: number } | { kind: 'icon'; at: number } | { kind: 'copy'; tool: Tool; at: number } | { kind: 'compare'; at: number } | { kind: 'open'; at: number };
 
 /** Films on the SD card, standing in as edits of the built-in ones. */
 const CARD_FILMS: { name: string; from: string; icon: string; film: () => Film }[] = [
@@ -899,6 +899,7 @@ function FilmIcon(props: { slug: string; size: number; color: string }) {
 /** Options are film numbers: the SD card's films, then the built-in ones. */
 function pickerOptions(p: PickerState): (number | 'opened')[] {
   if (p.kind === 'icon') return ICONS.map((_, i) => i);
+  if (p.kind === 'custom') return [0, 1];
   if (p.kind === 'open') return [...CARD_FILMS.map((_, i) => i), ...BASES.map((_, i) => CARD_FILMS.length + i)];
   return p.kind === 'compare' ? ['opened', ...BASES.map((_, i) => i)] : BASES.map((_, i) => i);
 }
@@ -906,12 +907,14 @@ function pickerOptions(p: PickerState): (number | 'opened')[] {
 function pickerLabel(p: PickerState, k: number | 'opened'): string {
   if (k === 'opened') return 'AS OPENED';
   if (p.kind === 'icon') return ICONS[k];
+  if (p.kind === 'custom') return k ? 'ON' : 'OFF';
   if (p.kind !== 'open') return BASES[k].name;
   return k < CARD_FILMS.length ? CARD_FILMS[k].name : BASES[k - CARD_FILMS.length].name;
 }
 
 function pickerCurrent(s: State, p: PickerState): number | 'opened' | undefined {
   if (p.kind === 'icon') return s.icon.startsWith('text:') ? ICONS.length - 1 : ICONS.indexOf(s.icon);
+  if (p.kind === 'custom') return s.custom ? 1 : 0;
   if (p.kind === 'copy') return groupSource(s.film, p.tool);
   if (p.kind === 'compare') return s.compare?.b;
   const card = CARD_FILMS.findIndex((c) => c.name === s.name);
@@ -921,6 +924,8 @@ function pickerCurrent(s: State, p: PickerState): number | 'opened' | undefined 
 function choose(s: State, p: PickerState, k: number | 'opened'): State {
   if (k === 'opened') return p.kind === 'compare' ? { ...s, picker: null, compare: { b: k, split: s.compare?.split ?? SPLIT } } : s;
   switch (p.kind) {
+    case 'custom':
+      return { ...s, picker: null, custom: k === 1 };
     case 'icon':
       if (ICONS[k] === 'text:') return { ...s, picker: null, keyboard: typing(s.icon.startsWith('text:') ? s.icon.slice(5) : '', 'icon') };
       return { ...s, picker: null, icon: ICONS[k] };
@@ -954,7 +959,7 @@ function saveAs(s: State, name: string): State {
 /** SAVE: the edits are written over the film opened. */
 const save = (s: State): State => ({ ...s, opened: s.film });
 
-function openPicker(s: State, p: { kind: 'icon' } | { kind: 'copy'; tool: Tool } | { kind: 'compare' } | { kind: 'open' }): State {
+function openPicker(s: State, p: { kind: 'custom' } | { kind: 'icon' } | { kind: 'copy'; tool: Tool } | { kind: 'compare' } | { kind: 'open' }): State {
   const current = pickerCurrent(s, { ...p, at: 0 });
   const at = Math.max(0, pickerOptions({ ...p, at: 0 }).indexOf(current ?? -1));
   return { ...s, picker: { ...p, at } };
@@ -1255,7 +1260,7 @@ export function press(s: State, key: CameraKey): State {
       case 'create':
         return key === 'ok' ? { ...s, created: s.crop } : s;
       case 'custom':
-        return { ...s, custom: !s.custom };
+        return key === 'ok' ? openPicker(s, { kind: 'custom' }) : s;
       case 'open':
         return key === 'ok' ? openPicker(s, { kind: 'open' }) : s;
       case 'save':
@@ -1985,13 +1990,13 @@ export function Editor(props: {
             />
           </Section>
         </Show>
-        <Section ref={(element) => (sections.custom = element)} title="PREVIEW WITH CUSTOM SETTING" long>
-          <Switch
-            items={['OFF', 'ON']}
-            value={s().custom ? 1 : 0}
+        <Section ref={(element) => (sections.custom = element)} title="CUSTOM SETTING">
+          <OptionRow
+            name="PREVIEW"
+            value={s().custom ? 'ON' : 'OFF'}
+            anchor="custom"
             focused={s().area === 'custom'}
-            onFocus={() => update({ ...s(), area: 'custom', railOn: null, header: false, inside: false })}
-            pick={(v) => update({ ...s(), custom: v === 1, area: 'custom' })}
+            onClick={() => update(openPicker({ ...s(), area: 'custom', railOn: null, header: false, inside: false }, { kind: 'custom' }))}
           />
           <div class="mt-[10px] flex flex-wrap gap-x-[14px] gap-y-[8px] px-[6px]" style={{ opacity: s().custom ? 1 : 0.4 }}>
             <For each={RECIPE_ROWS.slice(1)}>
@@ -2266,6 +2271,7 @@ export const FILM_STATES: { id: string; title: string; state: State }[] = [
   { id: 'copy', title: 'Copy one tool from a film', state: openPicker(initial({ header: true }), { kind: 'copy', tool: 'curve' }) },
   { id: 'compare', title: 'Compare with a film', state: initial({ compare: { b: 0, split: SPLIT } }) },
   { id: 'film-only', title: 'Custom setting off: the film alone', state: initial({ custom: false, area: 'custom', scrollTo: 'custom' }) },
+  { id: 'preview-list', title: 'PREVIEW opened with OK', state: openPicker(initial({ area: 'custom', scrollTo: 'custom' }), { kind: 'custom' }) },
   ...STRIP_STYLES.map(([strip, name]) => ({ id: `raw-${strip}`, title: `RAW files: ${name.toLowerCase()}`, state: initial({ crop: 3, area: 'strip', strip }) })),
 ];
 
