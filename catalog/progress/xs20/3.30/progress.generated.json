@@ -1,6 +1,6 @@
 {
   "$schema": "https://fujimod.com/schemas/progress.generated.schema.json",
-  "schema": 3,
+  "schema": 4,
   "firmware_id": "xs20-330",
   "model": "X-S20",
   "version": "3.30",
@@ -14,8 +14,6 @@
       "id": "static",
       "title": "Static analysis",
       "phase": "research",
-      "weight": 10,
-      "cells": false,
       "stages": [
         {
           "id": "research",
@@ -95,7 +93,8 @@
           "stage": "research",
           "result": "pass",
           "passed": 1,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "analysis",
@@ -103,7 +102,8 @@
           "stage": "analysis",
           "result": "pass",
           "passed": 1,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "catalog",
@@ -167,7 +167,8 @@
           "stage": "controls",
           "result": "stale",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "settings-layout",
@@ -175,7 +176,8 @@
           "stage": "settings-layout",
           "result": "stale",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "sd-facts",
@@ -183,7 +185,8 @@
           "stage": "sd-facts",
           "result": "pass",
           "passed": 1,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "boot-rom",
@@ -199,8 +202,6 @@
       "id": "emulator",
       "title": "Emulator",
       "phase": "emulator",
-      "weight": 35,
-      "cells": true,
       "stages": [
         {
           "id": "rec",
@@ -250,7 +251,8 @@
           "stage": "rec",
           "result": "not-run",
           "passed": 0,
-          "total": 1
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "stock/record-picture",
@@ -258,7 +260,8 @@
           "stage": "stock",
           "result": "not-run",
           "passed": 0,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "stock/record-movie",
@@ -274,7 +277,8 @@
           "stage": "stock",
           "result": "not-run",
           "passed": 0,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "stock/control-layout",
@@ -290,7 +294,8 @@
           "stage": "menu",
           "result": "not-run",
           "passed": 0,
-          "total": 1
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "stock/focus",
@@ -322,7 +327,8 @@
           "stage": "stock",
           "result": "not-run",
           "passed": 0,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "stock/playback-movie",
@@ -346,7 +352,8 @@
           "stage": "stock",
           "result": "not-run",
           "passed": 0,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
@@ -354,7 +361,8 @@
           "stage": "sd-boot-v1-stock-boots-in-emulator",
           "result": "not-run",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
@@ -370,8 +378,6 @@
       "id": "camera",
       "title": "Camera",
       "phase": "camera",
-      "weight": 20,
-      "cells": false,
       "stages": [
         {
           "id": "camera-identity",
@@ -462,7 +468,8 @@
           "stage": "camera-code",
           "result": "pass",
           "passed": 1,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "camera-bulk",
@@ -478,7 +485,8 @@
           "stage": "camera-backup",
           "result": "pass",
           "passed": 1,
-          "total": 1
+          "total": 1,
+          "milestone": true
         },
         {
           "id": "camera-snapshot",
@@ -534,7 +542,8 @@
           "stage": "camera-menu",
           "result": "not-run",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "camera-mods",
@@ -550,8 +559,6 @@
       "id": "fujimod",
       "title": "FujiMod",
       "phase": "mods",
-      "weight": 25,
-      "cells": false,
       "stages": [
         {
           "id": "language-font-bank",
@@ -604,7 +611,8 @@
           "stage": "mod-target",
           "result": "stale",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "mod-build",
@@ -620,7 +628,8 @@
           "stage": "sd-boot-v1-fujimod-built",
           "result": "not-run",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "firmware-update-fujimod-built",
@@ -1157,6 +1166,600 @@
           "result": "not-run",
           "passed": 0,
           "total": 1
+        },
+        {
+          "id": "mod-build/af",
+          "label": "af links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/fujimod",
+          "label": "fujimod links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/aspect-ratio",
+          "label": "aspect-ratio links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/raw-teleconverter",
+          "label": "raw-teleconverter links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/raw-crop-file",
+          "label": "raw-crop-file links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/surround-view",
+          "label": "surround-view links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/desqueeze",
+          "label": "desqueeze links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/desqueeze-jpeg",
+          "label": "desqueeze-jpeg links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/jpeg-max",
+          "label": "jpeg-max links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/noise-reduction",
+          "label": "noise-reduction links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/framing-guideline",
+          "label": "framing-guideline links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/film-sims",
+          "label": "film-sims links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/movie-film",
+          "label": "movie-film links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/card-films",
+          "label": "card-films links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/multipass-curves",
+          "label": "multipass-curves links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/film-editor",
+          "label": "film-editor links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/film-grain",
+          "label": "film-grain links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/grain-texture",
+          "label": "grain-texture links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/color-chrome",
+          "label": "color-chrome links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/halation",
+          "label": "halation links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/light-leaks",
+          "label": "light-leaks links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/film-borders",
+          "label": "film-borders links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/clarity",
+          "label": "clarity links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/monochromatic-color",
+          "label": "monochromatic-color links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/tone-curve",
+          "label": "tone-curve links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/tone-steps",
+          "label": "tone-steps links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/d-range-priority",
+          "label": "d-range-priority links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/highlight-meter",
+          "label": "highlight-meter links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/raw-view",
+          "label": "raw-view links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/f-log",
+          "label": "f-log links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/raw-exposure",
+          "label": "raw-exposure links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/hdmi-rec",
+          "label": "hdmi-rec links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/controls",
+          "label": "controls links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/menu-theme",
+          "label": "menu-theme links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/overlay-opacity",
+          "label": "overlay-opacity links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/menu-animations",
+          "label": "menu-animations links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/menu-tap",
+          "label": "menu-tap links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/focalized-ui",
+          "label": "focalized-ui links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/recipes",
+          "label": "recipes links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/snap-focus",
+          "label": "snap-focus links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/recipe-exif",
+          "label": "recipe-exif links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/hide-films",
+          "label": "hide-films links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/disposable",
+          "label": "disposable links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/date-stamp",
+          "label": "date-stamp links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/zone-focus",
+          "label": "zone-focus links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/digital-focal-length",
+          "label": "digital-focal-length links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/hud-layout",
+          "label": "hud-layout links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/menu-order",
+          "label": "menu-order links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/pixel-map",
+          "label": "pixel-map links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/usb-debug",
+          "label": "usb-debug links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/bug-report",
+          "label": "bug-report links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/sd-volume-name",
+          "label": "sd-volume-name links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/date-folders",
+          "label": "date-folders links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/software-nd",
+          "label": "software-nd links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/iso-auto-min-shutter",
+          "label": "iso-auto-min-shutter links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/custom-settings-bkt",
+          "label": "custom-settings-bkt links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/ae-bkt-setting",
+          "label": "ae-bkt-setting links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/multiple-exposure-control",
+          "label": "multiple-exposure-control links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/interval-timer",
+          "label": "interval-timer links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/sd-boot-v2-runtime",
+          "label": "sd-boot-v2-runtime links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/sd-boot-v2-stage1-internal-flash-install",
+          "label": "sd-boot-v2-stage1-internal-flash-install links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/ota-update",
+          "label": "ota-update links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/internal-data-backup",
+          "label": "internal-data-backup links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/welcome-sheet",
+          "label": "welcome-sheet links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/hardware-divide",
+          "label": "hardware-divide links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
+          "id": "mod-build/live-view-speedups",
+          "label": "live-view-speedups links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
         }
       ]
     },
@@ -1164,8 +1767,6 @@
       "id": "sd",
       "title": "SD card and install",
       "phase": "sd-card",
-      "weight": 10,
-      "cells": false,
       "stages": [
         {
           "id": "boot-rom-loads-sd-card-on-camera",
@@ -1210,7 +1811,8 @@
           "stage": "boot-rom-loads-sd-card-on-camera",
           "result": "not-run",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
@@ -1226,7 +1828,8 @@
           "stage": "sd-boot-v1-fujimod-boots-on-camera",
           "result": "not-run",
           "passed": 0,
-          "total": 0
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "firmware-update-stock-installs-on-camera",

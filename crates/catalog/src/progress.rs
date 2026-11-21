@@ -1,4 +1,4 @@
-//! Recorded bring-up progress and separate publishing overrides for one firmware.
+//! Recorded bring-up progress for one firmware.
 //!
 //! Each stage holds the latest recorded result of that stage for the firmware.
 //! A result whose inputs changed since it was recorded is `stale` and does not
@@ -7,22 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const PROGRESS_SCHEMA_URI: &str = "https://fujimod.com/schemas/progress.generated.schema.json";
-pub const PROGRESS_OVERRIDE_SCHEMA_URI: &str =
-    "https://fujimod.com/schemas/progress-override.generated.schema.json";
-
-/// A maintainer's publishing decision, separate from recorded progress.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct ProgressOverride {
-    /// Schema identifying the hand-authored document.
-    #[serde(rename = "$schema")]
-    pub schema_uri: String,
-    /// Firmware whose published progress changes.
-    pub firmware_id: String,
-    /// Show every phase and step as complete.
-    pub complete: bool,
-}
 
 /// Bring-up progress toward FujiMod on one firmware.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,13 +47,9 @@ pub struct TrackProgress {
     pub title: String,
     /// CSS phase identifier used by the website's progress bars.
     pub phase: String,
-    /// Share of the progress bar assigned to this track.
-    pub weight: u32,
-    /// Draw each step as its own cell instead of a single fill.
-    pub cells: bool,
     /// The track's stages, in order.
     pub stages: Vec<StageEntry>,
-    /// The ordered steps the website draws, resolved from the graph; an `inapplicable` stage has none.
+    /// The outcomes resolved from the graph, excluding inapplicable outcomes.
     pub steps: Vec<StepProgress>,
 }
 
@@ -85,7 +65,7 @@ pub struct StageEntry {
     pub result: StageProgress,
 }
 
-/// One rendered step of a track.
+/// One outcome within a bring-up track.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -97,6 +77,9 @@ pub struct StepProgress {
     /// Graph stage that owns this step.
     pub stage: String,
     pub result: StepResult,
+    /// Include this outcome in the public progress count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub milestone: Option<bool>,
     /// Graded parts that pass.
     pub passed: u32,
     /// Graded parts in total.

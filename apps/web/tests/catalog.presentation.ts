@@ -1,16 +1,9 @@
-/** Check the camera progress table against the catalog's generated progress and publishing overrides. */
+/** Check the camera progress table against the catalog's tagged milestones. */
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { glob, mkdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import {
-  byModel,
-  phases,
-  started,
-  withOverrides,
-  type FirmwareProgress,
-  type ProgressOverride,
-} from '../src/ui/camera-progress.ts';
+import { byModel, phases, started, type FirmwareProgress } from '../src/ui/camera-progress.ts';
 
 const url = process.env.FUJIMOD_WEB_URL;
 const output = process.env.FUJIMOD_TEST_OUTPUT;
@@ -19,10 +12,7 @@ const catalog = fileURLToPath(new URL('../../../catalog/progress/', import.meta.
 const documents: FirmwareProgress[] = [];
 for await (const path of glob('*/*/progress.generated.json', { cwd: catalog }))
   documents.push(JSON.parse(await readFile(catalog + path, 'utf8')));
-const overrides: ProgressOverride[] = [];
-for await (const path of glob('*/*/progress.override.json', { cwd: catalog }))
-  overrides.push(JSON.parse(await readFile(catalog + path, 'utf8')));
-const expected = Object.values(byModel(withOverrides(documents, overrides))).filter(started);
+const expected = Object.values(byModel(documents)).filter(started);
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 try {
@@ -38,20 +28,29 @@ try {
       has: page.getByText(progress.model, { exact: true }),
     });
     assert.equal(await row.count(), 1, progress.model);
-    const list = phases(progress);
-    for (const [index, phase] of list.entries()) {
-      const segment = row.locator('.phase').nth(index);
-      await segment.hover();
-      const tip = segment.locator('.tip');
-      await tip.waitFor({ state: 'visible' });
-      assert.equal(await tip.locator('.tip-label').innerText(), phase.label, progress.model);
-      assert.equal(await page.locator('#camera-table .phase.open').count(), 1, 'one tip open');
-      assert.equal(
-        await tip.locator('li:not(.todo)').count(),
-        phase.steps.filter((step) => step.fraction === 1).length,
-        `${progress.model} ${phase.label}`,
-      );
+    const groups = phases(progress);
+    const total = groups.reduce((sum, group) => sum + group.steps.length, 0);
+    const passed = groups.reduce((sum, group) => sum + group.passed, 0);
+    const bar = row.getByRole('progressbar');
+    assert.equal(await bar.getAttribute('aria-valuemax'), String(total || 1), progress.model);
+    assert.equal(await bar.getAttribute('aria-valuenow'), String(passed), progress.model);
+    const ratio = await bar.evaluate((element) => {
+      const width = element.getBoundingClientRect().width;
+      const fills = [...element.querySelectorAll('.fill')];
+      return fills.reduce((sum, fill) => sum + fill.getBoundingClientRect().width, 0) / width;
+    });
+    assert(Math.abs(ratio - passed / (total || 1)) < 0.002, progress.model);
+
+    await row.locator('.progress-bar').hover();
+    const tip = row.locator('.tip');
+    await tip.waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#camera-table .progress-bar.open').count(), 1, 'one tip open');
+    for (const [index, group] of groups.entries()) {
+      const details = tip.locator('.tip-group').nth(index);
+      assert.match(await details.locator('.tip-label').innerText(), new RegExp(group.label));
+      assert.equal(await details.locator('li:not(.todo)').count(), group.passed, progress.model);
     }
+    await page.keyboard.press('Escape');
   }
   // Taps on a phone: each tap moves the one open tip, and a tap elsewhere closes it.
   const phone = await browser.newPage({
@@ -60,15 +59,15 @@ try {
   });
   await phone.context().routeWebSocket('**/*', () => {});
   await phone.goto(new URL('#camera-table', url).href);
-  const tips = phone.locator('#camera-table .phase.open');
-  const segments = phone.locator('#camera-table .progress-row .phase:nth-child(2)');
+  const tips = phone.locator('#camera-table .progress-bar.open');
+  const bars = phone.locator('#camera-table .progress-row .progress-bar');
   for (const index of [0, 1, 2]) {
-    await segments.nth(index).tap();
-    await segments.nth(index).locator('.tip').waitFor({ state: 'visible' });
+    await bars.nth(index).tap();
+    await bars.nth(index).locator('.tip').waitFor({ state: 'visible' });
     assert.equal(await tips.count(), 1, `tap ${index}`);
+    await phone.touchscreen.tap(1, 1);
+    assert.equal(await tips.count(), 0, 'a tap elsewhere closes the tip');
   }
-  await phone.locator('#camera-table h2').tap();
-  assert.equal(await tips.count(), 0, 'a tap elsewhere closes the tip');
   await page.locator('#camera-table').screenshot({ path: `${output}/camera-progress.png` });
   console.log(`${expected.length} started cameras: progress rows and popovers verified at ${url}`);
 } finally {
