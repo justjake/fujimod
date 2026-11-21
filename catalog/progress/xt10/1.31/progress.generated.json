@@ -5,8 +5,8 @@
   "model": "X-T10",
   "version": "1.31",
   "facts": {
-    "located": 34,
-    "total": 34
+    "located": 35,
+    "total": 35
   },
   "boot_rom": "X70",
   "tracks": [

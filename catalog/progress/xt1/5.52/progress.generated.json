@@ -5,8 +5,8 @@
   "model": "X-T1",
   "version": "5.52",
   "facts": {
-    "located": 33,
-    "total": 33
+    "located": 34,
+    "total": 34
   },
   "boot_rom": "X70",
   "tracks": [

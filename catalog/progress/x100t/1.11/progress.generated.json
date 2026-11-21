@@ -247,12 +247,12 @@
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
-          "result": "fail"
+          "result": "pass"
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "fail"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
@@ -385,17 +385,17 @@
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "label": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "stage": "sd-boot-v1-stock-boots-in-emulator",
-          "result": "fail",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "fail",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
