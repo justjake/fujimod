@@ -343,6 +343,8 @@ impl Nor {
     }
     /// Declares a run in which the whole array is immutable: every
     /// write-enable, erase and program request fails the run when issued.
+    /// Contradicts declared write ranges in either order: `with_write_ranges`
+    /// refuses after this, and `try_port_from_nor` refuses the reverse order.
     pub fn with_write_protect(mut self) -> Self {
         self.write_protect = true;
         self
@@ -387,7 +389,7 @@ impl Nor {
     /// whole-array write protection.
     pub fn with_write_ranges(mut self, mut ranges: Vec<WriteRange>) -> Result<Self, String> {
         if self.write_protect {
-            return Err("NOR write ranges contradict whole-array write protection".into());
+            return Err(WRITE_POLICY_CONTRADICTION.into());
         }
         if ranges.is_empty() {
             return Err("NOR write ranges must not be empty".into());
@@ -678,6 +680,16 @@ pub struct Port {
 pub type Shared = Arc<Mutex<Port>>;
 pub fn port_from_nor(nor: Nor) -> Shared {
     Arc::new(Mutex::new(Port { nor, request: None, program_data: None }))
+}
+const WRITE_POLICY_CONTRADICTION: &str = "NOR write ranges contradict whole-array write protection";
+/// `port_from_nor` after validating the declared write policies together, so
+/// whole-array write protection and write ranges refuse each other with the
+/// same error whichever was declared first.
+pub fn try_port_from_nor(nor: Nor) -> Result<Shared, String> {
+    if nor.write_protect && !nor.write_ranges.is_empty() {
+        return Err(WRITE_POLICY_CONTRADICTION.into());
+    }
+    Ok(port_from_nor(nor))
 }
 impl Port {
     pub fn immutable_view(&self) -> Option<ImmutableView> { self.nor.immutable_view() }
@@ -4207,6 +4219,24 @@ mod write_range_tests {
             .map(|prefix_first| declare(ranges.clone(), prefix_first).unwrap().snapshot());
         assert_eq!(first, second);
         assert_eq!(first["immutable_prefix"], json!(0x1000));
+    }
+
+    #[test]
+    fn write_protection_and_write_ranges_contradict_in_either_order() {
+        let ranges = || vec![range(0x1000, PAGE as u64)];
+        let protect_first = strict()
+            .with_write_protect()
+            .with_write_ranges(ranges())
+            .and_then(try_port_from_nor);
+        let ranges_first = strict()
+            .with_write_ranges(ranges())
+            .map(Nor::with_write_protect)
+            .and_then(try_port_from_nor);
+        let [first, second] = [protect_first, ranges_first].map(|result| result.err().unwrap());
+        assert_eq!(first, second);
+        assert!(first.contains("contradict whole-array write protection"), "{first}");
+        assert!(try_port_from_nor(strict().with_write_protect()).is_ok());
+        assert!(try_port_from_nor(strict().with_write_ranges(ranges()).unwrap()).is_ok());
     }
 
     #[test]
