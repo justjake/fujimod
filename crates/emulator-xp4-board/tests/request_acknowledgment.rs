@@ -1,10 +1,10 @@
 use fujimod_emulator_cpu::arm;
 use fujimod_emulator_xp4_board::{Definition, Session};
-use fujimod_emulator_xp4_io::request_fff4f01c::ADDRESS;
+use fujimod_emulator_xp4_io::request_acknowledgment::ADDRESS;
 use serde_json::{Value, json};
 
 const ENTRY: u64 = 0x1000;
-const NAME: &str = "xp4-request-fff4f01c";
+const NAME: &str = "xp4-request-acknowledgment";
 
 fn input() -> Value {
     json!({
@@ -34,7 +34,7 @@ fn strict_defaults_and_adjacent_words_remain_unmapped() {
     for (ticks, address) in [(None, ADDRESS), (Some(8), ADDRESS - 4), (Some(8), ADDRESS + 4)] {
         let mut definition = input();
         if let Some(ticks) = ticks {
-            definition["request_fff4f01c_ticks"] = json!(ticks);
+            definition["request_acknowledgment_ticks"] = json!(ticks);
         }
         let session = board(definition).unwrap();
         assert_eq!(session.device_state_json().contains_key(NAME), ticks.is_some());
@@ -47,7 +47,7 @@ fn strict_defaults_and_adjacent_words_remain_unmapped() {
 #[test]
 fn exact_word_registration_refuses_overlapping_owners() {
     let mut definition = input();
-    definition["request_fff4f01c_ticks"] = json!(8);
+    definition["request_acknowledgment_ticks"] = json!(8);
     for (key, wiring) in [
         ("register_banks", json!([[ADDRESS, ADDRESS + 4]])),
         ("control_requests", json!([[ADDRESS, 8]])),
@@ -61,7 +61,7 @@ fn exact_word_registration_refuses_overlapping_owners() {
     definition["register_banks"] = json!([[ADDRESS - 4, ADDRESS], [ADDRESS + 4, ADDRESS + 8]]);
     assert!(board(definition.clone()).is_ok());
     for invalid in [0u64, 1_000_001] {
-        definition["request_fff4f01c_ticks"] = json!(invalid);
+        definition["request_acknowledgment_ticks"] = json!(invalid);
         assert!(board(definition.clone()).is_err());
     }
 }
@@ -70,7 +70,7 @@ fn exact_word_registration_refuses_overlapping_owners() {
 fn guest_writes_one_and_polls_until_the_declared_acknowledgment() {
     for ticks in [8u64, 17] {
         let mut definition = input();
-        definition["request_fff4f01c_ticks"] = json!(ticks);
+        definition["request_acknowledgment_ticks"] = json!(ticks);
         let session = board(definition).unwrap();
         program(&session, ADDRESS, &[
             0xe580_1000, // STR r1,[r0]
@@ -93,6 +93,6 @@ fn guest_writes_one_and_polls_until_the_declared_acknowledgment() {
         assert_eq!(state["phase"], json!("completed"));
         assert_eq!(state["request"]["deadline"], json!(deadline));
         assert_eq!(state["completed_at"], json!(deadline));
-        assert_eq!(session.device_records().iter().filter(|record| record.name.contains("FFF4F01C")).count(), 2);
+        assert_eq!(session.device_records().iter().filter(|record| record.name.starts_with("XP4 experimental request acknowledgment")).count(), 2);
     }
 }

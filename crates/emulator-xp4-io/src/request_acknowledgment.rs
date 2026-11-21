@@ -1,4 +1,4 @@
-//! Explicit XP4 0xfff4f01c request acknowledgment hypothesis.
+//! Explicit single-word XP4 request acknowledgment hypothesis at 0xfff4f01c.
 //! The declared delay is unmeasured and carries no physical clock or reset effect.
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
 use serde::{Deserialize, Serialize};
@@ -25,16 +25,16 @@ enum State {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct RequestWord {
+pub struct RequestAcknowledgment {
     completion_ticks: u64,
     generation: u64,
     state: State,
 }
 
-impl RequestWord {
+impl RequestAcknowledgment {
     pub fn new(completion_ticks: u64) -> Result<Self, String> {
         if !(1..=1_000_000).contains(&completion_ticks) {
-            return Err("Invalid XP4 0xfff4f01c request delay".into());
+            return Err("Invalid XP4 request acknowledgment delay".into());
         }
         Ok(Self {
             completion_ticks,
@@ -52,9 +52,9 @@ impl RequestWord {
     }
 }
 
-impl Device for RequestWord {
+impl Device for RequestAcknowledgment {
     fn name(&self) -> &'static str {
-        "xp4-request-fff4f01c"
+        "xp4-request-acknowledgment"
     }
 
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
@@ -64,7 +64,7 @@ impl Device for RequestWord {
         }
         match self.state {
             State::Unwritten {} => {
-                cx.fail("XP4 0xfff4f01c read before first request");
+                cx.fail("XP4 request acknowledgment read before first request");
                 0
             }
             State::Pending { .. } => 1,
@@ -78,11 +78,11 @@ impl Device for RequestWord {
             return;
         }
         if matches!(self.state, State::Pending { .. }) {
-            cx.fail("XP4 0xfff4f01c write while request is pending");
+            cx.fail("XP4 request acknowledgment write while request is pending");
             return;
         }
         if value != 1 {
-            cx.fail("XP4 0xfff4f01c request requires a write of 1");
+            cx.fail("XP4 request acknowledgment requires a write of 1");
             return;
         }
         let started_at = cx.now();
@@ -90,7 +90,7 @@ impl Device for RequestWord {
             started_at.checked_add(self.completion_ticks),
             self.generation.checked_add(1),
         ) else {
-            cx.fail("XP4 0xfff4f01c request deadline or generation overflow");
+            cx.fail("XP4 request acknowledgment deadline or generation overflow");
             return;
         };
         self.state = State::Pending {
@@ -98,7 +98,7 @@ impl Device for RequestWord {
         };
         self.generation = token;
         cx.record(Record::new(
-            "XP4 experimental FFF4F01C request scheduled",
+            "XP4 experimental request acknowledgment scheduled",
             [
                 ("address", Field::int(ADDRESS)),
                 ("tick", Field::int(started_at)),
@@ -117,7 +117,7 @@ impl Device for RequestWord {
         }
         self.state = State::Completed { request, completed_at };
         cx.record(Record::new(
-            "XP4 experimental FFF4F01C request acknowledged",
+            "XP4 experimental request acknowledgment completed",
             [
                 ("address", Field::int(ADDRESS)),
                 ("tick", Field::int(completed_at)),
@@ -152,7 +152,7 @@ impl Device for RequestWord {
         };
         // The host owns event delivery. This validates only the device state.
         if state.completion_ticks != self.completion_ticks || !valid_history {
-            return Err("Invalid XP4 0xfff4f01c request checkpoint or delay".into());
+            return Err("Invalid XP4 request acknowledgment checkpoint or delay".into());
         }
         *self = state;
         Ok(())
@@ -164,27 +164,27 @@ mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
 
-    fn read(model: &mut RequestWord, host: &mut RecordingHost, address: u64, width: u8) -> Result<u64, String> {
+    fn read(model: &mut RequestAcknowledgment, host: &mut RecordingHost, address: u64, width: u8) -> Result<u64, String> {
         let mut cx = Cx::new(host, 0, 0, 4);
         let value = model.read(&mut cx, address, width);
         cx.take_refusal().map_or(Ok(value), Err)
     }
 
     fn write(
-        model: &mut RequestWord, host: &mut RecordingHost, address: u64, width: u8, value: u64,
+        model: &mut RequestAcknowledgment, host: &mut RecordingHost, address: u64, width: u8, value: u64,
     ) -> Result<(), String> {
         let mut cx = Cx::new(host, 3, 0x1000, 4);
         model.write(&mut cx, address, width, value);
         cx.take_refusal().map_or(Ok(()), Err)
     }
 
-    fn event(model: &mut RequestWord, host: &mut RecordingHost, token: u64) {
+    fn event(model: &mut RequestAcknowledgment, host: &mut RecordingHost, token: u64) {
         model.event(&mut Cx::new(host, 0, 0, 4), token);
     }
 
     #[test]
     fn only_the_scheduled_token_at_or_after_its_deadline_acknowledges() {
-        let mut model = RequestWord::new(8).unwrap();
+        let mut model = RequestAcknowledgment::new(8).unwrap();
         let mut host = RecordingHost { now: 100, ..Default::default() };
         let unwritten = model.save();
         event(&mut model, &mut host, 1);
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn other_accesses_and_every_write_while_pending_are_refused_without_effects() {
-        let mut model = RequestWord::new(8).unwrap();
+        let mut model = RequestAcknowledgment::new(8).unwrap();
         let mut host = RecordingHost::default();
         for pending in [false, true] {
             if pending {
@@ -254,10 +254,10 @@ mod tests {
     #[test]
     fn delay_validation_and_overflow_preserve_state_and_scheduling() {
         for delay in [0, 1_000_001, u64::MAX] {
-            assert!(RequestWord::new(delay).is_err());
+            assert!(RequestAcknowledgment::new(delay).is_err());
         }
-        assert!(RequestWord::new(1_000_000).is_ok());
-        let mut model = RequestWord::new(1).unwrap();
+        assert!(RequestAcknowledgment::new(1_000_000).is_ok());
+        let mut model = RequestAcknowledgment::new(1).unwrap();
         let mut host = RecordingHost { now: u64::MAX, ..Default::default() };
         let before = model.save();
         assert!(write(&mut model, &mut host, ADDRESS, WIDTH, 1).is_err());
@@ -278,8 +278,8 @@ mod tests {
 
     #[test]
     fn checkpoint_validates_inputs_structure_timing_and_request_history() {
-        let mut model = RequestWord::new(8).unwrap();
-        let mut resumed = RequestWord::new(8).unwrap();
+        let mut model = RequestAcknowledgment::new(8).unwrap();
+        let mut resumed = RequestAcknowledgment::new(8).unwrap();
         let mut host = RecordingHost::default();
         let cold = model.save();
         resumed.restore(&cold).unwrap();
@@ -295,7 +295,7 @@ mod tests {
         resumed.restore(&pending).unwrap();
         assert_eq!(resumed.next_deadline(0), Some(8));
         assert_eq!(host.events, [(4, 8, 1)]);
-        assert!(RequestWord::new(9).unwrap().restore(&pending).is_err());
+        assert!(RequestAcknowledgment::new(9).unwrap().restore(&pending).is_err());
         for (field, value) in [("started_at", json!(1)), ("deadline", json!(7)), ("token", json!(0))] {
             let mut corrupt = pending.clone();
             corrupt["state"]["request"][field] = value;

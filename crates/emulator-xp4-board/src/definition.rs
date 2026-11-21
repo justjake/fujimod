@@ -94,9 +94,9 @@ pub struct Definition {
     pub spi_inputs: Vec<(u64, bool)>,
     #[serde(default)]
     pub control_requests: Vec<(u64, u64)>,
-    /// Optional unmeasured delay for the XP4 0xfff4f01c request word.
+    /// Optional unmeasured delay for the single-word XP4 request acknowledgment.
     #[serde(default)]
-    pub request_fff4f01c_ticks: Option<u64>,
+    pub request_acknowledgment_ticks: Option<u64>,
     /// Explicit, unmeasured functional hypotheses; absent keeps strict refusal.
     #[serde(default)]
     pub xp4_functional_system_control: Option<fujimod_emulator_xp4_system::system_control::Config>,

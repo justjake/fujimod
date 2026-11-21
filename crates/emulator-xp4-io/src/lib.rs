@@ -6,7 +6,7 @@ pub mod face_detector;
 pub mod filter_engine;
 pub mod interval_timers;
 pub mod power_serial;
-pub mod request_fff4f01c;
+pub mod request_acknowledgment;
 pub mod requests;
 pub mod rtc;
 pub mod register_bank;
