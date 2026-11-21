@@ -1,0 +1,126 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xs20-330-restart",
+  "firmware_id": "xs20-330",
+  "product": "X-S20",
+  "internal_version": "1.68",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_off_sender",
+      "address": 46841224,
+      "size": 248,
+      "sha256": "fe1cbef2e12e9e95727b3f5a5ddb9db854edbd03beda750beed0248b2c9edf28"
+    },
+    {
+      "name": "power_off",
+      "address": 48207820,
+      "size": 332,
+      "sha256": "19bce1e9f7949d9b0b3ab1013a8eadebb84eae077587dad1545acde753ea6cb1"
+    },
+    {
+      "name": "power_cut",
+      "address": 20457004,
+      "size": 472,
+      "sha256": "c9023a9aec80820eb53331568db645e444830a82f3ad5f00b4440fe5b88a155a"
+    },
+    {
+      "name": "console_handler",
+      "address": 20170332,
+      "size": 300,
+      "sha256": "733ec0dbe3f3c95bac50f097f17d21cb3ac8f160fcb2e1043ecf0851a7e712e9"
+    },
+    {
+      "name": "console_callback",
+      "address": 46388384,
+      "size": 768,
+      "sha256": "2e937bddfe1ffbe9d3e5466e10b8a19875ed076e032806d8d724d74ca46026c8"
+    },
+    {
+      "name": "data_cache_clean",
+      "address": 21794012,
+      "size": 264,
+      "sha256": "36ca8ad71f23cd87f75296c4eabe0fa9c7f10c49362ae04aeda63fba0051ed2a"
+    },
+    {
+      "name": "instruction_cache_sync",
+      "address": 374904,
+      "size": 380,
+      "sha256": "da344f492ec3bd2a4a75c92be95d1a1e36b0977a233f63c12163047201bfedcf"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "console_callback",
+      "slot": 33833840,
+      "stock_callback": 46388384,
+      "stub_area": 2162624,
+      "stub_bytes": 64,
+      "translation": [
+        {
+          "address": 672560,
+          "size": 8,
+          "value": 778240
+        },
+        {
+          "address": 778240,
+          "size": 8,
+          "value": 790531
+        },
+        {
+          "address": 790536,
+          "size": 8,
+          "value": 2098697
+        }
+      ],
+      "ready_words": [
+        {
+          "address": 29727264,
+          "size": 4,
+          "value": 1
+        },
+        {
+          "address": 29727268,
+          "size": 4,
+          "value": 15
+        },
+        {
+          "address": 36037648,
+          "size": 4,
+          "value": 655361
+        }
+      ],
+      "data_cache_clean": 21794232,
+      "instruction_cache_sync": 374928
+    },
+    "sender": 46841224,
+    "request": 135,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "ui": {
+      "mode_address": 39997144,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": null,
+      "menu_active_address": null
+    },
+    "power_off": {
+      "entry": 48207820,
+      "halt": 48208148,
+      "power_cut": 20457004,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          37,
+          38
+        ],
+        "enable": 18,
+        "enable_value": 257
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": 5
+    }
+  }
+}
