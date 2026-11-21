@@ -213,6 +213,9 @@ impl NandController {
                     .collect();
                 self.state.complete = true;
             }
+            // Set Feature: the value arrives through the FIFO and `stop` stores it, so the
+            // transaction stays active and incomplete until then.
+            0x1f => {}
             0x13 => {
                 self.state.cached_row = Some(self.row());
                 self.state.complete = true;
@@ -316,6 +319,10 @@ impl Device for NandController {
             return 0;
         }
         match o {
+            // The setup stage sends a byte with a read-modify-write of this register
+            // (ldr/bfxil/str at 0xff815944..0xff81594c), so a read during a transmit
+            // transaction is accepted and carries nothing.
+            0x80 if self.state.active && self.cmd() == 0x1f => 0,
             0x80 => match self.rx() {
                 Ok(b) => b as u64,
                 Err(e) => {
@@ -352,7 +359,18 @@ impl Device for NandController {
                     || (self.state.active
                         && matches!(self.cmd(), 0x9f | 0x0f | 0xa5 | 0x0b));
                 let complete = self.state.complete;
-                4 | if receive { 2 } else { 0 } | complete as u64
+                // Bit 2 requests transmit data. The setup stage's FIFO service routine
+                // (0xff8146a0) sends when bit 2 is set and bytes remain, so it must stay clear
+                // during a read transaction such as Get Feature; the loader's driver only waits
+                // for bit 0 (FUN_014a25b8).
+                let transmit = self.state.active && self.cmd() == 0x1f;
+                // Bit 8 accompanies completion: the setup stage's service routine finishes a
+                // transaction only when this bit is set and the last chunk was moved
+                // (0xff81470c..0xff81479c).
+                (if transmit { 4u64 } else { 0 })
+                    | (if receive { 2 } else { 0 })
+                    | complete as u64
+                    | (complete as u64) << 8
             }
             0xd0 => 0,
             _ => self.state.regs[o as usize / 4] as u64,
@@ -582,6 +600,31 @@ mod tests {
         assert_eq!(read(&mut c) & 0x80, 0);
         c.state.regs[0xfc / 4] = 1;
         assert_eq!(read(&mut c) & 0x80, 0x80);
+    }
+
+    #[test]
+    fn status_requests_transmit_only_for_set_feature_and_flags_completion() {
+        let mut c = controller(vec![0xff; PAGE + 2]);
+        let mut host = RecordingHost::default();
+        c.state.regs[0] = 1;
+        let mut status = |c: &mut NandController| {
+            c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0f0, 4) as u32
+        };
+        // Get Feature: receive data and completion (bits 1, 0 and 8), no transmit request.
+        c.state.regs[0x40 / 4] = 0x0f;
+        c.state.regs[0xa0 / 4] = 0x8000;
+        c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        assert_eq!(status(&mut c), 0x103);
+        // The driver reads the feature byte, then ends the transaction.
+        c.read(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a080, 4);
+        // Set Feature: transmit requested until the byte arrives, not complete.
+        c.state.regs[0x40 / 4] = 0x1f;
+        c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
+        assert_eq!(status(&mut c), 0x4);
+        // The send routine's read-modify-write read of the FIFO register carries nothing.
+        assert_eq!(c.read(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a080, 4), 0);
+        c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a080, 4, 0x10);
+        assert_eq!(status(&mut c), 0x101, "complete after the byte, no transmit request");
     }
 
     #[test]
