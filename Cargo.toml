@@ -313,7 +313,7 @@ strip = "none"
 opt-level = 3
 
 [patch.crates-io]
-# itsties/openh264-rs emscripten-target (justjake/openh264-rs#1): build.rs reads
+# justjake/openh264-rs#1 (itsties emscripten-target, d88b8d96): build.rs reads
 # CARGO_CFG_TARGET_FAMILY as a list ("unix,wasm" on wasm32-unknown-emscripten) and
 # builds the emscripten OS as Linux. Replace with the merged or released crate.
-openh264-sys2 = { git = "https://github.com/itsties/openh264-rs", rev = "d88b8d9612d5f445691378535b672180280b2fda" }
+openh264-sys2 = { git = "https://github.com/justjake/openh264-rs", rev = "d88b8d9612d5f445691378535b672180280b2fda" }

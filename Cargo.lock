@@ -4753,7 +4753,7 @@ dependencies = [
 [[package]]
 name = "openh264-sys2"
 version = "0.9.10"
-source = "git+https://github.com/itsties/openh264-rs?rev=d88b8d9612d5f445691378535b672180280b2fda#d88b8d9612d5f445691378535b672180280b2fda"
+source = "git+https://github.com/justjake/openh264-rs?rev=d88b8d9612d5f445691378535b672180280b2fda#d88b8d9612d5f445691378535b672180280b2fda"
 dependencies = [
  "cc",
  "nasm-rs",
