@@ -1,0 +1,126 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xm5-130-restart",
+  "firmware_id": "xm5-130",
+  "product": "X-M5",
+  "internal_version": "2.06",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_off_sender",
+      "address": 51809416,
+      "size": 248,
+      "sha256": "04594fee66f7a9728d5d8b61543150daefb930772624c5b3681e1b18e47a857c"
+    },
+    {
+      "name": "power_off",
+      "address": 53250792,
+      "size": 328,
+      "sha256": "345361ddf81fbe85eb3e7879d767abb6922bfba6c7b0afa58a773b4b9b9cf011"
+    },
+    {
+      "name": "power_cut",
+      "address": 21554504,
+      "size": 480,
+      "sha256": "b6e3ad33c0160770ca6701af1dcd61def60a526d978a21a5c41525df8716cad5"
+    },
+    {
+      "name": "console_handler",
+      "address": 21246796,
+      "size": 300,
+      "sha256": "b5d52011b6838d4e748de4a2d5a86045c19f44a7e53a300da60409b84444e2c5"
+    },
+    {
+      "name": "console_callback",
+      "address": 51340872,
+      "size": 768,
+      "sha256": "b951b8408e71e63352f9dbfd0345b4a54e249d8c711bd4cd36d845dcf83e9025"
+    },
+    {
+      "name": "data_cache_clean",
+      "address": 22919632,
+      "size": 264,
+      "sha256": "1c9a9173d686d4282cf48c647c35e9bb53f212a8303d9aa993acdfb76b6ae793"
+    },
+    {
+      "name": "instruction_cache_sync",
+      "address": 641144,
+      "size": 380,
+      "sha256": "da344f492ec3bd2a4a75c92be95d1a1e36b0977a233f63c12163047201bfedcf"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "console_callback",
+      "slot": 35995528,
+      "stock_callback": 51340872,
+      "stub_area": 2162624,
+      "stub_bytes": 64,
+      "translation": [
+        {
+          "address": 978584,
+          "size": 8,
+          "value": 1081344
+        },
+        {
+          "address": 1081344,
+          "size": 8,
+          "value": 1093635
+        },
+        {
+          "address": 1093640,
+          "size": 8,
+          "value": 2098697
+        }
+      ],
+      "ready_words": [
+        {
+          "address": 31690568,
+          "size": 4,
+          "value": 1
+        },
+        {
+          "address": 31690572,
+          "size": 4,
+          "value": 15
+        },
+        {
+          "address": 38581240,
+          "size": 4,
+          "value": 655361
+        }
+      ],
+      "data_cache_clean": 22919852,
+      "instruction_cache_sync": 641168
+    },
+    "sender": 51809416,
+    "request": 135,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "ui": {
+      "mode_address": 44328928,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": null,
+      "menu_active_address": null
+    },
+    "power_off": {
+      "entry": 53250792,
+      "halt": 53251116,
+      "power_cut": 21554504,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          37
+        ],
+        "enable": 18,
+        "enable_value": 257
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": 5,
+      "fixed_interval": null
+    }
+  }
+}
