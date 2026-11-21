@@ -99,14 +99,24 @@
 }
 .progress-row .track {
   display: flex;
+  gap: 2px;
   height: 4px;
   border-radius: 2px;
-  background: rgb(118 118 128 / 24%);
-  overflow: hidden;
   transition: opacity 120ms;
 }
+.progress-row .track:empty {
+  background: rgb(118 118 128 / 24%);
+}
+.progress-row .track-group {
+  flex: var(--outcomes) 1 0px;
+  min-width: 0;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--c) 24%, transparent);
+}
 .progress-row .fill {
-  flex: 0 0 var(--p);
+  width: var(--p);
+  height: 100%;
   background: var(--c);
 }
 .progress-row .bar:has(.open) .track {

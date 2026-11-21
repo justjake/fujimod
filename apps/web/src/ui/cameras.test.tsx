@@ -147,7 +147,7 @@ function table(
   return host;
 }
 
-test('the bar fills once per passed milestone, grouped by graph track', () => {
+test('each graph track reserves space for all of its tagged milestones', () => {
   const document = progress('X-E2S', [
     'research',
     'rec',
@@ -173,11 +173,17 @@ test('the bar fills once per passed milestone, grouped by graph track', () => {
   const bar = host.querySelector('[role="progressbar"]');
   expect(bar?.getAttribute('aria-valuenow')).toBe('5');
   expect(bar?.getAttribute('aria-valuemax')).toBe('16');
+  const segments = [...host.querySelectorAll<HTMLElement>('.track-group')];
+  expect(segments.map((segment) => segment.style.getPropertyValue('--outcomes'))).toEqual([
+    '2',
+    '6',
+    '4',
+    '2',
+    '2',
+  ]);
   expect(
-    [...host.querySelectorAll<HTMLElement>('.fill')].map((fill) =>
-      fill.style.getPropertyValue('--p'),
-    ),
-  ).toEqual(['6.25%', '6.25%', '6.25%', '12.5%']);
+    segments.map((segment) => Number.parseFloat(segment.style.getPropertyValue('--p'))),
+  ).toEqual([50, (1 / 6) * 100, 25, 100, 0]);
 });
 
 test('a released badge leaves the engineering count as recorded', () => {
