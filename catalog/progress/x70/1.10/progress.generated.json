@@ -1264,6 +1264,26 @@
           "total": 1
         },
         {
+          "id": "mod-build/live-view-custom-settings-editor",
+          "label": "Live view custom settings editor",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "detail": "Planned",
+          "milestone": true
+        },
+        {
+          "id": "mod-build/focal-shooting-osd",
+          "label": "Focal UI shooting display",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "detail": "Planned",
+          "milestone": true
+        },
+        {
           "id": "mod-build/af",
           "label": "af links",
           "stage": "mod-build",
