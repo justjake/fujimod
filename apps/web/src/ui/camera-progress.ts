@@ -56,7 +56,7 @@ export interface FirmwareProgress {
 /** A maintainer's decision to publish a firmware's progress differently from its records. */
 export interface ProgressOverride {
   firmware_id: string;
-  /** Show every phase and step as complete. */
+  /** Publish phase completion independently of measured mod coverage. */
   complete: boolean;
 }
 
@@ -64,9 +64,15 @@ export interface Step {
   label: string;
   /** Completed share of this step, 0–1. */
   fraction: number;
+  result: StepProgress['result'];
   /** "35 of 35", "9 of 11", "X70 dump". */
   detail?: string;
 }
+interface ModCoverage {
+  build: StepProgress;
+  walkthroughs: { passed: number; total: number };
+}
+
 export interface Phase {
   id: 'research' | 'emulator' | 'camera' | 'mods' | 'sd-card';
   label: string;
@@ -79,6 +85,7 @@ export interface Phase {
   steps: Step[];
   /** Draw each step as its own cell of the segment. */
   cells: boolean;
+  coverage?: ModCoverage;
 }
 
 function phase(
@@ -105,15 +112,22 @@ function phase(
 
 const MOD_BUILD_STEP = 'build/mods';
 
-export function modBuild(progress: FirmwareProgress): StepProgress | undefined {
-  return progress.tracks
-    .find((track) => track.id === 'fujimod')
-    ?.steps.find((step) => step.id === MOD_BUILD_STEP);
+function modCoverage(track: TrackProgress): ModCoverage | undefined {
+  const build = track.steps.find((step) => step.id === MOD_BUILD_STEP);
+  if (!build) return undefined;
+  const walkthroughs = track.steps.filter((step) => step.stage === 'walkthroughs');
+  return {
+    build,
+    walkthroughs: {
+      passed: walkthroughs.filter((step) => step.result === 'pass').length,
+      total: walkthroughs.length,
+    },
+  };
 }
 
 export function phases(progress: FirmwareProgress): Phase[] {
-  const recorded = progress.tracks.map((track) =>
-    phase(
+  const recorded = progress.tracks.map((track) => {
+    const summary = phase(
       track.phase,
       track.weight,
       track.title,
@@ -122,15 +136,19 @@ export function phases(progress: FirmwareProgress): Phase[] {
         .map((step) => ({
           label: step.label,
           fraction: step.total ? step.passed / step.total : 0,
+          result: step.result,
           detail: step.detail,
         })),
       track.cells,
-    ),
-  );
+    );
+    return { ...summary, coverage: modCoverage(track) };
+  });
   if (!progress.override?.complete) return recorded;
   return recorded.map((phase) => {
-    const steps = phase.steps.map((step) =>
-      step.fraction === 1 ? step : { label: step.label, fraction: 1 },
+    // Build and walkthrough coverage always show measured results.
+    if (phase.coverage) return phase;
+    const steps = phase.steps.map<Step>((step) =>
+      step.fraction === 1 ? step : { label: step.label, fraction: 1, result: 'pass' },
     );
     const mods =
       progress.tracks

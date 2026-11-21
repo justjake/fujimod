@@ -1,5 +1,12 @@
-import { For, Show, createEffect, createSignal, onCleanup, onSettled } from 'solid-js';
-import { modBuild, phases, started, type FirmwareProgress, type Phase } from './camera-progress';
+import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
+import {
+  phases,
+  started,
+  type FirmwareProgress,
+  type Phase,
+  type Step,
+  type StepProgress,
+} from './camera-progress';
 import './cameras.css';
 export interface Generation {
   name: string;
@@ -16,6 +23,23 @@ export interface Owner {
 const CONTRIBUTE = 'dev-tools/';
 /** Letters whose names start with a vowel sound take "an": an X-E2, an F… */
 const AN = /^[AEFHILMNORSX]/;
+const EVIDENCE_LABELS: Partial<Record<Step['result'], string>> = {
+  fail: 'Failed',
+  unavailable: 'Unavailable',
+  stale: 'Recheck due',
+  'not-run': 'No record',
+};
+
+function buildLabel(build: StepProgress) {
+  return build.result === 'stale'
+    ? `Last build ${build.passed}/${build.total} · recheck due`
+    : `${build.label} ${build.passed}/${build.total}`;
+}
+
+function walkthroughLabel({ passed, total }: { passed: number; total: number }) {
+  return total ? `Walkthroughs ${passed}/${total}` : 'No walkthroughs planned';
+}
+
 function help(model: string, phase: Phase) {
   if (phase.id !== 'camera' || phase.fraction === 1) return undefined;
   if (phase.fraction) return `Help test on your ${model}`;
@@ -47,6 +71,12 @@ function createTips(): Tips {
 }
 function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Tips }) {
   const key = () => `${props.model} ${props.phase.id}`;
+  const label = () => {
+    const { phase } = props;
+    return phase.coverage
+      ? `${phase.label}: ${buildLabel(phase.coverage.build)}, ${walkthroughLabel(phase.coverage.walkthroughs)}`
+      : `${phase.label}: ${phase.value}`;
+  };
   // A mouse opens the tip by hovering; a tap toggles it. Focus from a tap is not a keyboard visit.
   let pressed = false,
     wasOpen = false;
@@ -70,14 +100,15 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
     () => props.tips.open() === key(),
     (open) => {
       if (!open) return;
-      requestAnimationFrame(place);
+      const frame = requestAnimationFrame(place);
       const follow = () => place();
       window.addEventListener('resize', follow);
       window.addEventListener('scroll', follow, { passive: true });
-      onCleanup(() => {
+      return () => {
+        cancelAnimationFrame(frame);
         window.removeEventListener('resize', follow);
         window.removeEventListener('scroll', follow);
-      });
+      };
     },
   );
   return (
@@ -113,21 +144,53 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
         '--p': `${props.phase.fraction * 100}%`,
         '--c': `var(--phase-${props.phase.id})`,
       }}
-      aria-label={`${props.phase.label}: ${props.phase.value}`}
+      aria-label={label()}
     >
       <Show
-        when={props.phase.cells}
+        when={props.phase.coverage}
+        keyed
         fallback={
-          <div class="track">
-            <div class="fill" />
-          </div>
+          <Show
+            when={props.phase.cells}
+            fallback={
+              <div class="track">
+                <div class="fill" />
+              </div>
+            }
+          >
+            <div class="track cells">
+              <For each={props.phase.steps}>
+                {(step) => <div class="cell" style={{ '--p': `${step.fraction * 100}%` }} />}
+              </For>
+            </div>
+          </Show>
         }
       >
-        <div class="track cells">
-          <For each={props.phase.steps}>
-            {(step) => <div class="cell" style={{ '--p': `${step.fraction * 100}%` }} />}
-          </For>
-        </div>
+        {({ build, walkthroughs }) => (
+          <div class="coverage-tracks" aria-hidden="true">
+            <div
+              class="track build-track"
+              style={{
+                '--p':
+                  build.result !== 'stale' && build.total
+                    ? `${100 * (build.passed / build.total)}%`
+                    : '0%',
+              }}
+            >
+              <div class="fill" />
+            </div>
+            <div
+              class="track walkthrough-track"
+              style={{
+                '--p': walkthroughs.total
+                  ? `${100 * (walkthroughs.passed / walkthroughs.total)}%`
+                  : '0%',
+              }}
+            >
+              <div class="fill" />
+            </div>
+          </div>
+        )}
       </Show>
       <div
         class="tip"
@@ -137,11 +200,25 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
       >
         <div class="tip-scroll">
           <div class="tip-label">{props.phase.label}</div>
-          <div class="tip-value">
-            {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
-              ? 'Needs an owner'
-              : props.phase.value}
-          </div>
+          <Show
+            when={props.phase.coverage}
+            keyed
+            fallback={
+              <div class="tip-value">
+                {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
+                  ? 'Needs an owner'
+                  : props.phase.value}
+              </div>
+            }
+          >
+            {({ build, walkthroughs }) => (
+              <div class="tip-value">
+                {buildLabel(build)}
+                <br />
+                {walkthroughLabel(walkthroughs)}
+              </div>
+            )}
+          </Show>
           <ul>
             <For each={props.phase.steps}>
               {(step) => (
@@ -152,7 +229,7 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
                   }}
                 >
                   {step.label}
-                  <Show when={step.detail}>
+                  <Show when={step.detail ?? EVIDENCE_LABELS[step.result]}>
                     {(detail) => <span class="step-detail">{detail()}</span>}
                   </Show>
                 </li>
@@ -185,17 +262,20 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
   );
 }
 function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[]; tips: Tips }) {
-  const list = () => phases(props.progress);
+  const list = createMemo(() => phases(props.progress));
+  const coverage = () => list().find((phase) => phase.id === 'mods')?.coverage;
   return (
     <div class={{ 'progress-row': true, owned: props.owners.length > 0 }}>
       <div class="progress-heading">
         <span class="name">{props.progress.model}</span>
         <span class="version">{props.progress.version}</span>
-        <Show when={modBuild(props.progress)} keyed>
-          {(build) => (
-            <span class="mod-build">
-              {build.result === 'stale' ? 'Last build' : build.label} {build.passed}/{build.total}
-              {build.result === 'stale' && ' · recheck due'}
+        <Show when={coverage()} keyed>
+          {({ build, walkthroughs }) => (
+            <span class="coverage-summary">
+              <span class={{ 'mod-build': true, stale: build.result === 'stale' }}>
+                {buildLabel(build)}
+              </span>
+              <span>{walkthroughLabel(walkthroughs)}</span>
             </span>
           )}
         </Show>

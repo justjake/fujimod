@@ -78,13 +78,19 @@
   font-size: 11px;
   color: var(--faint);
 }
-.progress-row .mod-build {
+.progress-row .coverage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
   font-size: 11px;
   color: var(--dim);
   margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+.progress-row .mod-build:not(.stale) {
+  color: #53cd9a;
 }
 
-/* The same 4px track as the emulator's loading bar. */
 .progress-row .bar {
   display: flex;
   gap: 2px;
@@ -99,26 +105,37 @@
 .progress-row.owned .bar::after {
   content: '';
   position: absolute;
-  inset: 4px -3px auto;
-  height: 10px;
+  inset: 1px -3px 2px;
   border: 1px solid var(--owned-outline);
-  border-radius: 5px;
+  border-radius: 7px;
   box-sizing: border-box;
   pointer-events: none;
 }
 .progress-row .phase {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   flex: var(--w) 1 0;
-  padding: 7px 0 9px; /* hit target taller than the mark */
+  min-height: 11px;
+  padding: 4px 0 5px; /* hit target taller than the mark */
   outline: none;
 }
 .progress-row .track {
   position: relative;
-  height: 4px;
-  border-radius: 2px;
-  background: rgb(118 118 128 / 24%);
+  height: 6px;
+  border-radius: 3px;
+  background: rgb(118 118 128 / 34%);
   overflow: hidden;
   transition: opacity 120ms;
+}
+.progress-row .coverage-tracks {
+  display: grid;
+  gap: 2px;
+}
+.progress-row .walkthrough-track {
+  height: 3px;
+  border-radius: 2px;
 }
 /* A segment of separately graded features: one cell each, filled by its share. */
 .progress-row .track.cells {
@@ -129,7 +146,7 @@
 .progress-row .cell {
   position: relative;
   flex: 1 1 0;
-  background: rgb(118 118 128 / 24%);
+  background: rgb(118 118 128 / 34%);
   overflow: hidden;
 }
 .progress-row .cell::after {
@@ -159,7 +176,7 @@
 .progress-row .phase.open .fill {
   filter: brightness(1.2);
 }
-.progress-row .phase:focus-visible .track {
+.progress-row .phase:focus-visible > :is(.track, .coverage-tracks) {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
