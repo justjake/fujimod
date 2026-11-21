@@ -139,6 +139,7 @@
   line-height: 1.45;
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transform: translateY(4px);
   transition:
     opacity 140ms,
@@ -171,6 +172,7 @@
 .progress-row .progress-bar.open .tip {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
   transform: none;
   transition:
     opacity 140ms,

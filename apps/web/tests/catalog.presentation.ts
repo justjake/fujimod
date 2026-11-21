@@ -51,6 +51,8 @@ try {
       assert.equal(await details.locator('li:not(.todo)').count(), group.passed, progress.model);
     }
     await page.keyboard.press('Escape');
+    await tip.waitFor({ state: 'hidden' });
+    await page.mouse.move(1, 1);
   }
   // Taps on a phone: each tap moves the one open tip, and a tap elsewhere closes it.
   const phone = await browser.newPage({
