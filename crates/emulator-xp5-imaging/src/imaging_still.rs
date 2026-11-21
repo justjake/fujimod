@@ -562,6 +562,93 @@ impl ReszJob {
     }
 }
 
+impl ReszJob {
+    /// Whether this job reads a two-plane 4:2:0 picture and writes a packed one: source class
+    /// 2 (+0x10 bits 1..0) with a second source plane, and a destination that is not two-plane.
+    pub fn two_plane_source(&self) -> bool {
+        let word = |o: u64| self.words.get(&o).copied().unwrap_or(0);
+        let src = self.layout.source;
+        word(0x10) & 3 == 2 && (word(src + 0xc) != 0 || word(src + 8) & 7 != 0) && !self.two_plane()
+    }
+
+    /// Scale a two-plane 8-bit 4:2:0 source (Y plane and interleaved Cb, Cr plane at one pitch)
+    /// to a packed 4:2:2 destination, nearest neighbour: output pixel pair (2p, 2p + 1) of line
+    /// y takes the luma of its two source pixels and the Cb, Cr pair of the chroma site of
+    /// source pixel 2p on chroma line (source line) / 2.
+    pub fn scale_from_two_plane(&self, cx: &mut Cx<'_>) -> Result<String, String> {
+        let word = |o: u64| self.words.get(&o).copied().unwrap_or(0);
+        let address = |high: u64| u64::from(word(high + 4)) | (u64::from(word(high) & 7) << 32);
+        let size = |w: u32| ((w & 0xffff) as usize + 1, (w >> 16) as usize + 1);
+        let (src, dst) = (self.layout.source, self.layout.output);
+        let name = self.layout.block;
+        let (luma, chroma, pitch) = (address(src), address(src + 8), word(src + 0x10) as usize);
+        let (width, lines) = size(word(0x14));
+        let shift = (((word(0x24) >> 16) & 3) as usize, ((word(0x28) >> 16) & 3) as usize);
+        let decimated = (width.div_ceil(1 << shift.0), lines.div_ceil(1 << shift.1));
+        let origin = ((word(0x18) & 0xffff) as usize, (word(0x18) >> 16) as usize);
+        let crop = match word(0x1c) {
+            0 => (
+                decimated.0 - origin.0.min(decimated.0),
+                decimated.1 - origin.1.min(decimated.1),
+            ),
+            w => size(w),
+        };
+        let out = size(word(0x20));
+        let (output, out_pitch) = (address(dst), word(dst + 0x10) as usize);
+        let geometry = format!(
+            "{name} {:#x}: two-plane 4:2:0 source {luma:#x} / {chroma:#x} pitch {pitch:#x} size \
+             {width}x{lines}, crop {crop:?} at {origin:?}{}, packed 4:2:2 output {out:?} at {output:#x} \
+             pitch {out_pitch:#x} (+0x10 {:#x}){}",
+            self.base,
+            if shift == (0, 0) {
+                String::new()
+            } else {
+                format!(" after decimation by ({}, {})", 1 << shift.0, 1 << shift.1)
+            },
+            word(0x10),
+            // As for the packed jobs: a second destination plane next to a packed destination
+            // is named and not written.
+            match address(dst + 8) {
+                0 => String::new(),
+                second => format!("; second destination plane {second:#x} not modelled"),
+            }
+        );
+        let steps = [word(0x24), word(0x28)];
+        let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
+        if steps.iter().any(|w| w >> 18 != 0 || (w >> 16) & 3 == 3)
+            || luma == 0
+            || chroma == 0
+            || output == 0
+            || crop.0 == 0
+            || crop.1 == 0
+            || origin.0 + crop.0 > decimated.0
+            || origin.1 + crop.1 > decimated.1
+            || out.0 % 2 != 0
+            || pitch < used
+            || out_pitch < 2 * out.0
+        {
+            return Err(format!("{geometry} is outside the modelled layout"));
+        }
+        let luma = cx.ram_bytes(luma, pitch * (lines - 1) + used)?;
+        let chroma = cx.ram_bytes(chroma, pitch * (lines.div_ceil(2) - 1) + used)?;
+        let column = |x: usize| ((origin.0 + x * crop.0 / out.0) << shift.0).min(width - 1);
+        let row = |y: usize| ((origin.1 + y * crop.1 / out.1) << shift.1).min(lines - 1);
+        let mut line = vec![0u8; 2 * out.0];
+        for y in 0..out.1 {
+            let (at, c_at) = (row(y) * pitch, row(y) / 2 * pitch);
+            for pair in 0..out.0 / 2 {
+                let x = column(2 * pair);
+                line[4 * pair] = luma[at + x];
+                line[4 * pair + 1] = luma[at + column(2 * pair + 1)];
+                line[4 * pair + 2] = chroma[c_at + (x & !1)];
+                line[4 * pair + 3] = chroma[c_at + (x & !1) + 1];
+            }
+            cx.ram_write(output + (y * out_pitch) as u64, &line)?;
+        }
+        Ok(geometry)
+    }
+}
+
 fn pixels_lines(word: u32) -> (usize, usize) {
     ((word & 0xffff) as usize, (word >> 16) as usize)
 }
@@ -975,6 +1062,11 @@ impl Resz {
     /// A start: scale now, or, with an inline layout and source address 0 while a RIFP run is
     /// in progress, when that run ends.
     fn start(&self, cx: &mut Cx<'_>, job: ReszJob, rifp: &YcOutput) -> Result<(), String> {
+        if job.two_plane_source() {
+            let line = job.scale_from_two_plane(cx)?;
+            cx.log(&line);
+            return Ok(());
+        }
         if !self.layout.inline {
             return job.scale(cx, None);
         }
@@ -1795,6 +1887,85 @@ mod tests {
             rzl2.write(&mut cx, base + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_some());
+    }
+
+    /// A two-plane 4:2:0 source (source class 2 with a second source plane; the decoded movie
+    /// picture in playback and the movie thumbnail source) is written as packed 4:2:2: each
+    /// pixel pair takes its two luma samples and the Cb, Cr pair of its chroma site. Here an
+    /// 8x4 picture is halved to 4x2 by RZL2 (crop and output 4x2 after decimation by 2).
+    #[test]
+    fn a_two_plane_source_scales_to_a_packed_destination() {
+        let base = 0xff984000;
+        let stub = || {
+            CompletionStub::new(
+                base,
+                0x1000,
+                toml::from_str("starts = [{ offset = 0x04, mask = 0x1 }]\ndelay_us = 200").unwrap(),
+                1000,
+            )
+            .unwrap()
+        };
+        let mut rzl2 = Resz::with_layout(&RZL2, base, stub(), Some(YcOutput::default()));
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram: vec![0xee; 0x2000],
+            ..Default::default()
+        };
+        // Y at 0x000 (pitch 16): 10 * line + x. C at 0x100: Cb = 100 + 10 * line + site,
+        // Cr = 200 + 10 * line + site.
+        for y in 0..4 {
+            for x in 0..8 {
+                host.ram[y * 16 + x] = (10 * y + x) as u8;
+            }
+        }
+        for y in 0..2 {
+            for site in 0..4 {
+                host.ram[0x100 + y * 16 + 2 * site] = (100 + 10 * y + site) as u8;
+                host.ram[0x100 + y * 16 + 2 * site + 1] = (200 + 10 * y + site) as u8;
+            }
+        }
+        let words = [
+            (0x10, 0x102),
+            (0x14, 3 << 16 | 7),
+            (0x1c, 1 << 16 | 3),
+            (0x20, 1 << 16 | 3),
+            (0x24, 1 << 16 | 0x1000),
+            (0x28, 1 << 16 | 0x1000),
+            (0xd0, RAM as u32),
+            (0xd8, RAM as u32 + 0x100),
+            (0xdc, 16),
+            (0xe4, RAM as u32 + 0x1000),
+            (0xf0, 16),
+            (0x04, 1),
+        ];
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in words {
+            rzl2.write(&mut cx, base + o, 4, u64::from(v));
+        }
+        assert!(cx.refusal().is_none());
+        // Output line 0 reads source line 0, pixels 0, 2, 4, 6; line 1 reads source line 2.
+        assert_eq!(&host.ram[0x1000..0x1009], [0, 2, 100, 200, 4, 6, 102, 202, 0xee]);
+        assert_eq!(&host.ram[0x1010..0x1018], [20, 22, 110, 210, 24, 26, 112, 212]);
+        // Without the second source plane the job is the packed one, as before.
+        let mut packed = Resz::with_layout(&RZL2, base, stub(), Some(YcOutput::default()));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in words {
+            if o != 0xd8 {
+                packed.write(&mut cx, base + o, 4, u64::from(v));
+            }
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(&host.ram[0x1000..0x1004], [0, 4, 2, 3]);
+        // A two-plane destination next to the two-plane source is not this job.
+        let mut both = Resz::with_layout(&RZL2, base, stub(), Some(YcOutput::default()));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (o, v) in words {
+            if o != 0x04 {
+                both.write(&mut cx, base + o, 4, u64::from(if o == 0x10 { 0x122 } else { v }));
+            }
+        }
+        both.write(&mut cx, base + 0xec, 4, RAM + 0x1800);
+        assert!(both.job().two_plane() && !both.job().two_plane_source());
     }
 
     /// The advanced-filter scaler: the X-T5 4.31 ADV live-view start shape (source size, crop
