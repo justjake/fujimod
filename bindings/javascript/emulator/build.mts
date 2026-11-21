@@ -262,6 +262,10 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
   if (selected.rustSimd128) rustFlags.push('-C', 'target-feature=+simd128');
   env.CARGO_ENCODED_RUSTFLAGS = rustFlags.join('\x1f');
   delete env.RUSTFLAGS;
+  // C and C++ that build scripts compile with cc (the openh264 decoder) join
+  // the threaded module, so their objects need the same shared-memory flags.
+  env.CFLAGS_wasm32_unknown_emscripten = '-pthread';
+  env.CXXFLAGS_wasm32_unknown_emscripten = '-pthread';
 
   const simdFlags = selected.rustSimd128 || selected.cSimd128 ? ['-msimd128'] : [];
   const cFlags = [
@@ -337,6 +341,8 @@ export function buildPlan(selected: BuildOptions, source: NodeJS.ProcessEnv): Bu
     join(out, 'jit/host.js'),
     // emcc runs wasm-bindgen on the linked module and emits its declarations.
     '-sWASM_BINDGEN',
+    // openh264 is C++: link its standard library.
+    '-sDEFAULT_TO_CXX=1',
     '-Wno-experimental',
     '--emit-tsd',
     'camera.d.ts',

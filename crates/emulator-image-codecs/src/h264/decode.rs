@@ -313,7 +313,7 @@ pub fn packet_sequence(bytes: &[u8]) -> Result<Option<Sequence>, String> {
 pub struct Decoder {
     sequence: Option<Sequence>,
     allow_high: bool,
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     codec: openh264::decoder::Decoder,
 }
 
@@ -534,12 +534,12 @@ impl Decoder {
     }
 
     fn new_with_high(history: &[Arc<[u8]>], allow_high: bool) -> Result<Self, String> {
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         {
             let _ = (history, allow_high);
             Err("AVC decoding is unavailable on this target".into())
         }
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         {
             let mut decoder = Self {
                 sequence: None,
@@ -633,12 +633,12 @@ impl Decoder {
 
     fn decode_picture(&mut self, bytes: &[u8]) -> Result<Picture, String> {
         let sequence = self.sequence.ok_or("AVC picture has no bounded SPS")?;
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         {
             let _ = (bytes, sequence);
             Err("AVC decoding is unavailable on this target".into())
         }
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
         {
             use openh264::decoder::{DecodeOptions, Flush};
             let mut image = self
@@ -664,7 +664,7 @@ impl Decoder {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
 fn picture(
     sequence: Sequence,
     image: &impl openh264::formats::YUVSource,
