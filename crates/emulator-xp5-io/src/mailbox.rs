@@ -80,6 +80,14 @@ impl Device for Mailbox {
             (0x10, true) => 0x10,
             (0x14, true) => 0x20,
             (0x18, true) => 0x40,
+            // X-T5 4.31 playback entry (0x13f7dfc..0x13f7e08) waits for the companion link state 3,
+            // then writes 0x7f here before it clears +0x00. Meaning not decoded (0x7f covers every
+            // cause bit, so probably a clear or mask word): stored only, no cause raised.
+            (0x1c, false) => 0,
+            // The mask ROM's secondary-core park path stores one word per core here before it
+            // waits (0xfff02150: +0x04 = 0x1000580d, 0xfff0216c: +0x08 = 0x2000580d). Meaning not
+            // decoded; stored only, no cause raised.
+            (4 | 8, false) => 0,
             (0x20, _) => 0,
             _ if value == 0 => 0,
             _ => {
@@ -204,6 +212,19 @@ mod tests {
         m.write(&mut cx, 0xff90e100 + offset, 4, value);
         assert_eq!(cx.refusal(), None);
     }
+    #[test]
+    fn boot_rom_park_words_are_stored_without_a_cause() {
+        let mut m = device();
+        let mut h = TestHost::default();
+        write(&mut m, &mut h, 1, 4, 0x1000_580d);
+        write(&mut m, &mut h, 2, 8, 0x2000_580d);
+        assert!(h.core.is_empty() && h.irqs.is_empty());
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        assert_eq!(m.read(&mut cx, 0xff90e104, 4), 0x1000_580d);
+        assert_eq!(m.read(&mut cx, 0xff90e108, 4), 0x2000_580d);
+        assert_eq!(m.read(&mut cx, 0xff90e120, 4), 0);
+    }
+
     #[test]
     fn every_opaque_request_uses_the_same_register_and_level_contract() {
         for word in [0, 0x2a << 6, 0x2b << 6, 0x80 << 6, 0xa9 << 6, 0xffffffff] {

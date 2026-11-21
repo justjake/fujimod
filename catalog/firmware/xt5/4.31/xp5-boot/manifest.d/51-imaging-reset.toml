@@ -6,3 +6,7 @@
 base = 0xff950000
 size = 0x1000
 kind = "imaging-reset"
+[device.options]
+# Bring-up: the later block registers read back their last write (image-geometry setup
+# from +0x8 onward, reached on the way to the shooting screen).
+retain_words = true

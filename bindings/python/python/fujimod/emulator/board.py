@@ -241,6 +241,7 @@ class Board:
         camera: str | PathLike[str] | None = None,
         access_point: Mapping[str, object] | None = None,
         capability_reply: Sequence[int] | None = None,
+        camera_settings: Mapping[str, str] | None = None,
         engine: str | None = None,
         manifest: str | PathLike[str] | None = None,
         application_plan: str | PathLike[str] | None = None,
@@ -284,6 +285,11 @@ class Board:
         ``capability_reply`` is an explicit 20-byte MT5931 capability body,
         needed before stock Wi-Fi initialization accepts command 0x80. It is a
         declared fixture, not a recovered chip reply.
+
+        ``camera_settings`` names the settings of the user profile an XP5
+        loader start boots with, such as ``{"setup": "done", "language":
+        "en"}``. The profile is built from the update file and the firmware's
+        catalog settings layout; absence boots the flash as installed.
         """
         configuration_id = cls._identifier(configuration_id, "configuration_id")
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
@@ -332,6 +338,12 @@ class Board:
                 raise TypeError("clock_seconds_2000 must be a non-bool integer or None")
             if not 0 <= clock_seconds_2000 <= 0xFFFFFFFF:
                 raise ValueError("clock_seconds_2000 must be in 0..=0xFFFFFFFF")
+        if camera_settings is not None and not isinstance(camera_settings, Mapping):
+            raise TypeError("camera_settings must map setting names to value names")
+        selected_settings = dict(camera_settings or {})
+        if any(type(key) is not str or type(value) is not str or not key or not value
+               for key, value in selected_settings.items()):
+            raise TypeError("camera_settings must map nonempty strings to nonempty strings")
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
             overlays=selected_overlays,
@@ -347,6 +359,7 @@ class Board:
             camera=camera,
             access_point=access_point_text,
             capability_reply=capability,
+            camera_settings=selected_settings,
             engine=engine,
             manifest=manifest,
             application_plan=application_plan,
@@ -697,6 +710,14 @@ class Session:
         if not isinstance(key, str) or not key:
             raise TypeError("XP5 key must have a name")
         self._native_board().xp5_key(at_ns, key, pressed)
+
+    def xp5_set_position(self, at_ns: int, dial: str, position: str) -> None:
+        """Queue a latched dial or switch position at an absolute guest nanosecond."""
+        if type(at_ns) is not int or not 0 <= at_ns < 1 << 64:
+            raise TypeError("XP5 position change needs an unsigned time")
+        if not isinstance(dial, str) or not dial or not isinstance(position, str) or not position:
+            raise TypeError("XP5 position change needs a dial name and a position name")
+        self._native_board().xp5_set_position(at_ns, dial, position)
 
     def set_adc_samples(self, node: str, samples: Sequence[int]) -> None:
         """Replace the ADC channels with unsigned 16-bit sample values."""

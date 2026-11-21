@@ -116,6 +116,7 @@ fn devices_and_resources(
     controls: Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
     run_directory: Option<&Path>,
     outputs: &crate::output::Outputs,
+    viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_image: Option<&fujimod_emulator_devices::parts::sd_card::Card>,
@@ -153,15 +154,22 @@ fn devices_and_resources(
         companion,
         storage: None,
         displays: BTreeMap::new(),
+        pwm: Default::default(),
     };
     if let Some(card) = card_image {
-        // A raw card image (`--sd-image`) replaces the formatted volume of the ROM-start slot.
+        // A raw card image (`--card-image`) replaces the formatted volume of slot 1, in the ROM
+        // start and in the loader start.
         let slot = resources
             .sd
             .get_mut(&0xff9b_0000)
-            .ok_or("ROM start needs the SD slot at 0xff9b0000")?;
+            .ok_or("a card image needs the SD slot at 0xff9b0000")?;
         slot.card = Some(card.clone());
     }
+    // With the viewer on, every display bank publishes into the primary display's directory,
+    // which is the one directory the viewer serves (latest-bank0.png and latest-bank1.png).
+    let viewer_directory = windows.iter()
+        .find(|window| window.kind == "display" && window.options.contains_key("viewer_port"))
+        .map(|window| window.base);
     for window in &mut windows {
         match window.kind.as_str() {
             "adc" => {
@@ -180,7 +188,11 @@ fn devices_and_resources(
                 let origin =
                     usize::try_from(number("dat_origin")?).map_err(|error| error.to_string())?;
                 let xor = u8::try_from(number("xor")?).map_err(|error| error.to_string())?;
-                let image = firmware.dat_payload(origin, xor)?;
+                let mut image = firmware.dat_payload(origin, xor)?;
+                // A host input: extents of the installed image that start erased.
+                if let Ok(spec) = std::env::var("XT5_FLASH_ERASED") {
+                    flash_storage::erase_installed(&mut image, &spec)?;
+                }
                 resources.storage = Some(flash_storage::Medium::Nor(Arc::new(Mutex::new(
                     flash_storage::Storage::new(image)?,
                 ))));
@@ -191,13 +203,14 @@ fn devices_and_resources(
                 let mut options = window.options.clone();
                 if let Some(directory) = run_directory {
                     options.entry("frame_dir").or_insert_with(|| {
-                        toml::Value::String(directory.join(format!("display-{:x}", window.base))
+                        let base = viewer_directory.unwrap_or(window.base);
+                        toml::Value::String(directory.join(format!("display-{base:x}"))
                             .to_string_lossy().into_owned())
                     });
                 } else {
                     options.remove("frame_dir");
                 }
-                let display = super::display_output::configure(outputs, window.base, &options, None)?;
+                let display = super::display_output::configure(outputs, window.base, &options, viewer_keys.clone())?;
                 resources.displays.insert(window.base, display);
                 window.options.clear();
             }
@@ -369,6 +382,39 @@ fn carve_out(
     kept
 }
 
+/// Whether the boot manifest declares exactly `base..base+bytes` as RAM.
+fn caller_ram_declares(ram: &[super::manifest::RamRegion], base: u64, bytes: u64) -> bool {
+    ram.iter().any(|region| region.base == base && region.size == bytes)
+}
+
+/// Set `registers` (hex address -> value) on a power-controller part, keeping every register it
+/// already holds at another address. Addresses compare by value: `"0x1f"` and `"1f"` are the same.
+fn merge_power_registers(part: &mut toml::Table, registers: &toml::Value) -> Result<(), String> {
+    let address = |key: &str| {
+        u8::from_str_radix(key.trim_start_matches("0x"), 16)
+            .map_err(|error| format!("power-controller register {key}: {error}"))
+    };
+    let added = registers.as_table().ok_or("power-controller registers must be a table")?;
+    let held = part
+        .entry("registers")
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+        .as_table_mut()
+        .ok_or("power-controller registers must be a table")?;
+    for (key, value) in added {
+        let wanted = address(key)?;
+        let same: Vec<String> = held
+            .keys()
+            .filter(|existing| address(existing).is_ok_and(|found| found == wanted))
+            .cloned()
+            .collect();
+        for existing in same {
+            held.remove(&existing);
+        }
+        held.insert(key.clone(), value.clone());
+    }
+    Ok(())
+}
+
 /// The boot state of a ROM start: nothing of the stock firmware is preloaded, because the ROM
 /// and stage one bring it up from the emulated internal flash; the boot-source straps are an
 /// explicit input; the card carries only the caller's stage-one files.
@@ -387,8 +433,16 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         options,
     });
     let mut fragment = rom_start::Fragment::bundled()?;
+    // The firmware's own stock-setup windows come first, so their stub registers answer before
+    // the shared fragment's registers of the same page.
+    let mut windows = rom.setup_windows.clone();
     let slot_base = match &rom.entry {
-        Entry::MaskRom(_) => Some(0xff9b_0000),
+        Entry::MaskRom(_) => {
+            if let Some(registers) = &rom.reset_registers {
+                fragment.power_controller_registers.clone_from(registers);
+            }
+            Some(0xff9b_0000)
+        }
         Entry::CardHandoff(handoff) => {
             fragment.power_controller_registers.clone_from(&handoff.power_controller_registers);
             Some(handoff.slot)
@@ -401,9 +455,37 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             None
         }
     };
+    windows.extend(fragment.device);
     state.ram.extend(fragment.ram);
-    state.device.extend(fragment.device);
-    for options in fragment.window_options {
+    for window in windows {
+        // A bring-up stub page the manifest already owns (the X-T5's memory-controller pages
+        // 0xfaf27000 and 0xfaf37000) keeps the manifest's registers and gains the ROM-start
+        // registers it does not list, instead of a second device on the same page.
+        let owned = state.device.iter_mut().find(|existing| {
+            existing.base == window.base
+                && existing.size == window.size
+                && existing.kind == "bringup-stub"
+                && window.kind == "bringup-stub"
+        });
+        let Some(existing) = owned else {
+            state.device.push(window);
+            continue;
+        };
+        let offset = |register: &toml::Value| register.get("offset").and_then(toml::Value::as_integer);
+        let added = window.options.get("registers").and_then(toml::Value::as_array).cloned().unwrap_or_default();
+        let registers = existing
+            .options
+            .entry("registers")
+            .or_insert_with(|| toml::Value::Array(Vec::new()))
+            .as_array_mut()
+            .ok_or("bring-up stub registers must be an array")?;
+        for register in added {
+            if !registers.iter().any(|listed| offset(listed) == offset(&register)) {
+                registers.push(register);
+            }
+        }
+    }
+    for options in fragment.window_options.into_iter().chain(rom.setup_window_options.iter().cloned()) {
         let window = state
             .device
             .iter_mut()
@@ -428,7 +510,9 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             for endpoint in endpoints {
                 let part = endpoint.get_mut("part").and_then(toml::Value::as_table_mut);
                 if let Some(part) = part.filter(|part| part.get("kind").and_then(toml::Value::as_str) == Some("power-controller")) {
-                    part.insert("registers".into(), registers.clone());
+                    // Registers the endpoint already holds (a user profile header) stay; the
+                    // reset registers of this start replace only their own addresses.
+                    merge_power_registers(part, &registers)?;
                     found = true;
                 }
             }
@@ -466,6 +550,9 @@ pub(crate) fn open_from(
     mode: Mode,
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
+    loader_card: Option<&super::loader_card::LoaderCard>,
+    viewer_keys: Option<crate::frame_viewer::KeyHandler>,
+    profile: Option<&super::profile::Placed>,
 ) -> Result<Opened, String> {
     let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
     let rom_state;
@@ -616,6 +703,11 @@ pub(crate) fn open_from(
             RamPlan::Covered => {}
             RamPlan::Promote => execution.ram.push(board::factory::Ram { base: region.base, size }),
         }
+        // Caller RAM wins over a SoC register aperture page under it (the X-T5 maps DRAM channel 2
+        // from 0x80000000, where the SoC profile declares a 4-byte peripheral window). Device windows
+        // are separate and still refuse an overlap.
+        execution.peripherals =
+            carve_out(std::mem::take(&mut execution.peripherals), region.base, region.size);
     }
     for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
         if processor.model != ProcessorModel::CortexA53 {
@@ -663,6 +755,11 @@ pub(crate) fn open_from(
             let size = usize::try_from(bytes).map_err(|_| "region exceeds host address space")?;
             if !execution.ram.iter().any(|ram| ram.base == base && ram.size == size) {
                 execution.ram.push(board::factory::Ram { base, size });
+            }
+            // A manifest that declares this extent as RAM (the X-T5's boot SRAM) already mapped
+            // it for the cores above and maps it for the bus below; a second mapping overlaps.
+            if caller_ram_declares(&state.ram, base, bytes) {
+                continue;
             }
             execution.dma_mappings.push(board::memory::BusMapping {
                 permissions: permissions & 3,
@@ -849,14 +946,28 @@ pub(crate) fn open_from(
         controls,
         run_directory,
         &outputs,
+        viewer_keys,
         windows,
-        &rom.map(RomStart::assets).unwrap_or_default(),
-        rom.and_then(|rom| rom.card_image.as_ref()).map(|image| &image.card),
+        &rom.map(RomStart::assets)
+            .or_else(|| loader_card.map(|card| card.assets.clone()))
+            .unwrap_or_default(),
+        rom.and_then(|rom| rom.card_image.as_ref()).map(|image| &image.card)
+            .or_else(|| loader_card.and_then(|card| card.card.as_ref())),
         reference.soc.processors.iter()
             .position(|processor| processor.model == ProcessorModel::CortexM4),
     )?;
     if windows.is_empty() {
         return Err("X100VI caller boot manifest has no device windows".into());
+    }
+    if let Some(profile) = profile {
+        // The user profile's journal records, in the NOR session overlay like any later
+        // program, so snapshots carry them.
+        let storage = resources.storage.as_ref().ok_or("a user profile needs NOR flash storage")?;
+        for (offset, bytes) in &profile.records {
+            for (at, byte) in (*offset..).zip(bytes) {
+                storage.seed(at, *byte)?;
+            }
+        }
     }
     let mut images = initial_images(firmware, state)?;
     if let Some(Entry::MaskRom(bytes)) = rom.map(|rom| &rom.entry) {
@@ -890,6 +1001,9 @@ pub(crate) fn open_from(
         "boot_wiring_sha256": wiring_sha256,
         "update_sha256": firmware.source_sha256
     });
+    if let (Some(profile), Some(object)) = (profile, definition.as_object_mut()) {
+        object.insert("camera_settings".into(), json!(profile.requested));
+    }
     // A manifest DRAM override changes the machine, so it is part of the run's identity.
     if let (Some(dram), Some(object)) = (&state.dram, definition.as_object_mut()) {
         object.insert(
@@ -914,6 +1028,10 @@ pub(crate) fn open_from(
         images,
         scene,
     })?;
+    session.board.set_block_execution(
+        state.mprofile_block_execution
+            && std::env::var_os("FUJIMOD_MPROFILE_INSTRUCTIONS").is_none(),
+    );
     if let Some(Entry::CardHandoff(handoff)) = rom.map(|rom| &rom.entry) {
         let stage = session.card_read(&format!("{:#x}", handoff.slot), rom_start::CARD_FILE_NAME,
             None, handoff.stage_max_bytes)?;
@@ -953,6 +1071,36 @@ mod tests {
     use super::*;
 
     const DRAM: (u64, u64) = (0, 0x8000_0000);
+
+    #[test]
+    fn an_entry_extent_the_manifest_declares_as_ram_is_not_mapped_twice() {
+        let ram: Vec<super::super::manifest::RamRegion> =
+            toml::from_str::<toml::Table>("[[ram]]\nbase = 0xff800000\nsize = 0x40000\n").unwrap()["ram"]
+                .clone()
+                .try_into()
+                .unwrap();
+        assert!(caller_ram_declares(&ram, 0xff80_0000, 0x4_0000));
+        assert!(!caller_ram_declares(&ram, 0xff80_0000, 0x3_c000));
+        assert!(!caller_ram_declares(&ram, 0xfff0_0000, 0x1_0000));
+    }
+
+    #[test]
+    fn start_registers_keep_a_profile_header_and_replace_their_own_addresses() {
+        let mut part: toml::Table =
+            toml::from_str("kind = \"power-controller\"\n[registers]\n\"0x1f\" = 7\n\"0x10\" = 9\n").unwrap();
+        let start: toml::Value = toml::from_str("\"0\" = 0x8202\n\"10\" = 2\n").unwrap();
+        merge_power_registers(&mut part, &start).unwrap();
+        let held = part["registers"].as_table().unwrap();
+        assert_eq!(held.len(), 3);
+        assert_eq!(held["0x1f"].as_integer(), Some(7));
+        assert_eq!(held["0"].as_integer(), Some(0x8202));
+        assert_eq!(held["10"].as_integer(), Some(2));
+        let mut bare: toml::Table = toml::from_str("kind = \"power-controller\"\n").unwrap();
+        merge_power_registers(&mut bare, &start).unwrap();
+        assert_eq!(bare["registers"].as_table().unwrap().len(), 2);
+        let bad: toml::Value = toml::from_str("\"zz\" = 1\n").unwrap();
+        assert!(merge_power_registers(&mut bare, &bad).unwrap_err().contains("zz"));
+    }
 
     #[test]
     fn caller_ram_covered_by_catalog_is_skipped() {

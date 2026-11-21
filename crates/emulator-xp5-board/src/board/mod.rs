@@ -16,14 +16,19 @@ use fujimod_emulator_xp5_storage::{
 use fujimod_emulator_xp5_imaging::serial_sink;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+pub mod audio;
 pub mod clocks;
+pub mod codec;
 pub mod general_dma;
 pub mod i2c;
 pub mod imaging;
+pub mod jpeg;
 pub mod lz;
 pub mod renderer;
 pub mod serial;
 pub mod sd;
+pub mod uart;
+pub mod usb;
 
 pub struct Companion {
     pub pins: mailbox::Pins,
@@ -38,6 +43,8 @@ pub struct Resources {
     /// Verified and decoded image backing, shared by aperture, controller and DMA.
     pub storage: Option<flash_storage::Medium>,
     pub displays: BTreeMap<u64, display::Config>,
+    /// Extended-timer PWM words, read by the IBIS stage model behind input capture.
+    pub pwm: fujimod_emulator_xp5_io::timer::PwmOutputs,
 }
 fn register_with_resources(
     bus: &mut DeviceGraph,
@@ -88,19 +95,6 @@ fn register_with_resources(
                 )),
             )?;
         }
-        "input-capture" => {
-            if window.size != 0x1000 {
-                return Err("invalid input-capture window size".into());
-            }
-            if window.options.keys().any(|key| key != "dma_transmit") {
-                return Err("invalid input-capture option".into());
-            }
-            bus.register(
-                window.base,
-                window.size,
-                Box::new(fujimod_emulator_xp5_io::input_capture::InputCapture::new(window.base)?),
-            )?;
-        }
         "discarded-read" => {
             if !window.options.is_empty() {
                 return Err("discarded-read takes no options".into());
@@ -126,6 +120,12 @@ fn register_with_resources(
                     true,
                 )?),
             )?;
+        }
+        "usb-device-controller" => {
+            bus.register(window.base, window.size, Box::new(usb::controller(window)?))?;
+        }
+        "usb-phy" => {
+            bus.register(window.base, window.size, Box::new(usb::phy(window)?))?;
         }
         "hdmi-hot-plug-status" => {
             if window.options.keys().any(|key| key != "connected_level") {
@@ -226,6 +226,9 @@ fn register_with_resources(
                 )?),
             )?;
         }
+        "pl011" => {
+            bus.register(window.base, window.size, Box::new(uart::port(window)?))?;
+        }
         "bringup-stub" => {
             let options: fujimod_emulator_xp5_io::bringup_stub::Options =
                 toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("bring-up stub options: {e}"))?;
@@ -233,6 +236,77 @@ fn register_with_resources(
                 window.base,
                 window.size,
                 Box::new(fujimod_emulator_xp5_io::bringup_stub::BringupStub::new(window.base, window.size, options)?),
+            )?;
+        }
+        "completion-stub" => {
+            let options: fujimod_emulator_xp5_io::completion_stub::Options =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("completion stub options: {e}"))?;
+            // XP5 board time is in nanoseconds.
+            let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+                window.base,
+                window.size,
+                options,
+                1000,
+            )?;
+            if window.base == fujimod_emulator_xp5_imaging::imaging::mix::MIX_BASE && window.size == 0x1000 {
+                // MIX 0xffd22000: the same stub that, with XT5_STILL_PATH=real, also writes the
+                // HDR blend and composite (emulator-xp5-imaging imaging_mix.rs). Same device
+                // name and checkpoint, so the manifest and snapshots are unchanged.
+                let mix = fujimod_emulator_xp5_imaging::imaging::mix::Mix::new(stub);
+                bus.register(
+                    window.base,
+                    window.size,
+                    Box::new(if fujimod_emulator_imaging::frame::still_path_real() {
+                        mix.with_still_path()
+                    } else {
+                        mix
+                    }),
+                )?;
+            } else {
+                bus.register(window.base, window.size, Box::new(stub))?;
+            }
+        }
+        "imaging-fcnv" => {
+            // FCNV 0xffd26000: the completion stub that also converts YCbCr 4:2:2 to RGB
+            // (emulator-xp5-imaging imaging_fcnv.rs).
+            if window.base != 0xffd26000 || window.size != 0x1000 {
+                return Err("invalid imaging-fcnv window".into());
+            }
+            let options: fujimod_emulator_xp5_io::completion_stub::Options =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("imaging-fcnv options: {e}"))?;
+            let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+                window.base,
+                window.size,
+                options,
+                1000,
+            )?;
+            bus.register(window.base, window.size, Box::new(fujimod_emulator_xp5_imaging::imaging::fcnv::Fcnv::new(stub)))?;
+        }
+        "imaging-tnr" => {
+            // TNR 0xffd24000: the completion stub that, with XT5_MOVIE_PATH=real, also copies
+            // the current picture to the encoder input (emulator-xp5-imaging imaging_movie.rs).
+            // Registered here, in manifest order, so the device graph matches snapshots taken
+            // when the window was a plain completion stub.
+            if window.base != 0xffd24000 || window.size != 0x1000 {
+                return Err("invalid imaging-tnr window".into());
+            }
+            let options: fujimod_emulator_xp5_io::completion_stub::Options =
+                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("imaging-tnr options: {e}"))?;
+            let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+                window.base,
+                window.size,
+                options,
+                1000,
+            )?;
+            let tnr = fujimod_emulator_xp5_imaging::imaging::movie::Tnr::new(stub);
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(if fujimod_emulator_imaging::frame::movie_path_real() {
+                    tnr.with_movie_path()
+                } else {
+                    tnr
+                }),
             )?;
         }
         "write-only-registers" => {
@@ -275,6 +349,9 @@ fn register_with_resources(
         }
         "clock-banks" => clocks::register(bus, window.base, window.size)?,
         "lz" => lz::register(bus, window.base, window.size)?,
+        "jpeg-encoder" => jpeg::register(bus, window)?,
+        "jpeg-decoder" => jpeg::register_decoder(bus, window)?,
+        "xp5-codec" => codec::register(bus, window)?,
         "panel-spi" => {
             if window.base != 0xff919000 || window.size != 0x1000 {
                 return Err("invalid SPI9 panel window".into());
@@ -345,7 +422,7 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(timer::Timer::extended(window.base)),
+                Box::new(timer::Timer::extended(window.base).with_pwm_outputs(resources.pwm.clone())),
             )?;
         }
         "timer" | "timer-focus-capture" => {
@@ -561,7 +638,9 @@ pub fn register_all(
     }
     for w in windows
         .iter()
-        .filter(|w| w.kind != "flash-storage" && !general_dma::owns(&w.kind))
+        .filter(|w| {
+            w.kind != "flash-storage" && !general_dma::owns(&w.kind) && !audio::owns(&w.kind)
+        })
     {
         match w.kind.as_str() {
             "imaging-serial-sink"
@@ -580,7 +659,10 @@ pub fn register_all(
             | "movdc"
             | "imaging-resize"
             | "imaging-statistics"
-            | "imaging-paf" => continue,
+            | "imaging-paf"
+            | "imaging-resz"
+            | "imaging-rzl2"
+            | "imaging-filter-scaler" => continue,
             "clock-banks" => {
                 let specialized: Vec<u64> = windows
                     .iter()
@@ -649,7 +731,11 @@ pub fn register_all(
         windows,
         resources.companion.as_ref().map(|c| c.pins.companion),
         resources.pins.clone(),
+        resources.pwm.clone(),
+        // Only a declared aperture exposes the flash backing on the bus.
+        resources.storage.as_ref().filter(|_| aperture),
     )?;
+    audio::register_all(bus, windows)?;
     // Sensor command completion changes the receiver's active source. No
     // periodic polling deadline is needed to observe that causal edge.
     let sensors: Vec<_> = windows

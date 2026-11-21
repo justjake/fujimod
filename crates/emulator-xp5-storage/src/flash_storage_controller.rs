@@ -168,6 +168,7 @@ impl Controller {
             o,
             0 | 4
                 | 8
+                | 0xc
                 | 0x10
                 | 0x14
                 | 0x18
@@ -489,6 +490,8 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         // Aperture window words and the per-opcode format fields a setup program writes.
         for (offset, value) in [
+            // An SD card stage's own serial flash setup stores 2 here (X-T5, 0xff81ada4).
+            (0xc, 2),
             (0x24, 0xf000_0000),
             (0x28, u32::MAX),
             (0x2c, u32::MAX),

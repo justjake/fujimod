@@ -148,6 +148,34 @@ impl Storage {
         Ok(())
     }
 }
+/// Parse `XT5_FLASH_ERASED="OFFSET+SIZE,..."` (numbers decimal or `0x` hexadecimal) and erase
+/// those extents of the installed flash image before the board starts. A host input like
+/// `XT5_ADC`, kept outside the manifest: the image is otherwise the update's own payload, and
+/// the stock storage driver compares each sector with the new data and skips an equal one
+/// (X-T5 4.31 `0x138494c`), so an install of the installed version programs nothing. An erased
+/// extent is flash that an install has to program. Offsets and sizes are whole 4 KiB pages
+/// inside the image; an extent the start reads before the install must not be erased.
+pub fn erase_installed(image: &mut [u8], spec: &str) -> Result<(), String> {
+    fn number(text: &str) -> Option<usize> {
+        let text = text.trim();
+        match text.strip_prefix("0x") {
+            Some(hex) => usize::from_str_radix(hex, 16).ok(),
+            None => text.parse().ok(),
+        }
+    }
+    for item in spec.split(',').map(str::trim).filter(|item| !item.is_empty()) {
+        let (offset, size) = item
+            .split_once('+')
+            .and_then(|(offset, size)| Some((number(offset)?, number(size)?)))
+            .ok_or_else(|| format!("XT5_FLASH_ERASED needs OFFSET+SIZE[,...], not {item}"))?;
+        let end = offset
+            .checked_add(size)
+            .filter(|end| size != 0 && offset % PAGE == 0 && size % PAGE == 0 && *end <= image.len())
+            .ok_or_else(|| format!("XT5_FLASH_ERASED: {item} is not whole pages of the installed image"))?;
+        image[offset..end].fill(0xff);
+    }
+    Ok(())
+}
 /// The flash-storage medium behind the aperture, controller and DMA devices.
 /// Serial NOR keeps the sparse session overlay; serial NAND is die-backed
 /// (parts::nand) with the same linear evidence surface.
@@ -169,6 +197,26 @@ impl Medium {
         match self {
             Medium::Nor(s) => s.lock().unwrap().seed(offset, value),
             Medium::Nand(_) => Err("serial NAND storage takes no data seeds".into()),
+        }
+    }
+}
+
+/// Bus masters (general DMA) read the CPU aperture from the same backing as the aperture device,
+/// including the erased tail, and the read is recorded as guest evidence like a CPU read.
+impl fujimod_emulator_devices::dma::ReadSource for Medium {
+    fn read(&self, offset: u64, out: &mut [u8]) -> Result<(), String> {
+        out.copy_from_slice(&self.read_device(offset, out.len())?);
+        Ok(())
+    }
+}
+
+impl Medium {
+    /// The CPU aperture `BASE..BASE + SIZE` as a read-only bus-master window.
+    pub fn read_window(&self) -> fujimod_emulator_devices::dma::ReadWindow {
+        fujimod_emulator_devices::dma::ReadWindow {
+            base: BASE,
+            size: SIZE,
+            source: Arc::new(self.clone()),
         }
     }
 }
@@ -335,6 +383,21 @@ mod tests {
     }
 
     #[test]
+    fn erased_installed_extents_are_whole_pages_inside_the_image() {
+        let mut image = vec![0x5a; 4 * PAGE];
+        erase_installed(&mut image, "0x1000+0x1000, 12288+4096").unwrap();
+        assert!(image[..PAGE].iter().all(|byte| *byte == 0x5a));
+        assert!(image[PAGE..2 * PAGE].iter().all(|byte| *byte == 0xff));
+        assert!(image[2 * PAGE..3 * PAGE].iter().all(|byte| *byte == 0x5a));
+        assert!(image[3 * PAGE..].iter().all(|byte| *byte == 0xff));
+        erase_installed(&mut image, "").unwrap();
+        for bad in ["0x1000", "0x800+0x1000", "0+0x800", "0+0", "0x3000+0x2000", "x+0x1000"] {
+            let mut copy = vec![0x5a; 4 * PAGE];
+            assert!(erase_installed(&mut copy, bad).is_err(), "{bad}");
+            assert!(copy.iter().all(|byte| *byte == 0x5a), "{bad}");
+        }
+    }
+    #[test]
     fn programmed_and_erased_pages_are_reported_once() {
         let mut storage = Storage::new(vec![0; 3 * 4096]).unwrap();
         assert!(storage.take_dirty_pages().is_empty());
@@ -344,6 +407,25 @@ mod tests {
         assert_eq!(storage.take_dirty_pages(), vec![1, 2]);
         assert!(storage.take_dirty_pages().is_empty());
         assert_eq!(storage.read(5000, 1).unwrap(), vec![1]);
+    }
+    #[test]
+    fn bus_master_window_reads_the_aperture_bytes_and_erased_tail() {
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0xa5; 16]).unwrap()));
+        let medium = Medium::Nor(storage.clone());
+        let window = medium.read_window();
+        assert_eq!((window.base, window.size), (BASE, SIZE));
+        let mut aperture = Aperture(medium);
+        let mut host = fujimod_emulator_devices::test_host::recording::RecordingHost::default();
+        let cpu = aperture.read(&mut Cx::new(&mut host, 0, 0, 0), BASE + 12, 8);
+        let mut bytes = [0; 8];
+        window.source.read(12, &mut bytes).unwrap();
+        assert_eq!(u64::from_le_bytes(bytes), cpu);
+        assert_eq!(bytes, [0xa5, 0xa5, 0xa5, 0xa5, 0xff, 0xff, 0xff, 0xff]);
+        window.source.read(SIZE - 8, &mut bytes).unwrap();
+        assert_eq!(bytes, [0xff; 8]);
+        assert!(window.source.read(SIZE - 4, &mut bytes).is_err());
+        // DMA reads are guest evidence, as CPU aperture reads are.
+        assert_eq!(storage.lock().unwrap().session.reads.bytes, 24);
     }
     #[test]
     fn session_checkpoint_round_trips_overlay_and_reads() {

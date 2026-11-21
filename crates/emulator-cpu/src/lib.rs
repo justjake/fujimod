@@ -590,6 +590,20 @@ pub trait Cpu {
             }
         }
     }
+    /// How many hooks are installed on this processor, when the backend
+    /// installs each one natively. An owner uses it to see observers it did
+    /// not install itself.
+    fn hook_count(&self) -> Option<usize> {
+        None
+    }
+    /// Host address of the external backing this processor maps at `address`,
+    /// when one mapping covers all `bytes`. Reads through it see what the
+    /// processor's own memory reads see. The pointer stays valid until the
+    /// processor's memory maps change; the owner serializes its use with
+    /// execution. Backends that cannot name it return None.
+    fn backing_pointer(&self, _address: u64, _bytes: usize) -> Option<NonNull<u8>> {
+        None
+    }
     /// External mutable backing covered by a whole-board keyframe. Private
     /// memory retained by the processor snapshot is excluded. Unknown owners
     /// refuse, so a board cannot silently omit independently mapped RAM.

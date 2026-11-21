@@ -58,7 +58,7 @@ pub struct Keyframe {
     quantum: Option<usize>,
     host_pause: bool,
     isolated_core: Option<usize>,
-    hooks: Vec<(usize, HookId)>,
+    hooks: Vec<(usize, Option<HookId>)>,
     mmio: Vec<(usize, u64, usize, u64)>,
     controllers: Vec<Option<usize>>,
     observations: Vec<(usize, Vec<u64>)>,
@@ -135,7 +135,13 @@ impl State {
             reset_contexts: _,
             exclusive: _,
             code_run,
+            code_shadow: _,
+            blocks: _,
+            run_entries: _,
+            polls: _,
+            settled: _,
             active_slice: _,
+            code_write_deferred: _,
             parallel: _,
             decoders: _,
             memory_access: _,
@@ -219,6 +225,7 @@ impl State {
         self.processor_generations
             .clone_from(&saved.processor_generations);
         self.code_run = saved.code_run;
+        self.code_write_deferred = false;
         if let (Some(interrupts), Some(gic)) = (&mut self.interrupts, &saved.gic) {
             interrupts.gic.restore(gic)?;
         }
@@ -281,7 +288,7 @@ impl Board {
             quantum: self.quantum.get(),
             host_pause: self.host_pause.get(),
             isolated_core: self.isolated_core.get(),
-            hooks: self.hooks.clone(),
+            hooks: self.hook_wiring(),
             mmio: self.mmio.clone(),
             controllers: state
                 .core_interrupts
@@ -299,7 +306,7 @@ impl Board {
             .try_borrow_mut()
             .map_err(|_| "keyframe requires a stopped board")?;
         state.checkpoint_boundary()?;
-        if saved.hooks != self.hooks
+        if saved.hooks != self.hook_wiring()
             || saved.observations != self.observation_topology()
             || saved.mmio != self.mmio
             || saved.controllers

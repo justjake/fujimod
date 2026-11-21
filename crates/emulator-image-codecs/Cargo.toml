@@ -31,6 +31,10 @@ videotoolbox = { version = "0.21", features = ["async"] }
 # camera; the wasm32-unknown-unknown WebGPU helper does not need it.
 [target.'cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))'.dependencies]
 openh264 = "=0.9.9"
+# Native builds use the encoder's SIMD kernels. They are integer kernels with
+# the scalar code's results: `the_direct_encoder_output_is_pinned` holds the
+# output bytes for both.
+rusty_h264-encoder = { version = "=0.17.0", default-features = false, features = ["libm", "asm"] }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

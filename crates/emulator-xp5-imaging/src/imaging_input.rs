@@ -90,7 +90,9 @@ pub struct Input {
     #[serde(default)]
     acknowledge: bool,
     /// Configuration words at +0x140..=+0x17c: sixteen full 32-bit setter and getter pairs, each a
-    /// single register write and read, read back unchanged.
+    /// single register write and read, read back unchanged. X-T5 2c718cc/2c718f0 ..
+    /// 2c71d7c/2c71da0 are the same pairs; its REC task keeps input-engine state there
+    /// (3040cd4 word 0, 3041e9c word 15). See `idle_status` for word 15 on that body.
     #[serde(default)]
     configuration: [u32; 16],
     /// Full 32-bit word at +0x08 (setter 2f37230, getter 2f37254), read back unchanged.
@@ -99,6 +101,34 @@ pub struct Input {
     /// 17-bit word at +0x0c: setter 2f37288 and getter 2f372b4 both mask with 0x1ffff.
     #[serde(default)]
     word_0c: u32,
+    /// Bring-up: unmodeled aligned words and their last written value (`retain_words`).
+    #[serde(default)]
+    retained: BTreeMap<u64, u32>,
+    /// Device configuration from the manifest, not guest state.
+    #[serde(skip)]
+    retain_words: bool,
+    /// Device configuration from the manifest, not guest state.
+    #[serde(skip)]
+    idle_status: bool,
+}
+impl Input {
+    /// Let every aligned word of the window that has no modeled meaning read back its last
+    /// write (0 before any write) instead of stopping as unmodeled. A bring-up option.
+    pub fn with_retained_words(mut self) -> Self {
+        self.retain_words = true;
+        self
+    }
+    /// Read word 15 (+0x17c) as a status word instead of the last write: bit 31 set while bit 0
+    /// of word 0 (+0x140) is clear. X-T5 3030610 treats "word 0 bit 0 clear and word 15 bit 31
+    /// set" as idle; 303ddd0 clears bit 0 to stop the engine and the REC task then waits for
+    /// idle (2ff7930 in 2ffac88). Inferred: bit 31 follows the run bit with no modelled delay.
+    pub fn with_idle_status(mut self) -> Self {
+        self.idle_status = true;
+        self
+    }
+    fn retains(&self, offset: u64, size: u8) -> bool {
+        self.retain_words && size == 4 && offset & 3 == 0 && offset < 0x1000
+    }
 }
 impl Device for Input {
     fn name(&self) -> &'static str {
@@ -117,10 +147,14 @@ impl Device for Input {
             8 => u64::from(self.word_08),
             0xc => u64::from(self.word_0c),
             0x48 => u64::from(self.acknowledge),
+            0x17c if self.idle_status => u64::from(self.configuration[0] & 1 == 0) << 31,
             0x140..=0x17c if offset % 4 == 0 => {
                 u64::from(self.configuration[((offset - 0x140) / 4) as usize])
             }
             0x10c => u64::from(self.pending),
+            _ if self.retains(offset, size) => {
+                u64::from(self.retained.get(&offset).copied().unwrap_or(0))
+            }
             _ => {
                 cx.unmodeled();
                 0
@@ -160,6 +194,8 @@ impl Device for Input {
             // 318bc5c clears every pending cause by writing sixteen zero flags.
             self.pending &= value as u32 & 0xffff;
             cx.set_irq(229, self.pending != 0);
+        } else if self.retains(offset, size) {
+            self.retained.insert(offset, value as u32);
         } else {
             cx.unmodeled();
         }
@@ -188,13 +224,15 @@ impl Device for Input {
             self.ready = true;
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32);
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32, #[serde(default)] retained: BTreeMap<u64, u32>);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
+        let (retain_words, idle_status) = (self.retain_words, self.idle_status);
         *self = serde_json::from_value(value.clone())
             .map_err(|e| format!("input engine checkpoint: {e}"))?;
+        (self.retain_words, self.idle_status) = (retain_words, idle_status);
         Ok(())
     }
 }
@@ -295,7 +333,58 @@ mod tests {
         phy.write(&mut cx, 0xff944104, 2, 1);
         assert!(cx.is_unmodeled());
     }
+    #[test]
+    fn input_retains_unmodeled_words_only_when_enabled() {
+        let mut host = RecordingHost::default();
+        let mut strict = Input::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        strict.write(&mut cx, 0xff946050, 4, 1);
+        assert!(cx.is_unmodeled());
 
+        let mut input = Input::default().with_retained_words();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(input.read(&mut cx, 0xff94600c, 4), 0);
+        input.write(&mut cx, 0xff946050, 4, 1);
+        input.write(&mut cx, 0xff946054, 4, 0x22f8);
+        input.write(&mut cx, 0xff946058, 4, 0x36f9b50);
+        assert_eq!(input.read(&mut cx, 0xff946050, 4), 1);
+        assert_eq!(input.read(&mut cx, 0xff946054, 4), 0x22f8);
+        assert_eq!(input.read(&mut cx, 0xff946058, 4), 0x36f9b50);
+        // Modeled registers keep their behaviour.
+        input.write(&mut cx, 0xff94600c, 4, 0xffff_22f8);
+        assert_eq!(input.read(&mut cx, 0xff94600c, 4), 0x1_22f8);
+        assert!(!cx.is_unmodeled());
+
+        let checkpoint = input.checkpoint().unwrap();
+        let mut restored = Input::default().with_retained_words();
+        restored.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(restored.checkpoint().unwrap(), checkpoint);
+        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946054, 4), 0x22f8);
+        // The legacy JSON restore keeps the manifest option.
+        restored.restore(&input.save()).unwrap();
+        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946058, 4), 0x36f9b50);
+    }
+    #[test]
+    fn input_idle_status_option_reports_idle_in_word_15() {
+        let mut input = Input::default().with_idle_status();
+        let mut host = RecordingHost::default();
+        // Run bit clear: the status word reports idle (bit 31).
+        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94617c, 4), 1 << 31);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4, 0x8000_0001);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4, 0x1234_5678);
+        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4), 0x8000_0001);
+        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4), 0x1234_5678);
+        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94617c, 4), 0);
+        let checkpoint = input.checkpoint().unwrap();
+        let mut restored = Input::default().with_idle_status();
+        restored.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4), 0x1234_5678);
+        // A checkpoint saved before the words existed still restores.
+        let mut old = input.save();
+        old.as_object_mut().unwrap().remove("configuration");
+        restored.restore(&old).unwrap();
+        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4), 0);
+    }
     #[test]
     fn phy_and_input_reset_wait_for_their_guest_deadlines() {
         let mut phy = Phy::default();

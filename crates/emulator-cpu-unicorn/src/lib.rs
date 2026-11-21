@@ -116,7 +116,9 @@ impl Library {
             (core.api.uc_ctl)(raw, ffi::ctl(13, 1, 1), translation_cache_size_bytes)
         })?;
         // Page-hook code invalidation requires translation-installed watches.
-        // The AArch64 board still uses ordinary instruction observers.
+        // A plain AArch64 core has none; the A-profile execution installs a
+        // translation filter that watches every page it translates and then
+        // switches page hooks on itself (`Core::set_page_hooks`).
         if let Some(enable) = core.api.extensions.page_hooks {
             check(&core.api, unsafe { enable(raw, model != Model::ArmV8A) })?;
         }
@@ -373,6 +375,17 @@ fn range(range: HookRange) -> (u64, u64) {
     }
 }
 impl Core {
+    /// Route stores and hooked accesses to the engine's slow path only on
+    /// pages a hook covers. The caller must watch every page it translates
+    /// from (`watch_stores`), in every alias, before that code runs.
+    pub(crate) fn set_page_hooks(&self, on: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .page_hooks
+            .ok_or("CPU backend has no page hooks")?;
+        self.check(unsafe { set(self.raw, on) })
+    }
     fn check(&self, status: i32) -> Result<(), String> {
         check(&self.api, status)
     }
@@ -766,11 +779,32 @@ impl Cpu for Core {
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         Ok(self.cached_memory_regions()?.to_vec())
     }
+    fn hook_count(&self) -> Option<usize> {
+        Some(self.hooks.borrow().len())
+    }
+    fn backing_pointer(&self, address: u64, bytes: usize) -> Option<NonNull<u8>> {
+        frozen::pointer(self.identity, address, bytes)
+    }
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
         if self.has_engine_ram.get() {
             return Err("processor has engine-owned RAM outside the board checkpoint".into());
         }
         Ok(frozen::backings(self.identity))
+    }
+    unsafe fn backing_written(
+        &self,
+        _physical: u64,
+        backing: NonNull<u8>,
+        bytes: usize,
+    ) -> Result<(), String> {
+        // Refuse exactly where a full invalidation refuses.
+        self.check_tlbi_mutation()?;
+        // This engine translates only memory it maps. A write to backing it
+        // does not map cannot have changed any of its translations.
+        if !frozen::touches(self.identity, backing.as_ptr() as usize, bytes) {
+            return Ok(());
+        }
+        self.invalidate_code(None)
     }
     unsafe fn map_backing(
         &self,

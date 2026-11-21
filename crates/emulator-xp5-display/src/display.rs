@@ -746,7 +746,7 @@ mod tests {
         }
     }
     #[test]
-    fn packed_picture_uses_dma_crop_and_rejects_unknown_phase() {
+    fn packed_picture_uses_dma_crop_and_rejects_split_packing() {
         let (mut d, mut h) = setup(1);
         let base = d.base();
         let a = 0x370;
@@ -772,14 +772,18 @@ mod tests {
                 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255
             ]
         );
-        write(&mut d, &mut h, base + a + 0x2c, 1);
+        // 10-bit three-per-word packing (control bit 8) is not decoded.
+        write(&mut d, &mut h, base + a + 0x10, 0x100);
         due(&mut d, &mut h);
         due(&mut d, &mut h);
         h.now = d.next_deadline(h.now).unwrap();
         let irqs = h.irqs.len();
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         d.advance(&mut cx);
-        assert!(cx.refusal().unwrap().contains("fractional phase"));
+        let refusal = cx.refusal().unwrap();
+        assert!(refusal.contains("fractional phase"), "{refusal}");
+        assert!(refusal.contains("group0"), "{refusal}");
+        assert!(refusal.contains("+10(control)=0x100"), "{refusal}");
         assert_eq!(h.irqs.len(), irqs);
         assert_eq!(h.frames.len(), 1);
     }

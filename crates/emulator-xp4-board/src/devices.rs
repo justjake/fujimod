@@ -946,6 +946,7 @@ impl Devices {
                 // The X-T3 5.11 sensor driver writes the stride with the
                 // buffer address: +0x58 = 0x31e0 for 6276 samples.
                 line_stride: true,
+                frame_start_pulse: None,
             }),
             read_gate,
         );
@@ -1011,6 +1012,7 @@ impl Devices {
                         columns: 16,
                         rows: 16,
                         planes: Planes::Rgb,
+                        window: None,
                     }],
                     reset_ticks: reset,
                     period_ticks: None,

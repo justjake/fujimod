@@ -310,7 +310,7 @@ impl Codec {
             || !height.is_multiple_of(8)
             || width > 65535
             || height > 65535
-            || width * height > 32_000_000
+            || width * height > 64_000_000
             || source_bytes != width * height * 2
             || self.uploaded.contains(&0)
             || capacity == 0

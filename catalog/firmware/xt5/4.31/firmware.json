@@ -63,17 +63,17 @@
           },
           {
             "address": 100256,
-            "value": 4,
+            "value": 32770,
             "size": 4
           },
           {
             "address": 100260,
-            "value": 0,
+            "value": 1,
             "size": 4
           },
           {
             "address": 100264,
-            "value": 0,
+            "value": 6244803833302614016,
             "size": 8
           },
           {
@@ -94,22 +94,22 @@
           },
           {
             "address": 101404,
-            "value": 0,
+            "value": 1,
             "size": 4
           },
           {
             "address": 101408,
-            "value": 0,
+            "value": 30,
             "size": 4
           },
           {
             "address": 101412,
-            "value": 0,
+            "value": 1,
             "size": 4
           },
           {
             "address": 101416,
-            "value": 267,
+            "value": 257,
             "size": 4
           },
           {

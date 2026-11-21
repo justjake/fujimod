@@ -4,13 +4,21 @@ use super::{
     Startup, Started, open as session_open,
 };
 use crate::mod_loader;
-use crate::host::{parse_gpio, parse_number, parse_poke, parse_stub};
+use crate::host::{parse_gpio, parse_number, parse_stub, parse_timed_poke};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_parts_controls::key_input::Key;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+/// Write one little-endian word for --poke: a physical address first, else CPU0's virtual view.
+fn poke_word(board: &fujimod_emulator::board::Board, address: u64, value: u32) -> Result<(), String> {
+    let bytes = value.to_le_bytes();
+    board.write_physical(address, &bytes)
+        .or_else(|_| board.write_memory(0, address, &bytes))
+        .map_err(|error| format!("poke {address:#x}: {error}"))
+}
 
 fn shared_boot_summary(
     state: &Value,
@@ -79,6 +87,81 @@ fn shared_boot_summary(
 }
 
 
+/// One physical input requested through the frame viewer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ViewerInput {
+    /// A key of the body's key model.
+    Key(Key),
+    /// The shutter release: half (S1) or full (S2) press.
+    Shutter { full: bool },
+    /// A dial or switch position (viewer `POST /set`, sent as `SET CONTROL=POSITION`).
+    Set { control: String, position: String },
+}
+
+impl ViewerInput {
+    /// Validate a viewer key name. The names are the `--press` key names; `SET CONTROL=POSITION`
+    /// is a position change in the `--set` syntax, without a time.
+    fn parse(name: &str) -> Result<Self, String> {
+        if let Some(setting) = name.strip_prefix("SET ") {
+            let mut changes = crate::host::parse_settings(setting)?;
+            return match (changes.pop(), changes.is_empty()) {
+                (Some(change), true) if change.at_ms == 0 && !setting.contains('@') => {
+                    Ok(Self::Set { control: change.control, position: change.position })
+                }
+                _ => Err("viewer position changes take one CONTROL=POSITION and no time".into()),
+            };
+        }
+        Ok(match Key::parse(name)? {
+            Key::ShutterHalf => Self::Shutter { full: false },
+            Key::ShutterFull => Self::Shutter { full: true },
+            key => Self::Key(key),
+        })
+    }
+}
+
+/// Viewer key requests waiting for the next run slice. The viewer's client threads push them;
+/// the run loop applies them at the guest time it reaches between slices.
+type ViewerQueue = std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<(ViewerInput, bool)>>>;
+
+fn viewer_key_handler(queue: ViewerQueue) -> crate::frame_viewer::KeyHandler {
+    std::sync::Arc::new(move |name: &str, pressed: bool| {
+        let input = ViewerInput::parse(name)?;
+        queue.lock().map_err(|_| "viewer key queue is poisoned".to_string())?.push_back((input, pressed));
+        Ok(())
+    })
+}
+
+/// Apply one viewer input at guest time `now`. A body whose key model has no shutter wiring
+/// (the X-T5 ladder keys) gets the shutter as its GPIO release lines: half press drives 0:0 low,
+/// full press drives 0:1 low and holds 0:0 low while it is down.
+fn apply_viewer_input(
+    inputs: &fujimod_emulator_xp5_board::session::Inputs,
+    session: &mut fujimod_emulator_session::Session,
+    now: u64,
+    shutter: &mut [bool; 2],
+    (input, pressed): (ViewerInput, bool),
+) -> Result<(), String> {
+    match input {
+        ViewerInput::Key(key) => inputs.key(session, now, key, pressed),
+        ViewerInput::Set { control, position } => inputs.set_position(session, now, &control, &position),
+        ViewerInput::Shutter { full } => {
+            let key = if full { Key::ShutterFull } else { Key::ShutterHalf };
+            if inputs.key(session, now, key, pressed).is_ok() {
+                return Ok(());
+            }
+            let (half_high, full_high) = shutter_levels(shutter, full, pressed);
+            inputs.gpio(session, 0, 0, half_high)?;
+            inputs.gpio(session, 0, 1, full_high)
+        }
+    }
+}
+
+/// Record a shutter edge and return the active-low GPIO levels of 0:0 (S1) and 0:1 (S2).
+fn shutter_levels(shutter: &mut [bool; 2], full: bool, pressed: bool) -> (bool, bool) {
+    shutter[usize::from(full)] = pressed;
+    (!(shutter[0] || shutter[1]), !shutter[1])
+}
+
 /// One XP5 boot: the run configuration plus the caller's input files.
 pub struct Run {
     pub configuration: ResolvedConfiguration,
@@ -88,6 +171,8 @@ pub struct Run {
     pub update: PathBuf,
     pub manifest: Option<PathBuf>,
     pub watch_pcs: Option<String>,
+    /// Physical ranges `ADDR:LEN[,ADDR:LEN...]` whose writes are logged to stderr.
+    pub watch_writes: Option<String>,
     pub pc_trace: Option<crate::TraceOutput>,
     pub screenshot: Option<PathBuf>,
     pub viewer_port: Option<u16>,
@@ -95,15 +180,21 @@ pub struct Run {
     pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
     pub boot_rom: Option<PathBuf>,
-    /// A raw SD card image in place of the in-memory volume (ROM start only).
+    /// A raw SD card image in place of the in-memory volume. ROM and SD starts load it read-only;
+    /// the loader start puts it in slot 1 and writes changed sectors back at the end of the run.
     pub card_image: Option<PathBuf>,
-    /// Files on the in-memory SD card, as `(name, path)` (ROM start only).
+    /// Files on the SD card, as `(name, path)`: the startup card of a ROM or SD start, or the
+    /// slot-1 card of the loader start.
     pub card_files: Vec<(String, PathBuf)>,
     /// Scripted key presses: `t=SECONDS:KEY;...` (a leading `-` on KEY releases it).
     pub keys: Option<String>,
     pub gpio: Option<String>,
     pub pokes: Vec<String>,
     pub press: Option<String>,
+    /// Timed dial and switch positions: `CONTROL=POSITION[@MS][,...]`.
+    pub settings: Option<String>,
+    /// Named camera settings of the user profile the loader start boots with.
+    pub camera_settings: std::collections::BTreeMap<String, String>,
     /// Route unmodeled register accesses to the bus instead of stopping.
     pub discovery: bool,
     /// Discovery callee stubs: `NAME@ADDRESS=VALUE`.
@@ -144,6 +235,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         update,
         manifest,
         watch_pcs,
+        watch_writes,
         pc_trace,
         screenshot,
         viewer_port,
@@ -153,9 +245,11 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         card_image: sd_image,
         card_files,
         keys: key_script,
-        gpio,
+        gpio: gpio_spec,
         pokes,
         press,
+        settings,
+        camera_settings,
         discovery,
         stubs,
         patch_file,
@@ -189,6 +283,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .collect::<Result<Vec<_>, _>>()?;
     watch_pcs.sort_unstable();
     watch_pcs.dedup();
+    let watch_writes = parse_ranges("--watch-writes", &watch_writes.unwrap_or_default().replace(',', ";"))?;
     let dumps = parse_dumps(dump.as_deref().unwrap_or_default())?;
     let hashes = parse_ranges("--hash", hash.as_deref().unwrap_or_default())?;
     let mut patches = crate::patch::Schedule::from_path(
@@ -197,9 +292,45 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let keys = crate::host::parse_keys(key_script.as_deref(), press.as_deref())?.into_iter()
         .map(|edge| Ok((edge.delay, Key::parse(&edge.name)?, edge.pressed)))
         .collect::<Result<Vec<_>, String>>()?;
-    let gpio = gpio.as_deref().map(|spec| spec.split(',').map(parse_gpio).collect::<Result<Vec<_>, _>>())
-        .transpose()?.unwrap_or_default();
-    let pokes = pokes.iter().map(|spec| parse_poke(spec)).collect::<Result<Vec<_>, _>>()?;
+    let settings = crate::host::parse_settings(settings.as_deref().unwrap_or_default())?;
+    // `PORT:PIN=LEVEL` applies before the run; `PORT:PIN=LEVEL@MS` applies MS milliseconds of
+    // guest time after the run starts (after a snapshot load, like `--press`). The X-T5 shutter
+    // release has no key name: half press is `0:0=0@MS`, full press `0:1=0@MS`, release `=1@MS`.
+    let mut gpio = Vec::new();
+    let mut timed_gpio = Vec::new();
+    for item in gpio_spec.as_deref().unwrap_or_default().split(',').filter(|item| !item.trim().is_empty()) {
+        match item.trim().split_once('@') {
+            Some((level, at)) => {
+                let at_ms: u64 = at.trim().parse()
+                    .map_err(|_| format!("--gpio {item}: the time after @ is whole milliseconds"))?;
+                timed_gpio.push((at_ms, parse_gpio(level)?));
+            }
+            None => gpio.push(parse_gpio(item.trim())?),
+        }
+    }
+    // A stable sort keeps the written order of levels that share a time.
+    timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
+    // XT5_WATCH_AFTER_MS=N arms the --watch-pcs witnesses and --watch-writes ranges only after N ms of guest time from the
+    // run start, so the log shows the first hits after an event (a key press), not earlier ones.
+    let watch_after_ms = match std::env::var("XT5_WATCH_AFTER_MS") {
+        Ok(value) => Some(value.trim().parse::<u64>()
+            .map_err(|_| "XT5_WATCH_AFTER_MS needs whole milliseconds".to_string())?)
+            .filter(|ms| *ms > 0),
+        Err(_) => None,
+    };
+    // `ADDR=U32` writes before the run; `ADDR=U32@MS` writes MS guest milliseconds after the run
+    // starts, scheduled like a timed --gpio level.
+    let mut timed_pokes = Vec::new();
+    let mut untimed_pokes = Vec::new();
+    for spec in &pokes {
+        match parse_timed_poke(spec)? {
+            (Some(at_ms), address, value) => timed_pokes.push((at_ms, (address, value))),
+            (None, address, value) => untimed_pokes.push((address, value)),
+        }
+    }
+    timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
+    let pokes = untimed_pokes;
+    let viewer_queue = ViewerQueue::default();
     let request = Startup {
         update,
         manifest,
@@ -209,15 +340,17 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         scene,
         output: Some(run_directory.clone()),
         viewer_port,
+        viewer_keys: viewer_port.map(|_| viewer_key_handler(viewer_queue.clone())),
         mode,
         quantum: quantum_override,
+        camera_settings,
     };
     let crate::Opened::Xp5(started) =
         crate::open(configuration, crate::StartupInputs::Xp5(request))?
     else {
         return Err("XP5 startup returned another processor generation".into());
     };
-    let Started { firmware, state, opened } = *started;
+    let Started { firmware, state, opened, card_write_back } = *started;
     let session_open::Opened {
         mut session,
         inputs,
@@ -233,7 +366,10 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .board
         .install_discovery_callee_stubs(&callee_stubs)?;
     session.board.set_execution_policy(policy)?;
-    session.board.watch_pcs(&watch_pcs)?;
+    if watch_after_ms.is_none() {
+        session.board.watch_pcs(&watch_pcs)?;
+        session.board.watch_writes(&watch_writes)?;
+    }
     let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     // Emulator-only FujiMod (--mod): built and placed before the run, hook words attached between
     // run slices once the stock UILIB-ready flag holds. See mod_loader.rs.
@@ -258,16 +394,28 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
     }
     for (address, value) in pokes {
-        let bytes = value.to_le_bytes();
-        session.board.write_physical(address, &bytes)
-            .or_else(|_| session.board.write_memory(0, address, &bytes))
-            .map_err(|error| format!("poke {address:#x}: {error}"))?;
+        poke_word(&session.board, address, value)?;
     }
     let start = session.board.now();
     for (delay, key, pressed) in keys {
         let delay_ticks = crate::host::duration_ticks(delay, ticks_per_second);
         inputs.key(&mut session, start.saturating_add(delay_ticks), key, pressed)?;
     }
+    let millisecond_tick = |ms: u64| {
+        start.saturating_add(crate::host::duration_ticks(std::time::Duration::from_millis(ms), ticks_per_second))
+    };
+    for change in settings {
+        inputs.set_position(&mut session, millisecond_tick(change.at_ms), &change.control, &change.position)?;
+        eprintln!("FUJIMOD XP5 set: {}={} at {} ms", change.control, change.position, change.at_ms);
+    }
+    let mut timed_gpio: std::collections::VecDeque<_> = timed_gpio.into_iter()
+        .map(|(at_ms, level)| (millisecond_tick(at_ms), at_ms, level))
+        .collect();
+    let mut timed_pokes: std::collections::VecDeque<_> = timed_pokes.into_iter()
+        .map(|(at_ms, write)| (millisecond_tick(at_ms), at_ms, write))
+        .collect();
+    let mut watch_after = watch_after_ms.map(|ms| (millisecond_tick(ms), ms));
+    let mut viewer_shutter = [false; 2];
     let interrupted = Arc::new(AtomicBool::new(false));
     let signal = interrupted.clone();
     ctrlc::set_handler(move || signal.store(true, Ordering::Release))
@@ -294,13 +442,55 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }
-            let until = next_patch.map_or(now.saturating_add(slice), |at| at.min(now.saturating_add(slice)));
+            while let Some(&(at, at_ms, (port, pin, high))) = timed_gpio.front() {
+                if at > now {
+                    break;
+                }
+                timed_gpio.pop_front();
+                inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
+                eprintln!("FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})", u8::from(high));
+            }
+            while let Some(&(at, at_ms, (address, value))) = timed_pokes.front() {
+                if at > now {
+                    break;
+                }
+                timed_pokes.pop_front();
+                poke_word(&session.board, address, value)?;
+                eprintln!("FUJIMOD XP5 poke: {address:#x}={value:#x} at {at_ms} ms (tick {now})");
+            }
+            let requested: Vec<_> = viewer_queue.lock()
+                .map_err(|_| "viewer key queue is poisoned".to_string())?
+                .drain(..)
+                .collect();
+            for request in requested {
+                if let Err(error) = apply_viewer_input(&inputs, session, now, &mut viewer_shutter, request.clone()) {
+                    // A key the body does not wire is the user's request failing, not the run's.
+                    eprintln!("FUJIMOD XP5 viewer key {request:?}: {error}");
+                } else {
+                    eprintln!("FUJIMOD XP5 viewer key {request:?} at tick {now}");
+                }
+            }
+            if let Some((at, after_ms)) = watch_after
+                && at <= now
+            {
+                watch_after = None;
+                session.board.watch_pcs(&watch_pcs)?;
+                session.board.watch_writes(&watch_writes)?;
+                eprintln!("FUJIMOD XP5 watch-pcs armed at {after_ms} ms (tick {now})");
+            }
+            // Stop the slice at the next scheduled host action, so it applies at its guest time.
+            let until = [next_patch, timed_gpio.front().map(|item| item.0), timed_pokes.front().map(|item| item.0),
+                watch_after.map(|item| item.0)]
+                .into_iter()
+                .flatten()
+                .fold(now.saturating_add(slice), u64::min);
             Ok(std::ops::ControlFlow::Continue(Some(until)))
         },
         |session, result| {
             for line in session.board.take_console() {
                 println!("{line}");
             }
+            print_write_notes(&session.board, ticks_per_second);
             for frame in session.board.take_frames() {
                 outputs.frame(frame)?;
             }
@@ -377,9 +567,11 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         limits.stop_reason(&session).unwrap_or(crate::host::StopReason::Other)
     };
     eprintln!("FUJIMOD XP5 end: {}", stop_reason.name());
+    print_write_notes(&session.board, ticks_per_second);
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
+    let card_write = card_write_back.as_ref().map_or(Ok(()), |back| back.write(&session));
     let output_finish = screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
     let state = session.board.state();
     let state_write = serde_json::to_vec_pretty(&state)
@@ -402,6 +594,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         ("board", board_finish),
         ("outputs", output_finish),
         ("board state", state_write),
+        ("card image", card_write),
     ]
     .into_iter()
     .filter_map(|(name, result)| result.err().map(|error| format!("{name}={error}")))
@@ -443,6 +636,17 @@ fn parse_ranges(option: &str, spec: &str) -> Result<Vec<(u64, u64)>, String> {
         }
         Ok((address, length))
     }).collect()
+}
+
+/// Print the `--watch-writes` notes recorded since the last call.
+fn print_write_notes(board: &fujimod_emulator::board::Board, ticks_per_second: u64) {
+    let (notes, dropped) = board.take_write_notes();
+    for note in notes {
+        eprintln!("FUJIMOD XP5 write: {}", note.line(ticks_per_second));
+    }
+    if dropped > 0 {
+        eprintln!("FUJIMOD XP5 write: {dropped} more watched writes were not recorded (note bound)");
+    }
 }
 
 fn parse_dumps(spec: &str) -> Result<Vec<(u64, usize)>, String> {
@@ -496,5 +700,77 @@ fn post_mortem(
     }
     for entry in board.pc_entries() {
         eprintln!("FUJIMOD XP5 pc-entry: {entry}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn viewer_key_names_map_to_physical_inputs() {
+        assert_eq!(ViewerInput::parse("SHUTTER_HALF"), Ok(ViewerInput::Shutter { full: false }));
+        assert_eq!(ViewerInput::parse("shutter_full"), Ok(ViewerInput::Shutter { full: true }));
+        assert_eq!(ViewerInput::parse("OK"), Ok(ViewerInput::Key(Key::Menu)));
+        assert_eq!(ViewerInput::parse("DISP"), Ok(ViewerInput::Key(Key::Back)));
+        assert_eq!(ViewerInput::parse("STICK_PUSH"), Ok(ViewerInput::Key(Key::StickPush)));
+        assert_eq!(ViewerInput::parse("PLAY"), Ok(ViewerInput::Key(Key::Play)));
+        assert_eq!(ViewerInput::parse("REAR+"), Ok(ViewerInput::Key(Key::RearPlus)));
+        assert!(ViewerInput::parse("POWER").is_err());
+        assert_eq!(ViewerInput::parse("AEL"), Ok(ViewerInput::Key(Key::AeLock)));
+        assert_eq!(ViewerInput::parse("FRONT_PUSH"), Ok(ViewerInput::Key(Key::FrontPush)));
+        assert_eq!(
+            ViewerInput::parse("SET iso=800"),
+            Ok(ViewerInput::Set { control: "iso".into(), position: "800".into() })
+        );
+        assert!(ViewerInput::parse("SET iso=800@10").is_err());
+        assert!(ViewerInput::parse("SET iso=800,ss=A").is_err());
+        assert!(ViewerInput::parse("SET iso").is_err());
+    }
+
+    #[test]
+    fn new_control_key_names_parse() {
+        for (name, key) in [
+            ("AEL", Key::AeLock),
+            ("AFON", Key::AfOn),
+            ("STICK_UL", Key::StickUpLeft),
+            ("STICK_UR", Key::StickUpRight),
+            ("STICK_DL", Key::StickDownLeft),
+            ("STICK_DR", Key::StickDownRight),
+            ("REAR_PUSH", Key::RearPush),
+            ("FRONT_PUSH", Key::FrontPush),
+            ("REAR+", Key::RearPlus),
+            ("FRONT-", Key::FrontMinus),
+        ] {
+            assert_eq!(Key::parse(name), Ok(key), "{name}");
+        }
+        let edges = crate::host::parse_keys(None, Some("100:REAR+,200:AEL:300")).unwrap();
+        let names: Vec<_> = edges.iter().map(|edge| (edge.delay.as_millis(), edge.name.as_str(), edge.pressed)).collect();
+        assert_eq!(names, [(100, "REAR+", true), (200, "AEL", true), (250, "REAR+", false), (500, "AEL", false)]);
+    }
+
+    #[test]
+    fn viewer_handler_queues_valid_keys_and_refuses_unknown_names() {
+        let queue = ViewerQueue::default();
+        let handler = viewer_key_handler(queue.clone());
+        handler("UP", true).unwrap();
+        handler("SHUTTER_FULL", false).unwrap();
+        assert!(handler("NOT_A_KEY", true).is_err());
+        let queued: Vec<_> = queue.lock().unwrap().drain(..).collect();
+        assert_eq!(queued, [
+            (ViewerInput::Key(Key::Up), true),
+            (ViewerInput::Shutter { full: true }, false),
+        ]);
+    }
+
+    #[test]
+    fn full_shutter_press_holds_half_press_line_low() {
+        let mut shutter = [false; 2];
+        assert_eq!(shutter_levels(&mut shutter, false, true), (false, true));
+        assert_eq!(shutter_levels(&mut shutter, true, true), (false, false));
+        assert_eq!(shutter_levels(&mut shutter, false, false), (false, false));
+        assert_eq!(shutter_levels(&mut shutter, true, false), (true, true));
+        assert_eq!(shutter_levels(&mut shutter, true, true), (false, false));
+        assert_eq!(shutter_levels(&mut shutter, true, false), (true, true));
     }
 }

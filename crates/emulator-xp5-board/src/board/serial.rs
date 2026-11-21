@@ -59,6 +59,7 @@ impl Endpoint for GenericSink {
         }
         if self.miso_high { u16::MAX } else { 0 }
     }
+    fujimod_emulator_devices::checkpoint_fields!(miso_high: bool, transfers: u64, last: Vec<u16>);
     fn save(&self) -> serde_json::Value {
         serde_json::json!({"miso_high": self.miso_high, "transfers": self.transfers, "last": self.last})
     }
@@ -68,10 +69,12 @@ impl Endpoint for GenericSink {
         Ok(())
     }
 }
-/// A power controller whose key-ladder registers are driven by the body's
-/// controls. Their value is refreshed before every transfer, so the guest reads
-/// the held key's ladder value, or the declared released value, and a guest
-/// write to one of these registers does not stick.
+/// A power controller whose key-ladder registers, switch bits and dial count
+/// are driven by the body's controls. Ladder and switch registers are
+/// refreshed before every transfer, so the guest reads the held keys' ladder
+/// value, or the declared released value, and a guest write to them does not
+/// stick. A counting register is loaded when the guest starts to read it, and
+/// that read consumes the count it returns.
 struct LadderDriven {
     inner: PowerController,
     controls: Arc<dyn Controls>,
@@ -80,7 +83,7 @@ struct LadderDriven {
 impl LadderDriven {
     fn refresh(&mut self) {
         for &register in &self.registers {
-            if let Some(value) = self.controls.register_sample(register) {
+            if let Some(value) = self.controls.drive_register(register, self.inner.register(register)) {
                 self.inner.set_register(register, value);
             }
         }
@@ -98,6 +101,13 @@ impl Endpoint for LadderDriven {
     }
     fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, now_ns: u64) -> u16 {
         self.refresh();
+        let command = frame.word as u8;
+        if self.inner.transfer_position() == 0
+            && command & 0x80 == 0
+            && let Some(count) = self.controls.take_register(command & 0x7f)
+        {
+            self.inner.set_register(command & 0x7f, count);
+        }
         self.inner.transfer(frame, now_ns)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -117,6 +127,12 @@ impl Endpoint for LadderDriven {
         self.refresh();
         Ok(())
     }
+    fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
+        if self.registers.contains(&register) {
+            return Err("power-controller register is driven by the body controls".into());
+        }
+        Endpoint::set_input_bits(&mut self.inner, register, mask, value)
+    }
 }
 
 pub fn build(
@@ -135,6 +151,35 @@ pub fn build(
         attachments(wiring.endpoints, Some(controls))?,
     )
 }
+/// Parse `XT5_POWER_REGISTERS="REGISTER=VALUE,..."` (numbers decimal or `0x` hexadecimal):
+/// power-controller registers a run sets at power-on in place of the part's defaults. A host input
+/// like `XT5_ADC`, kept outside the manifest. On the X-T5, register 0x32 is the battery
+/// temperature in 0.1 K (2982 = 25.0 C); it reads 0 with no battery data, and the battery driver
+/// then reports external power.
+fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
+    fn number(text: &str) -> Option<u32> {
+        let text = text.trim();
+        match text.strip_prefix("0x") {
+            Some(hex) => u32::from_str_radix(hex, 16).ok(),
+            None => text.parse().ok(),
+        }
+    }
+    spec.split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| {
+            let (register, value) =
+                item.split_once('=').ok_or("XT5_POWER_REGISTERS needs REGISTER=VALUE[,...]")?;
+            let register = number(register)
+                .filter(|register| *register < 0x80)
+                .ok_or_else(|| format!("XT5_POWER_REGISTERS: invalid register in {item}"))?;
+            let value = number(value)
+                .and_then(|value| u16::try_from(value).ok())
+                .ok_or_else(|| format!("XT5_POWER_REGISTERS: invalid value in {item}"))?;
+            Ok((register as u8, value))
+        })
+        .collect()
+}
 fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
         Part::PowerController {
@@ -149,8 +194,13 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
                     .map_err(|e| format!("power-controller register {address}: {e}"))?;
                 part.set_register(address, value);
             }
+            if let Ok(spec) = std::env::var("XT5_POWER_REGISTERS") {
+                for (address, value) in parse_power_registers(&spec)? {
+                    part.set_register(address, value);
+                }
+            }
             match controls
-                .map(|controls| (controls.register_ladders(), controls))
+                .map(|controls| (controls.driven_registers(), controls))
                 .filter(|(registers, _)| !registers.is_empty())
             {
                 Some((registers, controls)) => {
@@ -210,7 +260,16 @@ pub(super) fn gpio_wire(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_controls::ladder_keys::{Ladder, LadderKeys, Options, Rung, Wire};
+
+    #[test]
+    fn power_register_inputs_parse_decimal_and_hexadecimal() {
+        assert_eq!(parse_power_registers("0x32=2982, 3=600").unwrap(), [(0x32, 2982), (3, 600)]);
+        assert_eq!(parse_power_registers("").unwrap(), []);
+        assert!(parse_power_registers("0x32").unwrap_err().contains("REGISTER=VALUE"));
+        assert!(parse_power_registers("0x80=1").unwrap_err().contains("invalid register"));
+        assert!(parse_power_registers("3=0x10000").unwrap_err().contains("invalid value"));
+    }
+    use fujimod_emulator_parts_controls::ladder_keys::{CountingDial, Ladder, LadderKeys, Options, RegisterSwitch, Rung, Wire};
     use fujimod_emulator_parts_controls::resistor_keys::Key;
     use fujimod_emulator_parts_io::serial::Frame;
     use std::time::Duration;
@@ -233,7 +292,20 @@ mod tests {
                     },
                     levels: 1024,
                     rungs: vec![rung(Key::Menu, 77)],
+                    sets: vec![],
                 }],
+                dials: vec![],
+                switches: vec![RegisterSwitch {
+                    name: "power".into(),
+                    register: 0,
+                    bit: 10,
+                    set: "OFF".into(),
+                    clear: "ON".into(),
+                    basis: "test fixture".into(),
+                }],
+                rear_dial: Some(CountingDial { register: 0x36, basis: "test fixture".into() }),
+                front_dial: None,
+                gpio_keys: vec![],
             })
             .unwrap(),
         )
@@ -283,6 +355,26 @@ mod tests {
         keys.enqueue(Duration::from_nanos(9), Key::Menu, false).unwrap();
         keys.advance(9);
         assert_eq!(read(endpoint.as_mut(), 0x34), 1023);
+    }
+
+    #[test]
+    fn switch_bits_and_the_dial_count_reach_the_power_controller() {
+        let keys = keys();
+        let mut endpoint = attach(keys.clone());
+        assert_eq!(read(endpoint.as_mut(), 0x00), 0x200, "no position: reset value");
+        assert_eq!(read(endpoint.as_mut(), 0x36), 0);
+        keys.set_position(Duration::from_nanos(3), "power", "OFF").unwrap();
+        for _ in 0..3 {
+            keys.enqueue(Duration::from_nanos(3), Key::RearMinus, true).unwrap();
+        }
+        keys.advance(3);
+        assert_eq!(read(endpoint.as_mut(), 0x00), 0x600);
+        // -3 as a signed nibble, then cleared by that read.
+        assert_eq!(read(endpoint.as_mut(), 0x36), 0xd);
+        assert_eq!(read(endpoint.as_mut(), 0x36), 0);
+        keys.set_position(Duration::from_nanos(4), "power", "ON").unwrap();
+        keys.advance(4);
+        assert_eq!(read(endpoint.as_mut(), 0x00), 0x200);
     }
 
     #[test]

@@ -256,9 +256,9 @@ impl Engine {
                 if self.state.pending.is_some() && value != self.state.enable as u64 {
                     return Err("PL022 control change during a frame is unmodeled".into());
                 }
-                if value & 2 == 0 && !self.state.rx.is_empty() {
-                    return Err("PL022 disable with unread FIFO data is unmodeled".into());
-                }
+                // Clearing SSE does not flush the FIFOs (PL022 TRM): unread receive
+                // words stay readable. The X-T5 4.31 M-core disables the companion
+                // SSP (0x21430) with IBIS sensor replies still queued.
                 let old = self.state.enable;
                 self.state.enable = value as u8;
                 if let Err(e) = self.start(now) {
@@ -350,7 +350,6 @@ impl Controller {
             })
             || state.pending.is_some() && state.divider < 2
             || state.pending.is_some() != state.clock_chain.is_some()
-            || !state.rx.is_empty() && state.enable & 2 == 0
             || state.idle_since.is_some() && (state.pending.is_some() || state.rx.is_empty())
             || state.timeout && (state.rx.is_empty() || state.pending.is_some())
             || state
@@ -510,6 +509,11 @@ impl Device for Controller {
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.offset(address, size)
             .is_some_and(|o| matches!(o, 0 | 4 | 0xc | 0x10 | 0x14 | 0x18 | 0x1c | 0x24))
+    }
+    fn poll_stable(&self, address: u64, size: u8) -> bool {
+        // SSPSR follows the FIFOs and the frame in flight. They change at a
+        // data register access and when a frame ends, which is a deadline.
+        self.offset(address, size) == Some(0xc)
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;

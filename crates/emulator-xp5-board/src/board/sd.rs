@@ -4,7 +4,7 @@
 //! slot (`sdhci-uhs2`) shares only its contacts.
 use fujimod_emulator_devices::{
     bus::InterruptLine,
-    graph::{DeviceGraph, DeviceWindow},
+    graph::{DeviceGraph, DeviceWindow, Mapping},
     parts::{card_contacts::Contacts, sd_card::Card},
 };
 use fujimod_emulator_ip::sdhci::{
@@ -82,6 +82,7 @@ pub(super) fn register(
         .get_mut(&window.base)
         .ok_or("SD host requires explicit card media")?;
     let card = slot.card.take().ok_or("SD card media already has an SD host")?;
+    let address_high = host.controller.address_high;
     let contacts = slot.contacts.clone();
     let device = if let Some(irq) = host.irq {
         SdHost::new(
@@ -95,7 +96,13 @@ pub(super) fn register(
     } else {
         SdHost::new_polled(host.controller, card, contacts)?
     };
-    graph.register(window.base, window.size, Box::new(device))?;
+    // A port's DMA address-high word sits in the system control block, so the
+    // host owns that word as a second window (X-T5 4.31 0x13a8ea0).
+    let mut windows = vec![Mapping { base: window.base, size: window.size }];
+    if let Some(base) = address_high {
+        windows.push(Mapping { base, size: 4 });
+    }
+    graph.register_windows(windows, Box::new(device))?;
     Ok(())
 }
 /// A UHS-II port of the slot whose UHS-I host is at `slot`: its PHY control
@@ -210,9 +217,12 @@ mod tests {
         register_uhs2(&mut graph, &port, &media).unwrap();
         assert!(graph.at(0xffd02224).is_ok());
         assert!(require_hosts(&media).unwrap_err().contains("no SD host"));
-        let host = DeviceWindow {base:0xffd00000,size:0x1e0,kind:"sdhci".into(),options:toml::from_str("[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296").unwrap()};
+        let host = DeviceWindow {base:0xffd00000,size:0x1e0,kind:"sdhci".into(),options:toml::from_str("[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296\ndram_alias=false\naddress_high=0xff90e7d8").unwrap()};
         register(&mut graph, &host, &mut media).unwrap();
         require_hosts(&media).unwrap();
+        // The host also owns its DMA address-high word in the system control block.
+        assert_eq!(graph.at(0xff90e7d8).unwrap(), graph.at(0xffd00000).unwrap());
+        assert!(graph.at(0xff90e7dc).is_err());
         let mut wrong = port.clone();
         wrong.size = 0x200;
         assert!(register_uhs2(&mut DeviceGraph::new(), &wrong, &media).is_err());

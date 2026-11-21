@@ -696,6 +696,14 @@ impl Recipe {
                             options.hold_units()?,
                             options.fallback_wait_seconds,
                         )?
+                    } else if setup.stock_selector.is_some() && storage.is_none() {
+                        // The recipe's own startup: the preloaded selector does not boot this body.
+                        xp5::package_stock_selector(
+                            &inverted,
+                            setup,
+                            ram,
+                            options.hold_units()?,
+                        )?
                     } else {
                         xp5::package_with_storage(
                             &inverted,

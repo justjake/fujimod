@@ -84,7 +84,27 @@ pub fn sequence_high(nal: &[u8]) -> Result<Sequence, String> {
     sequence_profile(nal, true)
 }
 
+/// The largest SPS level and coded picture a decoder accepts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bounds {
+    pub level_idc: u32,
+    pub coded_width: usize,
+    pub coded_height: usize,
+}
+
+impl Bounds {
+    /// Level 4.2 and 1920x1088: the bound of [`sequence`] and [`sequence_high`].
+    pub const FULL_HD: Self = Self { level_idc: 42, coded_width: 1920, coded_height: 1088 };
+    /// Level 5.2 and 4096x2304: 4K movies.
+    pub const UHD: Self = Self { level_idc: 52, coded_width: 4096, coded_height: 2304 };
+}
+
 fn sequence_profile(nal: &[u8], allow_high: bool) -> Result<Sequence, String> {
+    sequence_bounded(nal, allow_high, Bounds::FULL_HD)
+}
+
+/// [`sequence`] or, with `allow_high`, [`sequence_high`], with the given bounds.
+pub fn sequence_bounded(nal: &[u8], allow_high: bool, bounds: Bounds) -> Result<Sequence, String> {
     if nal.first().map(|b| b & 31) != Some(7) || nal.len() > 256 {
         return Err("AVC requires a bounded SPS".into());
     }
@@ -94,7 +114,7 @@ fn sequence_profile(nal: &[u8], allow_high: bool) -> Result<Sequence, String> {
         return Err("AVC decoder supports Baseline profile".into());
     }
     bits.bits(8)?; // Constraint flags.
-    if bits.bits(8)? > 42 || bits.ue()? > 31 {
+    if bits.bits(8)? > bounds.level_idc || bits.ue()? > 31 {
         return Err("AVC SPS level or identifiers exceed supported bounds".into());
     }
     if profile == 100 {
@@ -129,7 +149,7 @@ fn sequence_profile(nal: &[u8], allow_high: bool) -> Result<Sequence, String> {
     }
     let coded_width = (bits.ue()? as usize + 1) * 16;
     let coded_height = (bits.ue()? as usize + 1) * 16;
-    if coded_width > 1920 || coded_height > 1088 || bits.bit()? != 1 {
+    if coded_width > bounds.coded_width || coded_height > bounds.coded_height || bits.bit()? != 1 {
         return Err("AVC decoder requires bounded progressive pictures".into());
     }
     bits.bit()?; // direct_8x8_inference_flag.
@@ -313,6 +333,7 @@ pub fn packet_sequence(bytes: &[u8]) -> Result<Option<Sequence>, String> {
 pub struct Decoder {
     sequence: Option<Sequence>,
     allow_high: bool,
+    bounds: Bounds,
     #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
     codec: openh264::decoder::Decoder,
 }
@@ -333,6 +354,34 @@ mod tests {
             level_idc: 42,
         }
     }
+    /// A level 5.1 stream, as the X-T5 4K movie encoder writes: the default movie decoder
+    /// refuses its SPS, the 4K bounds decode it to the encoder's own reconstruction size.
+    #[test]
+    fn the_4k_bounds_accept_a_level_51_sequence() {
+        use crate::h264::{Direct, DirectConfig};
+        let mut encoder = Direct::new(DirectConfig {
+            width: 64,
+            height: 32,
+            frames_per_second: 30,
+            bitrate: 0,
+            gop: 1,
+            level_idc: 51,
+        })
+        .unwrap();
+        let unit = encoder.encode_i420(&input(false)).unwrap();
+        let refusal = Decoder::new_movie(&[]).unwrap().decode_movie_unit(&unit).err().unwrap();
+        assert_eq!(refusal, "AVC SPS level or identifiers exceed supported bounds");
+        let picture =
+            Decoder::new_movie_bounded(&[], Bounds::UHD).unwrap().decode_movie_unit(&unit).unwrap();
+        assert_eq!((picture.sequence.width, picture.sequence.height), (64, 32));
+        assert_eq!(picture.i420.len(), 64 * 32 * 3 / 2);
+        // A picture larger than the bound is refused before the host codec runs.
+        let small = Bounds { level_idc: 52, coded_width: 48, coded_height: 32 };
+        let refusal =
+            Decoder::new_movie_bounded(&[], small).unwrap().decode_movie_unit(&unit).err().unwrap();
+        assert_eq!(refusal, "AVC decoder requires bounded progressive pictures");
+    }
+
     fn input(bright: bool) -> Vec<u8> {
         let mut pixels = vec![128; 64 * 32 * 3 / 2];
         for row in 0..32 {
@@ -533,10 +582,19 @@ impl Decoder {
         Self::new_with_high(history, true)
     }
 
+    /// A movie decoder ([`Decoder::new_movie`]) with other SPS bounds.
+    pub fn new_movie_bounded(history: &[Arc<[u8]>], bounds: Bounds) -> Result<Self, String> {
+        Self::new_bounded(history, true, bounds)
+    }
+
     fn new_with_high(history: &[Arc<[u8]>], allow_high: bool) -> Result<Self, String> {
+        Self::new_bounded(history, allow_high, Bounds::FULL_HD)
+    }
+
+    fn new_bounded(history: &[Arc<[u8]>], allow_high: bool, bounds: Bounds) -> Result<Self, String> {
         #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         {
-            let _ = (history, allow_high);
+            let _ = (history, allow_high, bounds);
             Err("AVC decoding is unavailable on this target".into())
         }
         #[cfg(any(not(target_arch = "wasm32"), target_os = "emscripten"))]
@@ -544,6 +602,7 @@ impl Decoder {
             let mut decoder = Self {
                 sequence: None,
                 allow_high,
+                bounds,
                 codec: openh264::decoder::Decoder::new()
                     .map_err(|e| format!("AVC decoder initialization: {e}"))?,
             };
@@ -558,11 +617,7 @@ impl Decoder {
     }
 
     fn read_sequence(&self, nal: &[u8]) -> Result<Sequence, String> {
-        if self.allow_high {
-            sequence_high(nal)
-        } else {
-            sequence(nal)
-        }
+        sequence_bounded(nal, self.allow_high, self.bounds)
     }
     pub fn decode(&mut self, bytes: &[u8]) -> Result<Picture, String> {
         let (used, _) = access_unit_profile(bytes, self.allow_high)?;

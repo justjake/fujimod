@@ -6,9 +6,11 @@
 
 mod card_image;
 mod display_output;
+mod loader_card;
 pub mod firmware;
 mod manifest;
 mod open;
+mod profile;
 mod rom_start;
 mod run;
 
@@ -18,7 +20,7 @@ pub use run::{Run, run_boot};
 use fujimod_catalog_configuration::RunStart;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 /// Explicit files and settings needed to construct an XP5 session.
 pub struct Startup {
@@ -30,14 +32,21 @@ pub struct Startup {
     pub scene: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub viewer_port: Option<u16>,
+    /// Physical key requests from the frame viewer (POST /key); None disables them.
+    pub viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     pub mode: Mode,
     pub quantum: Option<usize>,
+    /// Named camera settings (`setup=done`, `language=en`) the loader start boots with, from
+    /// the user profile the firmware's settings layout locates. Empty: the flash as installed.
+    pub camera_settings: BTreeMap<String, String>,
 }
 
 pub struct Started {
     firmware: firmware::Firmware,
     state: manifest::BootState,
     opened: open::Opened,
+    /// The loader start's `--card-image`, written back at the end of a run.
+    card_write_back: Option<loader_card::WriteBack>,
 }
 
 impl Started {
@@ -58,7 +67,8 @@ pub(super) fn open_startup(
     startup: Startup,
 ) -> Result<Started, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        scene, output: run_directory, viewer_port, mode, quantum: quantum_override } = startup;
+        scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
+        camera_settings } = startup;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard && sd_image.is_none()
         && !card_files.iter().any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
@@ -86,7 +96,7 @@ pub(super) fn open_startup(
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
-    let mut runtime_files = Vec::new();
+    let mut loader = None;
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard | RunStart::Setup) {
         let start = match (rom_path.as_deref(), start) {
             (None, RunStart::Setup) => {
@@ -94,7 +104,8 @@ pub(super) fn open_startup(
                     .ok_or("this firmware declares no setup-stage start")??;
                 rom_start::RomStart::from_setup_handoff(handoff)?
             }
-            (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?,
+            (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?
+                .with_setup_windows_of(&firmware_id)?,
             (None, RunStart::SdCard) => {
                 let handoff = rom_start::Handoff::for_firmware(&firmware_id)
                     .ok_or("this SD card start requires --boot-rom")??;
@@ -119,10 +130,21 @@ pub(super) fn open_startup(
         if rom_path.is_some() {
             return Err("a boot ROM requires a ROM or SD card startup".into());
         }
-        runtime_files = card_files;
+        // The loader start's card: slot 1, inserted before the board is built (loader_card.rs).
+        loader = loader_card::LoaderCard::load(sd_image.as_deref(), &card_files)?;
+        if let Some(card) = &loader {
+            card.apply(&mut state)?;
+        }
         None
     };
-    let mut opened = open::open_from(
+    // A ROM or SD card start drops the hand-off preload: stage one builds that block itself,
+    // from the power-controller registers the profile header also goes into.
+    let profile = if camera_settings.is_empty() {
+        None
+    } else {
+        Some(profile::place(&mut state, &firmware, configuration, &camera_settings)?)
+    };
+    let opened = open::open_from(
         &firmware,
         &state,
         configuration,
@@ -131,9 +153,10 @@ pub(super) fn open_startup(
         mode,
         quantum_override,
         rom.as_ref(),
+        loader.as_ref(),
+        viewer_keys,
+        profile.as_ref(),
     )?;
-    if rom.is_none() {
-        crate::media::attach(&mut opened.session, sd_image.as_deref(), &runtime_files)?;
-    }
-    Ok(Started { firmware, state, opened })
+    let card_write_back = loader.and_then(|card| card.write_back);
+    Ok(Started { firmware, state, opened, card_write_back })
 }

@@ -22,3 +22,17 @@ pub mod preview;
 
 pub const STATISTICS_BASE: u64 = 0xff800000;
 pub const STATISTICS_BANK_SIZE: usize = 0x75a0;
+
+#[path = "imaging_still.rs"]
+pub mod still;
+
+#[path = "imaging_movie.rs"]
+pub mod movie;
+#[path = "imaging_fcnv.rs"]
+pub mod fcnv;
+
+#[path = "imaging_mix.rs"]
+pub mod mix;
+
+#[path = "imaging_colour.rs"]
+pub mod colour;

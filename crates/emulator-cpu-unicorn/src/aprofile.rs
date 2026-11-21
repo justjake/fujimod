@@ -170,6 +170,14 @@ impl Core {
             })?;
             e.cpu.hook_watched(hook, true)?;
             e.write_hook.set(Some(hook));
+            // The translation filter above watches every page this
+            // processor translates, and the shared memory watches it in
+            // every alias and peer. Stores to other pages can then keep the
+            // engine's inline path: only watched pages hold translated code
+            // or a live exclusive reservation.
+            if std::env::var_os("FUJIMOD_A64_ALL_STORES").is_none() {
+                e.cpu.set_page_hooks(true)?;
+            }
             if a32 {
                 e.cpu.install_hook(Hook::Exception {
                     callback: exception,
@@ -592,6 +600,12 @@ impl CodeOwner for Execution {
                 false,
             )?;
             self.wide_code_watch.set(true);
+            if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some() {
+                eprintln!(
+                    "FUJIMOD execution counters: CPU{} observes every store from now on: code at {address:#x} is beyond the store watch bitmap",
+                    self.id.get()
+                );
+            }
             Ok(())
         } else {
             self.cpu.watch_stores(address, bytes)
@@ -672,9 +686,44 @@ unsafe fn exception(exception: arm::Exception, data: *mut c_void) {
     })
 }
 unsafe fn device(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
+/// Host-only diagnostic: with `FUJIMOD_ACCESS_HISTOGRAM` set, count the
+/// stores that reach an A-profile processor's code-write hook by processor
+/// and 4 KiB page, and print the most frequent pages on request.
+pub mod store_histogram {
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    thread_local! {
+        static COUNTS: RefCell<Option<HashMap<(usize, u64), u64>>> = RefCell::new(
+            std::env::var_os("FUJIMOD_ACCESS_HISTOGRAM").map(|_| HashMap::new()),
+        );
+    }
+    #[inline]
+    pub(super) fn count(core: usize, address: u64) {
+        COUNTS.with(|counts| {
+            if let Some(counts) = counts.borrow_mut().as_mut() {
+                *counts.entry((core, address >> 12)).or_default() += 1;
+            }
+        });
+    }
+    pub fn report() {
+        COUNTS.with(|counts| {
+            if let Some(counts) = counts.borrow_mut().as_mut() {
+                let total: u64 = counts.values().sum();
+                let pages = counts.len();
+                let mut rows: Vec<_> = counts.drain().collect();
+                rows.sort_by_key(|&(key, n)| (std::cmp::Reverse(n), key));
+                eprintln!("FUJIMOD store histogram: {total} hooked A-profile stores on {pages} pages");
+                for ((core, page), n) in rows.into_iter().take(16) {
+                    eprintln!("FUJIMOD store histogram: CPU{core} page {:#x} count={n}", page << 12);
+                }
+            }
+        });
+    }
+}
 unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mut c_void) {
     let e = unsafe { &*data.cast::<Execution>() };
     e.guarded(|| {
+        store_histogram::count(e.id.get(), address);
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
         }

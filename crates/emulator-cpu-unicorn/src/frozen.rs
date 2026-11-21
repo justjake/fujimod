@@ -28,6 +28,19 @@ pub(super) fn backings(core: Identity) -> Vec<(NonNull<u8>, usize)> {
         .map(|mapping| (NonNull::new(mapping.pointer as *mut u8).unwrap(), mapping.bytes))
         .collect()
 }
+/// The host address behind one live backing mapping that covers the range.
+pub(super) fn pointer(core: Identity, address: u64, bytes: usize) -> Option<NonNull<u8>> {
+    let end = address.checked_add(bytes as u64)?;
+    MAPPINGS.lock().unwrap().iter()
+        .find(|m| m.core == core && m.mapped && m.address <= address && end <= m.address + m.bytes as u64)
+        .and_then(|m| NonNull::new((m.pointer + (address - m.address) as usize) as *mut u8))
+}
+/// Whether any backing this processor maps, or still leases, overlaps the
+/// host range. Engine-owned RAM is never part of a host backing.
+pub(super) fn touches(core: Identity, pointer: usize, bytes: usize) -> bool {
+    MAPPINGS.lock().unwrap().iter()
+        .any(|mapping| mapping.core == core && overlaps(pointer as u64, bytes, mapping.pointer as u64, mapping.bytes))
+}
 pub(super) fn views(core: Identity) -> Vec<(u64, usize)> {
     let mut ranges = MAPPINGS
         .lock()

@@ -258,6 +258,43 @@ fn key_name(name: &str) -> Result<String, String> {
     Ok(name.to_owned())
 }
 
+/// A dial or switch position change `MS` guest milliseconds after the run
+/// starts (after a snapshot load, like `--press`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PositionChange {
+    pub at_ms: u64,
+    pub control: String,
+    pub position: String,
+}
+
+/// Parse `--set CONTROL=POSITION[@MS][,...]`. Without `@MS` the change applies
+/// when the run starts. Names are checked later against the body's dials.
+pub fn parse_settings(spec: &str) -> Result<Vec<PositionChange>, String> {
+    let mut changes = Vec::new();
+    for item in spec.split(',').map(str::trim).filter(|item| !item.is_empty()) {
+        let (setting, at_ms) = match item.rsplit_once('@') {
+            Some((setting, at)) => (
+                setting,
+                at.trim()
+                    .parse()
+                    .map_err(|_| format!("--set {item}: the time after @ is whole milliseconds"))?,
+            ),
+            None => (item, 0),
+        };
+        let (control, position) = setting
+            .split_once('=')
+            .ok_or_else(|| format!("--set {item}: needs CONTROL=POSITION[@MS]"))?;
+        let (control, position) = (control.trim(), position.trim());
+        if control.is_empty() || position.is_empty() {
+            return Err(format!("--set {item}: needs CONTROL=POSITION[@MS]"));
+        }
+        changes.push(PositionChange { at_ms, control: control.to_owned(), position: position.to_owned() });
+    }
+    // A stable sort keeps the written order of changes that share a time.
+    changes.sort_by_key(|change| change.at_ms);
+    Ok(changes)
+}
+
 pub fn parse_gpio(spec: &str) -> Result<(u8, u8, bool), String> {
     let (pin, level) = spec.split_once('=').ok_or("--gpio needs PORT:PIN=0|1")?;
     let (port, pin) = pin.split_once(':').ok_or("--gpio needs PORT:PIN=0|1")?;
@@ -272,6 +309,9 @@ pub fn parse_gpio(spec: &str) -> Result<(u8, u8, bool), String> {
 }
 
 pub fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
+    if spec.contains('@') {
+        return Err(format!("--poke {spec}: the timed form ADDR=U32@MS needs an XP5 run"));
+    }
     let (address, value) = spec.split_once('=').ok_or("--poke needs ADDR=U32")?;
     let address = parse_number(address)?;
     let value = u32::try_from(parse_number(value)?).map_err(|_| "--poke value exceeds u32")?;
@@ -279,6 +319,65 @@ pub fn parse_poke(spec: &str) -> Result<(u64, u32), String> {
         return Err("--poke address needs 4-byte alignment".into());
     }
     Ok((address, value))
+}
+
+/// `ADDR=U32` (applied before the run) or `ADDR=U32@MS` (applied MS milliseconds of guest time
+/// after the run starts, after a snapshot load). Returns the time, if any, and the write.
+pub fn parse_timed_poke(spec: &str) -> Result<(Option<u64>, u64, u32), String> {
+    match spec.split_once('@') {
+        Some((write, at)) => {
+            let at_ms = at.trim().parse()
+                .map_err(|_| format!("--poke {spec}: the time after @ is whole milliseconds"))?;
+            let (address, value) = parse_poke(write.trim())?;
+            Ok((Some(at_ms), address, value))
+        }
+        None => {
+            let (address, value) = parse_poke(spec.trim())?;
+            Ok((None, address, value))
+        }
+    }
+}
+
+#[cfg(test)]
+mod poke_tests {
+    use super::*;
+
+    #[test]
+    fn position_settings_take_an_optional_time() {
+        let change = |at_ms, control: &str, position: &str| PositionChange {
+            at_ms,
+            control: control.into(),
+            position: position.into(),
+        };
+        assert_eq!(
+            parse_settings("iso=800@1500, ss=1/250@500,ev=-2/3,power=OFF@9000").unwrap(),
+            [
+                change(0, "ev", "-2/3"),
+                change(500, "ss", "1/250"),
+                change(1500, "iso", "800"),
+                change(9000, "power", "OFF"),
+            ]
+        );
+        assert_eq!(parse_settings("").unwrap(), []);
+        assert!(parse_settings("iso").is_err());
+        assert!(parse_settings("iso=@10").is_err());
+        assert!(parse_settings("=800").is_err());
+        assert!(parse_settings("iso=800@1.5").is_err());
+        assert!(parse_settings("iso=800@").is_err());
+    }
+
+
+    #[test]
+    fn timed_poke_takes_milliseconds_after_the_at_sign() {
+        assert_eq!(parse_timed_poke("0x257ccd8=0xc02"), Ok((None, 0x257_ccd8, 0xc02)));
+        assert_eq!(parse_timed_poke("0x257ccd8=0xc02@1500"), Ok((Some(1500), 0x257_ccd8, 0xc02)));
+        assert_eq!(parse_timed_poke("0x257ccd8=2@0"), Ok((Some(0), 0x257_ccd8, 2)));
+        assert!(parse_timed_poke("0x257ccd8=2@1.5").is_err());
+        assert!(parse_timed_poke("0x257ccd8=2@").is_err());
+        assert!(parse_timed_poke("0x257ccd9=2@10").is_err(), "unaligned address");
+        assert!(parse_poke("0x257ccd8=2@10").is_err(), "the untimed parser refuses a time");
+        assert_eq!(parse_poke("0x257ccd8=2"), Ok((0x257_ccd8, 2)));
+    }
 }
 
 #[cfg(test)]

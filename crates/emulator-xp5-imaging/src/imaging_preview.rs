@@ -14,14 +14,104 @@ struct State {
     armed: bool,
     frames: u64,
     deadline: Option<u64>,
+    /// RIFP: the last still-run output (see [`super::still`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    yc_output: Option<super::still::YcPicture>,
 }
 impl State {
     fn r(&self, o: u64) -> u32 {
         self.regs.get(&o).copied().unwrap_or(0)
     }
 }
+/// The RIFP I/O DMA at 0xffd01000 (channel 1 of the stock driver 0x2c720f8 / 0x2c6e478,
+/// channel table 0x32fa998, ops table 0x32fac38). The X-T5 4.31 still path only uses it in
+/// register-list mode (+0x4c bit 0 = 1): the recf register queue (0x13c0e54 / 0x13c0e94,
+/// entries of `value: u32, address: u32`) is read from DRAM and each entry becomes one
+/// 32-bit MMIO write, which is how the queued RIFP, RCIF/RCIZ and RESZ settings and the
+/// RIFP start (0xffd02004 = 1) reach the hardware.
+///
+/// * +0x00 run/stop handshake: 0x2c72da4 writes 0 and polls bit 0 until it reads 1.
+/// * +0x40 bit 0 START (ops +0x50, 0x2c6e97c), +0x44 bit 0 interrupt enable (ops +0x60,
+///   0x2c6e9e0), +0x48 bit 0 done status, write-one-to-clear (ISR 0x2c72d28 -> 0x2c6ea44).
+/// * Source (queue): +0x50 address bits 31..0, +0x54 bit 31 enable and bits 2..0 address
+///   bits 34..32, +0x58 pitch 8, +0x60 line bytes 8, +0x64 lines = entry count.
+/// * Destination: +0x6c = 0, +0x70 bit 31, +0x74 pitch 4, +0x7c line bytes 4, +0x80 = count.
+/// * Done raises INTID 230 (logical 0x15, 0x18ea918) while +0x44 bit 0 is set.
+///
+/// The engine is opt-in (`with_queue_completion_ticks`); without it, and for every other
+/// aligned word below +0xdc, the window stores its last write. The RIFP model reads the
+/// destination words +0x6c..+0x80.
 #[derive(Clone, Default)]
-pub struct Io(Arc<Mutex<State>>);
+pub struct Io(Arc<Mutex<State>>, Option<u64>);
+
+const QUEUE_IRQ: u32 = 230;
+
+/// Diagnostic trace of the RIFP register programming (`XT5_RIFP_TRACE=FILE`): each register
+/// list the I/O DMA performs (`Q address value` lines after a `queue` header) and each
+/// direct write to a RIFP sub-block page (`W address value`), with the guest time in ticks.
+fn trace(line: impl FnOnce() -> String) {
+    use std::io::Write;
+    static FILE: std::sync::OnceLock<Option<Mutex<std::fs::File>>> = std::sync::OnceLock::new();
+    let file = FILE.get_or_init(|| {
+        let path = std::env::var_os("XT5_RIFP_TRACE").filter(|path| !path.is_empty())?;
+        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(Mutex::new)
+    });
+    if let Some(file) = file {
+        let _ = writeln!(file.lock().unwrap(), "{}", line());
+    }
+}
+
+impl Io {
+    /// Enable the register-list engine: ticks between a START and its done status. The
+    /// queued writes themselves are performed at the START.
+    pub fn with_queue_completion_ticks(mut self, ticks: u64) -> Self {
+        self.1 = Some(ticks);
+        self
+    }
+    fn irq(state: &State, cx: &mut Cx<'_>) {
+        cx.set_irq(QUEUE_IRQ, state.r(0x48) & state.r(0x44) & 1 != 0);
+    }
+    /// Read the queue and post its writes; returns false after a refusal.
+    fn start(&self, state: &mut State, cx: &mut Cx<'_>) -> bool {
+        if state.r(0x4c) & 1 != 1 {
+            cx.unsupported("rifp-io: only the register-list mode (+0x4c bit 0 = 1) is modeled");
+            return false;
+        }
+        let source = state.r(0x54);
+        let count = state.r(0x64) & 0xffff;
+        if source & 0x8000_0000 == 0
+            || state.r(0x60) & 0x1ffff != 8
+            || state.r(0x7c) & 0x1ffff != 4
+            || state.r(0x80) & 0xffff != count
+        {
+            cx.unsupported("rifp-io: register-list geometry is not 8-byte entries to 4-byte writes");
+            return false;
+        }
+        let address = u64::from(state.r(0x50)) | (u64::from(source & 7) << 32);
+        let mut entries = vec![0; count as usize * 8];
+        if let Err(e) = fujimod_emulator_devices::dma::bus_read(&[], cx, address, &mut entries) {
+            cx.fail(format!("rifp-io register list at {address:#x}: {e}"));
+            return false;
+        }
+        trace(|| format!("queue {count} entries at {address:#x} t={}", cx.now()));
+        for entry in entries.chunks_exact(8) {
+            let value = u32::from_le_bytes(entry[..4].try_into().unwrap());
+            let target = u32::from_le_bytes(entry[4..].try_into().unwrap());
+            trace(|| format!("Q {target:08x} {value:08x}"));
+            cx.post_mmio_write(u64::from(target), 4, u64::from(value));
+        }
+        let Some(at) = cx.now().checked_add(self.1.unwrap_or(0)) else {
+            cx.fail("rifp-io deadline overflow");
+            return false;
+        };
+        state.armed = true;
+        state.generation = state.generation.wrapping_add(1);
+        state.deadline = Some(at);
+        state.frames += 1;
+        cx.schedule(at, state.generation);
+        true
+    }
+}
 pub enum Preview {
     Input(InputBuffer),
     Rifp(Rifp),
@@ -31,6 +121,39 @@ pub struct Rifp {
     io: Io,
     delay: u64,
     source_luma: u8,
+    /// Bring-up option: unmodeled aligned words read back their last write (in `state.regs`).
+    retain_words: bool,
+    /// Bytes of the window ([`Preview::with_span`]): the RIFP top page, then the pages of
+    /// its sub-blocks (see [`super::colour`]).
+    span: u64,
+    /// Opt-in still data path ([`Preview::with_still_path`]).
+    still: Option<StillPath>,
+}
+/// What a RIFP still run reads and shares: the sensor's still RAW and RESZ's view of the
+/// RIFP output.
+pub struct StillPath {
+    pub sensor: fujimod_emulator_sensor_input::sensor::Sensor,
+    pub output: super::still::YcOutput,
+    /// The still path (`XT5_STILL_PATH=real`): develop or copy at the end of each queued run
+    /// ([`super::still::rifp_run`]).
+    pub develop: bool,
+    /// The movie path (`XT5_MOVIE_PATH=real`): a queued two-plane 4:2:0 run is not developed;
+    /// when it ends, the two-plane RESZ start that waits for it scales the run's input
+    /// picture ([`super::movie::rifp_inline_picture`]).
+    pub movie: bool,
+}
+impl StillPath {
+    /// The inline picture of a queued movie run with the RIFP words `r`, if it is one.
+    fn movie_run(
+        &self,
+        io: &Io,
+        r: impl Fn(u64) -> u32,
+    ) -> Option<Result<super::still::YcPicture, String>> {
+        if !self.movie || io.0.lock().unwrap().r(0x4c) & 1 != 1 {
+            return None;
+        }
+        super::movie::rifp_inline_picture(r)
+    }
 }
 impl Preview {
     pub fn new(rifp: bool, io: Io, options: &toml::Table) -> Result<Self, String> {
@@ -48,7 +171,12 @@ impl Preview {
         if options.keys().any(|key| {
             !matches!(
                 key.as_str(),
-                "completion_us" | "frame_period_us" | "source_luma"
+                "completion_us"
+                    | "frame_period_us"
+                    | "source_luma"
+                    | "retain_words"
+                    | "focus_filters"
+                    | "focus_window"
             )
         }) {
             return Err("unknown preview option".into());
@@ -59,15 +187,40 @@ impl Preview {
             .and_then(|n| u8::try_from(n).ok())
             .filter(|n| (16..=235).contains(n))
             .ok_or("preview requires a declared limited-range source_luma")?;
+        let retain_words = match options.get("retain_words") {
+            None => false,
+            Some(value) => value.as_bool().ok_or("preview retain_words must be a boolean")?,
+        };
+        // X-T5 4.31: the output at +0x400 fills statistics planes 0..3, which only the AF
+        // service reads, as 13 x 9 cells of its four contrast filters (`statistics::FocusFrame`).
+        // Without the option it writes the 7 x 7 colour sums, as before.
+        let focus_filters = match options.get("focus_filters") {
+            None => false,
+            Some(value) => value.as_bool().ok_or("preview focus_filters must be a boolean")?,
+        };
+        // X-T5 4.31: the focus outputs (planes 0..3 with `focus_filters`, 0x21, 0xe, 0xf) measure
+        // the window of words +0x7c (x) and +0x80 (y) (`statistics::FocusWindow`), not the full
+        // frame. Without the option they measure the 13 x 9 full-frame grid, as before.
+        let focus_window = match options.get("focus_window") {
+            None => false,
+            Some(value) => value.as_bool().ok_or("preview focus_window must be a boolean")?,
+        };
+        if rifp && (focus_filters || focus_window) {
+            return Err("focus_filters and focus_window are input buffer options".into());
+        }
+        let window = focus_window.then_some((0x7c, 0x80));
         if rifp {
             return Ok(Self::Rifp(Rifp {
                 state: State::default(),
                 io,
                 delay,
                 source_luma,
+                retain_words,
+                span: 0x1000,
+                still: None,
             }));
         }
-        Ok(Self::Input(InputBuffer::new(
+        let input = InputBuffer::new(
             Wiring {
                 base: 0xff974000,
                 irq: 170,
@@ -79,15 +232,30 @@ impl Preview {
                 enables: [0x7ff, 0x3f],
                 causes: [0x7ff, 0x3f],
                 outputs: vec![
-                    Output {
-                        enable_word: 0,
-                        bit: 1 << 7,
-                        low: 0x400,
-                        high: 0x404,
-                        high_mask: 7,
-                        columns: 7,
-                        rows: 7,
-                        planes: Planes::Color,
+                    if focus_filters {
+                        Output {
+                            enable_word: 0,
+                            bit: 1 << 7,
+                            low: 0x400,
+                            high: 0x404,
+                            high_mask: 7,
+                            columns: 13,
+                            rows: 9,
+                            planes: Planes::FocusFilters,
+                            window,
+                        }
+                    } else {
+                        Output {
+                            enable_word: 0,
+                            bit: 1 << 7,
+                            low: 0x400,
+                            high: 0x404,
+                            high_mask: 7,
+                            columns: 7,
+                            rows: 7,
+                            planes: Planes::Color,
+                            window: None,
+                        }
                     },
                     Output {
                         enable_word: 0,
@@ -98,13 +266,73 @@ impl Preview {
                         columns: 16,
                         rows: 16,
                         planes: Planes::Ae,
+                        window: None,
+                    },
+                    // Focus (contrast AF) statistics, 13 x 9 cells: the cells (plane 0x21)
+                    // and the two per-cell planes 0xe and 0xf (`statistics::FocusFrame`).
+                    // X-T5 4.31: +0x418 / +0x420 are enabled by +0x04 bit 8 (driver
+                    // 0x1358cf4, setters 0x135c94c / 0x135ca70); the enable of +0x410
+                    // (setter 0x135f85c) is not decoded and is taken as the same bit.
+                    Output {
+                        enable_word: 0,
+                        bit: 1 << 8,
+                        low: 0x410,
+                        high: 0x414,
+                        high_mask: 7,
+                        columns: 13,
+                        rows: 9,
+                        planes: Planes::FocusCells,
+                        window,
+                    },
+                    Output {
+                        enable_word: 0,
+                        bit: 1 << 8,
+                        low: 0x418,
+                        high: 0x41c,
+                        high_mask: 7,
+                        columns: 13,
+                        rows: 9,
+                        planes: Planes::FocusLevels,
+                        window,
+                    },
+                    Output {
+                        enable_word: 0,
+                        bit: 1 << 8,
+                        low: 0x420,
+                        high: 0x424,
+                        high_mask: 7,
+                        columns: 13,
+                        rows: 9,
+                        planes: Planes::FocusSums,
+                        window,
                     },
                 ],
                 reset_ticks: 0,
                 period_ticks: Some(delay),
             },
             None,
-        )?))
+        )?;
+        Ok(Self::Input(if retain_words {
+            input.with_retained_window()
+        } else {
+            input
+        }))
+    }
+    /// RIFP: at the end of each queued run with programmed input and output addresses, develop
+    /// or copy the picture (see [`super::still`]).
+    pub fn with_still_path(mut self, still: StillPath) -> Self {
+        if let Self::Rifp(rifp) = &mut self {
+            rifp.still = Some(still);
+        }
+        self
+    }
+    /// RIFP: the window covers `span` bytes from 0xffd02000, so the retained words include the
+    /// sub-block pages that follow the top page (X-T5 4.31: 0xffd03000..0xffd0bfff).
+    pub fn with_span(mut self, span: u64) -> Self {
+        if let Self::Rifp(rifp) = &mut self {
+            rifp.span = span;
+        }
+        self
     }
     pub fn with_statistics(mut self, statistics: Statistics) -> Self {
         if let Self::Input(input) = &mut self {
@@ -182,6 +410,9 @@ impl Device for Rifp {
         self.advance(cx);
         let o = a.wrapping_sub(0xffd02000);
         if n != 4 || o & 3 != 0 || o > 0x14c {
+            if self.retain_words && n == 4 && o & 3 == 0 && o < self.span {
+                return u64::from(self.state.r(o));
+            }
             cx.unmodeled();
             return 0;
         }
@@ -202,7 +433,12 @@ impl Device for Rifp {
         let o = a.wrapping_sub(0xffd02000);
         let v = v as u32;
         if n != 4 || o & 3 != 0 || o > 0x14c {
-            cx.unmodeled();
+            if self.retain_words && n == 4 && o & 3 == 0 && o < self.span {
+                trace(|| format!("W {a:08x} {v:08x} t={}", cx.now()));
+                self.state.regs.insert(o, v);
+            } else {
+                cx.unmodeled();
+            }
             return;
         }
         if o == 0 && v & 1 == 0 {
@@ -211,13 +447,25 @@ impl Device for Rifp {
             self.state.generation = self.state.generation.wrapping_add(1);
             self.state.regs.insert(0, 1);
             self.state.regs.insert(0x144, 0);
+            if let Some(still) = &self.still {
+                still.output.set_busy(false);
+            }
         } else if o == 0x14c {
             self.state
                 .regs
                 .insert(0x144, self.state.r(0x144) & !(v & 1));
         } else {
+            trace(|| format!("W {a:08x} {v:08x} t={}", cx.now()));
             self.state.regs.insert(o, v);
             if o == 4 && v & 1 != 0 {
+                if let Some(still) = &self.still {
+                    let regs = &self.state.regs;
+                    if still.develop
+                        || still.movie_run(&self.io, |o| regs.get(&o).copied().unwrap_or(0)).is_some()
+                    {
+                        still.output.set_busy(true);
+                    }
+                }
                 self.state.armed = true;
                 self.state.generation = self.state.generation.wrapping_add(1);
                 let Some(at) = cx.now().checked_add(self.delay) else {
@@ -244,6 +492,124 @@ impl Device for Rifp {
         }
         self.state.deadline = None;
         self.state.armed = false;
+        if let Some(still) = &self.still {
+            still.output.set_busy(false);
+            let queued = self.io.0.lock().unwrap().r(0x4c) & 1 == 1;
+            let regs = self.state.regs.clone();
+            let r = |o| regs.get(&o).copied().unwrap_or(0);
+            let mut ran = None;
+            // The movie path: a two-plane 4:2:0 YC run ends. The inline RESZ start that waits
+            // for it scales the run's input picture (movie module notes).
+            if let Some(picture) = still.movie_run(&self.io, r) {
+                let result = picture.and_then(|picture| {
+                    cx.log(&format!("RIFP movie run: inline two-plane 4:2:0 picture {picture:?}"));
+                    match still.output.take_deferred() {
+                        Some(job) if job.two_plane() => job.scale_two_plane(cx, Some(picture)),
+                        Some(_) => Err("RIFP movie run: the waiting RESZ start is not two-plane".into()),
+                        None => Err("RIFP movie run: no RESZ start waits for it".into()),
+                    }
+                });
+                match result {
+                    Ok(line) => cx.log(&line),
+                    Err(e) => cx.log(&format!("{e}; nothing written")),
+                }
+            }
+            // The movie path's RAW modes need the still path's RAW develop: without it a
+            // waiting two-plane start is dropped here.
+            if !still.develop && still.output.waits_two_plane() {
+                still.output.take_deferred();
+                cx.log(
+                    "RIFP run for a two-plane RESZ start: the RAW develop needs XT5_STILL_PATH=real; \
+                     nothing written",
+                );
+            }
+            // The still channel picture this run's input is in: the HDR exposures are three
+            // pictures, developed after the last one was written.
+            let raw = still
+                .sensor
+                .still_raw_at(u64::from(r(0x0c)) | u64::from(r(0x10) & 7) << 32, u64::from(r(0x1c)));
+            // RCIZ (drive-mode BKT): a queued run without an output address streams its
+            // output into the inline RESZ start that waits for it (still module notes).
+            if still.develop
+                && still.movie_run(&self.io, r).is_none()
+                && queued
+                && r(0x0c) | r(0x10) & 7 != 0
+                && r(0x40) | r(0x44) & 7 == 0
+                && let Some(job) = still.output.take_deferred()
+                && let Err(e) =
+                    super::still::rifp_into_resz(cx, r, raw, &job)
+            {
+                // As for the other movie starts: one the model cannot follow is logged.
+                if job.two_plane() {
+                    cx.log(&format!("{e}; nothing written"));
+                } else {
+                    cx.fail(e);
+                    return;
+                }
+            }
+            // A RAW-output run (FINE+RAW): copy the RAW crop; the output becomes a derived
+            // still RAW that the following develop runs read.
+            let mut copied = false;
+            if still.develop
+                && still.movie_run(&self.io, r).is_none()
+                && queued
+                && r(0x0c) | r(0x10) & 7 != 0
+                && r(0x40) | r(0x44) & 7 != 0
+            {
+                match super::still::rifp_raw_copy(cx, r, raw) {
+                    Ok(Some(derived)) => {
+                        still.sensor.record_derived_raw(derived);
+                        copied = true;
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        cx.fail(e);
+                        return;
+                    }
+                }
+            }
+            if still.develop
+                && !copied
+                && still.movie_run(&self.io, r).is_none()
+                && queued
+                && r(0x0c) | r(0x10) & 7 != 0
+                && r(0x40) | r(0x44) & 7 != 0
+            {
+                match super::still::rifp_run(cx, r, raw) {
+                    Ok(picture) => {
+                        self.state.yc_output = Some(picture);
+                        still.output.set(Some(picture));
+                        ran = Some(picture);
+                    }
+                    Err(e) => {
+                        cx.fail(e);
+                        return;
+                    }
+                }
+            }
+            if let Some(job) = still.output.take_deferred() {
+                let result = match ran {
+                    Some(_) if job.two_plane() => {
+                        cx.log(
+                            "RIFP run with an output address for a two-plane RESZ start is not \
+                             modelled; nothing written",
+                        );
+                        Ok(())
+                    }
+                    Some(picture) => job.scale(cx, Some(picture)),
+                    None => Err(format!(
+                        "RESZ inline start waited for a RIFP run without an output address \
+                         (+0x40 {:#x}, +0x44 {:#x}): a pure inline stream is not modelled",
+                        r(0x40),
+                        r(0x44)
+                    )),
+                };
+                if let Err(e) = result {
+                    cx.fail(e);
+                    return;
+                }
+            }
+        }
         let io = self.io.0.lock().unwrap();
         let address = u64::from(io.r(0x6c)) | (u64::from(io.r(0x70) & 7) << 32);
         let row = io.r(0x7c) & 0x1ffff;
@@ -283,6 +649,9 @@ impl Device for Rifp {
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.state = saved.decode(self.name())?;
+        if let Some(still) = &self.still {
+            still.output.set(self.state.yc_output);
+        }
         Ok(())
     }
     fn save(&self) -> Value {
@@ -295,6 +664,9 @@ impl Device for Rifp {
             return Err("RIFP active/deadline disagree".into());
         }
         self.state = s;
+        if let Some(still) = &self.still {
+            still.output.set(self.state.yc_output);
+        }
         Ok(())
     }
 }
@@ -304,28 +676,90 @@ impl Device for Io {
         "imaging-rifp-io"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
+        self.advance(cx);
         let o = address.wrapping_sub(0xffd01000);
         if n != 4 || o & 3 != 0 || o > 0xd8 {
             cx.unmodeled();
             return 0;
         }
-        u64::from(self.0.lock().unwrap().r(o))
+        let state = self.0.lock().unwrap();
+        u64::from(match o {
+            // Stopped/ready acknowledge of the run/stop handshake.
+            0 if self.1.is_some() => state.r(0) | 1,
+            _ => state.r(o),
+        })
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
+        self.advance(cx);
         let o = address.wrapping_sub(0xffd01000);
         if n != 4 || o & 3 != 0 || o > 0xd8 {
             cx.unmodeled();
             return;
         }
-        self.0.lock().unwrap().regs.insert(o, v as u32);
+        let v = v as u32;
+        let mut state = self.0.lock().unwrap();
+        if self.1.is_none() {
+            state.regs.insert(o, v);
+            return;
+        }
+        match o {
+            0x48 => {
+                let status = state.r(0x48) & !(v & 1);
+                state.regs.insert(0x48, status);
+            }
+            0x40 if v & 1 != 0 && !state.armed => {
+                state.regs.insert(0x40, v);
+                if !self.start(&mut state, cx) {
+                    return;
+                }
+            }
+            _ => {
+                state.regs.insert(o, v);
+                if o == 0 && v & 1 == 0 && state.armed {
+                    // Stop: a pending done status is dropped.
+                    state.armed = false;
+                    state.deadline = None;
+                    state.generation = state.generation.wrapping_add(1);
+                    state.regs.insert(0x40, 0);
+                }
+            }
+        }
+        if matches!(o, 0x00 | 0x40 | 0x44 | 0x48) {
+            Self::irq(&state, cx);
+        }
+    }
+    fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
+        if token == self.0.lock().unwrap().generation {
+            self.advance(cx);
+        }
+    }
+    fn next_deadline(&self, _: u64) -> Option<u64> {
+        self.0.lock().unwrap().deadline
+    }
+    fn advance(&mut self, cx: &mut Cx<'_>) {
+        let mut state = self.0.lock().unwrap();
+        if !state.deadline.is_some_and(|at| at <= cx.now()) {
+            return;
+        }
+        state.deadline = None;
+        state.armed = false;
+        state.regs.insert(0x40, 0);
+        let status = state.r(0x48) | 1;
+        state.regs.insert(0x48, status);
+        Self::irq(&state, cx);
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         Checkpoint::encode(self.name(), &*self.0.lock().unwrap())
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        saved.decode::<State>(self.name()).map(|_| ())
+        let state: State = saved.decode(self.name())?;
+        if state.armed != state.deadline.is_some() {
+            return Err("RIFP IO active/deadline disagree".into());
+        }
+        Ok(())
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
         *self.0.lock().unwrap() = saved.decode(self.name())?;
         Ok(())
     }
@@ -333,8 +767,12 @@ impl Device for Io {
         serde_json::to_value(&*self.0.lock().unwrap()).unwrap()
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
-        *self.0.lock().unwrap() =
+        let state: State =
             serde_json::from_value(v.clone()).map_err(|e| format!("RIFP IO checkpoint: {e}"))?;
+        if state.armed != state.deadline.is_some() {
+            return Err("RIFP IO active/deadline disagree".into());
+        }
+        *self.0.lock().unwrap() = state;
         Ok(())
     }
 }
@@ -394,6 +832,42 @@ mod tests {
         assert_eq!(preview.next_deadline(host.now), Some(2_000_000));
     }
     #[test]
+    fn focus_filters_option_fills_planes_zero_to_three_with_the_focus_filters() {
+        let options = |text: &str| toml::from_str::<toml::Table>(text).unwrap();
+        assert!(Preview::new(false, Io::default(), &options("frame_period_us=1000\nsource_luma=128\nfocus_filters=1")).is_err());
+        assert!(Preview::new(true, Io::default(), &options("completion_us=1\nsource_luma=128\nfocus_filters=true")).is_err());
+        let statistics = Statistics::new(
+            super::super::STATISTICS_BASE,
+            super::super::STATISTICS_BANK_SIZE,
+        )
+        .unwrap();
+        let mut preview = Preview::new(
+            false,
+            Io::default(),
+            &options("frame_period_us=1000\nsource_luma=128\nfocus_filters=true"),
+        )
+        .unwrap()
+        .with_statistics(statistics);
+        let mut host = RecordingHost {
+            ram_base: 0x1_0000_0000,
+            ram: vec![0x55; 0x2000],
+            ..Default::default()
+        };
+        {
+            let mut cx = Cx::new(&mut host, 2, 0xbeef, 0);
+            for (o, v) in [(0x400, 0x100), (0x404, 1), (0x500, 0x100), (4, (1 << 23) | (1 << 7))] {
+                preview.write(&mut cx, 0xff974000 + o, 4, v);
+            }
+            assert!(cx.refusal().is_none());
+        }
+        host.now = 1_000_000;
+        preview.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        // Without a sensor scene the four filter planes (0x1000 bytes) are written as zero.
+        assert!(host.ram[0x100..0x1100].iter().all(|v| *v == 0));
+        assert!(host.ram[0x1100..].iter().all(|v| *v == 0x55));
+    }
+
+    #[test]
     fn rifp_fills_only_its_programmed_high_address_output_on_completion() {
         let mut io = Io::default();
         let mut rifp = Preview::new(
@@ -428,5 +902,97 @@ mod tests {
         assert!(host.irqs.contains(&(202, true)));
         rifp.write(&mut Cx::new(&mut host, 0, 0, 0), 0xffd0214c, 4, 1);
         assert_eq!(host.irqs.last(), Some(&(202, false)));
+    }
+    /// Program the stock register-list descriptor (0x2c51f98 -> 0x2c720f8 -> 0x2c6e478)
+    /// for `count` entries at `queue`.
+    fn program_register_list(io: &mut Io, cx: &mut Cx<'_>, queue: u64, count: u32) {
+        for (o, v) in [
+            (0x4c, 1),
+            (0x50, queue as u32),
+            (0x54, 0x8000_0000 | (queue >> 32) as u32),
+            (0x58, 8),
+            (0x5c, 0),
+            (0x60, 8),
+            (0x64, count),
+            (0x68, 0),
+            (0x6c, 0),
+            (0x70, 0x8000_0000),
+            (0x74, 4),
+            (0x78, 0),
+            (0x7c, 4),
+            (0x80, count),
+            (0x84, 0),
+        ] {
+            io.write(cx, 0xffd01000 + o, 4, u64::from(v));
+        }
+    }
+    #[test]
+    fn register_list_start_posts_each_queued_write_then_raises_done() {
+        let mut io = Io::default().with_queue_completion_ticks(5_000);
+        let mut host = RecordingHost {
+            ram_base: 0x1_2000_0000,
+            ram: vec![0; 0x100],
+            ..Default::default()
+        };
+        // Entries as 0x13c0e54 stores them: value at +0, address at +4.
+        for (i, (value, address)) in [(1u32, 0xffd02148u32), (0x1234, 0xffd0b050), (1, 0xffd02004)]
+            .into_iter()
+            .enumerate()
+        {
+            host.ram[i * 8..i * 8 + 4].copy_from_slice(&value.to_le_bytes());
+            host.ram[i * 8 + 4..i * 8 + 8].copy_from_slice(&address.to_le_bytes());
+        }
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // Run/stop handshake (0x2c72da4): write 0, bit 0 then reads 1.
+        io.write(&mut cx, 0xffd01000, 4, 0);
+        assert_eq!(io.read(&mut cx, 0xffd01000, 4) & 1, 1);
+        program_register_list(&mut io, &mut cx, 0x1_2000_0000, 3);
+        io.write(&mut cx, 0xffd01044, 4, 1);
+        assert!(cx.take_posted_writes().is_empty());
+        io.write(&mut cx, 0xffd01040, 4, 1);
+        assert!(cx.refusal().is_none());
+        let posted: Vec<_> = cx
+            .take_posted_writes()
+            .into_iter()
+            .map(|w| (w.address, w.size, w.value))
+            .collect();
+        assert_eq!(
+            posted,
+            [(0xffd02148, 4, 1), (0xffd0b050, 4, 0x1234), (0xffd02004, 4, 1)]
+        );
+        drop(cx);
+        assert_eq!(io.next_deadline(0), Some(5_000));
+        assert!(!host.irqs.contains(&(230, true)));
+        let saved = io.save();
+        let mut copy = Io::default();
+        copy.restore(&saved).unwrap();
+        // Without the engine the window stays a plain register file.
+        let mut plain = Io::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        plain.write(&mut cx, 0xffd01040, 4, 1);
+        assert_eq!(plain.read(&mut cx, 0xffd01000, 4), 0);
+        assert!(cx.take_posted_writes().is_empty() && cx.refusal().is_none());
+        drop(cx);
+        host.now = 5_000;
+        let token = host.events.last().unwrap().2;
+        io.event(&mut Cx::new(&mut host, usize::MAX, 0, 0), token);
+        assert_eq!(host.irqs.last(), Some(&(230, true)));
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(io.read(&mut cx, 0xffd01048, 4), 1);
+        assert_eq!(io.read(&mut cx, 0xffd01040, 4), 0);
+        // ISR 0x2c72d28 acknowledges with 1 at +0x48.
+        io.write(&mut cx, 0xffd01048, 4, 1);
+        drop(cx);
+        assert_eq!(host.irqs.last(), Some(&(230, false)));
+        assert_eq!(io.next_deadline(host.now), None);
+    }
+    #[test]
+    fn rifp_io_refuses_a_start_outside_register_list_mode() {
+        let mut io = Io::default().with_queue_completion_ticks(1);
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        io.write(&mut cx, 0xffd01040, 4, 1);
+        assert!(cx.is_unmodeled());
+        assert!(cx.take_posted_writes().is_empty());
     }
 }

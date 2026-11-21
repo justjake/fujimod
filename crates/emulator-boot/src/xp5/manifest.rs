@@ -27,6 +27,12 @@ pub struct BootState {
     /// write protection are run inputs; the card is formatted blank.
     #[serde(default)]
     pub sd: Vec<fujimod_emulator_xp5_board::board::sd::MediaInputs>,
+    /// Run the M-profile processors in block execution instead of under the instruction
+    /// observer with its loop windows. Both reach the same guest state; this only chooses the
+    /// faster host path for the body's M-profile work, so it is not part of the wiring that a
+    /// snapshot binds to. `FUJIMOD_MPROFILE_INSTRUCTIONS` in the environment overrides it.
+    #[serde(default, skip_serializing)]
+    pub mprofile_block_execution: bool,
 }
 fn version() -> u32 {
     1

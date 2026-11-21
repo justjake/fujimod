@@ -57,6 +57,31 @@ size = 0x1000
 kind = "input-capture"
 [device.options]
 dma_transmit = [{ channel = 2, request = 32 }]
+# IBIS stage position sensor behind capture channel 2. Every servo tick the
+# M-core (0x3cd4, DMA handle 0x4000d) streams the 41-word table at M-core RAM
+# 0x34adc to ff928044 and takes NVIC line 62 (descriptor 0x31fb4) twice; handler
+# 0x31e8 reads one capture from ff928050 per interrupt (two samples, then one).
+# The servo 0x284cc linearizes each raw sample as (sample - 0x8000) * -256 >> 8
+# (runtime offsets/gains at M-core 0xf6b3c/0xf6b42), so 0x8000 is stage position
+# zero. Task 8 latches an axis error after |position - target| > 3200 for 800
+# consecutive 2.5 ms checks (0x107c8; FINDINGS 2026-11-08 00:30). rest = 0: the
+# stage held centered while the body is still. latency_ns and lag_shift are
+# scenario inputs, not X-T5 measurements.
+[device.options.sequencer]
+channel = 2
+companion_irq_line = 62
+latency_ns = 20000
+center = [32768, 32768, 32768]
+rest = [0, 0, 0]
+lag_shift = 2
+# Coil drive: extended timer general channels 2, 4 and 0 carry the servo's three
+# PWM outputs (M-core duty words 0xf6e68/0xf6e6c/0xf6e70 matched the channels'
+# second compare in a run); 872 (first compare) is zero drive. The gain sign
+# follows the servo's own drive compensation; the size is a scenario input.
+drive_channels = [2, 4, 0]
+drive_gain = [6, 6, -3]
+# Faithful by default: the sensor always answers. For quick development runs only,
+# XT5_IBIS_SETTLE_FRAMES=32000 stops answering after 2 s of servo (not hardware behavior).
 [[device]]
 base = 0xff929000
 size = 0x1000

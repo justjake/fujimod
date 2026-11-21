@@ -2560,6 +2560,7 @@ name = "fujimod-emulator-sensor-input"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-imaging",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -2704,6 +2705,8 @@ dependencies = [
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-graphics",
+ "fujimod-emulator-image-codecs",
+ "fujimod-emulator-imaging",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",
@@ -2745,6 +2748,7 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-imaging",
  "fujimod-emulator-sensor-input",
+ "fujimod-emulator-xp5-io",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
@@ -2756,11 +2760,14 @@ name = "fujimod-emulator-xp5-io"
 version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
+ "fujimod-emulator-ip-arm",
  "fujimod-emulator-parts-controls",
  "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -5977,6 +5984,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
+name = "rusty_h264-accel"
+version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e443555f5505e09198e33de3481ffc2abb57fb03a515e91537ad4a605e7ac51"
+
+[[package]]
 name = "rusty_h264-common"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5986,6 +5999,7 @@ dependencies = [
  "libm",
  "once_cell",
  "portable-atomic",
+ "rusty_h264-accel",
  "wide 0.7.33",
 ]
 
@@ -5995,6 +6009,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b14bdafc588c0eea6df22d1688e6c0490d3613d6c86b4679b4c016c82ac2f4e8"
 dependencies = [
+ "rusty_h264-accel",
  "rusty_h264-common",
 ]
 

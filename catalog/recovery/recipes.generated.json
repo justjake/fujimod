@@ -16943,6 +16943,28 @@
             "what": "Use the card-resident setup register-bank accessors"
           }
         ]
+      },
+      "stock_selector": {
+        "ram_edits": [
+          {
+            "address": 11972,
+            "old": 4181722112,
+            "new": 3533963264,
+            "what": "Decode section 4 to scratch DRAM at 0x20000000 instead of its own address (ldr x0, [x0, #8] becomes mov x0, #0x20000000 in the reset stage's section 4 load at 0x2e94), so the copy of section 4 that the card put in RAM stays and runs. With selector 1 the stage loads the section table and section 0 from the installed flash, and the running firmware loads the later sections from it."
+          }
+        ],
+        "cleared": [
+          {
+            "address": 17565696,
+            "size": 221472,
+            "what": "Controller payload cache: only the preloaded selector needs it in RAM; with selector 1 the firmware reads the payload from the installed flash. The card that booted an X-T5 body carried zeros here."
+          },
+          {
+            "address": 82247680,
+            "size": 14499840,
+            "what": "Overlays: with selector 1 the running firmware decodes them from the installed flash, also when RAM already holds them. On an X-T5 body a card with the overlay bytes here stayed black and the same card with zeros booted."
+          }
+        ]
       }
     },
     "cold_start": null,
