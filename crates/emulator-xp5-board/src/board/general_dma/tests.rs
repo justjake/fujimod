@@ -307,7 +307,7 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
         assert_eq!(error.err().as_deref(), Some("invalid XP5 serial DMA request wiring"));
     }
     let mut outside = ssp5_windows(json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire}));
-    outside[1].base = 0xff91a000;
+    outside[1].base = 0xff91c000;
     let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared(), Default::default(), None);
     assert_eq!(error.err().as_deref(), Some("invalid XP5 PL022 window"));
 }
