@@ -1,0 +1,619 @@
+{
+  "$schema": "https://fujimod.com/schemas/control-ids.schema.json",
+  "schema": 1,
+  "id": "xa3-222-control-ids",
+  "firmware_id": "xa3-222",
+  "scanner": {
+    "base": 13888960,
+    "count": 30,
+    "stride": 32,
+    "lookup": 4226852,
+    "sha256": "c0846e341bdf2531cf6f3e24499dc807e3dfc1af2ba2f8bacd71fbe33cae1f22"
+  },
+  "input_readers": {
+    "calibration": null,
+    "scanner": null
+  },
+  "native_key_names": null,
+  "event_translation": null,
+  "debug_keys": [
+    {
+      "name": "EXE_M",
+      "event": 52041
+    },
+    {
+      "name": "DISP_B",
+      "event": 52042
+    },
+    {
+      "name": "UP",
+      "event": 52101
+    },
+    {
+      "name": "DOWN",
+      "event": 52102
+    },
+    {
+      "name": "LEFT",
+      "event": 52103
+    },
+    {
+      "name": "RIGHT",
+      "event": 52104
+    }
+  ],
+  "inputs": [
+    {
+      "id": "row-0",
+      "event": 16,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 0,
+        "witness": {
+          "physical_key": 16,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 192,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-1",
+      "event": 128,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 1,
+        "witness": {
+          "physical_key": 128,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 160,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-2",
+      "event": 177,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 2,
+        "witness": {
+          "physical_key": 177,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 194,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-3",
+      "event": 196,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 3,
+        "witness": {
+          "physical_key": 196,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 198,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-4",
+      "event": 200,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 4,
+        "witness": {
+          "physical_key": 200,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 208,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-5",
+      "event": 210,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 5,
+        "witness": {
+          "physical_key": 210,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 212,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-6",
+      "event": 214,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 6,
+        "witness": {
+          "physical_key": 214,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 216,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-7",
+      "event": 256,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 7,
+        "witness": {
+          "physical_key": 256,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 320,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-8",
+      "event": 322,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 8,
+        "witness": {
+          "physical_key": 322,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 324,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-9",
+      "event": 330,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 9,
+        "witness": {
+          "physical_key": 330,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 337,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-10",
+      "event": 339,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 10,
+        "witness": {
+          "physical_key": 339,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 341,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-11",
+      "event": 352,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 11,
+        "witness": {
+          "physical_key": 352,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 354,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-12",
+      "event": 356,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 12,
+        "witness": {
+          "physical_key": 356,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 362,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-13",
+      "event": 364,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 13,
+        "witness": {
+          "physical_key": 364,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 369,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-14",
+      "event": 371,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 14,
+        "witness": {
+          "physical_key": 371,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 376,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-15",
+      "event": 379,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 15,
+        "witness": {
+          "physical_key": 379,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 384,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-16",
+      "event": 400,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 16,
+        "witness": {
+          "physical_key": 400,
+          "input_kind": "kind_1",
+          "source": 0,
+          "lower": 608,
+          "upper": 8
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-17",
+      "event": 624,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 17,
+        "witness": {
+          "physical_key": 624,
+          "input_kind": "kind_2",
+          "source": 0,
+          "lower": 656,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-18",
+      "event": 658,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 18,
+        "witness": {
+          "physical_key": 658,
+          "input_kind": "kind_2",
+          "source": 0,
+          "lower": 660,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-19",
+      "event": 662,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 19,
+        "witness": {
+          "physical_key": 662,
+          "input_kind": "kind_2",
+          "source": 0,
+          "lower": 664,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-20",
+      "event": 768,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 20,
+        "witness": {
+          "physical_key": 768,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 776,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-21",
+      "event": 778,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 21,
+        "witness": {
+          "physical_key": 778,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 785,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-22",
+      "event": 792,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 22,
+        "witness": {
+          "physical_key": 792,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 832,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-23",
+      "event": 833,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 23,
+        "witness": {
+          "physical_key": 833,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 835,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-24",
+      "event": 897,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 24,
+        "witness": {
+          "physical_key": 897,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 899,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-25",
+      "event": 901,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 25,
+        "witness": {
+          "physical_key": 901,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 903,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-26",
+      "event": 913,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 26,
+        "witness": {
+          "physical_key": 913,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 928,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-27",
+      "event": 944,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 27,
+        "witness": {
+          "physical_key": 944,
+          "input_kind": "kind_3",
+          "source": 0,
+          "lower": 1008,
+          "upper": 0
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-28",
+      "event": 2,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 28,
+        "witness": {
+          "physical_key": 2,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 4,
+          "upper": 16711935
+        }
+      },
+      "electrical": null
+    },
+    {
+      "id": "row-29",
+      "event": 6,
+      "debug_key": null,
+      "target": {
+        "kind": "unclaimed"
+      },
+      "scanner": {
+        "index": 29,
+        "witness": {
+          "physical_key": 6,
+          "input_kind": "kind_0",
+          "source": 0,
+          "lower": 67109376,
+          "upper": 134219264
+        }
+      },
+      "electrical": null
+    }
+  ],
+  "undelivered_rows": [],
+  "interfaces": {}
+}
