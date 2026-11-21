@@ -4696,6 +4696,20 @@
             "kind"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter the firmware's boot-setup stage from internal flash, in place of the boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "setup",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
         }
       ]
     },

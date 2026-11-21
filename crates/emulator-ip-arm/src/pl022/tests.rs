@@ -274,3 +274,34 @@ fn interrupt_fanout_and_checkpoint_wiring_are_explicit() {
     other.restore(&c.save()).unwrap();
     assert_eq!(other.save(), c.save());
 }
+
+#[test]
+fn unconnected_interrupt_output_drives_nothing_and_undeclared_output_refuses() {
+    let clock = Clock {
+        source_hz: 48_000_000,
+        ticks_per_second: 1_000_000_000,
+    };
+    let unconnected = || {
+        Controller::new(BASE, clock, vec![], Box::new(Unconnected))
+            .unwrap()
+            .with_unconnected_interrupt()
+            .unwrap()
+    };
+    // Enabled with an empty transmit FIFO, unmasking the transmit interrupt raises it.
+    let mut h = RecordingHost::default();
+    let mut c = unconnected();
+    configure(&mut c, &mut h, false);
+    write(&mut c, &mut h, 0x14, 0xf);
+    assert_eq!(read(&mut c, &mut h, 0x1c) & 8, 8);
+    assert!(h.irqs.is_empty() && h.core_irqs.is_empty());
+    let mut c = Controller::new(BASE, clock, vec![], Box::new(Unconnected)).unwrap();
+    let mut h = RecordingHost::default();
+    configure(&mut c, &mut h, false);
+    let mut cx = Cx::new(&mut h, 0, 0x1234, 0);
+    c.write(&mut cx, BASE + 0x14, 2, 0xf);
+    assert!(cx.is_unmodeled());
+    let connected = Controller::new(BASE, clock, vec![InterruptLine::Shared(77)], Box::new(Unconnected))
+        .unwrap()
+        .with_unconnected_interrupt();
+    assert!(connected.is_err());
+}

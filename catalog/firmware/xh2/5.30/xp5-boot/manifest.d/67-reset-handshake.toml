@@ -1,0 +1,14 @@
+# Reset handshake word (the shared `reset-handshake` model, declared as on the X-T5 and
+# X100VI). 0x1490798, called from 0x1492e30, calls 0x13ad210(0, 0x7f0003), stores 1 to
+# 0xff91c01c through 0x5de10 (0x14907b4..0x14907c0) and reads the same word through
+# 0x5de38 until it returns 0 (0x14907c4..0x14907d4); the X-T5's 0x148a854 has the same
+# sequence. Immediate completion is the siblings' functional assumption, not a camera
+# measurement (UNVERIFIED). The other routines that address this page (0x138aae0,
+# 0x138ab70, 0x138ac5c, 0x138acf8, 0x138ad34 and 0x138af98: instance 0 of a controller at
+# 0xff91c000 + 0x75000 * n, registers +0x4 to +0x28) are not modeled and keep refusing.
+[[device]]
+base = 0xff91c000
+size = 0x1000
+kind = "reset-handshake"
+[device.options]
+trigger_offset = 0x1c

@@ -188,6 +188,8 @@ pub enum RunStart {
     Loader,
     /// Enter through a removable-card boot entry.
     SdCard,
+    /// Enter the firmware's boot-setup stage from internal flash, in place of the boot ROM.
+    Setup,
 }
 
 /// Intended operation selected by a run configuration.

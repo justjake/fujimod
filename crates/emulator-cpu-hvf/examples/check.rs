@@ -510,6 +510,8 @@ fn main() -> Result<(), String> {
         match cpu.poll_run(async_run).map_err(|e| e.to_string())? {
             RunStatus::Running => thread::yield_now(),
             RunStatus::CallbackPending => {
+                // The parked worker's published PC is the trapped load.
+                assert_eq!(get(&cpu, Register::Pc), 0x10300);
                 cpu.request_pause(async_run).map_err(|e| e.to_string())?;
                 cpu.service_pending_callback(async_run)
                     .map_err(|e| e.to_string())?;
@@ -523,6 +525,9 @@ fn main() -> Result<(), String> {
     assert_eq!(io.reads.split_off(async_reads), vec![(0, 8)]);
     assert_eq!(get(&cpu, Register::X(0)), 0x1234567800000080);
     assert_eq!(get(&cpu, Register::Pc), 0x10304);
+    // A register write while parked republishes the PC the owner reads.
+    set(&cpu, Register::Pc, 0x10308);
+    assert_eq!(get(&cpu, Register::Pc), 0x10308);
     io.stop_reads = false;
     code(&cpu, 0x10300, &[0xf9400020, 0xf9000420]);
     cpu.invalidate_code(Some((0x10300, 0x10308)))?;
