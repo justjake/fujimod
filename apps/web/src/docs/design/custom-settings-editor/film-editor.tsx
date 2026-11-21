@@ -7,7 +7,7 @@ import type { JSX } from '@solidjs/web';
 
 import { Chevron, Choice, Dial, Switch, signed } from '../../../design/controls';
 import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
-import { ACCENT, COLUMN, GLASS, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
+import { ACCENT, COLUMN, DETAIL, GLASS, HEADING, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
 import '../../../design/design.css';
 
 /* FILM EDITOR redesign mock: a tool rail down the left edge beside one tall
@@ -965,7 +965,7 @@ export function initial(over: Partial<State>): State {
 }
 
 export const RAIL = 60;
-export const SCROLLER = 352;
+export const SCROLLER = 392;
 const CONTENT = SCROLLER - 12;
 const PICTURE_LEFT = RAIL + SCROLLER;
 const SPLIT = Math.round((PICTURE_LEFT + W) / 2);
@@ -1489,7 +1489,7 @@ function RawStrip(props: { s: State; set: (s: State) => void }) {
                   }}
                 />
                 <Show when={s().strip === 'contact'}>
-                  <span class="text-[15px] leading-none font-medium tabular-nums" style={{ color: chosen() ? '#fff' : 'rgb(255 255 255 / 0.5)' }}>
+                  <span class={`font-medium tabular-nums ${SMALL}`} style={{ color: chosen() ? '#fff' : 'rgb(255 255 255 / 0.5)' }}>
                     {raw.name.slice(4, 8)}
                   </span>
                 </Show>
@@ -1662,7 +1662,7 @@ function NumbersSheet(props: { s: State; update: (s: State) => void }) {
         <button type="button" class="flex size-[32px] items-center justify-center text-white/70" onClick={() => props.update({ ...props.s, numbers: null })}>
           <Chevron dir="left" size={22} />
         </button>
-        <span class="text-[24px] font-semibold">{TOOL_NAMES[n().tool]}</span>
+        <span class={`font-semibold ${HEADING}`}>{TOOL_NAMES[n().tool]}</span>
         <span class={`ml-auto text-white/55 ${SMALL}`}>NUMBERS</span>
       </div>
       <div class="grid gap-[8px]" style={{ 'grid-template-columns': `30px repeat(${size()}, 1fr)` }}>
@@ -1806,7 +1806,7 @@ export function Editor(props: {
     <button
       type="button"
       ref={(element) => (rows[i] = element)}
-      class={`my-[2px] flex h-[40px] w-full items-center justify-between rounded-[10px] px-[12px] text-white/50 ${SMALL}`}
+      class={`my-[2px] flex h-[44px] w-full items-center justify-between rounded-[10px] px-[12px] text-white/50 ${TEXT}`}
       style={isFocused(i) ? { ...TRACK(true), color: '#fff' } : {}}
       onClick={() => update({ ...s(), focus: i, area: 'rows', header: false, numbers: { tool, cell: 1 } })}
     >
@@ -1910,7 +1910,7 @@ export function Editor(props: {
               <div class="flex min-w-0 grow flex-col gap-[5px]">
                 <span class={`truncate font-semibold ${TEXT}`}>{s().name}</span>
                 <Show when={s().from}>
-                  <span class="text-[16px] leading-none text-white/60">from {s().from}</span>
+                  <span class={`text-white/60 ${DETAIL}`}>from {s().from}</span>
                 </Show>
               </div>
               <svg width="24" height="24" viewBox="0 0 24 24" class="shrink-0 opacity-70">
@@ -1944,10 +1944,10 @@ export function Editor(props: {
               onPointerDown={() => update({ ...s(), area: 'strip', railOn: null, header: false, inside: false })}
             >
               <div class="flex grow flex-col gap-[5px]">
-                <span class={`font-medium ${SMALL}`}>{RAWS[s().crop - 1].name}</span>
-                <span class="text-[16px] leading-none text-white/60 tabular-nums">{RAWS[s().crop - 1].info}</span>
+                <span class={`font-medium ${TEXT}`}>{RAWS[s().crop - 1].name}</span>
+                <span class={`text-white/60 tabular-nums ${DETAIL}`}>{RAWS[s().crop - 1].info}</span>
               </div>
-              <span class={`text-white/60 tabular-nums ${SMALL}`}>
+              <span class={`text-white/60 tabular-nums ${TEXT}`}>
                 {s().crop}/{RAWS.length}
               </span>
             </div>
@@ -1998,7 +1998,7 @@ export function Editor(props: {
               {(row) => (
                 <span class="flex items-center gap-[4px]">
                   <Artwork src={stockArtwork(row.icon)} class="size-[28px]" color="rgb(255 255 255 / 0.8)" />
-                  <span class="text-[18px] leading-none tabular-nums">{row.value ?? signed(row.level ?? 0)}</span>
+                  <span class={`tabular-nums ${DETAIL}`}>{row.value ?? signed(row.level ?? 0)}</span>
                 </span>
               )}
             </For>
@@ -2016,7 +2016,7 @@ export function Editor(props: {
                   <button
                     type="button"
                     data-anchor={`copy-${tool}`}
-                    class={`flex h-[36px] shrink-0 items-center gap-[6px] rounded-[10px] pr-[8px] pl-[10px] whitespace-nowrap text-[18px] leading-none font-medium`}
+                    class={`flex h-[40px] shrink-0 items-center gap-[6px] rounded-[10px] pr-[8px] pl-[10px] whitespace-nowrap font-medium ${DETAIL}`}
                     style={{ background: 'var(--m-chip)', color: 'rgb(255 255 255 / 0.85)', 'box-shadow': headerFocused(tool) ? 'var(--m-focus-edge), 0 0 0 2px #fff' : 'var(--m-chip-edge)' }}
                     onClick={() => update(openPicker({ ...s(), focus: index(tool), header: true, area: 'rows' }, { kind: 'copy', tool }))}
                   >
@@ -2071,7 +2071,7 @@ export function Editor(props: {
                       {(mix, p) => (
                         <button
                           type="button"
-                          class={`flex h-[40px] flex-1 items-center justify-center gap-[7px] rounded-[9px] font-medium ${SMALL}`}
+                          class={`flex h-[40px] flex-1 items-center justify-center gap-[7px] rounded-[9px] font-medium ${TEXT}`}
                           style={s().primary === p() ? { ...SELECTED, color: '#fff' } : { color: 'rgb(255 255 255 / 0.75)' }}
                           onClick={() => update({ ...s(), primary: p() })}
                         >

@@ -5,7 +5,17 @@ import type { JSX } from '@solidjs/web';
    film editor share one design language. */
 
 export const ACCENT = 'var(--m-accent)';
+/* Text sizes are the camera menus' own, in camera pixels; nothing is smaller
+   than its key legends. */
+/** Names on cards over the picture: the menus' group labels. */
+export const LABEL = 'text-[30px] leading-none';
+/** Section headings and values being set: the menus' group titles. */
+export const HEADING = 'text-[28px] leading-none';
+/** Choices, buttons and control names: the menus' title bars. */
 export const TEXT = 'text-[24px] leading-none';
+/** Second lines and summaries: the menus' detail lines. */
+export const DETAIL = 'text-[23px] leading-none';
+/** Key legends, scale numbers and readouts: the camera's key hints. */
 export const SMALL = 'text-[21px] leading-none';
 
 /** A chip over the picture: key hints, name cards. */

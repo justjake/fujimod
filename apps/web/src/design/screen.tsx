@@ -135,7 +135,7 @@ export function KeyHint(props: { glyph: string; label?: string; tap?: () => void
         props.tap?.();
       }}
     >
-      <span class="flex h-[24px] min-w-[24px] items-center justify-center rounded-[6px] bg-white px-[4px] text-[18px] leading-none font-semibold text-black">{props.glyph}</span>
+      <span class={`flex h-[26px] min-w-[26px] items-center justify-center rounded-[6px] bg-white px-[4px] font-semibold text-black ${SMALL}`}>{props.glyph}</span>
       <Show when={props.label}>
         <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{props.label}</span>
       </Show>

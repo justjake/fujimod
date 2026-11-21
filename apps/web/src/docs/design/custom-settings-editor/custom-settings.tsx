@@ -3,7 +3,7 @@ import { For, Show, createEffect, createSignal, onSettled, untrack } from 'solid
 import type { JSX } from '@solidjs/web';
 
 import { Choice, Dial, type ChoiceItem } from '../../../design/controls';
-import { SMALL } from '../../../design/materials';
+import { DETAIL, LABEL, TEXT } from '../../../design/materials';
 import { Artwork, Wordmark, modArtwork, stockArtwork } from '../../../design/artwork';
 import { Button, Scroller, reveal } from '../../../design/column';
 import { FlyOut, PickerList, flyOutListHeight, pickerStep } from '../../../design/picker';
@@ -262,7 +262,7 @@ function Photo(props: { recipe: Recipe }) {
 const ROW = 57;
 /** The icon column, before the stroke that starts each row's drawer. */
 const ICON_COLUMN = 58;
-const WIDTH = 280;
+const WIDTH = 320;
 const COMPARE_WIDTH = 300;
 
 
@@ -430,7 +430,7 @@ function Column(props: {
   /** Shared by A and B so they scroll together, and read by the fly-outs. */
   scroll: number;
   saved?: boolean;
-  raw?: boolean;
+  mode?: Mode;
   setScroll: (top: number) => void;
   send: Send;
 }) {
@@ -472,9 +472,11 @@ function Column(props: {
           />
         )}
       </For>
-      <Show when={props.side === undefined}>
+      {/* Only a saved file (EDIT/CHECK) or a RAW has something to save or
+          create; from the shooting menu the rows are the menu's settings. */}
+      <Show when={props.side === undefined && props.mode !== undefined && props.mode !== 'live'}>
         <div class="px-[6px] pt-[10px] pb-[12px]">
-          <Button label={props.saved ? 'SAVED' : props.raw ? 'CREATE' : 'SAVE'} class="w-full" focused={false} accent={props.saved} onClick={() => props.send({ key: 'save' })} />
+          <Button label={props.mode === 'raw' ? 'CREATE' : props.saved ? 'SAVED' : 'SAVE'} class="w-full" focused={false} accent={props.saved} onClick={() => props.send({ key: 'save' })} />
         </div>
       </Show>
     </Scroller>
@@ -525,7 +527,8 @@ function ShiftGrid(props: { r: number; b: number; send: Send }) {
 /* ---- The editor screen ------------------------------------------------------- */
 
 type Fly = 'none' | 'shift';
-type Mode = 'live' | 'raw';
+/** live: the shooting menu's settings; file: a saved custom setting (EDIT/CHECK); raw: RAW CONVERSION. */
+type Mode = 'live' | 'file' | 'raw';
 
 export interface EditorState {
   mode: Mode;
@@ -553,7 +556,8 @@ function valueName(setting: Setting, recipe: Recipe): string {
         fmt(setting.steps[recipe[setting.id]]));
 }
 
-export function Editor(props: { state: EditorState; send?: Send }) {
+/** `hint` is a key hint for the focused row (Fn EDIT FILM, Fn WB SHIFT), under its cards. */
+export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Element }) {
   const s = () => props.state;
   const send: Send = (action) => props.send?.(action);
   const focused = () => SETTINGS[s().focus];
@@ -566,7 +570,8 @@ export function Editor(props: { state: EditorState; send?: Send }) {
     if (compare()) list.push({ glyph: 'AEL', label: 'A/B', key: 'Tab' });
     if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
     else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
-    list.push({ glyph: 'OK', label: focused().kind === 'choice' && !compare() ? 'SELECT' : s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
+    if (focused().kind === 'choice' && !compare()) list.push({ glyph: 'OK', label: 'SELECT', key: 'Enter' });
+    else if (s().mode !== 'live') list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
     return list;
   };
 
@@ -613,7 +618,7 @@ export function Editor(props: { state: EditorState; send?: Send }) {
       </Show>
 
       <Show when={!compare()}>
-        <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} raw={s().mode === 'raw'} send={send} />
+        <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} mode={s().mode} send={send} />
         <Show when={s().list !== undefined && focused().kind === 'choice' ? (focused() as ChoiceSetting) : undefined}>
           {(setting) => (
             <FlyOut left={WIDTH} rowTop={rowTop()} height={flyOutListHeight(setting().choices.length)}>
@@ -637,12 +642,13 @@ export function Editor(props: { state: EditorState; send?: Send }) {
         <Show when={s().fly === 'none' && s().list === undefined}>
           <div class="absolute top-[10px] flex flex-col items-start gap-[4px]" style={{ left: `${WIDTH + 12}px` }}>
             <Show when={focused().id !== 'film'}>
-              <Card class={`px-[12px] py-[6px] ${SMALL}`}>{focused().name}</Card>
+              <Card class={`px-[14px] py-[8px] ${LABEL}`}>{focused().name}</Card>
             </Show>
-            <Card class={`px-[12px] py-[6px] ${SMALL}`}>{valueName(focused(), s().recipe)}</Card>
+            <Card class={`px-[14px] py-[8px] ${LABEL}`}>{valueName(focused(), s().recipe)}</Card>
             <Show when={focused().id === 'film' ? FILMS[s().recipe.film].note : undefined}>
-              {(note) => <Card class="max-w-[400px] px-[12px] py-[8px] text-[19px] leading-[26px] font-light">{note()}</Card>}
+              {(note) => <Card class={`max-w-[376px] px-[14px] py-[9px] ${DETAIL} leading-[30px] font-light`}>{note()}</Card>}
             </Show>
+            {props.hint}
           </div>
         </Show>
         <Show when={s().mode === 'raw'}>
@@ -651,10 +657,10 @@ export function Editor(props: { state: EditorState; send?: Send }) {
           </div>
         </Show>
         <Show when={s().fly === 'shift'}>
-          <FlyOut left={WIDTH} rowTop={rowTop()} height={SHIFT_GRID + 46}>
+          <FlyOut left={WIDTH} rowTop={rowTop()} height={SHIFT_GRID + 52}>
             <div class="flex flex-col items-center gap-[6px] px-[10px] pt-[8px]">
               <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} send={send} />
-              <span class="text-[17px] leading-none font-medium tabular-nums">
+              <span class={`font-medium tabular-nums ${TEXT}`}>
                 R {fmt(s().recipe.shiftR)}&ensp;B {fmt(s().recipe.shiftB)}
               </span>
             </div>
@@ -726,7 +732,7 @@ export function onKey(state: EditorState, input: string): EditorState {
   const key = dial < 0 ? 'ArrowLeft' : dial > 0 ? 'ArrowRight' : input;
   if (key === 'Fn' && setting.id === 'wb' && state.fly === 'none') return openShift(state);
   if (key === 'Enter' && setting.kind === 'choice' && !state.comparing) return { ...state, list: state.recipe[setting.id] };
-  if (key === 'save' || key === 'Enter') return { ...state, saved: true };
+  if ((key === 'save' || key === 'Enter') && state.mode !== 'live') return { ...state, saved: true };
   if (key === 'ArrowUp' || key === 'ArrowDown') {
     const focus = Math.max(0, Math.min(SETTINGS.length - 1, state.focus + (key === 'ArrowUp' ? -1 : 1)));
     return { ...state, focus, fly: 'none' };
@@ -811,6 +817,7 @@ export const SETTINGS_STATES: { id: string; title: string; state: EditorState }[
     title: 'Compare, editing B',
     state: { ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 4, comparing: true },
   },
+  { id: 'edit-check', title: 'EDIT/CHECK: a saved custom setting, with SAVE', state: { ...INITIAL, mode: 'file', recipe: EDITED, focus: 5 } },
   {
     id: 'raw',
     title: 'RAW CONVERSION in playback',

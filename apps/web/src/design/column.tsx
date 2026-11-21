@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { ACCENT, COLUMN, SMALL, TEXT, TRACK } from './materials';
+import { ACCENT, COLUMN, HEADING, TEXT, TRACK } from './materials';
 
 /* The column every editor screen draws its rows in, and the pieces inside it. */
 
@@ -57,7 +57,7 @@ export function Section(props: {
     >
       <Show when={props.title}>
         <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
-          <span class={`grow font-semibold tracking-[0.02em] ${props.long ? SMALL : `whitespace-nowrap ${TEXT}`}`}>{props.title}</span>
+          <span class={`grow font-semibold tracking-[0.02em] ${props.long ? TEXT : `whitespace-nowrap ${HEADING}`}`}>{props.title}</span>
           {props.accessory}
         </div>
       </Show>
@@ -83,7 +83,7 @@ export function Button(props: {
     <button
       type="button"
       data-anchor={props.anchor}
-      class={`flex h-[47px] items-center justify-center px-[10px] font-semibold whitespace-nowrap ${SMALL} ${props.class ?? ''}`}
+      class={`flex h-[47px] items-center justify-center px-[8px] font-semibold whitespace-nowrap ${TEXT} ${props.class ?? ''}`}
       style={{
         ...TRACK(props.focused),
         ...(props.accent ? { background: ACCENT } : {}),

@@ -1,4 +1,4 @@
-import { Show, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 
 import { DesignFrame } from '../../../design/looks';
 import { CameraKeys, CameraScreen, Fit, KeyHint, States, type CameraKey } from '../../../design/screen';
@@ -93,17 +93,17 @@ function App() {
               visibility: open() ? 'hidden' : 'visible',
             }}
           >
-            <SettingsEditor state={settings()} send={(action) => setSettings(apply(settings(), action))} />
-            <Show when={settings().focus === FILM_ROW && settings().list === undefined}>
-              <div class="absolute top-[10px] right-[10px]">
-                <KeyHint glyph="Fn" label="EDIT FILM" tap={openFilm} />
-              </div>
-            </Show>
-            <Show when={settings().focus === WB_ROW && settings().fly === 'none' && settings().list === undefined}>
-              <div class="absolute top-[10px] right-[10px]">
-                <KeyHint glyph="Fn" label="WB SHIFT" tap={() => setSettings(onKey(settings(), 'Fn'))} />
-              </div>
-            </Show>
+            <SettingsEditor
+              state={settings()}
+              send={(action) => setSettings(apply(settings(), action))}
+              hint={
+                settings().focus === FILM_ROW ? (
+                  <KeyHint glyph="Fn" label="EDIT FILM" tap={openFilm} />
+                ) : settings().focus === WB_ROW ? (
+                  <KeyHint glyph="Fn" label="WB SHIFT" tap={() => setSettings(onKey(settings(), 'Fn'))} />
+                ) : undefined
+              }
+            />
           </div>
           <div class="absolute inset-0" style={{ visibility: open() ? 'visible' : 'hidden', transition: `visibility 0s linear ${open() ? '0ms' : '460ms'}` }}>
             <div class="absolute inset-0" style={{ opacity: open() ? 1 : 0, transition: 'opacity 300ms' }}>

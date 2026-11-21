@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { ACCENT, SELECTED, SMALL, TRACK, WELL } from './materials';
+import { ACCENT, HEADING, SELECTED, SMALL, TEXT, TRACK, WELL } from './materials';
 
 /* The editors' row controls: the choice strip and the slider card, shared by
    the custom settings editor and the film editor. Both take touch (a tap
@@ -201,11 +201,11 @@ export function Choice(props: {
   return (
     <div
       class="relative shrink-0 overflow-hidden select-none"
-      style={{ width: `${props.width}px`, height: `${props.height ?? 76}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || dial.active()) }}
+      style={{ width: `${props.width}px`, height: `${props.height ?? 88}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || dial.active()) }}
       {...dial.handlers}
     >
       <Show when={props.name !== undefined}>
-        <span class="absolute top-[7px] left-[12px] flex items-center gap-[6px] text-[17px] leading-[20px] tracking-[0.06em]" style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
+        <span class={`absolute top-[9px] left-[12px] flex items-center gap-[6px] ${TEXT} tracking-[0.06em]`} style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
           {props.name}
           <Show when={props.changed}>
             <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
@@ -230,7 +230,7 @@ export function Choice(props: {
               const ink = () => `rgb(255 255 255 / ${distance() < 0.5 ? 1 : 0.7})`;
               return (
                 <span
-                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${SMALL} ${typeof item === 'string' ? 'px-[7px]' : 'px-[3px]'}`}
+                  class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${TEXT} ${typeof item === 'string' ? 'px-[7px]' : 'px-[3px]'}`}
                   style={{ color: ink() }}
                 >
                   {typeof item === 'string' ? item : item.art(ink())}
@@ -285,7 +285,10 @@ export function Dial(props: {
   const count = () => Math.round((props.max - props.min) / props.step) + 1;
   /* Ticks every step, as far apart as the step count allows; a labeled major
      tick every few steps, counted from zero. */
-  const SPACING = props.name === undefined ? 38 : count() <= 11 ? 30 : count() <= 21 ? 20 : 15;
+  /* Without a name every step is labeled, so steps sit as far apart as the
+     widest label needs (the noise-reduction mod's words). */
+  const widest = Math.max(...Array.from({ length: count() }, (_, i) => (props.format ?? signed)(props.min + i * props.step).length));
+  const SPACING = props.name === undefined ? Math.max(38, widest * 13 + 10) : count() <= 11 ? 30 : count() <= 21 ? 20 : 15;
   const MAJOR = props.name === undefined ? 1 : SPACING >= 30 ? 2 : SPACING >= 20 ? 4 : 5;
   const label = (v: number) => (props.format ?? signed)(v);
   const indexOf = (v: number) => (v - props.min) / props.step;
@@ -306,18 +309,18 @@ export function Dial(props: {
   return (
     <div
       class="relative shrink-0 overflow-hidden select-none"
-      style={{ width: `${props.width}px`, height: `${props.height ?? 76}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
+      style={{ width: `${props.width}px`, height: `${props.height ?? 88}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
       {...dial.handlers}
     >
       <Show when={props.name !== undefined}>
-        <span class="absolute top-[7px] left-[12px] flex items-center gap-[6px] text-[17px] leading-[20px] tracking-[0.06em]" style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
+        <span class={`absolute top-[9px] left-[12px] flex items-center gap-[6px] ${TEXT} tracking-[0.06em]`} style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
           {props.name}
           {/* Changed from the film as opened: the same dot the rail uses. */}
           <Show when={props.changed}>
             <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
           </Show>
         </span>
-        <span class="absolute top-[4px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100" style={{ color: '#fff', 'font-size': '22px', 'line-height': '26px', transform: active() ? 'scale(1.2)' : 'none' }}>
+        <span class={`absolute top-[6px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100 ${HEADING}`} style={{ color: '#fff', transform: active() ? 'scale(1.2)' : 'none' }}>
           {label(props.value)}
         </span>
       </Show>
@@ -333,7 +336,7 @@ export function Dial(props: {
                 return (
                   <>
                     <Show when={major()}>
-                      <span class="absolute top-[3px] -translate-x-1/2 text-[15px] leading-none font-medium tabular-nums" style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
+                      <span class={`absolute top-[3px] -translate-x-1/2 font-medium tabular-nums ${SMALL}`} style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
                         {label(props.min + i * props.step)}
                       </span>
                     </Show>
@@ -372,7 +375,7 @@ export function Switch(props: { items: readonly string[]; value: number; focused
         {(item, i) => (
           <button
             type="button"
-            class={`flex h-[37px] grow basis-0 items-center justify-center rounded-[10px] font-medium ${SMALL}`}
+            class={`flex h-[37px] grow basis-0 items-center justify-center rounded-[10px] font-medium ${TEXT}`}
             style={props.value === i() ? { ...SELECTED, color: '#fff' } : { color: 'rgb(255 255 255 / 0.6)' }}
             onClick={() => props.pick(i())}
           >
