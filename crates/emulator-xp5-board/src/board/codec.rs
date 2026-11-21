@@ -87,12 +87,17 @@
 //!   4-byte start codes): the access units follow each other from the start
 //!   of bank 0, as the encoder writes them, and continue in the other bank at
 //!   the end of a bank. The first-frame session ends its one unit with a
-//!   start code and a zero byte, a NAL of type 0.
+//!   bare 4-byte start code and writes nothing after it: the next byte is
+//!   whatever the buffer held. At the first PLAY that is zero memory; after
+//!   a play session it is old picture data, because the first-frame stream
+//!   buffer (0x1d568000) lies inside the chroma plane of a play-session
+//!   image bank (4K: 0x1d2c9000, 0x3f4800 bytes).
 //! - Each `H264_CMD` bit 14 in decode mode decodes the unit at the stream
 //!   position with the workspace decoder after `run_ticks` and moves the
-//!   position past it. A unit ends at the type 0 NAL or at the first NAL of
-//!   the next unit (a start code is required after the slice; the hardware
-//!   needs none, a limit of the model). The picture is written as two-plane
+//!   position past it. A unit has one slice and ends at the first start
+//!   code after it, whatever byte follows that start code (a start code is
+//!   required after the slice; the hardware needs none, a limit of the
+//!   model). The picture is written as two-plane
 //!   8-bit 4:2:0 (Y, then interleaved Cb, Cr, [`CB_FIRST`]) at the pitch
 //!   `IMG_LINE_OFS` into an image bank: picture n of a session goes to bank
 //!   n modulo the bank count of set 0, then of set 1 (the hardware's order
@@ -375,9 +380,10 @@ impl Codec {
         Ok(bytes)
     }
 
-    /// The Annex B access unit at the stream position: its NALs up to the next
-    /// access unit (a parameter set, SEI, delimiter or slice after this unit's
-    /// slice) or up to the end marker (a NAL of type 0).
+    /// The Annex B access unit at the stream position: its NALs up to the first
+    /// start code after its slice. That start code begins the next unit or is
+    /// the bare one that ends the first-frame unit, so the byte after it is not
+    /// read as a NAL header. A NAL of type 0 before the slice also ends the unit.
     fn decode_unit(&self, cx: &mut Cx<'_>) -> Result<Vec<u8>, String> {
         let size = u64::from(self.word(STR_BUF_SIZE));
         if !size.is_power_of_two() || !(0x1000..=0x1000_0000).contains(&size) {
@@ -409,7 +415,7 @@ impl Codec {
                     continue;
                 }
                 let kind = unit[scanned + 3] & 31;
-                if kind == 0 || (slice && matches!(kind, 1 | 5..=9)) {
+                if kind == 0 || slice {
                     // Start codes have four bytes here.
                     let end = if scanned > 0 && unit[scanned - 1] == 0 { scanned - 1 } else { scanned };
                     unit.truncate(end);
@@ -1625,6 +1631,44 @@ mod tests {
             reg(&mut c, &mut h, H264_STATUS, PICTURE_DECODED);
             assert_eq!(bank_i420(&h, 0), expected.i420, "picture {n}");
         }
+    }
+
+    /// The first-frame unit after a play session (X-T5 4.31, PLAY, play, pause,
+    /// stop on a 4K movie): the firmware ends the unit with a bare start code
+    /// and the buffer keeps old picture data after it, here the chroma bytes
+    /// 0xde 0xff of the traced run. 0xde is no NAL header of the unit; the
+    /// start code alone ends it and the picture is the coded one.
+    #[test]
+    fn a_bare_start_code_before_stale_bytes_ends_the_unit() {
+        let units = coded_units(1);
+        let expected = Decoder::new_movie(&[]).unwrap().decode_movie_unit(&units[0]).unwrap();
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_decode(&mut c, &mut h, 1);
+        reg(&mut c, &mut h, STR_BUF_SIZE, 0x1_0000);
+        let at = (DEC_STR_AT - RAM) as usize;
+        for pair in h.ram[at..at + 0x1_0000].chunks_mut(2) {
+            pair.copy_from_slice(&[0xde, 0xff]);
+        }
+        h.ram[at..at + units[0].len()].copy_from_slice(&units[0]);
+        h.ram[at + units[0].len()..at + units[0].len() + 4].copy_from_slice(&[0, 0, 0, 1]);
+        reg(&mut c, &mut h, H264_CMD, CMD_STOP);
+        h.now = c.next_deadline(h.now).expect("a decode deadline");
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        c.advance(&mut cx);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(get(&mut c, &mut h, H264_STATUS), PICTURE_DECODED);
+        assert_eq!(bank_i420(&h, 0), expected.i420);
+        // A slice that is not H.264 before the same end is still an error.
+        open_decode(&mut c, &mut h, 1);
+        reg(&mut c, &mut h, STR_BUF_SIZE, 0x1_0000);
+        let garbage = [0, 0, 0, 1, 0x65, 0x88, 0x84, 0x00, 0x12, 0x34, 0, 0, 0, 1];
+        h.ram[at..at + garbage.len()].copy_from_slice(&garbage);
+        reg(&mut c, &mut h, H264_CMD, CMD_STOP);
+        h.now = c.next_deadline(h.now).expect("a decode deadline");
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        c.advance(&mut cx);
+        assert!(cx.refusal().unwrap().contains("H.264 decode failed"));
     }
 
     /// A stream without the end marker, a stream that is not H.264, and a decode
