@@ -1,0 +1,101 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xe2s-acquisition-contacts",
+  "model": {
+    "kind": "contact-cam",
+    "run_drive": 1,
+    "hold_drives": [
+      0,
+      3
+    ],
+    "release_drives": [
+      0
+    ],
+    "positions": [
+      {
+        "run_ticks": 0,
+        "contacts": [
+          false,
+          false
+        ]
+      },
+      {
+        "run_ticks": 330000,
+        "contacts": [
+          false,
+          true
+        ]
+      },
+      {
+        "run_ticks": 525000,
+        "contacts": [
+          true,
+          true
+        ]
+      },
+      {
+        "run_ticks": 750000,
+        "contacts": [
+          false,
+          true
+        ]
+      }
+    ],
+    "latch_overrun_ticks": 30000,
+    "release_ticks": 75000
+  },
+  "attachment": {
+    "gpio_interrupts": [
+      {
+        "pin": {
+          "port": 0,
+          "pin": 9
+        },
+        "edge": "both",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 17
+          }
+        ]
+      },
+      {
+        "pin": {
+          "port": 0,
+          "pin": 6
+        },
+        "edge": "falling",
+        "outputs": [
+          {
+            "core": 0,
+            "line": 14
+          }
+        ]
+      }
+    ],
+    "label": "acquisition_contacts",
+    "limits": [],
+    "drive_pins": [
+      {
+        "port": 1,
+        "pin": 1
+      },
+      {
+        "port": 1,
+        "pin": 2
+      }
+    ],
+    "contact_pins": [
+      {
+        "port": 0,
+        "pin": 9
+      },
+      {
+        "port": 0,
+        "pin": 6
+      }
+    ],
+    "initial_position": 525000
+  }
+}

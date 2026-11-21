@@ -1202,9 +1202,14 @@ class ConstructionWiring(TypedDict, total=False):
     selections: Required[list[ConstructionSelections]]
 
 
-class ContactPosition(TypedDict, total=False):
+class ContactCamPosition(TypedDict, total=False):
     contacts: Required[list[bool]]
     run_ticks: Required[int]
+
+
+class ContactPosition(TypedDict, total=False):
+    contacts: Required[list[bool]]
+    drive: Required[int]
 
 
 class ContentIdentity(TypedDict, total=False):
@@ -2929,6 +2934,7 @@ class HardwareOptics(TypedDict, total=False):
 
 class HardwarePartAssemblies(TypedDict, total=False):
     contact_actuators: NotRequired[list[str] | None]
+    contact_cams: NotRequired[list[str] | None]
     serial_outputs: NotRequired[list[str] | None]
     serial_part: Required[list[str]]
 
@@ -3991,6 +3997,7 @@ type PartModel = (
     | PartModelVariant7
     | PartModelVariant8
     | PartModelVariant9
+    | PartModelVariant10
 )
 
 
@@ -4008,10 +4015,16 @@ class PartModelVariant0(TypedDict, total=False):
 
 
 class PartModelVariant1(TypedDict, total=False):
-    hold_drives: Required[list[int]]
     kind: Required[Literal["contact-actuator"]]
-    latch_overrun_ticks: Required[int]
     positions: Required[list[ContactPosition]]
+    settle_ticks: Required[int]
+
+
+class PartModelVariant10(TypedDict, total=False):
+    hold_drives: Required[list[int]]
+    kind: Required[Literal["contact-cam"]]
+    latch_overrun_ticks: Required[int]
+    positions: Required[list[ContactCamPosition]]
     release_drives: Required[list[int]]
     release_ticks: Required[int]
     run_drive: Required[int]

@@ -1,19 +1,13 @@
-//! A motor-driven contact cam: a shutter charge mechanism with two position
-//! contacts. While the declared run drive is applied, the cam advances through
-//! contact positions declared along motor run time and stops at the release
-//! latch, its last position. A rising release input at the latch returns the
-//! cam, after its travel time, to run time 0. Only driven pads, the release
-//! input level and guest virtual time affect the part.
+//! A declared two-line actuator moves electrical contacts after settling.
+//! Only driven pads, contact levels and guest virtual time affect the part.
 use fujimod_emulator_devices::parts::pins::{Pin, Pins};
-use fujimod_emulator_devices::signals::Level;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Position {
-    /// Motor run time from the released position at which these levels start.
-    pub run_ticks: u64,
+    pub drive: u8,
     pub contacts: [bool; 2],
 }
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,95 +15,79 @@ pub struct Position {
 pub struct Options {
     pub drive: [Pin; 2],
     pub contacts: [Pin; 2],
-    /// Drive code (`drive[0] | drive[1] << 1`) that runs the motor.
-    pub run_drive: u8,
-    /// Drive codes that hold the cam still. Any other code refuses.
-    pub hold_drives: Vec<u8>,
-    /// Hold drives under which a release input edge releases the latch; the
-    /// other drives keep it latched.
-    pub release_drives: Vec<u8>,
-    /// Ascending from run time 0; the last position is the release latch.
     pub positions: Vec<Position>,
-    pub initial_run_ticks: u64,
-    /// Run time past the latch observed without harm before the drive stops.
-    pub latch_overrun_ticks: u64,
-    /// Release input edge to the return to run time 0.
-    pub release_ticks: u64,
+    pub initial_position: usize,
+    pub settle_ticks: u64,
 }
 pub struct Wiring {
     pub pins: Box<dyn Pins>,
-    pub release: Option<Level>,
 }
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct State {
-    drive: Option<u8>,
-    release_level: bool,
-    run: u64,
-    /// Guest tick up to which `run` has integrated a running motor.
-    since: u64,
-    release_due: Option<u64>,
-    transitions: u64,
+#[derive(Serialize, Deserialize)]
+struct Motion {
+    due: u64,
+    position: usize,
 }
 pub struct ContactActuator {
     options: Options,
     pins: Box<dyn Pins>,
-    release: Option<Level>,
-    state: State,
+    observed: Option<u8>,
+    position: usize,
+    pending: Option<Motion>,
+    transitions: u64,
 }
+type Saved = (Options, Option<u8>, usize, Option<Motion>, u64);
 impl ContactActuator {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         for pin in options.drive.into_iter().chain(options.contacts) {
             pin.validate()?;
         }
-        let p = &options.positions;
         if options.drive[0] == options.drive[1]
             || options.contacts[0] == options.contacts[1]
             || options
                 .drive
                 .iter()
                 .any(|pin| options.contacts.contains(pin))
-            || options.run_drive > 3
-            || options
-                .hold_drives
-                .iter()
-                .any(|&d| d > 3 || d == options.run_drive)
-            || options
-                .release_drives
-                .iter()
-                .any(|d| !options.hold_drives.contains(d))
-            || p.first().is_none_or(|first| first.run_ticks != 0)
-            || p.windows(2).any(|w| w[0].run_ticks >= w[1].run_ticks)
-            || options.initial_run_ticks > p.last().unwrap().run_ticks
-            || options.release_ticks == 0
+            || options.positions.is_empty()
+            || options.positions.len() > 4
+            || options.initial_position >= options.positions.len()
+            || options.settle_ticks == 0
+            || options.positions.iter().enumerate().any(|(i, p)| {
+                p.drive > 3
+                    || options.positions[..i]
+                        .iter()
+                        .any(|other| p.drive == other.drive)
+            })
         {
-            return Err("contact cam requires distinct pads, a run drive, ascending positions from 0 and a release time".into());
+            return Err("contact actuator requires distinct pads, unique driven states and positive settling time".into());
         }
         Ok(Self {
-            state: State {
-                drive: None,
-                release_level: wiring.release.as_ref().is_some_and(Level::high),
-                run: options.initial_run_ticks,
-                since: 0,
-                release_due: None,
-                transitions: 0,
-            },
+            position: options.initial_position,
             options,
             pins: wiring.pins,
-            release: wiring.release,
+            observed: None,
+            pending: None,
+            transitions: 0,
         })
     }
-    fn latch(&self) -> u64 {
-        self.options.positions.last().unwrap().run_ticks
-    }
-    fn position(&self, run: u64) -> usize {
-        self.options
-            .positions
-            .iter()
-            .rposition(|p| p.run_ticks <= run)
-            .unwrap()
-    }
-    fn running(&self) -> bool {
-        self.state.drive == Some(self.options.run_drive)
+    fn decoded_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Saved, String> {
+        let state: Saved = saved.decode(self.name())?;
+        let (options, observed, position, pending, _) = &state;
+        if options != &self.options
+            || *position >= options.positions.len()
+            || observed.is_some_and(|code| !options.positions.iter().any(|p| p.drive == code))
+            || pending.as_ref().is_some_and(|p| {
+                p.position >= options.positions.len()
+                    || p.due == 0
+                    || Some(options.positions[p.position].drive) != *observed
+                    || options.positions[p.position].contacts
+                        == options.positions[*position].contacts
+            })
+        {
+            return Err(
+                "contact actuator snapshot differs from its declared positions or wiring".into(),
+            );
+        }
+        Ok(state)
     }
     fn drive(&self) -> Result<Option<u8>, String> {
         let [a, b] = self.options.drive;
@@ -120,105 +98,82 @@ impl ContactActuator {
             },
         )
     }
-    fn release_level(&self) -> bool {
-        self.release.as_ref().is_some_and(Level::high)
-    }
-    fn set_run(&mut self, cx: &mut Cx<'_>, run: u64) -> Result<(), String> {
-        let (old, new) = (self.position(self.state.run), self.position(run));
-        self.state.run = run;
-        if old != new {
+    fn tick(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        let drive = self.drive()?;
+        if drive != self.observed {
+            let position = drive
+                .map(|code| {
+                    self.options
+                        .positions
+                        .iter()
+                        .position(|p| p.drive == code)
+                        .ok_or_else(|| {
+                            format!("contact actuator has no declared motion for drive {code:#x}")
+                        })
+                })
+                .transpose()?;
+            let pending = match position {
+                Some(position)
+                    if self.options.positions[position].contacts
+                        != self.options.positions[self.position].contacts =>
+                {
+                    Some(Motion {
+                        due: cx
+                            .now()
+                            .checked_add(self.options.settle_ticks)
+                            .ok_or("contact actuator deadline overflow")?,
+                        position,
+                    })
+                }
+                _ => None,
+            };
+            // A new drive with the same contact levels has no future edge.
+            if pending.is_none()
+                && let Some(position) = position
+            {
+                self.position = position;
+            }
+            self.observed = drive;
+            self.pending = pending;
+        }
+        if self.pending.as_ref().is_some_and(|p| p.due <= cx.now()) {
+            let motion = self.pending.take().unwrap();
             for (pin, level) in self
                 .options
                 .contacts
                 .into_iter()
-                .zip(self.options.positions[new].contacts)
+                .zip(self.options.positions[motion.position].contacts)
             {
                 self.pins.input(cx, pin, level)?;
             }
-            self.state.transitions += 1;
+            self.position = motion.position;
+            self.transitions += 1;
         }
         Ok(())
-    }
-    fn tick(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        let now = cx.now();
-        if self.running() {
-            let run = self.state.run + now.saturating_sub(self.state.since);
-            self.state.since = now;
-            if run > self.latch() + self.options.latch_overrun_ticks {
-                return Err("contact cam motor driven past its release latch".into());
-            }
-            self.set_run(cx, run)?;
-        }
-        if self.state.release_due.is_some_and(|due| due <= now) {
-            self.state.release_due = None;
-            self.set_run(cx, 0)?;
-        }
-        let level = self.release_level();
-        if level
-            && !self.state.release_level
-            && self
-                .state
-                .drive
-                .is_some_and(|d| self.options.release_drives.contains(&d))
-        {
-            if self.state.run < self.latch() || self.state.release_due.is_some() {
-                return Err("contact cam release input outside its latch".into());
-            }
-            self.state.release_due = Some(
-                now.checked_add(self.options.release_ticks)
-                    .ok_or("contact cam deadline overflow")?,
-            );
-        }
-        self.state.release_level = level;
-        let drive = self.drive()?;
-        if drive != self.state.drive {
-            if let Some(code) = drive
-                && code != self.options.run_drive
-                && !self.options.hold_drives.contains(&code)
-            {
-                return Err(format!(
-                    "contact cam has no declared motion for drive {code:#x}"
-                ));
-            }
-            self.state.drive = drive;
-            self.state.since = now;
-        }
-        Ok(())
-    }
-    fn decoded_checkpoint(
-        &self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<State, String> {
-        let (options, state): (Options, State) = saved.decode(self.name())?;
-        if options != self.options
-            || state.run > self.latch() + options.latch_overrun_ticks
-            || state.release_due.is_some_and(|due| due == 0)
-        {
-            return Err(
-                "contact cam snapshot differs from its declared positions or wiring".into(),
-            );
-        }
-        Ok(state)
     }
 }
 impl Device for ContactActuator {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
-            &(&self.options, &self.state),
+            &(
+                &self.options,
+                self.observed,
+                self.position,
+                &self.pending,
+                self.transitions,
+            ),
         )
     }
-    fn validate_checkpoint(
-        &self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
+    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
         self.decoded_checkpoint(saved).map(|_| ())
     }
-    fn restore_checkpoint(
-        &mut self,
-        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
-        self.state = self.decoded_checkpoint(saved)?;
+    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        let (_, observed, position, pending, transitions) = self.decoded_checkpoint(saved)?;
+        self.observed = observed;
+        self.position = position;
+        self.pending = pending;
+        self.transitions = transitions;
         Ok(())
     }
     fn name(&self) -> &'static str {
@@ -235,22 +190,10 @@ impl Device for ContactActuator {
         cx.unmodeled();
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
-        if !self.drive().is_ok_and(|d| d == self.state.drive)
-            || self.release_level() != self.state.release_level
-        {
-            return Some(now);
+        match self.drive() {
+            Ok(drive) if drive == self.observed => self.pending.as_ref().map(|p| p.due),
+            _ => Some(now),
         }
-        let motion = self.running().then(|| {
-            let next = self
-                .options
-                .positions
-                .get(self.position(self.state.run) + 1)
-                .map_or(self.latch() + self.options.latch_overrun_ticks + 1, |p| {
-                    p.run_ticks
-                });
-            self.state.since + next.saturating_sub(self.state.run).max(1)
-        });
-        motion.into_iter().chain(self.state.release_due).min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if let Err(e) = self.tick(cx) {
@@ -258,7 +201,8 @@ impl Device for ContactActuator {
         }
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::json!({"options":self.options,"state":self.state})
+        serde_json::json!({"options":self.options,"observed":self.observed,"position":self.position,
+            "pending":self.pending,"transitions":self.transitions})
     }
 }
 

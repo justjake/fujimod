@@ -1811,22 +1811,12 @@ pub enum PartModel {
         #[serde(default)]
         zoom: Option<ZoomMechanism>,
     },
-    /// A motor-driven contact cam with a release latch. The attachment's
-    /// initial position is its run time at reset.
+    /// A multi-pin contact actuator.
     ContactActuator {
-        /// Drive value that runs the motor.
-        run_drive: u32,
-        /// Drive values that hold the cam still.
-        hold_drives: Vec<u32>,
-        /// Hold drives under which a release input edge releases the latch.
-        release_drives: Vec<u32>,
-        /// Contact states along motor run time, ascending from 0; the last
-        /// is the release latch.
+        /// Supported drive values and resulting contact state.
         positions: Vec<ContactPosition>,
-        /// Run time past the latch tolerated before the drive stops.
-        latch_overrun_ticks: u64,
-        /// Release input edge to the return to run time 0.
-        release_ticks: u64,
+        /// Time required for a contact transition to settle.
+        settle_ticks: u64,
     },
     /// A serial output endpoint.
     SerialOutput {
@@ -1903,6 +1893,23 @@ pub enum PartModel {
     Peripheral {
         /// Closed protocol model for the endpoint.
         interface: crate::assembly::PeripheralPart,
+    },
+    /// A motor-driven contact cam with a release latch. The attachment's
+    /// initial position is its run time at reset.
+    ContactCam {
+        /// Drive value that runs the motor.
+        run_drive: u32,
+        /// Drive values that hold the cam still.
+        hold_drives: Vec<u32>,
+        /// Hold drives under which a release input edge releases the latch.
+        release_drives: Vec<u32>,
+        /// Contact states along motor run time, ascending from 0; the last
+        /// is the release latch.
+        positions: Vec<ContactCamPosition>,
+        /// Run time past the latch tolerated before the drive stops.
+        latch_overrun_ticks: u64,
+        /// Release input edge to the return to run time 0.
+        release_ticks: u64,
     },
 }
 
@@ -2112,6 +2119,23 @@ pub struct ZoomMechanism {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct ContactPosition {
+    /// Drive value applied to the actuator.
+    pub drive: u32,
+    /// Resulting contact states.
+    pub contacts: Vec<bool>,
+}
+
+/// A contact cam position along motor run time and its contact states.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct ContactCamPosition {
     /// Motor run time at which these contact states begin.
     pub run_ticks: u64,
     /// Resulting contact states.

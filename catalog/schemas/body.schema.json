@@ -6052,6 +6052,16 @@
             "null"
           ]
         },
+        "contact_cams": {
+          "description": "Declared motor-driven contact cams.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "serial_outputs": {
           "description": "Declared serial outputs.",
           "items": {

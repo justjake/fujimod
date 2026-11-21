@@ -16,6 +16,7 @@ pub fn register(constructors: &mut Constructors) {
     constructors.add("encoder", encoder);
     constructors.add("gpio-contact-response", gpio_contact_response);
     constructors.add("contact-actuator", contact_actuator);
+    constructors.add("contact-cam", contact_cam);
 }
 
 fn usb(builder: Builder<'_>, model: Model) -> Result<Built, String> {
@@ -185,19 +186,43 @@ fn gpio_contact_response(builder: Builder<'_>, model: Model) -> Result<Built, St
     }))
 }
 
-fn contact_actuator(builder: Builder<'_>, model: Model) -> Result<Built, String> {
+fn contact_cam(builder: Builder<'_>, model: Model) -> Result<Built, String> {
     let Builder {
         id,
         windows,
         resources,
         ..
     } = builder;
-    let Model::ContactActuator {
+    let Model::ContactCam {
         options,
         gpio,
         release,
     } = model
     else {
+        return Err("constructor called for another model kind".into());
+    };
+    Ok(Built::Device({
+        let options: fujimod_emulator_parts_controls::contact_cam::Options = decode(options)?;
+        if !windows.is_empty() || options.contacts.iter().any(|pin| pin.port >= 16) {
+            return Err("contact cam requires GPIO input pads and no register aperture".into());
+        }
+        Box::new(fujimod_emulator_parts_controls::contact_cam::ContactCam::new(
+            options,
+            fujimod_emulator_parts_controls::contact_cam::Wiring {
+                pins: Box::new(resources.pads(&gpio)?),
+                release: release
+                    .map(|name| Ok::<_, String>(wire!(resources, id, name, LogicLevel)))
+                    .transpose()?,
+            },
+        )?)
+    }))
+}
+
+fn contact_actuator(builder: Builder<'_>, model: Model) -> Result<Built, String> {
+    let Builder {
+        windows, resources, ..
+    } = builder;
+    let Model::ContactActuator { options, gpio } = model else {
         return Err("constructor called for another model kind".into());
     };
     Ok(Built::Device({
@@ -212,9 +237,6 @@ fn contact_actuator(builder: Builder<'_>, model: Model) -> Result<Built, String>
                 options,
                 fujimod_emulator_parts_controls::contact_actuator::Wiring {
                     pins: Box::new(resources.pads(&gpio)?),
-                    release: release
-                        .map(|name| Ok::<_, String>(wire!(resources, id, name, LogicLevel)))
-                        .transpose()?,
                 },
             )?,
         )

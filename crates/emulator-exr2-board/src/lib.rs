@@ -182,6 +182,7 @@ fn build(
             node.model,
             Model::Encoder { .. }
                 | Model::ContactActuator { .. }
+                | Model::ContactCam { .. }
                 | Model::GpioContactResponse { .. }
                 | Model::I2cMotorBridge { .. }
                 | Model::CoreRelease { .. }

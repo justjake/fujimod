@@ -1,10 +1,7 @@
 use super::*;
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::{exr2::gpio, test_host::TestHost};
-const MS: u64 = 12_000;
-const P9: Pin = Pin { port: 0, pin: 9 };
-const P6: Pin = Pin { port: 0, pin: 6 };
-fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, Level, TestHost) {
+fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, TestHost) {
     let mut levels = [0; 16];
     levels[0] = (1 << 9) | (1 << 6);
     let gpio = gpio::Gpio::new(
@@ -16,50 +13,47 @@ fn model() -> (ContactActuator, gpio::Gpio, gpio::Pads, Level, TestHost) {
         gpio::Wiring {
             irqs: vec![
                 gpio::InputIrq {
-                    pin: P9,
-                    edge: gpio::Edge::Both,
+                    pin: Pin { port: 0, pin: 9 },
+                    edge: gpio::Edge::Rising,
                     outputs: vec![InterruptLine::Core { core: 0, line: 17 }],
                 },
                 gpio::InputIrq {
-                    pin: P6,
+                    pin: Pin { port: 0, pin: 6 },
                     edge: gpio::Edge::Falling,
-                    outputs: vec![InterruptLine::Core { core: 0, line: 14 }],
+                    outputs: vec![InterruptLine::Core { core: 0, line: 17 }],
                 },
             ],
         },
     )
     .unwrap();
     let pads = gpio.pads();
-    let release = Level::new(false);
-    // The 12 MHz positions of the catalog part `acquisition-contacts`.
-    let position = |ms: f64, contacts| Position {
-        run_ticks: (ms * MS as f64) as u64,
-        contacts,
-    };
     let model = ContactActuator::new(
         Options {
             drive: [Pin { port: 1, pin: 1 }, Pin { port: 1, pin: 2 }],
-            contacts: [P9, P6],
-            run_drive: 1,
-            hold_drives: vec![0, 3],
-            release_drives: vec![0],
+            contacts: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 6 }],
             positions: vec![
-                position(0., [false, false]),
-                position(27.5, [false, true]),
-                position(43.75, [true, true]),
-                position(62.5, [false, true]),
+                Position {
+                    drive: 0,
+                    contacts: [true, true],
+                },
+                Position {
+                    drive: 1,
+                    contacts: [false, false],
+                },
+                Position {
+                    drive: 3,
+                    contacts: [true, true],
+                },
             ],
-            initial_run_ticks: 525_000,
-            latch_overrun_ticks: 30_000,
-            release_ticks: 75_000,
+            initial_position: 0,
+            settle_ticks: 3000,
         },
         Wiring {
             pins: Box::new(pads.clone()),
-            release: Some(release.clone()),
         },
     )
     .unwrap();
-    (model, gpio, pads, release, TestHost::new())
+    (model, gpio, pads, TestHost::new())
 }
 fn drive(gpio: &mut gpio::Gpio, h: &mut TestHost, code: u32) {
     let mut cx = h.cx();
@@ -76,123 +70,103 @@ fn tick(model: &mut ContactActuator, h: &mut TestHost) -> Result<(), String> {
     model.advance(&mut cx);
     cx.take_refusal().map_or(Ok(()), Err)
 }
-/// Run the part to `at`, stopping at each of its deadlines on the way.
-fn run_to(model: &mut ContactActuator, h: &mut TestHost, at: u64) {
-    while let Some(due) = model.next_deadline(h.now).filter(|&due| due <= at) {
-        h.now = due;
-        tick(model, h).unwrap();
-    }
-    h.now = at;
-}
-fn contacts(pads: &gpio::Pads) -> (bool, bool) {
-    (pads.input_level(P9).unwrap(), pads.input_level(P6).unwrap())
-}
-/// X-E2S camera, 1/15 single and continuous stills sampled every 2.5 ms:
-/// from charged, drive 1 opens pin 9 after 17.5-20 ms; pin 6 opens 5-7.5 ms
-/// after comparator 0's edge; from exposed, drive 1 closes pin 6 after 27.5 ms
-/// and pin 9 after 42.5-45 ms. The firmware reacted within one sample to
-/// pin 9 opening and closing (line 17) and to pin 6 opening (line 14).
-/// Comparators 0 and 1 fired together under drive 3 left pin 6 closed.
 #[test]
-fn xe2s_card46_release_curtain_and_charge_cycle() {
-    let (mut m, mut gpio, pads, release, mut h) = model();
-    assert_eq!(m.next_deadline(0), None);
-    assert_eq!(contacts(&pads), (true, true));
-    drive(&mut gpio, &mut h, 1);
-    run_to(&mut m, &mut h, 18 * MS);
-    assert_eq!(contacts(&pads), (true, true));
-    run_to(&mut m, &mut h, 19 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    assert_eq!(h.irqs.len(), 1);
-    drive(&mut gpio, &mut h, 3);
-    // Comparators 0 and 1 fired together under drive 3 leave pin 6 closed.
-    release.drive(true);
-    run_to(&mut m, &mut h, 40 * MS);
-    release.drive(false);
-    run_to(&mut m, &mut h, 41 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    drive(&mut gpio, &mut h, 0);
-    run_to(&mut m, &mut h, 100 * MS);
-    assert_eq!(m.next_deadline(h.now), None);
-    release.drive(true);
-    run_to(&mut m, &mut h, 106 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    run_to(&mut m, &mut h, 107 * MS);
-    assert_eq!(contacts(&pads), (false, false));
-    assert_eq!(h.irqs.len(), 2);
-    release.drive(false);
-    drive(&mut gpio, &mut h, 1);
-    run_to(&mut m, &mut h, 134 * MS);
-    assert_eq!(contacts(&pads), (false, false));
-    run_to(&mut m, &mut h, 135 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    run_to(&mut m, &mut h, 150 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    run_to(&mut m, &mut h, 151 * MS);
-    assert_eq!(contacts(&pads), (true, true));
-    assert_eq!(h.irqs.len(), 3);
-    drive(&mut gpio, &mut h, 3);
-    run_to(&mut m, &mut h, 166 * MS);
-    drive(&mut gpio, &mut h, 1);
-    run_to(&mut m, &mut h, 184 * MS);
-    assert_eq!(contacts(&pads), (true, true));
-    run_to(&mut m, &mut h, 185 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    assert_eq!(m.save()["state"]["transitions"], 5);
+fn floating_drive_is_idle_and_contacts_change_only_at_the_settled_guest_tick() {
+    let (mut model, mut gpio, pads, mut host) = model();
+    assert_eq!(model.next_deadline(0), None);
+    let stable = model.save();
+    tick(&mut model, &mut host).unwrap();
+    assert_eq!(stable, model.save());
+    host.now = 10;
+    drive(&mut gpio, &mut host, 1);
+    assert_eq!(model.next_deadline(10), Some(10));
+    tick(&mut model, &mut host).unwrap();
+    assert_eq!(model.next_deadline(10), Some(3010));
+    let pending = model.save();
+    assert_eq!(model.fingerprint().unwrap(), pending);
+    host.now = 3009;
+    tick(&mut model, &mut host).unwrap();
+    assert_eq!(pending, model.save());
+    assert!(pads.input_level(Pin { port: 0, pin: 6 }).unwrap());
+    assert!(host.irqs.is_empty());
+    host.now = 3010;
+    tick(&mut model, &mut host).unwrap();
+    assert_eq!(model.next_deadline(3010), None);
+    assert!(!pads.input_level(Pin { port: 0, pin: 9 }).unwrap());
+    assert!(!pads.input_level(Pin { port: 0, pin: 6 }).unwrap());
+    assert_eq!(host.irqs, vec![(0, 17)]);
+    drive(&mut gpio, &mut host, 3);
+    tick(&mut model, &mut host).unwrap();
+    host.now = 6010;
+    tick(&mut model, &mut host).unwrap();
+    assert!(pads.input_level(Pin { port: 0, pin: 9 }).unwrap());
+    assert_eq!(host.irqs, vec![(0, 17), (0, 17)]);
 }
 #[test]
-fn held_drive_stops_the_cam_and_keyframes_resume_mid_run() {
-    let (mut m, mut gpio, pads, _, mut h) = model();
-    drive(&mut gpio, &mut h, 1);
-    run_to(&mut m, &mut h, 10 * MS);
-    drive(&mut gpio, &mut h, 0);
-    run_to(&mut m, &mut h, 500 * MS);
-    let saved = m.checkpoint().unwrap();
-    let before = m.fingerprint().unwrap();
-    drive(&mut gpio, &mut h, 1);
-    run_to(&mut m, &mut h, 509 * MS);
-    assert_eq!(contacts(&pads), (false, true));
-    m.restore_checkpoint(&saved).unwrap();
-    assert_eq!(m.fingerprint().unwrap(), before);
-    let invalid = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
-        m.name(),
-        &(
-            &m.options,
-            State {
-                run: u64::MAX,
-                ..m.state.clone()
-            },
-        ),
-    )
-    .unwrap();
-    assert!(m.restore_checkpoint(&invalid).is_err());
-    assert_eq!(m.fingerprint().unwrap(), before);
+fn repeated_identical_drive_does_not_move_a_deadline_and_reversal_cancels_it() {
+    let (mut model, mut gpio, pads, mut host) = model();
+    drive(&mut gpio, &mut host, 0);
+    tick(&mut model, &mut host).unwrap();
+    drive(&mut gpio, &mut host, 1);
+    tick(&mut model, &mut host).unwrap();
+    host.now = 100;
+    drive(&mut gpio, &mut host, 1);
+    tick(&mut model, &mut host).unwrap();
+    assert_eq!(model.next_deadline(100), Some(3000));
+    drive(&mut gpio, &mut host, 0);
+    tick(&mut model, &mut host).unwrap();
+    assert_eq!(model.next_deadline(100), None);
+    host.now = 4000;
+    tick(&mut model, &mut host).unwrap();
+    assert!(pads.input_level(Pin { port: 0, pin: 6 }).unwrap());
+    assert!(host.irqs.is_empty());
 }
 #[test]
-fn unobserved_motion_refuses() {
-    let (mut m, mut gpio, _, _, mut h) = model();
-    drive(&mut gpio, &mut h, 2);
+fn unadmitted_drive_refuses_without_contact_effects() {
+    let (mut model, mut gpio, pads, mut host) = model();
+    drive(&mut gpio, &mut host, 2);
     assert!(
-        tick(&mut m, &mut h)
+        tick(&mut model, &mut host)
             .unwrap_err()
             .contains("no declared motion")
     );
-    let (mut m, mut gpio, _, _, mut h) = model();
-    drive(&mut gpio, &mut h, 1);
-    tick(&mut m, &mut h).unwrap();
-    h.now = 60 * MS;
-    assert!(
-        tick(&mut m, &mut h)
-            .unwrap_err()
-            .contains("past its release latch")
-    );
-    let (mut m, mut gpio, _, release, mut h) = model();
-    drive(&mut gpio, &mut h, 0);
-    tick(&mut m, &mut h).unwrap();
-    release.drive(true);
-    assert!(
-        tick(&mut m, &mut h)
-            .unwrap_err()
-            .contains("outside its latch")
-    );
+    assert!(pads.input_level(Pin { port: 0, pin: 6 }).unwrap());
+    assert!(host.irqs.is_empty());
+}
+
+#[test]
+fn unchanged_contacts_have_no_clock_and_keyframes_resume_a_real_pending_edge() {
+    let (mut part, mut gpio, pads, mut host) = model();
+    drive(&mut gpio, &mut host, 3);
+    tick(&mut part, &mut host).unwrap();
+    assert_eq!(part.next_deadline(0), None);
+    assert_eq!(part.save()["transitions"], 0);
+    host.now = 10;
+    drive(&mut gpio, &mut host, 1);
+    tick(&mut part, &mut host).unwrap();
+    let saved = part.checkpoint().unwrap();
+    let gpio_saved = gpio.checkpoint().unwrap();
+    let before = part.fingerprint().unwrap();
+    host.now = 3010;
+    tick(&mut part, &mut host).unwrap();
+    assert!(!pads.input_level(Pin { port: 0, pin: 6 }).unwrap());
+    gpio.restore_checkpoint(&gpio_saved).unwrap();
+    part.restore_checkpoint(&saved).unwrap();
+    assert_eq!(part.fingerprint().unwrap(), before);
+    assert!(pads.input_level(Pin { port: 0, pin: 6 }).unwrap());
+    host.irqs.clear();
+    host.now = 3009;
+    tick(&mut part, &mut host).unwrap();
+    assert_eq!(part.fingerprint().unwrap(), before);
+    host.now = 3010;
+    tick(&mut part, &mut host).unwrap();
+    assert_eq!(host.irqs, vec![(0, 17)]);
+    let invalid = fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+        part.name(),
+        &(&part.options, None::<u8>, usize::MAX, None::<Motion>, 0u64),
+    )
+    .unwrap();
+    let stable = part.fingerprint().unwrap();
+    assert!(part.restore_checkpoint(&invalid).is_err());
+    assert_eq!(part.fingerprint().unwrap(), stable);
 }
