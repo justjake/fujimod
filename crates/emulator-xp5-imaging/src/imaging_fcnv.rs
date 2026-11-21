@@ -16,8 +16,13 @@
 //!
 //! The user reached in playback is the GUI image draw 0x147de3c (mode 0x10: YCbCr 4:2:2 to
 //! four bytes a pixel, input addresses 0 and 1 equal, alpha 0xff), for the RAW CONVERSION
-//! thumbnail. Modelled: B 0 with A 0 or 1. The byte orders (Y0 Cb Y1 Cr in, R G B [alpha]
-//! out) are inferred, not traced; other modes are logged and write nothing. The completion,
+//! thumbnail. Modelled: B 0 with A 0 or 1. The input is the JPEG decoder's packed 4:2:2
+//! (Y0 Y1 Cb Cr, `emulator-ip` jpeg.rs, the same order the encoder takes); with Y0 Cb Y1 Cr
+//! the RAW CONVERSION thumbnail had vertical stripes and wrong colours. The four-byte output
+//! is alpha, B, G, R in memory: with R G B alpha the rear LCD showed white as (242, 230, 230)
+//! and magenta as yellow, which is exactly R G B alpha read as alpha B G R (alpha premultiplied).
+//! The three-byte output (A 0) is taken as B G R by the same order, not verified. Other modes
+//! are logged and write nothing. The completion,
 //! interrupt and checkpoint are the completion stub's.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
@@ -78,13 +83,15 @@ impl Fcnv {
             let line = cx.ram_bytes(source + y * in_pitch, (width * 2) as usize)?;
             let mut out = Vec::with_capacity((width * out_bytes) as usize);
             for pair in line.chunks_exact(4) {
-                let (cb, cr) = (pair[1] as i32 - 128, pair[3] as i32 - 128);
-                for luma in [pair[0] as i32, pair[2] as i32] {
-                    for row in 0..3 {
-                        out.push(clip(m[3 * row] * luma + m[3 * row + 1] * cb + m[3 * row + 2] * cr));
-                    }
+                // Y0 Y1 Cb Cr.
+                let (cb, cr) = (pair[2] as i32 - 128, pair[3] as i32 - 128);
+                for luma in [pair[0] as i32, pair[1] as i32] {
+                    // [alpha] B G R.
                     if a == 1 {
                         out.push(alpha);
+                    }
+                    for row in (0..3).rev() {
+                        out.push(clip(m[3 * row] * luma + m[3 * row + 1] * cb + m[3 * row + 2] * cr));
                     }
                 }
             }
@@ -165,12 +172,12 @@ mod tests {
         CompletionStub::new(0xffd2_6000, 0x1000, options, 1000).unwrap()
     }
 
-    /// The firmware's YCbCr -> RGB matrix (Q10) turns white, red and a mid grey into RGBA.
+    /// The firmware's YCbCr -> RGB matrix (Q10) turns white, red and a mid grey into alpha B G R.
     #[test]
     fn ycbcr_422_becomes_rgba_with_the_programmed_matrix() {
         let mut ram = vec![0u8; 0x1000];
-        // Y0 Cb Y1 Cr: white, white; then red (Y 76, Cb 85, Cr 255) twice; grey.
-        ram[..12].copy_from_slice(&[255, 128, 255, 128, 76, 85, 76, 255, 128, 128, 128, 128]);
+        // Y0 Y1 Cb Cr: white, white; then red (Y 76, Cb 85, Cr 255) twice; grey.
+        ram[..12].copy_from_slice(&[255, 255, 128, 128, 76, 76, 85, 255, 128, 128, 128, 128]);
         let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
         let mut fcnv = Fcnv::new(stub());
         let q10 = |v: f64| ((v * 1024.0).round() as i64 as u64) & 0x1fff;
@@ -198,8 +205,9 @@ mod tests {
         }
         let out = &host.ram[0x400..0x400 + 24];
         assert_eq!(&out[..8], &[255, 255, 255, 255, 255, 255, 255, 255]);
-        assert!(out[8] > 240 && out[9] < 16 && out[10] < 16 && out[11] == 255, "{:?}", &out[8..12]);
-        assert_eq!(&out[16..24], &[128, 128, 128, 255, 128, 128, 128, 255]);
+        // Alpha, B, G, R: red.
+        assert!(out[8] == 255 && out[9] < 16 && out[10] < 16 && out[11] > 240, "{:?}", &out[8..12]);
+        assert_eq!(&out[16..24], &[255, 128, 128, 128, 255, 128, 128, 128]);
         // A mode that is not modelled writes nothing.
         let mut fcnv = Fcnv::new(stub());
         let mut cx = Cx::new(&mut host, 0, 0, 0);
