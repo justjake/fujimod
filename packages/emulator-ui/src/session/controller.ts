@@ -122,6 +122,11 @@ export function startSession(
         }
     });
   }
+  function showPowerState(s: SessionState) {
+    s.live = s.poweredOn === false ? 'OFF' : 'LIVE';
+    s.message = s.poweredOn === false ? 'Camera is powered off' : 'Camera ready';
+    s.error = false;
+  }
   function finishLoading() {
     setState((s) => {
       s.loading = false;
@@ -199,9 +204,7 @@ export function startSession(
       latestFault = undefined;
       panel.resume();
       setCardEngine(engine);
-      setState((s) => {
-        s.live = 'LIVE';
-      });
+      setState(showPowerState);
     } catch (error) {
       reportFault(error);
     } finally {
@@ -324,20 +327,13 @@ export function startSession(
       viewer.powered(on);
       setState((s) => {
         s.poweredOn = on;
-        if (!s.loading) {
-          s.live = on ? 'LIVE' : 'OFF';
-          s.message = on ? 'Camera ready' : 'Camera is powered off';
-        }
+        if (!s.loading) showPowerState(s);
       });
     });
     setCardEngine(active);
     finishLoading();
     options.ready();
-    setState((s) => {
-      s.live = s.poweredOn === false ? 'OFF' : 'LIVE';
-      s.message = s.poweredOn === false ? 'Camera is powered off' : 'Camera ready';
-      s.error = false;
-    });
+    setState(showPowerState);
     refs.viewer.dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
   }
   async function replay(steps: readonly ReplayStep[]) {

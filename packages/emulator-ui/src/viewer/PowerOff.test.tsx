@@ -16,7 +16,7 @@ test('a sleeping camera exposes a real power-cycle action and removes it after w
       s.off = true;
     });
     flush();
-    expect(host.querySelector('[role=status]')?.textContent).toBe('Camera is powered off');
+    expect(host.querySelector('p')?.textContent).toBe('Camera is powered off');
     const button = host.querySelector('button')!;
     expect(button.textContent).toContain('Power off and on');
     button.click();
