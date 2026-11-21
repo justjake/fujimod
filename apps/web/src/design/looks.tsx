@@ -28,7 +28,7 @@ const LOOKS = {
     --m-divider: inset 0 2px 0 rgb(255 255 255 / 0.55);
     --m-accent: #b06cff; --m-confirm: #1f7cff;
     --m-title: #000; --m-text-area: #000; --m-tray: #000;
-    --m-well: #000; --m-well-edge: inset 0 0 0 1px rgb(255 255 255 / 0.4); --m-mark: #ffd60a; --m-mark-ink: #000;
+    --m-well: #000; --m-well-edge: inset 0 0 0 1px rgb(255 255 255 / 0.4); --m-mark: #ffd60a;
     --m-key: #3a3a3c; --m-key-special: #1c1c1e; --m-key-edge: inset 0 0 0 1px rgb(255 255 255 / 0.5); --m-key-focus: inset 0 0 0 4px #ffd60a;`,
   /* After the X-series menus: an opaque black column, gray plates with a lit
      top edge and a dark bottom edge, engraved dividers, recessed wells for
@@ -42,7 +42,7 @@ const LOOKS = {
     --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 0 0 2px #fff, inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 2px 4px rgb(0 0 0 / 0.7);
     --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
     --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
-    --m-mark: #e5333a; --m-mark-ink: #fff;
+    --m-mark: #e5333a;
     --m-accent: #d4282f; --m-confirm: linear-gradient(#d83a40, #a91d23);
     --m-title: linear-gradient(#262626, #121212); --m-text-area: rgb(0 0 0 / 0.82); --m-tray: linear-gradient(#141414, #050505);
     --m-key: linear-gradient(#4a4a4a, #333); --m-key-special: linear-gradient(#2c2c2c, #1e1e1e);
@@ -83,12 +83,12 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     --m-title: rgb(${gray(0)} / ${fill(0.55)}); --m-text-area: rgb(${gray(20, 2)} / ${fill(0.42)}); --m-tray: rgb(${gray(26, 2)} / ${fill(0.76)});
     --m-key: rgb(255 255 255 / ${mix(0.28, 0.36, contrast)}); --m-key-special: rgb(255 255 255 / ${mix(0.1, 0.17, contrast)});
     --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;
-    --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a; --m-mark-ink: #000;`;
+    --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a;`;
 }
 const GLASS_DEFAULT = { opacity: 0.35, contrast: 0.6, lightness: 0 };
 
 const STYLE_OPTIONS = `
-.fm-mark-chosen .fm-screen { --m-chosen: var(--m-mark); --m-chosen-ink: var(--m-mark-ink); }
+.fm-mark-chosen .fm-screen { --m-chosen-ink: var(--m-mark); }
 ${(Object.keys(LOOKS) as Look[]).filter((k) => k !== 'glass').map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
 .fm-look-fujimod .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
 .fm-look-fujimod .fm-screen rect { rx: 0; ry: 0; }
