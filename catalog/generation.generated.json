@@ -5493,13 +5493,8 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ValueError: key_record_find: 2 verified results from 7 candidates (Key lookup lacks one checked scanner base/stride/count)"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
