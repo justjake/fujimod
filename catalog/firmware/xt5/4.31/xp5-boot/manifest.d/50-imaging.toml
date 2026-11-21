@@ -121,6 +121,9 @@ frame_period_us = 33333
 source_luma = 128
 # Bring-up: unmodeled words read back their last write.
 retain_words = true
+# Statistics planes 0..3 (output +0x400) are read only by the AF service (0x2fea380,
+# 0x2fe36e0): 13 x 9 cells of the four contrast filters, not 7 x 7 colour sums.
+focus_filters = true
 
 # RIFP I/O DMA. The still path (0x2c51f98, recfRecifProcess / recfRecizProcess) uses it only
 # in register-list mode: it reads the recf register queue (0x13c0e54 / 0x13c0e94, 8-byte

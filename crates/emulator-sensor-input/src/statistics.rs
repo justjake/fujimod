@@ -26,6 +26,8 @@ pub enum Planes {
     FocusLevels,
     /// Per-cell count of clipped pixels, 0x400 bytes: see [`FocusFrame`].
     FocusSums,
+    /// The four focus filters, planes 0..3 (0x1000 bytes): see [`FocusFrame`].
+    FocusFilters,
 }
 
 /// Samples a line and lines of the picture the focus statistics are measured on. The width
@@ -70,9 +72,26 @@ const FOCUS_CELL_PIXELS: f64 = 149. * 146.;
 /// and minimum level; plane 0xf is the count of clipped pixels of the cell. `XT5_FOCUS_AUX`
 /// (bit 0: plane 0xe, bit 1: plane 0xf; default 3) leaves an auxiliary plane zero for
 /// experiments. Without a host scene every value is zero (a flat grey card has no contrast).
+///
+/// Planes 0..3 (bank +0x0, +0x400, +0x800, +0xc00; one u32 a cell in rows of 0x40 bytes) are
+/// read only by the AF service: 0x2fea380 (from the collector, bank base and the main AF
+/// arrays at [request +0x10]) copies the 13 x 9 cells of planes 1, 0, 2, 3 into four arrays
+/// of 117 (plane offsets from 0x2e8d624, jump table 0x33793d0), and 0x2fe36e0..0x2fe371c reads
+/// the same four planes. They are taken as the four contrast filters: `filters` holds band k
+/// of [`fujimod_emulator_imaging::focus::contrast_grid`] (the value of cell words k and k + 4)
+/// in plane k. With these planes the stock S1 contrast scan sees the peak (scene in focus at
+/// 60 % of the travel): it stops the sweep 4 frames past the peak instead of running to the
+/// end of the travel.
+///
+/// Not modelled: the AF window. In AF-S with a single point the firmware programs a 3 x 3
+/// grid (columns and rows in bytes 0x4a948e2 / 0x4a948e3, read by the collector) over the AF
+/// point, so its cells are local to that window. This model always measures 13 x 9 cells over
+/// the full frame, so the firmware takes the top-left 3 x 3 cells of the frame; the window
+/// registers of the input buffer are not decoded.
 #[derive(Clone)]
 pub struct FocusFrame {
     pub cells: Vec<u8>,
+    pub filters: Vec<u8>,
     pub levels: Vec<u8>,
     pub sums: Vec<u8>,
 }
@@ -120,7 +139,8 @@ impl FocusFrame {
         let (gain, aux) = *OPTIONS.get_or_init(|| {
             (host_number("XT5_FOCUS_GAIN", FOCUS_GAIN), host_number("XT5_FOCUS_AUX", 3.) as u32)
         });
-        let mut frame = Self { cells: vec![0; 0x2000], levels: vec![0; 0x400], sums: vec![0; 0x400] };
+        let mut frame =
+            Self { cells: vec![0; 0x2000], filters: vec![0; 0x1000], levels: vec![0; 0x400], sums: vec![0; 0x400] };
         if rgb.len() != FOCUS_WIDTH * FOCUS_LINES * 3 {
             return frame;
         }
@@ -157,6 +177,8 @@ impl FocusFrame {
                         let at = row * 0x200 + column * 0x20 + word * 4;
                         frame.cells[at..at + 4].copy_from_slice(&value);
                     }
+                    let at = band * 0x400 + row * 0x40 + column * 4;
+                    frame.filters[at..at + 4].copy_from_slice(&value);
                 }
                 let (mut low, mut high, mut clipped) = (f64::MAX, 0f64, 0usize);
                 for y in row * cell_lines..(row + 1) * cell_lines {
@@ -477,6 +499,7 @@ impl Statistics {
             (Planes::FocusCells, _) => focus(&|f| f.cells, 0x2000)?,
             (Planes::FocusLevels, _) => focus(&|f| f.levels, 0x400)?,
             (Planes::FocusSums, _) => focus(&|f| f.sums, 0x400)?,
+            (Planes::FocusFilters, _) => focus(&|f| f.filters, 0x1000)?,
             (_, Some(relative)) => Scene::host(columns, rows, relative)?.planes(columns, rows, ae),
             (_, None) => s.scene.planes(columns, rows, ae),
         };
@@ -735,9 +758,16 @@ mod tests {
         assert!(soft[0] * sharp[3] < soft[3] * sharp[0], "the fine band falls first");
         let frame = FocusFrame::measure(&bars, 1., 0.);
         assert_eq!((frame.cells.len(), frame.levels.len(), frame.sums.len()), (0x2000, 0x400, 0x400));
+        assert_eq!(frame.filters.len(), 0x1000);
         for (row, column) in [(0, 0), (4, 6), (8, 12)] {
             assert!(cell(&frame, row, column, 0) > 0, "cell {row},{column}");
             assert_eq!(cell(&frame, row, column, 1), cell(&frame, row, column, 5));
+            // Plane k of the filters holds cell word k (rows of 0x40 bytes, one u32 a cell).
+            for band in 0..4 {
+                let at = band * 0x400 + row * 0x40 + column * 4;
+                let filter = u32::from_le_bytes(frame.filters[at..at + 4].try_into().unwrap());
+                assert_eq!(u64::from(filter), cell(&frame, row, column, band));
+            }
             // Maximum over minimum in plane 0xe; nothing clips, so plane 0xf is zero.
             let at = row * 0x40 + column * 4;
             let levels = u32::from_le_bytes(frame.levels[at..at + 4].try_into().unwrap());
@@ -759,7 +789,12 @@ mod tests {
 
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let statistics = Statistics::in_memory(0x1000, 0x2000).unwrap();
-        for (planes, size) in [(Planes::FocusCells, 0x2000), (Planes::FocusLevels, 0x400), (Planes::FocusSums, 0x400)] {
+        for (planes, size) in [
+            (Planes::FocusCells, 0x2000),
+            (Planes::FocusLevels, 0x400),
+            (Planes::FocusSums, 0x400),
+            (Planes::FocusFilters, 0x1000),
+        ] {
             let mut host = RecordingHost { ram: vec![0x55; 0x2100], ram_base: 0x1000, ..Default::default() };
             statistics.complete(&mut Cx::new(&mut host, 0, 0, 0), 0x1000, 13, 9, planes).unwrap();
             assert!(host.ram[..size].iter().all(|v| *v == 0));
