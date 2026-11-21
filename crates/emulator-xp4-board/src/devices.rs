@@ -1199,7 +1199,7 @@ impl Devices {
         if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
         let view = nor.immutable_view();
         let executable_view = nor.executable_view();
-        let port = storage::port_from_nor(nor);
+        let port = storage::try_port_from_nor(nor)?;
         let mut dma = DmaController::new(port.clone(), routes).with_audio(audio)?;
         if let Some(input) = receiver_input {
             if input.address < 0xff000000 {
