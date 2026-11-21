@@ -88,6 +88,10 @@ export function pageMetadata(path: string) {
       description: 'The Fujimod camera manual and FocalUI SDK.',
       canonical: siteOrigin + normalized,
     };
+  if (normalized === '/docs/design/')
+    return { title: 'Design · FujiMod', description: 'Prototypes of Fujimod camera screens.', canonical: siteOrigin + normalized };
+  if (normalized === '/docs/design/custom-settings-editor/')
+    return { title: 'Custom settings editor · Design · FujiMod', description: 'The custom settings editor and film editor prototype.', canonical: siteOrigin + normalized };
   if (normalized === '/docs/sdk/focal/')
     return {
       title: 'FocalUI SDK · FujiMod',

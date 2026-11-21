@@ -19,6 +19,8 @@ export function siteRoutes(client: string) {
     ...Object.keys(textPages),
     ...manualRoutes(),
     '/docs/',
+    '/docs/design/',
+    '/docs/design/custom-settings-editor/',
     `/${sdkDocsPath}/`,
     ...components.map((component) => `/${sdkDocsPath}/components/${component.slug}/`),
   ];
@@ -49,6 +51,8 @@ export async function prerender(output = 'dist') {
                 '/recovery/': 'class="shell recovery"',
                 '/device/': 'class="shell device"',
                 '/docs/': 'class="shell docs-overview"',
+                '/docs/design/': 'class="shell design-index"',
+                '/docs/design/custom-settings-editor/': 'class="shell design-page"',
               }[route];
     if (
       !html.includes('class="site-header"') ||
