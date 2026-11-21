@@ -250,6 +250,11 @@ export function Choice(props: {
           )}
         </For>
       </div>
+      {/* Focus is drawn last, over the recessed strip, so it is the same
+          bright outline as everywhere else. */}
+      <Show when={props.focused || dial.active()}>
+        <span class="pointer-events-none absolute inset-0 z-20 rounded-[inherit]" style={{ 'box-shadow': 'var(--m-focus-edge)' }} />
+      </Show>
       {/* Without a name, changed is a dot at the card's left edge. */}
       <Show when={props.name === undefined && props.changed}>
         <span class="absolute top-1/2 left-[3px] z-10 size-[6px] -translate-y-1/2 rounded-full" style={{ background: ACCENT }} />
@@ -372,6 +377,11 @@ export function Dial(props: {
         </Show>
         <span class="fm-round absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: 'var(--m-mark)', 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.55)' }} />
       </div>
+      {/* Focus is drawn last, over the recessed strip, so it is the same
+          bright outline as everywhere else. */}
+      <Show when={props.focused || active()}>
+        <span class="pointer-events-none absolute inset-0 z-20 rounded-[inherit]" style={{ 'box-shadow': 'var(--m-focus-edge)' }} />
+      </Show>
       {/* Without a name, changed is a dot at the card's left edge. */}
       <Show when={props.name === undefined && props.changed}>
         <span class="absolute top-1/2 left-[3px] z-10 size-[6px] -translate-y-1/2 rounded-full" style={{ background: ACCENT }} />
