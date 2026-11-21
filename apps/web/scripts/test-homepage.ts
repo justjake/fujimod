@@ -172,7 +172,7 @@ for (const engine of [chromium, webkit]) {
 
       const camera = page.locator('.sd-camera input');
       assert.equal(await camera.count(), release.firmwares.length);
-      await camera.first().check();
+      assert.ok(await camera.first().isChecked());
       const recipeGroup = page.getByRole('group', { name: 'Recipes' });
       const recipeToggle = recipeGroup.getByRole('checkbox', { name: /^Recipes/ });
       const recipeList = recipeGroup.locator('.home-recipe-list input');
@@ -183,13 +183,11 @@ for (const engine of [chromium, webkit]) {
       assert.equal((await recipeGroup.locator('small').innerText()).trim(), String(recipes.length));
       assert.ok(await recipeToggle.isChecked());
       assert.equal(await recipeToggle.evaluate((el: HTMLInputElement) => el.indeterminate), false);
-      await recipeGroup.getByText('Choose recipes', { exact: true }).click();
       assert.equal(await recipeList.count(), recipes.length);
       assert.equal(
         await recipeGroup.locator('.home-recipe-list input:checked').count(),
         recipes.length,
       );
-      await recipeGroup.getByText('Choose recipes', { exact: true }).click();
 
       if (engine === chromium && !mobile) {
         for (const [selector, name] of [
@@ -202,7 +200,6 @@ for (const engine of [chromium, webkit]) {
           await page.screenshot({ path: resolve(output, `${name}@2x.png`) });
         }
       }
-      await recipeGroup.getByText('Choose recipes', { exact: true }).click();
       await recipeToggle.uncheck();
       assert.equal(await recipeGroup.locator('.home-recipe-list input:checked').count(), 0);
       await recipeToggle.check();
@@ -212,7 +209,6 @@ for (const engine of [chromium, webkit]) {
       );
       await recipeList.first().uncheck();
       assert.ok(await recipeToggle.evaluate((el: HTMLInputElement) => el.indeterminate));
-      await recipeGroup.getByText('Choose recipes', { exact: true }).click();
 
       for (const selector of [
         '.release-personal-note .manual-feature-link',

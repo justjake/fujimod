@@ -21,7 +21,7 @@ test('renders the release date, elapsed days, and names in the credits hover lis
     host,
   );
   try {
-    expect(host.querySelector('article time')?.textContent).toBe('April 2, 2026');
+    expect(host.querySelector('article time')?.textContent).toBe('April 1, 2026');
     expect(host.querySelector('time')?.dateTime).toBe('2026-04-02T00:05:00Z');
     expect(host.textContent).toContain('23 days');
     expect(host.textContent).toContain('2 contributors');

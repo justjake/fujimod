@@ -85,6 +85,13 @@ export function SdBootV2Download(props: { release?: LoadedRelease; catalog: read
       .catch((reason: unknown) => Error(shownError(reason)))
       .then((value) => setReleases((map) => new Map(map).set(camera.id, value)));
   }
+  let preselected = false;
+  createEffect(cameras, (list) => {
+    if (preselected || !list.length) return;
+    preselected = true;
+    const x70 = list.find((camera) => camera.model === 'X70');
+    if (x70) choose(x70, true);
+  });
   function setExcluded(paths: readonly string[], value: boolean) {
     setExcludedPaths((set) => {
       const next = new Set(set);
