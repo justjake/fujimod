@@ -17,9 +17,10 @@
 //! - The loader's init touches 0x08/0x2c/0x30/0x60/0x64/0x68/0x70/0x78/0x90
 //!   (slot regs and the DMA-assist window descriptor), which the NOR model
 //!   rejects as unmodeled.
-//! - The program path (0x02/0x84/0x10 program load/execute) is refused, not
-//!   faked: a silent no-op would misreport update writes as durable. Block erase
-//!   (0xd8) acts on the emulated die only.
+//! - Program load (0x02/0x84), program execute (0x10) and block erase (0xd8)
+//!   act on the emulated die only; the program load data arrives through the
+//!   aperture DMA. The row of 0x10 and 0xd8 is read from 0x50 (inferred from the
+//!   application's driver, not from the part's documentation).
 use crate::nand_storage::{NandShared, PAGE};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -263,10 +264,22 @@ impl NandController {
             // Program load (0x02/0x84), program execute (0x10) and block
             // erase: modeled refusals — the boot-read milestone never issues
             // them and a silent no-op would misreport update writes.
-            0x02 | 0x84 | 0x10 => {
-                return Err(format!(
-                    "serial-NAND program command {cmd:#x} is not modeled"
-                ))
+            // Program load: the data arrives through the aperture DMA into the page buffer.
+            0x02 | 0x84 => {
+                if cmd == 0x02 {
+                    self.nand.lock().unwrap().reset_program_buffer();
+                }
+                self.state.complete = true;
+            }
+            // Program execute: the row is in 0x50 as for the block erase.
+            0x10 => {
+                let row = if self.state.last_address_register == 0x50 {
+                    self.state.regs[0x50 / 4]
+                } else {
+                    self.row()
+                };
+                self.nand.lock().unwrap().execute_program(row)?;
+                self.state.complete = true;
             }
             // Block erase (0xd8 on the W35N01JW): the application's driver writes the block's first
             // row to 0x50 after the Write Enable. The erase completes instantly with WEL clear.
@@ -784,19 +797,25 @@ mod tests {
     }
 
     #[test]
-    fn program_path_is_refused_not_faked() {
-        for cmd in [0x02, 0x84, 0x10] {
-            let mut c = controller(vec![0xff; PAGE + 2]);
-            let mut host = RecordingHost::default();
-            c.state.regs[0] = 1;
+    fn program_execute_writes_the_loaded_page_under_write_enable() {
+        let mut c = controller(vec![0xff; PAGE * 64 * 2]);
+        let mut host = RecordingHost::default();
+        let strobe = |c: &mut NandController, cmd: u32| {
             c.state.regs[0x40 / 4] = cmd;
+            let mut host = RecordingHost::default();
             let mut cx = Cx::new(&mut host, 0, 0, 0);
             c.write(&mut cx, 0xff90a0c0, 4, 1);
-            assert!(
-                cx.refusal().is_some(),
-                "command {cmd:#x} must be an explicit refusal"
-            );
-        }
+            assert!(cx.refusal().is_none());
+        };
+        c.state.regs[0] = 1;
+        strobe(&mut c, 0x06);
+        strobe(&mut c, 0x02);
+        c.nand.lock().unwrap().load_program_data(8, &[1, 2, 3, 4]).unwrap();
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 70);
+        strobe(&mut c, 0x10);
+        let nand = c.nand.lock().unwrap();
+        assert_eq!(nand.read(70 * PAGE as u64 + 6, 8).unwrap(), [0xff, 0xff, 1, 2, 3, 4, 0xff, 0xff]);
+        assert!(!nand.session.write_enable);
     }
 
 }

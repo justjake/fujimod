@@ -1,0 +1,10 @@
+# Reset handshake word, declared as on the X-T5 and X-H2 boards: the application stores 1 to
+# 0xff91c01c (0x15ab07c, through 0x9ed80) and, as on those bodies, reads the same word until it
+# returns 0. Immediate completion is the sibling boards' functional assumption, UNVERIFIED for the
+# X-E5. The rest of the page stays unowned and refuses.
+[[device]]
+base = 0xff91c000
+size = 0x1000
+kind = "reset-handshake"
+[device.options]
+trigger_offset = 0x1c

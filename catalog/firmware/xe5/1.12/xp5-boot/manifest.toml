@@ -32,3 +32,28 @@ size = 0x1a0000
 address = 0x68c73000
 physical = 0x8c73000
 size = 5754880
+
+# SD slots: no card inserted, the run input of each slot of 25-sd.toml (as on the X-T5 board).
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"

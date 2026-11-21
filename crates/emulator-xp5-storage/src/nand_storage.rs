@@ -17,6 +17,10 @@ pub type NandShared = Arc<Mutex<NandStorage>>;
 pub struct NandSession {
     pub reads: StorageReads,
     pub write_enable: bool,
+    /// The page the program-load data builds up before a program execute: main area then spare,
+    /// 0xff where nothing was loaded. Not part of a checkpoint.
+    #[serde(skip)]
+    program_buffer: Vec<u8>,
 }
 
 pub struct NandStorage {
@@ -66,6 +70,33 @@ impl NandStorage {
         self.die.program(row, bytes, spare)?;
         self.session.write_enable = false;
         Ok(())
+    }
+
+    /// Starts a program load: the buffer is all erased bytes.
+    pub fn reset_program_buffer(&mut self) {
+        self.session.program_buffer = vec![0xff; PAGE + SPARE];
+    }
+
+    /// Program-load data at `offset` of the page (main area, then spare).
+    pub fn load_program_data(&mut self, offset: usize, bytes: &[u8]) -> Result<(), String> {
+        if self.session.program_buffer.is_empty() {
+            self.reset_program_buffer();
+        }
+        let end = offset
+            .checked_add(bytes.len())
+            .filter(|end| *end <= PAGE + SPARE)
+            .ok_or("serial NAND program load past the page and spare area")?;
+        self.session.program_buffer[offset..end].copy_from_slice(bytes);
+        Ok(())
+    }
+
+    /// Program execute: writes the loaded page to `row` under write enable.
+    pub fn execute_program(&mut self, row: u32) -> Result<(), String> {
+        if self.session.program_buffer.is_empty() {
+            self.reset_program_buffer();
+        }
+        let buffer = std::mem::take(&mut self.session.program_buffer);
+        self.program_page(row, &buffer[..PAGE], &buffer[PAGE..])
     }
 
     pub fn erase_block(&mut self, first_row: u32) -> Result<(), String> {

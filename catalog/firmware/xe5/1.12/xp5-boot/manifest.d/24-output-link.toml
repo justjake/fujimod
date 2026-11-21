@@ -1,0 +1,7 @@
+# Display output link at 0xff9a1000, declared as on the X-T5 board: immediate functional completion
+# of the application's configuration write and ready poll. The initial configuration words of 0 are
+# session assumptions. INHERITED and UNVERIFIED for the X-E5.
+[[device]]
+base = 0xff9a1000
+size = 0x1c
+kind = "display-output-link"

@@ -1,0 +1,59 @@
+# SD slots 0 and 1 at 0xff9b0000 + (n << 14), declared as on the X-T5 board (25-sd.toml there; the
+# driver layout is documented there): per instance the UHS-I SDHCI host, its selection words and the
+# UHS-II register file at +0x2200 with the PHY block at +0x2000. The application's first access is a
+# read at 0xff9b2080 from 0x14c4f10. Every value is INHERITED and UNVERIFIED for the X-E5:
+# transfer_ticks, clock_ticks and rca are session assumptions, ram_bytes is the run's DRAM limit, and
+# capabilities sets only bit 35 (UHS-II support) as on the X-T5; the X-E5's slot count and UHS-II
+# support are not read from its firmware yet. No interrupt line is declared: the boot polls.
+
+[[device]]
+base = 0xff9b0000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b0000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+ram_bytes = 0x67f00000
+
+[[device]]
+base = 0xff9b01e0
+size = 8
+kind = "sd-interface"
+
+[[device]]
+base = 0xff9b2000
+size = 0x300
+kind = "sdhci-uhs2"
+[device.options]
+slot = 0xff9b0000
+capabilities = 0x800000000
+clock_ticks = 1000
+
+[[device]]
+base = 0xff9b4000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b4000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+ram_bytes = 0x67f00000
+
+[[device]]
+base = 0xff9b41e0
+size = 8
+kind = "sd-interface"
+
+[[device]]
+base = 0xff9b6000
+size = 0x300
+kind = "sdhci-uhs2"
+[device.options]
+slot = 0xff9b4000
+capabilities = 0x800000000
+clock_ticks = 1000

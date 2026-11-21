@@ -1,0 +1,12 @@
+# I2C instance 2 at 0xff926000 (controllers at 0xff924000 + n * 0x1000), declared as on the X-T5
+# board: interrupt 290, no part acknowledged. The application's first access is a byte write at
+# 0xff926018 from 0x14a61b8, the same open routine that wrote 0xff925018 for instance 1. The bus
+# clients of the X-E5 are not read from its firmware yet, so every address is not acknowledged;
+# byte_ns is a functional latency, not a bus rate. INHERITED and UNVERIFIED.
+[[device]]
+kind = "i2c-controller"
+base = 0xff926000
+size = 0x1000
+[device.options]
+interrupt = 290
+byte_ns = 25000

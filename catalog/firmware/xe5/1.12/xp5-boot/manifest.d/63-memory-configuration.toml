@@ -1,0 +1,33 @@
+# Four instances of the memory-configuration controller at 0xfaf05000 + n * 0x10000, declared as on
+# the X-T5 board. The application writes the first from a table (0x14cce7c: word writes of
+# address/value pairs through 0x9ed80) and then polls the table's last address, 0xfaf05704, until
+# it reads 0. The other three instances are declared with the first, not from an access seen yet.
+# The commit latency is the X-T5 board's functional value, INHERITED and UNVERIFIED for the X-E5.
+
+[[device]]
+base = 0xfaf05000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf15000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf25000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf35000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000

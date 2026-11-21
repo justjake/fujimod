@@ -1,0 +1,20 @@
+# Two output blocks the application configures from 0x153ef3c (through 0x9ed80): a word at
+# 0xff9a2410 after the clock-gate calls 0x14ca57c(4, 0x1000) and 0x14ca2b0(8, 0x20), and, unless
+# setting 0x40d47 is 2, a word at 0xff9a4410 after the calls with 0x2000 and 0x80. The values are
+# packed settings bytes. 0x153f0c4 then polls +0x74 bit 0, and +0xb0 against the mask 0xa90, of
+# each block until set. Both are declared as a bring-up register file whose +0x74 reads 1 and
+# +0xb0 reads 0xa90 (constants, so the polls complete); nothing is established about the block, the
+# values stand in for a ready status and are UNVERIFIED.
+[[device]]
+base = 0xff9a2000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x74, mode = "constant", value = 1 }, { offset = 0xb0, mode = "constant", value = 0xa90 }]
+
+[[device]]
+base = 0xff9a4000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x74, mode = "constant", value = 1 }, { offset = 0xb0, mode = "constant", value = 0xa90 }]
