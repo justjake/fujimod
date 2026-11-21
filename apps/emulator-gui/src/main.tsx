@@ -8,8 +8,6 @@ if ('__TAURI_INTERNALS__' in window) {
     configurations: () => invoke('configurations'),
     chooseUpdate: () => invoke('choose_update'),
     launch: (request) => invoke('launch', { request }),
-    launchCommand: () => invoke('launch_command'),
-    launchCli: () => invoke('launch_cli'),
     close: () => invoke('close'),
   };
 }

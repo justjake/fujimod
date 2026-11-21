@@ -57,7 +57,6 @@ struct LaunchedCamera {
     model: String,
     firmware: String,
     endpoint: String,
-    standalone: bool,
 }
 
 struct Running {
@@ -68,7 +67,6 @@ struct Running {
 #[derive(Default)]
 struct AppState {
     running: Mutex<Option<Running>>,
-    launch: Mutex<Option<LaunchedCamera>>,
 }
 
 impl Drop for Running {
@@ -88,7 +86,11 @@ fn configurations() -> Vec<Configuration> {
             let run = &configuration.configuration;
             if !matches!(run.start, RunStart::Loader | RunStart::Rom)
                 || !matches!(run.inputs, Some(RunInputs::Xp5(_)))
-                || run.preset.as_ref().and_then(|preset| preset.firmware_profile_id.as_ref()).is_none()
+                || run
+                    .preset
+                    .as_ref()
+                    .and_then(|preset| preset.firmware_profile_id.as_ref())
+                    .is_none()
             {
                 return None;
             }
@@ -106,6 +108,34 @@ async fn choose_update() -> Option<String> {
         .map(|file| file.path().display().to_string())
 }
 
+fn checked_update(
+    configuration: &ResolvedConfiguration,
+    update: &str,
+) -> Result<PathBuf, String> {
+    let camera = Configuration::from_resolved(configuration)?;
+    let update = PathBuf::from(update);
+    let metadata = std::fs::metadata(&update)
+        .map_err(|error| format!("{}: {error}", update.display()))?;
+    if metadata.len() != camera.update_bytes {
+        return Err(format!(
+            "{} is not the firmware for {}.",
+            update.display(),
+            camera.model
+        ));
+    }
+    let shipped = std::fs::read(&update)
+        .map_err(|error| format!("{}: {error}", update.display()))?;
+    use sha2::{Digest, Sha256};
+    if format!("{:x}", Sha256::digest(&shipped)) != camera.update_sha256 {
+        return Err(format!(
+            "{} is not the firmware for {}.",
+            update.display(),
+            camera.model
+        ));
+    }
+    Ok(update)
+}
+
 fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), String> {
     let resolved = ResolvedConfiguration::bundled(&request.configuration)?;
     if !matches!(resolved.configuration.start, RunStart::Loader | RunStart::Rom)
@@ -113,26 +143,9 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     {
         return Err("This camera cannot start from the firmware file alone.".into());
     }
-    let configuration = Configuration::from_resolved(&resolved)?;
-    let update = PathBuf::from(request.update);
-    let metadata = std::fs::metadata(&update).map_err(|error| format!("{}: {error}", update.display()))?;
-    if metadata.len() != configuration.update_bytes {
-        return Err(format!(
-            "{} is not the firmware for {}.",
-            update.display(),
-            configuration.model
-        ));
-    }
-    let shipped = std::fs::read(&update).map_err(|error| format!("{}: {error}", update.display()))?;
-    use sha2::{Digest, Sha256};
-    if format!("{:x}", Sha256::digest(&shipped)) != configuration.update_sha256 {
-        return Err(format!(
-            "{} is not the firmware for {}.",
-            update.display(),
-            configuration.model
-        ));
-    }
-    let output = output_directory(&configuration.configuration)?;
+    let camera = Configuration::from_resolved(&resolved)?;
+    let update = checked_update(&resolved, &request.update)?;
+    let output = output_directory(&camera.configuration)?;
     let socket = fujimod_emulator_gui::bind(std::net::Ipv4Addr::LOCALHOST.into())?;
     let endpoint = socket.endpoint().url.clone();
     let stop = Arc::new(AtomicBool::new(false));
@@ -193,15 +206,21 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
         .map_err(|error| error.to_string())?;
     let launched = LaunchedCamera {
         id: endpoint.clone(),
-        configuration: configuration.configuration.clone(),
-        body: configuration.body,
-        model: configuration.model,
-        firmware: configuration.firmware,
+        configuration: camera.configuration,
+        body: camera.body,
+        model: camera.model,
+        firmware: camera.firmware,
         endpoint,
-        standalone: true,
     };
-    Ok((launched, Running { stop, thread: Some(thread) }))
+    Ok((
+        launched,
+        Running {
+            stop,
+            thread: Some(thread),
+        },
+    ))
 }
+
 #[tauri::command]
 async fn launch(
     request: LaunchRequest,
@@ -214,50 +233,7 @@ async fn launch(
         .map_err(|_| "emulator state is poisoned".to_owned())?
         .replace(running);
     drop(previous);
-    if let Ok(mut pending) = state.launch.lock() {
-        *pending = Some(launched.clone());
-    }
     Ok(launched)
-}
-
-#[tauri::command]
-fn launch_command(state: tauri::State<'_, AppState>) -> Option<LaunchedCamera> {
-    let mut pending = state.launch.lock().ok()?;
-    if pending.is_none() {
-        let (configuration, update) = std::env::args().skip(1).find_map(|argument| {
-            let launch = argument.strip_prefix("--launch=")?;
-            launch.split_once(',').map(|(configuration, update)| (configuration.to_owned(), update.to_owned()))
-        })?;
-        let camera = match launch_camera(LaunchRequest { configuration, update }) {
-            Ok((camera, running)) => {
-                *state.running.lock().ok()? = Some(running);
-                camera
-            }
-            Err(error) => {
-                eprintln!("fujimod-emulator-gui: {error}");
-                return None;
-            }
-        };
-        return Some(camera);
-    }
-    pending.take()
-}
-
-/// A CLI-started window receives its complete camera in the page URL.
-#[tauri::command]
-fn launch_cli() -> Option<LaunchedCamera> {
-    None
-}
-
-fn output_directory(configuration: &str) -> Result<PathBuf, String> {
-    let root = std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches")))
-        .ok_or("cannot resolve the application cache directory")?
-        .join("fujimod/emulator")
-        .join(configuration);
-    std::fs::create_dir_all(&root).map_err(|error| error.to_string())?;
-    Ok(root)
 }
 
 #[tauri::command]
@@ -271,19 +247,90 @@ fn close(state: tauri::State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+fn output_directory(configuration: &str) -> Result<PathBuf, String> {
+    let root = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches")))
+        .ok_or("cannot resolve the application cache directory")?
+        .join("fujimod/emulator")
+        .join(configuration);
+    std::fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+    Ok(root)
+}
+
+#[derive(Default)]
+struct WindowLaunch {
+    endpoint: Option<String>,
+    body: Option<String>,
+    model: Option<String>,
+}
+
+fn window_launch() -> Result<WindowLaunch, String> {
+    let mut launch = WindowLaunch::default();
+    let mut arguments = std::env::args().skip(1);
+    while let Some(argument) = arguments.next() {
+        let (key, inline) = argument
+            .split_once('=')
+            .map_or((argument.as_str(), None), |(key, value)| (key, Some(value)));
+        let mut value = || {
+            inline
+                .map(str::to_owned)
+                .or_else(|| arguments.next())
+                .ok_or_else(|| format!("{key} needs a value"))
+        };
+        match key {
+            "--connect" => launch.endpoint = Some(value()?),
+            "--body" => launch.body = Some(value()?),
+            "--model" => launch.model = Some(value()?),
+            other => return Err(format!("unknown option: {other}")),
+        }
+    }
+    match (&launch.endpoint, &launch.body, &launch.model) {
+        (None, None, None) => {}
+        (Some(_), Some(_), Some(_)) => {}
+        _ => return Err("--connect, --body and --model are given together".into()),
+    }
+    Ok(launch)
+}
+
+fn connect_script(launch: &WindowLaunch) -> Option<String> {
+    let endpoint = launch.endpoint.as_deref()?;
+    Some(format!(
+        "window.fujimodLaunch = {{ endpoint: {}, body: {}, model: {} }};",
+        serde_json::to_string(endpoint).ok()?,
+        serde_json::to_string(launch.body.as_deref().unwrap_or("")).ok()?,
+        serde_json::to_string(launch.model.as_deref().unwrap_or("")).ok()?,
+    ))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let connection = window_launch()?;
     tauri::Builder::default()
         .manage(AppState::default())
         .plugin(tauri_plugin_dialog::init())
+        .setup(move |app| {
+            let mut window = tauri::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::App("index.html".into()),
+            )
+            .title("FujiMod Emulator")
+            .inner_size(1280.0, 900.0)
+            .min_inner_size(720.0, 600.0)
+            .visible(false);
+            if let Some(script) = connect_script(&connection) {
+                window = window.initialization_script(script);
+            }
+            window.build()?.show()?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             configurations,
             choose_update,
             launch,
-            launch_command,
-            launch_cli,
             close
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running FujiMod Emulator");
+        .run(tauri::generate_context!())?;
+    Ok(())
 }
