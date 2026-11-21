@@ -38,6 +38,7 @@ XP5 --watch-writes logs each CPU store, DMA and host write into the physical ran
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
+Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
@@ -520,7 +521,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         let (session, inputs, ticks_per_second, quantum, _) = started.into_gui_parts();
         let host = fujimod_emulator_gui::serve(
             Xp5Session {
-                configuration,
+                configuration: configuration.clone(),
                 session,
                 inputs,
                 ticks_per_second,
@@ -530,7 +531,14 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
             std::net::Ipv4Addr::LOCALHOST.into(),
         )?;
         eprintln!("FUJIMOD GUI {}", host.endpoint().url);
-        host.run()?;
+        let mut window = fujimod_emulator_gui::launch::open(
+            host.endpoint(),
+            &configuration.configuration.body_id,
+            &configuration.reference.body.id,
+        )?;
+        let result = host.run();
+        let _ = window.wait();
+        result?;
         return Ok(Outcome { success: true });
     }
     let report = xp5::run_boot(run)?;
