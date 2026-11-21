@@ -14,12 +14,212 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
-msgid "1"
+msgid " "
 msgstr ""
 
-#. menu.label in FujiMod's camera interface.
-msgctxt "menu.label"
-msgid "2"
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "'YY MM DD"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+1"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+2"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+3"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+4"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+5"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+6"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+7"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+8"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "+9"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-1"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-2"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-3"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-4"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-5"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-6"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-7"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-8"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "-9"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "0"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "0%"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "0.3 M - INF"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "1 M - INF"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "1.25X"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "1.33X"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "1.50X"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "1.60X"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "1.80X"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "10 MIN"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "100%"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "2.00X"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "23 MIN"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "24"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "25%"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "27"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "35-TO-120"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "35MM NEGATIVE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "35MM SLIDE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "36"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "50%"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "75%"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -69,6 +269,11 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "AF RECOVERY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "ANY COLOR"
 msgstr ""
 
@@ -84,12 +289,32 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "APPEARANCE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "ASPECT RATIO"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "AUTO"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "AUTO LARGE"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "AUTO LEVER"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "AUTO SMALL"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -99,7 +324,87 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "AUTOMATIC"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Acros"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Acros Green"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Acros Red"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Acros Yellow"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Astia"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BACK UP"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BACK UP INTERNAL DATA"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BACKGROUND COLOR"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "BLACK"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "BLUE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BOOT SETUP"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "BORDERS"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "BOTTOM LEFT"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "BOTTOM RIGHT"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "BROWN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BUG REPORT"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -110,6 +415,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "BUILD OVERLAY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "BUILT"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -125,6 +435,26 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "BY NAME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CARD FILMS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CHANGE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CHECK AGAIN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CHECK FOR UPDATES"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -169,7 +499,22 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "COMMIT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "COMPARE WITH CURRENT"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "COMPOSITOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CONNECT WI-FI"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -214,7 +559,22 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
-msgid "CURRENT SETTINGS"
+msgid "CUSTOM"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CUSTOM 1"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CUSTOM 2"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "CUSTOM 3"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -234,6 +594,16 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "Classic Chrome"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Classic Negative"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "D RANGE PRIORITY"
 msgstr ""
 
@@ -245,6 +615,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "DATE STAMP"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "DD MM 'YY"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -275,6 +650,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "DISPOSABLE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "DOWNLOAD"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -354,6 +734,21 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "Eterna"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Eterna Bleach"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "F-LOG RECORDING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "F-Log RECORDING"
 msgstr ""
 
@@ -365,6 +760,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "FAVORITES"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "FEET"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -414,12 +814,27 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "FILM SIMULATIONS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FIRMWARE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "FLASH"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "FLASH COM"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "FOCALIZED UI"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -442,6 +857,11 @@ msgctxt "menu.label"
 msgid "FRAMING GUIDELINE"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "FROM CUSTOM SETTING"
+msgstr ""
+
 #. menu.page in FujiMod's camera interface.
 msgctxt "menu.page"
 msgid "FUJIMOD"
@@ -452,14 +872,39 @@ msgctxt "menu.page"
 msgid "FUJIMOD SET-UP"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "FULL"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "FUNCTION"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "GLOBAL"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "GRAIN EFFECT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "GRAIN TEXTURE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "GRAY"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "GREEN"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -479,6 +924,11 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "HIDE FEATURES"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "HIDE FILMS"
 msgstr ""
 
@@ -489,12 +939,147 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "HIGHLIGHT METERING"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "HIGHLIGHT TONE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HOLD"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "HUD LAYOUT"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 1"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 10"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 11"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 12"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 13"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 14"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 15"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 16"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 17"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 18"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 19"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 2"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 20"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 21"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 22"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 23"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 24"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 3"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 4"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 5"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 6"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 7"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 8"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HUE 9"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "HYPERFOCAL"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -512,6 +1097,21 @@ msgctxt "menu.label"
 msgid "INDICATOR OPACITY"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "INDIGO"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "INSTANT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "INTERVAL TIMER SHOOTING"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "ISO"
@@ -519,7 +1119,22 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "JOIN"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "LARGE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "LEAKS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "LEICA X"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -530,6 +1145,31 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "LIGHT LEAKS"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "LINE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "LIVE VIEW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MAGENTA-GREEN"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MANUAL"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MEDIUM"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -549,12 +1189,57 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "MENU TAP"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "METERS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "MF ASSIST AND PEAKING"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "MF SNAP FOCUS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MIN. SHUTTER SPEED AUTO"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MM DD 'YY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MODS"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MONOCHROMATIC COLOR"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MONOCHROME MG"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MONOCHROME WC"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "MOVE TO FAVORITES"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -569,7 +1254,152 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "MOVIE FILM SIMULATION"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 1"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 10"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 11"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 12"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 13"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 14"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 15"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 16"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 17"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 18"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 19"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 2"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 20"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 21"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 22"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 23"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 24"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 3"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 4"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 5"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 6"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 7"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 8"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "MUTED HUE 9"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "MY RECIPES"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Monochrome Green"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Monochrome Red"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Monochrome STD"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Monochrome Yellow"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -582,9 +1412,29 @@ msgctxt "menu.label"
 msgid "NEGATIVE"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "NEUTRAL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NEXT FRAMING GUIDELINE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NEXT PHOTOMETRY"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "NOISE REDUCTION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "NOISE REDUCTION -3/-4"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -599,7 +1449,47 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "Neutral"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Nostalgic Negative"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "OFF"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "ON"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "ORANGE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "ORANGE LED"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "OTA UPDATE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "OVERLAY RENDERING"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "PHONE"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -610,6 +1500,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "PHOTOMETRYMODE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "PINK"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -624,12 +1519,42 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "PLAY COLOR"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "PLAYBACK ONLY"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "POSITION"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "PROTECT"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "PURPLE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Pro Neg. Hi"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Pro Neg. Std"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Provia"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -647,6 +1572,26 @@ msgctxt "menu.label"
 msgid "QUICK START"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "RAINBOW"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RAW CROP FILE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RAW HIGHLIGHT"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "RAW TELECONVERTER"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "RAW VIEW"
@@ -655,6 +1600,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "REC ADV MODE FILTER"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "REC COLOR"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -669,12 +1619,37 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "RECIPES"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "RED"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "RESET THE CHANGES"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "RESTART TO UPDATE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "ROLL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "Reala Ace"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SAVE"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -695,6 +1670,11 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "SCENE POSITION"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SEARCH AGAIN"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -722,9 +1702,19 @@ msgctxt "menu.label"
 msgid "SELFTIMER"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "SEMI-TRANSPARENT"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "SET HYPERFOCAL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "SET-UP COLOR"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -759,6 +1749,11 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "SHOW WELCOME MESSAGE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "SHUTTER DIAL"
 msgstr ""
 
@@ -777,6 +1772,11 @@ msgctxt "menu.label"
 msgid "SIZE"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "SMALL"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "SNAP FOCUS"
@@ -792,6 +1792,11 @@ msgctxt "menu.label"
 msgid "STAMP"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "STANDARD 0.020"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "START NEW ROLL"
@@ -802,14 +1807,44 @@ msgctxt "menu.label"
 msgid "STILLCOLOR"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "STOCK"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "STRENGTH"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "STRICT 0.015"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "STRONG"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "STRONG LARGE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "STRONG SMALL"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "STYLE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "SUBTLE"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -819,12 +1854,52 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "Sepia"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "TEAL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "TELECONVERTER"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "TEXTURE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "THIN BLACK"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "TIME"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "TONE CURVE"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "TONE STEPS"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "ULTRA"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "ULTRAFINE"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -864,6 +1939,21 @@ msgstr ""
 
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
+msgid "Velvia"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "WARM"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "WARM-COOL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
 msgid "WB KELVIN"
 msgstr ""
 
@@ -877,9 +1967,39 @@ msgctxt "menu.label"
 msgid "WB SHIFT R"
 msgstr ""
 
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "WEAK"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "WEAK LARGE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "WEAK SMALL"
+msgstr ""
+
+#. menu.label in FujiMod's camera interface.
+msgctxt "menu.label"
+msgid "WELCOME SHEET"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "WHITE"
+msgstr ""
+
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "WHITE BALANCE"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "YELLOW"
 msgstr ""
 
 #. menu.label in FujiMod's camera interface.
@@ -915,4 +2035,14 @@ msgstr ""
 #. menu.label in FujiMod's camera interface.
 msgctxt "menu.label"
 msgid "film_tone_source"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "off"
+msgstr ""
+
+#. menu.choice in FujiMod's camera interface.
+msgctxt "menu.choice"
+msgid "on"
 msgstr ""
