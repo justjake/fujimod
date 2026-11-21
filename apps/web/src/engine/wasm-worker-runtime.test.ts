@@ -669,6 +669,12 @@ test('idle supply-off advances time without checkpoints and resumes capture afte
     f.events.some((e) => e.type === 'error'),
     false,
   );
+  const checkpoint = await f.send({ action: 'checkpoint' });
+  assert.equal(checkpoint.type, 'error');
+  if (checkpoint.type === 'error') {
+    assert.equal(checkpoint.error, 'The camera power supply is off.');
+    assert.equal(checkpoint.fault, undefined);
+  }
   f.supply(true);
   assert.equal((await advance()).type, 'reply');
   assert.ok(f.calls.filter((c) => c.action === 'checkpoint').length > before);
