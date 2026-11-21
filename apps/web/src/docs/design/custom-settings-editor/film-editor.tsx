@@ -6,6 +6,7 @@ import { For, Show, createEffect, createSignal, onSettled } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
 import { Chevron, Choice, Dial, signed } from '../../../design/controls';
+import { NumberPad, padStep, padType, padValue, type PadKey } from '../../../design/numberpad';
 import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
 import { ACCENT, COLUMN, DETAIL, GLASS, HEADING, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
 import '../../../design/design.css';
@@ -781,6 +782,8 @@ export interface State {
   primary: number;
   /** A matrix shown as numbers over the column, with the focused cell. */
   numbers: { tool: 'mix' | 'color'; cell: number } | null;
+  /** Typing a value on the number pad: the focused scale's, or a NUMBERS cell's. */
+  pad: Pad | null;
   /** Review states open scrolled to a tool. */
   scrollTo?: Section;
 }
@@ -808,6 +811,58 @@ function putCell(f: Film, tool: 'mix' | 'color', cell: number, v: number): Film 
   return { ...f, matrix: m, primaries: fitPrimaries(m) };
 }
 
+type Pad = { cell?: number; text: string; fresh: boolean; at: number };
+
+/** What the pad types into: its name, value, range and whether it takes decimals. */
+function padTarget(s: State, pad: Pad): { name: string; value: number; min: number; max: number; step: number; decimals: boolean; put: (f: Film, v: number) => Film } {
+  if (pad.cell !== undefined && s.numbers) {
+    const n = s.numbers;
+    const labels = n.tool === 'mix' ? ['R', 'G', 'B'] : ['Cb', 'Cr'];
+    const size = MATRIX_SIZE[n.tool];
+    const at = pad.cell;
+    return { name: `${labels[Math.floor(at / size)]} FROM ${labels[at % size]}`, value: cells(s.film, n.tool)[at], min: -4, max: 4, step: 0.01, decimals: true, put: (f, v) => putCell(f, n.tool, at, v) };
+  }
+  const c = scaleOf(CONTROLS[s.focus] as Control & { kind: 'scale' }, s);
+  return { name: c.name, value: c.get(s.film), min: c.min, max: c.max, step: c.step, decimals: false, put: c.put };
+}
+
+const padText = (v: number, decimals: boolean) => (decimals ? v.toFixed(2) : String(v)).replace('-', '−');
+
+function openPad(s: State, cell?: number): State {
+  const pad: Pad = { cell, text: '', fresh: true, at: 13 };
+  const target = padTarget(s, pad);
+  return { ...s, pad: { ...pad, text: padText(target.value, target.decimals) } };
+}
+
+/** A pad key: digits type, OK keeps the value (to the nearest step in range), BACK puts it back. */
+function pressPad(s: State, pad: Pad, key: CameraKey | { press: PadKey; at: number }): State {
+  const target = padTarget(s, pad);
+  if (typeof key === 'object' || key === 'ok') {
+    const at = typeof key === 'object' ? key.at : pad.at;
+    const k = typeof key === 'object' ? key.press : (['7', '8', '9', '4', '5', '6', '1', '2', '3', '±', '0', '.', '⌫', 'OK'] as PadKey[])[pad.at];
+    if (k === 'OK') {
+      const v = padValue(pad.text);
+      if (v === undefined) return { ...s, pad: null };
+      const snapped = Math.round(Math.max(target.min, Math.min(target.max, v)) / target.step) * target.step;
+      return { ...s, pad: null, film: target.put(s.film, +snapped.toFixed(2)) };
+    }
+    return { ...s, pad: { ...pad, at, text: padType(pad.text, pad.fresh, k, target.decimals), fresh: false } };
+  }
+  switch (key) {
+    case 'up':
+    case 'down':
+    case 'left':
+    case 'right':
+      return { ...s, pad: { ...pad, at: padStep(pad.at, key) } };
+    case 'dial-':
+    case 'dial+':
+      return { ...s, pad: { ...pad, at: Math.max(0, Math.min(13, pad.at + (key === 'dial+' ? 1 : -1))) } };
+    case 'back':
+      return { ...s, pad: null };
+  }
+  return s;
+}
+
 function pressNumbers(s: State, n: NonNullable<State['numbers']>, key: CameraKey): State {
   const size = MATRIX_SIZE[n.tool];
   const move = (dr: number, dc: number) => {
@@ -833,6 +888,7 @@ function pressNumbers(s: State, n: NonNullable<State['numbers']>, key: CameraKey
     case 'dial+':
       return { ...s, film: putCell(s.film, n.tool, n.cell, cells(s.film, n.tool)[n.cell] + (key === 'dial+' ? 0.01 : -0.01)) };
     case 'ok':
+      return fixedCell(n.tool, n.cell) ? s : openPad(s, n.cell);
     case 'back':
       return { ...s, numbers: null };
   }
@@ -966,7 +1022,7 @@ function openPicker(s: State, p: { kind: 'custom' } | { kind: 'icon' } | { kind:
 }
 
 export function initial(over: Partial<State>): State {
-  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, full: false, strip: 'frames', created: 0, raw: RAW_DEFAULT, primary: 0, numbers: null, ...over };
+  return { film: EDITED, opened: START, focus: 0, knot: 4, bend: false, band: 1, inside: false, header: false, custom: true, compare: null, crop: 0, picker: null, area: 'rows', railOn: null, name: 'NEW FILM', from: 'Classic Chrome', icon: 'classic-chrome', keyboard: null, pad: null, full: false, strip: 'frames', created: 0, raw: RAW_DEFAULT, primary: 0, numbers: null, ...over };
 }
 
 export const RAIL = 60;
@@ -1193,6 +1249,7 @@ export function press(s: State, key: CameraKey): State {
   const f = s.film;
   const d = key === 'left' || key === 'down' || key === 'dial-' ? -1 : 1;
   if (s.keyboard) return pressKeyboard(s, s.keyboard, key);
+  if (s.pad) return pressPad(s, s.pad, key);
   if (s.numbers) return pressNumbers(s, s.numbers, key);
   if (s.picker) {
     const p = s.picker;
@@ -1322,7 +1379,8 @@ export function press(s: State, key: CameraKey): State {
     case 'ok':
       if (s.header) return openPicker(s, { kind: 'copy', tool: control.tool });
       if (control.kind === 'numbers') return { ...s, numbers: { tool: control.tool, cell: 1 } };
-      return control.kind === 'scale' || control.kind === 'chips' ? s : { ...s, inside: true };
+      if (control.kind === 'scale') return openPad(s);
+      return control.kind === 'chips' ? s : { ...s, inside: true };
   }
   if (s.header) return s;
   if (control.kind === 'chips') return { ...s, primary: Math.max(0, Math.min(2, s.primary + step)) };
@@ -2146,7 +2204,7 @@ export function Editor(props: {
         </div>
       </Show>
 
-      <Show when={!s().picker && !s().keyboard}>
+      <Show when={!s().picker && !s().keyboard && !s().pad}>
         <div class="absolute right-[10px] bottom-[10px] flex flex-col items-end gap-[6px]" style={props.chrome}>
           <Show when={s().inside && CONTROLS[s().focus].kind === 'curve'}>
             <KeyHint glyph="OK" label={s().full ? 'SIDEBAR' : 'FULL SCREEN'} tap={() => update(press(s(), 'ok'))} />
@@ -2163,6 +2221,22 @@ export function Editor(props: {
       </Show>
 
       <Show when={s().keyboard}>{(t) => <Keyboard s={s()} t={t()} update={update} />}</Show>
+
+      <Show when={s().pad}>
+        {(pad) => {
+          const target = () => padTarget(s(), pad());
+          return (
+            <NumberPad
+              name={target().name}
+              text={pad().text}
+              range={`${padText(target().min, target().decimals)} to ${padText(target().max, target().decimals)}`}
+              decimals={target().decimals}
+              at={pad().at}
+              press={(key, at) => update(pressPad(s(), pad(), { press: key, at }))}
+            />
+          );
+        }}
+      </Show>
 
       <Show when={s().picker}>
         {(picker) => {
@@ -2266,6 +2340,8 @@ export const FILM_STATES: { id: string; title: string; state: State }[] = [
   { id: 'color', title: 'Color: the wheel', state: initial({ focus: 1, scrollTo: 'color' }) },
   { id: 'color-mix', title: 'Color mix: the vectorscope', state: initial({ focus: 6, scrollTo: 'mix' }) },
   { id: 'mix-numbers', title: 'Color mix as numbers', state: initial({ focus: 8, scrollTo: 'mix', numbers: { tool: 'mix', cell: 1 } }) },
+  { id: 'pad', title: 'Type a value: OK on a slider opens the number pad', state: openPad(initial({ focus: 2, scrollTo: 'color' })) },
+  { id: 'pad-cell', title: 'Type a COLOR MIX number', state: openPad(initial({ focus: 8, scrollTo: 'mix', numbers: { tool: 'mix', cell: 1 } }), 1) },
   { id: 'color-numbers', title: 'Color as numbers', state: initial({ focus: 4, scrollTo: 'color', numbers: { tool: 'color', cell: 1 } }) },
   { id: 'tone', title: 'Saturation by tone', state: initial({ focus: CONTROLS.findIndex((c) => c.kind === 'tone'), band: 4, inside: true, scrollTo: 'tone' }) },
   { id: 'copy', title: 'Copy one tool from a film', state: openPicker(initial({ header: true }), { kind: 'copy', tool: 'curve' }) },

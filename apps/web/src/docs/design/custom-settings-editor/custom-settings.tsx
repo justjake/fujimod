@@ -485,41 +485,45 @@ function Column(props: {
 
 /* ---- Fly-outs ---------------------------------------------------------------- */
 
-/** WB SHIFT's map, as the camera draws it: 19 by 19 colored dots (green to
- * the left, red to the right, blue at the top, yellow at the bottom, white in
- * the middle), white center axes, and a hollow white square at R and B. */
-const SHIFT_GRID = 190;
+/** WB SHIFT's map at the camera's own size, 338 by 300: 19 by 19 colored dots
+ * (green to the left, red to the right, blue at the top, yellow at the
+ * bottom, white in the middle), white center axes, and a hollow white
+ * 16-pixel square at R and B. */
+const SHIFT_WIDTH = 338;
+const SHIFT_HEIGHT = 300;
+/** The caption under it, as the camera's: 24-pixel text in a 30-pixel band. */
+const SHIFT_CAPTION = 30;
 
 function ShiftGrid(props: { r: number; b: number; send: Send }) {
-  const PITCH = SHIFT_GRID / 19;
-  const size = SHIFT_GRID;
-  const center = (v: number) => (v + 9) * PITCH + PITCH / 2;
+  const across = SHIFT_WIDTH / 19;
+  const down = SHIFT_HEIGHT / 19;
+  const x = (r: number) => (r + 9) * across + across / 2;
+  const y = (b: number) => (9 - b) * down + down / 2;
   const mix = (a: number[], b: number[], t: number) => a.map((c, i) => Math.round(c + (b[i] - c) * t));
   const dot = (r: number, b: number) => {
-    const across = mix([255, 255, 255], r < 0 ? [40, 220, 40] : [235, 40, 70], Math.abs(r) / 9);
-    const [red, green, blue] = mix(across, b > 0 ? [40, 110, 255] : [240, 215, 0], Math.abs(b) / 12);
+    const side = mix([255, 255, 255], r < 0 ? [40, 220, 40] : [235, 40, 70], Math.abs(r) / 9);
+    const [red, green, blue] = mix(side, b > 0 ? [40, 110, 255] : [240, 215, 0], Math.abs(b) / 12);
     return `rgb(${red} ${green} ${blue})`;
   };
   const steps = Array.from({ length: 19 }, (_, i) => i - 9);
   return (
     <svg
-      width={size}
-      height={size}
+      width={SHIFT_WIDTH}
+      height={SHIFT_HEIGHT}
       class="block"
       onClick={(e) => {
         const box = e.currentTarget.getBoundingClientRect();
-        const k = size / box.width;
-        const r = Math.floor(((e.clientX - box.left) * k) / PITCH) - 9;
-        const b = 9 - Math.floor(((e.clientY - box.top) * k) / PITCH);
+        const r = Math.floor(((e.clientX - box.left) / box.width) * 19) - 9;
+        const b = 9 - Math.floor(((e.clientY - box.top) / box.height) * 19);
         props.send({ shift: [Math.max(-9, Math.min(9, r)), Math.max(-9, Math.min(9, b))] });
       }}
     >
       <For each={steps}>
-        {(b) => <For each={steps}>{(r) => <rect x={center(r) - 1.5} y={center(-b) - 1.5} width={3} height={3} fill={dot(r, b)} />}</For>}
+        {(b) => <For each={steps}>{(r) => <rect x={x(r) - 2} y={y(b) - 2} width={4} height={4} fill={dot(r, b)} />}</For>}
       </For>
-      <line x1={size / 2} x2={size / 2} y1={0} y2={size} stroke="rgb(255 255 255 / 0.85)" stroke-width={1.5} />
-      <line y1={size / 2} y2={size / 2} x1={0} x2={size} stroke="rgb(255 255 255 / 0.85)" stroke-width={1.5} />
-      <rect x={center(props.r) - PITCH / 2} y={center(-props.b) - PITCH / 2} width={PITCH} height={PITCH} fill="none" stroke="#fff" stroke-width={2} />
+      <line x1={SHIFT_WIDTH / 2} x2={SHIFT_WIDTH / 2} y1={0} y2={SHIFT_HEIGHT} stroke="rgb(255 255 255 / 0.85)" stroke-width={2} />
+      <line y1={SHIFT_HEIGHT / 2} y2={SHIFT_HEIGHT / 2} x1={0} x2={SHIFT_WIDTH} stroke="rgb(255 255 255 / 0.85)" stroke-width={2} />
+      <rect x={x(props.r) - 8} y={y(props.b) - 8} width={16} height={16} fill="none" stroke="#fff" stroke-width={2} />
     </svg>
   );
 }
@@ -657,10 +661,10 @@ export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Elem
           </div>
         </Show>
         <Show when={s().fly === 'shift'}>
-          <FlyOut left={WIDTH} rowTop={rowTop()} height={SHIFT_GRID + 52}>
-            <div class="flex flex-col items-center gap-[6px] px-[10px] pt-[8px]">
+          <FlyOut left={WIDTH} rowTop={rowTop()} height={SHIFT_HEIGHT + SHIFT_CAPTION + 22}>
+            <div class="flex flex-col items-center px-[10px] pt-[10px] pb-[2px]">
               <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} send={send} />
-              <span class={`font-medium tabular-nums ${TEXT}`}>
+              <span class={`flex h-[30px] items-center font-medium tracking-[0.04em] tabular-nums ${TEXT}`}>
                 R {fmt(s().recipe.shiftR)}&ensp;B {fmt(s().recipe.shiftB)}
               </span>
             </div>

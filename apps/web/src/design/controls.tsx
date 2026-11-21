@@ -356,6 +356,20 @@ export function Dial(props: {
           </div>
         </div>
         <Show when={props.track}>{(track) => <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />}</Show>
+        {/* Focused, LEFT and RIGHT step it: a chevron at each end, dim where
+            the scale stops. */}
+        <Show when={props.focused}>
+          <For each={[0, 1] as const}>
+            {(side) => (
+              <span
+                class="pointer-events-none absolute inset-y-0 flex items-center px-[3px]"
+                style={{ [side ? 'right' : 'left']: '0', color: (side ? props.value >= props.max : props.value <= props.min) ? 'rgb(255 255 255 / 0.25)' : '#fff' }}
+              >
+                <Chevron dir={side ? 'right' : 'left'} size={16} />
+              </span>
+            )}
+          </For>
+        </Show>
         <span class="fm-round absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: 'var(--m-mark)', 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.55)' }} />
       </div>
       {/* Without a name, changed is a dot at the card's left edge. */}
