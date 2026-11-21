@@ -36,6 +36,9 @@ impl Boot for CatalogBoot {
             {
                 return Err("application-profile inputs belong in the startup plan".into());
             }
+            if inputs.second_card_image.is_some() || !inputs.second_card_files.is_empty() {
+                return Err("a card in SD slot 2 requires an XP5 run configuration".into());
+            }
             let plan = inputs.application_plan.ok_or("application startup needs an application plan")?;
             let boot::Opened::Application(mut started) = boot::open(resolved, boot::StartupInputs::Application(
                 boot::application::Startup {
@@ -69,7 +72,9 @@ impl Boot for CatalogBoot {
             }
             let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
                 update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
-                card_image: inputs.card_image, card_files: inputs.card_files, scene: inputs.scene,
+                card_image: inputs.card_image, card_files: inputs.card_files,
+                second_card_image: inputs.second_card_image, second_card_files: inputs.second_card_files,
+                scene: inputs.scene,
                 output: None, viewer_port: None, viewer_keys: None,
                 mode, quantum: inputs.quantum, camera_settings: inputs.camera_settings,
             }))? else {
@@ -80,6 +85,9 @@ impl Boot for CatalogBoot {
         }
         if inputs.manifest.is_some() {
             return Err("a boot manifest requires an XP5 run configuration".into());
+        }
+        if inputs.second_card_image.is_some() || !inputs.second_card_files.is_empty() {
+            return Err("a card in SD slot 2 requires an XP5 run configuration".into());
         }
         if !inputs.camera_settings.is_empty() {
             return Err("camera settings require an XP5 run configuration".into());

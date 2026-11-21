@@ -36,13 +36,15 @@ impl<'a> Owner<'a> {
 #[pymethods]
 impl Board {
     #[staticmethod]
-    #[pyo3(signature=(*, configuration_id, update, boot_rom=None, card_image=None, card_files=Vec::new(), scene=None, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, camera_settings=std::collections::BTreeMap::new(), engine=None, manifest=None, application_plan=None, discovery=false, quantum=None, instruction_rate=None))]
+    #[pyo3(signature=(*, configuration_id, update, boot_rom=None, card_image=None, card_files=Vec::new(), second_card_image=None, second_card_files=Vec::new(), scene=None, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, camera_settings=std::collections::BTreeMap::new(), engine=None, manifest=None, application_plan=None, discovery=false, quantum=None, instruction_rate=None))]
     fn from_inputs(
         configuration_id: String,
         update: PathBuf,
         boot_rom: Option<PathBuf>,
         card_image: Option<PathBuf>,
         card_files: Vec<(String, PathBuf)>,
+        second_card_image: Option<PathBuf>,
+        second_card_files: Vec<(String, PathBuf)>,
         scene: Option<PathBuf>,
         overlays: Vec<String>,
         nand: Option<PathBuf>,
@@ -68,6 +70,8 @@ impl Board {
             boot_rom,
             card_image,
             card_files,
+            second_card_image,
+            second_card_files,
             scene,
             nand,
             settings,

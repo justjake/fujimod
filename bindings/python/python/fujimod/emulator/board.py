@@ -233,6 +233,8 @@ class Board:
         boot_rom: str | PathLike[str] | None = None,
         card_image: str | PathLike[str] | None = None,
         card_files: Mapping[str, str | PathLike[str]] | None = None,
+        second_card_image: str | PathLike[str] | None = None,
+        second_card_files: Mapping[str, str | PathLike[str]] | None = None,
         scene: str | PathLike[str] | None = None,
         nand: str | PathLike[str] | None = None,
         settings: str | PathLike[str] | None = None,
@@ -261,6 +263,8 @@ class Board:
         ``update`` is required. ROM starts require ``boot_rom``. XP4 and
         X-Processor Pro runs accept startup files through ``application_plan``.
         ``card_image`` and ``card_files`` supply explicit SD card media.
+        ``second_card_image`` and ``second_card_files`` supply the card in SD
+        slot 2 of an XP5 loader start on a body with two slots.
         ``scene`` loads the selected board's scene document.
         ``nand`` and
         ``settings`` supply optional persistent storage inputs. No file path
@@ -311,6 +315,16 @@ class Board:
         ]
         if any(type(name) is not str or not name for name, _ in selected_files):
             raise TypeError("card_files keys must be nonempty strings")
+        if second_card_image is not None:
+            second_card_image = cls._input_path(second_card_image, "second_card_image")
+        if second_card_files is not None and not isinstance(second_card_files, Mapping):
+            raise TypeError("second_card_files must map SD card file names to paths")
+        selected_second_files = [
+            (name, cls._input_path(path, "SD card file"))
+            for name, path in (second_card_files or {}).items()
+        ]
+        if any(type(name) is not str or not name for name, _ in selected_second_files):
+            raise TypeError("second_card_files keys must be nonempty strings")
         manifest = None if manifest is None else cls._input_path(manifest, "manifest")
         if application_plan is not None:
             application_plan = cls._input_path(application_plan, "application_plan")
@@ -351,6 +365,8 @@ class Board:
             boot_rom=boot_rom,
             card_image=card_image,
             card_files=selected_files,
+            second_card_image=second_card_image,
+            second_card_files=selected_second_files,
             scene=scene,
             nand=nand,
             settings=settings,

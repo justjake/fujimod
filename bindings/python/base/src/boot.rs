@@ -13,6 +13,9 @@ pub struct Inputs {
     pub boot_rom: Option<PathBuf>,
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
+    /// The card in SD slot 2 of an XP5 loader start: a raw image, or files for a volume.
+    pub second_card_image: Option<PathBuf>,
+    pub second_card_files: Vec<(String, PathBuf)>,
     pub scene: Option<PathBuf>,
     pub engine: Option<String>,
     pub manifest: Option<PathBuf>,
