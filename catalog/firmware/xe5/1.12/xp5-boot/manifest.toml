@@ -22,3 +22,13 @@ size = 0x1a0000
 [[ram]]
 base = 0xfb400000
 size = 0x1a0000
+
+# Companion window onto the shared DRAM region. The application stores the region's physical base
+# 0x8c73000 in the companion's SRAM word 0xf6f8c (companion view), and the companion code adds the
+# 0x60000000 alias (0x312a stores to 0x69030080). The SoC's own window for the same structure sits
+# 0x800000 lower (0x68473000, 5754880 bytes), so this one has the same size at the X-E5 base. The
+# extent is UNVERIFIED for the X-E5.
+[[companion_window]]
+address = 0x68c73000
+physical = 0x8c73000
+size = 5754880

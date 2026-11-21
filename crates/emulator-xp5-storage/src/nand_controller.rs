@@ -18,8 +18,8 @@
 //!   (slot regs and the DMA-assist window descriptor), which the NOR model
 //!   rejects as unmodeled.
 //! - The program path (0x02/0x84/0x10 program load/execute) is refused, not
-//!   faked: the boot-read milestone never issues it and a silent no-op would
-//!   misreport update writes as durable.
+//!   faked: a silent no-op would misreport update writes as durable. Block erase
+//!   (0xd8) acts on the emulated die only.
 use crate::nand_storage::{NandShared, PAGE};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -263,10 +263,21 @@ impl NandController {
             // Program load (0x02/0x84), program execute (0x10) and block
             // erase: modeled refusals — the boot-read milestone never issues
             // them and a silent no-op would misreport update writes.
-            0x02 | 0x84 | 0x10 | 0xd0 => {
+            0x02 | 0x84 | 0x10 => {
                 return Err(format!(
-                    "serial-NAND program/erase command {cmd:#x} is not modeled"
+                    "serial-NAND program command {cmd:#x} is not modeled"
                 ))
+            }
+            // Block erase (0xd8 on the W35N01JW): the application's driver writes the block's first
+            // row to 0x50 after the Write Enable. The erase completes instantly with WEL clear.
+            0xd8 | 0xd0 => {
+                let row = if self.state.last_address_register == 0x50 {
+                    self.state.regs[0x50 / 4]
+                } else {
+                    self.row()
+                };
+                self.nand.lock().unwrap().erase_block(row)?;
+                self.state.complete = true;
             }
             _ => return Err(format!("unsupported serial-NAND storage command {cmd:#x}")),
         }
@@ -749,6 +760,27 @@ mod tests {
                 "init register write 0x{offset:x} must not be unmodeled"
             );
         }
+    }
+
+    #[test]
+    fn block_erase_clears_the_block_under_write_enable() {
+        let mut c = controller(vec![0x00; PAGE * 64 * 2]);
+        let mut host = RecordingHost::default();
+        let strobe = |c: &mut NandController, cmd: u32| {
+            c.state.regs[0x40 / 4] = cmd;
+            let mut host = RecordingHost::default();
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            c.write(&mut cx, 0xff90a0c0, 4, 1);
+            assert!(cx.refusal().is_none());
+        };
+        c.state.regs[0] = 1;
+        strobe(&mut c, 0x06);
+        c.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a050, 4, 64);
+        strobe(&mut c, 0xd8);
+        let nand = c.nand.lock().unwrap();
+        assert_eq!(nand.read(64 * PAGE as u64, 4).unwrap(), [0xff; 4]);
+        assert_eq!(nand.read(0, 4).unwrap(), [0x00; 4]);
+        assert!(!nand.session.write_enable);
     }
 
     #[test]

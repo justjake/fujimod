@@ -17,4 +17,8 @@ rtc_valid = true
 # Register 0 bit 15 set: the reset stage's boot wait on core 1 reads register 0 in a loop with
 # 10 us delays until the high byte's sign bit is set (reset stage 0x3a00). Bit 15 is what the
 # stage polls; what the chip reports in it is not established, so this is UNVERIFIED for the X-E5.
-registers = { "0" = 0x8200 }
+# Register 0x10 bit 1: the stage's power-on factor routine (0x3950) maps register 0x10 bits 0, 1, 4,
+# 6, 2 and 5 to factor bits 0, 1, 2, 3, 4 and 7 in the hand-off word at 0x1f140. With no bit set
+# the application's start-up decision (0x15fbae0) takes its power-off path. Bit 1 is the factor
+# whose branch returns "continue"; reading it as the power button is an INFERENCE, UNVERIFIED.
+registers = { "0" = 0x8200, "10" = 0x2 }
