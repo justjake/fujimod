@@ -49,6 +49,9 @@ kind = "bis-configuration-registers"
 revision = [0, 0]
 samples = [0, 0]
 idle_high = false
+# A body at rest: the 0a..0f block (command 8a) reads zero, as before it became
+# a declared input.
+block = [0, 0, 0, 0, 0, 0]
 [[device.options.wire.endpoints]]
 [device.options.wire.endpoints.select]
 port = 11
