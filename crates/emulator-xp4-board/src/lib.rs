@@ -1371,6 +1371,8 @@ impl Session {
             temperature,
             power_spi,
             power_spi_command_output,
+            power_spi_bank_inputs,
+            power_spi_eye_commit,
             checksum_power_spi,
             imaging,
             movdc,
@@ -1415,6 +1417,9 @@ impl Session {
         }
         if power_spi_command_output.is_some() && power_spi.is_none() {
             return Err("Command output requires power SPI peer".into());
+        }
+        if (!power_spi_bank_inputs.is_empty() || power_spi_eye_commit) && power_spi.is_none() {
+            return Err("Power SPI options require a power SPI peer".into());
         }
         // Cortex-A7 TRM DDI0464F table4-47: L1D four ways/64-byte
         // lines, L1I two ways/32-byte lines, L2 eight ways/64-byte lines.
@@ -1963,7 +1968,18 @@ impl Session {
         if let Some((base, idle, port, pin, high, inputs, rtc_ticks)) = power_spi {
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .power_spi(base, idle, port, pin, high, inputs, rtc_ticks, power_spi_command_output)?;
+                .power_spi(
+                    base,
+                    idle,
+                    port,
+                    pin,
+                    high,
+                    inputs,
+                    rtc_ticks,
+                    power_spi_command_output,
+                    power_spi_bank_inputs,
+                    power_spi_eye_commit,
+                )?;
         }
         if let Some((
             base,

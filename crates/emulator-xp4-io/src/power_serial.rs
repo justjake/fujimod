@@ -79,7 +79,15 @@ pub struct PowerSerial {
     pin: usize,
     active_high: bool,
     idle: bool,
+    /// Flat bank-zero declarations. Kept separate so every existing profile
+    /// keeps its bank-blind meaning.
     inputs: BTreeMap<u8, u16>,
+    /// Declarations for one explicit bank. A bank without an entry here still
+    /// reads the flat map, so an undeclared bank stays bank-blind.
+    bank_inputs: BTreeMap<(bool, u8), u16>,
+    /// Opt-in to the eye-sensor commit word at register 38 bit 15, the same
+    /// word X-T3 treats as the RTC alarm interrupt.
+    eye_commit: bool,
     registers: BTreeMap<(bool, u8), u16>,
     edge: u64,
     phase: u8,
@@ -139,6 +147,8 @@ impl PowerSerial {
             active_high,
             idle,
             inputs,
+            bank_inputs: BTreeMap::new(),
+            eye_commit: false,
             registers: BTreeMap::new(),
             edge: 0,
             phase: 0,
@@ -147,6 +157,34 @@ impl PowerSerial {
             response: 0,
             rtc,
         })
+    }
+    /// Declare an input for an explicit bank. The eye-sensor status word is
+    /// register 16 in bank one; the flat map keeps the bank-zero boot reason,
+    /// so both meanings survive. Undeclared banks keep reading the flat map.
+    pub fn with_bank_inputs(mut self, inputs: Vec<(bool, u8, u16)>) -> Result<Self, String> {
+        let mut declared = BTreeMap::new();
+        for (bank, register, value) in inputs {
+            if !matches!(register, 0..=6 | 16 | 21 | 27)
+                || ((3..=6).contains(&register) && value > 1023)
+                || declared.insert((bank, register), value).is_some()
+            {
+                return Err("Power SPI bank input is not declarable".into());
+            }
+        }
+        self.bank_inputs = declared;
+        Ok(self)
+    }
+    /// Admit the eye-sensor commit word at register 38 bit 15. The X-T3
+    /// meaning of the same bit is the unmodeled RTC alarm interrupt.
+    pub fn with_eye_commit(mut self, enabled: bool) -> Self {
+        self.eye_commit = enabled;
+        self
+    }
+    fn declared_input(&self, bank: bool, register: u8) -> Option<u16> {
+        self.bank_inputs
+            .get(&(bank, register))
+            .copied()
+            .or_else(|| self.inputs.get(&register).copied())
     }
     fn output_header(&self, header: u8) -> bool {
         header & 1 != 0 && self.command_output.as_ref().is_some_and(|c|
@@ -167,7 +205,7 @@ impl PowerSerial {
                 || status && register == ACCESSORY_COMMAND_REGISTER
                 || self.output_header(header)
         } else {
-            Self::writable(register) || self.inputs.contains_key(&register)
+            Self::writable(register) || self.declared_input(bank, register).is_some()
         }
     }
     fn writable(register: u8) -> bool {
@@ -187,6 +225,12 @@ struct PowerState {
     active_high: bool,
     idle: bool,
     inputs: BTreeMap<u8, u16>,
+    /// Non-default bank declarations as triples: a JSON object cannot carry a
+    /// `(bank, register)` key without spelling it.
+    #[serde(default)]
+    bank_inputs: Vec<(bool, u8, u16)>,
+    #[serde(default)]
+    eye_commit: bool,
     registers: Vec<(bool, u8, u16)>,
     phase: u8,
     header: u8,
@@ -201,6 +245,8 @@ impl PowerSerial {
         PowerState {
             kind: "power-registers".into(), port: self.port, pin: self.pin, active_high: self.active_high,
             idle: self.idle, inputs: self.inputs.clone(),
+            bank_inputs: self.bank_inputs.iter().map(|(&(bank, register), &value)| (bank, register, value)).collect(),
+            eye_commit: self.eye_commit,
             registers: self.registers.iter().map(|(&(bank, register), &value)| (bank, register, value)).collect(),
             command_output: self.command_output.clone(), accepted_output: self.accepted_output.clone(),
             phase: self.phase, header: self.header, high: self.high, response: self.response,
@@ -214,6 +260,11 @@ impl PowerSerial {
             .iter()
             .map(|(b, r, v)| ((*b, *r), *v))
             .collect();
+        let bank_inputs: BTreeMap<_, _> = state
+            .bank_inputs
+            .iter()
+            .map(|(b, r, v)| ((*b, *r), *v))
+            .collect();
         if state.phase != 0 && (!self.admitted_header(state.header)
                 || state.header & 1 != 0 && state.response != 0)
             || state.command_output != self.command_output
@@ -224,6 +275,9 @@ impl PowerSerial {
             || state.active_high != self.active_high
             || state.idle != self.idle
             || state.inputs != self.inputs
+            || state.bank_inputs.len() != bank_inputs.len()
+            || bank_inputs != self.bank_inputs
+            || state.eye_commit != self.eye_commit
             || state.rtc.0.ticks_per_second != self.rtc.0.ticks_per_second
             || state.phase > 2
             || registers.len() != state.registers.len()
@@ -293,15 +347,16 @@ impl Input for PowerSerial {
                 } else if matches!(register, 32 | 34 | 35) {
                     self.response = self.rtc.read(register, tick)?;
                 } else if Self::writable(register) {
-                    self.response = *self
+                    self.response = self
                         .registers
                         .get(&(bank, register))
-                        .or_else(|| self.inputs.get(&register))
-                        .unwrap_or(&0);
-                } else if let Some(v) = self.inputs.get(&register) {
+                        .copied()
+                        .or_else(|| self.declared_input(bank, register))
+                        .unwrap_or(0);
+                } else if let Some(v) = self.declared_input(bank, register) {
                     // Declared read-only words: the accessory status, the battery
                     // sample and the ADC/status inputs. Nothing is retained.
-                    self.response = *v;
+                    self.response = v;
                 } else {
                     return Err(format!("Unsupported power SPI read register{register}"));
                 }
@@ -339,7 +394,7 @@ impl Input for PowerSerial {
                         if !Self::writable(register) {
                             return Err("Unsupported power SPI write completion".into());
                         }
-                        if register == 38 && value & 0x8000 != 0 {
+                        if register == 38 && value & 0x8000 != 0 && !self.eye_commit {
                             return Err("Power RTC alarm interrupt is not modeled".into());
                         }
                         self.registers
@@ -353,7 +408,10 @@ impl Input for PowerSerial {
     }
     fn save(&self) -> Value {
         json!({"kind":"power-registers","port":self.port,"pin":self.pin,"active_high":self.active_high,
-        "idle":self.idle,"inputs":self.inputs,"registers":self.registers.iter().map(|(&(b,r),&v)|(b,r,v)).collect::<Vec<_>>(),
+        "idle":self.idle,"inputs":self.inputs,
+        "bank_inputs":self.bank_inputs.iter().map(|(&(b,r),&v)|(b,r,v)).collect::<Vec<_>>(),
+        "eye_commit":self.eye_commit,
+        "registers":self.registers.iter().map(|(&(b,r),&v)|(b,r,v)).collect::<Vec<_>>(),
         "command_output":self.command_output,"accepted_output":self.accepted_output,
         "phase":self.phase,"header":self.header,"high":self.high,"response":self.response,"edge":self.edge,"rtc":self.rtc})
     }
@@ -711,5 +769,82 @@ mod tests {
         assert_eq!(cancelled.exchange(8, 0x60, 0).unwrap(), 0);
         assert_eq!(cancelled.exchange(8, 0, 0).unwrap(), 0);
         assert_eq!(cancelled.exchange(8, 0, 0).unwrap(), 0xa5);
+    }
+
+    #[test]
+    fn bank_declared_inputs_keep_eye_status_apart_from_the_boot_reason() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        gpio.write(&mut Cx::new(&mut Clock, 0, 0, 0), BASE + 12 * 64, 4, (1 << 21) | (1 << 5));
+        // Bank-zero register 16 is the X-T3 cold-boot reason; bank one register
+        // 16 is the X-T30 eye status word.
+        let make = || PowerSerial::new(
+            pins.clone(), 12, 5, true, false,
+            [(0, 0), (1, 0), (2, 0), (3, 0), (16, 4), (32, 0), (34, 0), (35, 0)].into(),
+            54_000_000, None,
+        ).unwrap().with_bank_inputs(vec![(true, 16, 2)]).unwrap();
+        let mut peer = make();
+        assert_eq!([
+            peer.exchange(8, 16 << 2, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+        ], [0, 0, 4]);
+        assert_eq!([
+            peer.exchange(8, 16 << 2 | 2, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+        ], [0, 0, 2]);
+        // Undeclared banks keep the flat bank-blind value.
+        assert_eq!([
+            peer.exchange(8, 0, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+        ], [0, 0, 0]);
+        assert_eq!([
+            peer.exchange(8, 2, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+            peer.exchange(8, 0, 0).unwrap(),
+        ], [0, 0, 0]);
+        assert!(peer.exchange(8, 21 << 2, 0).is_err());
+        let saved = peer.save();
+        assert_eq!(saved["bank_inputs"], json!([[true, 16, 2]]));
+        let mut restored = make();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored.save(), saved);
+        assert!(make().with_bank_inputs(vec![(true, 32, 0)]).is_err());
+        assert!(make().with_bank_inputs(vec![(true, 16, 1), (true, 16, 2)]).is_err());
+        assert!(make().with_bank_inputs(vec![(true, 3, 1024)]).is_err());
+    }
+
+    #[test]
+    fn eye_commit_admits_register_38_bit_15_only_behind_its_flag() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        gpio.write(&mut Cx::new(&mut Clock, 0, 0, 0), BASE + 12 * 64, 4, (1 << 21) | (1 << 5));
+        let make = || PowerSerial::new(
+            pins.clone(), 12, 5, true, false,
+            [(0, 0), (1, 0), (2, 0), (3, 0), (32, 0), (34, 0), (35, 0)].into(),
+            54_000_000, None,
+        ).unwrap();
+        let commit = 38 << 2 | 1;
+        let mut alarm = make();
+        alarm.exchange(8, commit, 0).unwrap();
+        alarm.exchange(8, 0x80, 0).unwrap();
+        assert!(alarm.exchange(8, 0, 0).is_err());
+        let mut eye = make().with_eye_commit(true);
+        assert_eq!(eye.exchange(8, commit, 0).unwrap(), 0);
+        eye.exchange(8, 0x80, 0).unwrap();
+        assert_eq!(eye.exchange(8, 0, 0).unwrap(), 0);
+        assert_eq!(eye.save()["registers"], json!([[false, 38, 0x8000]]));
+        assert_eq!([
+            eye.exchange(8, 38 << 2, 0).unwrap(),
+            eye.exchange(8, 0, 0).unwrap(),
+            eye.exchange(8, 0, 0).unwrap(),
+        ], [0, 0x80, 0]);
+        let saved = eye.save();
+        let mut resumed = make().with_eye_commit(true);
+        resumed.restore(&saved).unwrap();
+        assert_eq!(resumed.save(), saved);
+        assert!(make().restore(&saved).is_err());
     }
 }
