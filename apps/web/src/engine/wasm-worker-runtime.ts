@@ -424,8 +424,11 @@ export class WasmWorkerRuntime {
         );
         return;
       }
-      case 'checkpoint':
-        return this.captureCheckpoint();
+      case 'checkpoint': {
+        const saved = this.captureCheckpoint();
+        if (!saved) throw Error('The camera power supply is off.');
+        return saved;
+      }
       case 'restore_checkpoint':
         s.restore(request.id);
         this.afterRestore();

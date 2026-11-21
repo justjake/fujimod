@@ -363,6 +363,40 @@ mod tests {
         );
     }
     #[test]
+    fn supply_off_ends_history_without_a_guest_failure() {
+        use fujimod_catalog_configuration::RunEngine;
+        use fujimod_emulator::board::{bus::{Bus, Mode}, factory::{Graph, Options}};
+        struct SupplyOff;
+        impl fujimod_emulator_devices::Device for SupplyOff {
+            fn name(&self) -> &'static str { "test-supply" }
+            fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 { 0 }
+            fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
+            fn next_deadline(&self, _: u64) -> Option<u64> { Some(5) }
+            fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
+                if cx.now() >= 5 { cx.power_off().unwrap(); }
+            }
+        }
+        let mut session = session(ExecutionPolicy::Interactive);
+        let graph: Graph = serde_json::from_value(json!({
+            "processors":[{"model":"cortex-a7","registers":[["Pc",65536],["Pstate",211]],"released":true,"mprofile":null,"rprofile":null}],
+            "ram":[{"base":65536,"size":4096}],
+            "dma_mappings":[{"address":65536,"physical":65536,"size":4096,"permissions":3}],
+            "mappings":[{"core":0,"address":65536,"physical":65536,"size":4096,"permissions":7}],
+            "peripherals":[],"decoders":[],"instructions_per_tick":[1,1]
+        })).unwrap();
+        let mut bus = Bus::new(Mode::Strict);
+        bus.attach(Box::new(SupplyOff));
+        session.core.board = graph.build(Options::new(RunEngine::Unicorn)
+            .with_translation_cache_size_bytes(1 << 20), bus, None).unwrap();
+        session.core.board.write_memory(0, 65536, &0xeafffffeu32.to_le_bytes()).unwrap();
+        session.checkpoint().unwrap();
+        session.run(5).unwrap();
+        assert!(!session.status().supply_on);
+        assert!(!session.status().failed);
+        assert!(session.history.is_none());
+        session.mark_input(&Input::Run {instructions: 1, quantum: 1, pause_after: None, until: Some(6)}).unwrap();
+    }
+    #[test]
     fn cold_power_keeps_shared_mosaic_input_without_raf_bytes() {
         use fujimod_emulator_imaging::scene::{Frame as SensorFrame, FramePixels, SensorFrames, mosaic::Radiance};
         use std::sync::Mutex;
