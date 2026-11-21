@@ -467,7 +467,8 @@ fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
 /// A Cortex-M4 with the M-profile controller, `device` at 0x8000000 and
 /// Thumb `code` at 0x2000.
 fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board {
-    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    use crate::board::factory::{Graph, MemoryMap, Options, Processor, Ram};
+    use fujimod_catalog_configuration::RunEngine;
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
@@ -500,7 +501,7 @@ fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board
     bus.register(0x8000000, 4, device).unwrap();
     let mut board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )
@@ -686,7 +687,8 @@ impl Device for Doorbell {
 /// waits in WFI. Core 0 rings the doorbell, which wakes core 1 during core 0's
 /// run, then polls the RAM flag core 1 sets after a counted delay.
 fn m4_pair(mode: LoopMode) -> Board {
-    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    use crate::board::factory::{Graph, MemoryMap, Options, Processor, Ram};
+    use fujimod_catalog_configuration::RunEngine;
     let processor = |vector_base| Processor {
         model: Model::CortexM4,
         registers: vec![],
@@ -721,7 +723,7 @@ fn m4_pair(mode: LoopMode) -> Board {
     bus.register(0x8000000, 4, Box::new(Doorbell)).unwrap();
     let mut board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )
@@ -819,7 +821,8 @@ fn m4_windows_end_at_the_slice_of_a_peer_woken_during_the_run() {
 /// behind the frontier and its windows are bounded by slices as well as by
 /// serial deadlines.
 fn m4_ssp(mode: LoopMode, peer: bool) -> Board {
-    use crate::board::factory::{Engine, Graph, MemoryMap, Options, Processor, Ram};
+    use crate::board::factory::{Graph, MemoryMap, Options, Processor, Ram};
+    use fujimod_catalog_configuration::RunEngine;
     use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
     let processor = |vector_base| Processor {
         model: Model::CortexM4,
@@ -869,7 +872,7 @@ fn m4_ssp(mode: LoopMode, peer: bool) -> Board {
     bus.register(0x8000000, 0x1000, Box::new(ssp)).unwrap();
     let mut board = graph
         .build(
-            Options::new(Engine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
             bus,
             None,
         )
