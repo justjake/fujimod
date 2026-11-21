@@ -1,0 +1,10 @@
+# HDMI hot-plug status word at 0xff90e200 (bit 0), declared as on the X-T5 board: no cable is
+# attached, and connected_level = 0 is INFERRED from the X-T5 reader's order of operations
+# (0x143fb8c there), not measured. The X-E5's reader (the application reads it first from 0x15602a4)
+# is not compared with the X-T5's yet, so the declaration is UNVERIFIED.
+[[device]]
+base = 0xff90e200
+size = 4
+kind = "hdmi-hot-plug-status"
+[device.options]
+connected_level = 0

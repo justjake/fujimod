@@ -97,8 +97,25 @@ impl Dma {
         if (flash_storage::BASE..flash_storage::BASE + flash_storage::SIZE).contains(&dst) {
             let mut s = match &self.medium {
                 crate::flash_storage::Medium::Nor(s) => s.lock().unwrap(),
-                crate::flash_storage::Medium::Nand(_) => {
-                    return Err("serial NAND storage takes no DMA program path".into())
+                crate::flash_storage::Medium::Nand(nand) => {
+                    // The aperture window is the program-load buffer of the serial-NAND
+                    // controller: its offset is the column within the page, and the controller's
+                    // program execute commits the page.
+                    let mut nand = nand.lock().unwrap();
+                    for row in 0..dc {
+                        let a = dst
+                            .checked_add(row as u64 * ds)
+                            .ok_or("DMA destination overflow")?
+                            - flash_storage::BASE;
+                        nand.load_program_data(a as usize, &bytes[row * dr..(row + 1) * dr])?;
+                    }
+                    let src = src + sc as u64 * ss;
+                    let dst = dst + dc as u64 * ds;
+                    r[1] = (src >> 32) as u32;
+                    r[2] = src as u32;
+                    r[6] = (dst >> 32) as u32;
+                    r[7] = dst as u32;
+                    return Ok(());
                 }
             };
             if !s.session.program_mode {
@@ -465,6 +482,50 @@ mod tests {
         bus.event(&mut Cx::new(&mut h, 0, 0, 0), d, t).unwrap();
         assert_eq!(&h.ram[8..12], &[1, 2, 3, 4]);
         assert_eq!(rd(&mut bus, &mut h, 0x18), 1);
+    }
+    #[test]
+    fn serial_nand_aperture_dma_loads_the_program_buffer() {
+        let storage = std::sync::Arc::new(std::sync::Mutex::new(
+            crate::nand_storage::NandStorage::new(vec![0xff; 0x20000]).unwrap(),
+        ));
+        let mut bus = TestBus::default();
+        bus.register(
+            0xff939000,
+            0x1000,
+            Box::new(Dma::new(crate::flash_storage::Medium::Nand(storage.clone()))),
+        )
+        .unwrap();
+        let mut h = RecordingHost {
+            ram: vec![0; 32],
+            events: vec![],
+            irq: false,
+            ..RecordingHost::default()
+        };
+        h.ram[4..8].copy_from_slice(&[9, 8, 7, 6]);
+        // One 4-byte row from RAM 4 to window offset 8.
+        for (o, v) in [
+            (0x108, 4),
+            (0x10c, 4),
+            (0x110, 4),
+            (0x114, 1),
+            (0x11c, flash_storage::BASE + 8),
+            (0x120, 4),
+            (0x124, 4),
+            (0x128, 1),
+            (0x130, 2),
+            (0x10, 3),
+            (0x20, 0x10001),
+            (4, 1),
+        ] {
+            wr(&mut bus, &mut h, o, v);
+        }
+        let (d, at, t) = h.events[0];
+        h.now = at;
+        bus.event(&mut Cx::new(&mut h, 0, 0, 0), d, t).unwrap();
+        let mut nand = storage.lock().unwrap();
+        nand.session.write_enable = true;
+        nand.execute_program(0).unwrap();
+        assert_eq!(nand.read(6, 8).unwrap(), [0xff, 0xff, 9, 8, 7, 6, 0xff, 0xff]);
     }
     #[test]
     fn disable_cancels_deadline_and_stale_start_is_not_latched() {

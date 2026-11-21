@@ -10,7 +10,7 @@ base = 0xff925000
 size = 0x1000
 [device.options]
 interrupt = 289
-byte_ns = 1000000
+byte_ns = 25000
 [[device.options.targets]]
 address = 0x36
 part = { kind = "fuel-gauge" }
