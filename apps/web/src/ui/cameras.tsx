@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createSignal, onCleanup, onSettled } from 'solid-js';
-import { phases, started, type FirmwareProgress, type Phase } from './camera-progress';
+import { phases, started, stepPassed, type FirmwareProgress, type Phase } from './camera-progress';
 import './cameras.css';
 export interface Generation {
   name: string;
@@ -157,7 +157,7 @@ function ProgressBar(props: { progress: FirmwareProgress; owners: Owner[]; tips:
                 <ul>
                   <For each={group.steps}>
                     {(step) => (
-                      <li class={{ todo: step.result !== 'pass' }}>
+                      <li class={{ todo: !stepPassed(step) }}>
                         {step.label}
                         <Show
                           when={step.result === 'stale' || step.result === 'fail' || step.detail}

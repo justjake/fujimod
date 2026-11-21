@@ -166,8 +166,8 @@
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -175,8 +175,8 @@
           "label": "Settings layout located",
           "stage": "settings-layout",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -206,6 +206,11 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
+          "result": "pass"
+        },
+        {
+          "id": "emulator-screen",
+          "title": "First usable emulator screen",
           "result": "pass"
         },
         {
@@ -246,6 +251,15 @@
       ],
       "steps": [
         {
+          "id": "emulator-screen",
+          "label": "First usable screen",
+          "stage": "emulator-screen",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
@@ -259,7 +273,7 @@
           "label": "Record picture",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -326,7 +340,7 @@
           "label": "Playback picture",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -351,7 +365,7 @@
           "label": "SD",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -566,6 +580,11 @@
           "result": "stale"
         },
         {
+          "id": "mod-memory",
+          "title": "Memory for mods located",
+          "result": "pass"
+        },
+        {
           "id": "mod-target",
           "title": "Mod target generated from facts",
           "result": "not-run"
@@ -573,6 +592,11 @@
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
+          "result": "not-run"
+        },
+        {
+          "id": "mod-effect",
+          "title": "First mod effect observed in the emulator",
           "result": "not-run"
         },
         {
@@ -606,6 +630,15 @@
           "total": 0
         },
         {
+          "id": "mod-memory",
+          "label": "Memory for mods located",
+          "stage": "mod-memory",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
@@ -621,6 +654,15 @@
           "result": "not-run",
           "passed": 0,
           "total": 0
+        },
+        {
+          "id": "mod-effect",
+          "label": "First mod effect observed in the emulator",
+          "stage": "mod-effect",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "sd-boot-v1-fujimod-built",

@@ -186,6 +186,19 @@ test('each graph track reserves space for all of its tagged milestones', () => {
   ).toEqual([50, (1 / 6) * 100, 25, 100, 0]);
 });
 
+test('stale outcomes retain credit for a last pass and show freshness', () => {
+  const document = progress('X70', ['rec']);
+  const [first, second] = document.tracks[0]!.steps;
+  Object.assign(first!, { result: 'stale', passed: 1, total: 1 });
+  Object.assign(second!, { result: 'stale', passed: 0, total: 1 });
+  const host = table([[{ name: 'EXR Processor II', years: '', models: ['X70'] }]], [document]);
+  expect(host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('2');
+  const stale = [...host.querySelectorAll('.tip li')].filter((row) =>
+    row.textContent?.includes('Stale'),
+  );
+  expect(stale.map((row) => row.classList.contains('todo'))).toEqual([false, true]);
+});
+
 test('a released badge leaves the engineering count as recorded', () => {
   const camera = progress('X70', ['rec']);
   const host = document.createElement('div');
