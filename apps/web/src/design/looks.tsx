@@ -85,7 +85,7 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;
     --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a;
     /* MARK COLOR CHOICES: a dark plate under mark-colored text, as the iPhone camera's chosen zoom. */
-    --m-mark-plate: rgb(0 0 0 / 0.4); --m-mark-ink: #ff9f0a;`;
+    --m-mark-plate: rgb(44 44 46 / 0.92); --m-mark-ink: #ff9f0a;`;
 }
 const GLASS_DEFAULT = { opacity: 0.35, contrast: 0.6, lightness: 0 };
 
