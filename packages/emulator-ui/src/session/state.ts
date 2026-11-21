@@ -8,6 +8,7 @@ export function sessionState() {
     message: '',
     error: false,
     live: '',
+    poweredOn: undefined as boolean | undefined,
     loading: false,
     loadingAssets: [] as AssetProgress[],
     webcamActive: false,

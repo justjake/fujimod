@@ -314,7 +314,8 @@ export class WasmWorkerRuntime {
   }
   private observe(state: SessionState) {
     this.state = state;
-    this.send({ type: 'state', state });
+    using status = this.require().status();
+    this.send({ type: 'state', state, supplyOn: status.supplyOn });
   }
   private observeCurrent() {
     if (this.manifest && this.manifest.construction !== 'resolved')
@@ -668,6 +669,12 @@ export class WasmWorkerRuntime {
       scene = undefined;
     }
     await this.coldBoot(config.bootInputs);
+    if (config.execution?.initialSteps?.length) {
+      this.stop();
+      for (const step of config.execution.initialSteps) await this.replayStep(step);
+      this.rebase();
+      this.start();
+    }
     this.send({
       type: 'progress',
       message: 'Booting camera…',

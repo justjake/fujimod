@@ -9,6 +9,7 @@ import type {
   WasmWorkerEvent,
 } from '@fujimod/emulator-ui/engine/wasm-worker-protocol';
 import { testConfig } from './test-fixtures';
+import { scenarioFromUrl } from '../scenarios';
 import type { CameraRecord, CameraSave } from '../cameras/store';
 
 function setup(
@@ -678,4 +679,30 @@ test('idle supply-off advances time without checkpoints and resumes capture afte
   f.supply(true);
   assert.equal((await advance()).type, 'reply');
   assert.ok(f.calls.filter((c) => c.action === 'checkpoint').length > before);
+});
+
+test('the idle review runs its native-time prelude once and power cycling restores supply', async () => {
+  const f = setup(),
+    scenario = scenarioFromUrl('?scenario=x70-idle');
+  f.supply(false);
+  const config = {
+    ...f.config,
+    execution: { ...f.config.execution, initialSteps: scenario.steps },
+  };
+  assert.equal(
+    (await f.send({ action: 'boot', config, dat: new ArrayBuffer(1), files: [], seedIdentity: [] }))
+      .type,
+    'reply',
+  );
+  assert.equal(f.ticks(), 1_800_000_000n);
+  const off = f.events.filter((e) => e.type === 'state').at(-1);
+  assert.ok(off?.type === 'state');
+  assert.equal(off.supplyOn, false);
+  assert.equal(off.state.poweredOn, true);
+  assert.equal((await f.send({ action: 'power_cycle', inputs: [] })).type, 'reply');
+  assert.equal(f.ticks(), 0n);
+  const on = f.events.filter((e) => e.type === 'state').at(-1);
+  assert.ok(on?.type === 'state');
+  assert.equal(on.supplyOn, true);
+  assert.equal(on.state.poweredOn, true);
 });

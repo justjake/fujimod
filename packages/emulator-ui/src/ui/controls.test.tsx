@@ -428,3 +428,16 @@ test('rocker halves and tab send separate native contact presses and releases', 
   expect(engine.rotate).not.toHaveBeenCalled();
   stop();
 });
+
+test('supply loss disables controls without changing the physical power-switch position', () => {
+  const viewer = { pressFeedback: vi.fn() };
+  const session = new ControlSession(viewer, vi.fn(), async () => {});
+  session.powerID = 'power_switch';
+  session.positions.set('power_switch', 'ON');
+  session.ready = true;
+  session.setPowered(false);
+  expect(session.powered).toBe(false);
+  expect(session.positions.get('power_switch')).toBe('ON');
+  expect(session.disabled('shutter_button')).toBe(true);
+  expect(session.disabled('power_switch')).toBe(false);
+});

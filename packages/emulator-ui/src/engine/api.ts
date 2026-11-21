@@ -58,7 +58,12 @@ export interface EngineConfig {
   /** Physical contacts held before the first instruction of a cold boot. */
   bootInputs?: BootInput[];
   /** Cold boot with a fixed RTC; replay mode advances only through replay(). */
-  execution?: { mode: 'live' | 'replay'; clockSeconds2000?: number };
+  execution?: {
+    mode: 'live' | 'replay';
+    clockSeconds2000?: number;
+    /** Replay native inputs and time before starting the live clock. */
+    initialSteps?: readonly ReplayStep[];
+  };
 }
 export interface Engine {
   exportSnapshot(): Promise<Uint8Array>;

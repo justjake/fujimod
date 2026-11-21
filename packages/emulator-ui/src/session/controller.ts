@@ -208,10 +208,15 @@ export function startSession(
       finishLoading();
     }
   }
+  async function turnOn() {
+    if (!engine || state.loading || state.poweredOn !== false) return;
+    await restartOperation(() => engine!.powerCycle([], progress));
+  }
   function reset() {
     ++generation;
     void webcam.stop(false);
     setState((s) => {
+      s.poweredOn = undefined;
       s.loadingAssets = [];
       s.webcamError = '';
     });
@@ -312,19 +317,30 @@ export function startSession(
     viewer.configureTouch(inputs, active, (error) => {
       if (current === generation) reportFault(error);
     });
+    panel.synchronize(positions);
     active.powerChanges((on) => {
+      if (current !== generation) return;
       panel.setPowered(on);
       viewer.powered(on);
+      setState((s) => {
+        s.poweredOn = on;
+        if (!s.loading) {
+          s.live = on ? 'LIVE' : 'OFF';
+          s.message = on ? 'Camera ready' : 'Camera is powered off';
+        }
+      });
     });
-    panel.synchronize(positions);
     setCardEngine(active);
     finishLoading();
     options.ready();
     setState((s) => {
       s.live = 'LIVE';
     });
+    setState((s) => {
+      if (s.poweredOn === false) s.live = 'OFF';
+    });
     refs.viewer.dataset.bootSeconds = ((performance.now() - started) / 1000).toFixed(3);
-    status('Camera ready');
+    status(state.poweredOn === false ? 'Camera is powered off' : 'Camera ready');
   }
   async function replay(steps: readonly ReplayStep[]) {
     panel.disable();
@@ -354,6 +370,7 @@ export function startSession(
     finishLoading,
     undo,
     restart: () => options.restart(),
+    turnOn,
     hasFault: () => !!latestFault,
     saveCamera: async () => {
       await engine?.saveCamera();

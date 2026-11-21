@@ -425,6 +425,7 @@ export function startHome(
                 ? {
                     mode: replayScenario.interactive ? 'live' : 'replay',
                     clockSeconds2000: replayScenario.clockSeconds2000,
+                    initialSteps: replayScenario.interactive ? replayScenario.steps : undefined,
                   }
                 : undefined,
             },
