@@ -1,0 +1,24 @@
+# UART port 0: an Arm PL011 at 0xff920000 (the serial driver addresses port n at
+# 0xff920000 + (n << 12): 0x1383960 writes +0x30 CR = 0, 0x138336c the divisors +0x24/+0x28,
+# then +0x2c LCR_H and +0x34 IFLS). The normal boot to REC never touches it.
+#
+# Interrupt: the driver's table 0x18e8e68 gives port n four logical interrupts 0x42 + 4n ..
+# 0x45 + 4n, all with one handler per port (0x1381b4c for port 0 -> 0x13817ec, which reads the
+# masked status and serves every cause). The interrupt records at 0x18ea918 + 16 * logical map
+# port 0 to INTIDs 293..296 (level, priority 0xd0). Which PL011 output is on which of the four
+# is not established; the model raises the first for any masked cause.
+#
+# Peer: the stock firmware update program opens port 0 (configuration 5 of table 0x18e8f78:
+# 115200 baud) about 41 s after the last confirmation and sends Renesas RL78 Protocol A frames
+# (0x13d4e8c: 3 tries, 500 ms each; first frame 01 03 9a 00 21 42 03 = baud rate set, 115200,
+# 3.3 V). It programs a 0xc000-byte image. So the peer is a virtual RL78 programming target
+# with 48 KiB of code flash, erased at power-on. The part on the camera's board is not
+# identified; pin-level mode entry is not modeled.
+[[device]]
+base = 0xff920000
+size = 0x1000
+kind = "pl011"
+
+[device.options]
+irq = 293
+rl78 = { flash_bytes = 0xc000 }

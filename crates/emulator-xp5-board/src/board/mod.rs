@@ -27,6 +27,7 @@ pub mod lz;
 pub mod renderer;
 pub mod serial;
 pub mod sd;
+pub mod uart;
 pub mod usb;
 
 pub struct Companion {
@@ -224,6 +225,9 @@ fn register_with_resources(
                     commit_ticks,
                 )?),
             )?;
+        }
+        "pl011" => {
+            bus.register(window.base, window.size, Box::new(uart::port(window)?))?;
         }
         "bringup-stub" => {
             let options: fujimod_emulator_xp5_io::bringup_stub::Options =
