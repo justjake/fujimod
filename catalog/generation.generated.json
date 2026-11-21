@@ -4771,10 +4771,6 @@
           "status": "available",
           "errors": []
         },
-        "memory-reservations": {
-          "status": "available",
-          "errors": []
-        },
         "progress": {
           "status": "unavailable",
           "errors": [
@@ -8141,13 +8137,8 @@
           ]
         },
         "flash": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "publication_error",
-              "reason": "empty state capture"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "progress": {
           "status": "unavailable",
@@ -8181,17 +8172,8 @@
           "errors": []
         },
         "state": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "boot_rom_error",
-              "reason": "xp5: no established safely readable boot ROM extent"
-            },
-            {
-              "locator": "publication_error",
-              "reason": "empty state capture"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "ui_setting_names": {
           "status": "available",

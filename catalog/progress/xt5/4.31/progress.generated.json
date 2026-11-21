@@ -45,12 +45,12 @@
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "restart-facts",
@@ -133,17 +133,17 @@
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "restart-facts",
@@ -225,7 +225,7 @@
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "not-run"
+          "result": "partial"
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
@@ -256,24 +256,24 @@
           "id": "stock/record-picture",
           "label": "Record picture",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/record-movie",
           "label": "Record movie",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -296,16 +296,17 @@
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
-          "total": 1
+          "result": "partial",
+          "passed": 3,
+          "total": 4,
+          "detail": "3 of 4"
         },
         {
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
@@ -320,31 +321,31 @@
           "id": "stock/playback-picture",
           "label": "Playback picture",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/playback-movie",
           "label": "Playback movie",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/develop-raw",
           "label": "Develop RAW",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/ibis",
           "label": "IBIS",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -352,15 +353,15 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/card-slots",
           "label": "Card slots",
           "stage": "stock",
-          "result": "not-run",
+          "result": "fail",
           "passed": 0,
           "total": 1
         },
@@ -1265,27 +1266,27 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "stale",
+      "result": "pass",
       "passed": 1,
       "total": 1
     },
     "record-movie": {
-      "result": "stale",
+      "result": "pass",
       "passed": 2,
       "total": 2
     },
     "control-input": {
-      "result": "stale",
+      "result": "pass",
       "passed": 51,
       "total": 51
     },
     "focus": {
-      "result": "stale",
+      "result": "partial",
       "passed": 3,
       "total": 4
     },
     "lens": {
-      "result": "stale",
+      "result": "pass",
       "passed": 3,
       "total": 3
     },
@@ -1293,30 +1294,34 @@
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "stale",
+      "result": "pass",
       "passed": 4,
       "total": 4
     },
     "playback-movie": {
-      "result": "stale",
-      "passed": 3,
+      "result": "pass",
+      "passed": 4,
       "total": 4
     },
     "develop-raw": {
-      "result": "stale",
+      "result": "pass",
       "passed": 3,
       "total": 3
     },
     "ibis": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 1
     },
     "sd": {
-      "result": "stale",
+      "result": "pass",
       "passed": 2,
       "total": 2
     },
     "card-slots": {
-      "result": "not-run"
+      "result": "fail",
+      "passed": 0,
+      "total": 2
     },
     "control-layout": {
       "result": "pass"
