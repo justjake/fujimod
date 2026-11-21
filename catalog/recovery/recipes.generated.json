@@ -16945,6 +16945,7 @@
         ]
       },
       "stock_selector": {
+        "transfer_clock_divider": 4,
         "ram_edits": [
           {
             "address": 11972,
@@ -16954,6 +16955,11 @@
           }
         ],
         "cleared": [
+          {
+            "address": 98304,
+            "size": 32768,
+            "what": "Erased tail of the reset stage's flash region (every byte 0xff in the update). The stock setup copies only the first 0x14000 bytes of the region to RAM, so nothing reads this. The card that booted an X-T5 body carried zeros here."
+          },
           {
             "address": 17565696,
             "size": 221472,

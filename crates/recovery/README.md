@@ -180,7 +180,13 @@ then build that one (X-T5 4.31). The installed flash stays attached and the imag
 update's own selector word (1), so the stock reset stage loads its section table and sections
 from the flash as on a flash boot. The loader is the default card loader; the prelude sets up
 and scans the installed flash as in stage one, and the card start's setup tables are not put in
-SRAM. The loader holds, gates and wakes no core. Under selector 1 the reset stage's
+SRAM. The loader keeps the card host as the boot ROM left it after reading the loader from this
+card: none of the recipe's board operations run. They are the stock driver's bring-up of a slot it
+finds unconfigured, and on a body with a UHS-II slot they also enable the slot's UHS-II interface,
+which the stock driver turns off again before its first command on the UHS-I host and the loader
+does not. A recipe's `transfer_clock_divider` replaces the loader's SD clock divider 1 for the card
+read (the packager changes the one `mov w1, #0x101` of the loader's clock control write and refuses
+a loader without exactly that write). The loader holds, gates and wakes no core. Under selector 1 the reset stage's
 secondary-core entry returns at once and the core goes on into the stage's own work, so the stage
 wakes the parked cores itself when it is ready; a wake at the hand-off (what the internal-flash
 build below does for the preloaded selector) ran them beside core 0 too early in the emulator.
@@ -189,10 +195,14 @@ zeroes the recipe's `cleared` extents (whole words after the reset stage, inside
 overlapping neither each other nor an edit), applies its `ram_edits` (each old word checked, none
 on the selector) and puts the stock selector back; the CRC the loader checks covers the result.
 For X-T5 4.31 the one edit sends the reset stage's decode of section 4 to scratch DRAM, so the
-card's copy of section 4 stays and runs, and the cleared extents are the controller payload
-cache and the overlays. An image of this shape, behind a hand-made loader that set up the flash
-at entry and woke no core, booted an X-T5 body from an SD card; the files this builder writes
-have run in the emulator only.
+card's copy of section 4 stays and runs; the cleared extents are the erased tail of the reset
+stage's flash region, the controller payload cache and the overlays; and the divider is 4, the
+stock driver's step for a default-speed card. The `ffboot.bin` this builds is byte for byte the
+image that booted an X-T5 body from an SD card (SHA-256 `4aa12ffc...85cb7aa1`). That card's loader
+was hand-made: it ran no board operations, read at divider 4, set up the flash at entry and woke no
+core. An earlier build of this startup, which ran the recipe's board operations and read at
+divider 1, left an X-T5 body black with the same image; which of the two it was is not separated.
+The `marble_init.bin` this builder writes has run in the emulator only.
 
 `sd-boot-v1-ram-startup FIRMWARE DAT NEW_DIRECTORY [--fallback-wait-seconds N]` (XP5) writes only
 the two files the boot ROM and the loader read, `marble_init.bin` and `ffboot.bin`, and never the
