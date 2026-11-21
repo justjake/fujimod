@@ -223,6 +223,13 @@
     "width": 1.156,
     "height": 0.746
   },
+  "bracket": {
+    "sprite": "feature",
+    "box": [2.75, 4.75, 30.5, 25.5],
+    "view": [0, 0, 36, 36],
+    "width": 1.078,
+    "height": 0.901
+  },
   "drive-single": {
     "sprite": "feature",
     "box": [3.75, 7.75, 28.5, 20.5],
