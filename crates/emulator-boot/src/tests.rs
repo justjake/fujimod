@@ -1083,6 +1083,8 @@ fn common_open_checks_generation_before_loading_startup_files() {
         boot_rom: None,
         card_image: None,
         card_files: vec![],
+        second_card_image: None,
+        second_card_files: vec![],
         scene: None,
         output: None, viewer_port: None, viewer_keys: None,
         mode: Mode::Strict,

@@ -29,6 +29,9 @@ pub struct Startup {
     pub boot_rom: Option<PathBuf>,
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
+    /// The loader start's card in SD slot 2: a raw image, or files for an in-memory volume.
+    pub second_card_image: Option<PathBuf>,
+    pub second_card_files: Vec<(String, PathBuf)>,
     pub scene: Option<PathBuf>,
     pub output: Option<PathBuf>,
     pub viewer_port: Option<u16>,
@@ -45,8 +48,8 @@ pub struct Started {
     firmware: firmware::Firmware,
     state: manifest::BootState,
     opened: open::Opened,
-    /// The loader start's `--card-image`, written back at the end of a run.
-    card_write_back: Option<loader_card::WriteBack>,
+    /// The loader start's card images, written back at the end of a run.
+    card_write_back: Vec<loader_card::WriteBack>,
 }
 
 impl Started {
@@ -67,7 +70,7 @@ pub(super) fn open_startup(
     startup: Startup,
 ) -> Result<Started, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
+        second_card_image, second_card_files, scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
         camera_settings } = startup;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard && sd_image.is_none()
@@ -96,8 +99,11 @@ pub(super) fn open_startup(
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
-    let mut loader = None;
+    let mut loader = Vec::new();
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard | RunStart::Setup) {
+        if second_card_image.is_some() || !second_card_files.is_empty() {
+            return Err("a card in SD slot 2 needs the loader start".into());
+        }
         let start = match (rom_path.as_deref(), start) {
             (None, RunStart::Setup) => {
                 let handoff = rom_start::SetupHandoff::for_firmware(&firmware_id)
@@ -130,9 +136,12 @@ pub(super) fn open_startup(
         if rom_path.is_some() {
             return Err("a boot ROM requires a ROM or SD card startup".into());
         }
-        // The loader start's card: slot 1, inserted before the board is built (loader_card.rs).
-        loader = loader_card::LoaderCard::load(sd_image.as_deref(), &card_files)?;
-        if let Some(card) = &loader {
+        // The loader start's cards, inserted before the board is built (loader_card.rs).
+        loader.extend(loader_card::LoaderCard::load(loader_card::SLOT, sd_image.as_deref(), &card_files)?);
+        loader.extend(loader_card::LoaderCard::load(
+            loader_card::SLOT_2, second_card_image.as_deref(), &second_card_files,
+        )?);
+        for card in &loader {
             card.apply(&mut state)?;
         }
         None
@@ -153,10 +162,10 @@ pub(super) fn open_startup(
         mode,
         quantum_override,
         rom.as_ref(),
-        loader.as_ref(),
+        &loader,
         viewer_keys,
         profile.as_ref(),
     )?;
-    let card_write_back = loader.and_then(|card| card.write_back);
+    let card_write_back = loader.into_iter().filter_map(|card| card.write_back).collect();
     Ok(Started { firmware, state, opened, card_write_back })
 }
