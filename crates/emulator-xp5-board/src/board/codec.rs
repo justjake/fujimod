@@ -65,6 +65,17 @@
 //! - A stop (`H264_CMD` bit 14) ends the recording: the encoder is dropped and
 //!   bit 19 (stop done) is reported after `run_ticks`.
 //!
+//! Halt (`0x15ff4` bit 0, leaf 0x13cf43c): the terminate 0x13d0e60 (recmv
+//! 0x2db994c after a recording, the HEIF library 0x2dd890c / 0x2dda6b4), the
+//! suspend 0x13d0f84 and the error path of the completion task (0x13d2510) write
+//! 1 and then poll `0x15fd4` (leaf 0x13ceeec) until bit 0 reads 1, with no
+//! timeout and no interrupt. The terminate then resets the block through the
+//! reset controller (0xff90db04 bit 16 or 17). The model drops the work in
+//! flight and the open recording at the halt, and bit 0 of `0x15fd4` reads 1
+//! until the next core select (the first register write of an open) or
+//! command. `0x15fd0`, the pending word the ISR reads with the same layout,
+//! stays 0: any of its bits sends the completion task into its error stop.
+//!
 //! The encoder holds reference pictures and rate-control history that cannot be
 //! serialized, so an exact checkpoint is refused while a recording is open (from
 //! the first coded picture until the stop, a new open or a new configuration).
@@ -131,6 +142,11 @@ const IMG_WIDX: u64 = 0x1_5ee4;
 const IMG_WADR: u64 = 0x1_5ee8;
 const IMG_LINE_OFS: u64 = 0x1_5f10;
 const PERI_STATUS: u64 = 0x1_5fd0;
+/// Raw peripheral status (leaf 0x13ceeec); bit 0 reports a completed halt.
+const PERI_RAW_STATUS: u64 = 0x1_5fd4;
+const PERI_HALTED: u32 = 1;
+/// Halt request (leaf 0x13cf43c writes bit 0).
+const PERI_HALT: u64 = 0x1_5ff4;
 
 /// Status bits of `0x15120`/`0x15124`.
 /// Bits 1..0: stream bank 0 / bank 1 filled by this picture.
@@ -183,6 +199,9 @@ struct State {
     /// HEVC_CMD go starts a picture; otherwise it is a stop.
     #[serde(default, skip_serializing_if = "is_false")]
     hevc_image: bool,
+    /// A halt (`0x15ff4` bit 0) completed and no open or command followed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    halted: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     due: Option<u64>,
     /// A start is waiting for `due`.
@@ -256,6 +275,21 @@ impl Codec {
         self.hevc_encoder = None;
         self.state.stream_position = 0;
         self.state.bank = 0;
+    }
+    /// The halt request: the work in flight and the open recording end here.
+    fn halt(&mut self, cx: &mut Cx<'_>) {
+        if self.state.due.take().is_some() {
+            cx.log("xp5-codec: halt drops the command in flight");
+        }
+        self.state.encode = false;
+        self.state.stop = false;
+        self.state.hevc = false;
+        if self.recording() {
+            cx.log(&format!("xp5-codec: halt ends the recording after {} pictures", self.state.pictures));
+        }
+        self.encoder = None;
+        self.hevc_encoder = None;
+        self.state.halted = true;
     }
     fn high(&self, index: usize) -> u64 {
         u64::from(self.state.high[index] & 7) << 32
@@ -405,7 +439,8 @@ impl Codec {
             HEVC_STATUS => self.state.hevc_pending,
             HEVC_RAW_STATUS => self.state.hevc_raw,
             HEVC_CMD => self.word(HEVC_CMD) & !HEVC_GO,
-            PERI_STATUS => 0,
+            PERI_STATUS | PERI_HALT => 0,
+            PERI_RAW_STATUS => u32::from(self.state.halted) * PERI_HALTED,
             STR_BANK => self.state.bank << 12,
             NALU_END => self.state.nalu_bytes,
             NALU_RESET => 0,
@@ -428,6 +463,11 @@ impl Codec {
             }
             // The ISR writes back what it read; nothing is ever pending here.
             PERI_STATUS | STR_BANK => {}
+            PERI_HALT => {
+                if value & 1 != 0 {
+                    self.halt(cx);
+                }
+            }
             NALU_RESET => {
                 if value & 1 != 0 {
                     self.state.nalu_bytes = 0;
@@ -438,6 +478,10 @@ impl Codec {
                 self.update_irq(cx);
             }
             H264_CORESEL | HEVC_CORESEL | STR_BUF_SIZE => {
+                // A core select is the first write of an open.
+                if register != STR_BUF_SIZE {
+                    self.state.halted = false;
+                }
                 self.set_word(register, value);
                 self.restart_stream();
             }
@@ -449,6 +493,7 @@ impl Codec {
             }
             HEVC_CMD => {
                 if value & HEVC_GO != 0 {
+                    self.state.halted = false;
                     if self.state.due.is_some() && !self.state.hevc {
                         return cx.fail("xp5-codec: HEVC command while an H.264 command is in flight");
                     }
@@ -474,6 +519,7 @@ impl Codec {
             }
             H264_CMD => {
                 if value & (CMD_START | CMD_STOP) != 0 {
+                    self.state.halted = false;
                     if value & CMD_START != 0 {
                         if self.state.encode {
                             return cx.fail("xp5-codec: H.264 start while a picture is in flight");
@@ -1117,6 +1163,39 @@ mod tests {
         let raw = get(&mut c, &mut h, HEVC_RAW_STATUS);
         assert_eq!(raw & (NALU_READY | STOP_DONE), NALU_READY | STOP_DONE);
         assert!(c.checkpoint().is_ok(), "the recording is closed");
+    }
+
+    /// The terminate 0x13d0e60 after a recording: the halt request (0x15ff4 = 1) is
+    /// acknowledged in the raw peripheral status (0x15fd4 bit 0) at once, with no
+    /// interrupt and nothing in the pending word 0x15fd0; a start in flight is
+    /// dropped and the recording ends, so a checkpoint is possible again. The
+    /// next open (core select) clears the acknowledge.
+    #[test]
+    fn a_halt_is_acknowledged_and_ends_the_recording() {
+        let mut c = Codec::new(IRQ, 1000).unwrap();
+        let mut h = host();
+        open_and_configure(&mut c, &mut h);
+        assert_eq!(get(&mut c, &mut h, PERI_RAW_STATUS), 0);
+        frame(&mut h, 0);
+        encode_one(&mut c, &mut h);
+        assert!(c.checkpoint().is_err());
+        reg(&mut c, &mut h, IMG_WIDX, 0);
+        reg(&mut c, &mut h, IMG_WADR, Y_AT as u32);
+        reg(&mut c, &mut h, H264_CMD, CMD_START);
+        assert!(c.next_deadline(h.now).is_some());
+        let irqs = h.irqs.len();
+        reg(&mut c, &mut h, PERI_HALT, 1);
+        assert_eq!(get(&mut c, &mut h, PERI_RAW_STATUS) & 1, 1);
+        assert_eq!(get(&mut c, &mut h, PERI_STATUS), 0);
+        assert_eq!(get(&mut c, &mut h, PERI_HALT), 0);
+        assert_eq!(c.next_deadline(h.now), None);
+        assert_eq!(h.irqs.len(), irqs);
+        let saved = c.checkpoint().expect("no recording after the halt");
+        let mut restored = Codec::new(IRQ, 1000).unwrap();
+        restored.restore_checkpoint(&saved).unwrap();
+        assert_eq!(get(&mut restored, &mut h, PERI_RAW_STATUS) & 1, 1);
+        reg(&mut c, &mut h, H264_CORESEL, 1);
+        assert_eq!(get(&mut c, &mut h, PERI_RAW_STATUS), 0);
     }
 
     #[test]
