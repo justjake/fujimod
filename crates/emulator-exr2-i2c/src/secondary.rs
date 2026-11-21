@@ -19,9 +19,71 @@ pub struct Contract {
     pub register_masks: WordMap,
     pub pwic_masks: WordMap,
     pub pwic_read_prefixes: Vec<(u32, Vec<u8>)>,
+    /// Further register targets on this bus. Only one
+    /// register target is active; addressing another at the start of a
+    /// transaction parks the active one here and swaps the addressed one in.
+    #[serde(default)]
+    pub banks: Vec<Bank>,
+    /// The declared register target whose registers 0..4 feed the lens bridge.
+    #[serde(default)]
+    pub bridge_address: Option<u8>,
+}
+
+/// One parked register target: its contract and its current register values.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct Bank {
+    pub address: u8,
+    pub modes: Vec<u32>,
+    pub read_registers: Vec<u32>,
+    pub masks: WordMap,
+    pub registers: WordMap,
 }
 
 impl Registers {
+    /// Registers of the bridge target, whether it is active or parked.
+    pub fn bridge_registers(&self) -> &WordMap {
+        let c = &self.secondary;
+        match c.bridge_address {
+            Some(a) if c.register_address != Some(a) => c
+                .banks
+                .iter()
+                .find(|b| b.address == a)
+                .map_or(&self.parts.target_registers, |b| &b.registers),
+            _ => &self.parts.target_registers,
+        }
+    }
+
+    /// Make the register target addressed by `value` (an address byte) the
+    /// active one. Only between transactions, when an address byte is due.
+    fn select_register_bank(&mut self, value: u32) {
+        if self.phase != Phase::AwaitingAddress || self.regs.get_or_zero(8) != 0xa {
+            return;
+        }
+        let address = (value >> 1) as u8;
+        let c = &mut self.secondary;
+        if c.register_address == Some(address) || c.pwic_address == Some(address) {
+            return;
+        }
+        let Some(index) = c.banks.iter().position(|b| b.address == address) else {
+            return;
+        };
+        let incoming = c.banks.remove(index);
+        if let Some(active) = c.register_address {
+            c.banks.push(Bank {
+                address: active,
+                modes: std::mem::take(&mut c.register_modes),
+                read_registers: std::mem::take(&mut c.read_registers),
+                masks: std::mem::take(&mut c.register_masks),
+                registers: std::mem::take(&mut self.parts.target_registers),
+            });
+        }
+        c.register_address = Some(incoming.address);
+        c.register_modes = incoming.modes;
+        c.read_registers = incoming.read_registers;
+        c.register_masks = incoming.masks;
+        self.parts.target_registers = incoming.registers;
+    }
+
     pub fn secondary_input(&self, connected: bool) -> Result<()> {
         match self.profile {
             Some(Profile::DeclaredSecondary) if connected != self.parts.secondary_usb_connected => {
@@ -308,6 +370,7 @@ impl Registers {
         if value > 0xff {
             return super::fail("Bus1 transmit requires one byte");
         }
+        self.select_register_bank(value);
         let p = &self.parts;
         let contract = &self.secondary;
         let mode = self.regs.get_or_zero(0x10);

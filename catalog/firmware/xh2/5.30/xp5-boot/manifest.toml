@@ -1,0 +1,22 @@
+# Cold OS boot: EL3 -> EL1t handoff at 0x5847c, after stock 0x58420..0x58478
+# (the X-T5 4.31 kernel shape; loader tail 0x2318..0x232c passes x0 = [0x13008] =
+# 0x14e1c4c and x1 = 0x18250).
+version = 1
+firmware = "xh2-530"
+load_firmware = true
+
+# Device windows: manifest.d/*.toml, merged in filename order.
+
+# The body's DRAM extent: the stock bus-drain classifier 0x14d1a1c splits memory at
+# 0x80000000 (body hardware.bus_drain). PROVISIONAL: installed capacity is unmeasured.
+[[ram]]
+base = 0
+size = 0x80000000
+
+# Companion SRAM, main view (the SoC's companion-sram region): 0x13fb120 copies the
+# companion image from flash 0xf01c0000 to 0xfa200000 and the shared configuration
+# lies at 0xfa2fa000..0xfa300000. Before that, the interrupt-configuration helper
+# 0x5dcd0 read-modify-writes 0xfa270e00 for INTIDs 0xf0..0xff.
+[[ram]]
+base = 0xfa200000
+size = 0x100000

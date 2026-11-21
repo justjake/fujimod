@@ -201,6 +201,46 @@ const CHANNEL_BASE: u64 = 0x280;
 const CHANNEL_STRIDE: u64 = 0x40;
 const CHANNEL_COUNT: u64 = 6;
 const CHANNEL_TOKEN: u64 = 1 << 62;
+/// Input buffer configuration: two eight-word blocks at 0x440 and 0x460.
+/// X-T5 4.31 writes each block in order through one setter (0x1354dd8 for
+/// 0x440, 0x135529c for 0x460, both called from 0x2eb89e4) after a range check
+/// that ends in "IBUF MAX ERROR."; matching getters (0x1355760, 0x13558ac) read
+/// the eight words back with the same field masks. Word 0 holds bit 0 (enable),
+/// bit 8 (mode) and a 15-bit value at bit 16; words 1..7 hold two 9-bit values
+/// at bits 0 and 16. The words are stored and read back; nothing polls them and
+/// what they configure is unknown. Bits outside these fields are refused.
+const INPUT_BUFFER: std::ops::RangeInclusive<u64> = 0x440..=0x47c;
+fn input_buffer_mask(o: u64) -> u32 {
+    if o & 0x1f == 0 {
+        0x7fff_0101
+    } else {
+        0x01ff_01ff
+    }
+}
+/// Input buffer size words at 0x480 and 0x4c0 and their flag words at 0x484 and 0x4c4 (X100VI 1.31;
+/// the same eight-word blocks' neighbors). The setters (0x143fa44, 0x143f2ac, 0x143f678) each read
+/// the word once, replace bit 0 with a boolean and bits 16 to 26 with a size of at most 0x400
+/// (else "IBUF MAX ERROR.") and write it back; the getter 0x143fb58 reads it once. 0x143fbec reads
+/// bits 0 and 1 of the flag words; no writer of them is known. Nothing polls any of these words and
+/// what they configure is unknown. The power-on values are unverified; they read 0 here.
+const INPUT_BUFFER_SIZE_WORDS: [u64; 2] = [0x480, 0x4c0];
+const INPUT_BUFFER_FLAG_WORDS: [u64; 2] = [0x484, 0x4c4];
+/// Enable word at 0x120 (X100VI 1.31): the setter 0x143e754 writes a boolean (0 or 1, else
+/// 0xffffffe2) with one plain write and the getter 0x143e7b4 reads it once and keeps bit 0; no
+/// other function touches it and nothing polls it. What it enables is unknown, and the power-on
+/// value is unverified; it reads 0 here.
+const ENABLE_WORD: u64 = 0x120;
+fn plain_word_mask(o: u64) -> Option<u32> {
+    if o == ENABLE_WORD {
+        Some(0x1)
+    } else if INPUT_BUFFER_SIZE_WORDS.contains(&o) {
+        Some(0x07ff_0001)
+    } else if INPUT_BUFFER_FLAG_WORDS.contains(&o) {
+        Some(0x3)
+    } else {
+        None
+    }
+}
 fn channel(o: u64) -> Option<u64> {
     (CHANNEL_BASE..CHANNEL_BASE + CHANNEL_STRIDE * CHANNEL_COUNT)
         .contains(&o)
@@ -308,6 +348,9 @@ impl Device for Command {
                 u64::from(self.reg(o))
             }
             0x224..=0x240 => u64::from(self.state.response[((0x240 - o) / 4) as usize]),
+            _ if INPUT_BUFFER.contains(&o) || plain_word_mask(o).is_some() => {
+                u64::from(self.reg(o))
+            }
             _ if channel(o).is_some() => {
                 let block = channel(o).unwrap();
                 if o == block + 4 {
@@ -375,6 +418,16 @@ impl Device for Command {
                 } else {
                     self.state.registers.insert(o, value);
                 }
+            }
+            _ if INPUT_BUFFER.contains(&o) || plain_word_mask(o).is_some() => {
+                let mask = plain_word_mask(o).unwrap_or_else(|| input_buffer_mask(o));
+                if value & !mask != 0 {
+                    cx.fail(format!(
+                        "input buffer word {o:#x} value {value:#x} sets bits outside its fields"
+                    ));
+                    return;
+                }
+                self.state.registers.insert(o, value);
             }
             _ if channel(o).is_some() => {
                 let block = channel(o).unwrap();
@@ -716,6 +769,53 @@ mod tests {
         assert_eq!(sensor.0.lock().unwrap().reads, 1);
     }
     #[test]
+    fn asynchronous_single_command_start_bit_clears_on_virtual_time() {
+        // X-T5 4.31: 0x2eb7678 sets format bit 31 for an asynchronous list,
+        // programs the descriptor words through 0x1352510 (+0x21c first),
+        // starts with +0x204 = 1 (0x1356750) and polls +0x204 bit 0
+        // (0x1356788). The poll only ends when guest time passes the latency.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor.clone(), 1000).unwrap();
+        let mut host = RecordingHost {
+            ram_base: 0x1000,
+            ram: vec![0x81, 0x12, 0x34, 0x5a, 0, 0, 0, 0],
+            ..Default::default()
+        };
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        for (o, v) in [
+            (0x208, 0x8001_0401),
+            (0x21c, 0),
+            (0x20c, 0),
+            (0x210, 0x1000),
+            (0x214, 0),
+            (0x218, 8),
+            (0x204, 1),
+        ] {
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+        }
+        assert!(cx.refusal().is_none());
+        for _ in 0..3 {
+            assert_eq!(command.read(&mut cx, 0xff948204, 4) & 1, 1);
+        }
+        assert_eq!(command.next_deadline(0), Some(1000));
+        host.now = 999;
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), 0xff948204, 4),
+            1
+        );
+        host.now = 1000;
+        assert_eq!(
+            command.read(&mut Cx::new(&mut host, 1, 0, 0), 0xff948204, 4),
+            0
+        );
+        assert_eq!(sensor.0.lock().unwrap().registers[&0x1234], 0x5a);
+        // +0x220 sits below the eight response words; 0x13568a4 reads it, but
+        // nothing establishes its meaning, so it stays unmodeled.
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        command.read(&mut cx, 0xff948220, 4);
+        assert!(cx.is_unmodeled());
+    }
+    #[test]
     fn trigger_channel_start_bit_clears_after_the_command_latency() {
         let sensor = Sensor::new(None, (0x51, 8));
         let mut command = Command::new(0xfff6c000, sensor, 17).unwrap();
@@ -749,5 +849,83 @@ mod tests {
         let mut cx = Cx::new(&mut host, 1, 0, 0);
         command.read(&mut cx, 0xfff6c000 + 0x400, 4);
         assert!(cx.is_unmodeled());
+    }
+    #[test]
+    fn input_buffer_words_store_their_fields_and_refuse_other_bits() {
+        // X-T5 4.31: 0x1354dd8 writes 0x440 = 0x100101 (enable, mode 1, value
+        // 0x10) then the seven 9-bit pairs; 0x1355760 reads them back.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        for (o, v) in [
+            (0x440, 0x0010_0101),
+            (0x444, 0x01ff_0001),
+            (0x45c, 0x0100_0000),
+            (0x460, 0x7fff_0001),
+        ] {
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert!(cx.refusal().is_none());
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(command.next_deadline(0), None);
+        for (o, v) in [(0x440, 0x8000_0000), (0x440, 2), (0x444, 0x200)] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert!(cx.refusal().is_some());
+        }
+        // The words around the two blocks stay unmodeled.
+        for o in [0x43c, 0x488, 0x4c8, 0x4fc] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.read(&mut cx, 0xff948000 + o, 4);
+            assert!(cx.is_unmodeled());
+        }
+    }
+    #[test]
+    fn input_buffer_size_and_flag_words_read_modify_write() {
+        // X100VI 1.31: 0x143fa44 reads 0x480 or 0x4c0 and writes it back with bit 0 and bits 16 to
+        // 26 replaced; 0x143fbec reads bits 0 and 1 of 0x484 and 0x4c4.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        for o in [0x480, 0x484, 0x4c0, 0x4c4] {
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), 0);
+        }
+        for (o, v) in [(0x480, 0x0400_0001), (0x4c0, 0x0040_0000), (0x484, 3), (0x4c4, 2)] {
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(command.next_deadline(0), None);
+        for (o, v) in [(0x480, 0x0800_0000), (0x4c0, 2), (0x484, 4)] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, 0xff948000 + o, 4, v);
+            assert!(cx.refusal().is_some());
+        }
+    }
+    #[test]
+    fn enable_word_at_0x120_is_a_plain_boolean_word() {
+        // X100VI 1.31: 0x143e754 writes 0 or 1 once; 0x143e7b4 reads it once and keeps bit 0.
+        let sensor = Sensor::new(None, (0x59, 4));
+        let mut command = Command::new(0xff948000, sensor, 1000).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        assert_eq!(command.read(&mut cx, 0xff948120, 4), 0);
+        for v in [1, 0] {
+            command.write(&mut cx, 0xff948120, 4, v);
+            assert_eq!(command.read(&mut cx, 0xff948120, 4), v);
+        }
+        assert!(cx.refusal().is_none());
+        assert_eq!(command.next_deadline(0), None);
+        let mut cx = Cx::new(&mut host, 1, 0, 0);
+        command.write(&mut cx, 0xff948120, 4, 2);
+        assert!(cx.refusal().is_some());
+        for o in [0xff94811c, 0xff948124] {
+            let mut cx = Cx::new(&mut host, 1, 0, 0);
+            command.write(&mut cx, o, 4, 0);
+            assert!(cx.refusal().is_some());
+        }
     }
 }

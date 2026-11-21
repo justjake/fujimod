@@ -117,11 +117,16 @@ pub struct Run {
     pub seconds: Option<Duration>,
     /// Optional additional instructions across all processors.
     pub instruction_limit: Option<u64>,
+    /// Stop after this much host time, whatever the guest budgets have reached.
+    pub wall_seconds: Option<Duration>,
     pub status_every: Duration,
     pub execution_policy: ExecutionPolicy,
     /// Directory for the run's records (display frames, board state, dumps).
     pub output: PathBuf,
 }
+
+/// Host-time cadence of status lines, so a slow run is visibly alive.
+const WALL_STATUS_EVERY: Duration = Duration::from_secs(10);
 
 /// Run the boot described by `run`.
 pub fn run_boot(run: Run) -> Result<Value, String> {
@@ -156,6 +161,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         quantum: quantum_override,
         seconds: limit,
         instruction_limit,
+        wall_seconds,
         status_every,
         execution_policy: policy,
         output: run_directory,
@@ -263,7 +269,9 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let signal = interrupted.clone();
     ctrlc::set_handler(move || signal.store(true, Ordering::Release))
         .map_err(|error| error.to_string())?;
-    let limits = crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?;
+    let limits = crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?
+        .with_wall(wall_seconds);
+    let mut next_wall_status = std::time::Instant::now() + WALL_STATUS_EVERY;
     let slice = ((ticks_per_second / 1_000).max(1)).min(100_000_000);
     let mut next_status =
         start.saturating_add(crate::host::duration_ticks(status_every, ticks_per_second));
@@ -334,6 +342,15 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             }
             session.board.check_discovery_callee_stubs()?;
             let now = session.board.now();
+            // A guest-time cadence goes quiet when the guest advances slowly; report on host time too.
+            if std::time::Instant::now() >= next_wall_status {
+                let state = session.board.state();
+                eprintln!(
+                    "FUJIMOD XP5 status: {}",
+                    shared_boot_summary(&state, &session.board, policy)
+                );
+                next_wall_status = std::time::Instant::now() + WALL_STATUS_EVERY;
+            }
             if status_every != Duration::ZERO && now >= next_status {
                 let state = session.board.state();
                 eprintln!(
@@ -351,6 +368,12 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     // that dies still leaves them. Setup errors above (opening the board, discovery stubs, the
     // execution policy, watch hooks, key scheduling, the Ctrl-C handler) return before anything
     // has run and leave no board state; a panic would also bypass this path.
+    let stop_reason = if interrupted.load(Ordering::Acquire) {
+        crate::host::StopReason::Other
+    } else {
+        limits.stop_reason(&session).unwrap_or(crate::host::StopReason::Other)
+    };
+    eprintln!("FUJIMOD XP5 end: {}", stop_reason.name());
     let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
     let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
@@ -396,6 +419,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         "firmware": firmware.id,
         "instructions": session.board.instruction_counts(),
         "now": session.board.now(),
+        "stop_reason": stop_reason.name(),
         "discovery_callee_stubs": session.board.discovery_callee_stubs(),
         "run_directory": run_directory,
         "state": shared_boot_summary(&state, &session.board, policy),

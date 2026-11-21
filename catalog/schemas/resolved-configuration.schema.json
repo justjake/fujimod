@@ -13460,6 +13460,17 @@
           ],
           "description": "Declared iris optics."
         },
+        "nd_filter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareNdFilter"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared neutral-density filter."
+        },
         "sensor_capture": {
           "anyOf": [
             {
@@ -13851,8 +13862,7 @@
         "travel_limits": {
           "description": "Declared travel limits.",
           "items": {
-            "format": "uint64",
-            "minimum": 0,
+            "format": "int64",
             "type": "integer"
           },
           "type": "array"
@@ -13868,6 +13878,13 @@
       "additionalProperties": false,
       "description": "Declared iris optics facts.",
       "properties": {
+        "actuator": {
+          "description": "What moves the iris: `lens` (the lens unit's second motor, the default)\nor `bridge` (the stepper behind the bus1 motor bridge).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "output": {
           "description": "Declared output.",
           "type": "string"
@@ -14062,6 +14079,52 @@
         "entry_labels",
         "images",
         "name"
+      ],
+      "type": "object"
+    },
+    "HardwareNdFilter": {
+      "additionalProperties": false,
+      "description": "A neutral-density filter swung in by a lens-unit output register.",
+      "properties": {
+        "basis": {
+          "description": "Why the actuator and its factor are believed.",
+          "type": "string"
+        },
+        "factor": {
+          "description": "Light reduction while the filter is in (8 = 3 EV).",
+          "format": "double",
+          "type": "number"
+        },
+        "insert_mask": {
+          "description": "Coil bit that swings the filter in.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output": {
+          "description": "Wire that publishes the current transmission factor.",
+          "type": "string"
+        },
+        "register": {
+          "description": "Lens-unit output register that drives the actuator.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "remove_mask": {
+          "description": "Coil bit that swings the filter out.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "factor",
+        "insert_mask",
+        "output",
+        "register",
+        "remove_mask"
       ],
       "type": "object"
     },
@@ -14424,6 +14487,31 @@
       ],
       "type": "object"
     },
+    "HardwareRadiometricCalibration": {
+      "additionalProperties": false,
+      "description": "Declared calibration of one radiometric path.",
+      "properties": {
+        "reference_white": {
+          "description": "Raw response to the reference white, per colour.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "saturation_lux_seconds": {
+          "description": "Exposure that saturates the reference white.",
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "reference_white",
+        "saturation_lux_seconds"
+      ],
+      "type": "object"
+    },
     "HardwareRadiometry": {
       "additionalProperties": false,
       "description": "Declared radiometry facts.",
@@ -14438,6 +14526,17 @@
             }
           ],
           "description": "Declared focal-plane curtains; absent for a leaf-shutter body."
+        },
+        "live_view": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRadiometricCalibration"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Live-view calibration declared separately from the still readout."
         },
         "mode_change_frames": {
           "description": "Invalid readouts while a sensor drive-mode change acquires sync.",
@@ -15596,10 +15695,77 @@
       ],
       "type": "object"
     },
+    "HardwareSecondaryBusRegisterChip": {
+      "additionalProperties": false,
+      "description": "One further register chip on the secondary bus.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit chip address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Why this chip and its registers are believed.",
+          "type": "string"
+        },
+        "modes": {
+          "description": "Bus modes in which the chip answers.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "values": {
+          "description": "Initial register values, each `[register, value]`.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "write_masks": {
+          "description": "Writable bits, each `[register, mask]`.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "basis",
+        "modes",
+        "values",
+        "write_masks"
+      ],
+      "type": "object"
+    },
     "HardwareSecondaryBusRegisters": {
       "additionalProperties": false,
       "description": "Declared control bus1 replies facts.",
       "properties": {
+        "extra_registers": {
+          "description": "Further register chips on the bus, each with its own register map.",
+          "items": {
+            "$ref": "#/$defs/HardwareSecondaryBusRegisterChip"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "pwic_address": {
           "description": "Declared pwic address.",
           "format": "uint64",
@@ -22703,6 +22869,21 @@
             "null"
           ]
         },
+        "capability_reply": {
+          "description": "MT5931 boot capability body (EVENT_NIC_CAPABILITY, 20 bytes) answering\ncommand 0x80. Absence refuses that command.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 20,
+          "minItems": 20,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "clear_profile": {
           "anyOf": [
             {
@@ -25699,6 +25880,20 @@
           "properties": {
             "kind": {
               "const": "sd_card",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter the firmware's boot-setup stage from internal flash, in place of the boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "setup",
               "type": "string"
             }
           },

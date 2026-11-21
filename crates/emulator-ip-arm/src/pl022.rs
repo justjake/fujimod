@@ -301,6 +301,9 @@ pub struct Controller {
     base: u64,
     engine: Arc<Mutex<Engine>>,
     interrupts: Vec<InterruptLine>,
+    /// The board declares that the interrupt output reaches no modeled input. Without
+    /// lines and without this declaration, a raised interrupt refuses.
+    interrupt_unconnected: bool,
 }
 impl Controller {
     fn validate_state(
@@ -361,12 +364,22 @@ impl Controller {
         Ok(Self {
             base,
             interrupts,
+            interrupt_unconnected: false,
             engine: Arc::new(Mutex::new(Engine {
                 clock,
                 state: State::default(),
                 wire,
             })),
         })
+    }
+    /// Declares the interrupt output unconnected: raising it then drives nothing.
+    /// Refuses when the controller already drives interrupt lines.
+    pub fn with_unconnected_interrupt(mut self) -> Result<Self, String> {
+        if !self.interrupts.is_empty() {
+            return Err("PL022 interrupt output is both connected and unconnected".into());
+        }
+        self.interrupt_unconnected = true;
+        Ok(self)
     }
     pub fn port(&self) -> SharedPort {
         Arc::new(Mutex::new(DmaPort(self.engine.clone())))
@@ -381,7 +394,7 @@ impl Controller {
             return;
         }
         e.state.irq_published = high;
-        if self.interrupts.is_empty() && high {
+        if self.interrupts.is_empty() && !self.interrupt_unconnected && high {
             cx.unmodeled();
         }
         for &line in &self.interrupts {

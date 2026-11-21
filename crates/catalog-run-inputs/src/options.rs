@@ -187,6 +187,10 @@ pub struct RunFactoryOptions {
     /// Selected wifi sdio transfer ticks. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wifi_sdio_transfer_ticks: Option<u64>,
+    /// MT5931 boot capability body (EVENT_NIC_CAPABILITY, 20 bytes) answering
+    /// command 0x80. Absence refuses that command.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capability_reply: Option<[u8; 20]>,
     /// Synthetic HDMI sink input, including the identity of its external EDID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_sink: Option<RunHdmiSink>,

@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "image_bytes": 1016,
+  "symbols": {
+    "xp5_exif_end": 1016,
+    "xp5_exif_entry": 0,
+    "xp5_exif_out_bad": 992,
+    "xp5_exif_out_result": 1000,
+    "xp5_exif_out_status": 984,
+    "xp5_exif_out_written": 1008,
+    "xp5_exif_p_bytes": 760,
+    "xp5_exif_p_count": 848,
+    "xp5_exif_p_dst": 752,
+    "xp5_exif_p_enable": 808,
+    "xp5_exif_p_enable_green": 816,
+    "xp5_exif_p_enable_red": 824,
+    "xp5_exif_p_func": 744,
+    "xp5_exif_p_gap": 800,
+    "xp5_exif_p_green": 768,
+    "xp5_exif_p_id": 736,
+    "xp5_exif_p_mux": 832,
+    "xp5_exif_p_pin": 784,
+    "xp5_exif_p_pulse": 792,
+    "xp5_exif_p_red": 776,
+    "xp5_exif_p_restore": 840,
+    "xp5_exif_p_return": 728,
+    "xp5_exif_p_self": 720,
+    "xp5_exif_p_table": 856,
+    "xp5_exif_params": 720
+  }
+}

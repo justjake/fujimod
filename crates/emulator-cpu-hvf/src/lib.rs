@@ -20,7 +20,7 @@ use std::rc::Rc;
 use std::sync::{Arc, atomic::Ordering, mpsc};
 use std::thread::JoinHandle;
 use std::{any::Any, ptr::NonNull};
-use worker::{Command, Event, Op, Value};
+use worker::{Command, Event, MmioAccess, Op, Value};
 
 /// One process-wide HVF VM; create every processor through this value.
 /// Map/host-memory mutations require all its CPUs to be stopped. Backing
@@ -51,12 +51,24 @@ pub enum NativeExit {
     Exception(Trap),
     VirtualTimer,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Window {
     end: u64,
     offset: u64,
     callbacks: Mmio,
     permissions: u32,
+    /// Device-published reads, served by the vCPU worker in interactive runs.
+    fast_reads: Arc<[FastMmioRead]>,
+}
+/// How the owner answers one parked callback.
+enum MmioOutcome {
+    /// Continue with the access retired (`true`), or return the trap to the
+    /// framework with its PC unchanged (`false`). A pause during a
+    /// synchronous run's device callback continues without committing the
+    /// access, so the instruction stays at its PC.
+    Resume(bool),
+    /// Registers to write on the worker: loads, writeback and the next PC.
+    Complete(Vec<(Register, u64)>),
 }
 pub struct Core {
     worker: Option<JoinHandle<()>>,
@@ -72,6 +84,9 @@ pub struct Core {
     active_run: RefCell<Option<ActiveRun>>,
     mmio: RefCell<BTreeMap<u64, Window>>,
     running: Cell<bool>,
+    /// The worker waits for this owner, so its published PC and PSTATE are
+    /// current. Cleared whenever the owner lets the vCPU execute.
+    parked: Cell<bool>,
     instruction_hook: Cell<bool>,
     execution_policy: Cell<ExecutionPolicy>,
     _owner: PhantomData<Rc<()>>,
@@ -138,6 +153,7 @@ impl Core {
                     active_run: RefCell::new(None),
                     mmio: RefCell::new(BTreeMap::new()),
                     running: Cell::new(false),
+                    parked: Cell::new(false),
                     instruction_hook: Cell::new(false),
                     execution_policy: Cell::new(ExecutionPolicy::Exact),
                     _owner: PhantomData,
@@ -175,11 +191,27 @@ impl Core {
         }
     }
     fn rpc(&self, op: Op) -> Result<Value, String> {
+        // Every other reply follows the worker publishing its parked state.
+        let resumes = matches!(op, Op::Resume(_) | Op::CompleteMmio(_));
+        self.parked.set(false);
         let (reply, rx) = mpsc::channel();
         self.commands
             .send(Command { op, reply })
             .map_err(|_| "HVF worker disconnected")?;
-        rx.recv().map_err(|_| "HVF worker reply disconnected")?
+        let result = rx.recv().map_err(|_| "HVF worker reply disconnected")?;
+        self.parked.set(!resumes);
+        result
+    }
+    /// PC or PSTATE published by the parked worker, without a round trip.
+    fn parked_register(&self, register: Register) -> Option<u64> {
+        if !self.parked.get() || !self.shared.parked_valid.load(Ordering::Acquire) {
+            return None;
+        }
+        match register {
+            Register::Pc => Some(self.shared.parked_pc.load(Ordering::Relaxed)),
+            Register::Pstate => Some(self.shared.parked_pstate.load(Ordering::Relaxed)),
+            _ => None,
+        }
     }
     fn validate_active_run(
         &self,
@@ -207,9 +239,6 @@ impl Core {
         let mut bytes = [0; 8];
         self.read_register(r, &mut bytes)?;
         Ok(u64::from_le_bytes(bytes))
-    }
-    fn set_scalar(&self, r: Register, value: u64) -> Result<(), String> {
-        self.write_register(r, &value.to_le_bytes())
     }
     fn selected(range: HookRange, address: u64) -> bool {
         match range {
@@ -258,11 +287,12 @@ impl Core {
             .checked_add(size as u64)
             .ok_or("MMIO range overflow")?;
         let windows = self.mmio.borrow();
-        let (&base, &w) = windows
+        let (&base, w) = windows
             .range(..=address)
             .next_back()
             .filter(|(_, w)| end <= w.end)
             .ok_or_else(|| format!("unmapped {access:?} at {address:#x}+{size:#x}"))?;
+        let w = w.clone();
         let required = match access {
             Access::Read => 1,
             Access::Write => 2,
@@ -273,52 +303,35 @@ impl Core {
         }
         Ok((base, w))
     }
-    /// Only mapped MMIO data aborts are completed here. Unknown architectural
-    /// traps return to the framework with the faulting PC unchanged.
-    fn mmio_trap(&self, trap: Trap, complete_after_pause: bool) -> Result<bool, ExecutionError> {
-        if !matches!(trap.syndrome >> 26, 0x24 | 0x25) {
-            return Ok(false);
-        }
-        let pc = self.scalar(Register::Pc).map_err(ExecutionError::Backend)?;
-        let mut word = [0; 4];
-        self.read_virtual(pc, Access::Fetch, &mut word)
-            .map_err(ExecutionError::Backend)?;
-        let decoded = arm64::decode_load_store(u32::from_le_bytes(word), pc, |r| {
-            self.scalar(if r == 31 {
-                Register::Sp
-            } else {
-                Register::X(r)
-            })
-        })
-        .map_err(ExecutionError::InvalidInstruction)?;
+    /// Complete a mapped MMIO data abort the worker already decoded. RAM
+    /// transfers return to the framework with the faulting PC unchanged.
+    fn mmio_trap(
+        &self,
+        trap: Trap,
+        access: &MmioAccess,
+        complete_after_pause: bool,
+    ) -> Result<MmioOutcome, ExecutionError> {
         // SIMD/pair transfers spanning RAM are handled by the runtime's
         // protected-memory path. Device callbacks carry scalar widths only.
-        let access = if decoded.load {
+        let kind = if access.load {
             Access::Read
         } else {
             Access::Write
         };
         let mut transfers = Vec::new();
-        for t in &decoded.transfers {
-            let pa = self
-                .translate(t.address, access)
-                .map_err(ExecutionError::Backend)?;
-            if self
-                .machine
-                .overlaps(pa, pa.saturating_add(t.size as u64))
-                .map_err(ExecutionError::Backend)?
-            {
-                return Ok(false);
+        for t in &access.transfers {
+            if t.ram {
+                return Ok(MmioOutcome::Resume(false));
             }
-            if decoded.simd || t.size > 8 {
+            if access.simd || t.size > 8 {
                 return Err(ExecutionError::InvalidInstruction(
                     "SIMD MMIO is unsupported".into(),
                 ));
             }
             let mapping = self
-                .window(pa, t.size as usize, access)
+                .window(t.physical, t.size as usize, kind)
                 .map_err(|message| ExecutionError::Memory {
-                    fault: match (decoded.load, message.starts_with("protected MMIO")) {
+                    fault: match (access.load, message.starts_with("protected MMIO")) {
                         (true, true) => Fault::ReadProtected,
                         (false, true) => Fault::WriteProtected,
                         (true, false) => Fault::ReadUnmapped,
@@ -326,12 +339,15 @@ impl Core {
                     },
                     message,
                 })?;
-            transfers.push((t, pa, mapping));
+            transfers.push((t, mapping));
+        }
+        if let Some(failure) = &access.failure {
+            return Err(failure.clone());
         }
         // Validate the whole operation before invoking any device callback.
         if transfers
             .first()
-            .is_none_or(|(_, pa, _)| *pa != trap.physical_address)
+            .is_none_or(|(t, _)| t.physical != trap.physical_address)
         {
             return Err(ExecutionError::Backend(
                 "HVF data-abort address disagrees with decoded instruction".into(),
@@ -341,70 +357,61 @@ impl Core {
         // An async pause can arrive while a device callback is already in
         // flight. Finish that guest access so the next run cannot repeat its
         // side effect or lose a loaded value.
-        for (t, pa, (base, w)) in transfers {
-            let offset = w.offset + pa - base;
-            if decoded.load {
+        for (t, (base, w)) in transfers {
+            let offset = w.offset + t.physical - base;
+            if access.load {
                 let raw =
                     unsafe { (w.callbacks.read)(offset, u32::from(t.size), w.callbacks.data) };
                 if !complete_after_pause && self.shared.stop.load(Ordering::Acquire) {
-                    return Ok(true);
-                }
-                let mask = u64::MAX >> (64 - u32::from(t.size) * 8);
-                let mut value = raw & mask;
-                if t.signed {
-                    let shift = 64 - t.size as u32 * 8;
-                    value = ((value << shift) as i64 >> shift) as u64;
-                }
-                if !t.wide {
-                    value &= u32::MAX as u64;
+                    return Ok(MmioOutcome::Resume(true));
                 }
                 if t.register != 31 {
-                    updates.push((Register::X(t.register), value));
+                    updates.push((Register::X(t.register), t.loaded(raw)));
                 }
             } else {
-                let value = if t.register == 31 {
-                    0
-                } else {
-                    self.scalar(Register::X(t.register))
-                        .map_err(ExecutionError::Backend)?
-                };
                 let mask = u64::MAX >> (64 - u32::from(t.size) * 8);
                 unsafe {
-                    (w.callbacks.write)(offset, u32::from(t.size), value & mask, w.callbacks.data);
+                    (w.callbacks.write)(offset, u32::from(t.size), t.store & mask, w.callbacks.data);
                 }
                 if !complete_after_pause && self.shared.stop.load(Ordering::Acquire) {
-                    return Ok(true);
+                    return Ok(MmioOutcome::Resume(true));
                 }
             }
         }
-        for (register, value) in updates {
-            self.set_scalar(register, value)
-                .map_err(ExecutionError::Backend)?;
+        if let Some((r, v)) = access.writeback {
+            updates.push((worker::base_register(r), v));
         }
-        if let Some((r, v)) = decoded.writeback {
-            self.set_scalar(
-                if r == 31 {
-                    Register::Sp
-                } else {
-                    Register::X(r)
-                },
-                v,
-            )
-            .map_err(ExecutionError::Backend)?;
-        }
-        self.set_scalar(Register::Pc, pc.wrapping_add(4))
-            .map_err(ExecutionError::Backend)?;
-        Ok(true)
+        updates.push((Register::Pc, access.pc.wrapping_add(4)));
+        Ok(MmioOutcome::Complete(updates))
     }
-    fn publish_device_ranges(&self) {
+    /// Answer a parked callback: resume, or retire the MMIO access in the
+    /// same worker round trip.
+    fn resume(&self, outcome: MmioOutcome) -> Result<(), ExecutionError> {
+        match outcome {
+            MmioOutcome::Resume(handled) => self.rpc(Op::Resume(handled)),
+            MmioOutcome::Complete(updates) => self.rpc(Op::CompleteMmio(updates)),
+        }
+        .map(|_| ())
+        .map_err(ExecutionError::Backend)
+    }
+    fn publish_device_ranges(&self) -> Result<(), String> {
+        let windows = self.mmio.borrow();
         self.machine.devices(
             self.identity,
-            self.mmio
-                .borrow()
-                .iter()
-                .map(|(&base, w)| (base, w.end))
-                .collect(),
+            windows.iter().map(|(&base, w)| (base, w.end)).collect(),
         );
+        let fast = windows
+            .iter()
+            .filter(|(_, w)| !w.fast_reads.is_empty() && w.permissions & 1 != 0)
+            .map(|(&base, w)| worker::FastWindow {
+                base,
+                end: w.end,
+                offset: w.offset,
+                reads: w.fast_reads.clone(),
+            })
+            .collect();
+        drop(windows);
+        self.rpc(Op::FastWindows(fast)).map(|_| ())
     }
     fn device_range(address: u64, bytes: usize) -> Result<u64, String> {
         if bytes == 0 {
@@ -447,14 +454,14 @@ impl Core {
         for base in keys {
             let w = windows.remove(&base).unwrap();
             if base < address {
-                windows.insert(base, Window { end: address, ..w });
+                windows.insert(base, Window { end: address, ..w.clone() });
             }
             if w.end > end {
                 windows.insert(
                     end,
                     Window {
                         offset: w.offset + end - base,
-                        ..w
+                        ..w.clone()
                     },
                 );
             }
@@ -472,7 +479,7 @@ impl Core {
             }
         }
         drop(windows);
-        self.publish_device_ranges();
+        self.publish_device_ranges()?;
         Ok(true)
     }
 }
@@ -485,6 +492,24 @@ impl Cpu for Core {
             return Err("interactive execution cannot observe instructions".into());
         }
         self.execution_policy.set(policy);
+        // Published reads bypass the owner only in interactive runs; exact
+        // execution keeps every access on the device's read callback.
+        for window in self.mmio.borrow().values() {
+            for read in window.fast_reads.iter() {
+                read.set_enabled(policy == ExecutionPolicy::Interactive);
+            }
+        }
+        Ok(())
+    }
+    fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
+        if self.running.get() {
+            return Err("guest clock anchor requires a stopped processor".into());
+        }
+        *self
+            .shared
+            .guest_clock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(clock);
         Ok(())
     }
     fn exclusive_domain(&self) -> Option<fujimod_emulator_cpu::exclusive::Shared> {
@@ -499,6 +524,9 @@ impl Cpu for Core {
     fn features(&self) -> Features {
         Features {
             asynchronous_runs: true,
+            // The anchor clocks device-published reads only; guest counters
+            // keep using the host's native virtual counter.
+            guest_clock: true,
             instruction_limit: true,
             shared_physical_maps: true,
             instruction_progress: true,
@@ -509,6 +537,14 @@ impl Cpu for Core {
         }
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
+        if let Some(value) = self.parked_register(register) {
+            let bytes = value.to_le_bytes();
+            let out = out
+                .get_mut(..bytes.len())
+                .ok_or_else(|| format!("register buffer needs {} bytes", bytes.len()))?;
+            out.copy_from_slice(&bytes);
+            return Ok(bytes.len());
+        }
         match self.rpc(Op::Read(register))? {
             Value::Bytes(bytes) if out.len() >= bytes.len() => {
                 out[..bytes.len()].copy_from_slice(&bytes);
@@ -622,6 +658,15 @@ impl Cpu for Core {
         self.machine.zeroed(address, bytes, permissions)
     }
     unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String> {
+        unsafe { self.map_mmio_fast(address, bytes, callbacks, Vec::new()) }
+    }
+    unsafe fn map_mmio_fast(
+        &self,
+        address: u64,
+        bytes: usize,
+        callbacks: Mmio,
+        fast_reads: Vec<FastMmioRead>,
+    ) -> Result<(), String> {
         let end = Self::device_range(address, bytes)?;
         if self.machine.overlaps(address, end)?
             || self
@@ -639,10 +684,16 @@ impl Cpu for Core {
                 offset: 0,
                 callbacks,
                 permissions: 3,
+                fast_reads: {
+                    let interactive = self.execution_policy.get() == ExecutionPolicy::Interactive;
+                    for read in &fast_reads {
+                        read.set_enabled(interactive);
+                    }
+                    fast_reads.into()
+                },
             },
         );
-        self.publish_device_ranges();
-        Ok(())
+        self.publish_device_ranges()
     }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
         if self.mmio_change(address, bytes, None)? {
@@ -686,6 +737,7 @@ impl Cpu for Core {
         let (events, event_rx) = mpsc::channel();
         let (reply, rx) = mpsc::channel();
         let observe = self.has_instruction_hooks();
+        self.parked.set(false);
         self.commands
             .send(Command {
                 op: Op::Run(request, policy, observe, events),
@@ -694,22 +746,23 @@ impl Cpu for Core {
             .map_err(|_| ExecutionError::Backend("HVF worker disconnected".into()))?;
         let mut error = None;
         while let Ok(event) = event_rx.recv() {
+            self.parked.set(true);
             match event {
                 Event::Before(pc) => {
                     self.before(pc);
                     self.rpc(Op::Resume(true))
                         .map_err(ExecutionError::Backend)?;
                 }
-                Event::Trap(trap) => {
-                    let handled = match self.mmio_trap(trap, false) {
-                        Ok(handled) => handled,
-                        Err(e) => {
-                            error = Some(e);
-                            false
-                        }
-                    };
-                    self.rpc(Op::Resume(handled))
+                Event::Trap => {
+                    self.rpc(Op::Resume(false))
                         .map_err(ExecutionError::Backend)?;
+                }
+                Event::Mmio(trap, access) => {
+                    let outcome = self.mmio_trap(trap, &access, false).unwrap_or_else(|e| {
+                        error = Some(e);
+                        MmioOutcome::Resume(false)
+                    });
+                    self.resume(outcome)?;
                 }
                 Event::Done => break,
             }
@@ -754,6 +807,7 @@ impl Cpu for Core {
         let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
         let (events, event_rx) = mpsc::channel();
         let (reply, reply_rx) = mpsc::channel();
+        self.parked.set(false);
         if self
             .commands
             .send(Command {
@@ -788,11 +842,13 @@ impl Cpu for Core {
             return Ok(RunStatus::Complete(result.clone()));
         }
         match state.events.try_recv() {
-            Ok(event @ (Event::Before(_) | Event::Trap(_))) => {
+            Ok(event @ (Event::Before(_) | Event::Trap | Event::Mmio(..))) => {
                 state.pending_callback = Some(event);
+                self.parked.set(true);
                 Ok(RunStatus::CallbackPending)
             }
             Ok(Event::Done) => {
+                self.parked.set(true);
                 let result = match state.reply.try_recv() {
                     Ok(Ok(Value::Exit(result))) => result,
                     Ok(Ok(_)) => Err(ExecutionError::Backend(
@@ -841,26 +897,25 @@ impl Cpu for Core {
             .ok_or_else(|| {
                 ExecutionError::Backend("HVF run has no parked callback to service".into())
             })?;
-        let handled = match event {
+        let outcome = match event {
             Event::Before(pc) => {
                 self.before(pc);
-                true
+                MmioOutcome::Resume(true)
             }
-            Event::Trap(trap) => match self.mmio_trap(trap, true) {
-                Ok(handled) => handled,
+            Event::Trap => MmioOutcome::Resume(false),
+            Event::Mmio(trap, access) => match self.mmio_trap(trap, &access, true) {
+                Ok(outcome) => outcome,
                 Err(error) => {
                     self.validate_active_run(run)?
                         .as_mut()
                         .unwrap()
                         .callback_error = Some(error);
-                    false
+                    MmioOutcome::Resume(false)
                 }
             },
             Event::Done => unreachable!("completion events cannot become callbacks"),
         };
-        self.rpc(Op::Resume(handled))
-            .map_err(ExecutionError::Backend)?;
-        Ok(())
+        self.resume(outcome)
     }
 
     fn cancel_pending_callback(&self, run: RunToken) -> Result<(), ExecutionError> {
@@ -1082,7 +1137,7 @@ impl Drop for Core {
                 }
                 loop {
                     match active.events.recv() {
-                        Ok(Event::Before(_) | Event::Trap(_)) => {
+                        Ok(Event::Before(_) | Event::Trap | Event::Mmio(..)) => {
                             let _ = self.rpc(Op::Resume(false));
                         }
                         Ok(Event::Done) | Err(_) => break,

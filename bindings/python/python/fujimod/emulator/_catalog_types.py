@@ -2794,6 +2794,7 @@ class HardwareImaging(TypedDict, total=False):
     focus_imaging: NotRequired[HardwareFocusImaging | None]
     iris_mechanics: NotRequired[HardwareIrisMechanics | None]
     iris_optics: NotRequired[HardwareIrisOptics | None]
+    nd_filter: NotRequired[HardwareNdFilter | None]
     sensor_capture: NotRequired[HardwareSensorCapture | None]
 
 
@@ -2872,6 +2873,7 @@ class HardwareIrisMechanics(TypedDict, total=False):
 
 
 class HardwareIrisOptics(TypedDict, total=False):
+    actuator: NotRequired[str | None]
     output: Required[str]
     positions: Required[list[list[int]]]
 
@@ -2908,6 +2910,15 @@ class HardwareNandBootLayout(TypedDict, total=False):
     entry_labels: Required[dict[str, str]]
     images: Required[list[HardwareBootImage]]
     name: Required[str]
+
+
+class HardwareNdFilter(TypedDict, total=False):
+    basis: Required[str]
+    factor: Required[int]
+    insert_mask: Required[int]
+    output: Required[str]
+    register: Required[int]
+    remove_mask: Required[int]
 
 
 class HardwareOptics(TypedDict, total=False):
@@ -2979,8 +2990,14 @@ class HardwareProjection(TypedDict, total=False):
     subject_distance_mm: Required[int]
 
 
+class HardwareRadiometricCalibration(TypedDict, total=False):
+    reference_white: Required[list[int]]
+    saturation_lux_seconds: Required[int]
+
+
 class HardwareRadiometry(TypedDict, total=False):
     curtains: NotRequired[HardwareCurtains | None]
+    live_view: NotRequired[HardwareRadiometricCalibration | None]
     mode_change_frames: Required[int]
     pixel_clock_hz: Required[int]
     projection: NotRequired[HardwareProjection | None]
@@ -3146,7 +3163,16 @@ class HardwareSdHostClocks(TypedDict, total=False):
     words: Required[list[int]]
 
 
+class HardwareSecondaryBusRegisterChip(TypedDict, total=False):
+    address: Required[int]
+    basis: Required[str]
+    modes: Required[list[int]]
+    values: Required[list[list[int]]]
+    write_masks: Required[list[list[int]]]
+
+
 class HardwareSecondaryBusRegisters(TypedDict, total=False):
+    extra_registers: NotRequired[list[HardwareSecondaryBusRegisterChip] | None]
     pwic_address: Required[int]
     pwic_modes: Required[list[int]]
     pwic_read_prefixes: Required[list[tuple[int, str]]]
@@ -4629,6 +4655,7 @@ class RunFactoryOptions(TypedDict, total=False):
     auxiliary_control_ticks: NotRequired[int | None]
     backdrop_profile: NotRequired[RunBackdropProfile | None]
     camera_settings: NotRequired[dict[str, str] | None]
+    capability_reply: NotRequired[list[int] | None]
     clear_profile: NotRequired[RunClearProfile | None]
     clock_seconds_2000: NotRequired[int | None]
     control_bus_profile: NotRequired[RunControlBusProfile | None]
@@ -5356,7 +5383,9 @@ type RunSettings = Literal["default", "owner"]
 type RunSpi0InputProfile = Literal["absent-hot-shoe-flash-fixed-low-miso"]
 
 
-type RunStart = RunStartVariant0 | RunStartVariant1 | RunStartVariant2
+type RunStart = (
+    RunStartVariant0 | RunStartVariant1 | RunStartVariant2 | RunStartVariant3
+)
 
 
 class RunStartVariant0(TypedDict, total=False):
@@ -5369,6 +5398,10 @@ class RunStartVariant1(TypedDict, total=False):
 
 class RunStartVariant2(TypedDict, total=False):
     kind: Required[Literal["sd_card"]]
+
+
+class RunStartVariant3(TypedDict, total=False):
+    kind: Required[Literal["setup"]]
 
 
 class RunStatistics(TypedDict, total=False):

@@ -4,10 +4,15 @@ pub mod focus;
 #[path = "imaging_iris.rs"]
 pub mod iris;
 
+#[path = "imaging_buffer.rs"]
+pub mod buffer;
 #[path = "imaging_input.rs"]
 pub mod input;
 #[path = "imaging_paf.rs"]
 pub mod paf;
+
+#[path = "imaging_table.rs"]
+pub mod table;
 
 #[path = "imaging_work.rs"]
 pub mod work;

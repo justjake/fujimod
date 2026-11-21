@@ -858,6 +858,21 @@
             "null"
           ]
         },
+        "capability_reply": {
+          "description": "MT5931 boot capability body (EVENT_NIC_CAPABILITY, 20 bytes) answering\ncommand 0x80. Absence refuses that command.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 20,
+          "minItems": 20,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "clear_profile": {
           "anyOf": [
             {
@@ -3306,6 +3321,20 @@
           "properties": {
             "kind": {
               "const": "sd_card",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Enter the firmware's boot-setup stage from internal flash, in place of the boot ROM.",
+          "properties": {
+            "kind": {
+              "const": "setup",
               "type": "string"
             }
           },

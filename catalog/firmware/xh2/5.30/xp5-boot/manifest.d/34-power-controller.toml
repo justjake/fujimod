@@ -1,0 +1,20 @@
+# Power controller on SPI2 (0xff912000), chip select GPIO 11.6 active-high: logical
+# serial descriptor 0x12 at 0x18ea480 is [2, 0xb0006, 1, 2, 0x20, ...] (instance 2,
+# select 11.6), where the X-T5's descriptor 19 selects SPI8 and 15.15. The reader
+# 0x13d805c and writer 0x13d8878 use the four-byte packet with the one's-complement
+# checksum of the shared power-controller part; the RTC getter 0x13d9214 combines
+# registers 0x23/0x24 and 0x27 bit 1 is calendar-valid. rtc_seconds is a virtual input
+# (seconds since 2000-01-01), not a captured value; source_hz is the X-T5 and X100VI
+# value, UNVERIFIED.
+[[device]]
+base = 0xff912000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 11, pin = 6, active_high = true }
+[device.options.endpoints.part]
+kind = "power-controller"
+rtc_seconds = 0x325ffea2
+rtc_valid = true

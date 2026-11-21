@@ -73,6 +73,33 @@ impl Fragment {
 pub(crate) enum Entry {
     MaskRom(Vec<u8>),
     CardHandoff(Handoff),
+    /// The boot-setup stage, entered from internal flash in place of the boot ROM.
+    SetupHandoff(SetupHandoff),
+}
+
+/// The boot-setup stage as the boot ROM would leave it: the image copied from internal flash to
+/// boot SRAM, the entry the ROM branches to, and the boot-source straps it samples.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SetupHandoff {
+    pub pc: u64,
+    pub sp: u64,
+    /// Offset of the stage in the update image's XOR-DAT payload.
+    pub dat_offset: u64,
+    pub length: u64,
+    pub sha256: String,
+    pub source_straps: u32,
+}
+
+impl SetupHandoff {
+    pub fn for_firmware(firmware: &str) -> Option<Result<Self, String>> {
+        match firmware {
+            "xm5-130" => Some(toml::from_str(include_str!(
+                "../../../../catalog/firmware/xm5/1.30/xp5-boot/setup-handoff.toml"
+            )).map_err(|error| format!("setup-handoff.toml: {error}"))),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -129,6 +156,13 @@ impl RomStart {
             return Err(format!("boot ROM SHA-256 {digest} is not the captured ROM"));
         }
         Self::with_media(Entry::MaskRom(rom), dials_held, card_files, card_present)
+    }
+
+    pub fn from_setup_handoff(handoff: SetupHandoff) -> Result<Self, String> {
+        let straps = handoff.source_straps;
+        let mut start = Self::with_media(Entry::SetupHandoff(handoff), false, Vec::new(), false)?;
+        start.source_straps = straps;
+        Ok(start)
     }
 
     pub fn from_card_handoff(handoff: Handoff, files: Vec<(String, PathBuf)>) -> Result<Self, String> {
@@ -197,6 +231,18 @@ mod tests {
 
     fn start(dials_held: bool, files: Vec<(String, PathBuf)>) -> Result<RomStart, String> {
         RomStart::with_media(Entry::MaskRom(vec![0; ROM_SIZE]), dials_held, files, true)
+    }
+
+    #[test]
+    fn x_m5_setup_handoff_declares_the_boot_setup_extent() {
+        let handoff = SetupHandoff::for_firmware("xm5-130").unwrap().unwrap();
+        assert_eq!((handoff.pc, handoff.dat_offset, handoff.length), (0xff80_0000, 0xabc, 0x2c000));
+        assert_eq!(handoff.sha256.len(), 64);
+        assert_eq!(handoff.source_straps, 1);
+        assert!(SetupHandoff::for_firmware("xt5-431").is_none());
+        let start = RomStart::from_setup_handoff(handoff).unwrap();
+        assert_eq!(start.source_straps, 1);
+        assert!(!start.card_present && start.card_files.is_empty());
     }
 
     #[test]

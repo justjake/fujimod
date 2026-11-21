@@ -246,3 +246,107 @@ fn unknown_sensor_data_and_changed_chip_select_refuse_without_rx_completion() {
     assert!(f.host.core_irqs.is_empty());
     assert_eq!(f.graph.nodes[id].device.save()["state"]["rx"], json!([]));
 }
+
+fn ssp5_windows(options: serde_json::Value) -> Vec<DeviceWindow> {
+    vec![
+        window(GPIO, 0x1000, "gpio", json!({})),
+        window(0xff915000, 0x1000, "pl022", options),
+        window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83})),
+        window(0xff90e500, 0x20, "dma-request-routing", json!({})),
+        window(0xff90e748, 0x40, "dma-address-high", json!({})),
+    ]
+}
+
+#[test]
+fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
+    let wire = json!({"kind":"gpio-selected","endpoints":[
+        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"idle_high":false}}
+    ]});
+    let pins = Pins::shared();
+    let mut graph = DeviceGraph::new();
+    graph
+        .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+        .unwrap();
+    let windows = ssp5_windows(
+        json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()}),
+    );
+    register_all(&mut graph, &windows, Some(4), pins.clone()).unwrap();
+    let mut f = Fixture {
+        graph,
+        host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
+    };
+    // The companion's receive-FIFO drain reads the status word (bit 2, receive not empty).
+    let id = f.graph.at(0xff91500c).unwrap();
+    let mut cx = Cx::new(&mut f.host, 4, 0x386c, id);
+    let status = f.graph.nodes[id].device.read(&mut cx, 0xff91500c, 2);
+    assert_eq!(cx.refusal(), None);
+    assert_eq!(status & 4, 0);
+    // No request number reaches this instance, so a DMA channel aimed at it refuses.
+    for (offset, value) in [(0, 0xc7), (0x10, 6), (0x24, 3), (4, 0xa)] {
+        f.write(0xff915000 + offset, value);
+    }
+    f.write(0xff90e514, 0x01010203);
+    f.write(DMA, 0x10000000);
+    for (offset, value) in [(0x10, 0), (0x14, 0x1000), (0x18, 0xff915008), (0x1c, 0), (0x20, 4), (0x24, 0)] {
+        f.write(DMA + offset, value);
+    }
+    let id = f.graph.at(DMA).unwrap();
+    let mut cx = Cx::new(&mut f.host, 4, 0, id);
+    f.graph.nodes[id].device.write(&mut cx, DMA + 0x28, 4, 0x10209011);
+    assert!(
+        cx.refusal().is_some_and(|r| r.contains("no connected peripheral; request=3")),
+        "{:?}",
+        cx.refusal()
+    );
+    assert!(f.host.core_irqs.is_empty());
+
+    for options in [
+        json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"wire":wire.clone()}),
+        json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":2,"wire":wire.clone()}),
+    ] {
+        let pins = Pins::shared();
+        let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(options), Some(4), pins);
+        assert_eq!(error.err().as_deref(), Some("invalid XP5 serial DMA request wiring"));
+    }
+    let mut outside = ssp5_windows(json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire}));
+    outside[1].base = 0xff91a000;
+    let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared());
+    assert_eq!(error.err().as_deref(), Some("invalid XP5 PL022 window"));
+}
+
+#[test]
+fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_line() {
+    let wire = json!({"kind":"gpio-selected","endpoints":[
+        {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"idle_high":false}}
+    ]});
+    let options = |extra: serde_json::Value| {
+        let mut options = json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()});
+        options.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        options
+    };
+    for (extra, refused) in [(json!({"companion_irq_unconnected":true}), false), (json!({}), true)] {
+        let pins = Pins::shared();
+        let mut graph = DeviceGraph::new();
+        graph
+            .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+            .unwrap();
+        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins).unwrap();
+        let mut f = Fixture {
+            graph,
+            host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
+        };
+        for (offset, value) in [(0, 0xc7), (0x10, 6), (0x24, 3), (4, 0xa)] {
+            f.write(0xff915000 + offset, value);
+        }
+        // The companion's SSP setup unmasks all four interrupts with the transmit FIFO
+        // empty, so the transmit interrupt goes high.
+        let id = f.graph.at(0xff915014).unwrap();
+        let mut cx = Cx::new(&mut f.host, 4, 0x20084, id);
+        f.graph.nodes[id].device.write(&mut cx, 0xff915014, 4, 0xf);
+        assert_eq!(cx.is_unmodeled(), refused);
+        assert!(f.host.core_irqs.is_empty() && f.host.irqs.is_empty());
+    }
+    let both = options(json!({"companion_irq_line":99,"companion_irq_unconnected":true}));
+    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared());
+    assert_eq!(error.err().as_deref(), Some("PL022 interrupt output is both connected and unconnected"));
+}

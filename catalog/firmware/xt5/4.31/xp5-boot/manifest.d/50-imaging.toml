@@ -1,0 +1,16 @@
+# Sensor command lane at ff948000 (+0x200), the X100VI and X-E5 layout: the
+# packet senders 0x2eb7374 (0x81 write) and 0x2eb7470 (0x82 read) program the
+# format word +0x208 through 0x13567b8 ([0,0,1,4,1] = 0x10401; 0x2eb7678 sets
+# bit 31 for asynchronous lists), the DMA source +0x20c/+0x210 and the
+# descriptor words +0x214/+0x218 (0, 8) and +0x21c through 0x1352510, start
+# with +0x204 = 1 (0x1356750) and poll +0x204 bit 0 (0x1356788) until it
+# clears; 0x2eb7470 reads the response words +0x240..+0x224 (0x1356a14,
+# 0x13568dc). The stock busy polls own the wait; the start bit clears after the
+# scheduled latency. Image registers below +0x180 keep the shared XP5 model.
+[[device]]
+base = 0xff948000
+size = 0x1000
+kind = "imaging-sensor"
+[device.options]
+# Functional scheduled latency per packet, not measured camera timing.
+command_latency_us = 1

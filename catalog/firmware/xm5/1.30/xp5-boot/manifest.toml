@@ -1,0 +1,15 @@
+version = 1
+firmware = "xm5-130"
+load_firmware = true
+
+# The body's DRAM catalog extent: Linux 256 MiB at 0x40000000 plus the shared arenas
+# (research/xm5-130/linux-boot.md). Installed capacity is unmeasured.
+[[ram]]
+base = 0
+size = 0x68000000
+
+# M-core SRAM. The X-T5 stock code copies its M-core image here before reset release; the
+# X-M5 source of that copy is not located yet.
+[[ram]]
+base = 0xfa200000
+size = 0x100000

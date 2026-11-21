@@ -52,6 +52,65 @@ fn main() {
         &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub"],
     );
     stub(&root, &out);
+    // The marker build: the copy-stub build plus a binding that names the words the loader changes in
+    // the DRAM copy of the first section, and the marker program's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-marker-loader",
+        "xp5_marker_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_marker"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-marker", "xp5_marker.rs");
+    // The OS build: the copy-stub build plus a binding for the OS section's compressed load, and the
+    // stub's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-os-loader",
+        "xp5_os_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_os"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-os-stub", "xp5_os_stub.rs");
+    // The Exif build: the copy-stub build plus a binding for the named words of the OS section, and the
+    // stub's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-exif-loader",
+        "xp5_exif_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_exif"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-exif-stub", "xp5_exif_stub.rs");
+    // The hook build: the copy-stub build plus a binding for a hook at the entry of one OS function and a small program
+    // in the OS's code padding, and the stub's own image.
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-hook-loader",
+        "xp5_hook_loader.rs",
+        &["setup_sd_read_only", "setup_sd_redirect", "setup_sd_copy_stub", "setup_sd_hook"],
+    );
+    flat_image(&root, &out, "sd-boot-v1-xp5-hook-stub", "xp5_hook_stub.rs");
+}
+
+/// A position-independent program's image (code, then a zero parameter block) and the offsets of its
+/// symbols.
+fn flat_image(root: &Path, out: &Path, stem: &str, output: &str) {
+    let image = root.join(format!("assets/{stem}.generated.bin"));
+    let layout = root.join(format!("assets/{stem}.generated.json"));
+    println!("cargo:rerun-if-changed={}", image.display());
+    println!("cargo:rerun-if-changed={}", layout.display());
+    let layout: serde_json::Value =
+        serde_json::from_slice(&fs::read(&layout).expect("XP5 program layout")).unwrap();
+    assert_eq!(layout["schema"], 1, "XP5 program layout schema");
+    let image_bytes = fs::metadata(&image).expect("XP5 program image").len();
+    assert_eq!(layout["image_bytes"].as_u64(), Some(image_bytes), "XP5 program image size");
+    let mut rust = format!("pub const IMAGE: &[u8] = include_bytes!({:?});\n", image.display().to_string());
+    for (name, offset) in layout["symbols"].as_object().unwrap() {
+        rust += &format!("pub const {}: usize = {:#x};\n", name.to_uppercase(), offset.as_u64().unwrap());
+    }
+    fs::write(out.join(output), rust).unwrap();
 }
 
 /// The copy stub's image (code, then a zero parameter block) and the offsets of its parameters.

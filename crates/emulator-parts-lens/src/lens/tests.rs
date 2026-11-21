@@ -130,3 +130,38 @@ fn zero_quantity_completes_at_frame_end_before_a_later_focus_move() {
     assert_eq!(unit.next_deadline(1_691), Some(2_691));
     assert_eq!(host.irqs, [(0, 14)]);
 }
+
+#[test]
+fn nd_filter_coil_pulses_scale_aperture_and_transmission() {
+    use std::sync::{Arc, Mutex};
+    let mut lens = unit();
+    let aperture = Arc::new(Mutex::new(4.0));
+    let transmission = Arc::new(Mutex::new(1.0));
+    let options = NdOptions {
+        register: 0xd400,
+        insert_mask: 0x80,
+        remove_mask: 0x100,
+        factor: 8.0,
+    };
+    assert!(lens
+        .attach_nd(
+            NdOptions { remove_mask: 0x80, ..options },
+            aperture.clone(),
+            transmission.clone()
+        )
+        .is_err());
+    lens.attach_nd(options, aperture.clone(), transmission.clone())
+        .unwrap();
+    let state = || (*aperture.lock().unwrap(), *transmission.lock().unwrap());
+    lens.nd_write(0xd400, 0x054).unwrap(); // idle
+    assert_eq!(state(), (4.0, 1.0));
+    lens.nd_write(0xd200, 0x0d4).unwrap(); // other register
+    assert_eq!(state(), (4.0, 1.0));
+    lens.nd_write(0xd400, 0x0d4).unwrap(); // insert coil
+    assert_eq!(state(), (32.0, 8.0));
+    lens.nd_write(0xd400, 0x0d4).unwrap(); // already in
+    lens.nd_write(0xd400, 0x1d4).unwrap(); // both coils: no move
+    assert_eq!(state(), (32.0, 8.0));
+    lens.nd_write(0xd400, 0x154).unwrap(); // remove coil
+    assert_eq!(state(), (4.0, 1.0));
+}

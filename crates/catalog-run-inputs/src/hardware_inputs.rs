@@ -565,6 +565,9 @@ pub struct InputsGpio {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ResetPower"))]
 pub struct Power {
+    /// Further display panels on the serial bus, after `panel_contract`'s.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub additional_panels: Option<Vec<PanelRoute>>,
     /// Declared adc samples.
     pub adc_samples: Vec<u64>,
     /// Declared boot reply.
@@ -586,6 +589,20 @@ pub struct Power {
     /// Declared spi status registers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_status_registers: Option<Vec<Vec<u64>>>,
+}
+
+/// One further write-only display panel on the serial bus.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetPanelRoute"))]
+pub struct PanelRoute {
+    /// Why this panel and its route are believed.
+    pub basis: String,
+    /// GPIO levels that select the panel, each `[port, pin, level]`.
+    pub selection: Vec<Vec<u64>>,
+    /// Serial control and configuration words, without the busy bit.
+    pub transport: Vec<u64>,
 }
 
 /// Declared hardwarereset inputs facts.

@@ -21,7 +21,63 @@ pub enum Op {
     Run(Run, ExecutionPolicy, bool, mpsc::Sender<Event>),
     RunToNativeExit,
     Resume(bool),
+    /// Retire a parked guest MMIO access: write these registers (loaded
+    /// values, base writeback and the next PC), then continue the run.
+    CompleteMmio(Vec<(Register, u64)>),
+    /// Device-published reads this vCPU may serve without its owner.
+    FastWindows(Vec<FastWindow>),
     Shutdown,
+}
+/// One readable MMIO window with device-published reads. `offset` maps a
+/// physical address to the callback offset space, as in the owner's window.
+#[derive(Clone)]
+pub struct FastWindow {
+    pub base: u64,
+    pub end: u64,
+    pub offset: u64,
+    pub reads: Arc<[FastMmioRead]>,
+}
+/// One decoded transfer of a trapped load/store, translated on the vCPU
+/// thread. `ram` marks a transfer that touches mapped RAM; the owner then
+/// returns the trap to the framework as before.
+pub struct MmioTransfer {
+    pub physical: u64,
+    pub size: u8,
+    pub register: u8,
+    pub signed: bool,
+    pub wide: bool,
+    pub ram: bool,
+    /// The store data register's value; zero for loads and XZR.
+    pub store: u64,
+}
+/// A data abort decoded where the vCPU lives. `transfers` holds every
+/// transfer prepared in order; `failure` is the error that stopped
+/// preparation after them (fetch, decode, translation or register read).
+pub struct MmioAccess {
+    pub pc: u64,
+    pub load: bool,
+    pub simd: bool,
+    pub transfers: Vec<MmioTransfer>,
+    pub writeback: Option<(u8, u64)>,
+    pub failure: Option<ExecutionError>,
+}
+impl MmioTransfer {
+    /// The architectural register value of a loaded device word.
+    pub fn loaded(&self, raw: u64) -> u64 {
+        let bits = u32::from(self.size) * 8;
+        let mut value = raw & (u64::MAX >> (64 - bits));
+        if self.signed {
+            let shift = 64 - bits;
+            value = ((value << shift) as i64 >> shift) as u64;
+        }
+        if !self.wide {
+            value &= u32::MAX as u64;
+        }
+        value
+    }
+}
+pub fn base_register(r: u8) -> Register {
+    if r == 31 { Register::Sp } else { Register::X(r) }
 }
 pub enum Value {
     Empty,
@@ -37,7 +93,10 @@ pub struct Command {
 }
 pub enum Event {
     Before(u64),
-    Trap(Trap),
+    /// Any other architectural trap; the worker returns it from the run.
+    Trap,
+    /// A data abort with its instruction already decoded by the worker.
+    Mmio(Trap, Box<MmioAccess>),
     Done,
 }
 #[derive(Clone)]
@@ -70,6 +129,16 @@ pub struct Shared {
     pub budget_shutdown: AtomicBool,
     pub budget_timer_kqueue: AtomicI32,
     pub budget_lock: Mutex<()>,
+    /// The owner's guest-clock anchor for the next run. Interactive runs
+    /// evaluate clocked device reads at anchor + executed time.
+    pub guest_clock: Mutex<Option<Clock>>,
+    /// PC and PSTATE as the worker hands control to its owner: before each
+    /// event, run completion and command reply. They stay exact until the
+    /// owner lets the vCPU execute again, so the owner reads them without a
+    /// worker round trip. `parked_valid` is false when publishing failed.
+    pub parked_pc: AtomicU64,
+    pub parked_pstate: AtomicU64,
+    pub parked_valid: AtomicBool,
     run_wakeup: Mutex<Option<RunWakeup>>,
 }
 impl Default for Shared {
@@ -88,6 +157,10 @@ impl Default for Shared {
             budget_shutdown: AtomicBool::new(false),
             budget_timer_kqueue: AtomicI32::new(-1),
             budget_lock: Mutex::new(()),
+            guest_clock: Mutex::new(None),
+            parked_pc: AtomicU64::new(0),
+            parked_pstate: AtomicU64::new(0),
+            parked_valid: AtomicBool::new(false),
             run_wakeup: Mutex::new(None),
         }
     }
@@ -427,6 +500,10 @@ fn submit_kqueue_change(queue: i32, event: &ffi::Kevent) -> Result<(), String> {
 
 const BUDGET_USER_IDENT: u64 = 0;
 
+fn mach_nanoseconds(ticks: u64, timebase: ffi::MachTimebaseInfo) -> u64 {
+    let ns = u128::from(ticks) * u128::from(timebase.numer) / u128::from(timebase.denom);
+    ns.min(u128::from(u64::MAX)) as u64
+}
 fn mach_deadline(start: u64, limit_ns: u64, timebase: ffi::MachTimebaseInfo) -> u64 {
     let numerator = u128::from(limit_ns) * u128::from(timebase.denom);
     let ticks = numerator.div_ceil(u128::from(timebase.numer));
@@ -439,9 +516,16 @@ struct Processor {
     vm: Arc<Machine>,
     shared: Arc<Shared>,
     interrupts: [bool; 2],
+    fast_windows: Vec<FastWindow>,
+    timebase: ffi::MachTimebaseInfo,
 }
 impl Processor {
     fn create(vm: Arc<Machine>, shared: Arc<Shared>) -> Result<Self, String> {
+        let mut timebase = ffi::MachTimebaseInfo::default();
+        let result = unsafe { ffi::mach_timebase_info(&mut timebase) };
+        if result != 0 || timebase.numer == 0 || timebase.denom == 0 {
+            return Err(format!("read Mach timebase: {result}"));
+        }
         let mut cpu = 0;
         let mut exit = std::ptr::null();
         unsafe {
@@ -471,6 +555,8 @@ impl Processor {
             vm,
             shared,
             interrupts: [false; 2],
+            fast_windows: Vec::new(),
+            timebase,
         };
         unsafe {
             ffi::check(
@@ -546,6 +632,20 @@ impl Processor {
             || (r.crn == 2 && r.op1 == 3 && r.crm == 4 && r.op2 <= 1)
             || id == 0xc230
             || (r.op0 == 3 && r.op1 == 0 && r.crn == 12 && (8..=15).contains(&r.crm))
+    }
+    /// Publish the PC and PSTATE the owner may read while this vCPU waits.
+    fn publish_parked(&self) {
+        let pc = self.reg(ffi::PC);
+        let pstate = self.reg(ffi::PSTATE);
+        if let (Ok(pc), Ok(pstate)) = (pc, pstate) {
+            self.shared.parked_pc.store(pc, Ordering::Relaxed);
+            self.shared
+                .parked_pstate
+                .store(pstate & !(1 << 21), Ordering::Relaxed);
+            self.shared.parked_valid.store(true, Ordering::Release);
+        } else {
+            self.shared.parked_valid.store(false, Ordering::Release);
+        }
     }
     fn read(&self, r: Register) -> Result<Vec<u8>, String> {
         if let Some(id) = Self::id(r) {
@@ -823,12 +923,21 @@ impl Processor {
                 let _ = c.reply.send(Ok(Value::Empty));
                 return Ok(handled);
             }
+            if let Op::CompleteMmio(updates) = c.op {
+                let result = updates
+                    .iter()
+                    .try_for_each(|&(register, value)| self.write(register, &value.to_le_bytes()));
+                let _ = c.reply.send(result.clone().map(|()| Value::Empty));
+                result?;
+                return Ok(true);
+            }
             if matches!(c.op, Op::Run(..) | Op::Shutdown) {
                 let _ = c
                     .reply
                     .send(Err("cannot run/destroy a CPU inside its callback".into()));
             } else {
                 let result = self.execute(c.op);
+                self.publish_parked();
                 let _ = c.reply.send(result);
             }
         }
@@ -850,12 +959,133 @@ impl Processor {
             ExecutionPolicy::Interactive => self.run_interactive(request, events, commands),
         }
     }
+    /// Decode a data abort's instruction where the vCPU state lives, so the
+    /// owner receives one event instead of fetching, decoding and
+    /// translating through register RPCs.
+    fn prepare_mmio(&self) -> MmioAccess {
+        let mut access = MmioAccess {
+            pc: 0,
+            load: false,
+            simd: false,
+            transfers: Vec::new(),
+            writeback: None,
+            failure: None,
+        };
+        let result = (|| -> Result<(), ExecutionError> {
+            let pc = self.reg(ffi::PC)?;
+            access.pc = pc;
+            let mut word = [0; 4];
+            let pa = self.translate(pc, Access::Fetch)?;
+            self.vm.read(pa, &mut word)?;
+            self.vm.check_access(pa, 4, 4)?;
+            let decoded = arm64::decode_load_store(u32::from_le_bytes(word), pc, |r| {
+                if r == 31 {
+                    self.sys(self.sp()?)
+                } else {
+                    self.reg(r as u32)
+                }
+            })
+            .map_err(ExecutionError::InvalidInstruction)?;
+            access.load = decoded.load;
+            access.simd = decoded.simd;
+            access.writeback = decoded.writeback;
+            let kind = if decoded.load {
+                Access::Read
+            } else {
+                Access::Write
+            };
+            for t in decoded.transfers {
+                let physical = self.translate(t.address, kind)?;
+                let ram = self
+                    .vm
+                    .overlaps(physical, physical.saturating_add(t.size as u64))?;
+                let store = if decoded.load || decoded.simd || ram || t.register == 31 {
+                    0
+                } else {
+                    self.reg(t.register as u32)?
+                };
+                access.transfers.push(MmioTransfer {
+                    physical,
+                    size: t.size,
+                    register: t.register,
+                    signed: t.signed,
+                    wide: t.wide,
+                    ram,
+                    store,
+                });
+                if ram {
+                    break;
+                }
+            }
+            Ok(())
+        })();
+        access.failure = result.err();
+        access
+    }
+    /// Serve a single scalar device load from a published read in an
+    /// interactive run, at this core's guest clock. Anything else, including
+    /// a declined read, stays an owner callback.
+    fn fast_mmio(
+        &self,
+        trap: &Trap,
+        access: &MmioAccess,
+        tick: Option<u64>,
+    ) -> Result<bool, ExecutionError> {
+        let [t] = access.transfers.as_slice() else {
+            return Ok(false);
+        };
+        if access.failure.is_some()
+            || !access.load
+            || access.simd
+            || t.ram
+            || t.size > 8
+            || t.physical != trap.physical_address
+        {
+            return Ok(false);
+        }
+        let Some(end) = t.physical.checked_add(u64::from(t.size)) else {
+            return Ok(false);
+        };
+        let at = self.fast_windows.partition_point(|w| w.base <= t.physical);
+        let Some(window) = at
+            .checked_sub(1)
+            .map(|i| &self.fast_windows[i])
+            .filter(|w| end <= w.end)
+        else {
+            return Ok(false);
+        };
+        let offset = window.offset + t.physical - window.base;
+        let Some(raw) = window
+            .reads
+            .iter()
+            .find_map(|read| read.read_at(offset, u32::from(t.size), tick))
+        else {
+            return Ok(false);
+        };
+        if t.register != 31 {
+            self.set_reg(u32::from(t.register), t.loaded(raw))?;
+        }
+        if let Some((r, v)) = access.writeback {
+            self.write(base_register(r), &v.to_le_bytes())?;
+        }
+        self.set_reg(ffi::PC, access.pc.wrapping_add(4))?;
+        Ok(true)
+    }
+    /// Report an architectural trap; data aborts carry their decoded access.
+    fn trap_event(&self, trap: Trap) -> Event {
+        if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
+            Event::Mmio(trap, Box::new(self.prepare_mmio()))
+        } else {
+            Event::Trap
+        }
+    }
     fn send_event(
         &self,
         events: &mpsc::Sender<Event>,
         event: Event,
         disconnected: &'static str,
     ) -> Result<(), ExecutionError> {
+        self.publish_parked();
         events
             .send(event)
             .map_err(|_| ExecutionError::Backend(disconnected.into()))?;
@@ -970,7 +1200,7 @@ impl Processor {
                         virtual_address: 0,
                         physical_address: 0,
                     };
-                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
+                    self.send_event(events, Event::Trap, "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -1011,7 +1241,8 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
+                    let event = self.trap_event(trap);
+                    self.send_event(events, event, "HVF trap owner disconnected")?;
                     if !self.paused(commands)? {
                         return Ok(Exit::Trap(trap));
                     }
@@ -1026,10 +1257,13 @@ impl Processor {
         }
         Ok(Exit::Stopped)
     }
-    /// Guest time this run has executed, from the hypervisor's per-vCPU
-    /// execution clock. Wall time the thread spends preempted or paused for an
-    /// owner callback is not guest work: charging it lets a core the host did
-    /// not schedule advance a whole barrier round past its peers.
+    /// Guest time this run has executed in nanoseconds, from the
+    /// hypervisor's per-vCPU execution clock. Wall time the thread spends
+    /// preempted or paused for an owner callback is not guest work: charging
+    /// it lets a core the host did not schedule advance a whole barrier round
+    /// past its peers. The arm64 SDK (`hv_vcpu.h`) reports this clock in
+    /// mach_absolute_time units, 125/3 ns each on Apple silicon, not in
+    /// nanoseconds.
     fn exec_time(&self) -> Result<u64, ExecutionError> {
         let mut time = 0;
         unsafe {
@@ -1038,7 +1272,7 @@ impl Processor {
                 "read execution time",
             )?;
         }
-        Ok(time)
+        Ok(mach_nanoseconds(time, self.timebase))
     }
     fn update_interactive_progress(&self, started: u64) -> Result<u64, ExecutionError> {
         let progress = self.exec_time()?.saturating_sub(started);
@@ -1101,6 +1335,11 @@ impl Processor {
         self.shared.limit.store(limit, Ordering::Release);
 
         let started = self.exec_time()?;
+        let clock = *self
+            .shared
+            .guest_clock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
         let mdscr = self.sys(ffi::MDSCR)?;
         self.set_sys(ffi::MDSCR, mdscr & !1)?;
@@ -1108,6 +1347,7 @@ impl Processor {
         self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
         loop {
             if self.shared.stop.load(Ordering::Acquire) {
+                self.update_interactive_progress(started)?;
                 return Ok(Exit::Stopped);
             }
             if self.interactive_budget_spent(started)? {
@@ -1130,6 +1370,8 @@ impl Processor {
             run_result?;
             let exit = unsafe { *self.exit };
             if self.shared.stop.load(Ordering::Acquire) {
+                // A paused core keeps the guest time it executed.
+                self.update_interactive_progress(started)?;
                 return Ok(Exit::Stopped);
             }
             if self.interactive_budget_spent(started)? {
@@ -1155,9 +1397,20 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    self.send_event(events, Event::Trap(trap), "HVF trap owner disconnected")?;
+                    let event = self.trap_event(trap);
+                    if let Event::Mmio(_, access) = &event {
+                        let progress = self.exec_time().ok().and_then(|now| now.checked_sub(started));
+                        let tick = clock
+                            .zip(progress)
+                            .and_then(|(clock, progress)| clock.after(progress).ok())
+                            .map(|clock| clock.now);
+                        if self.fast_mmio(&trap, access, tick)? {
+                            continue;
+                        }
+                    }
+                    self.send_event(events, event, "HVF trap owner disconnected")?;
                     let handled = self.paused(commands)?;
-                    self.update_interactive_progress(started);
+                    let _ = self.update_interactive_progress(started);
                     if !handled {
                         return Ok(Exit::Trap(trap));
                     }
@@ -1210,6 +1463,10 @@ impl Processor {
                 self.interrupts[usize::from(line == Interrupt::Fiq)] = level;
                 Ok(Value::Empty)
             }
+            Op::FastWindows(windows) => {
+                self.fast_windows = windows;
+                Ok(Value::Empty)
+            }
             _ => Err("invalid HVF command in this state".into()),
         }
     }
@@ -1248,12 +1505,14 @@ pub fn serve(
             }
             Op::Run(request, policy, observe, events) => {
                 let result = p.run(request, policy, observe, &events, &commands);
+                p.publish_parked();
                 let _ = c.reply.send(Ok(Value::Exit(result)));
                 let _ = events.send(Event::Done);
                 p.shared.notify_run_wakeup();
             }
             op => {
                 let result = p.execute(op);
+                p.publish_parked();
                 let _ = c.reply.send(result);
             }
         }

@@ -58,6 +58,18 @@ pub struct StartupOptions {
     /// dead padding of the stock reset image, and that checks the DRAM copy and the destination at
     /// the moment of use and falls back to the flash copy (`xp5::package_copy_stub`).
     pub copy_stub: bool,
+    /// With `copy_stub`: also change a few named words of the first section (a hook at its entry point and a
+    /// short program in its zero padding) through the same checked path (`xp5::package_marker`).
+    pub marker: bool,
+    /// With `copy_stub` (and not `marker`): check the OS section's compressed load instead of the first
+    /// section's copy (`xp5::package_os`).
+    pub os: bool,
+    /// With `copy_stub` (and neither `marker` nor `os`): name a few words of the OS section's decode and write them
+    /// after the stage's own load (`xp5::package_exif`).
+    pub exif: bool,
+    /// With `copy_stub` (and none of `marker`, `os` and `exif`): put a hook and a small program into the OS's code
+    /// after the stage's own load (`xp5::package_hook`).
+    pub hook: bool,
 }
 
 impl StartupOptions {
@@ -505,6 +517,16 @@ impl Recipe {
             !options.copy_stub || options.checked_redirect.is_some(),
             "The copy stub requires the checked redirect",
         )?;
+        require(!options.marker || options.copy_stub, "The marker requires the copy stub")?;
+        require(!options.os || (options.copy_stub && !options.marker), "The OS stub requires the copy stub and excludes the marker")?;
+        require(
+            !options.exif || (options.copy_stub && !options.marker && !options.os),
+            "The Exif stub requires the copy stub and excludes the marker and the OS stub",
+        )?;
+        require(
+            !options.hook || (options.copy_stub && !options.marker && !options.os && !options.exif),
+            "The hook stub requires the copy stub and excludes the marker, the OS stub and the Exif stub",
+        )?;
         require(
             source.len() == self.source_size,
             "Update size differs from recipe",
@@ -603,7 +625,43 @@ impl Recipe {
                             contract.verify(&ram)?;
                         }
                         redirect_checked = true;
-                        if options.copy_stub {
+                        if options.hook {
+                            xp5::package_hook(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.hold_units()?,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.exif {
+                            xp5::package_exif(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.hold_units()?,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.os {
+                            xp5::package_os(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.hold_units()?,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.marker {
+                            xp5::package_marker(
+                                &inverted,
+                                setup,
+                                ram,
+                                options.hold_units()?,
+                                destination,
+                                mode,
+                            )?
+                        } else if options.copy_stub {
                             xp5::package_copy_stub(
                                 &inverted,
                                 setup,

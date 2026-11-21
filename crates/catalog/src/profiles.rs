@@ -165,12 +165,33 @@ pub struct PrimaryControlBus {
     pub transfer_ticks: u64,
 }
 
+/// One further register chip on the secondary bus.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareSecondaryBusRegisterChip"))]
+pub struct SecondaryBusRegisterChip {
+    /// Seven-bit chip address.
+    pub address: u64,
+    /// Why this chip and its registers are believed.
+    pub basis: String,
+    /// Bus modes in which the chip answers.
+    pub modes: Vec<u64>,
+    /// Initial register values, each `[register, value]`.
+    pub values: Vec<Vec<u64>>,
+    /// Writable bits, each `[register, mask]`.
+    pub write_masks: Vec<Vec<u64>>,
+}
+
 /// Declared control bus1 replies facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareSecondaryBusRegisters"))]
 pub struct SecondaryBusRegisters {
+    /// Further register chips on the bus, each with its own register map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_registers: Option<Vec<SecondaryBusRegisterChip>>,
     /// Declared pwic address.
     pub pwic_address: u64,
     /// Declared pwic modes.
@@ -581,6 +602,21 @@ pub struct Radiometry {
     pub ticks_per_second: u64,
     /// Declared white luminance.
     pub white_luminance: f64,
+    /// Live-view calibration declared separately from the still readout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_view: Option<RadiometricCalibration>,
+}
+
+/// Declared calibration of one radiometric path.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareRadiometricCalibration"))]
+pub struct RadiometricCalibration {
+    /// Raw response to the reference white, per colour.
+    pub reference_white: Vec<u64>,
+    /// Exposure that saturates the reference white.
+    pub saturation_lux_seconds: f64,
 }
 
 /// Declared capture color facts.
@@ -765,7 +801,7 @@ pub struct IrisMechanics {
     /// Declared boundary.
     pub boundary: String,
     /// Declared travel limits.
-    pub travel_limits: Vec<u64>,
+    pub travel_limits: Vec<i64>,
 }
 
 /// Declared iris optics facts.
@@ -774,10 +810,34 @@ pub struct IrisMechanics {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareIrisOptics"))]
 pub struct IrisOptics {
+    /// What moves the iris: `lens` (the lens unit's second motor, the default)
+    /// or `bridge` (the stepper behind the bus1 motor bridge).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actuator: Option<String>,
     /// Declared output.
     pub output: String,
     /// Declared positions.
     pub positions: Vec<Vec<f64>>,
+}
+
+/// A neutral-density filter swung in by a lens-unit output register.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareNdFilter"))]
+pub struct NdFilter {
+    /// Why the actuator and its factor are believed.
+    pub basis: String,
+    /// Light reduction while the filter is in (8 = 3 EV).
+    pub factor: f64,
+    /// Coil bit that swings the filter in.
+    pub insert_mask: u64,
+    /// Wire that publishes the current transmission factor.
+    pub output: String,
+    /// Lens-unit output register that drives the actuator.
+    pub register: u64,
+    /// Coil bit that swings the filter out.
+    pub remove_mask: u64,
 }
 
 /// Declared sensor capture facts.
@@ -825,6 +885,9 @@ pub struct Imaging {
     /// Declared iris optics.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iris_optics: Option<IrisOptics>,
+    /// Declared neutral-density filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nd_filter: Option<NdFilter>,
     /// Declared sensor capture.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensor_capture: Option<SensorCapture>,

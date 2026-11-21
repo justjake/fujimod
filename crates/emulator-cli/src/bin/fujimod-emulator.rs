@@ -18,7 +18,7 @@ NAND accepts a committed image or 128 MiB main-area image without OOB/spare.\n\
 Settings accepts a sixteen-byte MCU persistent packet.\n\
 First-start menus are accepted through MENU/OK ADC input.\n\
 EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --clock-seconds-2000 N.\n\
-Run output and limits: --output DIR, --seconds N, --status-every N, --viewer-port PORT.\n\
+Run output and limits: --output DIR, --seconds N (guest time), --wall-seconds N (host time), --status-every N (guest time), --viewer-port PORT.\n\
 Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH.\n\
@@ -29,7 +29,7 @@ Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FIL
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 37] = [
+const VALUED: [&str; 38] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -45,6 +45,7 @@ const VALUED: [&str; 37] = [
     "--clock-seconds-2000",
     "--output",
     "--seconds",
+    "--wall-seconds",
     "--status-every",
     "--viewer-port",
     "--quantum",
@@ -424,6 +425,10 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
             .map(|value| boot::host::parse_seconds(&value))
             .transpose()?,
         instruction_limit: boot_options.instruction_limit()?,
+        wall_seconds: boot_options
+            .text("--wall-seconds")?
+            .map(|value| boot::host::parse_seconds(&value))
+            .transpose()?,
         status_every: boot_options
             .text("--status-every")?
             .map(|value| boot::host::parse_seconds(&value))
@@ -654,6 +659,13 @@ mod tests {
         assert_eq!(overridden.execution, Some(expected));
         let mut boot = parse(args(&["boot", "--engine", "hvf"])).unwrap().unwrap();
         assert!(boot.resolve(id).err().unwrap().starts_with("--engine:"));
+    }
+
+    #[test]
+    fn wall_seconds_is_a_valued_host_time_option() {
+        let mut boot = parse(args(&["boot", "--wall-seconds", "12.5"])).unwrap().unwrap();
+        assert_eq!(boot.text("--wall-seconds").unwrap().as_deref(), Some("12.5"));
+        assert!(parse(args(&["boot", "--wall-seconds", "1", "--wall-seconds", "2"])).is_err());
     }
 
     #[test]
