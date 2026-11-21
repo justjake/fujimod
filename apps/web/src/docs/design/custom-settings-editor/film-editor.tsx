@@ -1870,7 +1870,7 @@ export function Editor(props: {
               <button
                 type="button"
                 class="relative flex size-[52px] items-center justify-center rounded-[14px]"
-                style={lit() ? SELECTED : chosen() ? { background: 'var(--m-focus)' } : {}}
+                style={lit() ? { ...SELECTED, 'box-shadow': 'var(--m-focus-edge)' } : chosen() ? SELECTED : {}}
                 onClick={() => {
                   scrollToTool(tool, true);
                   const on = tool === 'film' || tool === 'raw' || tool === 'custom' ? tool : null;
@@ -2022,7 +2022,7 @@ export function Editor(props: {
                     type="button"
                     data-anchor={`copy-${tool}`}
                     class={`flex h-[40px] shrink-0 items-center gap-[6px] rounded-[10px] pr-[8px] pl-[10px] whitespace-nowrap font-medium ${DETAIL}`}
-                    style={{ background: 'var(--m-chip)', color: 'rgb(255 255 255 / 0.85)', 'box-shadow': headerFocused(tool) ? 'var(--m-focus-edge), 0 0 0 2px #fff' : 'var(--m-chip-edge)' }}
+                    style={{ background: 'var(--m-chip)', color: 'rgb(255 255 255 / 0.85)', 'box-shadow': headerFocused(tool) ? 'var(--m-focus-edge)' : 'var(--m-chip-edge)' }}
                     onClick={() => update(openPicker({ ...s(), focus: index(tool), header: true, area: 'rows' }, { kind: 'copy', tool }))}
                   >
                     <Show when={from() === undefined}>

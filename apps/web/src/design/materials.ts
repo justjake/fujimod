@@ -45,10 +45,10 @@ export const WELL: JSX.CSSProperties = {
   'box-shadow': 'var(--m-well-edge)',
 };
 
-/** The chosen or focused item inside a card: a lighter plate and a rim, its
- * ink unchanged (as iOS's segmented control and list selection), never an
- * inversion. */
+/** The current choice inside a control (a strip's chosen cell, a chip, the
+ * section in view): a lighter plate and nothing more. The outline belongs to
+ * focus alone, so only the thing the keys act on is ever outlined. */
 export const SELECTED: JSX.CSSProperties = {
   background: 'var(--m-selected, rgb(255 255 255 / 0.24))',
-  'box-shadow': 'var(--m-selected-edge, inset 0 0 0 2px rgb(255 255 255 / 0.85))',
+  'box-shadow': 'none',
 };

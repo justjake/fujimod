@@ -39,7 +39,7 @@ const LOOKS = {
     --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
     --m-track: linear-gradient(#262626, #1a1a1a); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(0 0 0 / 0.9);
-    --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.55), 0 2px 4px rgb(0 0 0 / 0.7);
+    --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 0 0 2px #fff, inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 2px 4px rgb(0 0 0 / 0.7);
     --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
     --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
     --m-mark: #e5333a;
@@ -76,7 +76,8 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
     --m-track: rgb(255 255 255 / ${mix(0.05, 0.1, contrast)}); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / ${mix(0, 0.12, contrast)});
     --m-focus: rgb(255 255 255 / ${mix(0.15, 0.26, contrast)});
-    --m-focus-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.3)}), inset 0 0 0 ${contrast > 0.5 ? 2 : 1}px rgb(255 255 255 / ${edge(0.12) + contrast * 0.3});
+    /* Focus is the one white outline on screen. */
+    --m-focus-edge: inset 0 0 0 2px rgb(255 255 255 / 0.95);
     --m-divider: inset 0 1px 0 rgb(255 255 255 / ${edge(0.14)});
     --m-accent: ${contrast > 0.5 ? '#8f4fe0' : '#7d3fc2'}; --m-confirm: #0a6bdc;
     --m-title: rgb(${gray(0)} / ${fill(0.55)}); --m-text-area: rgb(${gray(20, 2)} / ${fill(0.42)}); --m-tray: rgb(${gray(26, 2)} / ${fill(0.76)});

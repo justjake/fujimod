@@ -3,7 +3,7 @@ import type { JSX } from '@solidjs/web';
 
 import { reveal } from './column';
 import { Chevron } from './controls';
-import { ACCENT, SELECTED } from './materials';
+import { ACCENT } from './materials';
 
 /** A fly-out row's height: the camera menu's row pitch. */
 const FLY_ROW = 57;
@@ -58,7 +58,7 @@ export function PickerList(props: {
               }
               style={
                 props.columns
-                  ? { color: '#fff', ...(props.at === i() ? SELECTED : {}) }
+                  ? { color: '#fff', ...(props.at === i() ? { background: 'var(--m-cursor)', 'box-shadow': 'var(--m-cursor-edge)' } : {}) }
                   : {
                       color: '#fff',
                       height: `${FLY_ROW}px`,
