@@ -157,16 +157,23 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
     let edits: Vec<_> = stock.ram_edits.iter().map(|e| (e.address, e.old, e.new)).collect();
     assert_eq!(edits, [(0x2ec4, 0xf940_0400, 0xd2a4_0000)]);
     assert!(0x2ec4 < setup.reset_copy_size && setup.selector == 0x11a00);
-    // The cleared extents are whole regions of the plan: the controller payload cache and the
-    // overlays, which end the image.
+    // The cleared extents: the controller payload cache and the overlays, which are whole
+    // regions of the plan and end the image, and the erased tail of the reset stage's region.
     let plan = recipe.plan.as_ref().unwrap();
     let region = |name: &str| {
         let region = plan.regions.iter().find(|r| r.name == name).unwrap();
         (region.address, region.source.decoded_size)
     };
     let cleared: Vec<_> = stock.cleared.iter().map(|c| (c.address, c.size)).collect();
-    assert_eq!(cleared, [region("controller payload cache"), region("overlays")]);
-    assert_eq!(cleared[1].0 + cleared[1].1, plan.size);
+    // The first is the erased tail of the reset stage's region, past what the stock setup copies.
+    let reset = region("reset stage");
+    assert_eq!(reset, (0, 0x20000));
+    assert_eq!(cleared[0], (0x18000, 0x8000));
+    assert!(cleared[0].0 >= setup.reset_copy_size && cleared[0].0 + cleared[0].1 == reset.1);
+    assert_eq!(cleared[1..], [region("controller payload cache"), region("overlays")]);
+    assert_eq!(cleared[2].0 + cleared[2].1, plan.size);
+    // The loader reads the card at the stock driver's default-speed clock divider.
+    assert_eq!(stock.transfer_clock_divider, Some(4));
     assert!(stock.ram_edits.iter().all(|e| !e.what.is_empty()));
     assert!(stock.cleared.iter().all(|c| !c.what.is_empty()));
     // No other bundled recipe names one.
