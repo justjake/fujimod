@@ -5,8 +5,8 @@
   "model": "X-T5",
   "version": "4.31",
   "facts": {
-    "located": 17,
-    "total": 18
+    "located": 19,
+    "total": 20
   },
   "boot_rom": null,
   "tracks": [
@@ -45,12 +45,12 @@
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
@@ -133,17 +133,17 @@
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
@@ -205,7 +205,7 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
@@ -220,7 +220,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -230,12 +230,12 @@
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
@@ -248,15 +248,15 @@
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/record-picture",
           "label": "Record picture",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -264,7 +264,7 @@
           "id": "stock/record-movie",
           "label": "Record movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -272,7 +272,7 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -280,23 +280,23 @@
           "id": "stock/control-layout",
           "label": "Control layout",
           "stage": "stock",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1
         },
         {
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -304,7 +304,7 @@
           "id": "stock/lens",
           "label": "Lens",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -320,7 +320,7 @@
           "id": "stock/playback-picture",
           "label": "Playback picture",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -328,13 +328,21 @@
           "id": "stock/playback-movie",
           "label": "Playback movie",
           "stage": "stock",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
         {
           "id": "stock/develop-raw",
           "label": "Develop RAW",
+          "stage": "stock",
+          "result": "stale",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/ibis",
+          "label": "IBIS",
           "stage": "stock",
           "result": "not-run",
           "passed": 0,
@@ -344,6 +352,14 @@
           "id": "stock/sd",
           "label": "SD",
           "stage": "stock",
+          "result": "stale",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "stock/card-slots",
+          "label": "Card slots",
+          "stage": "stock",
           "result": "not-run",
           "passed": 0,
           "total": 1
@@ -352,17 +368,17 @@
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "label": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "stage": "sd-boot-v1-stock-boots-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         }
       ]
     },
@@ -1249,37 +1265,61 @@
   ],
   "stock": {
     "record-picture": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 1,
+      "total": 1
     },
     "record-movie": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 2,
+      "total": 2
     },
     "control-input": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 51,
+      "total": 51
     },
     "focus": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 3,
+      "total": 4
     },
     "lens": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 3,
+      "total": 3
     },
     "film-simulations": {
       "result": "not-run"
     },
     "playback-picture": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 4,
+      "total": 4
     },
     "playback-movie": {
-      "result": "not-run"
+      "result": "stale",
+      "passed": 3,
+      "total": 4
     },
     "develop-raw": {
+      "result": "stale",
+      "passed": 3,
+      "total": 3
+    },
+    "ibis": {
       "result": "not-run"
     },
     "sd": {
+      "result": "stale",
+      "passed": 2,
+      "total": 2
+    },
+    "card-slots": {
       "result": "not-run"
     },
     "control-layout": {
-      "result": "not-run"
+      "result": "pass"
     }
   },
   "mods": {
