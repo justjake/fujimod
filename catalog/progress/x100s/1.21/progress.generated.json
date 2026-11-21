@@ -603,12 +603,12 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "walkthroughs",
@@ -618,7 +618,7 @@
         {
           "id": "sd-boot-v1-fujimod-built",
           "title": "SD boot v1: FujiMod SD image built",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "firmware-update-fujimod-built",
@@ -644,7 +644,7 @@
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -652,7 +652,7 @@
           "id": "mod-build",
           "label": "Every shipped mod built",
           "stage": "mod-build",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -660,7 +660,7 @@
           "id": "sd-boot-v1-fujimod-built",
           "label": "SD boot v1: FujiMod SD image built",
           "stage": "sd-boot-v1-fujimod-built",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },

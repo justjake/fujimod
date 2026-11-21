@@ -40,12 +40,12 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "state-regions",
@@ -55,22 +55,22 @@
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "sd-facts",
@@ -126,7 +126,7 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -134,7 +134,7 @@
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -150,7 +150,7 @@
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -158,7 +158,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -166,7 +166,7 @@
           "id": "controls",
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -174,7 +174,7 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -557,7 +557,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "mod-target",
@@ -595,7 +595,7 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },

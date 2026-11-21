@@ -40,7 +40,7 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
@@ -125,9 +125,9 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "flash-reader",
@@ -556,12 +556,12 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-build",
@@ -594,17 +594,17 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-build",
