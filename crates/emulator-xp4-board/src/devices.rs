@@ -687,13 +687,13 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    pub fn request_fff4f01c(&mut self, ticks: u64) -> Result<(), String> {
-        use fujimod_emulator_xp4_io::request_fff4f01c::{ADDRESS, RequestWord, WIDTH};
+    pub fn request_acknowledgment(&mut self, ticks: u64) -> Result<(), String> {
+        use fujimod_emulator_xp4_io::request_acknowledgment::{ADDRESS, RequestAcknowledgment, WIDTH};
         let end = ADDRESS + u64::from(WIDTH);
         if self.windows.iter().any(|&(lo, hi, _)| ADDRESS < hi && lo < end) {
-            return Err("Overlapping XP4 0xfff4f01c request window".into());
+            return Err("Overlapping XP4 request acknowledgment window".into());
         }
-        let model = RequestWord::new(ticks)?;
+        let model = RequestAcknowledgment::new(ticks)?;
         let id = self.models.len();
         self.windows.push((ADDRESS, end, id));
         self.models.push(Some(Box::new(model)));
