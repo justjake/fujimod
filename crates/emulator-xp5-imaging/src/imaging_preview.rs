@@ -171,7 +171,12 @@ impl Preview {
         if options.keys().any(|key| {
             !matches!(
                 key.as_str(),
-                "completion_us" | "frame_period_us" | "source_luma" | "retain_words" | "focus_filters"
+                "completion_us"
+                    | "frame_period_us"
+                    | "source_luma"
+                    | "retain_words"
+                    | "focus_filters"
+                    | "focus_window"
             )
         }) {
             return Err("unknown preview option".into());
@@ -193,9 +198,17 @@ impl Preview {
             None => false,
             Some(value) => value.as_bool().ok_or("preview focus_filters must be a boolean")?,
         };
-        if rifp && focus_filters {
-            return Err("focus_filters is an input buffer option".into());
+        // X-T5 4.31: the focus outputs (planes 0..3 with `focus_filters`, 0x21, 0xe, 0xf) measure
+        // the window of words +0x7c (x) and +0x80 (y) (`statistics::FocusWindow`), not the full
+        // frame. Without the option they measure the 13 x 9 full-frame grid, as before.
+        let focus_window = match options.get("focus_window") {
+            None => false,
+            Some(value) => value.as_bool().ok_or("preview focus_window must be a boolean")?,
+        };
+        if rifp && (focus_filters || focus_window) {
+            return Err("focus_filters and focus_window are input buffer options".into());
         }
+        let window = focus_window.then_some((0x7c, 0x80));
         if rifp {
             return Ok(Self::Rifp(Rifp {
                 state: State::default(),
@@ -229,6 +242,7 @@ impl Preview {
                             columns: 13,
                             rows: 9,
                             planes: Planes::FocusFilters,
+                            window,
                         }
                     } else {
                         Output {
@@ -240,6 +254,7 @@ impl Preview {
                             columns: 7,
                             rows: 7,
                             planes: Planes::Color,
+                            window: None,
                         }
                     },
                     Output {
@@ -251,6 +266,7 @@ impl Preview {
                         columns: 16,
                         rows: 16,
                         planes: Planes::Ae,
+                        window: None,
                     },
                     // Focus (contrast AF) statistics, 13 x 9 cells: the cells (plane 0x21)
                     // and the two per-cell planes 0xe and 0xf (`statistics::FocusFrame`).
@@ -266,6 +282,7 @@ impl Preview {
                         columns: 13,
                         rows: 9,
                         planes: Planes::FocusCells,
+                        window,
                     },
                     Output {
                         enable_word: 0,
@@ -276,6 +293,7 @@ impl Preview {
                         columns: 13,
                         rows: 9,
                         planes: Planes::FocusLevels,
+                        window,
                     },
                     Output {
                         enable_word: 0,
@@ -286,6 +304,7 @@ impl Preview {
                         columns: 13,
                         rows: 9,
                         planes: Planes::FocusSums,
+                        window,
                     },
                 ],
                 reset_ticks: 0,

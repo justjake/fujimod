@@ -20,6 +20,9 @@ pub struct Output {
     pub columns: usize,
     pub rows: usize,
     pub planes: Planes,
+    /// Registers holding the x and y words of a focus statistics window
+    /// ([`crate::statistics::FocusWindow`]); `None` measures the full-frame grid.
+    pub window: Option<(u64, u64)>,
 }
 #[derive(Clone)]
 pub struct Wiring {
@@ -118,7 +121,16 @@ impl InputBuffer {
                     self.statistics
                         .as_ref()
                         .ok_or("input-buffer output has no statistics source")?
-                        .complete(cx, address, output.columns, output.rows, output.planes)?;
+                        .complete(
+                            cx,
+                            address,
+                            output.columns,
+                            output.rows,
+                            output.planes,
+                            output.window.and_then(|(x, y)| {
+                                crate::statistics::FocusWindow::from_words(s.r(x), s.r(y))
+                            }),
+                        )?;
                 }
             }
         }
@@ -320,6 +332,7 @@ mod tests {
                         columns: 16,
                         rows: 16,
                         planes: Planes::Rgb,
+                        window: None,
                     }],
                     reset_ticks: 8,
                     period_ticks: None,
