@@ -205,6 +205,27 @@ fn a_drive_without_the_absolute_flag_sweeps_toward_the_named_end() {
 }
 
 #[test]
+fn a_focus_stop_holds_the_position_the_sweep_reached() {
+    let mut port = lens();
+    let mut time = 0;
+    powered(&port, &mut time);
+    time += 20 * MS;
+    request(&mut port, FOCUS_SPEED, 6000, &mut time);
+    request(&mut port, FOCUS_FLAGS, 0x200, &mut time);
+    request(&mut port, FOCUS_TARGET, 200, &mut time);
+    time += 100 * MS;
+    let (reached, _) = port.focus(time);
+    assert!(reached > 200 && reached < 4000, "{reached}");
+    // The AF's stop (family 0x58 with 0) ends the sweep where it is, not at position 0.
+    request(&mut port, FOCUS_DRIVE, 0, &mut time);
+    let (stopped, target) = port.focus(time);
+    assert_eq!(target, stopped);
+    assert!(stopped.abs_diff(reached) < 10, "{stopped} {reached}");
+    time += 100 * MS;
+    assert_eq!(port.focus(time), (stopped, stopped));
+}
+
+#[test]
 fn aperture_setpoint_moves_the_index() {
     let mut port = lens();
     let mut time = 0;
