@@ -163,6 +163,16 @@ function table(
   return host;
 }
 
+test('reports the last mod build independently of walkthrough grades', () => {
+  const document = progress('X-E2S', ['research'], { snap: 'fail', zone: 'fail' });
+  const mods = document.tracks.find((track) => track.id === 'fujimod')!;
+  const build = mods.steps.find((step) => step.id === 'mod-build')!;
+  Object.assign(build, { id: 'build/mods', label: 'Mods built', result: 'stale', passed: 61, total: 63 });
+  const host = table([[{ name: 'EXR Processor II', years: '', models: ['X-E2S'] }]], [document]);
+  expect(host.querySelector('.mod-build')?.textContent).toBe('Last build 61/63 · recheck due');
+  expect(phases(document).find((phase) => phase.id === 'mods')?.fraction).toBe(0);
+});
+
 test('each phase fills by its steps and names its value', () => {
   const document = progress(
     'X-E2S',

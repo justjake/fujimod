@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createSignal, onCleanup, onSettled } from 'solid-js';
-import { phases, started, type FirmwareProgress, type Phase } from './camera-progress';
+import { modBuild, phases, started, type FirmwareProgress, type Phase } from './camera-progress';
 import './cameras.css';
 export interface Generation {
   name: string;
@@ -191,6 +191,14 @@ function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[]; tips:
       <div class="progress-heading">
         <span class="name">{props.progress.model}</span>
         <span class="version">{props.progress.version}</span>
+        <Show when={modBuild(props.progress)} keyed>
+          {(build) => (
+            <span class="mod-build">
+              {build.result === 'stale' ? 'Last build' : build.label} {build.passed}/{build.total}
+              {build.result === 'stale' && ' · recheck due'}
+            </span>
+          )}
+        </Show>
       </div>
       <ul class="bar" aria-label={`${props.progress.model} progress`}>
         <For each={list()}>

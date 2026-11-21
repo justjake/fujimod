@@ -103,17 +103,27 @@ function phase(
   };
 }
 
+const MOD_BUILD_STEP = 'build/mods';
+
+export function modBuild(progress: FirmwareProgress): StepProgress | undefined {
+  return progress.tracks
+    .find((track) => track.id === 'fujimod')
+    ?.steps.find((step) => step.id === MOD_BUILD_STEP);
+}
+
 export function phases(progress: FirmwareProgress): Phase[] {
   const recorded = progress.tracks.map((track) =>
     phase(
       track.phase,
       track.weight,
       track.title,
-      track.steps.map((step) => ({
-        label: step.label,
-        fraction: step.total ? step.passed / step.total : 0,
-        detail: step.detail,
-      })),
+      track.steps
+        .filter((step) => step.id !== MOD_BUILD_STEP)
+        .map((step) => ({
+          label: step.label,
+          fraction: step.total ? step.passed / step.total : 0,
+          detail: step.detail,
+        })),
       track.cells,
     ),
   );

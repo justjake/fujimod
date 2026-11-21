@@ -67,7 +67,8 @@
 .progress-row .progress-heading {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 0 8px;
 }
 .progress-row .name {
   font-size: 13px;
@@ -76,6 +77,11 @@
 .progress-row .version {
   font-size: 11px;
   color: var(--faint);
+}
+.progress-row .mod-build {
+  font-size: 11px;
+  color: var(--dim);
+  margin-inline-start: auto;
 }
 
 /* The same 4px track as the emulator's loading bar. */
