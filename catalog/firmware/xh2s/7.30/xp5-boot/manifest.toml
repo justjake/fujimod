@@ -5,7 +5,7 @@ version = 1
 firmware = "xh2s-730"
 load_firmware = true
 
-# Device windows: xh2s-730.d/*.toml, merged in filename order.
+# Device windows: manifest.d/*.toml, merged in filename order.
 
 # The stock bus-drain helper 0x17f1794 splits memory at 0x80000000, the body's
 # dram_bytes (catalog/bodies/xh2s/body.json). Installed capacity is unmeasured.
@@ -13,7 +13,7 @@ load_firmware = true
 base = 0
 size = 0x80000000
 
-# M-core SRAM (same XP5 SoC window as xt5-431.toml).
+# M-core SRAM (same XP5 SoC window as the X-T5 4.31 manifest).
 [[ram]]
 base = 0xfa200000
 size = 0x100000
@@ -21,7 +21,7 @@ size = 0x100000
 # Cold component descriptor table. Header +0 points to the rows at 0x13e0050 and +8 to
 # the lazy-image descriptor at 0x13e02f8; rows give kernel 0x40000/0x1e340 (flash
 # 0x60000), OS 0x1421000/0xb76000 (flash 0x300000), app 0x2cca000/0xe28000 (flash
-# 0x840000) and the lazy app (flash 0xf20000), the layout of streams.json.
+# 0x840000) and the lazy app (flash 0xf20000), the layout of streams.toml.
 [[preload]]
 address = 0x13e0000
 dat_offset = 0x1a0274
@@ -78,7 +78,7 @@ address = 0x18518
 bytes = "00 00 00 00 00 00 00 00 00 00 00 00 00 80 01 00 00 00 00 00"
 # +0x5cc..0x5dc: flash setup and ID. The camera holds the trained setup (1, 0x1a, 0,
 # 0x101) and its NOR ID 0x2c5b1b. The FujiMod flash controller accepts JEDEC 0x20bb20
-# only, so this run declares the untrained setup and that ID, as xt5-431.toml does:
+# only, so this run declares the untrained setup and that ID, as the X-T5 4.31 manifest does:
 # +0x5cc = 0 (untrained), +0x5d0 = 0, +0x5d4 = 0, +0x5d8 = 0x10b, +0x5dc = 0x20bb20.
 [[preload]]
 address = 0x18928
