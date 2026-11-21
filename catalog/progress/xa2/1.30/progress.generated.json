@@ -608,7 +608,7 @@
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "walkthroughs",
@@ -649,12 +649,12 @@
           "total": 0
         },
         {
-          "id": "mod-build",
-          "label": "Every shipped mod built",
+          "id": "build/mods",
           "stage": "mod-build",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "label": "Mods built",
+          "result": "partial",
+          "passed": 1,
+          "total": 63
         },
         {
           "id": "sd-boot-v1-fujimod-built",
