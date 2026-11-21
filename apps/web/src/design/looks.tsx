@@ -59,7 +59,9 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     const v = Math.round(mix(dark, 150, lightness));
     return `${v} ${v} ${v + blue}`;
   };
-  const fill = (a: number) => mix(a, Math.min(0.97, a + 0.3), opacity);
+  /* A surface's alpha: its own at OPACITY 0, fully opaque at 100; eased so
+     the default 35 keeps the look it was tuned at. */
+  const fill = (a: number) => +(a + (1 - a) * opacity ** 1.5).toFixed(3);
   const edge = (a: number) => mix(a, Math.min(1, a * 2.2), contrast);
   return `
     --m-column: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)});
