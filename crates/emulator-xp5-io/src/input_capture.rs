@@ -164,16 +164,27 @@ impl Sequencer {
             pwm,
         })
     }
-    fn command(&self, axis: usize) -> i32 {
-        let drive = match (&self.options.drive_channels, &self.pwm) {
+    /// The coil drive of an axis in PWM counts: the second compare minus the first.
+    fn drive(&self, axis: usize) -> i64 {
+        match (&self.options.drive_channels, &self.pwm) {
             (Some(channels), Some(pwm)) => {
                 let words = pwm.lock().unwrap()[usize::from(channels[axis])];
                 words[3] as i64 - words[2] as i64
             }
             _ => 0,
-        };
-        (self.options.rest[axis] as i64 + self.options.drive_gain[axis] as i64 * drive)
+        }
+    }
+    fn command(&self, axis: usize) -> i32 {
+        (self.options.rest[axis] as i64 + self.options.drive_gain[axis] as i64 * self.drive(axis))
             .clamp(-0x8000, 0x8000) as i32
+    }
+    /// What the stage is being told to do now, for a stopped-board observation: each axis's
+    /// coil drive and the position that drive commands. Reading it changes nothing.
+    fn stage(&self) -> serde_json::Value {
+        serde_json::json!({
+            "drive": [self.drive(0), self.drive(1), self.drive(2)],
+            "command": [self.command(0), self.command(1), self.command(2)],
+        })
     }
     fn sample(&self, axis: usize) -> u16 {
         (i32::from(self.options.center[axis]) - self.state.position[axis]).clamp(0, 0xffff) as u16
@@ -452,6 +463,15 @@ impl Device for InputCapture {
             }
         }
     }
+    /// The checkpoint state and, with a sequencer, the stage's present coil drive and commanded
+    /// position (`stage`). The drive is the extended timer's state, so the checkpoint omits it.
+    fn diagnostic_state(&self) -> serde_json::Value {
+        let mut state = self.save();
+        if let Some(s) = &self.sequencer {
+            state["stage"] = s.engine.lock().unwrap().stage();
+        }
+        state
+    }
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
         let control = state
             .get("control")
@@ -673,6 +693,11 @@ mod tests {
         pwm.lock().unwrap()[4][3] = 862; // -10 counts on axis 1
         pwm.lock().unwrap()[0][3] = 1743;
         assert_eq!(frame(&mut sequencer), [0x8000 - 160, 0x8000 - 80, 0x8000 - 3484]);
+        // The observation reports the drive and the position it commands, not the lagging stage.
+        assert_eq!(
+            sequencer.stage(),
+            serde_json::json!({"drive": [10, -10, 871], "command": [160, 80, 3484]})
+        );
     }
 
     #[test]
