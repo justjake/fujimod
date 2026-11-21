@@ -17,6 +17,7 @@ fn options(protocol: Protocol, initialization_fault: InitializationFault) -> Opt
         rca: 7,
         ram_bytes: 0x4000,
         initialization_fault,
+        latency: None,
         high_speed: false,
         ram_banks: vec![],
     }
