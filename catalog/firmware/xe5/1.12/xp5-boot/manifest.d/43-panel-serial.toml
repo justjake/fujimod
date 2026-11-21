@@ -1,0 +1,21 @@
+# SSP instance 9 at 0xff919000 (0xff910000 + n * 0x1000): the application's SSP driver reads it first
+# from 0x1495258 (0x1495228 sets the frame format). Its first transfer found none of the declared
+# select lines asserted: in the board state at that stop, port 12 pin 8 (12.8) is an output driven
+# low while 12.7 and 12.10 are high, and 12.8 is the X-T5's LCD select. The two peers are therefore
+# the X-T5 board's panel declaration: the LCD command/data endpoint on 12.8 (mode 0, 8-bit words,
+# read flag bit 0) and the EVF endpoint on 12.10 (mode 2, 8-bit words). That the X-E5's LCD and EVF
+# sit on this instance with these modes is INHERITED and UNVERIFIED (its driver descriptor is not
+# read yet). The endpoints retain writes and refuse reads, since the peers' replies are unknown.
+# source_hz is the X100VI value, UNVERIFIED.
+[[device]]
+base = 0xff919000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 12, pin = 8, active_high = false }
+part = { kind = "serial-command-registers", bits = 8, mode = 0, read_flag = 0x01, miso_high = false }
+[[device.options.endpoints]]
+select = { port = 12, pin = 10, active_high = false }
+part = { kind = "serial-command-registers", bits = 8, mode = 2, miso_high = false }
