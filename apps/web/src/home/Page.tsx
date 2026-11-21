@@ -11,7 +11,7 @@ import { cameraProgress } from '../ui/catalog-progress';
 import generations from '../../devices/generations.generated.json';
 import owners from '../../devices/owners.json';
 import { ReleaseNotes } from '../cameras/ReleaseNotes';
-import { releaseData } from '../release-data';
+import { releaseData, releaseDate } from '../release-data';
 import { SiteFrame } from '../ui/SiteFrame';
 import { FeatureReels } from './FeatureReels';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
@@ -76,10 +76,7 @@ export default function Home() {
                 <h2 class="home-release-title">
                   Fujimod {release().version}
                   <time datetime={release().publishedAt}>
-                    {new Intl.DateTimeFormat('en-US', {
-                      dateStyle: 'long',
-                      timeZone: 'UTC',
-                    }).format(new Date(release().publishedAt))}
+                    {releaseDate.format(new Date(release().publishedAt))}
                   </time>
                 </h2>
               )}

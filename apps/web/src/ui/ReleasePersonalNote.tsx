@@ -1,9 +1,8 @@
 import { For, Show } from 'solid-js';
 import { ManualFeatureLink } from './ManualFeatureLink';
-import { releaseData, type SiteReleaseData } from '../release-data';
+import { releaseData, releaseDate, type SiteReleaseData } from '../release-data';
 import './release-personal-note.css';
 
-const dateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeZone: 'UTC' });
 const credits = '/credits';
 const manual = '/docs/manual/';
 /** The release note below announces the first release after this one. */
@@ -57,7 +56,7 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
         <Show when={data().current}>
           {(release) => (
             <time datetime={release().publishedAt}>
-              {dateFormat.format(new Date(release().publishedAt))}
+              {releaseDate.format(new Date(release().publishedAt))}
             </time>
           )}
         </Show>
@@ -66,9 +65,10 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
           the full potential of your Fujifilm camera.
         </p>
         <p>
-          It’s an early look at how we’ll make Fujimod the best camera firmware in the world: packed with creative tools, configured with a slick menu interface on top of
-          files you can back up and share, fully documented in our <a href={manual}>manual</a>, and
-          engineered for <a href="/safety">rapid AI development while keeping your camera safe</a>.
+          It’s an early look at how we’ll make Fujimod the best camera firmware in the world: packed
+          with creative tools, configured with a slick menu interface on top of files you can back
+          up and share, fully documented in our <a href={manual}>manual</a>, and engineered for{' '}
+          <a href="/safety">rapid AI development while keeping your camera safe</a>.
         </p>
         <p>
           I built the first version alone. In the {note().daysSinceFirstRelease} days since,{' '}
@@ -129,8 +129,8 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
           ; <a href="https://github.com/shanecranor">shane</a> and{' '}
           <a href="https://github.com/chris-rudmin">chris-rudmin</a> for bringing up the X-E2 and
           X-E2S and speeding things up; and{' '}
-          <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and an anonymous tester for
-          early feedback that pushed us further.
+          <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and an anonymous tester
+          for early feedback that pushed us further.
         </p>
         <p>
           Next we’re maturing the platform: more cameras, and nightly releases delivered by our{' '}

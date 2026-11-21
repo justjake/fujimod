@@ -17,3 +17,9 @@ export interface SiteReleaseData {
 declare const __FUJIMOD_RELEASE_DATA__: SiteReleaseData;
 
 export const releaseData = __FUJIMOD_RELEASE_DATA__;
+
+/** Release dates read in Eastern time, where releases are published. */
+export const releaseDate = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'long',
+  timeZone: 'America/New_York',
+});
