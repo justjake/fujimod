@@ -1,6 +1,8 @@
-//! Modelled movie data path of the X-T5 4.31 (opt-in, `XT5_MOVIE_PATH=real`): the frame that
-//! the MOVDC movie channel develops reaches the H.264 encoder input ("aEncYC") through
-//! RIFP (inline YC) -> RESZ (two-plane 4:2:0) -> TNR.
+//! Modelled movie data path of the X-T5 4.31 (opt-in, `XT5_MOVIE_PATH=real`). In the YC modes
+//! (FHD) the frame that the MOVDC movie channel develops reaches the H.264 encoder input
+//! ("aEncYC") through RIFP (inline YC) -> RESZ (two-plane 4:2:0) -> TNR. In the RAW modes
+//! (4K) the sensor RAW of each frame reaches it through RIFP (RAW develop, inline) -> RESZ
+//! (two-plane 4:2:0), with no TNR run.
 //!
 //! # Where the encoder input comes from
 //!
@@ -40,22 +42,56 @@
 //! inline stream of the MOVDC picture (the RIFP input pitch and planes are the MOVDC ones; the
 //! RIFP input is the MOVDC frame before the last).
 //!
+//! The recf queue starts RESZ before the RIFP run of the same frame (RCIZ order, see
+//! [`super::still`]): every frame's register list holds the RESZ words and START first, the
+//! RIFP page and START last.
+//!
+//! # The RAW modes (4K 29.97, strict run, 24 frames traced)
+//!
+//! The sensor's still channel (RAW DMA unit 3) delivers one packed 12-bit RAW of 6308x3614
+//! samples (pitch 0x2520) per frame, and each frame's register list programs:
+//!
+//! | stage | words |
+//! |---|---|
+//! | RESZ 0xffd0c000 | +0x10 0x10000121, source words 0 (inline), +0x14 0x0ddd1877 (6264x3550), +0x18 0, +0x1c 0x0ddb1877 (crop 6264x3548), +0x20 0x086f0eff (3840x2160), +0x24 / +0x28 0x1a00 / 0x1a01, destination 0x1ab3b000 / 0x61f92800 pitch 0x2200 (a ring of 12 buffers) |
+//! | RIFP 0xffd02000 | +0x08 0x10222010 (RAW input, inline to RESZ), input +0x0c the frame's RAW from sample 32 of line 66, pitch +0x1c 0x2520, +0x20 0x0e001878 (6264x3584), +0x24 0, +0x28 0x00051877, +0x2c 0x00060ddb, no output address (+0x40 / +0x44 0), +0x134..+0x13c 0x05010000 |
+//! | H.264 0xffd15000 | IMG_WADR Y / C = the RESZ destination of the frame (the first coded picture is the second RESZ run), IMG_LINE_OFS 0x2200 |
+//!
+//! TNR does not run. The RIFP input has 3584 lines, 34 more than the RESZ source (the filter
+//! margin of the RCIZ check, [`super::still`]); only its first 3548 lines are inside the RAW
+//! (66 + 3548 = 3614), and those are the lines of the RESZ crop.
+//!
+//! The RIFP window words (setter 0x2c52728, parameter fields 4..7): +0x28 = field 5 << 16 |
+//! field 4 and +0x2c = field 7 << 16 | field 6. Fields 4 and 5 share the pixel bound 0xffef
+//! and fields 6 and 7 the line bound 0xfffb, so +0x28 is a pixel pair and +0x2c a line pair:
+//! first << 16 | last. FHD programs 0..=1919 / 0..=1079, 4K 5..=6263 / 6..=3547 (the last
+//! line is the last RAW line). A still run programs first = 0, which the still model reads as
+//! "the whole input" ([`super::still`]).
+//!
 //! # Model
 //!
-//! * RIFP ([`rifp_inline_picture`]): a queued run with mode 2 (+0x08 bits 1..0) and an input
-//!   second plane is a two-plane 4:2:0 YC input. At its start the picture of
-//!   (+0x28 + 1) x (+0x2c + 1) pixels from crop origin +0x24 of the input planes becomes the
-//!   inline picture for RESZ. RIFP itself writes nothing: its output words equal the RESZ
-//!   destination, and the RESZ pitch (0x1600) differs from the RIFP +0x50 (0xc00), so the
-//!   RIFP output is taken to be the inline link (+0x134..+0x13c) only. The colour processing
-//!   is not applied (the MOVDC model already writes the scene as YC).
-//! * RESZ ([`super::still::ReszJob::scale_two_plane`]): see [`super::still`].
+//! * RESZ: a start with a two-plane 4:2:0 destination and source address 0 waits for the RIFP
+//!   run that follows it and is served when that run ends ([`super::still::Resz`]).
+//! * RIFP, YC modes ([`rifp_inline_picture`]): a queued run with mode 2 (+0x08 bits 1..0) and
+//!   an input second plane is a two-plane 4:2:0 YC input. The picture of pixels and lines
+//!   0..=last (+0x28 / +0x2c) from crop origin +0x24 of the input planes is the inline
+//!   picture, which the waiting RESZ start scales
+//!   ([`super::still::ReszJob::scale_two_plane`]). RIFP itself writes nothing: its output
+//!   words equal the RESZ destination, and the RESZ pitch (0x1600) differs from the RIFP
+//!   +0x50 (0xc00), so the RIFP output is taken to be the inline link (+0x134..+0x13c) only.
+//!   The colour processing is not applied (the MOVDC model already writes the scene as YC).
+//! * RIFP, RAW modes ([`super::still::rifp_into_resz`]): a queued run without an output
+//!   address whose input is in a still channel RAW is developed as a still run is (it needs
+//!   `XT5_STILL_PATH=real`), at the input pixels the waiting RESZ start samples, straight
+//!   into the two RESZ destination planes. The run's whole input is the stream, from its
+//!   first line; the window words are not applied.
 //! * TNR ([`Tnr`]): copies the current picture to the output; the reference is not blended
 //!   (no temporal filter).
 //!
-//! INFERRED, not decoded: the +0x28 / +0x2c minus-one sizes of RIFP mode 2 (the still runs
-//! also program width - 1 / height - 1 there), the RESZ class meaning and the TNR register
-//! roles (from the parameter block order and the run93 addresses).
+//! INFERRED, not decoded: what the RIFP window +0x28 / +0x2c selects in the RAW modes (taken
+//! as the valid area of the develop filters, since RESZ reads pixels and lines from 0), the
+//! RESZ class meaning and the TNR register roles (from the parameter block order and the
+//! run93 addresses).
 use super::still::YcPicture;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};

@@ -81,8 +81,8 @@ pub fn register_all(
         sensor
     };
     let yc_output = fujimod_emulator_xp5_imaging::imaging::still::YcOutput::default();
-    // XT5_MOVIE_PATH=real: the modelled movie data path (MOVDC -> RIFP inline -> RESZ -> TNR),
-    // see fujimod_emulator_xp5_imaging::imaging::movie.
+    // XT5_MOVIE_PATH=real: the modelled movie data path (MOVDC -> RIFP inline -> RESZ -> TNR,
+    // or sensor RAW -> RIFP -> RESZ), see fujimod_emulator_xp5_imaging::imaging::movie.
     let movie_path = fujimod_emulator_imaging::frame::movie_path_real();
     let ticks = |options: &toml::Table, key: &str| -> Result<u64, String> {
         options

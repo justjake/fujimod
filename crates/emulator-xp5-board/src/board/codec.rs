@@ -37,9 +37,9 @@
 //! - With `XT5_SCENE` set and `XT5_MOVIE_PATH` not `real`, the host scene at
 //!   the programmed size replaces the guest picture (a functional shortcut, as
 //!   for the JPEG encoder). With `XT5_MOVIE_PATH=real` the movie develop chain
-//!   (MOVDC -> RIFP inline -> RESZ -> TNR, emulator-xp5-imaging
-//!   imaging_movie.rs) writes the input picture. The scene is a host input
-//!   outside the run definition and the checkpoint.
+//!   (FHD: MOVDC -> RIFP inline -> RESZ -> TNR; 4K: sensor RAW -> RIFP -> RESZ;
+//!   emulator-xp5-imaging imaging_movie.rs) writes the input picture. The
+//!   scene is a host input outside the run definition and the checkpoint.
 //! - The access unit (SPS, PPS and an IDR slice on each IDR; one non-IDR slice
 //!   otherwise) is written with a 4-byte start code before each NAL into the
 //!   stream banks `BADR_STR0`/`BADR_STR1` of `STR_BUF_SIZE` bytes each. The
