@@ -311,7 +311,6 @@ export function Dial(props: {
   });
   const shown = dial.shown;
   const active = dial.active;
-  const chevronInk = (atEnd: boolean) => (atEnd ? 'rgb(255 255 255 / 0.2)' : props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.45)');
   return (
     <div
       class="relative shrink-0 overflow-hidden select-none"
@@ -326,18 +325,8 @@ export function Dial(props: {
             <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
           </Show>
         </span>
-        {/* The value between chevrons: LEFT and RIGHT step it. A chevron dims
-            where the scale stops; both are faint until the row is focused. */}
-        <span class="absolute top-[6px] right-[6px] flex items-center gap-[2px]">
-          <span style={{ color: chevronInk(props.value <= props.min) }}>
-            <Chevron dir="left" size={18} />
-          </span>
-          <span class={`origin-center font-semibold tabular-nums transition-transform duration-100 ${HEADING}`} style={{ color: '#fff', transform: active() ? 'scale(1.2)' : 'none' }}>
-            {label(props.value)}
-          </span>
-          <span style={{ color: chevronInk(props.value >= props.max) }}>
-            <Chevron dir="right" size={18} />
-          </span>
+        <span class={`absolute top-[6px] right-[12px] origin-right font-semibold tabular-nums transition-transform duration-100 ${HEADING}`} style={{ color: '#fff', transform: active() ? 'scale(1.2)' : 'none' }}>
+          {label(props.value)}
         </span>
       </Show>
       {/* The scale: a recessed strip along the bottom, the track's colors on
