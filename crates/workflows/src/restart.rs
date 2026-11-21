@@ -228,9 +228,14 @@ pub async fn request(
     recover: bool,
 ) -> Result<Requested> {
     restart.validate().map_err(BulkError::Check)?;
+    let m = &restart.mechanism;
+    // A request without a located power-off has no return path: the image never
+    // shows where the wake is handled, so refuse before touching the camera.
+    let power_off = m.power_off.as_ref().ok_or_else(|| {
+        BulkError::Check("This image publishes no power-off that returns from the request".into())
+    })?;
     check_camera(session, &restart.product, &restart.internal_version).await?;
     let alias = restart.code_alias;
-    let m = &restart.mechanism;
     let mut access = Access { session, limits };
     for check in &restart.code_checks {
         let bytes = access.raw(check.address + alias, check.size).await?;
@@ -249,6 +254,7 @@ pub async fn request(
             stock_callback,
             output_fields,
             output_bytes,
+            ..
         }) => {
             // The table pointer may hold the cached or the uncached alias.
             let table = word(&access.raw(callback_table + alias, 4).await?);
@@ -282,7 +288,7 @@ pub async fn request(
                 vec![(0, 0)],
                 fields,
             )?;
-            set_boot_flag(&mut access, m.power_off.boot_flag.as_ref()).await?;
+            set_boot_flag(&mut access, power_off.boot_flag.as_ref()).await?;
             match borrowed.invoke(access.session, limits.memory).await {
                 Ok(_) => Ok(Requested::Accepted),
                 // The whole sequence ran and restored both words; the send was refused.
@@ -364,7 +370,7 @@ pub async fn request(
                 u32::try_from(*slot).is_ok(),
                 "Console callback slot beyond 32-bit addressing",
             )?;
-            set_boot_flag(&mut access, m.power_off.boot_flag.as_ref()).await?;
+            set_boot_flag(&mut access, power_off.boot_flag.as_ref()).await?;
             // Write the stub, clean it out to memory on every core, then drop
             // stale instructions.
             let mut clean = call(*data_cache_clean, true);
@@ -463,18 +469,20 @@ mod tests {
             "../../../catalog/firmware/x70/1.10/restart.generated.json"
         ))
         .unwrap();
-        assert!(restart.mechanism.power_off.boot_flag.is_none());
-        restart.mechanism.power_off.boot_flag = Some(FLAG);
+        let power_off = restart.mechanism.power_off.as_mut().unwrap();
+        assert!(power_off.boot_flag.is_none());
+        power_off.boot_flag = Some(FLAG);
         restart.validate().unwrap();
         for mask in [0, 0x21] {
-            restart.mechanism.power_off.boot_flag = Some(BootFlag { mask, ..FLAG });
+            let power_off = restart.mechanism.power_off.as_mut().unwrap();
+            power_off.boot_flag = Some(BootFlag { mask, ..FLAG });
             assert!(restart.validate().is_err());
         }
         let mut fixed: FirmwareRestart = serde_json::from_str(include_str!(
             "../../../catalog/firmware/x100s/1.21/restart.generated.json"
         ))
         .unwrap();
-        fixed.mechanism.power_off.boot_flag = Some(FLAG);
+        fixed.mechanism.power_off.as_mut().unwrap().boot_flag = Some(FLAG);
         assert!(fixed.validate().is_err());
     }
 
@@ -506,11 +514,13 @@ mod tests {
         .unwrap();
         restart.validate().unwrap();
         assert!(restart.mechanism.transport.is_none());
-        assert_eq!(restart.mechanism.power_off.entry, 0x692944);
+        assert_eq!(restart.mechanism.power_off.as_ref().unwrap().entry, 0x692944);
         assert_eq!(
             restart
                 .mechanism
                 .power_off
+                .as_ref()
+                .unwrap()
                 .fixed_interval
                 .as_ref()
                 .unwrap()
@@ -518,6 +528,16 @@ mod tests {
             [60, 0]
         );
         assert!(parameters(&restart).is_err());
+    }
+
+    #[test]
+    fn an_x_processor_4_document_validates_and_publishes_no_power_off() {
+        let restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../catalog-restart/tests/fixtures/xp4-wake-deadline.json"
+        ))
+        .unwrap();
+        restart.validate().unwrap();
+        assert!(restart.mechanism.power_off.is_none());
     }
 
     #[test]

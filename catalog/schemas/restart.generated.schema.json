@@ -76,6 +76,116 @@
       ],
       "type": "object"
     },
+    "ClockIo": {
+      "additionalProperties": false,
+      "description": "The stock clock the wake deadline is compared against.",
+      "properties": {
+        "bank_pointer": {
+          "description": "Byte both register helpers read as their bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_order": {
+          "description": "Register selectors read, in order, to take one counter reading.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "reader": {
+          "description": "Stock routine that reads the counter.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_reader": {
+          "description": "Stock routine that reads one counter register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register_writer": {
+          "description": "Stock routine that writes one counter register.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "registers": {
+          "$ref": "#/$defs/ClockRegisters",
+          "description": "Counter registers."
+        },
+        "start_value": {
+          "description": "Value the writer stores in the control register to start the counter.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stop_value": {
+          "description": "Value the writer stores in the control register to stop it.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transaction": {
+          "description": "Serial transaction both register helpers target.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "writer": {
+          "description": "Stock routine that writes the counter.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reader",
+        "writer",
+        "register_reader",
+        "register_writer",
+        "transaction",
+        "bank_pointer",
+        "registers",
+        "read_order",
+        "start_value",
+        "stop_value"
+      ],
+      "type": "object"
+    },
+    "ClockRegisters": {
+      "additionalProperties": false,
+      "description": "The counter registers a writer frames and a reader selects.",
+      "properties": {
+        "control": {
+          "description": "Control register the start and stop values are written to.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "high": {
+          "description": "High halfword of the counter.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "low": {
+          "description": "Low halfword of the counter.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "control",
+        "low",
+        "high"
+      ],
+      "type": "object"
+    },
     "CodeCheck": {
       "additionalProperties": false,
       "description": "Stock code bytes identified by their SHA-256.",
@@ -108,6 +218,42 @@
         "sha256"
       ],
       "type": "object"
+    },
+    "ConfigurationOverride": {
+      "additionalProperties": false,
+      "description": "Debug-configuration keys that steer the request path.",
+      "properties": {
+        "delay_keys": {
+          "description": "Configuration keys the path reads as its delays.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "enable_key": {
+          "description": "Configuration key that enables the path.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enable_key",
+        "delay_keys"
+      ],
+      "type": "object"
+    },
+    "DeadlineUnit": {
+      "description": "The unit a queued deadline is expressed in.",
+      "oneOf": [
+        {
+          "const": "epoch-seconds",
+          "description": "Absolute seconds since the epoch the stock clock counts.",
+          "type": "string"
+        }
+      ]
     },
     "DeferredTimer": {
       "additionalProperties": false,
@@ -485,6 +631,107 @@
         }
       ]
     },
+    "MessageQueue": {
+      "additionalProperties": false,
+      "description": "The message queue a request leaves the core on.",
+      "properties": {
+        "enqueue": {
+          "description": "Stock routine that enqueues the built message.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Queue identifier the request is sent on.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Sender parameters carried in the payload, keyed by their payload byte\noffset and mapped to their parameter byte offset.",
+          "type": "object"
+        },
+        "payload_bytes": {
+          "description": "Bytes in one payload.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sender": {
+          "description": "Stock routine that builds the queue message.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uninitialized_payload_offsets": {
+          "description": "Payload bytes the sender leaves uninitialized.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "sender",
+        "enqueue",
+        "payload_bytes",
+        "parameters",
+        "uninitialized_payload_offsets"
+      ],
+      "type": "object"
+    },
+    "ParameterStorage": {
+      "additionalProperties": false,
+      "description": "Persistent storage for the parameter record a sender takes. No document\npublishes one yet: an X-Processor 4 image's query output is smaller than the\nrecord, and no locator has placed the copy.",
+      "properties": {
+        "address": {
+          "description": "Where the record is kept.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "Bytes kept.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "PayloadDeadline": {
+      "additionalProperties": false,
+      "description": "Where the wake deadline travels once the request leaves the core.",
+      "properties": {
+        "payload_offset": {
+          "description": "Byte offset of the deadline in the queued payload.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unit": {
+          "$ref": "#/$defs/DeadlineUnit",
+          "description": "Unit of the deadline word."
+        }
+      },
+      "required": [
+        "payload_offset",
+        "unit"
+      ],
+      "type": "object"
+    },
     "PowerOff": {
       "additionalProperties": false,
       "description": "The stock power-off reached by the request.",
@@ -617,6 +864,29 @@
       ],
       "type": "object"
     },
+    "RequestConversion": {
+      "additionalProperties": false,
+      "description": "The request-word rewrite a sender applies before it builds its message.",
+      "properties": {
+        "source": {
+          "description": "Request word the host passes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "description": "Request word the sender sends instead.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
     "RequestTransport": {
       "description": "How the host makes the camera call the sender.",
       "oneOf": [
@@ -635,6 +905,15 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "forward": {
+              "description": "Stock routine that forwards a decoded tag to the callback table,\nwhere the image locates that routine (X-Processor 4).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "kind": {
               "const": "borrowed_query",
@@ -657,6 +936,15 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "tag_decoder": {
+              "description": "Stock routine that decodes the query tag, where the image locates\nthe decoder separately from the query (X-Processor 4).",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
           "required": [
@@ -743,10 +1031,53 @@
         }
       ]
     },
+    "RestartKind": {
+      "description": "The mechanism a restart document describes.",
+      "oneOf": [
+        {
+          "const": "xp4-wake-deadline",
+          "description": "Message 3 on queue 2 for the processor that acts on it, with the wake\ndeadline as absolute epoch seconds in the queued payload.",
+          "type": "string"
+        }
+      ]
+    },
     "RestartMechanism": {
       "additionalProperties": false,
       "description": "The stock power-off request with a wake deadline. The power-off arms the\npower controller's alarm and cuts power; the alarm boots the camera again.",
       "properties": {
+        "clock": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClockIo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stock clock the deadline is compared against."
+        },
+        "configuration_override": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfigurationOverride"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Debug-configuration keys that steer the request path."
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PayloadDeadline"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the wake deadline travels once the request leaves the core."
+        },
         "deadline_offset": {
           "description": "Byte offset of the wake deadline in the sender's parameters.",
           "format": "uint32",
@@ -778,6 +1109,17 @@
           ],
           "description": "Freestanding restart before the operating system, when located."
         },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RestartKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which mechanism this is. Absent from the wake-deadline documents\nschema 2 started with; `xp4-wake-deadline` in schema 3."
+        },
         "parameter_bytes": {
           "description": "Bytes of sender parameters.",
           "format": "uint32",
@@ -787,9 +1129,38 @@
             "null"
           ]
         },
+        "parameter_storage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ParameterStorage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Persistent storage for the sender's parameter record. An X-Processor 4\ndocument publishes none, and `validate` refuses one until a locator\nproves where the record is kept."
+        },
         "power_off": {
-          "$ref": "#/$defs/PowerOff",
-          "description": "What the stock power-off does with the request."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PowerOff"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What the stock power-off does with the request. Schema 3 publishes none:\nthat image holds no power-off to describe."
+        },
+        "queue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MessageQueue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Queue that carries the built request to the processor that acts on it."
         },
         "request": {
           "description": "Request word that selects power-off with a wake.",
@@ -800,12 +1171,30 @@
             "null"
           ]
         },
+        "request_conversion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestConversion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Request-word rewrite the sender applies before sending."
+        },
         "request_offset": {
           "description": "Byte offset of the request word in the sender's parameters.",
           "format": "uint32",
           "minimum": 0,
           "type": [
             "integer",
+            "null"
+          ]
+        },
+        "runtime_qualified": {
+          "description": "Whether a camera run confirmed the mechanism's runtime behavior. False\nstates that the request was located but the path never ran.",
+          "type": [
+            "boolean",
             "null"
           ]
         },
@@ -835,8 +1224,7 @@
         }
       },
       "required": [
-        "ui",
-        "power_off"
+        "ui"
       ],
       "type": "object"
     },
@@ -938,7 +1326,7 @@
       "type": "string"
     },
     "schema": {
-      "description": "Document version.",
+      "description": "Document version: [`WAKE_DEADLINE_SCHEMA`] or\n[`XP4_WAKE_DEADLINE_SCHEMA`].",
       "format": "uint32",
       "minimum": 0,
       "type": "integer"

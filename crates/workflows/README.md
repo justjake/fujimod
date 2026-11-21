@@ -50,6 +50,12 @@ It returns `Accepted` when the query answered, or `SessionEnded` when the
 camera cut power before answering. Nothing is written when a check fails; a
 refused send leaves the slot and fields restored. The caller watches the camera
 leave USB and return.
+
+The schema also carries X-Processor 4 message requests (schema 3). Those
+publish no power-off and state `runtime_qualified: false`, so `restart::request`
+refuses them before any write instead of sending a request whose return path
+never ran.
+
 Python exposes it as `AsyncSession.request_restart(profile_json, recover)` with
 profiles from `fujimod.catalog.restart_profiles()`; JavaScript as
 `Session.requestRestart(firmwareId, recover)` with the bundled catalog and

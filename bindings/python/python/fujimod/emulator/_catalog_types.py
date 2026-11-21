@@ -524,6 +524,25 @@ class ClockDomain(TypedDict, total=False):
     parent_id: NotRequired[str | None]
 
 
+class ClockIo(TypedDict, total=False):
+    bank_pointer: Required[int]
+    read_order: Required[list[int]]
+    reader: Required[int]
+    register_reader: Required[int]
+    register_writer: Required[int]
+    registers: Required[ClockRegisters]
+    start_value: Required[int]
+    stop_value: Required[int]
+    transaction: Required[int]
+    writer: Required[int]
+
+
+class ClockRegisters(TypedDict, total=False):
+    control: Required[int]
+    high: Required[int]
+    low: Required[int]
+
+
 class CodeCheck(TypedDict, total=False):
     address: Required[int]
     name: Required[str]
@@ -568,6 +587,11 @@ class ConfigurationLocationVariant0(TypedDict, total=False):
 class ConfigurationLocationVariant1(TypedDict, total=False):
     address: Required[int]
     kind: Required[Literal["direct"]]
+
+
+class ConfigurationOverride(TypedDict, total=False):
+    delay_keys: Required[list[int]]
+    enable_key: Required[int]
 
 
 class ConfigurationVariant0(TypedDict, total=False):
@@ -1412,6 +1436,9 @@ class DataCacheGeometry(TypedDict, total=False):
     line_bytes: Required[int]
     sets: Required[int]
     ways: Required[int]
+
+
+type DeadlineUnit = Literal["epoch-seconds"]
 
 
 class DebugKey(TypedDict, total=False):
@@ -3679,6 +3706,15 @@ type MenuTablesVariant1 = dict[str, Never]
 type MenuTablesVariant2 = dict[str, Never]
 
 
+class MessageQueue(TypedDict, total=False):
+    enqueue: Required[int]
+    id: Required[int]
+    parameters: Required[dict[str, int]]
+    payload_bytes: Required[int]
+    sender: Required[int]
+    uninitialized_payload_offsets: Required[list[int]]
+
+
 class MicrocontrollerAssembly(TypedDict, total=False):
     channel: Required[int]
     connection_id: Required[str]
@@ -3891,6 +3927,11 @@ type NativeVectorGpuInputsCopyProfile = Literal["vg-32bpp-untile-unrotated"]
 type OpticalQuantity = Literal["lens_focus", "lens_aperture"]
 
 
+class ParameterStorage(TypedDict, total=False):
+    address: Required[int]
+    bytes: Required[int]
+
+
 Part = TypedDict(
     "Part",
     {
@@ -4082,6 +4123,11 @@ class PartModelVariant8(TypedDict, total=False):
 class PartModelVariant9(TypedDict, total=False):
     interface: Required[PeripheralPart]
     kind: Required[Literal["peripheral"]]
+
+
+class PayloadDeadline(TypedDict, total=False):
+    payload_offset: Required[int]
+    unit: Required[DeadlineUnit]
 
 
 class PeripheralMapping(TypedDict, total=False):
@@ -4435,16 +4481,23 @@ class RegisterWord(TypedDict, total=False):
     value: Required[int]
 
 
+class RequestConversion(TypedDict, total=False):
+    source: Required[int]
+    target: Required[int]
+
+
 type RequestTransport = RequestTransportVariant0 | RequestTransportVariant1
 
 
 class RequestTransportVariant0(TypedDict, total=False):
     callback_offset: Required[int]
     callback_table: Required[int]
+    forward: NotRequired[int | None]
     kind: Required[Literal["borrowed_query"]]
     output_bytes: Required[int]
     output_fields: Required[int]
     stock_callback: Required[int]
+    tag_decoder: NotRequired[int | None]
 
 
 class RequestTransportVariant1(TypedDict, total=False):
@@ -4506,14 +4559,25 @@ class Resources(TypedDict, total=False):
     text_variants_offset: Required[int]
 
 
+type RestartKind = Literal["xp4-wake-deadline"]
+
+
 class RestartMechanism(TypedDict, total=False):
+    clock: NotRequired[ClockIo | None]
+    configuration_override: NotRequired[ConfigurationOverride | None]
+    deadline: NotRequired[PayloadDeadline | None]
     deadline_offset: NotRequired[int | None]
     deferred_timer: NotRequired[DeferredTimer | None]
     early_boot: NotRequired[EarlyBootMechanism | None]
+    kind: NotRequired[RestartKind | None]
     parameter_bytes: NotRequired[int | None]
-    power_off: Required[PowerOff]
+    parameter_storage: NotRequired[ParameterStorage | None]
+    power_off: NotRequired[PowerOff | None]
+    queue: NotRequired[MessageQueue | None]
     request: NotRequired[int | None]
+    request_conversion: NotRequired[RequestConversion | None]
     request_offset: NotRequired[int | None]
+    runtime_qualified: NotRequired[bool | None]
     sender: NotRequired[int | None]
     transport: NotRequired[RequestTransport | None]
     ui: Required[RecIdle]
