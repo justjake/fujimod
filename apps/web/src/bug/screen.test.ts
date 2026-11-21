@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test } from 'vite-plus/test';
 import { bitmap, composeScreen } from './screen';
 
 test('the saved planes composite as the display stacks them', () => {
