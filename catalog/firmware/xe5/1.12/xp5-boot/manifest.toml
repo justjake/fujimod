@@ -12,3 +12,13 @@ size = 0x67f00000
 [[ram]]
 base = 0xfa200000
 size = 0x100000
+
+# DDR PHY register and firmware space, two PHYs of 0x1a0000 bytes below their mailbox pages, as on
+# the X-T5 and X100VI. Extents unverified for the X-E5.
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
