@@ -80,6 +80,15 @@ lag_shift = 2
 # follows the servo's own drive compensation; the size is a scenario input.
 drive_channels = [2, 4, 0]
 drive_gain = [6, 6, -3]
+# IS MODE does not change this wiring. The body sends request 0x80 with the mode in
+# bits 18..16 (A53 0x13f85e0: 1 CONTINUOUS, 2 SHOOTING ONLY, 0 OFF); the M-core
+# handler 0x4390 stores operation 2, 3 or 1 at +0x20 of the stabilizer task block
+# 0x3521c, the task (0x5428) stays in state 2 (servo running) for each of them, and
+# 0xb354 stores the mode the servo's correction tables are indexed with at 0x39acc
+# (1, 2, 0). So the servo samples and holds the stage in all three modes, and the
+# stage model follows whatever drive it outputs. The model's diagnostic state reports
+# that drive and the position it commands (`stage`). No gyro motion is modeled, so
+# the modes command the same position for a body at rest.
 # Faithful by default: the sensor always answers. For quick development runs only,
 # XT5_IBIS_SETTLE_FRAMES=32000 stops answering after 2 s of servo (not hardware behavior).
 [[device]]
