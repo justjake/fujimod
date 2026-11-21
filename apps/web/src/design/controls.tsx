@@ -1,7 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import type { JSX } from '@solidjs/web';
 
-import { ACCENT, HEADING, SELECTED, SMALL, TEXT, TRACK, WELL } from './materials';
+import { ACCENT, CHOSEN, CHOSEN_INK, HEADING, SMALL, TEXT, TRACK, WELL } from './materials';
 
 /* The editors' row controls: the choice strip and the slider card, shared by
    the custom settings editor and the film editor. Both take touch (a tap
@@ -216,7 +216,7 @@ export function Choice(props: {
         {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
         <span
           class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
-          style={{ width: `${plate()}px`, ...SELECTED, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
+          style={{ width: `${plate()}px`, ...CHOSEN, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
         />
         <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
         <div
@@ -227,7 +227,7 @@ export function Choice(props: {
           <For each={[...props.items]}>
             {(item, i) => {
               const distance = () => Math.abs(i() - dial.shown());
-              const ink = () => `rgb(255 255 255 / ${distance() < 0.5 ? 1 : 0.7})`;
+              const ink = () => (distance() < 0.5 ? CHOSEN_INK : 'rgb(255 255 255 / 0.7)');
               return (
                 <span
                   class={`relative flex shrink-0 items-center justify-center font-medium whitespace-nowrap ${TEXT} ${typeof item === 'string' ? 'px-[7px]' : 'px-[3px]'}`}
@@ -411,7 +411,7 @@ export function Switch(props: { items: readonly string[]; value: number; focused
           <button
             type="button"
             class={`flex h-[37px] grow basis-0 items-center justify-center rounded-[10px] font-medium ${TEXT}`}
-            style={props.value === i() ? { ...SELECTED, color: '#fff' } : { color: 'rgb(255 255 255 / 0.6)' }}
+            style={props.value === i() ? CHOSEN : { color: 'rgb(255 255 255 / 0.6)' }}
             onClick={() => props.pick(i())}
           >
             {item}

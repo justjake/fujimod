@@ -8,7 +8,7 @@ import type { JSX } from '@solidjs/web';
 import { Chevron, Choice, Dial, signed } from '../../../design/controls';
 import { NumberPad, padStep, padType, padValue, type PadKey } from '../../../design/numberpad';
 import { Fit, KeyHint, type CameraKey } from '../../../design/screen';
-import { ACCENT, COLUMN, DETAIL, GLASS, HEADING, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
+import { ACCENT, CHOSEN, COLUMN, DETAIL, GLASS, HEADING, SELECTED, SMALL, TEXT, TRACK } from '../../../design/materials';
 import '../../../design/design.css';
 
 /* FILM EDITOR redesign mock: a tool rail down the left edge beside one tall
@@ -2185,7 +2185,7 @@ export function Editor(props: {
                         <button
                           type="button"
                           class={`flex h-[40px] flex-1 items-center justify-center gap-[7px] rounded-[9px] font-medium ${TEXT}`}
-                          style={s().primary === p() ? { ...SELECTED, color: '#fff' } : { color: 'rgb(255 255 255 / 0.75)' }}
+                          style={s().primary === p() ? CHOSEN : { color: 'rgb(255 255 255 / 0.75)' }}
                           onClick={() => update({ ...s(), primary: p() })}
                         >
                           <Swatch film={s().film} mix={p()} />
