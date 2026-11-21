@@ -166,8 +166,8 @@
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -175,8 +175,8 @@
           "label": "Settings layout located",
           "stage": "settings-layout",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -226,6 +226,11 @@
           "result": "pass"
         },
         {
+          "id": "emulator-screen",
+          "title": "First usable emulator screen",
+          "result": "pass"
+        },
+        {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
           "result": "stale"
@@ -263,6 +268,15 @@
       ],
       "steps": [
         {
+          "id": "emulator-screen",
+          "label": "First usable screen",
+          "stage": "emulator-screen",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
@@ -276,7 +290,7 @@
           "label": "Record picture",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -293,9 +307,10 @@
           "label": "Control input",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
-          "total": 1,
-          "milestone": true
+          "passed": 77,
+          "total": 78,
+          "milestone": true,
+          "detail": "77 of 78"
         },
         {
           "id": "stock/control-layout",
@@ -344,7 +359,7 @@
           "label": "Playback picture",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -369,7 +384,7 @@
           "label": "SD",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -386,8 +401,8 @@
           "label": "SD boot v2: patch triggers fire in the emulator",
           "stage": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -610,6 +625,11 @@
           "result": "stale"
         },
         {
+          "id": "mod-memory",
+          "title": "Memory for mods located",
+          "result": "pass"
+        },
+        {
           "id": "mod-target",
           "title": "Mod target generated from facts",
           "result": "stale"
@@ -618,6 +638,11 @@
           "id": "mod-build",
           "title": "Every shipped mod built",
           "result": "pass"
+        },
+        {
+          "id": "mod-effect",
+          "title": "First mod effect observed in the emulator",
+          "result": "not-run"
         },
         {
           "id": "walkthroughs",
@@ -650,12 +675,21 @@
           "total": 0
         },
         {
+          "id": "mod-memory",
+          "label": "Memory for mods located",
+          "stage": "mod-memory",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -665,6 +699,15 @@
           "result": "pass",
           "passed": 1,
           "total": 1
+        },
+        {
+          "id": "mod-effect",
+          "label": "First mod effect observed in the emulator",
+          "stage": "mod-effect",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "sd-boot-v1-fujimod-built",
@@ -688,8 +731,8 @@
           "label": "SD boot v2: FujiMod release built",
           "stage": "sd-boot-v2-fujimod-built",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -1224,7 +1267,7 @@
           "id": "mod-build/af",
           "label": "af links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1233,7 +1276,7 @@
           "id": "mod-build/fujimod",
           "label": "fujimod links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1242,7 +1285,7 @@
           "id": "mod-build/aspect-ratio",
           "label": "aspect-ratio links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1251,7 +1294,7 @@
           "id": "mod-build/raw-teleconverter",
           "label": "raw-teleconverter links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1260,7 +1303,7 @@
           "id": "mod-build/raw-crop-file",
           "label": "raw-crop-file links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1269,7 +1312,7 @@
           "id": "mod-build/surround-view",
           "label": "surround-view links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1278,7 +1321,7 @@
           "id": "mod-build/desqueeze",
           "label": "desqueeze links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1287,7 +1330,7 @@
           "id": "mod-build/desqueeze-jpeg",
           "label": "desqueeze-jpeg links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1296,7 +1339,7 @@
           "id": "mod-build/jpeg-max",
           "label": "jpeg-max links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1305,7 +1348,7 @@
           "id": "mod-build/noise-reduction",
           "label": "noise-reduction links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1314,7 +1357,7 @@
           "id": "mod-build/framing-guideline",
           "label": "framing-guideline links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1323,7 +1366,7 @@
           "id": "mod-build/film-sims",
           "label": "film-sims links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1332,7 +1375,7 @@
           "id": "mod-build/movie-film",
           "label": "movie-film links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1341,7 +1384,7 @@
           "id": "mod-build/card-films",
           "label": "card-films links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1350,7 +1393,7 @@
           "id": "mod-build/multipass-curves",
           "label": "multipass-curves links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1359,7 +1402,7 @@
           "id": "mod-build/film-editor",
           "label": "film-editor links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1368,7 +1411,7 @@
           "id": "mod-build/film-grain",
           "label": "film-grain links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1377,7 +1420,7 @@
           "id": "mod-build/grain-texture",
           "label": "grain-texture links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1386,7 +1429,7 @@
           "id": "mod-build/color-chrome",
           "label": "color-chrome links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1395,7 +1438,7 @@
           "id": "mod-build/halation",
           "label": "halation links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1404,7 +1447,7 @@
           "id": "mod-build/light-leaks",
           "label": "light-leaks links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1413,7 +1456,7 @@
           "id": "mod-build/film-borders",
           "label": "film-borders links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1422,7 +1465,7 @@
           "id": "mod-build/clarity",
           "label": "clarity links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1431,7 +1474,7 @@
           "id": "mod-build/monochromatic-color",
           "label": "monochromatic-color links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1440,7 +1483,7 @@
           "id": "mod-build/tone-curve",
           "label": "tone-curve links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1449,7 +1492,7 @@
           "id": "mod-build/tone-steps",
           "label": "tone-steps links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1458,7 +1501,7 @@
           "id": "mod-build/d-range-priority",
           "label": "d-range-priority links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1467,7 +1510,7 @@
           "id": "mod-build/highlight-meter",
           "label": "highlight-meter links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1476,7 +1519,7 @@
           "id": "mod-build/raw-view",
           "label": "raw-view links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1485,7 +1528,7 @@
           "id": "mod-build/f-log",
           "label": "f-log links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1494,7 +1537,7 @@
           "id": "mod-build/raw-exposure",
           "label": "raw-exposure links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1503,7 +1546,7 @@
           "id": "mod-build/hdmi-rec",
           "label": "hdmi-rec links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1512,7 +1555,7 @@
           "id": "mod-build/controls",
           "label": "controls links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1521,7 +1564,7 @@
           "id": "mod-build/menu-theme",
           "label": "menu-theme links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1530,7 +1573,7 @@
           "id": "mod-build/overlay-opacity",
           "label": "overlay-opacity links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1539,7 +1582,7 @@
           "id": "mod-build/menu-animations",
           "label": "menu-animations links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1548,7 +1591,7 @@
           "id": "mod-build/menu-tap",
           "label": "menu-tap links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1557,7 +1600,7 @@
           "id": "mod-build/focalized-ui",
           "label": "focalized-ui links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1566,7 +1609,7 @@
           "id": "mod-build/recipes",
           "label": "recipes links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1575,7 +1618,7 @@
           "id": "mod-build/snap-focus",
           "label": "snap-focus links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1584,7 +1627,7 @@
           "id": "mod-build/recipe-exif",
           "label": "recipe-exif links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1593,7 +1636,7 @@
           "id": "mod-build/hide-films",
           "label": "hide-films links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1602,7 +1645,7 @@
           "id": "mod-build/disposable",
           "label": "disposable links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1611,7 +1654,7 @@
           "id": "mod-build/date-stamp",
           "label": "date-stamp links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1620,7 +1663,7 @@
           "id": "mod-build/zone-focus",
           "label": "zone-focus links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1629,7 +1672,7 @@
           "id": "mod-build/digital-focal-length",
           "label": "digital-focal-length links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1638,7 +1681,7 @@
           "id": "mod-build/hud-layout",
           "label": "hud-layout links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1647,7 +1690,7 @@
           "id": "mod-build/menu-order",
           "label": "menu-order links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1656,7 +1699,7 @@
           "id": "mod-build/pixel-map",
           "label": "pixel-map links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1665,7 +1708,7 @@
           "id": "mod-build/usb-debug",
           "label": "usb-debug links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1674,7 +1717,7 @@
           "id": "mod-build/bug-report",
           "label": "bug-report links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1683,7 +1726,7 @@
           "id": "mod-build/sd-volume-name",
           "label": "sd-volume-name links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1692,7 +1735,7 @@
           "id": "mod-build/date-folders",
           "label": "date-folders links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1701,7 +1744,7 @@
           "id": "mod-build/software-nd",
           "label": "software-nd links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1710,7 +1753,7 @@
           "id": "mod-build/iso-auto-min-shutter",
           "label": "iso-auto-min-shutter links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1719,7 +1762,7 @@
           "id": "mod-build/custom-settings-bkt",
           "label": "custom-settings-bkt links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1746,7 +1789,7 @@
           "id": "mod-build/interval-timer",
           "label": "interval-timer links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1755,7 +1798,7 @@
           "id": "mod-build/sd-boot-v2-runtime",
           "label": "sd-boot-v2-runtime links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1764,7 +1807,7 @@
           "id": "mod-build/sd-boot-v2-stage1-internal-flash-install",
           "label": "sd-boot-v2-stage1-internal-flash-install links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1773,7 +1816,7 @@
           "id": "mod-build/ota-update",
           "label": "ota-update links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1782,7 +1825,7 @@
           "id": "mod-build/internal-data-backup",
           "label": "internal-data-backup links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1791,7 +1834,7 @@
           "id": "mod-build/welcome-sheet",
           "label": "welcome-sheet links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1800,7 +1843,7 @@
           "id": "mod-build/hardware-divide",
           "label": "hardware-divide links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1809,7 +1852,7 @@
           "id": "mod-build/live-view-speedups",
           "label": "live-view-speedups links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true

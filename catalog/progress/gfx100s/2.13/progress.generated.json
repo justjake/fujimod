@@ -210,6 +210,11 @@
           "result": "not-run"
         },
         {
+          "id": "emulator-screen",
+          "title": "First usable emulator screen",
+          "result": "not-run"
+        },
+        {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
           "result": "inapplicable"
@@ -246,6 +251,15 @@
         }
       ],
       "steps": [
+        {
+          "id": "emulator-screen",
+          "label": "First usable screen",
+          "stage": "emulator-screen",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0,
+          "milestone": true
+        },
         {
           "id": "rec",
           "label": "Boot",
@@ -567,6 +581,11 @@
           "result": "not-run"
         },
         {
+          "id": "mod-memory",
+          "title": "Memory for mods located",
+          "result": "not-run"
+        },
+        {
           "id": "mod-target",
           "title": "Mod target generated from facts",
           "result": "not-run"
@@ -574,6 +593,11 @@
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
+          "result": "not-run"
+        },
+        {
+          "id": "mod-effect",
+          "title": "First mod effect observed in the emulator",
           "result": "not-run"
         },
         {
@@ -607,6 +631,15 @@
           "total": 0
         },
         {
+          "id": "mod-memory",
+          "label": "Memory for mods located",
+          "stage": "mod-memory",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0,
+          "milestone": true
+        },
+        {
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
@@ -622,6 +655,15 @@
           "result": "not-run",
           "passed": 0,
           "total": 0
+        },
+        {
+          "id": "mod-effect",
+          "label": "First mod effect observed in the emulator",
+          "stage": "mod-effect",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "sd-boot-v1-fujimod-built",

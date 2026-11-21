@@ -56,6 +56,13 @@ export interface Phase {
   steps: StepProgress[];
 }
 
+export function stepPassed(step: StepProgress): boolean {
+  return (
+    step.result === 'pass' ||
+    (step.result === 'stale' && step.total > 0 && step.passed === step.total)
+  );
+}
+
 export function phases(progress: FirmwareProgress): Phase[] {
   return progress.tracks.flatMap((track) => {
     const steps = track.steps.filter((step) => step.milestone);
@@ -64,7 +71,7 @@ export function phases(progress: FirmwareProgress): Phase[] {
           {
             id: track.phase,
             label: track.title,
-            passed: steps.filter((step) => step.result === 'pass').length,
+            passed: steps.filter(stepPassed).length,
             steps,
           },
         ]
@@ -75,7 +82,7 @@ export function phases(progress: FirmwareProgress): Phase[] {
 /** A body with any verified engineering work is shown even before a milestone passes. */
 export function started(progress: FirmwareProgress): boolean {
   return progress.tracks.some((track) =>
-    track.steps.some((step) => step.result === 'pass' || step.result === 'partial'),
+    track.steps.some((step) => stepPassed(step) || step.result === 'partial'),
   );
 }
 

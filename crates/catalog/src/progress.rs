@@ -1,8 +1,7 @@
 //! Recorded bring-up progress for one firmware.
 //!
 //! Each stage holds the latest recorded result of that stage for the firmware.
-//! A result whose inputs changed since it was recorded is `stale` and does not
-//! count as progress.
+//! A result whose inputs changed is marked `stale`. Its last recorded count is retained.
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

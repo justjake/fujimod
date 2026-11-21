@@ -167,8 +167,8 @@
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -176,8 +176,8 @@
           "label": "Settings layout located",
           "stage": "settings-layout",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -227,6 +227,11 @@
           "result": "pass"
         },
         {
+          "id": "emulator-screen",
+          "title": "First usable emulator screen",
+          "result": "pass"
+        },
+        {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
           "result": "stale"
@@ -263,6 +268,15 @@
         }
       ],
       "steps": [
+        {
+          "id": "emulator-screen",
+          "label": "First usable screen",
+          "stage": "emulator-screen",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
+          "milestone": true
+        },
         {
           "id": "rec",
           "label": "Boot",
@@ -386,8 +400,8 @@
           "label": "SD boot v2: patch triggers fire in the emulator",
           "stage": "sd-boot-v2-patch-triggers-fire-in-emulator",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -610,6 +624,11 @@
           "result": "stale"
         },
         {
+          "id": "mod-memory",
+          "title": "Memory for mods located",
+          "result": "pass"
+        },
+        {
           "id": "mod-target",
           "title": "Mod target generated from facts",
           "result": "stale"
@@ -618,6 +637,11 @@
           "id": "mod-build",
           "title": "Every shipped mod built",
           "result": "pass"
+        },
+        {
+          "id": "mod-effect",
+          "title": "First mod effect observed in the emulator",
+          "result": "not-run"
         },
         {
           "id": "walkthroughs",
@@ -650,12 +674,21 @@
           "total": 0
         },
         {
+          "id": "mod-memory",
+          "label": "Memory for mods located",
+          "stage": "mod-memory",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -665,6 +698,15 @@
           "result": "pass",
           "passed": 1,
           "total": 1
+        },
+        {
+          "id": "mod-effect",
+          "label": "First mod effect observed in the emulator",
+          "stage": "mod-effect",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0,
+          "milestone": true
         },
         {
           "id": "sd-boot-v1-fujimod-built",
@@ -1749,7 +1791,7 @@
           "id": "mod-build/hardware-divide",
           "label": "hardware-divide links",
           "stage": "mod-build",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
