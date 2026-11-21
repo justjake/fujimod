@@ -14,3 +14,7 @@ select = { port = 15, pin = 15, active_high = true }
 kind = "power-controller"
 rtc_seconds = 0x325ffea2
 rtc_valid = true
+# Register 0 bit 15 set: the reset stage's boot wait on core 1 reads register 0 in a loop with
+# 10 us delays until the high byte's sign bit is set (reset stage 0x3a00). Bit 15 is what the
+# stage polls; what the chip reports in it is not established, so this is UNVERIFIED for the X-E5.
+registers = { "0" = 0x8200 }
