@@ -177,7 +177,12 @@ export default function Home() {
               />
             </Show>
           </EmulatorWorkspace>
-          <CameraTable columns={generations} progress={cameraProgress} owners={owners} />
+          <CameraTable
+            columns={generations}
+            progress={cameraProgress}
+            owners={owners}
+            released={new Set(state.release?.firmwares.map((firmware) => firmware.id))}
+          />
         </main>
         <footer id="preview-credit" hidden={!state.idle}>
           <Show when={state.previewCredit}>

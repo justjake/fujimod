@@ -95,12 +95,6 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
-        "progress-override.generated.schema.json",
-        schema::<fujimod_catalog::progress::ProgressOverride>(
-            fujimod_catalog::progress::PROGRESS_OVERRIDE_SCHEMA_URI,
-        ),
-    );
-    documents.insert(
         "sd-boot-v2-autostart.generated.schema.json",
         schema::<fujimod_catalog::nand_boot::FirmwareNandBoot>(
             fujimod_catalog::nand_boot::NAND_BOOT_SCHEMA_URI,

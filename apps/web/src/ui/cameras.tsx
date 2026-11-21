@@ -17,11 +17,11 @@ const CONTRIBUTE = 'dev-tools/';
 /** Letters whose names start with a vowel sound take "an": an X-E2, an F… */
 const AN = /^[AEFHILMNORSX]/;
 function help(model: string, phase: Phase) {
-  if (phase.id !== 'camera' || phase.fraction === 1) return undefined;
-  if (phase.fraction) return `Help test on your ${model}`;
+  if (phase.id !== 'camera' || phase.passed === phase.steps.length) return undefined;
+  if (phase.passed) return `Help test on your ${model}`;
   return `Have ${AN.test(model) ? 'an' : 'a'} ${model}? Help test it`;
 }
-/** The one segment whose tip is open, so taps and hovers never leave two tips showing. */
+/** The open row, shared across the table so only one detail panel is visible. */
 interface Tips {
   open: () => string | undefined;
   show: (key: string | undefined) => void;
@@ -30,7 +30,7 @@ function createTips(): Tips {
   const [open, show] = createSignal<string>();
   onSettled(() => {
     const outside = (event: PointerEvent) => {
-      if (!(event.target instanceof Element && event.target.closest('#camera-table .phase')))
+      if (!(event.target instanceof Element && event.target.closest('#camera-table .progress-bar')))
         show(undefined);
     };
     const escape = (event: KeyboardEvent) => {
@@ -45,8 +45,12 @@ function createTips(): Tips {
   });
   return { open, show: (key) => show(() => key) };
 }
-function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Tips }) {
-  const key = () => `${props.model} ${props.phase.id}`;
+function ProgressBar(props: { progress: FirmwareProgress; owners: Owner[]; tips: Tips }) {
+  const key = () => props.progress.model;
+  const groups = () => phases(props.progress);
+  const total = () => groups().reduce((sum, group) => sum + group.steps.length, 0);
+  const passed = () => groups().reduce((sum, group) => sum + group.passed, 0);
+  const value = () => `${passed()} of ${total()}`;
   // A mouse opens the tip by hovering; a tap toggles it. Focus from a tap is not a keyboard visit.
   let pressed = false,
     wasOpen = false;
@@ -81,8 +85,8 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
     },
   );
   return (
-    <li
-      class={{ phase: true, open: props.tips.open() === key() }}
+    <div
+      class={{ 'progress-bar': true, open: props.tips.open() === key() }}
       tabindex="0"
       onPointerEnter={(event) => event.pointerType === 'mouse' && props.tips.show(key())}
       onPointerLeave={(event) => {
@@ -108,27 +112,28 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
         if (event.target instanceof Element && event.target.closest('.tip')) return;
         props.tips.show(wasOpen ? undefined : key());
       }}
-      style={{
-        '--w': String(props.phase.weight),
-        '--p': `${props.phase.fraction * 100}%`,
-        '--c': `var(--phase-${props.phase.id})`,
-      }}
-      aria-label={`${props.phase.label}: ${props.phase.value}`}
     >
-      <Show
-        when={props.phase.cells}
-        fallback={
-          <div class="track">
-            <div class="fill" />
-          </div>
-        }
+      <div
+        class="track"
+        role="progressbar"
+        aria-label={`${key()} progress`}
+        aria-valuemin={0}
+        aria-valuemax={total() || 1}
+        aria-valuenow={passed()}
+        aria-valuetext={value()}
       >
-        <div class="track cells">
-          <For each={props.phase.steps}>
-            {(step) => <div class="cell" style={{ '--p': `${step.fraction * 100}%` }} />}
-          </For>
-        </div>
-      </Show>
+        <For each={groups().filter((group) => group.passed)}>
+          {(group) => (
+            <div
+              class="fill"
+              style={{
+                '--p': `${(group.passed / total()) * 100}%`,
+                '--c': `var(--phase-${group.id})`,
+              }}
+            />
+          )}
+        </For>
+      </div>
       <div
         class="tip"
         ref={(element) => {
@@ -136,74 +141,82 @@ function Segment(props: { model: string; phase: Phase; owners: Owner[]; tips: Ti
         }}
       >
         <div class="tip-scroll">
-          <div class="tip-label">{props.phase.label}</div>
-          <div class="tip-value">
-            {props.phase.id === 'camera' && !props.phase.fraction && !props.owners.length
-              ? 'Needs an owner'
-              : props.phase.value}
-          </div>
-          <ul>
-            <For each={props.phase.steps}>
-              {(step) => (
-                <li
-                  class={{
-                    todo: step.fraction < 1,
-                    partial: step.fraction > 0 && step.fraction < 1,
-                  }}
-                >
-                  {step.label}
-                  <Show when={step.detail}>
-                    {(detail) => <span class="step-detail">{detail()}</span>}
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-          <Show when={props.phase.id === 'camera' && props.owners.length}>
-            <div class="owners">
-              Owned by{' '}
-              <For each={props.owners}>
-                {(owner, index) => (
-                  <>
-                    {index() ? ', ' : ''}
-                    <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
-                  </>
-                )}
-              </For>
-            </div>
-          </Show>
-          <Show when={help(props.model, props.phase)}>
-            {(text) => (
-              <a class="help" href={CONTRIBUTE}>
-                {text()}
-              </a>
+          <div class="tip-value">{value()}</div>
+          <For each={groups()}>
+            {(group) => (
+              <div class="tip-group" style={{ '--c': `var(--phase-${group.id})` }}>
+                <div class="tip-label">
+                  {group.label}
+                  <span class="step-detail">
+                    {group.passed} of {group.steps.length}
+                  </span>
+                </div>
+                <ul>
+                  <For each={group.steps}>
+                    {(step) => (
+                      <li class={{ todo: step.result !== 'pass' }}>
+                        {step.label}
+                        <Show
+                          when={step.result === 'stale' || step.result === 'fail' || step.detail}
+                        >
+                          <span class="step-detail">
+                            {step.result === 'stale'
+                              ? 'Stale'
+                              : step.result === 'fail'
+                                ? 'Failed'
+                                : step.detail}
+                          </span>
+                        </Show>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+                <Show when={group.id === 'camera' && props.owners.length}>
+                  <div class="owners">
+                    Owned by{' '}
+                    <For each={props.owners}>
+                      {(owner, index) => (
+                        <>
+                          {index() ? ', ' : ''}
+                          <a href={`https://github.com/${owner.github}`}>@{owner.github}</a>
+                        </>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+                <Show when={help(key(), group)}>
+                  {(text) => (
+                    <a class="help" href={CONTRIBUTE}>
+                      {text()}
+                    </a>
+                  )}
+                </Show>
+              </div>
             )}
-          </Show>
+          </For>
         </div>
       </div>
-    </li>
+    </div>
   );
 }
-function ProgressRow(props: { progress: FirmwareProgress; owners: Owner[]; tips: Tips }) {
-  const list = () => phases(props.progress);
+function ProgressRow(props: {
+  progress: FirmwareProgress;
+  owners: Owner[];
+  tips: Tips;
+  released: boolean;
+}) {
   return (
     <div class={{ 'progress-row': true, owned: props.owners.length > 0 }}>
       <div class="progress-heading">
         <span class="name">{props.progress.model}</span>
         <span class="version">{props.progress.version}</span>
+        <Show when={props.released}>
+          <span class="version">Released</span>
+        </Show>
       </div>
-      <ul class="bar" aria-label={`${props.progress.model} progress`}>
-        <For each={list()}>
-          {(phase) => (
-            <Segment
-              model={props.progress.model}
-              phase={phase}
-              owners={props.owners}
-              tips={props.tips}
-            />
-          )}
-        </For>
-      </ul>
+      <div class="bar">
+        <ProgressBar progress={props.progress} owners={props.owners} tips={props.tips} />
+      </div>
     </div>
   );
 }
@@ -212,6 +225,7 @@ function GenerationGroup(props: {
   progress: Record<string, FirmwareProgress>;
   owners: ReadonlyMap<string, Owner[]>;
   tips: Tips;
+  released?: ReadonlySet<string>;
 }) {
   const rows = () =>
     props.group.models.flatMap((model) => {
@@ -232,6 +246,7 @@ function GenerationGroup(props: {
             progress={progress}
             owners={props.owners.get(progress.model) ?? []}
             tips={props.tips}
+            released={props.released?.has(progress.firmware_id) ?? false}
           />
         )}
       </For>
@@ -251,18 +266,11 @@ function GenerationGroup(props: {
     </div>
   );
 }
-const LEGEND: Phase['id'][] = ['research', 'emulator', 'camera', 'mods', 'sd-card'];
-const LEGEND_LABELS: Record<Phase['id'], string> = {
-  research: 'Static analysis',
-  emulator: 'Emulator',
-  camera: 'Camera',
-  mods: 'FujiMod',
-  'sd-card': 'SD card and install',
-};
 export function CameraTable(props: {
   columns: Generation[][];
   progress: Record<string, FirmwareProgress>;
   owners: Owner[];
+  released?: ReadonlySet<string>;
 }) {
   const tips = createTips();
   const owners = () => {
@@ -270,6 +278,12 @@ export function CameraTable(props: {
     for (const owner of props.owners)
       for (const body of owner.bodies) result.set(body, [...(result.get(body) ?? []), owner]);
     return result;
+  };
+  const legend = () => {
+    const tracks = new Map<Phase['id'], string>();
+    for (const progress of Object.values(props.progress))
+      for (const track of progress.tracks) tracks.set(track.phase, track.title);
+    return [...tracks];
   };
   const listed = () => new Set(props.columns.flat().flatMap((group) => group.models));
   const unlisted = () =>
@@ -284,8 +298,8 @@ export function CameraTable(props: {
           Cameras
         </h2>
         <ul class="legend" aria-label="Legend">
-          <For each={LEGEND}>
-            {(id) => <li style={{ '--c': `var(--phase-${id})` }}>{LEGEND_LABELS[id]}</li>}
+          <For each={legend()}>
+            {([id, title]) => <li style={{ '--c': `var(--phase-${id})` }}>{title}</li>}
           </For>
           <li class="owned">Owned by a contributor</li>
         </ul>
@@ -300,6 +314,7 @@ export function CameraTable(props: {
                   progress={props.progress}
                   owners={owners()}
                   tips={tips}
+                  released={props.released}
                 />
               )}
             </For>
@@ -313,6 +328,7 @@ export function CameraTable(props: {
             progress={props.progress}
             owners={owners()}
             tips={tips}
+            released={props.released}
           />
         </div>
       </Show>

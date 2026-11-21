@@ -78,14 +78,6 @@
   color: var(--faint);
 }
 
-/* The same 4px track as the emulator's loading bar. */
-.progress-row .bar {
-  display: flex;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 /* Bodies a contributor owns: a 1px outline 2px outside the track, following its rounded ends. */
 .progress-row.owned .bar {
   position: relative;
@@ -100,60 +92,33 @@
   box-sizing: border-box;
   pointer-events: none;
 }
-.progress-row .phase {
+.progress-row .progress-bar {
   position: relative;
-  flex: var(--w) 1 0;
   padding: 7px 0 9px; /* hit target taller than the mark */
   outline: none;
 }
 .progress-row .track {
-  position: relative;
+  display: flex;
   height: 4px;
   border-radius: 2px;
   background: rgb(118 118 128 / 24%);
   overflow: hidden;
   transition: opacity 120ms;
 }
-/* A segment of separately graded features: one cell each, filled by its share. */
-.progress-row .track.cells {
-  display: flex;
-  gap: 1px;
-  background: none;
-}
-.progress-row .cell {
-  position: relative;
-  flex: 1 1 0;
-  background: rgb(118 118 128 / 24%);
-  overflow: hidden;
-}
-.progress-row .cell::after {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--p);
-  background: var(--c);
-  transition: filter 120ms;
-}
-.progress-row .phase.open .cell::after {
-  filter: brightness(1.2);
-}
 .progress-row .fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--p);
+  flex: 0 0 var(--p);
   background: var(--c);
-  transition: filter 120ms;
 }
 .progress-row .bar:has(.open) .track {
   opacity: 0.45;
 }
-.progress-row .phase.open .track {
+.progress-row .progress-bar.open .track {
   opacity: 1;
 }
-.progress-row .phase.open .fill {
+.progress-row .progress-bar.open .fill {
   filter: brightness(1.2);
 }
-.progress-row .phase:focus-visible .track {
+.progress-row .progress-bar:focus-visible .track {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
@@ -182,7 +147,7 @@
 }
 @media (max-width: 600px) {
   /* A hidden, off-screen tip still widens the document in WebKit. */
-  .progress-row .phase:not(.open) .tip {
+  .progress-row .progress-bar:not(.open) .tip {
     display: none;
   }
 }
@@ -203,22 +168,16 @@
   inset: 100% 0 auto;
   height: 26px;
 }
-.progress-row .phase:first-child .tip {
-  left: 0;
-  translate: var(--tip-shift-x, 0px) var(--tip-shift-y, 0px);
-}
-.progress-row .phase:last-child .tip {
-  left: auto;
-  right: 0;
-  translate: var(--tip-shift-x, 0px) var(--tip-shift-y, 0px);
-}
-.progress-row .phase.open .tip {
+.progress-row .progress-bar.open .tip {
   opacity: 1;
   visibility: visible;
   transform: none;
   transition:
     opacity 140ms,
     transform 140ms;
+}
+.progress-row .tip-group + .tip-group {
+  margin-top: 10px;
 }
 .progress-row .tip .tip-label {
   display: flex;
@@ -261,11 +220,6 @@
   padding-left: 10px;
   color: var(--dim);
   font-variant-numeric: tabular-nums;
-}
-.progress-row .tip li.partial.todo::before {
-  content: '◐';
-  font-weight: 400;
-  color: var(--c);
 }
 .progress-row .tip li.todo {
   color: var(--dim);
