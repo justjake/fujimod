@@ -124,6 +124,9 @@ retain_words = true
 # Statistics planes 0..3 (output +0x400) are read only by the AF service (0x2fea380,
 # 0x2fe36e0): 13 x 9 cells of the four contrast filters, not 7 x 7 colour sums.
 focus_filters = true
+# The focus outputs measure the window of words +0x7c / +0x80 (origin << 16 | (count - 1) << 12 |
+# cell size): a 3 x 3 grid over the AF point in AF-S, not the full frame.
+focus_window = true
 
 # RIFP I/O DMA. The still path (0x2c51f98, recfRecifProcess / recfRecizProcess) uses it only
 # in register-list mode: it reads the recf register queue (0x13c0e54 / 0x13c0e94, 8-byte
