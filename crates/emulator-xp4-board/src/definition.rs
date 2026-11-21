@@ -221,6 +221,14 @@ pub struct Definition {
     /// Optional exact uninterpreted output; requires the power SPI peer.
     #[serde(default)]
     pub power_spi_command_output: Option<fujimod_emulator_xp4_io::power_serial::ExactCommandOutput>,
+    /// Non-default bank declarations for the power SPI peer, as
+    /// `(bank, register, value)`. Bank-zero declarations stay in `power_spi`.
+    #[serde(default)]
+    pub power_spi_bank_inputs: Vec<(bool, u8, u16)>,
+    /// Admit the eye-sensor commit word at power register 38 bit 15, which is
+    /// the RTC alarm interrupt on bodies that do not opt in.
+    #[serde(default)]
+    pub power_spi_eye_commit: bool,
     #[serde(default)]
     pub checksum_power_spi: Option<(
         u64,
