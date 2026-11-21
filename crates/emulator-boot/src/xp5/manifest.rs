@@ -21,6 +21,10 @@ pub struct BootState {
     pub dram: Option<Dram>,
     #[serde(default)]
     pub preload: Vec<Preload>,
+    /// Address windows the companion core sees in addition to the SoC's own, for a body whose
+    /// companion firmware reaches DRAM the SoC windows do not cover.
+    #[serde(default)]
+    pub companion_window: Vec<CompanionWindow>,
     #[serde(default)]
     pub device: Vec<DeviceWindow>,
     /// Card media of each SD slot, keyed by its UHS-I host base. Presence and
@@ -39,6 +43,16 @@ fn version() -> u32 {
 }
 fn yes() -> bool {
     true
+}
+/// One window of the companion core's address space onto the application cores' physical memory.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompanionWindow {
+    /// Address the companion core uses.
+    pub address: u64,
+    /// Physical address it reaches.
+    pub physical: u64,
+    pub size: u64,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

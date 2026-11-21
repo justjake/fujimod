@@ -778,6 +778,21 @@ pub(crate) fn open_from(
             });
         }
     }
+    for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
+        if processor.model != ProcessorModel::CortexM4 {
+            continue;
+        }
+        for window in &state.companion_window {
+            execution.mappings.push(board::factory::MemoryMap {
+                core,
+                address: window.address,
+                physical: window.physical,
+                size: usize::try_from(window.size)
+                    .map_err(|_| "companion window exceeds host address space")?,
+                permissions: 7,
+            });
+        }
+    }
     if rom.is_some() {
         // The catalog declares the ROM's pages as part of its last register window and the flash
         // aperture as a register window. A ROM start needs both as memory for the A53 cores: the

@@ -1,0 +1,7 @@
+# SoC temperature sensor block, declared as on the X-T5 board. The first access is a word write of 0
+# at 0xff90500c from the application (0x14daf50); the X-E5's use of it is not read yet, so the
+# declaration is INHERITED and UNVERIFIED.
+[[device]]
+base = 0xff905000
+size = 0x1000
+kind = "soc-temperature"

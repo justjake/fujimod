@@ -1,0 +1,25 @@
+# I2C instance 1 at 0xff925000 (four controllers at 0xff924000 + n * 0x1000 on the other XP5 bodies).
+# The controller, interrupt 289 and the four targets are the X-T5 board's declaration (fuel gauge
+# 0x36, eye sensor 0x39, retained power registers 0x66 and 0x68), INHERITED and UNVERIFIED for the
+# X-E5: the first access is a byte write at 0xff925018 from the application's I2C driver, and the
+# bus clients of this body are not read from its firmware yet. Other addresses are not acknowledged.
+# byte_ns is a functional latency, not a bus rate.
+[[device]]
+kind = "i2c-controller"
+base = 0xff925000
+size = 0x1000
+[device.options]
+interrupt = 289
+byte_ns = 1000000
+[[device.options.targets]]
+address = 0x36
+part = { kind = "fuel-gauge" }
+[[device.options.targets]]
+address = 0x39
+part = { kind = "tmd2772-proximity" }
+[[device.options.targets]]
+address = 0x66
+part = { kind = "retained-registers" }
+[[device.options.targets]]
+address = 0x68
+part = { kind = "retained-registers" }

@@ -1,0 +1,34 @@
+# Companion serial controller at 0xff911000 (PL022): the companion's first access is a halfword read
+# of its status register (+0xc) at companion code 0x39bc. The wiring is the X-T5 board's declaration
+# (the BIS configuration chip on select port 11 pin 5 and the LSM6DS-class motion sensor on port 11
+# pin 3, both active low; DMA request numbers 2 and 3, companion interrupt line 99, 48 MHz source).
+# Every value is INHERITED and UNVERIFIED for the X-E5: revision nibbles and idle MISO level are
+# scenario inputs, not measurements, and the X-E5's chip selects are not read from its firmware yet.
+[[device]]
+base = 0xff911000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+receive_request = 2
+transmit_request = 3
+companion_irq_line = 99
+[device.options.wire]
+kind = "gpio-selected"
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 11
+pin = 5
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "bis-configuration-registers"
+revision = [0, 0]
+idle_high = false
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 11
+pin = 3
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "lsm6ds-configuration-registers"
