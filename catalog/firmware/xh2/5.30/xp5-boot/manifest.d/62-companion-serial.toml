@@ -57,3 +57,6 @@ active_high = false
 [device.options.wire.endpoints.part]
 kind = "lsm6ds-configuration-registers"
 temperature = 0
+# A still body: zero angular rate and acceleration (the model main read before
+# motion became a declared input).
+motion = { angular_rate = [0, 0, 0], acceleration = [0, 0, 0] }

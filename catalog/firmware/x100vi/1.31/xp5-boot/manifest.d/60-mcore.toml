@@ -57,6 +57,9 @@ active_high = false
 [device.options.wire.endpoints.part]
 kind = "lsm6ds-configuration-registers"
 temperature = 0
+# A still body: zero angular rate and acceleration (the model main read before
+# motion became a declared input).
+motion = { angular_rate = [0, 0, 0], acceleration = [0, 0, 0] }
 
 # Local26d0c/26d3c: five channels at5f928000, three at5f929000, stride20.
 # Only channel-reset and idle data/status semantics; active sampling stops.

@@ -48,6 +48,9 @@ active_high = false
 [device.options.wire.endpoints.part]
 kind = "lsm6ds-configuration-registers"
 temperature = 0
+# A still body: zero angular rate and acceleration (the model main read before
+# motion became a declared input).
+motion = { angular_rate = [0, 0, 0], acceleration = [0, 0, 0] }
 
 # Input-capture banks (five channels at ff928000, three at ff929000, stride 0x20).
 # The X-T5 companion writes ff928040 and streams fa234adc -> ff928044 on general
