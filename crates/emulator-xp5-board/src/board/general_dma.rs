@@ -53,6 +53,10 @@ enum WireInput {
 #[serde(deny_unknown_fields)]
 struct DmaWiring {
     companion_irq_base: u32,
+    /// GIC SPI base: channel `bank * 2 + lane` also raises `a53_irq_base + channel` for the A53
+    /// driver's completion callbacks. Absent leaves the banks wired to the companion only.
+    #[serde(default)]
+    a53_irq_base: Option<u32>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -179,13 +183,27 @@ pub fn register_all(
         if wiring.companion_irq_base.checked_add(15).is_none() {
             return Err("DMA IRQ range overflow".into());
         }
+        // GIC SPIs start at INTID 32 and the architecture ends them at 1019.
+        if wiring
+            .a53_irq_base
+            .is_some_and(|base| base < 32 || base > 1019 - 15)
+        {
+            return Err("general-DMA A53 IRQ base must leave 16 SPIs in 32..1019".into());
+        }
         for (bank, route) in banks.iter().enumerate() {
             let base = w.base + bank as u64 * 0x1000;
             let interrupts = std::array::from_fn(|lane| {
-                vec![InterruptLine::Core {
+                let channel = (bank * 2 + lane) as u32;
+                let mut lines = vec![InterruptLine::Core {
                     core,
-                    line: wiring.companion_irq_base + (bank * 2 + lane) as u32,
-                }]
+                    line: wiring.companion_irq_base + channel,
+                }];
+                lines.extend(
+                    wiring
+                        .a53_irq_base
+                        .map(|base| InterruptLine::Shared(base + channel)),
+                );
+                lines
             });
             pairs.push(bus.register(
                 base,

@@ -8,6 +8,9 @@ kind = "general-dma"
 
 [device.options]
 companion_irq_base = 83
+# The A53 driver also takes channel completions on the GIC (INTID 237 + channel on the X-T5 and
+# X-H2S). UNVERIFIED for the X-E5, carried over so the reset stage's completion callbacks can fire.
+a53_irq_base = 237
 
 [[device]]
 base = 0xff90e748
