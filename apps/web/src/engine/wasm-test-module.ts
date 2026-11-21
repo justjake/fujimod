@@ -16,6 +16,7 @@ export function testCameraModule(shared = false) {
     createError = '',
     commandError = '',
     restoreError = '',
+    supplyOn = true,
     frameEnabled = false,
     prepared: (request: string, camera?: Uint8Array) => void = () => {};
   const calls: { action: string; options: Record<string, unknown>; bytes: number[] }[] = [];
@@ -89,7 +90,7 @@ export function testCameraModule(shared = false) {
       calls.push({ action: 'input', options: { key, pressed, at }, bytes: [] });
     }
     status() {
-      return { ticks, instructions: ticks * 2n, failed, ...disposable };
+      return { ticks, instructions: ticks * 2n, failed, supplyOn, ...disposable };
     }
     frame(output: number) {
       if (!frameEnabled) return undefined;
@@ -241,6 +242,7 @@ export function testCameraModule(shared = false) {
       return { ticksPerSecond: '12000000', frames: Number(ticks / 1200000n), state: {} };
     }
     checkpoint() {
+      if (!supplyOn) throw Error('cannot checkpoint during power-off reconstruction');
       record('checkpoint');
       return { id: String(ticks), ...point(), retainedIds: [String(ticks)] };
     }
@@ -335,6 +337,9 @@ export function testCameraModule(shared = false) {
     /** Observe the prepared construction request text. */
     prepared(hook: (request: string, camera?: Uint8Array) => void) {
       prepared = hook;
+    },
+    supply(on: boolean) {
+      supplyOn = on;
     },
     fail() {
       failed = true;

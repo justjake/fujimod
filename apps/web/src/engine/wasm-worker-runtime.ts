@@ -811,7 +811,12 @@ export class WasmWorkerRuntime {
       ),
     );
   }
-  private captureCheckpoint(): Checkpoint {
+  private captureCheckpoint(): Checkpoint | undefined {
+    using status = this.require().status();
+    if (!status.supplyOn) {
+      this.points = [];
+      return;
+    }
     const { retainedIds, ...saved } = this.require().checkpoint();
     this.points = this.points.filter((point) => retainedIds.includes(point.id));
     this.points.push(saved);

@@ -367,6 +367,11 @@ impl Session {
             self.failed = true;
         }
         self.collect_frames();
+        // Supply-off ends this rewind branch. Keyframes cannot represent the
+        // pending cold reconstruction, or belong to its next board owner.
+        if self.core.board.is_powered_off() {
+            self.history = None;
+        }
         result
     }
     pub fn take_host_requests(

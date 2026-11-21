@@ -6,6 +6,7 @@ use std::sync::Arc;
 impl Session {
     pub fn status(&self) -> super::Status {
         super::Status {
+            supply_on: !self.core.board.is_powered_off(),
             ticks: self.core.board.now(),
             instructions: self.core.board.instruction_counts().iter().sum(),
             failed: self.failed,
