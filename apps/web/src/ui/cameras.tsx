@@ -122,15 +122,18 @@ function ProgressBar(props: { progress: FirmwareProgress; owners: Owner[]; tips:
         aria-valuenow={passed()}
         aria-valuetext={value()}
       >
-        <For each={groups().filter((group) => group.passed)}>
+        <For each={groups()}>
           {(group) => (
             <div
-              class="fill"
+              class="track-group"
               style={{
-                '--p': `${(group.passed / total()) * 100}%`,
+                '--outcomes': String(group.steps.length),
+                '--p': `${(group.passed / group.steps.length) * 100}%`,
                 '--c': `var(--phase-${group.id})`,
               }}
-            />
+            >
+              <div class="fill" />
+            </div>
           )}
         </For>
       </div>

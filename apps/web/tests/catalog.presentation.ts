@@ -34,12 +34,22 @@ try {
     const bar = row.getByRole('progressbar');
     assert.equal(await bar.getAttribute('aria-valuemax'), String(total || 1), progress.model);
     assert.equal(await bar.getAttribute('aria-valuenow'), String(passed), progress.model);
-    const ratio = await bar.evaluate((element) => {
-      const width = element.getBoundingClientRect().width;
-      const fills = [...element.querySelectorAll('.fill')];
-      return fills.reduce((sum, fill) => sum + fill.getBoundingClientRect().width, 0) / width;
-    });
-    assert(Math.abs(ratio - passed / (total || 1)) < 0.002, progress.model);
+    const measured = await bar.locator('.track-group').evaluateAll((segments) =>
+      segments.map((segment) => ({
+        width: segment.getBoundingClientRect().width,
+        fill: segment.querySelector('.fill')!.getBoundingClientRect().width,
+      })),
+    );
+    assert.equal(measured.length, groups.length, progress.model);
+    // Divider pixels are decoration. The remaining width belongs to the tagged outcomes.
+    const width = measured.reduce((sum, segment) => sum + segment.width, 0);
+    const fill = measured.reduce((sum, segment) => sum + segment.fill, 0);
+    for (const [index, group] of groups.entries()) {
+      const segment = measured[index]!;
+      assert(Math.abs(segment.width - (width * group.steps.length) / total) < 0.1, group.label);
+      assert(Math.abs(segment.fill - (width * group.passed) / total) < 0.1, group.label);
+    }
+    assert(Math.abs(fill - (total ? (width * passed) / total : 0)) < 0.2, progress.model);
 
     await row.locator('.progress-bar').hover();
     const tip = row.locator('.tip');
