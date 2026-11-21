@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xe5-112-setup-start",
+  "configuration_id": "xe5-112",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "setup"
+    }
+  }
+}
