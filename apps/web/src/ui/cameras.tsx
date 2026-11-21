@@ -159,16 +159,8 @@ function ProgressBar(props: { progress: FirmwareProgress; owners: Owner[]; tips:
                     {(step) => (
                       <li class={{ todo: !stepPassed(step) }}>
                         {step.label}
-                        <Show
-                          when={step.result === 'stale' || step.result === 'fail' || step.detail}
-                        >
-                          <span class="step-detail">
-                            {step.result === 'stale'
-                              ? 'Stale'
-                              : step.result === 'fail'
-                                ? 'Failed'
-                                : step.detail}
-                          </span>
+                        <Show when={step.result === 'fail' ? 'Failed' : step.detail}>
+                          {(detail) => <span class="step-detail">{detail()}</span>}
                         </Show>
                       </li>
                     )}
