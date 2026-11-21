@@ -171,7 +171,7 @@ impl Preview {
         if options.keys().any(|key| {
             !matches!(
                 key.as_str(),
-                "completion_us" | "frame_period_us" | "source_luma" | "retain_words"
+                "completion_us" | "frame_period_us" | "source_luma" | "retain_words" | "focus_filters"
             )
         }) {
             return Err("unknown preview option".into());
@@ -186,6 +186,16 @@ impl Preview {
             None => false,
             Some(value) => value.as_bool().ok_or("preview retain_words must be a boolean")?,
         };
+        // X-T5 4.31: the output at +0x400 fills statistics planes 0..3, which only the AF
+        // service reads, as 13 x 9 cells of its four contrast filters (`statistics::FocusFrame`).
+        // Without the option it writes the 7 x 7 colour sums, as before.
+        let focus_filters = match options.get("focus_filters") {
+            None => false,
+            Some(value) => value.as_bool().ok_or("preview focus_filters must be a boolean")?,
+        };
+        if rifp && focus_filters {
+            return Err("focus_filters is an input buffer option".into());
+        }
         if rifp {
             return Ok(Self::Rifp(Rifp {
                 state: State::default(),
@@ -209,15 +219,28 @@ impl Preview {
                 enables: [0x7ff, 0x3f],
                 causes: [0x7ff, 0x3f],
                 outputs: vec![
-                    Output {
-                        enable_word: 0,
-                        bit: 1 << 7,
-                        low: 0x400,
-                        high: 0x404,
-                        high_mask: 7,
-                        columns: 7,
-                        rows: 7,
-                        planes: Planes::Color,
+                    if focus_filters {
+                        Output {
+                            enable_word: 0,
+                            bit: 1 << 7,
+                            low: 0x400,
+                            high: 0x404,
+                            high_mask: 7,
+                            columns: 13,
+                            rows: 9,
+                            planes: Planes::FocusFilters,
+                        }
+                    } else {
+                        Output {
+                            enable_word: 0,
+                            bit: 1 << 7,
+                            low: 0x400,
+                            high: 0x404,
+                            high_mask: 7,
+                            columns: 7,
+                            rows: 7,
+                            planes: Planes::Color,
+                        }
                     },
                     Output {
                         enable_word: 0,
@@ -761,6 +784,42 @@ mod tests {
         assert_eq!(statistics.save()["frames"], 1);
         assert_eq!(preview.next_deadline(host.now), Some(2_000_000));
     }
+    #[test]
+    fn focus_filters_option_fills_planes_zero_to_three_with_the_focus_filters() {
+        let options = |text: &str| toml::from_str::<toml::Table>(text).unwrap();
+        assert!(Preview::new(false, Io::default(), &options("frame_period_us=1000\nsource_luma=128\nfocus_filters=1")).is_err());
+        assert!(Preview::new(true, Io::default(), &options("completion_us=1\nsource_luma=128\nfocus_filters=true")).is_err());
+        let statistics = Statistics::new(
+            super::super::STATISTICS_BASE,
+            super::super::STATISTICS_BANK_SIZE,
+        )
+        .unwrap();
+        let mut preview = Preview::new(
+            false,
+            Io::default(),
+            &options("frame_period_us=1000\nsource_luma=128\nfocus_filters=true"),
+        )
+        .unwrap()
+        .with_statistics(statistics);
+        let mut host = RecordingHost {
+            ram_base: 0x1_0000_0000,
+            ram: vec![0x55; 0x2000],
+            ..Default::default()
+        };
+        {
+            let mut cx = Cx::new(&mut host, 2, 0xbeef, 0);
+            for (o, v) in [(0x400, 0x100), (0x404, 1), (0x500, 0x100), (4, (1 << 23) | (1 << 7))] {
+                preview.write(&mut cx, 0xff974000 + o, 4, v);
+            }
+            assert!(cx.refusal().is_none());
+        }
+        host.now = 1_000_000;
+        preview.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        // Without a sensor scene the four filter planes (0x1000 bytes) are written as zero.
+        assert!(host.ram[0x100..0x1100].iter().all(|v| *v == 0));
+        assert!(host.ram[0x1100..].iter().all(|v| *v == 0x55));
+    }
+
     #[test]
     fn rifp_fills_only_its_programmed_high_address_output_on_completion() {
         let mut io = Io::default();
