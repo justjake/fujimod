@@ -289,6 +289,34 @@ test('a portable camera save restores media before boot', async () => {
   assert.equal(f.saves.length, 0);
 });
 
+test('a camera save the emulator cannot read boots a fresh camera instead of stopping', async () => {
+  const f = setup({
+    saved: {
+      durable: new Uint8Array([7, 8, 9]).buffer,
+      runtimeKey: 'prior-runtime',
+      positions: {},
+      poweredOn: true,
+      modEnabled: false,
+    },
+  });
+  f.restoreError('durable storage decode: missing field `overlays`');
+  const boot = await f.send({
+    action: 'boot',
+    config: f.config,
+    dat: new ArrayBuffer(1),
+    files: [],
+    seedIdentity: [],
+  });
+  assert.equal(boot.type, 'reply');
+  const actions = f.calls.map((c) => c.action);
+  assert.deepEqual(actions.slice(0, actions.indexOf('restore_durable') + 2), [
+    'create',
+    'restore_durable',
+    'create',
+  ]);
+  assert.equal(actions.filter((a) => a === 'restore_durable').length, 1);
+});
+
 test('replay advance returns while power is OFF and does not run or spin', async () => {
   const f = setup();
   await f.send({
