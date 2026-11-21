@@ -2,6 +2,9 @@
 version = 1
 firmware = "xt5-431"
 load_firmware = true
+# Host execution only: the M4 pair computes (the IBIS servo, the lens link) far more than it
+# waits in delay loops, so it runs in block execution. The guest state is the same either way.
+mprofile_block_execution = true
 
 # Device windows: xt5-431.d/*.toml, merged in filename order.
 
