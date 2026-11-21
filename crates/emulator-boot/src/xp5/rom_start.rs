@@ -97,6 +97,9 @@ impl SetupHandoff {
             "xm5-130" => Some(toml::from_str(include_str!(
                 "../../../../catalog/firmware/xm5/1.30/xp5-boot/setup-handoff.toml"
             )).map_err(|error| format!("setup-handoff.toml: {error}"))),
+            "xe5-112" => Some(toml::from_str(include_str!(
+                "../../../../catalog/firmware/xe5/1.12/xp5-boot/setup-handoff.toml"
+            )).map_err(|error| format!("setup-handoff.toml: {error}"))),
             _ => None,
         }
     }
@@ -319,6 +322,16 @@ mod tests {
         assert_eq!(card.setup_window_options.len(), xt5.setup_window_options.len());
         // A firmware that declares none keeps the shared fragment alone.
         assert!(start(true, vec![]).unwrap().with_setup_windows_of("x100vi-131").unwrap().setup_windows.is_empty());
+    }
+
+    #[test]
+    fn x_e5_setup_handoff_declares_the_same_boot_setup_stage_as_the_x_m5() {
+        let x_e5 = SetupHandoff::for_firmware("xe5-112").unwrap().unwrap();
+        let x_m5 = SetupHandoff::for_firmware("xm5-130").unwrap().unwrap();
+        assert_eq!(
+            (x_e5.pc, x_e5.sp, x_e5.dat_offset, x_e5.length, &x_e5.sha256),
+            (x_m5.pc, x_m5.sp, x_m5.dat_offset, x_m5.length, &x_m5.sha256),
+        );
     }
 
     #[test]

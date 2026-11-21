@@ -23,7 +23,7 @@ use fujimod_emulator_xp5_board::{
     session::Inputs,
 };
 use fujimod_emulator_xp5_io::mailbox;
-use fujimod_emulator_xp5_storage::flash_storage;
+use fujimod_emulator_xp5_storage::{flash_storage, nand_storage};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{
@@ -193,9 +193,20 @@ fn devices_and_resources(
                 if let Ok(spec) = std::env::var("XT5_FLASH_ERASED") {
                     flash_storage::erase_installed(&mut image, &spec)?;
                 }
-                resources.storage = Some(flash_storage::Medium::Nor(Arc::new(Mutex::new(
-                    flash_storage::Storage::new(image)?,
-                ))));
+                let medium = window
+                    .options
+                    .get("medium")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or("nor");
+                resources.storage = Some(match medium {
+                    "nor" => flash_storage::Medium::Nor(Arc::new(Mutex::new(
+                        flash_storage::Storage::new(image)?,
+                    ))),
+                    "serial-nand" => flash_storage::Medium::Nand(Arc::new(Mutex::new(
+                        nand_storage::NandStorage::new(image)?,
+                    ))),
+                    other => return Err(format!("unknown flash storage medium {other}")),
+                });
                 window.options.remove("dat_origin");
                 window.options.remove("xor");
             }
@@ -1094,7 +1105,10 @@ pub(crate) fn open_from(
             synchronize: Box::new(move |board| sync_flash_aperture(&storage, board)),
         });
     }
-    if rom.is_some() && !setup_without_flash {
+    // Serial NAND has no CPU-executable aperture to shadow: the controller and its DMA read the
+    // storage directly.
+    let serial_nand = matches!(storage, Some(flash_storage::Medium::Nand(_)));
+    if rom.is_some() && !setup_without_flash && !serial_nand {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.ok_or("early startup flash backing is absent")?;
         session.window_action = Some(fujimod_emulator_session::WindowAction {
