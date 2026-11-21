@@ -82,6 +82,9 @@ impl NandController {
             o,
             0 | 4
                 | 8
+                // Two-bit mode word the setup stage writes (0xff815250) and reads back
+                // (0xff815244); kept as a latch, no other effect is evidenced.
+                | 0xc
                 | 0x10
                 | 0x14
                 | 0x18
@@ -321,19 +324,27 @@ impl Device for NandController {
                 }
             },
             0xe0 => {
-                // FUN_014a1dc8 decode: 0x18 sets the bit4/bit3 family that
-                // states 3/4/5 require while the master enable is set; 8 is
-                // the idle state the init and release polls expect.
-                let mode = if self.state.regs[0xfc / 4] & 1 != 0 {
-                    0x18
-                } else {
+                // Bits 4..3 follow the configuration register at +0x10: both drivers write
+                // it and wait for the matching state. The loader sets bits 0 and 16 together
+                // from its argument (FUN_014a200c) and waits for state 3 (8 in these bits)
+                // when set and state 2 (0x18, decoded by FUN_014a1dc8) when clear; the setup
+                // stage waits for 8 when `value & 0x10001` is nonzero and 0x18 otherwise
+                // (0xff813be0..0xff813c00).
+                let enabled = self.state.regs[0xfc / 4] & 1 != 0;
+                let mode = if self.state.regs[0x10 / 4] & 0x10001 != 0 {
                     8
-                };
-                mode | if self.state.configuration_complete {
-                    1 << 23
                 } else {
-                    0
-                }
+                    0x18
+                };
+                // Bit 7 acknowledges the master enable: the setup stage writes the enable
+                // bit (0xff8163d4) and then waits for bit 7 to equal it (0xff8139e8 with
+                // mask and expected value 0x80), with no timeout.
+                mode | if enabled { 0x80 } else { 0 }
+                    | if self.state.configuration_complete {
+                        1 << 23
+                    } else {
+                        0
+                    }
             }
             0xa0 => (self.state.regs[0xa0 / 4] & 0x7fff) as u64,
             0xf0 => {
@@ -357,7 +368,11 @@ impl Device for NandController {
         let result = match o {
             0x80 => {
                 if !self.state.active || self.cmd() != 0x1f {
-                    Err("unsupported serial-NAND FIFO write".into())
+                    Err(format!(
+                        "unsupported serial-NAND FIFO write (command {:#x}, transaction {})",
+                        self.cmd(),
+                        if self.state.active { "active" } else { "not started" },
+                    ))
                 } else {
                     self.state.tx.push(v as u8);
                     if self.state.tx.len() == (self.state.regs[0xa0 / 4] & 0x7ff) as usize + 1 {
@@ -379,7 +394,10 @@ impl Device for NandController {
                 Ok(())
             }
             0xd0 => {
-                if v & !0x101 != 0 {
+                // Self-clearing resets: bits 0, 8 and 9 (reads return 0). The setup stage
+                // sets bit 8 (0xff815ebc) and bit 9 (0xff815ee4) and polls them back
+                // (0xff815eb0, 0xff815ed8).
+                if v & !0x301 != 0 {
                     Err("unsupported serial-NAND FIFO reset".into())
                 } else {
                     Ok(())
@@ -548,16 +566,22 @@ mod tests {
     fn bus_state_decode_matches_loader_expectations() {
         let mut c = controller(vec![0xff; PAGE + 2]);
         let mut host = RecordingHost::default();
-        // Master enable set (per-transaction): states 3/5 must decode.
-        c.state.regs[0xfc / 4] = 1;
-        assert_eq!(
-            c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0e0, 4) & 0x18,
-            0x18
-        );
-        // Master enable clear (init/release): idle state family.
+        let mut read = |c: &mut NandController| {
+            c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0e0, 4) as u32
+        };
+        // Configuration bits 0/16 clear: the 0x18 family (loader state 2, setup wait for 0x18).
+        c.state.regs[0x10 / 4] = 0;
+        assert_eq!(read(&mut c) & 0x18, 0x18);
+        // Either bit set: the idle family 8 (loader state 3, setup wait for 8).
+        c.state.regs[0x10 / 4] = 1;
+        assert_eq!(read(&mut c) & 0x18, 8);
+        c.state.regs[0x10 / 4] = 0x10000;
+        assert_eq!(read(&mut c) & 0x18, 8);
+        // Bit 7 follows the master enable.
         c.state.regs[0xfc / 4] = 0;
-        let idle = c.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff90a0e0, 4) as u32;
-        assert_eq!(idle & 0x18, 8, "idle must satisfy the state-8 poll");
+        assert_eq!(read(&mut c) & 0x80, 0);
+        c.state.regs[0xfc / 4] = 1;
+        assert_eq!(read(&mut c) & 0x80, 0x80);
     }
 
     #[test]
