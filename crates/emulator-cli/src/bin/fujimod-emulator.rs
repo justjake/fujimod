@@ -3,10 +3,11 @@ use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_gui::{GuiOptions, Xp5Session};
 use boot::host::Memory;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode, time::Duration};
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -39,8 +40,8 @@ Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
-/// Options that take a value, in help order; `--discovery` is the only flag.
-const VALUED: [&str; 43] = [
+/// Options that take a value, in help order; `--discovery` and `--gui` are flags.
+const VALUED: [&str; 38] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -97,6 +98,7 @@ struct Boot {
     second_card_files: Vec<String>,
     pokes: Vec<String>,
     discovery: bool,
+    gui: bool,
 }
 
 fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
@@ -120,12 +122,19 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
         second_card_files: Vec::new(),
         pokes: Vec::new(),
         discovery: false,
+        gui: false,
     };
     while let Some(key) = args.next() {
         let key = key.to_str().ok_or("option name is not UTF-8")?.to_owned();
         if key == "--discovery" {
             if std::mem::replace(&mut boot.discovery, true) {
                 return Err("duplicate option: --discovery".into());
+            }
+            continue;
+        }
+        if key == "--gui" {
+            if std::mem::replace(&mut boot.gui, true) {
+                return Err("duplicate option: --gui".into());
             }
             continue;
         }
@@ -446,9 +455,16 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
     let card_files = boot_options.sd_files()?;
     let pc_trace = boot_options.pc_trace()?;
     let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
+    let gpio = boot_options.text("--gpio")?;
+    let gui_options = GuiOptions {
+        load_snapshot: boot_options.path("--load-snapshot"),
+        discovery: boot_options.discovery,
+        execution_policy,
+    };
+    let gui = boot_options.gui;
     let run = xp5::Run {
         configuration: resolved,
-        load_snapshot: boot_options.path("--load-snapshot"),
+        load_snapshot: gui_options.load_snapshot.clone(),
         save_snapshot: boot_options.path("--save-snapshot"),
         manifest: boot_options.path("--manifest"),
         watch_pcs: boot_options.text("--watch-pcs")?,
@@ -465,7 +481,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         second_card_image: boot_options.path("--card-image-2"),
         second_card_files: boot_options.second_sd_files()?,
         keys: boot_options.text("--keys")?,
-        gpio: boot_options.text("--gpio")?,
+        gpio,
         pokes: std::mem::take(&mut boot_options.pokes),
         press: boot_options.text("--press")?,
         settings: boot_options.text("--set")?,
@@ -496,6 +512,27 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         execution_policy,
         output: boot_options.path("--output").ok_or("required option: --output")?,
     };
+    if gui {
+        let configuration = run.configuration.clone();
+        let boot::Opened::Xp5(started) = xp5::open_gui(run)? else {
+            return Err("XP5 GUI startup returned another processor generation".into());
+        };
+        let (session, inputs, ticks_per_second, quantum, _) = started.into_gui_parts();
+        let host = fujimod_emulator_gui::serve(
+            Xp5Session {
+                configuration,
+                session,
+                inputs,
+                ticks_per_second,
+                quantum,
+            },
+            gui_options,
+            std::net::Ipv4Addr::LOCALHOST.into(),
+        )?;
+        eprintln!("FUJIMOD GUI {}", host.endpoint().url);
+        host.run()?;
+        return Ok(Outcome { success: true });
+    }
     let report = xp5::run_boot(run)?;
     println!(
         "{}",

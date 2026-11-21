@@ -29,9 +29,25 @@ export type NativeDisplayState = {
   title: string | null;
   sequence: number;
 };
+export type NativeCatalog = {
+  configuration: string;
+  body: string;
+  model: string;
+  firmware: string;
+  controls: unknown;
+};
+export type NativeSessionState = {
+  inputs: ControlInput[];
+  positions: Record<string, string>;
+  poweredOn: boolean;
+};
 type Reply = { type: 'reply'; serial: number; result: unknown };
 type Failure = { type: 'error'; serial?: number; error: string; fault?: EngineFault };
 type NativeState = { type: 'native-state'; display: NativeDisplayState };
+type NativeCatalogMessage = { type: 'catalog' } & Omit<NativeCatalog, 'controls'> & {
+  controls: NativeCatalog['controls'];
+};
+type NativeSessionMessage = { type: 'state' } & NativeSessionState;
 type FrameListeners = Set<(frame: Frame) => void>;
 
 class Listeners<T> {
@@ -64,6 +80,10 @@ export class RemoteEngine implements Engine {
   private saveListeners = new Listeners<SaveEvent>();
   private powerListeners = new Listeners<boolean>();
   private nativeStateListeners = new Listeners<NativeDisplayState>();
+  private catalogListeners = new Listeners<NativeCatalog>();
+  private sessionListeners = new Listeners<NativeSessionState>();
+  private latestCatalog?: NativeCatalog;
+  private latestSession?: NativeSessionState;
   private progress?: LoadingProgress;
   private unavailable?: Error;
   private disposed = false;
@@ -150,6 +170,8 @@ export class RemoteEngine implements Engine {
       | Reply
       | Failure
       | NativeState
+      | NativeCatalogMessage
+      | NativeSessionMessage
       | { type: 'progress'; message: string; percent?: number };
     try {
       message = JSON.parse(source) as typeof message;
@@ -163,6 +185,16 @@ export class RemoteEngine implements Engine {
     }
     if (message.type === 'native-state') {
       this.nativeStateListeners.emit(message.display);
+      return;
+    }
+    if (message.type === 'catalog') {
+      this.latestCatalog = message;
+      this.catalogListeners.emit(message);
+      return;
+    }
+    if (message.type === 'state') {
+      this.latestSession = message;
+      this.sessionListeners.emit(message);
       return;
     }
     if (message.type === 'error') {
@@ -350,6 +382,14 @@ export class RemoteEngine implements Engine {
   }
   nativeState(listener: (state: NativeDisplayState) => void) {
     return this.nativeStateListeners.add(listener);
+  }
+  catalog(listener: (catalog: NativeCatalog) => void) {
+    if (this.latestCatalog) listener(this.latestCatalog);
+    return this.catalogListeners.add(listener);
+  }
+  sessionState(listener: (state: NativeSessionState) => void) {
+    if (this.latestSession) listener(this.latestSession);
+    return this.sessionListeners.add(listener);
   }
   dispose(): Promise<void> {
     if (this.disposePromise) return this.disposePromise;

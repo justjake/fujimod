@@ -45,6 +45,8 @@ members = [
   "crates/emulator-board-graph",
   "crates/emulator-session",
   "crates/emulator-cli",
+  "crates/emulator-gui",
+  "apps/emulator-gui/src-tauri",
   "crates/catalog-wiring",
   "crates/emulator-controls",
   "crates/mcp-core",
@@ -181,6 +183,7 @@ fujimod-perf = { path = "crates/perf", version = "0.1.0" }
 fujimod-emulator-board-graph = { path = "crates/emulator-board-graph", version = "0.1.0" }
 fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
 fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
+fujimod-emulator-gui = { path = "crates/emulator-gui", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }
 fujimod-emulator-models = { path = "crates/emulator-models", version = "0.1.0" }
 fujimod-emulator-exr2-boot-serial = { path = "crates/emulator-exr2-boot-serial", version = "0.1.0" }

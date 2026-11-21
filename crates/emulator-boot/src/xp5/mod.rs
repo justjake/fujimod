@@ -14,7 +14,7 @@ mod profile;
 mod rom_start;
 mod run;
 
-pub use run::{Run, run_boot};
+pub use run::{Run, run_boot, open_gui};
 
 
 use fujimod_catalog_configuration::RunStart;
@@ -60,8 +60,44 @@ impl Started {
         (self.opened.session, self.opened.inputs, self.opened.read_limit)
     }
 
+    /// Transfer the opened board, physical inputs and scheduler values to a GUI host.
+    pub fn into_gui_session(
+        self,
+    ) -> (
+        fujimod_emulator_session::Session,
+        fujimod_emulator_xp5_board::session::Inputs,
+        u64,
+        usize,
+    ) {
+        (
+            self.opened.session,
+            self.opened.inputs,
+            self.opened.ticks_per_second,
+            self.opened.quantum,
+        )
+    }
+
     pub fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
         &mut self.opened.session
+    }
+
+    /// The physical controls and scheduler values of the opened session.
+    pub fn into_gui_parts(
+        self,
+    ) -> (
+        fujimod_emulator_session::Session,
+        fujimod_emulator_xp5_board::session::Inputs,
+        u64,
+        usize,
+        usize,
+    ) {
+        (
+            self.opened.session,
+            self.opened.inputs,
+            self.opened.ticks_per_second,
+            self.opened.quantum,
+            self.opened.read_limit,
+        )
     }
 }
 

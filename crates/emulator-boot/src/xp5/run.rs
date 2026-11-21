@@ -223,6 +223,52 @@ pub struct Run {
     pub output: PathBuf,
 }
 
+/// Open the inputs for a native GUI without running the guest.
+pub fn open_gui(run: Run) -> Result<crate::Opened, String> {
+    let Run {
+        configuration,
+        load_snapshot,
+        update,
+        manifest,
+        boot_rom,
+        card_image,
+        card_files,
+        scene,
+        viewer_port,
+        discovery,
+        quantum,
+        output,
+        ..
+    } = run;
+    let mode = if discovery {
+        fujimod_emulator::board::bus::Mode::Discovery
+    } else {
+        fujimod_emulator::board::bus::Mode::Strict
+    };
+    let request = Startup {
+        update,
+        manifest,
+        boot_rom,
+        card_image,
+        card_files,
+        scene,
+        output: Some(output),
+        viewer_port,
+        mode,
+        quantum,
+    };
+    let mut opened = crate::open(configuration, crate::StartupInputs::Xp5(request))?;
+    if let Some(path) = load_snapshot {
+        match &mut opened {
+            crate::Opened::Xp5(started) => {
+                crate::load_snapshot(started.session_mut(), &path)?;
+            }
+            _ => return Err("XP5 startup returned another processor generation".into()),
+        }
+    }
+    Ok(opened)
+}
+
 /// Host-time cadence of status lines, so a slow run is visibly alive.
 const WALL_STATUS_EVERY: Duration = Duration::from_secs(10);
 
