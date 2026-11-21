@@ -498,9 +498,11 @@ pub fn still_path_real() -> bool {
 
 /// Whether the `XT5_MOVIE_PATH` environment variable selects the modelled movie data path
 /// (`real`): the H.264 encoder reads the guest Y/C planes instead of the host scene, and the
-/// movie develop chain (RIFP inline YC -> RESZ two-plane 4:2:0 -> TNR) moves the MOVDC
-/// picture into the encoder input. Unset or any other value keeps the encoder shortcut. Read
-/// once per process; a host input outside the run definition, like `XT5_SCENE`.
+/// movie develop chain writes the encoder input: in the YC modes (FHD) RIFP inline YC -> RESZ
+/// two-plane 4:2:0 -> TNR from the MOVDC picture, in the RAW modes (4K) RIFP RAW develop ->
+/// RESZ two-plane 4:2:0 from the sensor RAW, which also needs `XT5_STILL_PATH=real`. Unset or
+/// any other value keeps the encoder shortcut. Read once per process; a host input outside
+/// the run definition, like `XT5_SCENE`.
 pub fn movie_path_real() -> bool {
     use std::sync::OnceLock;
     static REAL: OnceLock<bool> = OnceLock::new();
@@ -508,7 +510,8 @@ pub fn movie_path_real() -> bool {
         let real = std::env::var("XT5_MOVIE_PATH").is_ok_and(|v| v == "real");
         if real {
             eprintln!(
-                "XT5_MOVIE_PATH: real (MOVDC -> RIFP inline -> RESZ -> TNR -> H.264 encoder; no scene shortcut)"
+                "XT5_MOVIE_PATH: real (FHD: MOVDC -> RIFP inline -> RESZ -> TNR -> H.264 encoder; 4K: sensor RAW -> \
+                 RIFP -> RESZ -> H.264 encoder, with XT5_STILL_PATH=real; no scene shortcut)"
             );
         }
         real

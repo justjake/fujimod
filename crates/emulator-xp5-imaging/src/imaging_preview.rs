@@ -137,9 +137,9 @@ pub struct StillPath {
     /// The still path (`XT5_STILL_PATH=real`): develop or copy at the end of each queued run
     /// ([`super::still::rifp_run`]).
     pub develop: bool,
-    /// The movie path (`XT5_MOVIE_PATH=real`): a queued two-plane 4:2:0 run publishes its
-    /// input as the inline picture at its start ([`super::movie::rifp_inline_picture`]) and is
-    /// not developed.
+    /// The movie path (`XT5_MOVIE_PATH=real`): a queued two-plane 4:2:0 run is not developed;
+    /// when it ends, the two-plane RESZ start that waits for it scales the run's input
+    /// picture ([`super::movie::rifp_inline_picture`]).
     pub movie: bool,
 }
 impl StillPath {
@@ -441,19 +441,10 @@ impl Device for Rifp {
             if o == 4 && v & 1 != 0 {
                 if let Some(still) = &self.still {
                     let regs = &self.state.regs;
-                    match still.movie_run(&self.io, |o| regs.get(&o).copied().unwrap_or(0)) {
-                        Some(Ok(picture)) => {
-                            cx.log(&format!("RIFP movie run: inline two-plane 4:2:0 picture {picture:?}"));
-                            still.output.set(Some(picture));
-                            self.state.yc_output = Some(picture);
-                        }
-                        Some(Err(e)) => {
-                            cx.log(&format!("{e}; no inline picture"));
-                            still.output.set(None);
-                            self.state.yc_output = None;
-                        }
-                        None if still.develop => still.output.set_busy(true),
-                        None => {}
+                    if still.develop
+                        || still.movie_run(&self.io, |o| regs.get(&o).copied().unwrap_or(0)).is_some()
+                    {
+                        still.output.set_busy(true);
                     }
                 }
                 self.state.armed = true;
@@ -488,6 +479,31 @@ impl Device for Rifp {
             let regs = self.state.regs.clone();
             let r = |o| regs.get(&o).copied().unwrap_or(0);
             let mut ran = None;
+            // The movie path: a two-plane 4:2:0 YC run ends. The inline RESZ start that waits
+            // for it scales the run's input picture (movie module notes).
+            if let Some(picture) = still.movie_run(&self.io, r) {
+                let result = picture.and_then(|picture| {
+                    cx.log(&format!("RIFP movie run: inline two-plane 4:2:0 picture {picture:?}"));
+                    match still.output.take_deferred() {
+                        Some(job) if job.two_plane() => job.scale_two_plane(cx, Some(picture)),
+                        Some(_) => Err("RIFP movie run: the waiting RESZ start is not two-plane".into()),
+                        None => Err("RIFP movie run: no RESZ start waits for it".into()),
+                    }
+                });
+                match result {
+                    Ok(line) => cx.log(&line),
+                    Err(e) => cx.log(&format!("{e}; nothing written")),
+                }
+            }
+            // The movie path's RAW modes need the still path's RAW develop: without it a
+            // waiting two-plane start is dropped here.
+            if !still.develop && still.output.waits_two_plane() {
+                still.output.take_deferred();
+                cx.log(
+                    "RIFP run for a two-plane RESZ start: the RAW develop needs XT5_STILL_PATH=real; \
+                     nothing written",
+                );
+            }
             // The still channel picture this run's input is in: the HDR exposures are three
             // pictures, developed after the last one was written.
             let raw = still
@@ -504,8 +520,13 @@ impl Device for Rifp {
                 && let Err(e) =
                     super::still::rifp_into_resz(cx, r, raw, &job)
             {
-                cx.fail(e);
-                return;
+                // As for the other movie starts: one the model cannot follow is logged.
+                if job.two_plane() {
+                    cx.log(&format!("{e}; nothing written"));
+                } else {
+                    cx.fail(e);
+                    return;
+                }
             }
             // A RAW-output run (FINE+RAW): copy the RAW crop; the output becomes a derived
             // still RAW that the following develop runs read.
@@ -549,6 +570,13 @@ impl Device for Rifp {
             }
             if let Some(job) = still.output.take_deferred() {
                 let result = match ran {
+                    Some(_) if job.two_plane() => {
+                        cx.log(
+                            "RIFP run with an output address for a two-plane RESZ start is not \
+                             modelled; nothing written",
+                        );
+                        Ok(())
+                    }
                     Some(picture) => job.scale(cx, Some(picture)),
                     None => Err(format!(
                         "RESZ inline start waited for a RIFP run without an output address \

@@ -68,7 +68,8 @@
 //! destination class 2 (+0x10 bits 5..4) and a second destination plane writes two-plane
 //! 8-bit 4:2:0: Y at +0xe4 / +0xe8, interleaved Cb, Cr at +0xec / +0xf0, both at the pitch
 //! +0xf4 ([`ReszJob::scale_two_plane`]). Its source is the second-plane pair of the source
-//! words, or, with source address 0, the RIFP inline picture. X-T5 4.31 FHD recording
+//! words, or, with source address 0, the RIFP run that follows it in the queue (below): that
+//! run's two-plane inline picture, or its developed RAW lines. X-T5 4.31 FHD recording
 //! programs +0x10 = 0x10000121 (queue bit 28, source class 1, destination class 2), 1920x1080
 //! in, crop and out, steps 0x1000, destination pitch 0x1600 (run93 end state).
 //!
@@ -165,7 +166,9 @@ struct Shared {
 /// What RIFP and RESZ share: the last picture a RIFP still run wrote, whether a RIFP run is in
 /// progress, and a RESZ job that waits for that run's output (an inline start, see the module
 /// notes). Only the output is part of a checkpoint (RIFP's); a checkpoint taken between an
-/// inline RESZ start and the RIFP completion loses the waiting job.
+/// inline RESZ start and the RIFP completion loses the waiting job. For the movie path's
+/// starts that is the frame before the codec opens: while it records, the codec refuses a
+/// checkpoint.
 #[derive(Clone, Default)]
 pub struct YcOutput(Arc<Mutex<Shared>>);
 impl YcOutput {
@@ -178,6 +181,10 @@ impl YcOutput {
     /// RIFP: a run started (true) or ended (false).
     pub fn set_busy(&self, busy: bool) {
         self.0.lock().unwrap().rifp_busy = busy;
+    }
+    /// RIFP: whether the waiting RESZ job, if any, writes two-plane 4:2:0 (the movie path).
+    pub fn waits_two_plane(&self) -> bool {
+        self.0.lock().unwrap().deferred.as_ref().is_some_and(ReszJob::two_plane)
     }
     /// RIFP: the RESZ job waiting for the run that just ended, if any.
     pub fn take_deferred(&self) -> Option<ReszJob> {
@@ -271,6 +278,44 @@ struct ReszPlan {
 
 impl ReszPlan {
     /// The source line (in source lines, after the pre-decimation) that output line `y` reads.
+    fn row(&self, y: usize) -> usize {
+        (self.origin.1 + y * self.crop.1 / self.out.1) << self.shift.1
+    }
+}
+
+/// What a start with a two-plane 4:2:0 destination reads.
+enum TwoPlaneSource {
+    /// Its source planes, or, with source address 0, this two-plane RIFP inline picture.
+    Picture(Option<YcPicture>),
+    /// With source address 0: the lines of a RIFP RAW run without an output address,
+    /// (pixels, lines), sampled as the run develops them ([`rifp_into_resz`]).
+    Stream(usize, usize),
+}
+
+/// The checked geometry of one start with a two-plane 4:2:0 destination.
+struct TwoPlanePlan {
+    geometry: String,
+    /// The source planes and their pitch (not used for a stream).
+    luma: u64,
+    chroma: u64,
+    pitch: usize,
+    lines: usize,
+    used: usize,
+    shift: (usize, usize),
+    origin: (usize, usize),
+    crop: (usize, usize),
+    out: (usize, usize),
+    output: u64,
+    out_chroma: u64,
+    out_pitch: usize,
+}
+
+impl TwoPlanePlan {
+    /// The source pixel that output pixel `x` reads.
+    fn column(&self, x: usize) -> usize {
+        (self.origin.0 + x * self.crop.0 / self.out.0) << self.shift.0
+    }
+    /// The source line that output line `y` reads.
     fn row(&self, y: usize) -> usize {
         (self.origin.1 + y * self.crop.1 / self.out.1) << self.shift.1
     }
@@ -464,10 +509,42 @@ impl ReszJob {
         (word(0x10) >> 4) & 3 == 2 && (word(dst + 0xc) != 0 || word(dst + 8) & 7 != 0)
     }
 
+    /// Whether the source address words are zero: the source is the RIFP inline stream.
+    pub fn inline_source(&self) -> bool {
+        let word = |o: u64| self.words.get(&o).copied().unwrap_or(0);
+        let src = self.layout.source;
+        word(src) & 7 == 0 && word(src + 4) == 0
+    }
+
     /// Scale a two-plane 4:2:0 picture to the two-plane destination, nearest neighbour; the
     /// chroma plane takes the Cb, Cr pair at the chroma site of each output pixel pair.
     /// `inline` replaces a zero source address (the RIFP inline stream). Returns the log line.
     pub fn scale_two_plane(&self, cx: &mut Cx<'_>, inline: Option<YcPicture>) -> Result<String, String> {
+        let p = self.two_plane_plan(TwoPlaneSource::Picture(inline))?;
+        let luma = cx.ram_bytes(p.luma, p.pitch * (p.lines - 1) + p.used)?;
+        let chroma = cx.ram_bytes(p.chroma, p.pitch * (p.lines.div_ceil(2) - 1) + p.used)?;
+        let mut line = vec![0u8; p.out.0];
+        for y in 0..p.out.1 {
+            let at = p.row(y) * p.pitch;
+            for (x, pixel) in line.iter_mut().enumerate() {
+                *pixel = luma[at + p.column(x)];
+            }
+            cx.ram_write(p.output + (y * p.out_pitch) as u64, &line)?;
+        }
+        for y in 0..p.out.1.div_ceil(2) {
+            let at = p.row(2 * y) / 2 * p.pitch;
+            for pair in 0..p.out.0 / 2 {
+                let x = p.column(2 * pair) & !1;
+                line[2 * pair] = chroma[at + x];
+                line[2 * pair + 1] = chroma[at + x + 1];
+            }
+            cx.ram_write(p.out_chroma + (y * p.out_pitch) as u64, &line)?;
+        }
+        Ok(p.geometry)
+    }
+
+    /// The checked geometry of a start that writes a two-plane 4:2:0 picture.
+    fn two_plane_plan(&self, source: TwoPlaneSource) -> Result<TwoPlanePlan, String> {
         let word = |o: u64| self.words.get(&o).copied().unwrap_or(0);
         let address = |high: u64| u64::from(word(high + 4)) | (u64::from(word(high) & 7) << 32);
         let size = |w: u32| ((w & 0xffff) as usize + 1, (w >> 16) as usize + 1);
@@ -476,24 +553,44 @@ impl ReszJob {
         let (mut luma, mut chroma, mut pitch) = (address(src), address(src + 8), word(src + 0x10) as usize);
         let from_rifp = luma == 0;
         let (width, lines) = size(word(0x14));
-        if from_rifp {
-            let picture = inline.ok_or_else(|| {
-                format!("{name} {:#x}: two-plane start with source address 0 but no RIFP inline picture", self.base)
-            })?;
-            let Some(c) = picture.chroma else {
+        let mut stream = None;
+        match source {
+            TwoPlaneSource::Stream(..) if !from_rifp => {
                 return Err(format!(
-                    "{name} {:#x}: two-plane start with source address 0 but the RIFP inline picture is \
-                     packed 4:2:2 ({picture:?})",
-                    self.base
-                ));
-            };
-            if width > picture.width as usize || lines > picture.lines as usize {
-                return Err(format!(
-                    "{name} {:#x}: source size {width}x{lines} exceeds the RIFP inline picture {picture:?}",
+                    "{name} {:#x}: a RIFP stream for a two-plane start with source address {luma:#x}",
                     self.base
                 ));
             }
-            (luma, chroma, pitch) = (picture.address, c, picture.pitch as usize);
+            TwoPlaneSource::Stream(pixels, stream_lines) => {
+                if width > pixels || lines > stream_lines {
+                    return Err(format!(
+                        "{name} {:#x}: source size {width}x{lines} exceeds the RIFP inline stream \
+                         {pixels}x{stream_lines}",
+                        self.base
+                    ));
+                }
+                stream = Some((pixels, stream_lines));
+            }
+            TwoPlaneSource::Picture(_) if !from_rifp => {}
+            TwoPlaneSource::Picture(inline) => {
+                let picture = inline.ok_or_else(|| {
+                    format!("{name} {:#x}: two-plane start with source address 0 but no RIFP inline picture", self.base)
+                })?;
+                let Some(c) = picture.chroma else {
+                    return Err(format!(
+                        "{name} {:#x}: two-plane start with source address 0 but the RIFP inline picture is \
+                         packed 4:2:2 ({picture:?})",
+                        self.base
+                    ));
+                };
+                if width > picture.width as usize || lines > picture.lines as usize {
+                    return Err(format!(
+                        "{name} {:#x}: source size {width}x{lines} exceeds the RIFP inline picture {picture:?}",
+                        self.base
+                    ));
+                }
+                (luma, chroma, pitch) = (picture.address, c, picture.pitch as usize);
+            }
         }
         let shift = (((word(0x24) >> 16) & 3) as usize, ((word(0x28) >> 16) & 3) as usize);
         let decimated = (width.div_ceil(1 << shift.0), lines.div_ceil(1 << shift.1));
@@ -508,11 +605,16 @@ impl ReszJob {
         let out = size(word(0x20));
         let (output, out_chroma, out_pitch) = (address(dst), address(dst + 8), word(dst + 0x10) as usize);
         let geometry = format!(
-            "{name} {:#x}: two-plane 4:2:0 source {luma:#x} / {chroma:#x}{} pitch {pitch:#x} size \
-             {width}x{lines}, crop {crop:?} at {origin:?}{}, output {out:?} at {output:#x} / \
-             {out_chroma:#x} pitch {out_pitch:#x} (+0x10 {:#x})",
+            "{name} {:#x}: two-plane 4:2:0 source {} size {width}x{lines}, crop {crop:?} at {origin:?}{}, \
+             output {out:?} at {output:#x} / {out_chroma:#x} pitch {out_pitch:#x} (+0x10 {:#x})",
             self.base,
-            if from_rifp { " (RIFP inline)" } else { "" },
+            match stream {
+                Some((pixels, stream_lines)) => format!("RIFP inline stream {pixels}x{stream_lines}"),
+                None => format!(
+                    "{luma:#x} / {chroma:#x}{} pitch {pitch:#x}",
+                    if from_rifp { " (RIFP inline)" } else { "" }
+                ),
+            },
             if shift == (0, 0) {
                 String::new()
             } else {
@@ -523,8 +625,7 @@ impl ReszJob {
         let steps = [word(0x24), word(0x28)];
         let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
         if steps.iter().any(|w| w >> 18 != 0 || (w >> 16) & 3 == 3)
-            || luma == 0
-            || chroma == 0
+            || (stream.is_none() && (luma == 0 || chroma == 0 || pitch < used))
             || output == 0
             || out_chroma == 0
             || crop.0 == 0
@@ -532,33 +633,25 @@ impl ReszJob {
             || origin.0 + crop.0 > decimated.0
             || origin.1 + crop.1 > decimated.1
             || out.0 % 2 != 0
-            || pitch < used
             || out_pitch < out.0
         {
             return Err(format!("{geometry} is outside the modelled layout"));
         }
-        let luma = cx.ram_bytes(luma, pitch * (lines - 1) + used)?;
-        let chroma = cx.ram_bytes(chroma, pitch * (lines.div_ceil(2) - 1) + used)?;
-        let column = |x: usize| (origin.0 + x * crop.0 / out.0) << shift.0;
-        let row = |y: usize| (origin.1 + y * crop.1 / out.1) << shift.1;
-        let mut line = vec![0u8; out.0];
-        for y in 0..out.1 {
-            let at = row(y) * pitch;
-            for (x, pixel) in line.iter_mut().enumerate() {
-                *pixel = luma[at + column(x)];
-            }
-            cx.ram_write(output + (y * out_pitch) as u64, &line)?;
-        }
-        for y in 0..out.1.div_ceil(2) {
-            let at = row(2 * y) / 2 * pitch;
-            for pair in 0..out.0 / 2 {
-                let x = column(2 * pair) & !1;
-                line[2 * pair] = chroma[at + x];
-                line[2 * pair + 1] = chroma[at + x + 1];
-            }
-            cx.ram_write(out_chroma + (y * out_pitch) as u64, &line)?;
-        }
-        Ok(geometry)
+        Ok(TwoPlanePlan {
+            geometry,
+            luma,
+            chroma,
+            pitch,
+            lines,
+            used,
+            shift,
+            origin,
+            crop,
+            out,
+            output,
+            out_chroma,
+            out_pitch,
+        })
     }
 }
 
@@ -697,7 +790,7 @@ pub fn rifp_run(
 ) -> Result<YcPicture, String> {
     let output = u64::from(word(0x40)) | (u64::from(word(0x44) & 7) << 32);
     let out_pitch = (word(0x50) & 0xfffff) as usize;
-    let out = rifp_lines(cx, &word, raw, Some(out_pitch), |cx, y, line| {
+    let out = rifp_lines(cx, &word, raw, Some(out_pitch), None, |cx, y, line| {
         cx.ram_write(output + (y * out_pitch) as u64, line)
     })?;
     capture_run(cx, &word, output, out_pitch, out)?;
@@ -856,16 +949,52 @@ pub fn rifp_raw_copy(
 /// One RIFP still run without an output address (RCIZ, see the module notes): its output lines
 /// go straight into the inline RESZ `job` that waits for it, which scales them to its
 /// destination. Nothing else is written.
+///
+/// A job with a two-plane 4:2:0 destination ([`ReszJob::two_plane`], the movie path's RAW
+/// modes) takes the run's whole input as the stream ([`super::movie`]): each destination line
+/// is developed at the input pixels RESZ samples, its luma goes to the Y plane and the Cb, Cr
+/// pairs of every other line go to the C plane.
 pub fn rifp_into_resz(
     cx: &mut Cx<'_>,
     word: impl Fn(u64) -> u32,
     raw: Option<StillRaw>,
     job: &ReszJob,
 ) -> Result<(), String> {
+    if job.two_plane() {
+        let (width, lines) = pixels_lines(word(0x20));
+        let p = job.two_plane_plan(TwoPlaneSource::Stream(width, lines))?;
+        cx.log(&p.geometry);
+        let sampling = Sampling {
+            out: p.out,
+            rows: (0..p.out.1).map(|y| p.row(y)).collect(),
+            columns: (0..p.out.0).map(|x| p.column(x)).collect(),
+        };
+        let (mut luma, mut chroma) = (vec![0u8; p.out.0], vec![0u8; p.out.0]);
+        rifp_lines(cx, &word, raw, None, Some(&sampling), |cx, y, line| {
+            for (pair, yc) in line.as_chunks::<4>().0.iter().enumerate() {
+                luma[2 * pair..2 * pair + 2].copy_from_slice(&yc[..2]);
+                chroma[2 * pair..2 * pair + 2].copy_from_slice(&yc[2..]);
+            }
+            cx.ram_write(p.output + (y * p.out_pitch) as u64, &luma)?;
+            if y % 2 == 0 {
+                cx.ram_write(p.out_chroma + (y / 2 * p.out_pitch) as u64, &chroma)?;
+            }
+            Ok(())
+        })?;
+        return Ok(());
+    }
     let (_, _, _, out) = rifp_window(&word);
     let mut stream = job.stream(cx, out)?;
-    rifp_lines(cx, &word, raw, None, |cx, y, line| stream.feed(cx, y, line))?;
+    rifp_lines(cx, &word, raw, None, None, |cx, y, line| stream.feed(cx, y, line))?;
     stream.finish()
+}
+
+/// The input pixels a RIFP run develops when RESZ resamples its inline stream: output line `y`
+/// takes input line `rows[y]`, output pixel `x` input pixel `columns[x]`.
+struct Sampling {
+    out: (usize, usize),
+    rows: Vec<usize>,
+    columns: Vec<usize>,
 }
 
 /// The input size, crop origin, crop size and output size of a RIFP run (+0x20..+0x2c, see the
@@ -889,18 +1018,27 @@ fn rifp_window(
 
 /// Develop (or copy) a RIFP still run and hand each output line to `emit`, in order. With
 /// `out_pitch` the run has an output picture at that pitch; without it the output is the
-/// inline stream to RESZ. Returns the output size (pixels, lines).
+/// inline stream to RESZ. With `sampling` (a RAW run only) the output is the whole input,
+/// sampled as given, and the window words +0x24..+0x2c are not read. Returns the output size
+/// (pixels, lines).
 fn rifp_lines(
     cx: &mut Cx<'_>,
     word: &impl Fn(u64) -> u32,
     raw: Option<StillRaw>,
     out_pitch: Option<usize>,
+    sampling: Option<&Sampling>,
     mut emit: impl FnMut(&mut Cx<'_>, usize, &[u8]) -> Result<(), String>,
 ) -> Result<(usize, usize), String> {
     let address = |low, high| u64::from(word(low)) | (u64::from(word(high) & 7) << 32);
     let (input, pitch) = (address(0x0c, 0x10), word(0x1c) as usize);
     let output = address(0x40, 0x44);
-    let ((width, lines), origin, crop, out) = rifp_window(word);
+    let ((width, lines), origin, crop, out) = match sampling {
+        Some(sampling) => {
+            let size = pixels_lines(word(0x20));
+            (size, (0, 0), size, sampling.out)
+        }
+        None => rifp_window(word),
+    };
     let develop = raw
         .filter(|r| {
             r.pitch as usize == pitch
@@ -951,6 +1089,12 @@ fn rifp_lines(
         || out.0 % 2 != 0
         || out_pitch.is_some_and(|p| p < 2 * out.0)
         || (!packed12 && pitch < 2 * width)
+        || sampling.is_some_and(|s| {
+            s.rows.len() != out.1
+                || s.columns.len() != out.0
+                || s.rows.iter().any(|&y| y >= lines)
+                || s.columns.iter().any(|&x| x >= width)
+        })
     {
         return Err(format!("{} is outside the modelled layout", geometry()));
     }
@@ -997,7 +1141,8 @@ fn rifp_lines(
         let levels = (!path.is_declared())
             .then(|| super::colour::linear_levels(&xtrans::Response::xt5(r.exposure)));
         for y in 0..out.1 {
-            let (line_y, column) = (origin.1 + y * crop.1 / out.1, |x| origin.0 + x * crop.0 / out.0);
+            let line_y = sampling.map_or(origin.1 + y * crop.1 / out.1, |s| s.rows[y]);
+            let column = |x: usize| sampling.map_or(origin.0 + x * crop.0 / out.0, |s| s.columns[x]);
             let line = match &levels {
                 Some(levels) => {
                     super::colour::develop_422_line(&raw, &path, levels, line_y, out.0, column)
@@ -1006,6 +1151,11 @@ fn rifp_lines(
             };
             emit(cx, y, &line)?;
         }
+    } else if sampling.is_some() {
+        return Err(format!(
+            "{}: the input is not a RAW the model can develop (no still channel picture holds it)",
+            geometry()
+        ));
     } else {
         cx.log(&format!("{} copies packed 4:2:2", geometry()));
         scale_422(&bytes, pitch, (0, 0), origin, crop, out, |y, line| emit(cx, y, line))?;
@@ -1045,9 +1195,10 @@ impl Resz {
         }
     }
     /// The movie path (`XT5_MOVIE_PATH=real`): a start whose destination is two-plane 4:2:0
-    /// ([`ReszJob::two_plane`]) scales at once, from its source planes or, with source address
-    /// 0, from the RIFP inline picture in `output`. A start the model cannot follow is logged
-    /// and only completes. Other starts keep the still-path behaviour.
+    /// ([`ReszJob::two_plane`]) scales at once from its source planes or, with source address
+    /// 0 (RCIZ: the queue starts RESZ before the RIFP run that feeds it), waits in `output` for
+    /// the next RIFP run to end, as an inline still start does. A start the model cannot
+    /// follow is logged and only completes. Other starts keep the still-path behaviour.
     pub fn with_movie_path(mut self, output: YcOutput) -> Self {
         self.movie = Some(output);
         self
@@ -1114,9 +1265,23 @@ impl Device for Resz {
         if let Some(movie) = &self.movie
             && job.two_plane()
         {
-            match job.scale_two_plane(cx, movie.get()) {
-                Ok(line) => cx.log(&line),
-                Err(e) => cx.log(&format!("{e}; nothing written")),
+            if job.inline_source() {
+                let mut shared = movie.0.lock().unwrap();
+                cx.log(&format!(
+                    "{} {:#x}: two-plane inline start waits for the {} RIFP run",
+                    self.layout.block,
+                    self.base,
+                    if shared.rifp_busy { "current" } else { "next" }
+                ));
+                if shared.deferred.is_some() {
+                    cx.log("an earlier inline RESZ start got no RIFP run; it is dropped");
+                }
+                shared.deferred = Some(job);
+            } else {
+                match job.scale_two_plane(cx, None) {
+                    Ok(line) => cx.log(&line),
+                    Err(e) => cx.log(&format!("{e}; nothing written")),
+                }
             }
         } else if let Some(rifp) = &self.rifp
             && let Err(e) = self.start(cx, job, rifp)
@@ -1548,12 +1713,36 @@ mod tests {
         assert!(host.irqs.contains(&(203, true)));
     }
 
-    /// Movie path: an inline start (source 0) with destination class 2 halves a two-plane
-    /// 4:2:0 RIFP inline picture of 8x4 (pitch 16): Y takes every other pixel of every other
-    /// line, C the Cb, Cr pair of every other chroma site. Without the movie path the same
-    /// start is the still path's packed job, which refuses the two-plane inline picture.
+    /// A RIFP device with the still and movie paths as given, its I/O DMA in register-list
+    /// mode, sharing `shared` with RESZ.
+    fn rifp_device(
+        cx: &mut Cx<'_>,
+        sensor: fujimod_emulator_sensor_input::sensor::Sensor,
+        shared: &YcOutput,
+        develop: bool,
+    ) -> super::super::preview::Preview {
+        use super::super::preview::{Io, Preview, StillPath};
+        let mut io = Io::default();
+        let rifp = Preview::new(true, io.clone(), &toml::from_str("completion_us=100\nsource_luma=128").unwrap())
+            .unwrap()
+            .with_still_path(StillPath {
+                sensor,
+                output: shared.clone(),
+                develop,
+                movie: true,
+            });
+        io.write(cx, 0xffd0104c, 4, 1);
+        rifp
+    }
+
+    /// Movie path, YC modes (FHD): the queue starts RESZ (source 0, destination class 2)
+    /// before the RIFP run whose two-plane 4:2:0 input of 8x4 (pitch 16) is the inline
+    /// picture. RESZ writes nothing until that run ends; then it halves the picture: Y takes
+    /// every other pixel of every other line, C the Cb, Cr pair of every other chroma site.
+    /// Without the movie path the same start is the still path's packed job, which refuses the
+    /// two-plane inline picture.
     #[test]
-    fn a_movie_resz_start_scales_the_two_plane_inline_picture() {
+    fn a_movie_resz_start_scales_the_two_plane_inline_picture_when_the_rifp_run_ends() {
         let mut host = RecordingHost {
             ram_base: RAM,
             ram: vec![0xee; 0x2000],
@@ -1586,18 +1775,39 @@ mod tests {
             (0xf4, 16),
             (0x04, 1),
         ];
-        let output = YcOutput::default();
-        output.set(Some(inline));
-        let mut movie = resz().with_movie_path(output);
+        let shared = YcOutput::default();
+        let mut movie = resz().with_movie_path(shared.clone());
+        movie.rifp = Some(shared.clone());
         let mut cx = Cx::new(&mut host, 0, 0, 0);
+        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
+        let mut rifp = rifp_device(&mut cx, sensor, &shared, true);
         for (o, v) in words {
             movie.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
         }
+        // The X-T5 4.31 FHD run: mode 2 with an input second plane, 8 pixels by 4 lines.
+        for (o, v) in [
+            (0x08, 0x1000_6012),
+            (0x0c, RAM as u32),
+            (0x14, RAM as u32 + 0x100),
+            (0x1c, 16),
+            (0x20, 4 << 16 | 8),
+            (0x28, 7),
+            (0x2c, 3),
+            (0x04, 1),
+        ] {
+            rifp.write(&mut cx, 0xffd02000 + o, 4, u64::from(v));
+        }
         assert!(cx.refusal().is_none());
+        assert!(host.ram[0x1000..0x1200].iter().all(|b| *b == 0xee));
+        host.now = rifp.next_deadline(0).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        rifp.advance(&mut cx);
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
         assert_eq!(&host.ram[0x1000..0x1005], [0, 2, 4, 6, 0xee]);
         assert_eq!(&host.ram[0x1010..0x1015], [32, 34, 36, 38, 0xee]);
         assert_eq!(&host.ram[0x1100..0x1105], [0x80, 0x81, 0x84, 0x85, 0xee]);
         assert_eq!(host.ram[0x1110], 0xee);
+        assert!(shared.take_deferred().is_none());
 
         let mut still = resz();
         still.rifp.as_ref().unwrap().set(Some(inline));
@@ -1714,6 +1924,141 @@ mod tests {
         assert!(host.ram[0x2000 + 6 * 32..].iter().all(|b| *b == 0));
         assert_eq!(shared.get(), None);
         assert!(shared.take_deferred().is_none());
+    }
+
+    /// The words of a two-plane RESZ start as the X-T5 4.31 4K recording programs it, scaled
+    /// down: source 24x10 (two lines fewer than the RIFP input), crop 24x8, output 12x4,
+    /// Y at RAM + 0x2000 and C at RAM + 0x2800, pitch 16.
+    const TWO_PLANE_FROM_RAW: [(u64, u32); 8] = [
+        (0x10, 0x1000_0121),
+        (0x14, 9 << 16 | 23),
+        (0x1c, 7 << 16 | 23),
+        (0x20, 3 << 16 | 11),
+        (0xe8, RAM as u32 + 0x2000),
+        (0xf0, RAM as u32 + 0x2800),
+        (0xf4, 16),
+        (0x04, 1),
+    ];
+
+    /// A host whose RAM holds a packed 12-bit RAW of `colour`, 24x12 at pitch 40, and the
+    /// sensor that recorded it as its still channel picture; the rest of the RAM is 0xee.
+    fn packed_raw_host(colour: [u8; 3]) -> (RecordingHost, fujimod_emulator_sensor_input::sensor::Sensor) {
+        let mut ram = vec![0xeeu8; 0x4000];
+        let mut samples = vec![0u8; 48];
+        for y in 0..12 {
+            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut samples, &xtrans::Response::xt5(1.).mosaic_lut());
+            xtrans::pack12_line(&samples, &mut ram[y * 40..y * 40 + 36]);
+        }
+        let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
+        sensor.0.lock().unwrap().still_raw = Some(StillRaw {
+            address: RAM,
+            pitch: 40,
+            width: 24,
+            lines: 12,
+            packed12: true,
+            ..Default::default()
+        });
+        let host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
+        (host, sensor)
+    }
+
+    /// The X-T5 4.31 4K RIFP run, scaled down: RAW input of 24x12 packed 12-bit samples, no
+    /// output address, window words that are not sizes (pixels 5..=23, lines 6..=7).
+    fn start_raw_movie_run(cx: &mut Cx<'_>, rifp: &mut super::super::preview::Preview) {
+        for (o, v) in [
+            (0x08, 0x1022_2010),
+            (0x0c, RAM as u32),
+            (0x1c, 40),
+            (0x20, 12 << 16 | 24),
+            (0x28, 5 << 16 | 23),
+            (0x2c, 6 << 16 | 7),
+            (0x04, 1),
+        ] {
+            rifp.write(cx, 0xffd02000 + o, 4, u64::from(v));
+        }
+    }
+
+    /// Movie path, RAW modes (4K): the queue starts RESZ (source 0, two-plane destination)
+    /// before a RIFP run that develops the sensor RAW and has no output address. When the run
+    /// ends, the pixels RESZ samples from the run's whole input are developed straight into
+    /// the two destination planes: 12x4 luma, and the Cb, Cr pairs of lines 0 and 2.
+    #[test]
+    fn a_raw_rifp_run_develops_into_the_waiting_two_plane_resz_start() {
+        let colour = [40u8, 180, 90];
+        let (mut host, sensor) = packed_raw_host(colour);
+        let shared = YcOutput::default();
+        let mut resz = resz().with_movie_path(shared.clone());
+        resz.rifp = Some(shared.clone());
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        let mut rifp = rifp_device(&mut cx, sensor, &shared, true);
+        for (o, v) in TWO_PLANE_FROM_RAW {
+            resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
+        }
+        start_raw_movie_run(&mut cx, &mut rifp);
+        assert!(cx.refusal().is_none());
+        assert!(host.ram[0x2000..0x3000].iter().all(|b| *b == 0xee));
+        host.now = rifp.next_deadline(0).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        rifp.advance(&mut cx);
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+        let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
+        for line in 0..4 {
+            let at = 0x2000 + line * 16;
+            assert_eq!(&host.ram[at..at + 12], [y].repeat(12).as_slice());
+            assert!(host.ram[at + 12..at + 16].iter().all(|b| *b == 0xee));
+        }
+        assert!(host.ram[0x2040..0x2800].iter().all(|b| *b == 0xee));
+        for line in 0..2 {
+            let at = 0x2800 + line * 16;
+            assert_eq!(&host.ram[at..at + 12], [cb, cr].repeat(6).as_slice());
+            assert!(host.ram[at + 12..at + 16].iter().all(|b| *b == 0xee));
+        }
+        assert!(host.ram[0x2820..0x3000].iter().all(|b| *b == 0xee));
+        assert_eq!(shared.get(), None);
+        assert!(shared.take_deferred().is_none());
+    }
+
+    /// The same chain without the still path's RAW develop: the waiting start is dropped and
+    /// nothing is written; the run does not stop.
+    #[test]
+    fn a_raw_movie_run_without_the_still_path_writes_nothing() {
+        let (mut host, sensor) = packed_raw_host([40, 180, 90]);
+        let shared = YcOutput::default();
+        let mut resz = resz().with_movie_path(shared.clone());
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        let mut rifp = rifp_device(&mut cx, sensor, &shared, false);
+        for (o, v) in TWO_PLANE_FROM_RAW {
+            resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
+        }
+        assert!(shared.waits_two_plane());
+        start_raw_movie_run(&mut cx, &mut rifp);
+        host.now = rifp.next_deadline(0).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        rifp.advance(&mut cx);
+        assert!(cx.refusal().is_none());
+        assert!(host.ram[0x2000..0x3000].iter().all(|b| *b == 0xee));
+        assert!(shared.take_deferred().is_none());
+    }
+
+    /// A two-plane start needs a stream at least as large as its source, and a source
+    /// address of 0.
+    #[test]
+    fn a_two_plane_stream_smaller_than_the_resz_source_refuses() {
+        let job = |source: u32| ReszJob {
+            base: 0xffd0c000,
+            layout: &RESZ,
+            words: TWO_PLANE_FROM_RAW.into_iter().chain([(0xd4, source)]).collect(),
+        };
+        assert!(job(0).two_plane() && job(0).inline_source());
+        assert!(job(0).two_plane_plan(TwoPlaneSource::Stream(24, 12)).is_ok());
+        assert!(job(0).two_plane_plan(TwoPlaneSource::Stream(24, 9)).is_err());
+        assert!(job(0).two_plane_plan(TwoPlaneSource::Stream(22, 12)).is_err());
+        assert!(!job(RAM as u32).inline_source());
+        assert!(job(RAM as u32).two_plane_plan(TwoPlaneSource::Stream(24, 12)).is_err());
     }
 
     /// The stream ends before the RESZ crop does: the job refuses up front.
