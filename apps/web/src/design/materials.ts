@@ -49,10 +49,10 @@ export const WELL: JSX.CSSProperties = {
  * section in view): a lighter plate and nothing more. The outline belongs to
  * focus alone, so only the thing the keys act on is ever outlined. */
 /** The chosen option of a multiple choice control (a strip's chosen cell, a
- * switch's option, a color chip): the selected plate, its text and artwork
- * white, or with MARK COLOR CHOICES in the scale mark's color. */
+ * switch's option, a color chip): the selected plate with white text and
+ * artwork, or with MARK COLOR CHOICES the look's mark plate and ink. */
 export const CHOSEN: JSX.CSSProperties = {
-  background: 'var(--m-selected, rgb(255 255 255 / 0.24))',
+  background: 'var(--m-chosen, var(--m-selected, rgb(255 255 255 / 0.24)))',
   'box-shadow': 'none',
   color: 'var(--m-chosen-ink, #fff)',
 };
