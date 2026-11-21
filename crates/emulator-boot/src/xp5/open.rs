@@ -1028,6 +1028,10 @@ pub(crate) fn open_from(
         images,
         scene,
     })?;
+    session.board.set_block_execution(
+        state.mprofile_block_execution
+            && std::env::var_os("FUJIMOD_MPROFILE_INSTRUCTIONS").is_none(),
+    );
     if let Some(Entry::CardHandoff(handoff)) = rom.map(|rom| &rom.entry) {
         let stage = session.card_read(&format!("{:#x}", handoff.slot), rom_start::CARD_FILE_NAME,
             None, handoff.stage_max_bytes)?;

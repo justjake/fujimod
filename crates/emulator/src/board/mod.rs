@@ -332,7 +332,9 @@ pub struct Board {
     /// Per core, the board store hook (`written`) when it is always installed.
     store_hooks: Vec<Option<HookId>>,
     /// Host run control: M-profile processors may run in block execution.
-    /// `FUJIMOD_MPROFILE_INSTRUCTIONS` starts a board with it off.
+    /// Off unless the board's owner asks for it (`set_block_execution`): a
+    /// processor in block execution has no instruction observer, so the
+    /// M-profile loop windows (`loops`) do not run for it.
     block_execution: Cell<bool>,
     /// Host run control: poll loops of M-profile processors in block
     /// execution are fast-forwarded. `FUJIMOD_POLL_LOOPS=0` starts a board
@@ -613,9 +615,7 @@ impl Board {
             observer_hooks: vec![None; n],
             block_hooks: vec![vec![]; n],
             store_hooks: vec![None; n],
-            block_execution: Cell::new(
-                std::env::var_os("FUJIMOD_MPROFILE_INSTRUCTIONS").is_none(),
-            ),
+            block_execution: Cell::new(false),
             poll_loops: Cell::new(
                 std::env::var_os("FUJIMOD_POLL_LOOPS").is_none_or(|v| v != "0"),
             ),
@@ -1620,7 +1620,10 @@ impl Board {
             .collect()
     }
     /// Allow or forbid block execution of M-profile processors. Both ways run
-    /// the same guest instructions; this exists to compare them.
+    /// the same guest instructions and reach the same state. Block execution
+    /// replaces the instruction observer, and with it the M-profile loop
+    /// windows, so a board chooses one: blocks pay off where the processors
+    /// compute, loop windows where they wait in delay and poll loops.
     pub fn set_block_execution(&self, on: bool) {
         self.block_execution.set(on);
     }
