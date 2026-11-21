@@ -1,0 +1,6 @@
+# GPIO block. Pad defaults are not declared: the X-E5 panel selects and accessory input are
+# not established, so every output latch and input starts at the model default.
+[[device]]
+base = 0xff907000
+size = 0x1000
+kind = "gpio"
