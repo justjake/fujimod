@@ -17,7 +17,7 @@ const QUEUE_LIMIT: usize = 4096;
 
 
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 struct Contact {
     active: bool,
     x: u16,
@@ -33,7 +33,7 @@ fn default_contact_ids() -> [u8; 2] {
     [1, 1]
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TouchController {
     ticks_per_second: u64,
     period: u64,

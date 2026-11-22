@@ -356,6 +356,35 @@ pub struct Xt20TouchPanelInput {
 pub struct ByteI2cInput {
     /// Declared basis.
     pub basis: String,
+    /// Touch chip answering on this bus; the bus has no peer when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub touch_chip: Option<TouchChipInput>,
+}
+
+/// A touch chip with 16-bit register addresses and an input-ready interrupt.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetTouchChipInput"))]
+pub struct TouchChipInput {
+    /// Seven-bit bus address.
+    pub address: u8,
+    /// First register of the eleven-byte report.
+    pub report_register: u16,
+    /// Register that returns a counter changing on each read.
+    pub heartbeat_register: u16,
+    /// Register that gates reporting: nonzero enables, zero disables.
+    pub mode_register: u16,
+    /// Registers that accept writes, including the mode register.
+    pub writable_registers: Vec<u16>,
+    /// Slot IDs reported for contacts 0 and 1.
+    pub contact_ids: [u8; 2],
+    /// Interrupt line raised for each input-ready edge.
+    pub input_ready_irq: u32,
+    /// Host virtual ticks per second; a positive multiple of 100.
+    pub ticks_per_second: u64,
+    /// Declared basis.
+    pub basis: String,
 }
 
 /// An X-mount lens attached at power-on, answering on its serial link.

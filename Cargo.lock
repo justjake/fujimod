@@ -3220,6 +3220,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
+ "fujimod-emulator-parts-controls",
  "fujimod-workspace-hack",
  "parking_lot",
  "serde",
