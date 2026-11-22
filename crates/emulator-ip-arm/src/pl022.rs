@@ -469,8 +469,8 @@ impl Device for Controller {
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let mut e = self.engine.lock().unwrap();
-        if e.advance(cx.now()).is_err() {
-            cx.unmodeled();
+        if let Err(error) = e.advance(cx.now()) {
+            cx.unsupported(error);
         }
         self.publish(&mut e, cx);
     }

@@ -520,6 +520,7 @@ fn the_xt5_lens_fragment_registers_the_lens_bus_connector() {
     assert_eq!(graph.nodes[id].device.name(), "xp5-x-mount-lens");
     let attached = std::env::var("XT5_LENS").map_or(true, |v| v != "none");
     assert_eq!(pins.lock().unwrap().level(0, 11) == 0, attached);
+}
 #[test]
 fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
     let mut graph = DeviceGraph::new();
@@ -527,7 +528,7 @@ fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
         window(0xff90e748, 0x40, "dma-address-high", json!({})),
         window(0xff90e500, 0x20, "dma-request-routing", json!({})),
     ];
-    register_all(&mut graph, &windows, None, Pins::shared()).unwrap();
+    register_all(&mut graph, &windows, None, Pins::shared(), Default::default(), None).unwrap();
     let mut host = RecordingHost::default();
     let id = graph.at(0xff90e74c).unwrap();
     let mut cx = Cx::new(&mut host, 4, 0, id);
@@ -563,6 +564,6 @@ fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
 #[test]
 fn dma_still_requires_companion_and_both_views() {
     let dma = window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83}));
-    assert!(register_all(&mut DeviceGraph::new(), &[dma.clone()], None, Pins::shared()).is_err());
-    assert!(register_all(&mut DeviceGraph::new(), &[dma], Some(4), Pins::shared()).is_err());
+    assert!(register_all(&mut DeviceGraph::new(), &[dma.clone()], None, Pins::shared(), Default::default(), None).is_err());
+    assert!(register_all(&mut DeviceGraph::new(), &[dma], Some(4), Pins::shared(), Default::default(), None).is_err());
 }
