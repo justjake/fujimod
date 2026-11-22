@@ -9,7 +9,35 @@ pub(crate) trait CodeOwner {
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_cpu::exclusive;
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap as StdMap, HashSet as StdSet};
+use std::hash::{BuildHasherDefault, Hasher};
+
+/// Multiplicative hash for the small integer keys of the per-run lookups.
+/// The keys are processor ids and page numbers, never attacker chosen, so a
+/// keyed hash would only cost time on every run and block.
+#[derive(Default)]
+pub(crate) struct IntegerHasher(u64);
+impl Hasher for IntegerHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 = (self.0.rotate_left(5) ^ u64::from(byte)).wrapping_mul(0x517c_c1b7_2722_0a95);
+        }
+    }
+    fn write_u32(&mut self, value: u32) {
+        self.write_u64(u64::from(value));
+    }
+    fn write_u64(&mut self, value: u64) {
+        self.0 = (self.0.rotate_left(5) ^ value).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+    fn write_usize(&mut self, value: usize) {
+        self.write_u64(value as u64);
+    }
+}
+pub(crate) type HashMap<K, V> = StdMap<K, V, BuildHasherDefault<IntegerHasher>>;
+type HashSet<K> = StdSet<K, BuildHasherDefault<IntegerHasher>>;
 use std::rc::{Rc, Weak};
 use std::sync::{Arc, Mutex};
 
@@ -108,6 +136,9 @@ struct State {
 #[derive(Clone)]
 pub struct SharedMemory {
     state: Arc<Mutex<State>>,
+    /// `invalidations.len()`, republished whenever the state lock is released,
+    /// so the per-block check for pending invalidations takes no lock.
+    pending: Arc<std::sync::atomic::AtomicUsize>,
     monitors: exclusive::Shared,
     data_lines: Arc<std::sync::OnceLock<Arc<crate::rprofile::data_cache::Lines>>>,
 }
@@ -115,6 +146,7 @@ impl Default for SharedMemory {
     fn default() -> Self {
         Self {
             state: Arc::new(Mutex::new(State::default())),
+            pending: Arc::default(),
             monitors: Arc::new(Mutex::new(exclusive::Monitors::default())),
             data_lines: Arc::default(),
         }
@@ -185,6 +217,28 @@ impl Drop for RunReservation<'_> {
         self.memory.finish_run(self.core);
     }
 }
+/// The locked state; releasing it republishes the invalidation count.
+struct StateGuard<'a> {
+    guard: std::sync::MutexGuard<'a, State>,
+    pending: &'a std::sync::atomic::AtomicUsize,
+}
+impl std::ops::Deref for StateGuard<'_> {
+    type Target = State;
+    fn deref(&self) -> &State {
+        &self.guard
+    }
+}
+impl std::ops::DerefMut for StateGuard<'_> {
+    fn deref_mut(&mut self) -> &mut State {
+        &mut self.guard
+    }
+}
+impl Drop for StateGuard<'_> {
+    fn drop(&mut self) {
+        self.pending
+            .store(self.guard.invalidations.len(), std::sync::atomic::Ordering::Release);
+    }
+}
 impl Default for Memory {
     fn default() -> Self {
         SharedMemory::default().processor()
@@ -195,11 +249,15 @@ impl Memory {
     pub fn shared(&self) -> SharedMemory {
         self.shared.clone()
     }
-    fn state(&self) -> std::sync::MutexGuard<'_, State> {
-        self.shared
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    fn state(&self) -> StateGuard<'_> {
+        StateGuard {
+            guard: self
+                .shared
+                .state
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            pending: &self.shared.pending,
+        }
     }
     pub(crate) fn require_stopped(&self) -> Result<(), String> {
         if !Self::quiescent(&self.state()) {
@@ -764,6 +822,9 @@ impl Memory {
         changed
     }
     pub(crate) fn flush_pending(&self) -> bool {
+        if self.shared.pending.load(std::sync::atomic::Ordering::Acquire) == 0 {
+            return false;
+        }
         let local = self.local.cores.borrow();
         self.state()
             .invalidations

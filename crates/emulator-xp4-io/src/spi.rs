@@ -260,6 +260,11 @@ impl Device for Spi {
             cx.fail(e);
         }
     }
+    /// Control, enable, status, divider and cause words read stored state;
+    /// the receive FIFO word pops and is not stable.
+    fn read_stable(&self, address: u64, size: u8) -> bool {
+        size == 4 && matches!(address.wrapping_sub(self.base), 0 | 4 | 0xc | 0x10 | 0x14)
+    }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
         self.pending.map(|p| p.0)
     }

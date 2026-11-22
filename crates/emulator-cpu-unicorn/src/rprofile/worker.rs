@@ -1155,6 +1155,7 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
                     bitmap: NonNull::new(range.bitmap as *mut std::sync::atomic::AtomicU64)
                         .expect("checked bitmap"),
                     page_shift: range.page_shift,
+                    summary: None,
                 })
                 .collect::<Vec<_>>();
             unsafe { cpu.observe_backings(&ranges)? };

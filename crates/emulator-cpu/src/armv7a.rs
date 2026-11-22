@@ -29,6 +29,11 @@ impl Entries {
 /// identity reads, the PMU control and cycle counter (c9, c12/c13, op1 0),
 /// and WFE/WFI/SEV.
 /// The condition field is not decoded; the board evaluates it at entry.
+/// MRC p15,0,Rt,c0,c0,5 (MPIDR) into a core register, any condition.
+pub fn mpidr_read(word: u32) -> bool {
+    word & 0x0fff_0fff == 0x0e10_0fb0 && (word >> 12) & 15 != 15
+}
+
 pub fn framework_instruction(word: u32) -> bool {
     let body = word & 0x0fff_ffff;
     if body & 0x0f00_0f10 == 0x0e00_0f10

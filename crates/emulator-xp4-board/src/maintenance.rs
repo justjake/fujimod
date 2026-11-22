@@ -194,6 +194,15 @@ impl Maintenance {
                 return Err("Translation delivery cannot be retried".into());
             }
         }
+        // Only the core that ran can have queued work or poison: no other
+        // engine has executed since its own settlement left it clean.
+        if cpus.len() == self.owners.len() {
+            let status = cpus.get(source).ok_or("Invalid translation source core")?
+                .borrow().translation_maintenance_status()?;
+            if status.owner == self.tokens[source] && status.pending == 0 && status.poison == 0 {
+                return Ok(());
+            }
+        }
         let statuses = self.statuses(cpus)?;
         // Poison anywhere freezes the domain before any new peer effect.
         for (core, status) in statuses.iter().enumerate() {
