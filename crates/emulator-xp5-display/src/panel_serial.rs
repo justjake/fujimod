@@ -230,4 +230,49 @@ mod tests {
         assert_eq!(panel.next_deadline(at), None);
         assert_eq!(panel.save()["transfers"], 1);
     }
+    #[test]
+    fn panel_selection_and_width_remain_strict_across_reconfiguration() {
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new()).unwrap();
+        let mut panel = PanelSerial::new(pins.clone(), (15, 13), 48_000_000).unwrap();
+        let mut host = RecordingHost::default();
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            for (o, v) in [(0, 0x0f), (4, 2), (0x10, 16), (8, 0)] {
+                panel.write(&mut cx, BASE + o, 4, v);
+            }
+            assert!(cx.refusal().unwrap().contains("mode"));
+        }
+        assert_eq!(panel.next_deadline(0), None);
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            panel.write(&mut cx, BASE, 4, 0xc7); // 8-bit, mode 3
+            panel.write(&mut cx, BASE + 8, 4, 0);
+            assert!(cx.refusal().unwrap().contains("mode"));
+        }
+        assert_eq!(panel.next_deadline(0), None);
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            panel.write(&mut cx, BASE, 4, 0xcf);
+            // Deselect the active-low panel; the other line is not an endpoint.
+            gpio.write(&mut cx, 0xff9073c0, 4, (1 << 29) | (1 << 13));
+            gpio.write(&mut cx, 0xff9073c0, 4, (1 << 31) | (1 << 15));
+            panel.write(&mut cx, BASE + 8, 4, 0x1234);
+            assert!(cx.refusal().unwrap().contains("chip select"));
+        }
+        assert_eq!(panel.next_deadline(0), None);
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            gpio.write(&mut cx, 0xff9073c0, 4, 1 << 29);
+            panel.write(&mut cx, BASE + 8, 4, 0x1234);
+            assert!(cx.refusal().is_none());
+        }
+        assert!(panel.next_deadline(0).is_some());
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            panel.write(&mut cx, BASE, 4, 0x0f);
+            assert!(cx.refusal().unwrap().contains("during panel transfer"));
+        }
+    }
+
 }
