@@ -126,6 +126,30 @@ fn x_processor_4_restart_document_validates_its_generated_schema() {
 }
 
 #[test]
+fn the_restart_schema_rejects_non_numeric_parameter_keys() {
+    let package = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let fixture = package.join("../catalog-restart/tests/fixtures/xp4-wake-deadline.json");
+    let mut document: Value = serde_json::from_slice(
+        &fs::read(&fixture).unwrap_or_else(|error| panic!("{}: {error}", fixture.display())),
+    )
+    .expect("restart fixture");
+    document["mechanism"]["queue"]["parameters"] = serde_json::json!({"offset": 0});
+
+    let path = package.join("../../catalog/schemas/restart.generated.schema.json");
+    let schema: Value = serde_json::from_slice(
+        &fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display())),
+    )
+    .expect("restart schema");
+    let validator =
+        validator_for(&schema).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    assert!(
+        validator.iter_errors(&document).next().is_some(),
+        "{}: a non-numeric payload offset key is rejected",
+        fixture.display()
+    );
+}
+
+#[test]
 fn bundled_reference_records_resolve_by_identity() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().expect("bundled references");
     for (body, firmware) in [
