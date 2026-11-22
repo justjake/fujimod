@@ -4,7 +4,9 @@ use super::contact_driver::{ControlChoice, ControlInput, QueueState};
 use fujimod_emulator_devices::parts::pins::Pin;
 use fujimod_emulator_devices::parts::switch_panel::{Signal, Spec, SwitchPanel};
 use std::collections::BTreeMap;
-use fujimod_emulator_devices::capability::{AnalogInputs, GravityInput, SerialStatus, TouchPanel};
+use fujimod_emulator_devices::capability::{
+    AnalogInputs, GpioInputs, GravityInput, SerialStatus, TouchPanel,
+};
 
 /// Host-visible controls and their current positions.
 #[derive(Clone, Debug, serde::Serialize)]
@@ -91,8 +93,10 @@ impl Session {
             }
         }
         for (node, changes) in pins {
-            self.resources.pads(node)?.admit_requests(&changes)?;
-            self.node(node)?;
+            self.board
+                .inspect_capability::<dyn GpioInputs, _>(self.node(node)?, |gpio| {
+                    gpio.admit_inputs(&changes)
+                })?;
         }
         Ok(())
     }
@@ -129,8 +133,10 @@ impl Session {
             }
         }
         for (node, changes) in pins {
-            self.resources.pads(node)?.request_many(&changes)?;
-            self.board.inputs_changed(self.node(node)?)?;
+            self.board
+                .edit_capability::<dyn GpioInputs, _>(self.node(node)?, |gpio| {
+                    gpio.request_inputs(&changes)
+                })?;
         }
         for (node, changes) in analog {
             self.board

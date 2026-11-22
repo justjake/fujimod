@@ -221,7 +221,47 @@ fn masked(old: u32, value: u32) -> u32 {
     let select = value >> 16;
     (old & !select) | (value & select)
 }
+impl fujimod_emulator_devices::capability::GpioInputs for Gpio {
+    fn admit_inputs(
+        &self,
+        changes: &[(fujimod_emulator_devices::parts::pins::Pin, bool)],
+    ) -> Result<(), String> {
+        for (pin, _) in changes {
+            if pin.port >= 20 || pin.pin >= 16 {
+                return Err("XP5 GPIO input is outside the declared pin range".into());
+            }
+            let fed = self.feedback.iter().any(|wire| {
+                (wire.input_port, wire.input_pin) == (usize::from(pin.port), usize::from(pin.pin))
+            });
+            if fed {
+                return Err("XP5 GPIO input pad is driven by a board feedback wire".into());
+            }
+        }
+        Ok(())
+    }
+    fn request_inputs(
+        &mut self,
+        changes: &[(fujimod_emulator_devices::parts::pins::Pin, bool)],
+    ) -> Result<(), String> {
+        self.admit_inputs(changes)?;
+        let mut pins = self.pins.lock().map_err(|_| "XP5 GPIO pins poisoned")?;
+        for (pin, high) in changes {
+            pins.set_input(usize::from(pin.port), usize::from(pin.pin), *high);
+        }
+        Ok(())
+    }
+}
 impl Device for Gpio {
+    fn gpio_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::GpioInputs + 'static)> {
+        Some(self)
+    }
+    fn gpio_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::GpioInputs + 'static)> {
+        Some(self)
+    }
     fn name(&self) -> &'static str {
         if self.special {
             "gpio-port3"

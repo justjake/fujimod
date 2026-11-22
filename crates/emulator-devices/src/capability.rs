@@ -42,6 +42,22 @@ impl Capability for dyn GravityInput {
     }
 }
 
+/// External electrical levels on a GPIO controller's input pins.
+pub trait GpioInputs {
+    /// Refuse changes the controller cannot accept, without applying any.
+    fn admit_inputs(&self, changes: &[(crate::parts::pins::Pin, bool)]) -> Result<(), String>;
+    /// Apply changes; the board wakes the controller afterwards.
+    fn request_inputs(&mut self, changes: &[(crate::parts::pins::Pin, bool)]) -> Result<(), String>;
+}
+impl Capability for dyn GpioInputs {
+    fn of(device: &dyn Device) -> Option<&Self> {
+        device.gpio_inputs()
+    }
+    fn of_mut(device: &mut dyn Device) -> Option<&mut Self> {
+        device.gpio_inputs_mut()
+    }
+}
+
 /// Status registers of serial endpoints that external inputs drive.
 pub trait SerialStatus {
     fn status_value(&self, route: usize, register: u8) -> Result<u8, String>;

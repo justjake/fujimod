@@ -297,7 +297,21 @@ impl Gpio {
             .then_some((port, word))
     }
 }
+impl crate::capability::GpioInputs for Gpio {
+    fn admit_inputs(&self, changes: &[(Pin, bool)]) -> Result<(), String> {
+        self.pads.admit_requests(changes)
+    }
+    fn request_inputs(&mut self, changes: &[(Pin, bool)]) -> Result<(), String> {
+        self.pads.request_many(changes)
+    }
+}
 impl Device for Gpio {
+    fn gpio_inputs(&self) -> Option<&(dyn crate::capability::GpioInputs + 'static)> {
+        Some(self)
+    }
+    fn gpio_inputs_mut(&mut self) -> Option<&mut (dyn crate::capability::GpioInputs + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         crate::checkpoint::Checkpoint::encode(
             self.name(),
