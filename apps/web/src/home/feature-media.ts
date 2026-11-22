@@ -1,6 +1,14 @@
-/** A photograph a recording kept: its settings caption, a page-size image and
- * the full-resolution image with its pixel size. */
-export type Photo = { label: string; image: string; full: string; width: number; height: number };
+/** A photograph a recording kept or the camera developed: its settings
+ * caption, a page-size image and the full-resolution image with its pixel
+ * size. Photographs of one scene are compared side by side. */
+export type Photo = {
+  label: string;
+  image: string;
+  full: string;
+  width: number;
+  height: number;
+  scene?: string;
+};
 
 /** Preview recording: clean clip, still, each option's range in the clip, and
  * the photographs worth comparing. */
@@ -34,7 +42,8 @@ const validPhoto = (photo: Photo) =>
   Number.isInteger(photo.width) &&
   Number.isInteger(photo.height) &&
   photo.width > 0 &&
-  photo.height > 0;
+  photo.height > 0 &&
+  (photo.scene === undefined || (typeof photo.scene === 'string' && !!photo.scene));
 
 export function validateFeatureMedia(value: unknown): FeatureMedia {
   const manifest = value as FeatureMedia;

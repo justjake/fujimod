@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import { Dynamic, type JSX } from '@solidjs/web';
 import type { Credits } from '../home/catalog';
 import { Rich } from '../home/catalog-parts';
-import { featureMedia, type Media } from '../home/feature-media';
+import { featureMedia, type Media, type Photo } from '../home/feature-media';
 import { Markdown } from './Markdown';
 import { PhotoComparison } from './PhotoComparison';
 import type { ManualPage, ManualSection } from './manual-data';
@@ -15,15 +15,18 @@ function sectionMedia(section: ManualSection) {
   return section.media ? mediaForCard(section.media.card) : null;
 }
 
+/** One comparison per scene, in the order the scenes first appear. */
 function SectionPhotos(props: { section: ManualSection }) {
-  const photos = () => {
-    const list = sectionMedia(props.section)?.photos;
-    return list?.length ? list : undefined;
+  const scenes = () => {
+    const groups = new Map<string | undefined, Photo[]>();
+    for (const photo of sectionMedia(props.section)?.photos ?? [])
+      groups.set(photo.scene, [...(groups.get(photo.scene) ?? []), photo]);
+    return [...groups.values()];
   };
   return (
-    <Show when={photos()}>
-      {(photos) => <PhotoComparison photos={photos()} frame={props.section.media?.frame} />}
-    </Show>
+    <For each={scenes()}>
+      {(photos) => <PhotoComparison photos={photos} frame={props.section.media?.frame} />}
+    </For>
   );
 }
 
