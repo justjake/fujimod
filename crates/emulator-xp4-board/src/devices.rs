@@ -187,8 +187,13 @@ impl Host for PhysicalHost<'_> {
                 .set_line(line as usize, level);
         }
     }
-    fn raise_irq(&mut self, _cpu: usize, _line: u32) -> Result<(), String> {
-        Err("Per-core interrupt input is not wired for ARMv7-A".into())
+    /// An edge on a shared interrupt line; private lines below 32 are not wired.
+    fn raise_irq(&mut self, _cpu: usize, line: u32) -> Result<(), String> {
+        if line < 32 {
+            return Err("Per-core interrupt input is not wired for ARMv7-A".into());
+        }
+        unsafe { (*self.cluster.state.get()).gic.pulse(line as usize) };
+        Ok(())
     }
     // Applied once the MMU is off, as retained TLB entries keep the ROM
     // page table in the old low window until then.

@@ -42,7 +42,7 @@ pub struct Profile {
     pub ticks_per_second: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct TouchChip {
     profile: Profile,
     controller: TouchController,
@@ -199,17 +199,24 @@ impl TouchChip {
         Ok(())
     }
 
-    /// Check the next read byte without effect.
-    pub fn check_read(&self) -> Result<(), String> {
+    /// The next read byte, without effect.
+    pub fn peek_read(&self) -> Result<u8, String> {
         let pointer = match (self.phase, self.pointer) {
             (TransferPhase::Read, Some(pointer)) => pointer,
             _ => return Err("Touch chip read without a register pointer".into()),
         };
-        if self.report_index(pointer).is_some() || pointer == self.profile.heartbeat_register {
-            Ok(())
+        if let Some(index) = self.report_index(pointer) {
+            Ok(self.current.map_or(0, |frame| frame[index]))
+        } else if pointer == self.profile.heartbeat_register {
+            Ok(self.heartbeat.wrapping_add(1))
         } else {
             Err(format!("Touch chip register {pointer:#06x} is not readable"))
         }
+    }
+
+    /// Check the next read byte without effect.
+    pub fn check_read(&self) -> Result<(), String> {
+        self.peek_read().map(|_| ())
     }
 
     fn report_index(&self, pointer: u16) -> Option<usize> {
@@ -220,14 +227,13 @@ impl TouchChip {
     }
 
     pub fn read(&mut self) -> Result<u8, String> {
-        self.check_read()?;
+        let byte = self.peek_read()?;
         let pointer = self.pointer.expect("checked pointer");
         self.pointer = Some(pointer.wrapping_add(1));
         let Some(index) = self.report_index(pointer) else {
-            self.heartbeat = self.heartbeat.wrapping_add(1);
-            return Ok(self.heartbeat);
+            self.heartbeat = byte;
+            return Ok(byte);
         };
-        let byte = self.current.map_or(0, |frame| frame[index]);
         if index == usize::from(REPORT_BYTES) - 1 && self.current.take().is_some() {
             self.reads += 1;
         }

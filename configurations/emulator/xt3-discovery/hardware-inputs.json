@@ -247,7 +247,51 @@
     ],
     "byte_i2c_inputs": {
       "2": {
-        "basis": "The X-T3 5.11 touch controller sits on I2C bus 2, the byte controller at 0xfff3f000 (interrupt 0x43). The bus starts with no peer attached."
+        "basis": "The X-T3 5.11 touch controller sits on I2C bus 2, the byte controller at 0xfff3f000 (interrupt 0x43). The touch chip is the only peer on the bus.",
+        "touch_chip": {
+          "address": 85,
+          "report_register": 0,
+          "heartbeat_register": 7174,
+          "mode_register": 7168,
+          "writable_registers": [
+            7170,
+            7171,
+            7175,
+            7177,
+            7179,
+            7195,
+            7196,
+            7197,
+            7198,
+            7199,
+            7203,
+            7204,
+            7209,
+            7214,
+            7215,
+            7218,
+            7219,
+            7224,
+            7228,
+            7229,
+            7230,
+            7231,
+            7321,
+            7360,
+            7361,
+            7362,
+            7363,
+            7364,
+            7365,
+            7376,
+            7168,
+            7176
+          ],
+          "contact_ids": [1, 2],
+          "input_ready_irq": 153,
+          "ticks_per_second": 54000000,
+          "basis": "Touch chip of X-T3 5.11 at seven-bit address 0x55 with 16-bit register addresses, high byte first. The writable registers are the 30 start-up configuration registers 0x1c02..0x1cd0 plus the mode register 0x1c00 (2 enables reports) and 0x1c08. The eleven-byte two-contact report starts at register 0, the heartbeat counter is register 0x1c06, and the input-ready edge is interrupt line 153. Contact IDs 1 and 2 and the 54 MHz virtual timebase are declared, not measured."
+        }
       }
     }
   }

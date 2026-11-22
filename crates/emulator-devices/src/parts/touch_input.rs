@@ -7,7 +7,7 @@ pub enum Phase {
     Move,
     Up,
 }
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ContactInput {
     pub tick: u64,
     pub contact: usize,

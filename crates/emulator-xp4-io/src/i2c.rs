@@ -6,6 +6,7 @@
 //! is provided. Unsupported operations refuse before effects. Idle recovery
 //! drives virtual pulled-high lines only; it is not a sub-byte waveform model.
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
+use fujimod_emulator_parts_controls::i2c::touch_chip::{Profile as TouchProfile, TouchChip};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -60,7 +61,22 @@ pub struct RegisterPeer {
     pub registers: BTreeMap<u16, u8>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Peer { Empty, Register(RegisterPeer) }
+pub enum Peer {
+    Empty,
+    Register(RegisterPeer),
+    /// Touch chip with 16-bit register addresses; it also owns the input-ready
+    /// interrupt named by its profile.
+    Touch(TouchProfile),
+}
+impl Peer {
+    fn address7(&self) -> Option<u8> {
+        match self {
+            Self::Empty => None,
+            Self::Register(p) => Some(p.address),
+            Self::Touch(p) => Some(p.address),
+        }
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Transport {
@@ -71,15 +87,25 @@ struct Transport {
     /// High byte of a two-byte register address awaiting its low byte.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pointer_high: Option<u8>,
+    /// Chip state for a `Peer::Touch`; it keeps its own pointer and phase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    touch: Option<TouchChip>,
 }
 impl Transport {
     fn address(&mut self, byte: u8) -> bool {
-        self.selected = matches!(&self.peer, Peer::Register(p) if p.address == byte >> 1);
-        self.expect_pointer = self.selected && byte & 1 == 0;
+        self.selected = match (&self.peer, &mut self.touch) {
+            (Peer::Register(p), _) => p.address == byte >> 1,
+            (Peer::Touch(_), Some(chip)) => chip.address(byte),
+            _ => false,
+        };
+        self.expect_pointer = matches!(self.peer, Peer::Register(_)) && self.selected && byte & 1 == 0;
         self.pointer_high = None;
         self.selected
     }
     fn check_write(&self, byte: u8) -> Result<(), String> {
+        if let (Peer::Touch(_), Some(chip)) = (&self.peer, &self.touch) {
+            return if self.selected { chip.check_write() } else { Err("No selected I2C peer".into()) };
+        }
         let Peer::Register(p) = &self.peer else { return Err("No selected I2C peer".into()); };
         let cell = if self.expect_pointer {
             if p.address_bytes == AddressBytes::Two && self.pointer_high.is_none() {
@@ -93,7 +119,14 @@ impl Transport {
         if !self.selected || !p.registers.contains_key(&cell) { return Err("Undeclared synthetic register write/pointer".into()); }
         Ok(())
     }
-    fn write(&mut self, byte: u8) {
+    fn write(&mut self, byte: u8) -> Result<(), String> {
+        if let Some(chip) = &mut self.touch {
+            return chip.write(byte);
+        }
+        self.write_register(byte);
+        Ok(())
+    }
+    fn write_register(&mut self, byte: u8) {
         let Peer::Register(p) = &mut self.peer else { return };
         if self.expect_pointer {
             if p.address_bytes == AddressBytes::Two && self.pointer_high.is_none() {
@@ -107,7 +140,11 @@ impl Transport {
             self.pointer = Some(Self::next(p.address_bytes, pointer));
         }
     }
+    /// The next read byte, without effect.
     fn read(&self) -> Result<u8, String> {
+        if let (Peer::Touch(_), Some(chip), true) = (&self.peer, &self.touch, self.selected) {
+            return chip.peek_read();
+        }
         if self.selected
             && let Peer::Register(p) = &self.peer
             && let Some(v) = self.pointer.and_then(|a| p.registers.get(&a))
@@ -118,12 +155,21 @@ impl Transport {
     }
     /// Pointer after one data byte, wrapping at the address width.
     fn next(width: AddressBytes, pointer: u16) -> u16 { if pointer == width.max() { 0 } else { pointer + 1 } }
-    fn consume(&mut self) {
+    /// Take the next read byte. A touch chip produces it now, so it is the
+    /// authority over the byte the guest receives.
+    fn consume(&mut self) -> Result<Option<u8>, String> {
+        if let Some(chip) = &mut self.touch {
+            return chip.read().map(Some);
+        }
         if let Peer::Register(p) = &self.peer {
             self.pointer = self.pointer.map(|pointer| Self::next(p.address_bytes, pointer));
         }
+        Ok(None)
     }
-    fn stop(&mut self) { self.selected = false; self.expect_pointer = false; self.pointer_high = None; }
+    fn stop(&mut self) {
+        self.selected = false; self.expect_pointer = false; self.pointer_high = None;
+        if let Some(chip) = &mut self.touch { chip.stop(); }
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Phase { Idle, Write, Read, Nacked, ReadEnded }
@@ -164,12 +210,19 @@ impl ByteI2c {
         {
             return Err("Invalid synthetic I2C peer address or register count".into());
         }
+        let touch = match &peer {
+            Peer::Touch(p) if !(32..512).contains(&p.input_ready_irq) => {
+                return Err("Invalid touch chip input-ready interrupt".into());
+            }
+            Peer::Touch(p) => Some(TouchChip::new(p.clone())?),
+            _ => None,
+        };
         // The declared peer itself binds checkpoints to this factory.
         let factory = serde_json::to_value(&peer).unwrap();
         let r = &profile.reset;
         let state = State { ccr:r.ccr, adr:r.adr, csr:r.csr, fsr:r.fsr, bcr:0, bsr:0, dar:0,
             staged:false, rx_ready:false, low_drives:0, phase:Phase::Idle, pending:None,
-            transport:Transport { peer:peer.clone(), selected:false, pointer:None, expect_pointer:false, pointer_high:None } };
+            transport:Transport { peer:peer.clone(), selected:false, pointer:None, expect_pointer:false, pointer_high:None, touch } };
         Ok(Self {base, irq, profile, factory, initial_peer:peer, state, irq_dirty:true})
     }
     pub fn windows(&self) -> Vec<(u64,u64)> { vec![(self.base, self.base + 0x20)] }
@@ -288,11 +341,17 @@ impl ByteI2c {
                             .keys()
                             .any(|key| *key == pointer || Transport::next(a.address_bytes, *key) == pointer)
                     }) => {}
+            (Peer::Touch(a), Peer::Touch(b))
+                if a == b
+                    && s.transport.touch.as_ref().is_some_and(|chip| chip.profile() == a)
+                    && s.transport.pointer.is_none()
+                    && s.transport.pointer_high.is_none()
+                    && !s.transport.expect_pointer => {}
             _ => return Err("Changed byte I2C peer factory".into()),
         }
         let addressing = s.pending.as_ref().is_some_and(|p| matches!(p.operation,Operation::Address(_)));
         let stopping = s.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop);
-        if s.transport.selected && !matches!(s.transport.peer,Peer::Register(_))
+        if s.transport.selected && s.transport.peer.address7().is_none()
             || s.transport.expect_pointer && !matches!(s.transport.peer,Peer::Register(_))
             || s.transport.selected != matches!(s.phase,Phase::Read|Phase::Write|Phase::ReadEnded)
             || s.transport.expect_pointer && (!s.transport.selected || s.phase!=Phase::Write)
@@ -319,12 +378,75 @@ impl ByteI2c {
             let legal=match p.operation {
                 Operation::Address(b) => s.ccr&0x20!=0 && (8..=0x77).contains(&(b>>1)) && s.bcr&MSS!=0 && s.bsr==0x80 && s.dar==b && s.low_drives==0,
                 Operation::Write(b) => s.phase==Phase::Write && s.transport.check_write(b).is_ok(),
-                Operation::Read{byte,ack} => s.phase==Phase::Read && s.transport.read()==Ok(byte) && (s.bcr&ACK!=0)==ack,
+                Operation::Read{byte,ack} => s.phase==Phase::Read && (s.bcr&ACK!=0)==ack
+                    && match s.transport.touch { Some(_) => s.transport.read().is_ok(), None => s.transport.read()==Ok(byte) },
                 Operation::Stop => s.bsr&0x80!=0 && s.bcr&MSS==0,
             };
             if !legal {return Err("Invalid byte I2C pending operation".into());}
         }
         Ok(())
+    }
+}
+impl ByteI2c {
+    fn complete(&mut self, cx: &mut Cx<'_>, p: Pending) {
+        let s = &mut self.state;
+        s.pending = None;
+        let mut fields = vec![
+            ("base", Field::int(self.base)),
+            ("deadline", Field::int(p.deadline)),
+            ("tick", Field::int(p.deadline)),
+        ];
+        if s.transport.selected
+            && let Some(address7) = s.transport.peer.address7()
+            && !matches!(p.operation, Operation::Address(_))
+        {
+            fields.push(("address7", Field::int(address7)));
+        }
+        match p.operation {
+            Operation::Address(b)=>{
+                let ack=s.transport.address(b);
+                fields.extend([("operation",Field::constant("address")),("address7",Field::int(b>>1)),
+                    ("direction",Field::constant(if b&1==0 {"write"} else {"read"})),("peer_ack",Field::Bool(ack))]);
+                s.phase=if !ack {Phase::Nacked} else if b&1==0 {Phase::Write}else{Phase::Read};
+                s.bsr=0x81 | if b&1==0 {8}else{0} | if ack {0}else{0x10};
+                s.bcr|=INT;
+            }
+            Operation::Write(b)=>{
+                if let Err(e)=s.transport.write(b){cx.fail(e);}s.bsr=0x88;s.bcr|=INT;
+                fields.extend([("operation",Field::constant("write")),("direction",Field::constant("write")),("data",Field::int(b)),("peer_ack",Field::Bool(true))]);
+            }
+            Operation::Read{ack,mut byte}=>{
+                match s.transport.consume() {
+                    Ok(Some(actual)) => byte = actual,
+                    Ok(None) => {}
+                    Err(e) => cx.fail(e),
+                }
+                fields.extend([("operation",Field::constant("read")),("direction",Field::constant("read")),("data",Field::int(byte)),("master_ack",Field::Bool(ack))]);
+                s.dar=byte;s.rx_ready=true;s.bsr=0x80|if ack{0}else{0x10};
+                if !ack {s.phase=Phase::ReadEnded;} s.bcr|=INT;
+            }
+            Operation::Stop=>{
+                fields.push(("operation",Field::constant("stop")));
+                s.phase=Phase::Idle;s.bsr=0;s.transport.stop();s.rx_ready=false;}
+        }
+        cx.at_tick(p.deadline,|cx|cx.record(Record::new("Byte I2C virtual phase completed",fields)));
+        self.sync_irq(cx);
+    }
+    /// Run due chip input edges; an input-ready edge raises the chip's interrupt.
+    fn advance_touch(&mut self, cx: &mut Cx<'_>) {
+        let now = cx.now();
+        let Some(chip) = &mut self.state.transport.touch else { return };
+        if chip.next_deadline(now).is_none_or(|at| at > now) {
+            return;
+        }
+        match chip.advance(now) {
+            Ok(true) => {
+                let line = chip.profile().input_ready_irq;
+                if let Err(e) = cx.raise_irq(0, line) { cx.fail(e); }
+            }
+            Ok(false) => {}
+            Err(e) => cx.fail(e),
+        }
     }
 }
 impl Device for ByteI2c {
@@ -350,53 +472,17 @@ impl Device for ByteI2c {
         if self.irq_dirty {
             self.sync_irq(cx);
         }
-        let Some(p) = self
-            .state
-            .pending
-            .clone()
-            .filter(|p| p.deadline <= cx.now())
-        else {
-            return;
-        };
-        let s = &mut self.state;
-        s.pending = None;
-        let mut fields = vec![
-            ("base", Field::int(self.base)),
-            ("deadline", Field::int(p.deadline)),
-            ("tick", Field::int(p.deadline)),
-        ];
-        if s.transport.selected
-            && let Peer::Register(peer) = &s.transport.peer
-            && !matches!(p.operation, Operation::Address(_))
-        {
-            fields.push(("address7", Field::int(peer.address)));
+        if let Some(p) = self.state.pending.clone().filter(|p| p.deadline <= cx.now()) {
+            self.complete(cx, p);
         }
-        match p.operation {
-            Operation::Address(b)=>{
-                let ack=s.transport.address(b);
-                fields.extend([("operation",Field::constant("address")),("address7",Field::int(b>>1)),
-                    ("direction",Field::constant(if b&1==0 {"write"} else {"read"})),("peer_ack",Field::Bool(ack))]);
-                s.phase=if !ack {Phase::Nacked} else if b&1==0 {Phase::Write}else{Phase::Read};
-                s.bsr=0x81 | if b&1==0 {8}else{0} | if ack {0}else{0x10};
-                s.bcr|=INT;
-            }
-            Operation::Write(b)=>{
-                s.transport.write(b);s.bsr=0x88;s.bcr|=INT;
-                fields.extend([("operation",Field::constant("write")),("direction",Field::constant("write")),("data",Field::int(b)),("peer_ack",Field::Bool(true))]);
-            }
-            Operation::Read{ack,byte}=>{
-                fields.extend([("operation",Field::constant("read")),("direction",Field::constant("read")),("data",Field::int(byte)),("master_ack",Field::Bool(ack))]);
-                s.transport.consume();s.dar=byte;s.rx_ready=true;s.bsr=0x80|if ack{0}else{0x10};
-                if !ack {s.phase=Phase::ReadEnded;} s.bcr|=INT;
-            }
-            Operation::Stop=>{
-                fields.push(("operation",Field::constant("stop")));
-                s.phase=Phase::Idle;s.bsr=0;s.transport.stop();s.rx_ready=false;}
-        }
-        cx.at_tick(p.deadline,|cx|cx.record(Record::new("Byte I2C virtual phase completed",fields)));
-        self.sync_irq(cx);
+        self.advance_touch(cx);
     }
-    fn next_deadline(&self,now:u64)->Option<u64> {if self.irq_dirty{Some(now)}else{self.state.pending.as_ref().map(|p|p.deadline)}}
+    fn next_deadline(&self,now:u64)->Option<u64> {
+        if self.irq_dirty { return Some(now); }
+        let pending = self.state.pending.as_ref().map(|p| p.deadline);
+        let touch = self.state.transport.touch.as_ref().and_then(|chip| chip.next_deadline(now));
+        pending.into_iter().chain(touch).min()
+    }
     fn save(&self)->Value {serde_json::to_value(Snapshot{version:1,base:self.base,irq:self.irq,profile:self.profile.clone(),factory:self.factory.clone(),state:self.state.clone()}).unwrap()}
     fn restore(&mut self,v:&Value)->Result<(),String> {
         let snapshot:Snapshot=serde_json::from_value(v.clone()).map_err(|e|e.to_string())?;
