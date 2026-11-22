@@ -340,6 +340,14 @@ impl Preview {
         }
         self
     }
+    /// The statistics input buffer ends each frame one sensor frame after the previous one
+    /// ([`InputBuffer::with_frame_clock`]); RIFP runs are unaffected.
+    pub fn with_frame_clock(self, sensor: fujimod_emulator_sensor_input::sensor::Sensor) -> Self {
+        match self {
+            Self::Input(input) => Self::Input(input.with_frame_clock(sensor)),
+            rifp => rifp,
+        }
+    }
     fn device(&mut self) -> &mut dyn Device {
         match self {
             Self::Input(v) => v,

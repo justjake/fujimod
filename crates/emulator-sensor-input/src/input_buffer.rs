@@ -62,12 +62,21 @@ pub struct InputBuffer {
     /// Bring-up option: aligned words outside the wired register map read back their last
     /// write (kept in `State::regs`, so they are part of the checkpoint).
     retain_window: bool,
+    /// The sensor whose frames a free-running clock (`Wiring::period_ticks`) follows.
+    frame_clock: Option<crate::sensor::Sensor>,
 }
 impl InputBuffer {
     /// Let every aligned word of the 4 KiB window beyond the wired register map read back its
     /// last write (0 before any write) instead of stopping as unmodeled.
     pub fn with_retained_window(mut self) -> Self {
         self.retain_window = true;
+        self
+    }
+    /// Let the free-running frame clock follow the sensor's frame length
+    /// ([`crate::sensor::Sensor::frame_ticks`]): each frame of statistics ends one sensor
+    /// frame after the previous one, in a decoded readout as in the stand-in period.
+    pub fn with_frame_clock(mut self, sensor: crate::sensor::Sensor) -> Self {
+        self.frame_clock = Some(sensor);
         self
     }
     fn retains(&self, o: u64, n: u8) -> bool {
@@ -95,6 +104,7 @@ impl InputBuffer {
             wiring,
             statistics,
             retain_window: false,
+            frame_clock: None,
         })
     }
     fn irq(&self, s: &State, cx: &mut Cx<'_>) {
@@ -142,6 +152,10 @@ impl InputBuffer {
     }
     fn schedule(&self, s: &mut State, cx: &mut Cx<'_>, anchor: u64) {
         if let Some(period) = self.wiring.period_ticks {
+            let period = self
+                .frame_clock
+                .as_ref()
+                .map_or(period, |sensor| sensor.frame_ticks(period));
             let Some(at) = anchor.checked_add(period) else {
                 cx.fail("input-buffer deadline overflow");
                 return;
