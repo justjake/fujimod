@@ -119,6 +119,11 @@ function AlternatePaths(props: { section: ManualSection; base: MenuPath }) {
 
 function ManualOptions(props: { section: ManualSection }) {
   const options = () => props.section.options ?? [];
+  /** Options the camera already had, without a description: one dimmed row. */
+  const original = () =>
+    options()
+      .filter((option) => option.stock && !option.summary && !option.credits)
+      .map((option) => option.label);
   return (
     <Show when={options().length}>
       <Show
@@ -126,9 +131,14 @@ function ManualOptions(props: { section: ManualSection }) {
         fallback={
           <>
             <p class="manual-choices">
-              {options()
-                .map((option) => option.label)
-                .join(' · ')}
+              <For each={options()}>
+                {(option, index) => (
+                  <>
+                    {index() ? ' · ' : ''}
+                    <span class={{ 'manual-original': !!option.stock }}>{option.label}</span>
+                  </>
+                )}
+              </For>
             </p>
             <For each={options()}>
               {(option) => (
@@ -146,7 +156,13 @@ function ManualOptions(props: { section: ManualSection }) {
         }
       >
         <dl class="manual-options">
-          <For each={options()}>
+          <Show when={original().length}>
+            <div class="manual-original">
+              <dt>{original().join(' · ')}</dt>
+              <dd>Original options</dd>
+            </div>
+          </Show>
+          <For each={options().filter((option) => !original().includes(option.label))}>
             {(option) => (
               <div>
                 <dt>{option.label}</dt>

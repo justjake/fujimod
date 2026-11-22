@@ -9,7 +9,12 @@ export type ManualSection = {
   path?: readonly string[];
   paths?: readonly (readonly string[])[];
   summary?: string | null;
-  options?: readonly { label: string; summary: string | null; credits: Credits | null }[];
+  options?: readonly {
+    label: string;
+    summary: string | null;
+    stock?: boolean;
+    credits: Credits | null;
+  }[];
   credits?: Credits;
   media?: { card: string; options: readonly string[] } | null;
   markdown?: string;
