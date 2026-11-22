@@ -3038,6 +3038,25 @@ impl Session {
         }
         result
     }
+    /// Ticks between touch reports on the board's touch panel.
+    pub fn touch_period(&self) -> Result<u64, String> {
+        let state = unsafe { &*self.inner.state.get() };
+        state.devices.as_ref().ok_or("XP4 touch panel is not wired")?.touch_period()
+    }
+    /// One contact-0 input at the current tick: `phase` is press, drag or
+    /// release; `x`, `y` are raw 12-bit panel coordinates.
+    pub fn touch(&self, phase: &str, x: u16, y: u16) -> Result<(), String> {
+        use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
+        let phase = match phase {
+            "press" => Phase::Down,
+            "drag" => Phase::Move,
+            "release" => Phase::Up,
+            _ => return Err("Touch phase must be press, drag or release".into()),
+        };
+        self.inner.external_devices(|d, now| {
+            d.touch(now, &[ContactInput { tick: now, contact: 0, phase, x, y }])
+        })
+    }
     pub fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> Result<(), String> {
         self.inner.host_mutation()?;
         let state = unsafe { &mut *self.inner.state.get() };
