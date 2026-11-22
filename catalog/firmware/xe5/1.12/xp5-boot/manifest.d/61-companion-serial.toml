@@ -24,7 +24,11 @@ active_high = false
 [device.options.wire.endpoints.part]
 kind = "bis-configuration-registers"
 revision = [0, 0]
+samples = [0, 0]
 idle_high = false
+# A body at rest: the 0a..0f block (command 8a) reads zero. INHERITED from the X-T5 and
+# UNVERIFIED for the X-E5.
+block = [0, 0, 0, 0, 0, 0]
 [[device.options.wire.endpoints]]
 [device.options.wire.endpoints.select]
 port = 11
@@ -32,3 +36,7 @@ pin = 3
 active_high = false
 [device.options.wire.endpoints.part]
 kind = "lsm6ds-configuration-registers"
+temperature = 0
+# A still body: zero angular rate and acceleration. INHERITED from the X-T5 and UNVERIFIED for
+# the X-E5.
+motion = { angular_rate = [0, 0, 0], acceleration = [0, 0, 0] }
