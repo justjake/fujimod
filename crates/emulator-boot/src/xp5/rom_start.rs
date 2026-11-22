@@ -89,6 +89,9 @@ pub(crate) struct SetupHandoff {
     pub length: u64,
     pub sha256: String,
     pub source_straps: u32,
+    /// Device windows the stock setup needs beyond the shared ROM-start fragment.
+    #[serde(default)]
+    pub device: Vec<DeviceWindow>,
 }
 
 impl SetupHandoff {
@@ -181,8 +184,10 @@ impl RomStart {
 
     pub fn from_setup_handoff(handoff: SetupHandoff) -> Result<Self, String> {
         let straps = handoff.source_straps;
+        let setup_windows = handoff.device.clone();
         let mut start = Self::with_media(Entry::SetupHandoff(handoff), false, Vec::new(), false)?;
         start.source_straps = straps;
+        start.setup_windows = setup_windows;
         Ok(start)
     }
 
