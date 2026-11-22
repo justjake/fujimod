@@ -9,7 +9,7 @@ import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
-import type { DesktopBridge, RunConfiguration } from './launch';
+import type { DesktopBridge, LaunchRequest, RunConfiguration } from './launch';
 import { desktopBridge } from './desktop';
 import './app.css';
 
@@ -132,6 +132,19 @@ export default function App() {
     }
   }
 
+  async function openCamera(request: LaunchRequest) {
+    if (!bridge || busy()) return;
+    setBusy(true);
+    setLauncherError('');
+    try {
+      await startCamera(await bridge.launch(request));
+    } catch (error) {
+      setLauncherError(shownError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   onSettled(() => {
     window.addEventListener('error', (event) => {
       setPageError(shownError(event.error ?? event.message));
@@ -140,26 +153,22 @@ export default function App() {
       setPageError(shownError(event.reason));
     });
     if (!bridge) return;
-    void Promise.all([bridge.configurations(), bridge.launchConnection()]).then(
-      ([rows, connection]) => {
-        setConfigurations(rows);
-        setSelected(rows[0]?.configuration ?? '');
-        if (connection) {
-          setSelected(connection.configuration);
-          setUpdate(connection.update);
-          void bridge
-            .launch(connection)
-            .then(startCamera)
-            .catch((error) => {
-              setLauncherError(shownError(error));
-              updateState((value) => {
-                value.message = shownError(error);
-                value.error = true;
-              });
-            });
-        }
-      },
-    );
+    void bridge.configurations().then((rows) => {
+      setConfigurations(rows);
+      setSelected(rows[0]?.configuration ?? '');
+    });
+    void bridge.launchConnection().then((connection) => {
+      if (!connection) return;
+      setSelected(connection.configuration);
+      setUpdate(connection.update);
+      void openCamera(connection).catch((error) => {
+        setLauncherError(shownError(error));
+        updateState((value) => {
+          value.message = shownError(error);
+          value.error = true;
+        });
+      });
+    });
   });
   onCleanup(() => {
     runtime?.dispose();

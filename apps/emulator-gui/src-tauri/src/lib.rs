@@ -332,7 +332,7 @@ fn window_launch() -> Result<WindowLaunch, String> {
 
 #[tauri::command]
 fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest> {
-    state.command.lock().ok()?.clone()
+    state.command.lock().ok()?.take()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -341,7 +341,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     tauri::Builder::default()
         .manage(AppState {
             running: Mutex::new(None),
-            command: Mutex::new(connection.command),
+    command: Mutex::new(connection.command),
         })
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
