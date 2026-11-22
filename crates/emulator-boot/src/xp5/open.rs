@@ -1030,13 +1030,11 @@ pub(crate) fn open_from(
         return Err("X100VI caller boot manifest has no device windows".into());
     }
     if let Some(profile) = profile {
-        // The user profile's journal records, in the NOR session overlay like any later
-        // program, so snapshots carry them.
-        let storage = resources.storage.as_ref().ok_or("a user profile needs NOR flash storage")?;
+        // The user profile's journal records, as declared seeds of the flash storage (a NOR
+        // session overlay or initial NAND main-area input), so snapshots carry them.
+        let storage = resources.storage.as_ref().ok_or("a user profile needs flash storage")?;
         for (offset, bytes) in &profile.records {
-            for (at, byte) in (*offset..).zip(bytes) {
-                storage.seed(at, *byte)?;
-            }
+            storage.seed_bytes(*offset, bytes)?;
         }
     }
     let mut images = initial_images(firmware, state)?;
