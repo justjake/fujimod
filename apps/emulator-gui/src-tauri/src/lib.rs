@@ -316,7 +316,6 @@ fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest>
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let connection = window_launch()?;
-    let devtools = connection.command.is_some();
     tauri::Builder::default()
         .manage(AppState {
             running: Mutex::new(None),
@@ -332,12 +331,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             .title("FujiMod Emulator")
             .inner_size(1280.0, 900.0)
             .min_inner_size(720.0, 600.0)
-            .devtools(true)
             .visible(false)
             .build()?;
-            if devtools {
-                window.open_devtools();
-            }
             window.show()?;
             Ok(())
         })
