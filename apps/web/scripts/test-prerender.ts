@@ -535,6 +535,24 @@ try {
       await page.getByRole('button', { name: 'Show instructions', exact: true }).click();
       await page.waitForURL(base + '/dev-tools/service/');
       await page.goto(base + '/bug/');
+      const description = page.getByRole('textbox', { name: 'What happened?' });
+      await description.fill('Static bug report');
+      await page
+        .getByRole('combobox', { name: 'Contact for updates (optional)' })
+        .selectOption('GitHub');
+      await page.getByRole('textbox', { name: 'GitHub handle' }).waitFor();
+      assert.equal(await description.inputValue(), 'Static bug report');
+      assert.equal(
+        await page.getByRole('checkbox', { name: 'Share contact info publicly' }).isChecked(),
+        false,
+      );
+      assert.equal(
+        await page.getByRole('checkbox', { name: 'Share uploaded files publicly' }).isChecked(),
+        false,
+      );
+      await page.getByRole('button', { name: 'Windows', exact: true }).click();
+      await page.getByText('File Explorer → This PC → your SD card', { exact: true }).waitFor();
+      await page.goto(base + '/bug/?qr#invalid-report');
       await page
         .getByRole('alert')
         .filter({ hasText: 'This link has no valid camera report.' })
