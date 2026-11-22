@@ -6,3 +6,6 @@ pub mod panel_serial;
 pub mod renderer;
 #[cfg(test)]
 mod lz_osd_tests;
+
+#[cfg(test)]
+mod display_vsync_tests;
