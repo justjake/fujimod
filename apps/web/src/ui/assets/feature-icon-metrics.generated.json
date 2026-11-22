@@ -440,13 +440,6 @@
     "width": 1.307,
     "height": 0.683
   },
-  "mod-custom-settings-bkt-page": {
-    "sprite": "mod",
-    "box": [0, 5, 44, 23],
-    "view": [0, 0, 45, 30],
-    "width": 1.307,
-    "height": 0.683
-  },
   "mod-d-range-priority": {
     "sprite": "mod",
     "box": [0, 0, 43.875, 30],
@@ -510,7 +503,7 @@
     "width": 1.137,
     "height": 0.775
   },
-  "mod-fm-features-setup-row": {
+  "mod-fm-features-shooting-row": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
     "view": [0, 0, 45, 30],
@@ -623,6 +616,13 @@
     "height": 0.76
   },
   "mod-recipes-root-mine": {
+    "sprite": "mod",
+    "box": [0, 0, 44, 30],
+    "view": [0, 0, 45, 30],
+    "width": 1.126,
+    "height": 0.768
+  },
+  "mod-recipes-root-owner": {
     "sprite": "mod",
     "box": [0, 0, 44, 30],
     "view": [0, 0, 45, 30],
