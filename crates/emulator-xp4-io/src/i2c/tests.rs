@@ -46,6 +46,17 @@ fn register_peer_write_repeated_start_read_ack_last_nack_stop(){
     write(&mut m,&mut h,4,0x42);complete(&mut m,&mut h);assert_eq!(m.state.phase,Phase::Idle);
 }
 #[test]
+fn restating_held_configuration_during_a_transfer_is_not_reconfiguration(){
+    let mut m=model(Peer::Empty);let mut h=TestHost::default();init(&mut m,&mut h);
+    write(&mut m,&mut h,16,0x60);write(&mut m,&mut h,4,0x52);
+    let held=m.save();
+    for (o,v) in [(24,3),(20,8),(8,0x2c),(12,0)] {write(&mut m,&mut h,o,v);}
+    assert_eq!(m.save(),held);
+    let mut cx=Cx::new(&mut h,0,0,4);m.write(&mut cx,BASE+20,1,2);assert!(cx.refusal().is_some());
+    let mut cx=Cx::new(&mut h,0,0,4);m.write(&mut cx,BASE+8,1,0x24);assert!(cx.refusal().is_some());
+    assert_eq!(m.save(),held);
+}
+#[test]
 fn rejected_accesses_do_not_change_state_irq_or_events(){
     let mut m=model(Peer::Empty);let mut h=TestHost::default();init(&mut m,&mut h);
     for (o,size,v) in [(24,4,3),(1,1,0),(24,1,256),(0,1,0),(12,1,1),(4,1,0x46)] {
