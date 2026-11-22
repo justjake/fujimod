@@ -119,11 +119,6 @@ function AlternatePaths(props: { section: ManualSection; base: MenuPath }) {
 
 function ManualOptions(props: { section: ManualSection }) {
   const options = () => props.section.options ?? [];
-  /** Options the camera already had, without a description: one dimmed row. */
-  const original = () =>
-    options()
-      .filter((option) => option.stock && !option.summary && !option.credits)
-      .map((option) => option.label);
   return (
     <Show when={options().length}>
       <Show
@@ -156,15 +151,9 @@ function ManualOptions(props: { section: ManualSection }) {
         }
       >
         <dl class="manual-options">
-          <Show when={original().length}>
-            <div class="manual-original">
-              <dt>{original().join(' · ')}</dt>
-              <dd>Original options</dd>
-            </div>
-          </Show>
-          <For each={options().filter((option) => !original().includes(option.label))}>
+          <For each={options()}>
             {(option) => (
-              <div>
+              <div class={{ 'manual-original': !!option.stock }}>
                 <dt>{option.label}</dt>
                 <dd>
                   {option.summary}
@@ -181,11 +170,39 @@ function ManualOptions(props: { section: ManualSection }) {
   );
 }
 
+/** A generated table of the row's facts, such as a strength at each ISO. */
+function ManualTable(props: { table: NonNullable<ManualSection['table']> }) {
+  return (
+    <div class="manual-table">
+      <table>
+        <caption>{props.table.caption}</caption>
+        <thead>
+          <tr>
+            <th />
+            <For each={props.table.columns}>{(column) => <th scope="col">{column}</th>}</For>
+          </tr>
+        </thead>
+        <tbody>
+          <For each={props.table.rows}>
+            {(row) => (
+              <tr>
+                <th scope="row">{row.label}</th>
+                <For each={row.cells}>{(cell) => <td>{cell}</td>}</For>
+              </tr>
+            )}
+          </For>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ManualRowContent(props: { section: ManualSection }) {
   return (
     <>
       <Show when={props.section.markdown}>{(text) => <Markdown text={text()} />}</Show>
       <ManualOptions section={props.section} />
+      <Show when={props.section.table}>{(table) => <ManualTable table={table()} />}</Show>
       <Show when={props.section.credits}>{(credits) => <ManualCredits credits={credits()} />}</Show>
       <Show when={sectionMedia(props.section)}>
         {(recording) => (
