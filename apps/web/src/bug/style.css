@@ -224,6 +224,10 @@
   margin: 0;
 }
 
+#bug-sd-help {
+  margin-top: 6px;
+}
+
 .bug-attachments {
   padding: 0;
   list-style: none;

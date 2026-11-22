@@ -129,10 +129,23 @@ export function GeneralReport() {
                 disabled={busy()}
                 onFiles={addFiles}
               />
-              <label class="bug-sd-picker">
-                SD card
-                <input type="file" webkitdirectory multiple onChange={readSdCard} />
-              </label>
+              <div>
+                <label>
+                  Select the SD card
+                  <input
+                    type="file"
+                    webkitdirectory
+                    multiple
+                    aria-describedby="bug-sd-help"
+                    onChange={readSdCard}
+                  />
+                </label>
+                <p id="bug-sd-help" class="bug-status">
+                  In the folder picker, select the SD card itself, one level above FUJIMOD. Reports
+                  and boot files appear in the checklist below. Backups start unchecked, and photos
+                  in DCIM are skipped.
+                </p>
+              </div>
               <Show when={files().length}>
                 <ul class="bug-attachments" aria-label="Files to include">
                   <For each={files()} keyed={false}>
