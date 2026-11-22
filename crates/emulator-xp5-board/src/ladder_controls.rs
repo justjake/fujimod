@@ -25,7 +25,7 @@ use fujimod_emulator_parts_controls::{key_input::Key, ladder_keys};
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
-const CONTROL_KEYS: [(&str, Key); 21] = [
+const CONTROL_KEYS: [(&str, Key); 24] = [
     ("menu_ok_button", Key::Menu),
     ("disp_back_bluetooth_button", Key::Back),
     ("disp_back_button", Key::Back),
@@ -45,7 +45,10 @@ const CONTROL_KEYS: [(&str, Key); 21] = [
     ("focus_stick.right", Key::StickRight),
     ("focus_stick", Key::StickPush),
     ("playback_button", Key::Play),
+    ("play_button", Key::Play),
+    ("q_button", Key::Quick),
     ("ael_button", Key::AeLock),
+    ("ael_afl_button", Key::AeLock),
     ("af_on_button", Key::AfOn),
 ];
 
@@ -586,7 +589,7 @@ mod tests {
 
     #[test]
     fn every_mapped_identity_is_a_catalog_control() {
-        let bodies = [("xt5-431", "xt5"), ("xh2s-730", "xh2s")].map(|(configuration, body)| {
+        let bodies = [("xt5-431", "xt5"), ("xh2s-730", "xh2s"), ("xe5-112", "xe5")].map(|(configuration, body)| {
             let document = ResolvedConfiguration::bundled(configuration)
                 .unwrap()
                 .reference
@@ -599,6 +602,32 @@ mod tests {
                 bodies.iter().any(|controls| controls.control(id).is_ok()),
                 "{id} is no body's catalog control"
             );
+        }
+    }
+
+    #[test]
+    fn xe5_ladders_become_the_ladder_key_model() {
+        let options = ladder_keys(&ResolvedConfiguration::bundled("xe5-112").unwrap())
+            .unwrap()
+            .unwrap();
+        let channels: Vec<u8> = options
+            .ladders
+            .iter()
+            .filter_map(|ladder| match ladder.wire {
+                ladder_keys::Wire::Adc { channel } => Some(channel),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(channels, [1, 2, 8, 11, 14]);
+        let keys = ladder_keys::LadderKeys::new(options).unwrap();
+        // Keys that share a wire are pressed one at a time: no combined band is declared.
+        for (step, key) in [Key::Menu, Key::Back, Key::StickUp, Key::StickDown, Key::Play, Key::Quick]
+            .into_iter()
+            .enumerate()
+        {
+            let at = |offset| Duration::from_nanos(2 * step as u64 + offset);
+            keys.enqueue(at(1), key, true).unwrap();
+            keys.enqueue(at(2), key, false).unwrap();
         }
     }
 

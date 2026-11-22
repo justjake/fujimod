@@ -58,7 +58,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
       },
       "positions": []
     },
@@ -527,7 +530,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
       },
       "positions": []
     },
@@ -735,7 +741,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DRIVE"
+        }
       },
       "positions": []
     },
@@ -753,7 +762,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
       },
       "positions": []
     },
@@ -771,7 +783,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "AEAF_LOCK"
+        }
       },
       "positions": []
     },
@@ -814,7 +829,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
       },
       "positions": []
     },
@@ -833,10 +851,22 @@
       "behavior": {
         "kind": "pad",
         "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
+          "up": {
+            "kind": "debug_key",
+            "name": "8DIR_U"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "8DIR_D"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "8DIR_L"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "8DIR_R"
+          }
         },
         "press": null
       },
@@ -857,7 +887,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
       },
       "positions": []
     },
@@ -875,7 +908,10 @@
       "mechanical": false,
       "behavior": {
         "kind": "button",
-        "press": null
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
       },
       "positions": []
     },
@@ -955,5 +991,146 @@
       "positions": [],
       "short_name": "BATTERY"
     }
-  }
+  },
+  "ladders": [
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 1
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware caches ADC channel 1 at 0x225c918 + 2 * channel (observed in an emulator run with a distinct sample on every channel) and reads it as a 12-bit value. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "drive_delete_button",
+          "band_low": 2618,
+          "band_high": 3066,
+          "sample": 2842,
+          "basis": "Band 2618..3066, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x3853 low, 0x3851 high); callback 0x1523e60 accepts this band for the DRIVE key alone; the other bands it accepts are shared with a neighboring key, so they are combined presses. The sample is the band midpoint."
+        },
+        {
+          "control_id": "q_button",
+          "band_low": 2102,
+          "band_high": 2325,
+          "sample": 2213,
+          "basis": "Band 2102..2325, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x384b low, 0x3849 high); callback 0x1523e60 accepts this band for the K_Q key alone; the other bands it accepts are shared with a neighboring key, so they are combined presses. The sample is the band midpoint."
+        },
+        {
+          "control_id": "play_button",
+          "band_low": 3067,
+          "band_high": 3750,
+          "sample": 3408,
+          "basis": "Band 3067..3750, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x3857 low, 0x3855 high); callback 0x1523e60 accepts this band for the K_PLAY key alone; the other bands it accepts are shared with a neighboring key, so they are combined presses. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 2
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware caches ADC channel 2 at 0x225c918 + 2 * channel (observed in an emulator run with a distinct sample on every channel) and reads it as a 12-bit value. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "ael_afl_button",
+          "band_low": 2618,
+          "band_high": 3066,
+          "sample": 2842,
+          "basis": "Band 2618..3066, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x38bf low, 0x38bd high); callback 0x1523c94 accepts this band for the AEAF_LOCK key alone; the other bands it accepts are shared with a neighboring key, so they are combined presses. The sample is the band midpoint."
+        },
+        {
+          "control_id": "menu_ok_button",
+          "band_low": 2102,
+          "band_high": 2325,
+          "sample": 2213,
+          "basis": "Band 2102..2325, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x38b7 low, 0x38b5 high); callback 0x1523c94 accepts this band for the EXE_M key alone; the other bands it accepts are shared with a neighboring key, so they are combined presses. The sample is the band midpoint."
+        },
+        {
+          "control_id": "disp_back_button",
+          "band_low": 3067,
+          "band_high": 3750,
+          "sample": 3408,
+          "basis": "Band 3067..3750, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x38c3 low, 0x38c1 high); callback 0x1523c94 accepts this band for the DISP_B key alone; the other bands it accepts are shared with a neighboring key, so they are combined presses. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 8
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware caches ADC channel 8 at 0x225c918 + 2 * channel (observed in an emulator run with a distinct sample on every channel) and reads it as a 12-bit value. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "fn1_button",
+          "band_low": 3067,
+          "band_high": 3750,
+          "sample": 3408,
+          "basis": "Band 3067..3750, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x387f low, 0x387d high); callback 0x15240b8 accepts this band for the FUNCTION key. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 11
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware caches ADC channel 11 at 0x225c918 + 2 * channel (observed in an emulator run with a distinct sample on every channel) and reads it as a 12-bit value. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "fn2_button",
+          "band_low": 3067,
+          "band_high": 3750,
+          "sample": 3408,
+          "basis": "Band 3067..3750, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x389f low, 0x389d high); callback 0x1523ff4 accepts this band for the FUNCTION2 key. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 14
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware caches ADC channel 14 at 0x225c918 + 2 * channel (observed in an emulator run with a distinct sample on every channel) and reads it as a 12-bit value. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1451,
+          "band_high": 1774,
+          "sample": 1612,
+          "basis": "Band 1451..1774, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x3819 low, 0x3817 high); scanner rows of table 0x1e02e70 (kind 1, source 14) for 8DIR_U. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 2108,
+          "band_high": 2329,
+          "sample": 2218,
+          "basis": "Band 2108..2329, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x3821 low, 0x381f high); scanner rows of table 0x1e02e70 (kind 1, source 14) for 8DIR_R. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2621,
+          "band_high": 3068,
+          "sample": 2844,
+          "basis": "Band 2621..3068, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x3829 low, 0x3827 high); scanner rows of table 0x1e02e70 (kind 1, source 14) for 8DIR_L. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3069,
+          "band_high": 3708,
+          "sample": 3388,
+          "basis": "Band 3069..3708, halfwords of the factory configuration page read through the stock tag reader 0x15b5a64 (tags 0x382d low, 0x382b high); scanner rows of table 0x1e02e70 (kind 1, source 14) for 8DIR_D. The sample is the band midpoint."
+        }
+      ]
+    }
+  ]
 }
