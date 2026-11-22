@@ -263,6 +263,7 @@ impl Session {
                         },
                         registers,
                         released: c.released,
+                        parked_until_sgi: false,
                         mprofile: None,
                         rprofile: c.rprofile,
                     })
