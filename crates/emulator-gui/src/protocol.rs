@@ -68,3 +68,41 @@ pub(crate) fn command_args(args: Value) -> Result<Value, String> {
         Err("command arguments must be an object".into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_request_names_one_command_and_its_arguments() {
+        let request: Request =
+            serde_json::from_str(r#"{"type":"rpc","serial":7,"action":"press","args":{"id":"shutter"}}"#)
+                .unwrap();
+        let Request::Rpc { serial, action, args } = request;
+        assert_eq!((serial, action.as_str()), (7, "press"));
+        assert_eq!(args["id"], "shutter");
+        assert_eq!(args.clone(), command_args(args).unwrap());
+    }
+
+    #[test]
+    fn a_reply_and_a_state_event_keep_their_wire_names() {
+        let reply: Value = serde_json::from_str(
+            &Event::reply(3, json!(null)).json().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(reply["type"], "reply");
+        assert_eq!(reply["serial"], 3);
+        let state: Value = serde_json::from_str(
+            &Event::State {
+                inputs: Vec::new(),
+                positions: Default::default(),
+                powered_on: true,
+            }
+            .json()
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["type"], "state");
+        assert_eq!(state["poweredOn"], true);
+    }
+}

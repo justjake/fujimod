@@ -267,6 +267,19 @@ fn checked_endpoint(endpoint: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::checked_endpoint;
+
+    #[test]
+    fn a_session_endpoint_is_a_loopback_emulator_socket() {
+        assert!(checked_endpoint("ws://127.0.0.1:48123/emulator").is_ok());
+        assert!(checked_endpoint("ws://example.com:48123/emulator").is_err());
+        assert!(checked_endpoint("http://127.0.0.1:48123/emulator").is_err());
+        assert!(checked_endpoint("ws://127.0.0.1:48123/other").is_err());
+    }
+}
+
 #[tauri::command]
 async fn connect(
     endpoint: String,

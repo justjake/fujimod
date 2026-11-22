@@ -186,6 +186,9 @@ impl GuiSession {
                     Err(tungstenite::Error::ConnectionClosed) => {
                         return self.finish();
                     }
+                    Err(tungstenite::Error::Protocol(
+                        tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+                    )) => return self.finish(),
                     Err(error) => return Err(error.to_string()),
                 };
                 match message {

@@ -16,3 +16,16 @@ pub fn connect(endpoint: &str) -> Result<Child, String> {
         .spawn()
         .map_err(|error| format!("{}: {error}", executable.display()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::arguments;
+
+    #[test]
+    fn the_desktop_receives_the_session_endpoint_as_its_own_option() {
+        assert_eq!(
+            arguments("ws://127.0.0.1:48123/emulator"),
+            ["--endpoint", "ws://127.0.0.1:48123/emulator"]
+        );
+    }
+}

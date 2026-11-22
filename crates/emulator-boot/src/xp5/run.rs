@@ -441,7 +441,9 @@ impl RunHost {
         let until = next_patch.map_or(now.saturating_add(*slice), |at| {
             at.min(now.saturating_add(*slice))
         });
-        let result = limits.step(session, *quantum, None, Some(until));
+        // Keep the desktop responsive while the guest makes progress: one host-sized slice per
+        // poll, not the headless driver's full budget.
+        let result = session.run_with_limits(1_000_000, *quantum, None, Some(until));
         for line in session.board.take_console() {
             println!("{line}");
         }
