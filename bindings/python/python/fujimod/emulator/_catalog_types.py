@@ -5698,6 +5698,7 @@ class SettingsProfile(TypedDict, total=False):
     derived_fields: NotRequired[list[ProfileField]]
     header: Required[UpdateRange]
     loader_offset: NotRequired[int | None]
+    marker: NotRequired[int]
     power_register: NotRequired[int | None]
     records: Required[dict[str, ProfileRecord]]
 
