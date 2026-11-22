@@ -151,13 +151,18 @@ fn unknown_settings_and_malformed_updates_refuse() {
 /// The fixture with a profile: a header and a record of eight default bytes
 /// after the bank defaults, with `language` in the record and `setup` in the header.
 fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
+    profile_fixture_marked(0xaa)
+}
+
+/// The profile fixture whose header carries `marker` and whose layout names it.
+fn profile_fixture_marked(marker: u8) -> (Vec<u8>, FirmwareSettings) {
     let (_, mut layout) = fixture();
     let descriptor: Vec<u8> = [2u32, 40, 931]
         .into_iter()
         .flat_map(u32::to_le_bytes)
         .collect();
     let table = [0x10, 0, 9, 0, 0xf0, 0, 7, 0, 0xff, 0xff, 0, 0];
-    let header = [0, 0, 0, 0, 0xd0, 7, 0, 0xff, 0, 0x80, 0, 4, 0, 0, 0xaa, 0];
+    let header = [0, 0, 0, 0, 0xd0, 7, 0, 0xff, 0, 0x80, 0, 4, 0, 0, marker, 0];
     let record = [1, 2, 3, 4, 5, 6, 7, 8];
     let mut section = descriptor;
     section.extend([0; 4]);
@@ -168,6 +173,7 @@ fn profile_fixture() -> (Vec<u8>, FirmwareSettings) {
     layout.profile = Some(SettingsProfile {
         derived_fields: vec![],
         header: range(0x101c, &header),
+        marker,
         loader_offset: None,
         power_register: None,
         records: BTreeMap::from([(
@@ -474,6 +480,27 @@ fn source_and_range_extents_remain_bounded() {
 fn main_record(layout: &mut FirmwareSettings) -> &mut ProfileRecord {
     let profile = layout.profile.as_mut().unwrap();
     profile.records.get_mut("main").unwrap()
+}
+
+#[test]
+fn the_layout_names_the_header_marker() {
+    let requested = BTreeMap::from([("language".into(), "en".into())]);
+    let (source, mut layout) = profile_fixture_marked(0x36);
+    let flash = flash_image(&source, 4).unwrap();
+    let header = build(&layout, &flash, &requested, None)
+        .unwrap()
+        .profile
+        .unwrap()
+        .header;
+    assert_eq!(header[14], 0x36);
+    assert_eq!(header.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)), 0);
+    // A layout that names another marker refuses the stock header.
+    layout.profile.as_mut().unwrap().marker = 0xaa;
+    assert!(
+        build(&layout, &flash, &requested, None)
+            .unwrap_err()
+            .contains("no marker")
+    );
 }
 
 #[test]

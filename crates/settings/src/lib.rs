@@ -206,7 +206,7 @@ fn profile<'a>(
 ) -> Result<Settings, String> {
     if let Some(profile) = &layout.profile {
         let header = read(section, layout, &profile.header)?;
-        if header[header.len() - 2] != 0xaa {
+        if header[header.len() - 2] != profile.marker {
             return Err("stock profile header has no marker".into());
         }
         stores.insert("header", header);

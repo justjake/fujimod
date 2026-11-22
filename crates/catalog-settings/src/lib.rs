@@ -151,9 +151,13 @@ impl SectionLength {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct SettingsProfile {
-    /// Stock eight- or sixteen-byte header. The last two bytes hold marker
-    /// `0xaa` and the checksum that makes the header sum to zero.
+    /// Stock eight- or sixteen-byte header. The last two bytes hold the marker
+    /// and the checksum that makes the header sum to zero.
     pub header: UpdateRange,
+    /// The marker byte before the checksum: `0xaa` unless the layout states
+    /// another one, as the stock check of an X-E5 does.
+    #[serde(default = "stock_header_marker", skip_serializing_if = "is_stock_header_marker")]
+    pub marker: u8,
     /// X-Processor 4 only: the header's offset in the boot loader's handoff
     /// block. Absent for X-Processor Pro, whose header goes to sub-CPU
     /// registers.
@@ -169,6 +173,14 @@ pub struct SettingsProfile {
     /// Fields initialized from the calibration bank or a declared fill.
     #[serde(default)]
     pub derived_fields: Vec<ProfileField>,
+}
+
+fn stock_header_marker() -> u8 {
+    0xaa
+}
+
+fn is_stock_header_marker(marker: &u8) -> bool {
+    *marker == stock_header_marker()
 }
 
 /// A stock initialization of a profile field, applied before requested settings.
