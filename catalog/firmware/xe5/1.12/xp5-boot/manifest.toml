@@ -2,10 +2,13 @@ version = 1
 firmware = "xe5-112"
 load_firmware = true
 
-# The XP5 device tree maps Linux DRAM and shared arenas below 0x67f00000.
+# The XP5 device tree maps Linux DRAM and shared arenas below 0x67f00000, but the application also
+# uses DRAM up to 0x80000000: CPU1 writes 0x7ec00000 (a memset from 0x3271124, as on the X-T5, whose
+# still subject-detection arena is 0x7ec00000 + 0x1400000), and the drain routine reads 0x68000000
+# from inside that range. So RAM runs to 0x80000000. Installed capacity is unmeasured.
 [[ram]]
 base = 0
-size = 0x67f00000
+size = 0x80000000
 
 # M-core SRAM, as on the other XP5 bodies. The extent and the source of the
 # stock M-core image copy are UNVERIFIED for the X-E5.
