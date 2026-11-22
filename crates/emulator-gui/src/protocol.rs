@@ -1,14 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// The part of a native boot that a GUI host must reproduce after it opens.
-#[derive(Clone, Debug, Default)]
-pub struct GuiOptions {
-    pub load_snapshot: Option<std::path::PathBuf>,
-    pub discovery: bool,
-    pub execution_policy: fujimod_emulator_cpu::ExecutionPolicy,
-}
-
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 pub(crate) enum Request {
@@ -23,7 +15,10 @@ pub(crate) enum Request {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum Event {
-    Reply { serial: u64, result: Value },
+    Reply {
+        serial: u64,
+        result: Value,
+    },
     Error {
         serial: Option<u64>,
         error: String,

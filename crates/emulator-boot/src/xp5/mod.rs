@@ -14,8 +14,7 @@ mod profile;
 mod rom_start;
 mod run;
 
-pub use run::{Run, run_boot, open_gui};
-
+pub use run::{Run, RunHost, run_boot};
 
 use fujimod_catalog_configuration::RunStart;
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -56,48 +55,20 @@ impl Started {
     /// Transfer the opened board and physical input handle to a language binding.
     pub fn into_session(
         self,
-    ) -> (fujimod_emulator_session::Session, fujimod_emulator_xp5_board::session::Inputs, usize) {
-        (self.opened.session, self.opened.inputs, self.opened.read_limit)
-    }
-
-    /// Transfer the opened board, physical inputs and scheduler values to a GUI host.
-    pub fn into_gui_session(
-        self,
     ) -> (
         fujimod_emulator_session::Session,
         fujimod_emulator_xp5_board::session::Inputs,
-        u64,
         usize,
     ) {
         (
             self.opened.session,
             self.opened.inputs,
-            self.opened.ticks_per_second,
-            self.opened.quantum,
+            self.opened.read_limit,
         )
     }
 
     pub fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
         &mut self.opened.session
-    }
-
-    /// The physical controls and scheduler values of the opened session.
-    pub fn into_gui_parts(
-        self,
-    ) -> (
-        fujimod_emulator_session::Session,
-        fujimod_emulator_xp5_board::session::Inputs,
-        u64,
-        usize,
-        usize,
-    ) {
-        (
-            self.opened.session,
-            self.opened.inputs,
-            self.opened.ticks_per_second,
-            self.opened.quantum,
-            self.opened.read_limit,
-        )
     }
 }
 
@@ -105,20 +76,43 @@ pub(super) fn open_startup(
     configuration: &ResolvedConfiguration,
     startup: Startup,
 ) -> Result<Started, String> {
-    let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        second_card_image, second_card_files, scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
-        camera_settings } = startup;
+    let Startup {
+        update,
+        manifest,
+        boot_rom: rom_path,
+        card_image: sd_image,
+        card_files,
+        scene,
+        output: run_directory,
+        viewer_port,
+        mode,
+        quantum: quantum_override,
+    } = startup;
     let start = configuration.configuration.start;
-    if start == RunStart::SdCard && sd_image.is_none()
-        && !card_files.iter().any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
+    if start == RunStart::SdCard
+        && sd_image.is_none()
+        && !card_files
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
     {
         return Err("XP5 SD card startup requires marble_init.bin or an SD card image".into());
     }
     let firmware_id = configuration.configuration.firmware_id.clone();
     let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
-    let preloads = configuration.configuration.preset.as_ref()
+    let preloads = configuration
+        .configuration
+        .preset
+        .as_ref()
         .and_then(|preset| preset.firmware_profile_id.as_ref())
-        .and_then(|id| configuration.reference.firmware.layouts.as_ref()?.profiles.get(id))
+        .and_then(|id| {
+            configuration
+                .reference
+                .firmware
+                .layouts
+                .as_ref()?
+                .profiles
+                .get(id)
+        })
         .and_then(|profile| profile.preload.as_deref())
         .unwrap_or_default();
     state.preload.splice(..0, preloads.iter().cloned());
@@ -126,9 +120,14 @@ pub(super) fn open_startup(
         if run_directory.is_none() {
             return Err("the frame viewer needs a run output directory".into());
         }
-        let display = state.device.iter_mut().find(|window| window.base == 0xff99_0000 && window.kind == "display")
+        let display = state
+            .device
+            .iter_mut()
+            .find(|window| window.base == 0xff99_0000 && window.kind == "display")
             .ok_or("configuration declares no primary display window")?;
-        display.options.insert("viewer_port".into(), toml::Value::Integer(port.into()));
+        display
+            .options
+            .insert("viewer_port".into(), toml::Value::Integer(port.into()));
     }
     let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
     let firmware = firmware::Firmware::from_update(&firmware_id, update_bytes, true)?;
@@ -202,6 +201,12 @@ pub(super) fn open_startup(
         viewer_keys,
         profile.as_ref(),
     )?;
-    let card_write_back = loader.into_iter().filter_map(|card| card.write_back).collect();
-    Ok(Started { firmware, state, opened, card_write_back })
+    if rom.is_none() {
+        crate::media::attach(&mut opened.session, sd_image.as_deref(), &runtime_files)?;
+    }
+    Ok(Started {
+        firmware,
+        state,
+        opened,
+    })
 }

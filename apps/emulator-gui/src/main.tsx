@@ -19,7 +19,9 @@ if ('__TAURI_INTERNALS__' in window) {
     configurations: () => invoke('configurations'),
     chooseUpdate: () => invoke('choose_update'),
     launch: (request) => invoke('launch', { request }),
+    connect: (endpoint) => invoke('connect', { endpoint }),
     launchConnection: () => invoke('launch_connection'),
+    connection: () => invoke('connection'),
     close: () => invoke('close'),
   };
 }

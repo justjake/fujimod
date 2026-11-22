@@ -1,6 +1,6 @@
 use fujimod_catalog_configuration::{RunInputs, RunStart};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_gui::Xp5Session;
+use fujimod_emulator_gui::RunHost;
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -70,6 +70,7 @@ struct Running {
 struct AppState {
     running: Mutex<Option<Running>>,
     command: Mutex<Option<LaunchRequest>>,
+    endpoint: Mutex<Option<String>>,
 }
 
 fn log_session(line: impl AsRef<str>) {
@@ -130,14 +131,11 @@ async fn choose_update() -> Option<String> {
         .map(|file| file.path().display().to_string())
 }
 
-fn checked_update(
-    configuration: &ResolvedConfiguration,
-    update: &str,
-) -> Result<PathBuf, String> {
+fn checked_update(configuration: &ResolvedConfiguration, update: &str) -> Result<PathBuf, String> {
     let camera = Configuration::from_resolved(configuration)?;
     let update = PathBuf::from(update);
-    let metadata = std::fs::metadata(&update)
-        .map_err(|error| format!("{}: {error}", update.display()))?;
+    let metadata =
+        std::fs::metadata(&update).map_err(|error| format!("{}: {error}", update.display()))?;
     if metadata.len() != camera.update_bytes {
         return Err(format!(
             "{} is not the firmware for {}.",
@@ -145,8 +143,8 @@ fn checked_update(
             camera.model
         ));
     }
-    let shipped = std::fs::read(&update)
-        .map_err(|error| format!("{}: {error}", update.display()))?;
+    let shipped =
+        std::fs::read(&update).map_err(|error| format!("{}: {error}", update.display()))?;
     use sha2::{Digest, Sha256};
     if format!("{:x}", Sha256::digest(&shipped)) != camera.update_sha256 {
         return Err(format!(
@@ -163,8 +161,10 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
     }
-    if !matches!(resolved.configuration.start, RunStart::Loader | RunStart::Rom)
-        || !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
+    if !matches!(
+        resolved.configuration.start,
+        RunStart::Loader | RunStart::Rom
+    ) || !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
     {
         return Err("This camera cannot start from the firmware file alone.".into());
     }
@@ -180,7 +180,10 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
         .spawn(move || {
             log_session(format!(
                 "session: opening camera engine={:?}",
-                resolved.configuration.execution.map(|execution| execution.engine)
+                resolved
+                    .configuration
+                    .execution
+                    .map(|execution| execution.engine)
             ));
             let run = fujimod_emulator_boot::xp5::Run {
                 configuration: resolved.clone(),
@@ -214,24 +217,11 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 execution_policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
                 output,
             };
-            let opened = fujimod_emulator_boot::xp5::open_gui(run)
-                .inspect_err(|error| log_session(format!("session: {error}")))?;
+            let run =
+                RunHost::open(run).inspect_err(|error| log_session(format!("session: {error}")))?;
             log_session("session: camera opened");
-            let fujimod_emulator_boot::Opened::Xp5(started) = opened else {
-                return Err("This run did not open an XP5 camera.".into());
-            };
-            let (session, inputs, ticks_per_second, quantum, _) = started.into_gui_parts();
             socket
-                .serve(
-                    Xp5Session {
-                        configuration: resolved,
-                        session,
-                        inputs,
-                        ticks_per_second,
-                        quantum,
-                    },
-                    Default::default(),
-                )
+                .serve(run)
                 .run_until(&thread_stop)
                 .inspect_err(|error| log_session(format!("session: {error}")))
         })
@@ -251,6 +241,53 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             thread: Some(thread),
         },
     ))
+}
+
+/// Accept a session that another process is already serving on loopback.
+fn checked_endpoint(endpoint: &str) -> Result<(), String> {
+    let rest = endpoint
+        .strip_prefix("ws://")
+        .ok_or("a session endpoint must use ws://")?;
+    let (authority, path) = rest
+        .split_once('/')
+        .ok_or("a session endpoint needs a path")?;
+    if !matches!(path, "emulator") {
+        return Err("a session endpoint must address /emulator".into());
+    }
+    let (host, port) = authority
+        .rsplit_once(':')
+        .ok_or("a session endpoint needs a port")?;
+    if host != "127.0.0.1" {
+        return Err("a session endpoint must use 127.0.0.1".into());
+    }
+    let port = port
+        .parse::<u16>()
+        .map_err(|_| "a session endpoint needs a port")?;
+    let _ = port;
+    Ok(())
+}
+
+#[tauri::command]
+async fn connect(
+    endpoint: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<LaunchedCamera, String> {
+    checked_endpoint(&endpoint)?;
+    let previous = state
+        .running
+        .lock()
+        .map_err(|_| "emulator state is poisoned".to_owned())?
+        .take();
+    drop(previous);
+    // The catalog event supplies the camera identity once the webview joins the session.
+    Ok(LaunchedCamera {
+        id: endpoint.clone(),
+        configuration: String::new(),
+        body: String::new(),
+        model: String::new(),
+        firmware: String::new(),
+        endpoint,
+    })
 }
 
 #[tauri::command]
@@ -293,6 +330,7 @@ fn output_directory(configuration: &str) -> Result<PathBuf, String> {
 #[derive(Default)]
 struct WindowLaunch {
     command: Option<LaunchRequest>,
+    endpoint: Option<String>,
 }
 
 fn window_launch() -> Result<WindowLaunch, String> {
@@ -304,20 +342,40 @@ fn window_launch() -> Result<WindowLaunch, String> {
             .map_or((argument.as_str(), None), |(key, value)| (key, Some(value)));
         match key {
             "--configuration" => {
-                launch.command.get_or_insert_with(LaunchRequest::default).configuration =
-                    inline.map(str::to_owned).or_else(|| arguments.next()).ok_or("--configuration needs a value")?;
+                launch
+                    .command
+                    .get_or_insert_with(LaunchRequest::default)
+                    .configuration = inline
+                    .map(str::to_owned)
+                    .or_else(|| arguments.next())
+                    .ok_or("--configuration needs a value")?;
             }
             "--update" => {
-                launch.command.get_or_insert_with(LaunchRequest::default).update =
-                    inline.map(str::to_owned).or_else(|| arguments.next()).ok_or("--update needs a value")?;
+                launch
+                    .command
+                    .get_or_insert_with(LaunchRequest::default)
+                    .update = inline
+                    .map(str::to_owned)
+                    .or_else(|| arguments.next())
+                    .ok_or("--update needs a value")?;
             }
             "--engine" => {
                 let value = inline
                     .map(str::to_owned)
                     .or_else(|| arguments.next())
                     .ok_or("--engine needs a value")?;
-                launch.command.get_or_insert_with(LaunchRequest::default).engine =
-                    Some(value.parse().map_err(|_| "unknown --engine value")?);
+                launch
+                    .command
+                    .get_or_insert_with(LaunchRequest::default)
+                    .engine = Some(value.parse().map_err(|_| "unknown --engine value")?);
+            }
+            "--endpoint" => {
+                launch.endpoint = Some(
+                    inline
+                        .map(str::to_owned)
+                        .or_else(|| arguments.next())
+                        .ok_or("--endpoint needs a value")?,
+                );
             }
             other => return Err(format!("unknown option: {other}")),
         }
@@ -331,17 +389,23 @@ fn window_launch() -> Result<WindowLaunch, String> {
 }
 
 #[tauri::command]
+fn connection(state: tauri::State<'_, AppState>) -> Option<String> {
+    state.endpoint.lock().ok()?.take()
+}
+
+#[tauri::command]
 fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest> {
     state.command.lock().ok()?.take()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let connection = window_launch()?;
+    let startup = window_launch()?;
     tauri::Builder::default()
         .manage(AppState {
             running: Mutex::new(None),
-    command: Mutex::new(connection.command),
+            command: Mutex::new(startup.command),
+            endpoint: Mutex::new(startup.endpoint),
         })
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
@@ -362,6 +426,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             configurations,
             choose_update,
             launch,
+            connect,
+            connection,
             launch_connection,
             close
         ])
