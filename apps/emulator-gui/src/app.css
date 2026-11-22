@@ -9,19 +9,36 @@ html, body, #root { min-height: 100%; margin: 0; }
 body { background: #0b0b0c; }
 button, select { font: inherit; color: inherit; }
 .window {
+  height: 100vh;
   min-height: 100vh;
-  padding: 28px;
-  background: radial-gradient(circle at 25% 0%, #242428, #0b0b0c 48%);
+  overflow: hidden;
+  background: #0b0b0c;
 }
-header, footer { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
-header { max-width: 1280px; margin: 0 auto 20px; }
-h1, h2, p { margin: 0; }
-h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.04em; }
-.eyebrow { color: #8e8e93; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
-.camera-name { color: #aeaeb2; font-size: 13px; }
-.stage { max-width: 1280px; margin: 0 auto; }
+p { margin: 0; }
+.stage {
+  height: 100vh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+.stage:not(.idle) {
+  height: 100vh;
+  min-height: 0;
+}
+.stage .viewer {
+  height: 100vh;
+  min-height: 0;
+  background: #000;
+}
+.stage #lcd-source.flat {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
 .launcher { display: grid; align-content: center; gap: 18px; min-height: 520px; max-width: 420px; margin: auto; padding: 32px; }
-.launcher h2 { font-size: 22px; font-weight: 600; }
 .launcher label { display: grid; gap: 7px; color: #aeaeb2; font-size: 12px; }
 select, .file-row { width: 100%; border: 1px solid #3a3a3c; border-radius: 10px; background: #1c1c1e; padding: 10px 12px; }
 .file-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #8e8e93; }
@@ -31,9 +48,7 @@ select, .file-row { width: 100%; border: 1px solid #3a3a3c; border-radius: 10px;
 .launcher button:disabled { cursor: default; opacity: 0.45; }
 .status { color: #8e8e93; font-size: 13px; line-height: 1.5; }
 .error { color: #ff6a3d; font-size: 13px; line-height: 1.45; }
-footer { max-width: 1280px; margin: 14px auto 0; color: #636366; font-size: 11px; }
 .page-error { position: fixed; right: 18px; bottom: 18px; max-width: 70ch; margin: 0; padding: 12px; overflow: auto; border: 1px solid #ff6a3d; border-radius: 8px; background: #1c1c1e; color: #ff9a7a; font-size: 12px; white-space: pre-wrap; }
 @media (max-width: 820px) {
-  .window { padding: 12px; }
   .launcher { padding: 20px; }
 }

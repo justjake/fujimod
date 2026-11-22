@@ -17,8 +17,6 @@ import './app.css';
 export default function App() {
   const bridge = desktopBridge();
   const [state, setState] = createSignal(sessionState(), { equals: false });
-  const [camera, setCamera] = createSignal<NativeCamera>();
-  const [catalog, setCatalog] = createSignal<NativeCatalog>();
   const [configurations, setConfigurations] = createSignal<RunConfiguration[]>([]);
   const [selected, setSelected] = createSignal('');
   const [update, setUpdate] = createSignal('');
@@ -35,7 +33,6 @@ export default function App() {
   };
 
   async function startCamera(launched: NativeCamera) {
-    setCamera(launched);
     updateState((value) => {
       value.idle = true;
       value.loading = true;
@@ -79,7 +76,6 @@ export default function App() {
     };
     const stopCatalog = photo.catalog((value) => {
       catalog = value;
-      setCatalog(value);
       bootWhenReady();
     });
     const stopState = photo.state((latest) => {
@@ -109,7 +105,6 @@ export default function App() {
         }));
         session.panel.synchronize(initial.positions);
         session.panel.setPowered(initial.poweredOn);
-        session.viewer.powered(initial.poweredOn);
         session.panel.resume();
         updateState((value) => {
           value.live = 'LIVE';
@@ -184,15 +179,7 @@ export default function App() {
 
   return (
     <main class="window">
-      <header>
-        <div>
-          <span class="eyebrow">FujiMod</span>
-          <h1>Emulator</h1>
-        </div>
-        <Show when={camera()}>
-          {(value) => <p class="camera-name">{value().model}</p>}
-        </Show>
-      </header>
+      <h1 id="emulator-title" class="visually-hidden">FujiMod Emulator</h1>
       <EmulatorWorkspace
         state={state()}
         runtime={runtime()}
@@ -206,7 +193,6 @@ export default function App() {
       >
         <Show when={state().idle}>
           <section class="launcher" aria-labelledby="emulator-title">
-            <h2 id="emulator-title">Open a camera</h2>
             <Show when={bridge} fallback={<p class="status">{launcherError() || 'Start the emulator with a native session.'}</p>}>
               <label>
                 <span>Run configuration</span>
@@ -235,12 +221,6 @@ export default function App() {
           </section>
         </Show>
       </EmulatorWorkspace>
-      <Show when={catalog()}>
-        <footer>
-          <span>{catalog()!.configuration}</span>
-          <span>{catalog()!.firmware}</span>
-        </footer>
-      </Show>
       <Show when={pageError()}>
         <pre class="page-error" role="alert">{pageError()}</pre>
       </Show>
