@@ -13,7 +13,7 @@ impl Host for TestHost {
 }
 const BASE:u64=0x1000;
 fn model(peer:Peer)->ByteI2c {ByteI2c::new(BASE,17,Profile{reset:VirtualIdleReset{ccr:0,adr:0,csr:0,fsr:0},byte_ticks:7},peer).unwrap()}
-fn peer()->Peer {Peer::Register(RegisterPeer{address:0x30,registers:BTreeMap::from([(0x10,0xa5),(0x11,0xb6)])})}
+fn peer()->Peer {Peer::Register(RegisterPeer{address:0x30,address_bytes:AddressBytes::One,registers:BTreeMap::from([(0x10,0xa5),(0x11,0xb6)])})}
 fn write(m:&mut ByteI2c,h:&mut TestHost,o:u64,v:u64){let mut cx=Cx::new(h,3,0xabcdef,4);m.write(&mut cx,BASE+o,1,v);assert!(cx.refusal().is_none(),"{:?}",cx.refusal());}
 fn read(m:&mut ByteI2c,h:&mut TestHost,o:u64)->u64{let mut cx=Cx::new(h,2,0x8888,4);let v=m.read(&mut cx,BASE+o,1);assert!(cx.refusal().is_none());v}
 fn advance(m:&mut ByteI2c,h:&mut TestHost,at:u64){h.now=at;m.advance(&mut Cx::new(h,usize::MAX,0,4));}
@@ -35,7 +35,7 @@ fn empty_address_nack_is_timed_not_poll_driven(){
 fn register_peer_write_repeated_start_read_ack_last_nack_stop(){
     let mut m=model(peer());let mut h=TestHost::default();init(&mut m,&mut h);
     for b in [0x60,0x10,0x44] {write(&mut m,&mut h,16,b);write(&mut m,&mut h,4,0x52);complete(&mut m,&mut h);}
-    assert_eq!(m.state.transport.peer,Peer::Register(RegisterPeer{address:0x30,registers:BTreeMap::from([(0x10,0x44),(0x11,0xb6)])}));
+    assert_eq!(m.state.transport.peer,Peer::Register(RegisterPeer{address:0x30,address_bytes:AddressBytes::One,registers:BTreeMap::from([(0x10,0x44),(0x11,0xb6)])}));
     // Readdressing a write transaction selects a pointer again.
     write(&mut m,&mut h,16,0x60);write(&mut m,&mut h,4,0x72);complete(&mut m,&mut h);
     write(&mut m,&mut h,16,0x10);write(&mut m,&mut h,4,0x52);complete(&mut m,&mut h);
@@ -165,4 +165,74 @@ fn late_phase_records_identify_bus_inputs_and_declared_completion_time() {
     assert_eq!(field(stop,"base"),Some(&Field::int(BASE)));
     assert_eq!(field(stop,"deadline"),Some(&Field::int(h.now)));
     assert_eq!(field(stop,"direction"),None);
+}
+fn wide_peer()->Peer {Peer::Register(RegisterPeer{address:0x55,address_bytes:AddressBytes::Two,registers:BTreeMap::from([(0x0000,0x09),(0x0001,0x11),(0x1c06,0xa5),(0x1c07,0xb6),(0xffff,0x77)])})}
+/// One byte on the wire: stage it, issue the command and let the byte complete.
+fn byte(m:&mut ByteI2c,h:&mut TestHost,data:u8,control:u64){write(m,h,16,data.into());write(m,h,4,control);complete(m,h);}
+fn wide_pointer(m:&mut ByteI2c,h:&mut TestHost,register:u16){
+    byte(m,h,0xaa,0x52);
+    byte(m,h,(register>>8) as u8,0x12);byte(m,h,register as u8,0x12);
+}
+#[test]
+fn two_byte_register_address_selects_a_cell_and_increments_across_reads(){
+    let mut m=model(wide_peer());let mut h=TestHost::default();init(&mut m,&mut h);
+    write(&mut m,&mut h,16,0xaa);write(&mut m,&mut h,4,0x52);complete(&mut m,&mut h);
+    byte(&mut m,&mut h,0x1c,0x12);
+    assert_eq!(m.state.transport.pointer,None);assert!(m.state.transport.expect_pointer);
+    byte(&mut m,&mut h,0x06,0x12);
+    assert_eq!(m.state.transport.pointer,Some(0x1c06));assert!(!m.state.transport.expect_pointer);
+    // Repeated start in the read direction.
+    byte(&mut m,&mut h,0xab,0x72);
+    write(&mut m,&mut h,4,0x5a);complete(&mut m,&mut h);assert_eq!(read(&mut m,&mut h,16),0xa5);
+    write(&mut m,&mut h,4,0x52);complete(&mut m,&mut h);assert_eq!(read(&mut m,&mut h,16),0xb6);
+    assert_eq!(m.state.transport.pointer,Some(0x1c08));
+    let saved=m.save();let mut restored=model(wide_peer());restored.restore(&saved).unwrap();assert_eq!(restored.save(),saved);
+}
+#[test]
+fn two_byte_register_write_stores_data_and_wraps_at_sixteen_bits(){
+    let mut m=model(wide_peer());let mut h=TestHost::default();init(&mut m,&mut h);
+    wide_pointer(&mut m,&mut h,0xffff);
+    byte(&mut m,&mut h,0x12,0x12);
+    let Peer::Register(p)=&m.state.transport.peer else {panic!()};
+    assert_eq!(p.registers[&0xffff],0x12);assert_eq!(m.state.transport.pointer,Some(0));
+    byte(&mut m,&mut h,0x34,0x12);
+    let Peer::Register(p)=&m.state.transport.peer else {panic!()};
+    assert_eq!(p.registers[&0],0x34);
+    // The high address byte alone does not select register 0x00xx.
+    assert_eq!(p.registers.get(&0x1c06),Some(&0xa5));
+}
+#[test]
+fn two_byte_register_address_refuses_undeclared_cells_without_effects(){
+    let mut m=model(wide_peer());let mut h=TestHost::default();init(&mut m,&mut h);
+    byte(&mut m,&mut h,0xaa,0x52);byte(&mut m,&mut h,0x1c,0x12);
+    // 0x1c08 is not declared.
+    write(&mut m,&mut h,16,0x08);
+    let old=m.save();let mut cx=Cx::new(&mut h,0,0,4);m.write(&mut cx,BASE+4,1,0x12);
+    assert!(cx.refusal().is_some());assert_eq!(m.save(),old);
+}
+#[test]
+fn stop_discards_a_partial_two_byte_register_address(){
+    let mut m=model(wide_peer());let mut h=TestHost::default();init(&mut m,&mut h);
+    byte(&mut m,&mut h,0xaa,0x52);byte(&mut m,&mut h,0x1c,0x12);
+    assert_eq!(m.state.transport.pointer_high,Some(0x1c));
+    write(&mut m,&mut h,4,0x02);complete(&mut m,&mut h);
+    assert_eq!(m.state.transport.pointer_high,None);assert_eq!(m.state.phase,Phase::Idle);
+    // A new write transaction starts its address afresh.
+    byte(&mut m,&mut h,0xaa,0x52);byte(&mut m,&mut h,0x00,0x12);byte(&mut m,&mut h,0x01,0x12);
+    assert_eq!(m.state.transport.pointer,Some(1));
+}
+#[test]
+fn register_address_width_is_validated_and_one_byte_peers_keep_their_form(){
+    let single=|address_bytes,key|Peer::Register(RegisterPeer{address:0x55,address_bytes,registers:BTreeMap::from([(key,1)])});
+    let build=|peer|ByteI2c::new(BASE,17,Profile{reset:VirtualIdleReset{ccr:0,adr:0,csr:0,fsr:0},byte_ticks:7},peer);
+    assert!(build(single(AddressBytes::One,0x100)).is_err());
+    assert!(build(single(AddressBytes::One,0xff)).is_ok());
+    assert!(build(single(AddressBytes::Two,0x100)).is_ok());
+    let one=serde_json::to_value(peer()).unwrap();
+    assert!(one["Register"].get("address_bytes").is_none());
+    assert_eq!(serde_json::from_value::<Peer>(one).unwrap(),peer());
+    let two=serde_json::to_value(wide_peer()).unwrap();assert_eq!(two["Register"]["address_bytes"],"Two");
+    // A checkpoint cannot change the address width of its factory.
+    let m=model(wide_peer());let mut narrow=model(single(AddressBytes::One,0x1c));
+    assert!(narrow.restore(&m.save()).is_err());
 }

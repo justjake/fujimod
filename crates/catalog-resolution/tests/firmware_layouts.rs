@@ -75,3 +75,28 @@ fn xt30_boot_inputs_declare_the_sd_host_slot() {
     assert_eq!(slot.card.format.partition_start, 8192);
     assert_eq!(slot.card.format.sectors_per_cluster, 64);
 }
+
+#[test]
+fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
+    use fujimod_catalog::Soc;
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let soc: Soc =
+        serde_json::from_slice(&fs::read(root.join("catalog/soc/xp4/soc.json")).unwrap()).unwrap();
+    let maps = soc.hardware.as_ref().unwrap().profiles["xp4"]
+        .register_maps
+        .as_ref()
+        .unwrap();
+    let controllers = maps
+        .byte_i2c
+        .as_ref()
+        .expect("declared byte I2C controllers");
+    let inputs = HardwareInputs::bundled("xt3-discovery").unwrap();
+    let wired = inputs
+        .reset
+        .byte_i2c_inputs
+        .expect("declared byte I2C buses");
+    assert_eq!(wired.keys().collect::<Vec<_>>(), ["2"]);
+    let bus = &controllers["2"];
+    assert_eq!((bus.base, bus.irq), (0xfff3_f000, 0x43));
+    assert!(bus.byte_ticks > 0);
+}

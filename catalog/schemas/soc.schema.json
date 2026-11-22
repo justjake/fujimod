@@ -951,6 +951,41 @@
       ],
       "type": "object"
     },
+    "HardwareByteI2c": {
+      "additionalProperties": false,
+      "description": "One byte-oriented I2C controller window.",
+      "properties": {
+        "base": {
+          "description": "Declared base.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "byte_ticks": {
+          "description": "Virtual ticks per address, data byte or STOP.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "irq": {
+          "description": "Interrupt line of the controller.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "basis",
+        "byte_ticks",
+        "irq"
+      ],
+      "type": "object"
+    },
     "HardwareControlRequests": {
       "additionalProperties": false,
       "description": "Declared control requests facts.",
@@ -2625,6 +2660,16 @@
             }
           ],
           "description": "Declared adc."
+        },
+        "byte_i2c": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HardwareByteI2c"
+          },
+          "description": "Declared byte I2C controllers by bus index.",
+          "type": [
+            "object",
+            "null"
+          ]
         },
         "control_bus0": {
           "anyOf": [

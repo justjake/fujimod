@@ -348,6 +348,16 @@ pub struct Xt20TouchPanelInput {
     pub input_ready_irq: u64,
 }
 
+/// A byte I2C controller present on the body, with an empty bus.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetByteI2cInput"))]
+pub struct ByteI2cInput {
+    /// Declared basis.
+    pub basis: String,
+}
+
 /// An X-mount lens attached at power-on, answering on its serial link.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1351,6 +1361,9 @@ pub struct HardwareReset {
     /// Declared frame period of the imaging pipeline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imaging_frames: Option<ImagingFramesInput>,
+    /// Byte I2C controllers wired on this body, by bus index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub byte_i2c_inputs: Option<BTreeMap<String, ByteI2cInput>>,
     /// Declared spi inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spi_inputs: Option<BTreeMap<String, SpiInputs>>,

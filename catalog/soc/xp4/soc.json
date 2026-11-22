@@ -1376,6 +1376,26 @@
             "irq_route": 123,
             "run_ticks": 108000,
             "basis": "Face detection engine of X-T3 5.11. The driver has one accessor per word or word group: +0x00 stop (bit 0 written clear, then the word is polled until nonzero), +0x04 start, +0x08 mode (bits 2..0 below 5, flags 4, 8, 12, 16), configuration words +0x0c..+0x5fc, +0x6e0/+0x6e4 and +0x710..+0x71c (read back by the driver), results +0x600..+0x608, channel flags +0x700 bits 0, 4, 8, 16, 20, 24 with fields +0x704 cleared by writing +0x708, finished bit 0 at +0x730 and +0x734 (cleared by writing 1), and channel arming +0x738 bit 0. The driver's open programs the configuration and registers its handler on interrupt line 123. Each live view frame's run writes the mode, arms the channels, polls +0x700 until all six flags are set, clears them and sets +0x04 bit 0; the handler reads +0x730, writes it back to +0x734 and posts the finished run to the face task. No image is read and no face is detected: the result words read zero. Arming completes at once; run_ticks (2 ms at 54 MHz) is not measured. Runs in other modes (mode 4) are refused."
+          },
+          "byte_i2c": {
+            "0": {
+              "base": 4294168576,
+              "byte_ticks": 16,
+              "irq": 65,
+              "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
+            },
+            "1": {
+              "base": 4294172672,
+              "byte_ticks": 16,
+              "irq": 66,
+              "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
+            },
+            "2": {
+              "base": 4294176768,
+              "byte_ticks": 16,
+              "irq": 67,
+              "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
+            }
           }
         },
         "limits": [],
