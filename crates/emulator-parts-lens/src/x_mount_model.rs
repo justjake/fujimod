@@ -383,6 +383,15 @@ impl Identity<'_> {
         for table in [0x7207f7u32, 0x7208c0, 0x720989] {
             put(table, le(&vec![offsets[2] as u16; steps]));
         }
+        // Focus travel limits for the scan (s16 per zoom step z): the S1 scan planner
+        // (0x2f5c33c -> 0x2fb90b4, plan at 0x4454540) clips its range through 0x2fadf20 to
+        // [s16 0x720a6b + 2z (0x153b94c), s16 0x7209a2 + 2z (0x153b8e0) - u16 0x720243
+        // (0x156a6d4)]. Left zero, every scan range was clipped to (0, 0): the sweep had no
+        // length and the AF's motion profile predicted no travel. Here they are the model's
+        // travel ends; the margin at 0x720243 stays zero. 0x7209a2 is 25 bytes after the
+        // 0x720989 table, so both fit only for up to 12 zoom steps (the presets have 8 or 1).
+        put(0x720a6b, le(&vec![self.focus.min; steps]));
+        put(0x7209a2, le(&vec![self.focus.max; steps]));
         // Scan margins beyond the limits (0x153e704: pairs 0x720cd2/0x720d9b and
         // 0x720b40/0x720c09), 1/80 of the travel, so infinity - margin stays in the travel.
         for table in [0x720cd2u32, 0x720d9b, 0x720b40, 0x720c09] {
@@ -403,6 +412,31 @@ impl Identity<'_> {
         // Zoom steps below which the nearest-distance tables (+0x63b, +0x704) apply
         // (0x1539228, 0x153ea04; 0x1565360 reads it as a step count): all of them.
         put(0x721213, vec![steps as u8]);
+        // Focus sensitivity, the image-plane shift of one focus unit: u16 0x722640 times the
+        // curve value at the focus position / 1000 (0x153a564 -> 0x1539ba8 -> 0x15390a8). The
+        // curve has 11 u16 values a zoom step at 0x731b00 + 22z, at positions 0, s, 3s .. 19s
+        // above infinity with s = u16 0x722643 + 2z; 0x1539ba8 reads it at the ordinary near
+        // end. The AF divides its depth of focus (0x153a5f0: 2 x F-number x config 0x5800,
+        // the circle of confusion) by it (0x153a6a8): the S1 scan plan (0x2fb8718) starts
+        // sampling that far past the scan start. Left zero, the divisor fell back to 1 and
+        // one depth of focus was 1890 units, half the travel. Here the curve is flat at the
+        // thin-lens shift from infinity to the closest distance, f^2 / (d - f), spread over
+        // the units from infinity to the ordinary near end, in 0.01 um (the unit that makes
+        // config 0x5800 = 33 a 3.3 um circle, about the X-T5 pixel pitch; inferred).
+        put(0x722640, le(&[1000]));
+        put(0x722643, le(&vec![(span / 20).max(1) as u16; steps]));
+        let near_units = f64::from(offsets[2].max(1));
+        let closest_mm = f64::from(self.closest_cm) * 10.;
+        let curve: Vec<u16> = zoom
+            .iter()
+            .flat_map(|(focal, _)| {
+                let f = f64::from(*focal) / 10.;
+                let shift_mm = f * f / (closest_mm - f).max(f);
+                let value = (shift_mm * 100_000. / near_units).round().clamp(1., 65_535.) as u16;
+                [value; 11]
+            })
+            .collect();
+        put(0x731b00, le(&curve));
         Catalog { selector: 6, blocks: LENS_BLOCKS + 4, marker_block: Some(LENS_BLOCKS), sections }
     }
     /// Invented extended record: layout version 1, zero fill, zero byte sum.
@@ -840,11 +874,19 @@ impl Unit {
             self.state.operation_until = None;
         }
     }
-    fn operation(&mut self, now: u64, motion: Motion) {
-        let end = motion
-            .end(self.timing.ticks_per_ms)
+    /// Hold the ready line busy until every motion in progress has ended (at least the
+    /// shortest operation from `now`). A new request replaces the previous busy period: a
+    /// stop (0x58) or a nearer target ends it early, so the body sees the drive complete
+    /// when the lens actually settles.
+    fn operation(&mut self, now: u64) {
+        let tpm = self.timing.ticks_per_ms;
+        let end = self
+            .state
+            .focus
+            .end(tpm)
+            .max(self.state.aperture.end(tpm))
             .max(now.saturating_add(self.timing.min_operation_ticks));
-        self.state.operation_until = Some(self.state.operation_until.map_or(end, |u| u.max(end)));
+        self.state.operation_until = Some(end);
     }
     fn move_focus(&mut self, now: u64, target: i64) {
         let target = self.spec.focus.clamp(target);
@@ -852,8 +894,7 @@ impl Unit {
         let speed = self.state.focus_speed;
         let from = self.state.focus.position(now, tpm);
         self.state.focus.retarget(now, tpm, target, speed);
-        let focus = self.state.focus;
-        self.operation(now, focus);
+        self.operation(now);
         self.log_once(EVENT_FIRST_FOCUS, || format!("first focus move {from} -> {target}"));
         self.log_move(EVENT_FOCUS_MOVES, "focus", from, target, now);
     }
@@ -872,8 +913,7 @@ impl Unit {
         let speed = self.spec.aperture.units_per_ms;
         let from = self.state.aperture.position(now, tpm);
         self.state.aperture.retarget(now, tpm, target, speed);
-        let aperture = self.state.aperture;
-        self.operation(now, aperture);
+        self.operation(now);
         self.log_once(EVENT_FIRST_APERTURE, || format!("first aperture move {from} -> {target}"));
         self.log_move(EVENT_APERTURE_MOVES, "aperture", from, target, now);
     }
@@ -924,20 +964,19 @@ impl Unit {
             // so the body sees the drive complete.
             //
             // 0x55 (lenscom 0x13e5d4c) carries request byte +2 in bit 0 and +5 in bit 9. The
-            // AF drives of an S1 contrast scan differ only in +2: 1 for the move to the scan
-            // start and for the final move, 0 for the sweep, whose target is the current
-            // position (amount 0) with the scan speed. The model reads +2 = 0 as a continuous
-            // drive at the requested speed toward the end bit 9 names (1: the high end, where
-            // nearer subjects lie), until the next request; inferred from those requests, not
-            // from lens documentation.
+            // AF drives of an S1 contrast scan differ in +2: 1 for the move to the scan start
+            // and for the final move, 0 for the scan move itself. With the lens's travel
+            // limits in the catalog (0x7209a2 / 0x720a6b) the scan move carries the planned
+            // scan end as its target (X-T5 4.31: 179 -> 3815 at speed 6000), so +2 = 0 is not
+            // a continuous drive: every 0x56 is a move to its target at the requested speed,
+            // and like every move it holds the ready line busy until it ends. The body reads
+            // the position (family 0x21) once per AF frame during the scan move (the lens
+            // task's monitor, 0x155e2b8 -> 0x1569638) and takes the ready line's rise as the
+            // drive's completion (messages 0x42/0x43, 0x156643c -> 0x157204c); a ready line
+            // released early ends the scan after its first frames. The AF ends a scan move
+            // early with its stop request (0x58) when it has passed the contrast peak.
             FOCUS_TARGET => {
-                let flags = self.state.settings.get(&FOCUS_FLAGS).copied().unwrap_or(1);
-                let target = if flags & 1 == 0 {
-                    if flags & 0x200 != 0 { self.spec.focus.max as i64 } else { self.spec.focus.min as i64 }
-                } else {
-                    payload as i16 as i64
-                };
-                self.move_focus(now, target);
+                self.move_focus(now, payload as i16 as i64);
                 payload
             }
             // 0x58 (lenscom 0x13e5f7c, message 0x18fa, wrapper 0x1535968): one bit from the
@@ -975,7 +1014,7 @@ impl Unit {
             // Echo and store it, and hold the ready line busy like an operation.
             STATE_REQUEST => {
                 self.state.settings.insert(STATE_REQUEST, payload);
-                self.operation(now, Motion::at_rest(0));
+                self.operation(now);
                 payload
             }
             f if KNOWN_WRITES.contains(&f) => {
