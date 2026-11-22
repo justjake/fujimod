@@ -115,7 +115,7 @@ and another tap returns.
 - `/credits`: GitHub Contributors (from `contributors/`), Testing & Feedback,
   Recipe Authors (each author with their recipes, linked to each recipe's
   source), Photographs (a row of each photographer's scene photographs;
-  a frame opens in a lightbox) and Open Source (generated from a CycloneDX SBOM of everything the
+  a photograph opens in a lightbox) and Open Source (generated from a CycloneDX SBOM of everything the
   camera image, website and emulator ship, with each license's full text and
   a link to the source at the shipped version).
 - `/releases`: all release notes, read from the GitHub releases at build time.
