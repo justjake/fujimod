@@ -23,6 +23,7 @@
       "size": 8,
       "sha256": "09fa8b71aedaf8255b7bf1ad64a1183c8de81661c27036e5e5af32e4fa391e36"
     },
+    "marker": 54,
     "loader_offset": 344,
     "power_register": 31,
     "records": {

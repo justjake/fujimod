@@ -27389,7 +27389,7 @@
         },
         "header": {
           "$ref": "#/$defs/UpdateRange",
-          "description": "Stock eight- or sixteen-byte header. The last two bytes hold marker\n`0xaa` and the checksum that makes the header sum to zero."
+          "description": "Stock eight- or sixteen-byte header. The last two bytes hold the marker\nand the checksum that makes the header sum to zero."
         },
         "loader_offset": {
           "default": null,
@@ -27400,6 +27400,13 @@
             "integer",
             "null"
           ]
+        },
+        "marker": {
+          "description": "The marker byte before the checksum: `0xaa` unless the layout states\nanother one, as the stock check of an X-E5 does.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
         },
         "power_register": {
           "description": "First 16-bit register of the header on a checksum SPI power controller.\nThe header fills one register per two bytes: four registers for an\neight-byte header, eight for a sixteen-byte one.",
