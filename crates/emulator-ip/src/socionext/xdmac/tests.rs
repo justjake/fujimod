@@ -461,6 +461,7 @@ fn ram_keeps_precedence_over_a_read_window_and_window_writes_refuse() {
     let refusal = cx.refusal().expect("a DMA write into a read-only window refuses");
     assert!(refusal.contains("read-only device memory"), "{refusal}");
     assert_eq!(read(&mut d, &mut h, BASE + 0x30) & 8, 0);
+}
 #[test]
 fn global_enable_at_reset_runs_a_software_copy_without_a_global_write() {
     // Session assumption: a reset-state global enable, so a copy needs no global write first.
