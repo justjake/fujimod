@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runtime } from './test-runtime.ts';
+import { zipBlob } from '../../packages/emulator-ui/src/archive.ts';
 const origin = 'https://justjake.github.io';
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const tar = new Uint8Array(1024);
@@ -179,6 +180,106 @@ await test('uncertain GitHub response retains the archive without duplicate issu
     await mf.dispatchFetch('https://worker.example/issue-reports', await submission());
     assert.equal(calls, 1);
     assert.ok(await (await mf.getR2Bucket('ISSUE_REPORTS')).get(`${id}/report.tar`));
+  } finally {
+    await mf.dispose();
+  }
+});
+
+await test('general reports store arbitrary attachments and contact details privately', async () => {
+  const issues: { title: string; body: string; labels: string[] }[] = [];
+  const mf = await runtime({
+    bindings: { GITHUB_ISSUES_TOKEN: 'test-only' },
+    outboundService: async (request) => {
+      assert.equal(request.url, 'https://api.github.com/repos/justjake/fujimod/issues');
+      issues.push((await request.json()) as (typeof issues)[number]);
+      return Response.json({ html_url: 'https://github.com/justjake/fujimod/issues/123' });
+    },
+  });
+  try {
+    const archive = await zipBlob([
+      { path: 'Attachments/1/private.mp4', data: new Blob(['video bytes']) },
+      { path: 'FUJIMOD/REPORTS/R1234567.TAR', data: new Blob(['report bytes']) },
+    ]);
+    const form = new FormData();
+    form.set('kind', 'general');
+    form.set('description', 'Screen flickers');
+    form.set('name', 'Private Name');
+    form.set('contact-type', 'Email');
+    form.set('contact-value', 'private@example.com');
+    form.set('archive', 'zip');
+    const encoded = new Request('https://worker.example/issue-reports', {
+      method: 'POST',
+      body: form,
+    });
+    const formBytes = new Uint8Array(await encoded.arrayBuffer());
+    const post = () =>
+      mf.dispatchFetch('https://worker.example/issue-reports', {
+        method: 'POST',
+        headers: {
+          Origin: origin,
+          'Idempotency-Key': id,
+          'Content-Type': encoded.headers.get('Content-Type')!,
+        },
+        body: formBytes,
+      });
+    assert.equal((await post()).status, 409);
+    const base = `https://worker.example/contributions/${id}`;
+    const contribution = (path: string, method: 'POST' | 'PUT', body?: string | Uint8Array) =>
+      mf.dispatchFetch(base + path, { method, headers: { Origin: origin }, body });
+    assert.equal(
+      (
+        await contribution(
+          '',
+          'POST',
+          JSON.stringify({
+            reportArchive: true,
+            files: [{ model: 'report', serial: 'report', name: 'report.zip', bytes: archive.size }],
+          }),
+        )
+      ).status,
+      201,
+    );
+    assert.equal((await contribution('/files/0', 'POST')).status, 200);
+    const bytes = new Uint8Array(await archive.arrayBuffer());
+    assert.equal((await contribution('/files/0/parts/1', 'PUT', bytes)).status, 200);
+    assert.equal(
+      (await contribution('/files/0/complete', 'POST', JSON.stringify({ parts: 1 }))).status,
+      200,
+    );
+    assert.deepEqual(await (await contribution('/finish', 'POST')).json(), { id });
+    const first = await post();
+    assert.equal(first.status, 201);
+    assert.deepEqual(await first.json(), {
+      id,
+      issueURL: 'https://github.com/justjake/fujimod/issues/123',
+    });
+    assert.equal((await post()).status, 200);
+    assert.deepEqual(issues, [
+      {
+        title: 'Screen flickers',
+        body: `Screen flickers\n\nReport ID: \`${id}\`\n\nZIP attachment: stored privately`,
+        labels: ['bug'],
+      },
+    ]);
+    const bucket = await mf.getR2Bucket('ISSUE_REPORTS');
+    assert.deepEqual(
+      new Uint8Array(await (await bucket.get(`${id}/report.zip`))!.arrayBuffer()),
+      bytes,
+    );
+    const metadata = (await (await bucket.get(`${id}/metadata.json`))!.json()) as {
+      name: string;
+      contact: { type: string; value: string };
+      archive: string;
+    };
+    assert.equal(metadata.name, 'Private Name');
+    assert.deepEqual(metadata.contact, { type: 'Email', value: 'private@example.com' });
+    assert.equal(metadata.archive, 'report.zip');
+    const publications = await (
+      await mf.getD1Database('REPORTS_INDEX')
+    )
+      .prepare('SELECT COUNT(*) AS count FROM publications')
+      .first<{ count: number }>();
+    assert.equal(publications?.count, 0);
   } finally {
     await mf.dispose();
   }

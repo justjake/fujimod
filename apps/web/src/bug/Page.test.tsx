@@ -8,7 +8,13 @@ import { tar, link, hash, reportTar } from './fixtures.test-helper';
 import { listedReport } from './report-link';
 import type { UploadReport } from './upload';
 import type { ReportConnection } from './usb';
+import { zipBlob } from '@fujimod/emulator-ui/archive';
+import { uploadReportArchive } from '../files/contribute';
 import { sharingUrl } from '../sharing-server';
+vi.mock('../files/contribute', () => ({ uploadReportArchive: vi.fn(async () => {}) }));
+vi.mock('@fujimod/emulator-ui/archive', () => ({
+  zipBlob: vi.fn(async () => new NodeBlob(['zip'])),
+}));
 vi.mock('../dev-tools/Page', () => ({
   default: () => <p>Dev Tools connected</p>,
 }));
@@ -247,6 +253,91 @@ test("USB reports show their screen and time, list the camera's others and offer
       expect(button(dialog(host), 'Next report')).toBeTruthy();
     });
     expect(upload.mock.calls[1]![1].path).toBe('A:\\FUJIMOD\\REPORTS\\R00000AB.TAR');
+  } finally {
+    dispose();
+  }
+});
+
+test('without a QR link, users can select arbitrary files and submit a report with optional contact', async () => {
+  const fetcher = vi.fn<typeof fetch>(async (_url, request) =>
+    Response.json({
+      id: new Headers(request?.headers).get('Idempotency-Key'),
+      issueURL: 'https://github.com/justjake/fujimod/issues/123',
+    }),
+  );
+  vi.stubGlobal('fetch', fetcher);
+  const { host, dispose } = mount({ hash: '', supported: false });
+  try {
+    flush();
+    const select = host.querySelector<HTMLSelectElement>('select[name="contact-type"]')!;
+    expect([...select.options].map((option) => option.text)).toEqual([
+      'None',
+      'Instagram',
+      'Twitter',
+      'GitHub',
+      'Email',
+    ]);
+    expect(host.querySelector('input[name="contact-value"]')).toBeNull();
+    select.value = 'Email';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    flush();
+    host.querySelector<HTMLInputElement>('input[name="contact-value"]')!.value = 'me@example.com';
+    host.querySelector<HTMLInputElement>('input[name="name"]')!.value = 'Reporter';
+    const picker = host.querySelector<HTMLInputElement>('input[type=file]')!;
+    expect(picker.multiple).toBe(true);
+    expect(picker.hasAttribute('accept')).toBe(false);
+    Object.defineProperty(picker, 'files', {
+      value: [new File(['log'], 'camera.log'), new File(['video'], 'sample.mp4')],
+    });
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    flush();
+    expect(host.textContent).toContain('sample.mp4');
+    const directory = host.querySelector<HTMLInputElement>('input[webkitdirectory]')!;
+    const file = (path: string) =>
+      Object.defineProperty(new File(['data'], path.split('/').at(-1)!), 'webkitRelativePath', {
+        value: path,
+      });
+    Object.defineProperty(directory, 'files', {
+      value: [
+        file('FUJI/FUJIMOD/REPORTS/R1234567.TAR'),
+        file('FUJI/FUJIMOD/AUTOSTRT.TXT'),
+        file('FUJI/BACKUP/X70_001.IMG'),
+        file('FUJI/ffboot.bin'),
+        file('FUJI/DCIM/100_FUJI/DSCF0123.JPG'),
+        file('FUJI/other.txt'),
+      ],
+    });
+    directory.dispatchEvent(new Event('change', { bubbles: true }));
+    flush();
+    expect(host.textContent).not.toMatch(/DSCF0123|other.txt/);
+    const check = (text: string) =>
+      [...host.querySelectorAll<HTMLLabelElement>('ul.bug-attachments label')]
+        .find((label) => label.textContent?.includes(text))!
+        .querySelector('input')!;
+    expect(check('X70_001.IMG').checked).toBe(false);
+    check('X70_001.IMG').click();
+    flush();
+    check('sample.mp4').click();
+    flush();
+    expect(fetcher).not.toHaveBeenCalled();
+    button(host, 'Submit report').click();
+    await vi.waitFor(() => {
+      flush();
+      expect(host.textContent).toContain('Report saved.');
+    });
+    const body = fetcher.mock.calls[0]?.[1]?.body as FormData;
+    expect(body.get('name')).toBe('Reporter');
+    expect(body.get('contact-type')).toBe('Email');
+    expect(body.get('contact-value')).toBe('me@example.com');
+    expect(body.get('archive')).toBe('zip');
+    expect(vi.mocked(zipBlob).mock.lastCall?.[0].map((entry) => entry.path)).toEqual([
+      'Attachments/1/camera.log',
+      'BACKUP/X70_001.IMG',
+      'ffboot.bin',
+      'FUJIMOD/AUTOSTRT.TXT',
+      'FUJIMOD/REPORTS/R1234567.TAR',
+    ]);
+    expect(uploadReportArchive).toHaveBeenCalledOnce();
   } finally {
     dispose();
   }

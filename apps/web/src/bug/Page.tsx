@@ -26,6 +26,7 @@ import type { DeviceFileEntry } from '../device-files';
 import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { prepareDownload } from './download';
 import { ReportUsb, type CameraChoice, type ReportConnection } from './usb';
+import { GeneralReport } from './GeneralReport';
 import './style.css';
 export default function BugReport(props: {
   connection?: ReportConnection;
@@ -68,7 +69,9 @@ export default function BugReport(props: {
   onSettled(() => {
     setPlatform(reportPlatform(navigator.userAgent, navigator.maxTouchPoints));
     try {
-      const value = parseReportLink(untrack(() => props.hash) ?? location.hash);
+      const hash = untrack(() => props.hash) ?? location.hash;
+      if (!hash) return;
+      const value = parseReportLink(hash);
       setLink(value);
       if (value.archive) {
         void acceptArchive(validateReport(decode64(value.archive), value), value)
@@ -246,7 +249,7 @@ export default function BugReport(props: {
       fallback={
         <SiteFrame class="bug-report">
           <main>
-            <Show when={link()}>
+            <Show when={link()} fallback={<GeneralReport />}>
               {(value) => (
                 <>
                   <p>
