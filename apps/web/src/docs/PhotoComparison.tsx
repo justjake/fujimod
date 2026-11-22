@@ -3,114 +3,82 @@ import type { Photo } from '../home/feature-media';
 import './photo-comparison.css';
 
 const mediaRoot = '/artifacts/docs/';
-/** Pointer travel, in CSS pixels, that turns a press into a drag. */
-const DRAG = 4;
 
 /** A point on every photograph, as fractions of its width and height. */
 type Point = { u: number; v: number };
 
-/** Photographs side by side across the window. Hovering shows a 1:1 loupe at
- * the same point of every photograph; clicking or tapping fills each one with
- * its 1:1 pixels, and dragging pans them together. */
+/** Photographs side by side from the text column to the window's edge. With
+ * the pointer over a photograph, every photograph shows its 1:1 pixels around
+ * the same point, which follows the pointer and is marked by the same cross.
+ * On touch screens a tap zooms, dragging follows the finger, and a tap without
+ * dragging returns. */
 export function PhotoComparison(props: { photos: readonly Photo[] }) {
   const [point, setPoint] = createSignal<Point>();
-  const [zoomed, setZoomed] = createSignal(false);
   const [scale, setScale] = createSignal(1);
   let row!: HTMLDivElement;
 
-  // The row spans the window, past the text column and the sidebar.
   onSettled(() => {
-    const bleed = () => {
-      row.style.marginLeft = '0px';
-      row.style.marginLeft = `${-row.getBoundingClientRect().left}px`;
-      row.style.width = `${document.documentElement.clientWidth}px`;
+    const fit = () => {
+      row.style.width = '';
+      const width = document.documentElement.clientWidth - row.getBoundingClientRect().left;
+      row.style.width = `${width}px`;
+      row.style.setProperty('--dpr', String(devicePixelRatio));
       setScale(1 / devicePixelRatio);
     };
-    const observer = new ResizeObserver(bleed);
+    const observer = new ResizeObserver(fit);
     observer.observe(document.documentElement);
-    bleed();
+    fit();
     return () => observer.disconnect();
   });
 
   const pointIn = (event: PointerEvent): Point | undefined => {
-    const image = (event.target as Element).closest('.photo-frame');
-    if (!image) return undefined;
-    const box = image.getBoundingClientRect();
+    const frame = (event.target as Element).closest('.photo-frame');
+    if (!frame) return undefined;
+    const box = frame.getBoundingClientRect();
     return {
       u: Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)),
       v: Math.min(1, Math.max(0, (event.clientY - box.top) / box.height)),
     };
   };
 
-  let press: { x: number; y: number; start: Point; dragged: boolean } | undefined;
+  // Touch: a tap zooms; while zoomed, dragging follows and a tap returns.
+  let touch: { x: number; y: number; dragged: boolean } | undefined;
   const down = (event: PointerEvent) => {
-    const at = pointIn(event);
-    if (!at) return;
-    press = { x: event.clientX, y: event.clientY, start: point() ?? at, dragged: false };
-    if (zoomed()) row.setPointerCapture(event.pointerId);
+    if (event.pointerType === 'mouse' || !pointIn(event)) return;
+    touch = { x: event.clientX, y: event.clientY, dragged: false };
+    if (point()) row.setPointerCapture(event.pointerId);
   };
   const move = (event: PointerEvent) => {
-    if (press && zoomed()) {
-      const dx = event.clientX - press.x;
-      const dy = event.clientY - press.y;
-      if (!press.dragged && Math.hypot(dx, dy) < DRAG) return;
-      press.dragged = true;
-      // Dragging moves the pixels with the pointer at 1:1.
-      const { width, height } = props.photos[0];
-      const s = scale();
-      setPoint({
-        u: Math.min(1, Math.max(0, press.start.u - dx / (width * s))),
-        v: Math.min(1, Math.max(0, press.start.v - dy / (height * s))),
-      });
-      return;
-    }
-    if (event.pointerType === 'mouse' && !zoomed()) setPoint(pointIn(event));
+    if (event.pointerType === 'mouse') return void setPoint(pointIn(event));
+    if (!touch || !point()) return;
+    if (Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 4) touch.dragged = true;
+    if (touch.dragged) setPoint(pointIn(event) ?? point());
   };
   const up = (event: PointerEvent) => {
-    const pressed = press;
-    press = undefined;
-    if (!pressed || pressed.dragged) return;
-    if (zoomed()) {
-      setZoomed(false);
-      if (event.pointerType !== 'mouse') setPoint(undefined);
-      else setPoint(pointIn(event));
-    } else {
-      setPoint(pointIn(event));
-      setZoomed(true);
-    }
+    const tapped = touch && !touch.dragged;
+    touch = undefined;
+    if (event.pointerType === 'mouse' || !tapped) return;
+    setPoint(point() ? undefined : pointIn(event));
   };
   const leave = (event: PointerEvent) => {
-    if (event.pointerType === 'mouse' && !zoomed()) setPoint(undefined);
-  };
-  const key = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      setZoomed(false);
-      setPoint(undefined);
-    }
+    if (event.pointerType === 'mouse') setPoint(undefined);
   };
   const outside = (event: PointerEvent) => {
-    if (zoomed() && !row.contains(event.target as Node)) {
-      setZoomed(false);
-      setPoint(undefined);
-    }
+    if (point() && !row.contains(event.target as Node)) setPoint(undefined);
   };
-  window.addEventListener('keydown', key);
   window.addEventListener('pointerdown', outside);
-  onCleanup(() => {
-    window.removeEventListener('keydown', key);
-    window.removeEventListener('pointerdown', outside);
-  });
+  onCleanup(() => window.removeEventListener('pointerdown', outside));
 
   return (
     <div
       ref={(element) => (row = element)}
-      class={{ 'photo-comparison': true, zoomed: zoomed() }}
+      class={{ 'photo-comparison': true, zoomed: !!point() }}
       style={{ '--count': props.photos.length }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
       onPointerLeave={leave}
-      onPointerCancel={() => (press = undefined)}
+      onPointerCancel={() => (touch = undefined)}
     >
       <For each={props.photos}>
         {(photo) => (
@@ -124,24 +92,25 @@ export function PhotoComparison(props: { photos: readonly Photo[] }) {
               />
               <Show when={point()}>
                 {(at) => (
-                  <div
-                    class={zoomed() ? 'photo-zoom' : 'photo-loupe'}
-                    style={
-                      zoomed() ? undefined : { left: `${at().u * 100}%`, top: `${at().v * 100}%` }
-                    }
-                  >
+                  <>
                     <img
                       class="photo-pixels"
                       src={mediaRoot + photo.full}
                       alt=""
                       draggable={false}
                       style={{
+                        left: `${at().u * 100}%`,
+                        top: `${at().v * 100}%`,
                         width: `${photo.width * scale()}px`,
                         height: `${photo.height * scale()}px`,
                         transform: `translate(${-at().u * photo.width * scale()}px, ${-at().v * photo.height * scale()}px)`,
                       }}
                     />
-                  </div>
+                    <span
+                      class="photo-cross"
+                      style={{ left: `${at().u * 100}%`, top: `${at().v * 100}%` }}
+                    />
+                  </>
                 )}
               </Show>
             </div>
