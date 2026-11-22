@@ -351,7 +351,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tauri::WebviewUrl::App("index.html".into()),
             )
             .title("FujiMod Emulator")
-            .inner_size(1280.0, 900.0)
+            .inner_size(1440.0, 720.0)
             .min_inner_size(720.0, 600.0)
             .visible(false)
             .build()?;
