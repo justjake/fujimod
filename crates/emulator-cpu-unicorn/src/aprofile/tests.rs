@@ -445,7 +445,8 @@ fn a32_code_rewritten_in_place_runs_the_new_code(base: u64) {
         .unwrap();
     let cpu = Core::new(raw, Memory::default()).unwrap();
     cpu.map_zeroed(0, 0x8000, 7).unwrap();
-    cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes()).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes())
+        .unwrap();
     let words = |address: u64, words: &[u32]| {
         let bytes = words
             .iter()
@@ -462,7 +463,14 @@ fn a32_code_rewritten_in_place_runs_the_new_code(base: u64) {
     // routine: ldr r1, [pc, #8]; ldr r2, [pc, #8]; str r1, [r2]; bx r2; mov r0, #2; base
     words(
         routine,
-        &[0xe59f1008, 0xe59f2008, 0xe5821000, 0xe12fff12, 0xe3a00002, base as u32],
+        &[
+            0xe59f1008,
+            0xe59f2008,
+            0xe5821000,
+            0xe12fff12,
+            0xe3a00002,
+            base as u32,
+        ],
     );
     run(&cpu, base, 7);
     assert_eq!(value(&cpu, arm::CORE[0]), 2);
@@ -496,7 +504,8 @@ fn code_rewritten_again_while_a_peer_has_not_flushed_runs_the_new_code() {
             cpu.map_backing(0, 0x4000, 7, NonNull::new(backing.as_ptr()).unwrap())
                 .unwrap()
         }
-        cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes())
+            .unwrap();
         cpu
     };
     let cpu = core(shared.processor());

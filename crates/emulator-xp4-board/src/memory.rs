@@ -42,6 +42,21 @@ pub(super) fn allocate(regions: Vec<Region>, dram_size: usize) -> Result<Vec<Win
 }
 
 impl Cluster {
+    /// The processor whose data cache a device access of this extent must
+    /// see through, when it overlaps a declared coherent range.
+    pub(super) fn coherent_core(
+        &self,
+        address: u64,
+        size: usize,
+    ) -> Option<&fujimod_emulator_cpu_unicorn::aprofile::Core> {
+        let end = address.saturating_add(size as u64);
+        if self.coherent.is_empty()
+            || !self.coherent.iter().any(|&(b, e)| address < e && b < end)
+        {
+            return None;
+        }
+        self.cpus.iter().find_map(|cpu| cpu.counted())
+    }
     pub(super) fn memory_pointer(
         &self,
         address: u64,

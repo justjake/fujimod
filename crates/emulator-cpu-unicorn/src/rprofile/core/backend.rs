@@ -56,7 +56,8 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("guest profiling requires a stopped processor".into());
         }
-        let profile = e.guest_profile
+        let profile = e
+            .guest_profile
             .borrow_mut()
             .take()
             .map(|profile| profile.blocks.into_values().collect());

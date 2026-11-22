@@ -401,7 +401,8 @@ impl Memory {
         s.views.retain(|v| v.core != core);
         s.bindings.retain(|v| v.core != core);
         s.watches.retain(|(id, _)| *id != core);
-        s.invalidations.retain(|invalidation| invalidation.core != core);
+        s.invalidations
+            .retain(|invalidation| invalidation.core != core);
         s.cores[core] = false;
         self.local.cores.borrow_mut().remove(&core);
     }

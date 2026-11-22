@@ -51,10 +51,7 @@ fn execute(cpu: &Core, begin: u64, budget: usize) {
     .unwrap();
 }
 fn state(cpu: &Core) -> (fujimod_emulator_cpu::CpuState, u64) {
-    (
-        cpu.state().unwrap(),
-        cpu.instruction_progress().unwrap(),
-    )
+    (cpu.state().unwrap(), cpu.instruction_progress().unwrap())
 }
 
 #[test]

@@ -2,10 +2,10 @@
 //! calls are confined here; observers receive architectural execution events.
 // Links the static Unicorn archive that `ffi` binds.
 use fujimod_unicorn_sys as _;
-#[cfg(target_os = "emscripten")]
-mod available_memory;
 pub mod accounting;
 pub mod aprofile;
+#[cfg(target_os = "emscripten")]
+mod available_memory;
 pub mod memory;
 mod observers;
 pub mod rprofile;
@@ -14,28 +14,28 @@ mod test_support;
 
 use fujimod_emulator_cpu::*;
 use std::{any::Any, ffi::c_void, ptr::NonNull};
-mod architecture;
 mod aarch64;
+#[cfg(test)]
+mod actlr_tests;
+#[cfg(test)]
+mod alignment_tests;
+mod architecture;
+#[cfg(test)]
+mod code_store_tests;
+#[cfg(test)]
+mod dual_architecture_tests;
 mod durable;
 mod ffi;
 mod frozen;
 #[cfg(test)]
 mod frozen_tests;
+#[cfg(test)]
+mod hook_tlb_flush_tests;
+pub mod jit;
+pub mod loop_proof;
 pub mod maintenance;
 #[cfg(test)]
 mod maintenance_tests;
-#[cfg(test)]
-mod hook_tlb_flush_tests;
-#[cfg(test)]
-mod actlr_tests;
-#[cfg(test)]
-mod alignment_tests;
-#[cfg(test)]
-mod code_store_tests;
-#[cfg(test)]
-mod dual_architecture_tests;
-pub mod jit;
-pub mod loop_proof;
 use std::cell::{Cell, Ref, RefCell};
 use std::collections::BTreeMap;
 use std::ffi::CStr;
@@ -74,7 +74,9 @@ impl Library {
             Model::ArmV8A => (2, 0, 1),
         };
         let mut raw = std::ptr::null_mut();
-        check(&self.api, unsafe { (self.api.uc_open)(architecture, mode, &mut raw) })?;
+        check(&self.api, unsafe {
+            (self.api.uc_open)(architecture, mode, &mut raw)
+        })?;
         let core = Core {
             api: self.api.clone(),
             raw,
@@ -406,40 +408,71 @@ impl Core {
     /// but loses the real read-only backing flag on retained fragments. Partition
     /// first, then protect complete current regions, so no final protection call
     /// can split and thaw a previously repaired frozen neighbor.
-    fn reprotect_frozen_views(&self) -> Result<(),String> {
-        let views=frozen::views(self.identity);
-        if views.is_empty() {return Ok(());}
-        let repair=(|| {
+    fn reprotect_frozen_views(&self) -> Result<(), String> {
+        let views = frozen::views(self.identity);
+        if views.is_empty() {
+            return Ok(());
+        }
+        let repair = (|| {
             self.invalidate_memory_regions();
             for region in self.memory_regions()? {
-                for &(start,size) in &views {
-                    let lo=region.begin.max(start);
-                    let hi=(region.end+1).min(start+size as u64);
-                    if lo<hi && (lo!=region.begin || hi!=region.end+1) {
-                        self.check(unsafe{(self.api.uc_mem_protect)(self.raw,lo,hi-lo,region.permissions & !2)})?;
+                for &(start, size) in &views {
+                    let lo = region.begin.max(start);
+                    let hi = (region.end + 1).min(start + size as u64);
+                    if lo < hi && (lo != region.begin || hi != region.end + 1) {
+                        self.check(unsafe {
+                            (self.api.uc_mem_protect)(
+                                self.raw,
+                                lo,
+                                hi - lo,
+                                region.permissions & !2,
+                            )
+                        })?;
                     }
                 }
             }
             self.invalidate_memory_regions();
             for region in self.memory_regions()? {
-                let intersects=views.iter().any(|&(start,size)|start<=region.end && region.begin<start+size as u64);
-                if !intersects {continue;}
-                if !views.iter().any(|&(start,size)|start<=region.begin && region.end<start+size as u64) {
+                let intersects = views.iter().any(|&(start, size)| {
+                    start <= region.end && region.begin < start + size as u64
+                });
+                if !intersects {
+                    continue;
+                }
+                if !views
+                    .iter()
+                    .any(|&(start, size)| start <= region.begin && region.end < start + size as u64)
+                {
                     return Err("frozen backing fragment could not be isolated".into());
                 }
-                self.check(unsafe{(self.api.uc_mem_protect)(self.raw,region.begin,region.end-region.begin+1,region.permissions & !2)})?;
+                self.check(unsafe {
+                    (self.api.uc_mem_protect)(
+                        self.raw,
+                        region.begin,
+                        region.end - region.begin + 1,
+                        region.permissions & !2,
+                    )
+                })?;
             }
             self.invalidate_memory_regions();
             Ok(())
         })();
-        repair.map_err(|error:String|frozen::poison(self.identity,format!("frozen backing reprotection failed: {error}; destroy CPU")))
+        repair.map_err(|error: String| {
+            frozen::poison(
+                self.identity,
+                format!("frozen backing reprotection failed: {error}; destroy CPU"),
+            )
+        })
     }
-    fn mapping_result(&self, result:Result<(),String>) -> Result<(),String> {
-        if let Err(error)=result {
+    fn mapping_result(&self, result: Result<(), String>) -> Result<(), String> {
+        if let Err(error) = result {
             // A failed native split/replacement has no atomicity guarantee. Do
             // not resume a processor with ambiguous physical views.
             if frozen::any(self.identity) {
-                return Err(frozen::poison(self.identity,format!("mapping operation failed with frozen backing: {error}; destroy CPU")));
+                return Err(frozen::poison(
+                    self.identity,
+                    format!("mapping operation failed with frozen backing: {error}; destroy CPU"),
+                ));
             }
             return Err(error);
         }
@@ -447,16 +480,21 @@ impl Core {
     }
     fn finish_backing_outcome(
         &self,
-        reservation:frozen::Reservation,
-        protection:Result<(),String>,
-        rollback:impl FnOnce()->Result<(),String>,
-    ) -> Result<(),String> {
-        if let Err(error)=protection {
-            if let Err(rollback)=rollback() {
+        reservation: frozen::Reservation,
+        protection: Result<(), String>,
+        rollback: impl FnOnce() -> Result<(), String>,
+    ) -> Result<(), String> {
+        if let Err(error) = protection {
+            if let Err(rollback) = rollback() {
                 // Keep the actual live mapping in the policy registry. Its owner
                 // must retain the allocation and destroy this CPU after refusal.
                 reservation.commit();
-                return Err(frozen::poison(self.identity,format!("backing protection failed ({error}); mapping rollback failed ({rollback}); destroy CPU")));
+                return Err(frozen::poison(
+                    self.identity,
+                    format!(
+                        "backing protection failed ({error}); mapping rollback failed ({rollback}); destroy CPU"
+                    ),
+                ));
             }
             return Err(error);
         }
@@ -464,11 +502,18 @@ impl Core {
         reservation.commit();
         Ok(())
     }
-    fn finish_backing_map(&self, address:u64, bytes:usize, permissions:u32,
-        reservation:frozen::Reservation) -> Result<(),String> {
-        let protection=self.check(unsafe{(self.api.uc_mem_protect)(self.raw,address,bytes as u64,permissions)});
-        self.finish_backing_outcome(reservation,protection,|| {
-            self.check(unsafe{(self.api.uc_mem_unmap)(self.raw,address,bytes as u64)})
+    fn finish_backing_map(
+        &self,
+        address: u64,
+        bytes: usize,
+        permissions: u32,
+        reservation: frozen::Reservation,
+    ) -> Result<(), String> {
+        let protection = self.check(unsafe {
+            (self.api.uc_mem_protect)(self.raw, address, bytes as u64, permissions)
+        });
+        self.finish_backing_outcome(reservation, protection, || {
+            self.check(unsafe { (self.api.uc_mem_unmap)(self.raw, address, bytes as u64) })
         })
     }
     unsafe fn map_io(
@@ -622,8 +667,8 @@ impl Cpu for Core {
     }
     fn features(&self) -> Features {
         let e = &self.api.extensions;
-        let frontend = self.model != Model::ArmV8A
-            || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
+        let frontend =
+            self.model != Model::ArmV8A || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
         Features {
             asynchronous_runs: false,
             guest_clock: false,
@@ -632,12 +677,14 @@ impl Cpu for Core {
             instruction_limit: true,
             shared_physical_maps: false,
             instruction_progress: false,
-            translation_filter: frontend && e.insn_filter.is_some()
+            translation_filter: frontend
+                && e.insn_filter.is_some()
                 && e.retry_block.is_some()
                 && e.request_restart.is_some(),
             // The R-profile backend writes the appended pause pointer. Require
             // its ABI bit before exposing the accounting record to that backend.
-            block_accounting: frontend && e.features & 2 != 0
+            block_accounting: frontend
+                && e.features & 2 != 0
                 && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
                 && e.features & ffi::FEATURE_PARALLEL_TCG != 0
                 && e.set_parallel_cpus.is_some()
@@ -691,7 +738,9 @@ impl Cpu for Core {
         if value.is_some() {
             self.check_tlbi_mutation()?;
             if self.tlbi_owner.get().is_some() && maintenance::shared_selector(register) {
-                return Err("Shared translation maintenance requires an accepted guest instruction".into());
+                return Err(
+                    "Shared translation maintenance requires an accepted guest instruction".into(),
+                );
             }
         }
         if self.model == Model::ArmV8A {
@@ -814,7 +863,13 @@ impl Cpu for Core {
         backing: NonNull<u8>,
     ) -> Result<(), String> {
         self.check_tlbi_mutation()?;
-        let reservation = frozen::reserve(self.identity, address, backing.as_ptr() as usize, bytes, false)?;
+        let reservation = frozen::reserve(
+            self.identity,
+            address,
+            backing.as_ptr() as usize,
+            bytes,
+            false,
+        )?;
         self.check(unsafe {
             (self.api.uc_mem_map_ptr)(
                 self.raw,
@@ -827,17 +882,37 @@ impl Cpu for Core {
         // The pointer-mapping API records permissions without setting QEMU's
         // read-only backing flag. Apply them through the protection API too,
         // so CPU-managed translation cannot write through a ROM mapping.
-        self.finish_backing_map(address,bytes,permissions,reservation)
+        self.finish_backing_map(address, bytes, permissions, reservation)
     }
-    unsafe fn map_frozen_backing(&self, address:u64, bytes:usize, permissions:u32, backing:NonNull<u8>) -> Result<(),String> {
+    unsafe fn map_frozen_backing(
+        &self,
+        address: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
         self.check_tlbi_mutation()?;
-        if bytes==0 || permissions==0 || permissions & !5 != 0 {
+        if bytes == 0 || permissions == 0 || permissions & !5 != 0 {
             return Err("frozen backing requires read/execute-only permissions".into());
         }
-        let reservation=frozen::reserve(self.identity,address,backing.as_ptr() as usize,bytes,true)?;
-        self.check(unsafe {(self.api.uc_mem_map_ptr)(self.raw,address,bytes as u64,permissions,backing.as_ptr().cast())})?;
+        let reservation = frozen::reserve(
+            self.identity,
+            address,
+            backing.as_ptr() as usize,
+            bytes,
+            true,
+        )?;
+        self.check(unsafe {
+            (self.api.uc_mem_map_ptr)(
+                self.raw,
+                address,
+                bytes as u64,
+                permissions,
+                backing.as_ptr().cast(),
+            )
+        })?;
         // Apply the real read-only backing flag without relaxing the frozen policy.
-        self.finish_backing_map(address,bytes,permissions,reservation)
+        self.finish_backing_map(address, bytes, permissions, reservation)
     }
     unsafe fn replace_physical(
         &self,
@@ -849,7 +924,8 @@ impl Cpu for Core {
     ) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         // Replacing a view may not introduce an alias of a frozen allocation.
-        let reservation=frozen::reserve_replacement(self.identity,address,backing.as_ptr() as usize,bytes)?;
+        let reservation =
+            frozen::reserve_replacement(self.identity, address, backing.as_ptr() as usize, bytes)?;
         if self.model != Model::CortexA7
             || address & 0xfff != 0
             || bytes == 0
@@ -869,20 +945,31 @@ impl Cpu for Core {
         // The native replacement ABI accepts only an entire current region.
         // Partition a strict subrange first using its existing permissions; then
         // restore every retained frozen fragment before replacing the target.
-        let end=address+bytes as u64;
-        let region=self.memory_regions()?.into_iter().find(|region|region.begin<=address && end-1<=region.end)
+        let end = address + bytes as u64;
+        let region = self
+            .memory_regions()?
+            .into_iter()
+            .find(|region| region.begin <= address && end - 1 <= region.end)
             .ok_or("physical replacement must fit one current region")?;
-        if region.begin!=address || region.end+1!=end {
-            let partition=self.check(unsafe{(self.api.uc_mem_protect)(self.raw,address,bytes as u64,region.permissions)});
+        if region.begin != address || region.end + 1 != end {
+            let partition = self.check(unsafe {
+                (self.api.uc_mem_protect)(self.raw, address, bytes as u64, region.permissions)
+            });
             self.invalidate_memory_regions();
             self.reprotect_frozen_views()?;
             self.mapping_result(partition)?;
         }
-        let result=self.check(unsafe {
-            replace(self.raw,address,bytes as u64,permissions,backing.as_ptr().cast())
+        let result = self.check(unsafe {
+            replace(
+                self.raw,
+                address,
+                bytes as u64,
+                permissions,
+                backing.as_ptr().cast(),
+            )
         });
         if result.is_ok() {
-            frozen::remove_except(self.identity,address,bytes,Some(reservation.id()));
+            frozen::remove_except(self.identity, address, bytes, Some(reservation.id()));
             reservation.commit();
         }
         self.invalidate_memory_regions();
@@ -913,8 +1000,11 @@ impl Cpu for Core {
         self.check_tlbi_mutation()?;
         frozen::ready(self.identity)?;
         let affected = self.affected_mmio(address, bytes)?;
-        let result=self.check(unsafe { (self.api.uc_mem_unmap)(self.raw, address, bytes as u64) });
-        if result.is_ok() {frozen::remove(self.identity, address, bytes);}
+        let result =
+            self.check(unsafe { (self.api.uc_mem_unmap)(self.raw, address, bytes as u64) });
+        if result.is_ok() {
+            frozen::remove(self.identity, address, bytes);
+        }
         self.invalidate_memory_regions();
         self.reprotect_frozen_views()?;
         self.mapping_result(result)?;
@@ -923,9 +1013,11 @@ impl Cpu for Core {
     fn protect(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         frozen::ready(self.identity)?;
-        if permissions & 2 != 0 {frozen::check(self.identity, address, bytes)?;}
+        if permissions & 2 != 0 {
+            frozen::check(self.identity, address, bytes)?;
+        }
         let affected = self.affected_mmio(address, bytes)?;
-        let result=self.check(unsafe {
+        let result = self.check(unsafe {
             (self.api.uc_mem_protect)(self.raw, address, bytes as u64, permissions)
         });
         self.invalidate_memory_regions();
@@ -1264,9 +1356,16 @@ impl Cpu for Core {
 
 unsafe extern "C" fn instruction(_: ffi::Engine, address: u64, size: u32, data: *mut c_void) {
     let data = unsafe { &*data.cast::<HookData>() };
-    if let Hook::Instruction { callback, data: argument, .. } = data.hook {
+    if let Hook::Instruction {
+        callback,
+        data: argument,
+        ..
+    } = data.hook
+    {
         data.instruction_active.set(true);
-        unsafe { callback(address, size, argument); }
+        unsafe {
+            callback(address, size, argument);
+        }
         data.instruction_active.set(false);
     }
 }
@@ -1656,7 +1755,8 @@ mod tests {
     #[test]
     fn m4_accepts_interactive_policy_while_preserving_exact_instruction_limits() {
         let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
-        cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
         cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
         cpu.write_memory(0x1000, &[0x07, 0x20, 0x08, 0x22]).unwrap();
         cpu.run(Run {
