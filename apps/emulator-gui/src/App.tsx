@@ -9,13 +9,12 @@ import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
-import { commandLineLaunch, type DesktopBridge, type RunConfiguration } from './launch';
+import type { DesktopBridge, RunConfiguration } from './launch';
 import { desktopBridge } from './desktop';
 import './app.css';
 
 export default function App() {
   const bridge = desktopBridge();
-  const commandLine = commandLineLaunch();
   const [state, setState] = createSignal(sessionState(), { equals: false });
   const [camera, setCamera] = createSignal<NativeCamera>();
   const [catalog, setCatalog] = createSignal<NativeCatalog>();
@@ -23,6 +22,7 @@ export default function App() {
   const [selected, setSelected] = createSignal('');
   const [update, setUpdate] = createSignal('');
   const [launcherError, setLauncherError] = createSignal('');
+  const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
   let viewer!: HTMLDivElement, workspace!: HTMLElement, lcd!: HTMLCanvasElement;
   let engine: NativeEngine | undefined;
@@ -105,6 +105,7 @@ export default function App() {
         session.panel.synchronize(initial.positions);
         session.panel.setPowered(initial.poweredOn);
         session.viewer.powered(initial.poweredOn);
+        session.panel.resume();
         updateState((value) => {
           value.live = 'LIVE';
           value.message = 'Camera ready';
@@ -132,20 +133,33 @@ export default function App() {
   }
 
   onSettled(() => {
-    if (bridge) {
-      void bridge.configurations().then((rows) => {
+    window.addEventListener('error', (event) => {
+      setPageError(shownError(event.error ?? event.message));
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+      setPageError(shownError(event.reason));
+    });
+    if (!bridge) return;
+    void Promise.all([bridge.configurations(), bridge.launchConnection()]).then(
+      ([rows, connection]) => {
         setConfigurations(rows);
         setSelected(rows[0]?.configuration ?? '');
-      });
-    } else if (commandLine) {
-      void startCamera(commandLine).catch((error) => {
-        setLauncherError(shownError(error));
-        updateState((value) => {
-          value.message = shownError(error);
-          value.error = true;
-        });
-      });
-    }
+        if (connection) {
+          setSelected(connection.configuration);
+          setUpdate(connection.update);
+          void bridge
+            .launch(connection)
+            .then(startCamera)
+            .catch((error) => {
+              setLauncherError(shownError(error));
+              updateState((value) => {
+                value.message = shownError(error);
+                value.error = true;
+              });
+            });
+        }
+      },
+    );
   });
   onCleanup(() => {
     runtime?.dispose();
@@ -212,6 +226,9 @@ export default function App() {
           <span>{catalog()!.configuration}</span>
           <span>{catalog()!.firmware}</span>
         </footer>
+      </Show>
+      <Show when={pageError()}>
+        <pre class="page-error" role="alert">{pageError()}</pre>
       </Show>
     </main>
   );

@@ -9,6 +9,7 @@ export interface RunConfiguration {
 export interface LaunchRequest {
   configuration: string;
   update: string;
+  engine?: 'unicorn' | 'hypervisor';
 }
 export interface LaunchedCamera {
   id: string;
@@ -22,15 +23,6 @@ export interface DesktopBridge {
   configurations(): Promise<RunConfiguration[]>;
   chooseUpdate(): Promise<string | undefined>;
   launch(request: LaunchRequest): Promise<LaunchedCamera>;
+  launchConnection(): Promise<LaunchRequest | undefined>;
   close(): Promise<void>;
-}
-declare global {
-  interface Window {
-    fujimodLaunch?: LaunchedCamera;
-  }
-}
-/** A CLI-opened window receives its live endpoint before the page starts. */
-export function commandLineLaunch(): LaunchedCamera | undefined {
-  const launch = window.fujimodLaunch;
-  return launch?.endpoint ? launch : undefined;
 }
