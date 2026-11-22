@@ -67,6 +67,27 @@ pub fn register_all(
         }),
         (0x59, 4),
     );
+    // Frame timing of the decoded sensor readout (sensor::FrameTiming), opt-in through the
+    // imaging-sensor window: frame_timing_readout (the value of sensor register 0x01) and
+    // frame_timing_line_ns (its line length). Without them every frame keeps the stand-in
+    // periods of the receiver and preview windows.
+    let sensor = match windows.iter().find(|w| w.kind == "imaging-sensor") {
+        Some(w) if w.options.contains_key("frame_timing_readout") || w.options.contains_key("frame_timing_line_ns") => {
+            let number = |key: &str, max: u64| {
+                w.options
+                    .get(key)
+                    .and_then(toml::Value::as_integer)
+                    .and_then(|n| u64::try_from(n).ok())
+                    .filter(|n| (1..=max).contains(n))
+                    .ok_or_else(|| format!("imaging-sensor {key} must be a positive bounded integer"))
+            };
+            sensor.with_frame_timing(sensor::FrameTiming {
+                readout: number("frame_timing_readout", 0xff)? as u8,
+                line_ticks: number("frame_timing_line_ns", 1_000_000)?,
+            })
+        }
+        _ => sensor,
+    };
     // XT5_STILL_PATH=real: the modelled still data path (sensor RAW -> RIFP -> RESZ), see
     // fujimod_emulator_xp5_imaging::imaging::still. A host input, like XT5_SCENE.
     let still_path = fujimod_emulator_imaging::frame::still_path_real();
@@ -234,7 +255,8 @@ pub fn register_all(
         } else {
             let device = preview::Preview::new(w.kind == "imaging-rifp", io.clone(), &w.options)?
                 .with_span(w.size)
-                .with_statistics(statistics.clone());
+                .with_statistics(statistics.clone())
+                .with_frame_clock(sensor.clone());
             Box::new(if still_path || movie_path {
                 device.with_still_path(preview::StillPath {
                     sensor: sensor.clone(),
