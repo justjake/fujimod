@@ -49,7 +49,7 @@ fn board(blocks: bool) -> Board {
             Processor {
                 model: Model::CortexM4,
                 registers: vec![],
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -62,7 +62,7 @@ fn board(blocks: bool) -> Board {
                 mprofile: None,
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x14000), (arm32(1), 0x12010)],
-                released: true,
+                released: true, parked_until_sgi: false,
             },
         ],
         dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
@@ -224,7 +224,7 @@ fn run_pair(quantum: usize, blocks: bool) -> (Value, Vec<u64>, bool) {
             .map(|vector_base| Processor {
                 model: Model::CortexM4,
                 registers: vec![],
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -328,7 +328,7 @@ fn bench_block_execution() {
                 Processor {
                     model: Model::CortexM4,
                     registers: vec![],
-                    released: true,
+                    released: true, parked_until_sgi: false,
                     rprofile: None,
                     mprofile: Some(super::mprofile::Config {
                         clock_hz: 1_000_000_000,
@@ -341,7 +341,7 @@ fn bench_block_execution() {
                     mprofile: None,
                     model: Model::CortexR5F,
                     registers: vec![(Register::Pc, 0x14000)],
-                    released: true,
+                    released: true, parked_until_sgi: false,
                 },
             ],
             dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],

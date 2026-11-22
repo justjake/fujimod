@@ -576,7 +576,7 @@ mod peripheral_page_tests {
             processors: vec![Processor {
                 model: Model::ArmV8A,
                 registers: vec![],
-                released: true,
+                released: true, parked_until_sgi: false,
                 mprofile: None,
                 rprofile: None,
             }],

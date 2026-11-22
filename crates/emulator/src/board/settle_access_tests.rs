@@ -122,7 +122,7 @@ fn run_with(quantum: usize, blocks: bool, windows: &[u64], stable: bool, fast_fo
         processors: vec![Processor {
             model: Model::CortexM4,
             registers: vec![],
-            released: true,
+            released: true, parked_until_sgi: false,
             rprofile: None,
             mprofile: Some(super::mprofile::Config {
                 clock_hz: 1_000_000_000,
@@ -266,7 +266,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
                 (Register::Pstate, 0x3c5),
                 (Register::X(19), 0x8000000),
             ],
-            released: true,
+            released: true, parked_until_sgi: false,
             rprofile: None,
             mprofile: None,
         }],

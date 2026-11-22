@@ -34,7 +34,7 @@ fn mapped_board(mappings: Vec<MemoryMap>, decoders: Vec<decoder::Decoder>) -> Bo
         processors: vec![Processor {
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
-            released: true,
+            released: true, parked_until_sgi: false,
             mprofile: None,
             rprofile: Some(Default::default()),
         }],
@@ -62,14 +62,14 @@ pub(super) fn two_core_board() -> Board {
             Processor {
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
-                released: true,
+                released: true, parked_until_sgi: false,
                 mprofile: None,
                 rprofile: Some(Default::default()),
             },
             Processor {
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
-                released: true,
+                released: true, parked_until_sgi: false,
                 mprofile: None,
                 rprofile: Some(Default::default()),
             },

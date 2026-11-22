@@ -27,7 +27,7 @@ fn run_with(
             Processor {
                 model: Model::CortexM4,
                 registers: vec![],
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -40,7 +40,7 @@ fn run_with(
                 mprofile: None,
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
-                released: true,
+                released: true, parked_until_sgi: false,
             },
         ],
         dma_mappings: vec![

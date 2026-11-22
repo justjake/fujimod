@@ -53,7 +53,7 @@ fn graph(private_peer: bool) -> Graph {
             .map(|core| Processor {
                 model: Model::CortexR5F,
                 mprofile: None,
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: Some(rprofile::core::Options {
                     tcm: if private_peer && core == 1 {
                         rprofile::tcm::Options {

@@ -95,7 +95,7 @@ mod tests {
             processors: vec![factory::Processor {
                 model: Model::ArmV8A,
                 registers: vec![(Register::Pc, 0x1000), (Register::Pstate, 0x3cd)],
-                released: true,
+                released: true, parked_until_sgi: false,
                 mprofile: None,
                 rprofile: None,
             }],
@@ -197,7 +197,7 @@ mod tests {
                 processors: (0..4)
                     .map(|core| factory::Processor {
                         model: Model::ArmV8A,
-                        released: true,
+                        released: true, parked_until_sgi: false,
                         registers: vec![
                             (
                                 Register::Pc,
@@ -230,7 +230,7 @@ mod tests {
             if companion {
                 graph.processors.push(factory::Processor {
                     model: Model::CortexM4,
-                    released: false,
+                    released: false, parked_until_sgi: false,
                     registers: vec![],
                     mprofile: Some(crate::board::mprofile::Config {
                         clock_hz: 600_000_000,
