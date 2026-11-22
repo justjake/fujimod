@@ -164,6 +164,12 @@ impl Core {
             r.ring = (*e.ring.get()).as_mut_ptr();
             r.mask = 63;
             r.enabled = 1;
+            if a32 {
+                // A device access ends its block and every other stop raised
+                // from a callback takes effect at the next block entry, so
+                // only block entries test for requests.
+                e.cpu.set_entry_exits(true)?;
+            }
             e.cpu.translation_hooks(Some(TranslationHooks {
                 classify,
                 restart,
