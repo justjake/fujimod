@@ -1,7 +1,10 @@
-# Reset handshake word, declared as on the X-T5 and X-H2 boards: the application stores 1 to
-# 0xff91c01c (0x15ab07c, through 0x9ed80) and, as on those bodies, reads the same word until it
-# returns 0. Immediate completion is the sibling boards' functional assumption, UNVERIFIED for the
-# X-E5. The rest of the page stays unowned and refuses.
+# VERIFIED base 0xff91c000 and trigger_offset 0x1c: 0x015ab050 (called at 0x015ad224) stores 1 to
+# 0xff91c01c (0x015ab070..0x015ab078, via 0x0009ed80) and polls 0xff91c01c until it reads 0
+# (0x015ab07c..0x015ab08c, via 0x0009eda8, no timeout). The audio-serial driver at
+# 0x014a76b0..0x014a8047 also addresses instance 0 at 0xff91c000 (instance 1 at 0xff991000, stride
+# 0x75000), writing 1 to +0x1c and polling bit 0 until clear (0x014a76e0..0x014a7700,
+# 0x014a7814..0x014a7834); its registers span +0x00..+0x28. Exact hardware aperture size beyond
+# +0x28 and immediate completion latency are UNVERIFIED / HARDWARE-ONLY.
 [[device]]
 base = 0xff91c000
 size = 0x1000
