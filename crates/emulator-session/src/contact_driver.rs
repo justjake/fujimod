@@ -284,7 +284,10 @@ impl Driver {
                     if *edges_per_step == 0 || edges_per_step.unsigned_abs() > 64 {
                         return Err("invalid rotary edges per step".into());
                     }
-                    session.resources.encoder(node)?;
+                    session.board.inspect_capability::<dyn fujimod_emulator_devices::capability::RotaryInput, _>(
+                        session.node(node)?,
+                        |dial| dial.admit_edges(session.board.now(), 0),
+                    )?;
                 }
                 Interface::Touch {
                     node,

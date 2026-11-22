@@ -174,11 +174,12 @@ impl Session {
             .pads(name)?
             .pad_state(fujimod_emulator_devices::parts::pins::Pin { port, pin })
     }
+    /// Turn a dial by whole Gray-code cycles of four edges.
     pub fn rotate(&mut self, name: &str, cycles: i32) -> Result<(), String> {
-        self.resources
-            .encoder(name)?
-            .queue_cycles(self.board.now(), cycles)?;
-        self.board.inputs_changed(self.node(name)?)
+        let edges = cycles
+            .checked_mul(4)
+            .ok_or("encoder cycle request exceeds the signal queue bound")?;
+        self.rotate_edges(name, edges)
     }
     pub fn rotate_edges(&mut self, name: &str, edges: i32) -> Result<(), String> {
         let now = self.board.now();
