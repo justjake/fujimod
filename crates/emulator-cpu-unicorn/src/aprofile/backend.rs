@@ -386,6 +386,19 @@ impl Cpu for Core {
                 .ok_or("A-profile hook identity overflow")?,
         );
         let native = match hook {
+            Hook::Instruction {
+                range: HookRange::Inclusive { begin, end },
+                ..
+            } if end >= begin
+                && end - begin < 4096
+                && e.cpu.translate(begin, Access::Fetch).is_ok()
+                && e.cpu.translate(end, Access::Fetch).is_ok() =>
+            {
+                // Only translations covering the observed instructions need
+                // translating again, and only where the engine can name them.
+                e.cpu.invalidate_code(Some((begin, end + 4)))?;
+                None
+            }
             Hook::Instruction { .. } | Hook::Block { .. } => {
                 e.cpu.invalidate_code(None)?;
                 None

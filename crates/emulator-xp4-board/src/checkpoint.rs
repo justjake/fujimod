@@ -105,6 +105,8 @@ impl Header {
         state.observe_filter = self.observe_filter;
         state.exclusive = self.exclusive;
         state.cache_dirty = self.cache_dirty;
+        state.dirty_pages.clear();
+        state.dirty_all = self.cache_dirty;
         state.pmu = self.pmu;
         state.remap_pending = self.remap_pending;
         state.remap_ready = self.remap_ready;

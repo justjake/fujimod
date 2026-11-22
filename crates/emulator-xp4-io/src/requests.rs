@@ -7,6 +7,7 @@
 //! No target reset/clock routing is inferred.
 use fujimod_emulator_devices::{Cx, Device, Record, Value as Field};
 use serde_json::{Value, json};
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
 const REQUEST_OFFSET: u64 = 0x80;
@@ -29,6 +30,10 @@ pub struct Requests {
     /// Each block's `[base, base + 0x100)` window.
     blocks: Vec<(u64, u64)>,
     generation: u64,
+    /// The earliest due tick of any word (outer `None`: not computed since
+    /// the last change to a word's deadline).
+    #[serde(skip)]
+    earliest: Cell<Option<Option<u64>>>,
 }
 impl Requests {
     pub fn new(inputs: &[(u64, u64)]) -> Result<Self, String> {
@@ -63,6 +68,7 @@ impl Requests {
             registers: BTreeMap::new(),
             blocks,
             generation: 0,
+            earliest: Cell::new(None),
         })
     }
     fn in_block(&self, address: u64) -> bool {
@@ -116,6 +122,7 @@ impl Device for Requests {
             return;
         }
         if let Some(word) = self.words.get_mut(&address) {
+            self.earliest.set(None);
             if !matches!(value, 0 | 2 | 3 | 5 | 6) {
                 cx.fail("Unsupported XP4 control request bits");
                 return;
@@ -145,9 +152,15 @@ impl Device for Requests {
         cx.unmodeled();
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.words.values().filter_map(|w| w.due.map(|d| d.0)).min()
+        if let Some(known) = self.earliest.get() {
+            return known;
+        }
+        let earliest = self.words.values().filter_map(|w| w.due.map(|d| d.0)).min();
+        self.earliest.set(Some(earliest));
+        earliest
     }
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
+        self.earliest.set(None);
         for (&address, word) in &mut self.words {
             if let Some((at, generation)) = word.due
                 && generation == token
