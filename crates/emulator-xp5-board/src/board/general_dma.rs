@@ -46,6 +46,8 @@ const SSP_INSTANCES: std::ops::Range<u64> = 0xff910000..0xff91c000;
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum WireInput {
     Unconnected,
+    /// Experimental X-H2S companion SPI2 peer.
+    Xh2sSpi2Peer,
     InputLevel {
         high: bool,
     },
@@ -132,6 +134,7 @@ pub fn register_all(
         let mut lens = None;
         let wire: Box<dyn Wire> = match wiring.wire {
             WireInput::Unconnected => Box::new(Unconnected),
+            WireInput::Xh2sSpi2Peer => Box::new(spi2_peer::Peer::default()),
             WireInput::InputLevel { high } => Box::new(InputLevel(high)),
             WireInput::GpioSelected { endpoints } => {
                 super::serial::gpio_wire(pins.clone(), endpoints)?
@@ -341,3 +344,5 @@ pub fn register_all(
 
 #[cfg(test)]
 mod tests;
+
+mod spi2_peer;
