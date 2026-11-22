@@ -124,6 +124,47 @@ impl Fixture {
     }
 }
 #[test]
+fn a53_software_dma_completion_is_per_channel_and_acknowledged() {
+    let mut f = Fixture::with_dma(json!({"companion_irq_base":83,"a53_irq_base":237}));
+    let bank = 0xff930000;
+    let lane = bank + 0x30; // Channel 1, INTID 238.
+    let source = [0x12, 0x34, 0x56, 0x78];
+    f.host.ram[0x100..0x104].copy_from_slice(&source);
+    f.write(0xff90e500, 0x01003f00); // Channel 1 software request selector.
+    f.write(bank, 0x10000000);
+    for (offset, value) in [
+        (0x10, 3), (0x14, 0x100), (0x18, 0x200),
+        (0x1c, 0), (0x20, 0), (0x24, 0),
+    ] {
+        f.write(lane + offset, value);
+    }
+    // Configuring a channel without a start must not copy or assert an interrupt.
+    f.until(100);
+    assert_eq!(&f.host.ram[0x200..0x204], &[0xcc; 4]);
+    assert!(f.host.irqs.is_empty());
+    assert!(f.host.core_irqs.is_empty());
+
+    f.write(lane + 0x28, 0x11100001); // Enable, software start, normal interrupt.
+    f.until(100);
+    assert_eq!(&f.host.ram[0x200..0x204], &source);
+    assert_eq!(f.host.irqs, [(238, true)]);
+    assert_eq!(f.host.core_irqs, [(4, 84, true)]);
+    let id = f.graph.at(lane + 0x30).unwrap();
+    let mut cx = Cx::new(&mut f.host, 0, 0, id);
+    assert_eq!(f.graph.nodes[id].device.read(&mut cx, lane + 0x30, 4), 8);
+    assert_eq!(cx.refusal(), None);
+
+    // The model's interrupt status is clear-by-zero, not write-one-to-clear.
+    f.write(lane + 0x30, 0);
+    assert_eq!(f.host.irqs, [(238, true), (238, false)]);
+    assert_eq!(f.host.core_irqs, [(4, 84, true), (4, 84, false)]);
+    let mut cx = Cx::new(&mut f.host, 0, 0, id);
+    assert_eq!(f.graph.nodes[id].device.read(&mut cx, lane + 0x30, 4), 0);
+    assert_eq!(cx.refusal(), None);
+}
+
+
+#[test]
 fn graph_connects_both_request_edges_and_clocked_data_to_actual_companion_irq_lines() {
     let mut f = Fixture::new();
     let serial = f.graph.at(SPI).unwrap();
