@@ -144,24 +144,13 @@
   margin: 0 0 22px;
 }
 
-/* Frames between rows of sprocket holes. */
 .credits-page main .film-strip {
-  --hole: rgb(255 255 255 / 16%);
   display: flex;
-  gap: 8px;
-  width: fit-content;
-  max-width: 100%;
+  gap: 4px;
   margin: 0;
-  padding: 22px 8px;
+  padding: 0;
   overflow-x: auto;
   list-style: none;
-  border-radius: 4px;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 5px, var(--hole) 5px 15px, transparent 15px 20px)
-      left 0 top 7px / 100% 8px no-repeat,
-    repeating-linear-gradient(90deg, transparent 0 5px, var(--hole) 5px 15px, transparent 15px 20px)
-      left 0 bottom 7px / 100% 8px no-repeat,
-    #0c0c0d;
 }
 
 .film-strip li {

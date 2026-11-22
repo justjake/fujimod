@@ -114,7 +114,7 @@ and another tap returns.
 - `/safety`: the risks of custom firmware and how Fujimod mitigates them.
 - `/credits`: GitHub Contributors (from `contributors/`), Testing & Feedback,
   Recipe Authors (each author with their recipes, linked to each recipe's
-  source), Photographs (each photographer's scene photographs as a film strip;
+  source), Photographs (a row of each photographer's scene photographs;
   a frame opens in a lightbox) and Open Source (generated from a CycloneDX SBOM of everything the
   camera image, website and emulator ship, with each license's full text and
   a link to the source at the shipped version).
