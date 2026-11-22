@@ -11,6 +11,7 @@ import { nativePanel } from './panel';
 import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
 import type { DesktopBridge, LaunchRequest, RunConfiguration } from './launch';
 import { desktopBridge } from './desktop';
+import '@fujimod/emulator-ui/viewport-controls.css';
 import './app.css';
 
 export default function App() {
@@ -24,9 +25,9 @@ export default function App() {
   const [launcherError, setLauncherError] = createSignal('');
   const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
+  const [runtime, setRuntime] = createSignal<ReturnType<typeof startSession>>();
   let viewer!: HTMLDivElement, workspace!: HTMLElement, lcd!: HTMLCanvasElement;
   let engine: NativeEngine | undefined;
-  let runtime: ReturnType<typeof startSession> | undefined;
   const updateState = (write: (value: ReturnType<typeof sessionState>) => void) => {
     const value = state();
     write(value);
@@ -47,6 +48,7 @@ export default function App() {
         value.error = true;
       });
     });
+    void photo.open().catch((error) => session.showFault(faultFrom(error)));
     engine = photo;
     let catalog: NativeCatalog | undefined;
     let nativeState: NativeState | undefined;
@@ -69,7 +71,7 @@ export default function App() {
       ready() {},
       cameraSaved() {},
     });
-    runtime = session;
+    setRuntime(session);
     const bootWhenReady = () => {
       if (!catalog || !nativeState || sessionInitialized) return;
       sessionInitialized = true;
@@ -137,12 +139,10 @@ export default function App() {
 
   async function openCamera(request: LaunchRequest) {
     if (!bridge || busy()) return;
-    void bridge.note(`open ${request.configuration} engine=${request.engine ?? 'default'}`);
     setBusy(true);
     setLauncherError('');
     try {
       const launched = await bridge.launch(request);
-      void bridge.note(`launched ${launched.endpoint}`);
       await startCamera(launched);
     } catch (error) {
       setLauncherError(shownError(error));
@@ -177,12 +177,11 @@ export default function App() {
     });
   });
   onCleanup(() => {
-    runtime?.dispose();
+    runtime()?.dispose();
     void engine?.dispose();
     void bridge?.close();
   });
 
-  const active = state();
   return (
     <main class="window">
       <header>
@@ -195,8 +194,8 @@ export default function App() {
         </Show>
       </header>
       <EmulatorWorkspace
-        state={active}
-        runtime={runtime}
+        state={state()}
+        runtime={runtime()}
         bodyPreview=""
         labelledBy="emulator-title"
         workspace={(element) => { workspace = element; }}
