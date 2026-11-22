@@ -94,6 +94,20 @@ page outline. Each row is a link to its place on the manual page that covers
 it. One mapping from menu paths to manual pages drives both the index and
 the chapters, and every shown row maps to a page.
 
+### Photo comparisons
+
+A section whose recordings kept photographs shows them between the section's
+title (with its summary) and its options. The photographs sit side by side in
+one row, separated by hairlines, spanning the full width of the window: past
+the text column and past the sidebar. Each photograph is captioned with its
+settings as the camera shows them, and the default setting is always among
+them, so readers see what they get without changing anything.
+
+Hovering, or tapping on touch screens, opens a loupe at 1:1 pixels at the
+same point of every photograph at once. Moving the pointer or dragging moves
+every loupe together, so the settings can be compared pixel for pixel.
+Leaving the row, or tapping outside it, closes the loupes.
+
 ## Other pages
 
 - `/safety`: the risks of custom firmware and how Fujimod mitigates them.
