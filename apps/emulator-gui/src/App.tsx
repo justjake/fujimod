@@ -9,7 +9,7 @@ import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
-import type { DesktopBridge, LaunchRequest, RunConfiguration } from './launch';
+import type { LaunchRequest, RunConfiguration } from './launch';
 import { desktopBridge } from './desktop';
 import '@fujimod/emulator-ui/viewport-controls.css';
 import './app.css';
@@ -24,7 +24,7 @@ export default function App() {
   const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
   const [runtime, setRuntime] = createSignal<ReturnType<typeof startSession>>();
-  let viewer!: HTMLDivElement, workspace!: HTMLElement, lcd!: HTMLCanvasElement;
+  let viewer!: HTMLDivElement, lcd!: HTMLCanvasElement;
   let engine: NativeEngine | undefined;
   const updateState = (write: (value: ReturnType<typeof sessionState>) => void) => {
     const value = state();
@@ -195,7 +195,7 @@ export default function App() {
         runtime={runtime()}
         bodyPreview=""
         labelledBy="emulator-title"
-        workspace={(element) => { workspace = element; }}
+        workspace={() => {}}
         viewer={(element) => { viewer = element; }}
         lcd={(element) => { lcd = element; }}
         selectFile={() => {}}
