@@ -232,6 +232,9 @@ importers:
       fujimod:
         specifier: workspace:*
         version: link:../../bindings/javascript
+      lightbox3:
+        specifier: 1.4.0
+        version: 1.4.0
       minisearch:
         specifier: 7.2.0
         version: 7.2.0
@@ -3507,6 +3510,9 @@ packages:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
 
+  lightbox3@1.4.0:
+    resolution: {integrity: sha512-1JHKBAZC7OXjAKrXWDR4msoOUJuF4FNsgwsQJh9ng/EU10HufuYGz/oLkvCDT5k75kXoJKVYxUJXLn/0mqzuIA==}
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -6594,6 +6600,8 @@ snapshots:
     dependencies:
       prelude-ls: 1.2.1
       type-check: 0.4.0
+
+  lightbox3@1.4.0: {}
 
   lightningcss-android-arm64@1.33.0:
     optional: true

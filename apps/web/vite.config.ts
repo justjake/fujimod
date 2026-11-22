@@ -1,4 +1,5 @@
 import { prepareDefaultScene } from '../../scripts/assets/default-scene.ts';
+import { prepareScenePreviews } from '../../scripts/assets/scene-previews.ts';
 
 import { uiLint } from '../../packages/emulator-ui/lint';
 import { runtimeHeaders } from './src/security';
@@ -24,6 +25,7 @@ import { stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 await prepareDefaultScene();
+await prepareScenePreviews();
 
 // The development preview starts the sharing Worker from apps/usb-sharing with
 // wrangler dev and serves its public paths under the preview's own origin.
