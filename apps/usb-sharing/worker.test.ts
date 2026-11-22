@@ -48,13 +48,7 @@ function inbox(socket: WebSocket) {
     }
   };
 }
-async function connect(
-  mf: Miniflare,
-  id: string,
-  role: string,
-  native = false,
-  ownerKey?: string,
-) {
+async function connect(mf: Miniflare, id: string, role: string, native = false, ownerKey?: string) {
   const response = await mf.dispatchFetch(`https://worker.example/usb-proxy/signal?room=${id}`, {
     headers: { Upgrade: 'websocket', ...(native ? {} : { Origin: origin }) },
   });
@@ -244,6 +238,43 @@ await test('persistent owner key is bound on first join and authorizes offline r
     await mf.dispose();
   }
 });
+
+await test(
+  'a persistent owner can replace a stale socket with the same key',
+  { timeout: 10000 },
+  async () => {
+    const mf = await runtime();
+    const id = room(12);
+    const key = room(76);
+    try {
+      const owner = await connect(mf, id, 'host', false, key);
+      assert.equal(owner.ready.peer, 'host');
+      const client = await connect(mf, id, 'client');
+      const wrongOwner = await connect(mf, id, 'host', false, room(77));
+      assert.match(wrongOwner.ready.message ?? '', /Invalid owner key/);
+
+      const closed = [owner.socket, client.socket].map(
+        (socket) =>
+          new Promise<number>((resolve) =>
+            socket.addEventListener('close', (event) => resolve(event.code)),
+          ),
+      );
+      const resumed = await connect(mf, id, 'host', false, key);
+      assert.equal(resumed.ready.peer, 'host');
+      assert.deepEqual(await Promise.all(closed), [1012, 1012]);
+
+      const receiver = await connect(mf, id, 'client');
+      receiver.send({ type: 'signal', data: 'b2ZmZXI' });
+      assert.deepEqual(await resumed.next('signal'), {
+        type: 'signal',
+        from: receiver.ready.peer,
+        data: 'b2ZmZXI',
+      });
+    } finally {
+      await mf.dispose();
+    }
+  },
+);
 
 await test('persistent room idle alarm revokes after SHARE_IDLE_SECONDS', async () => {
   const mf = await runtime({ bindings: { SHARE_IDLE_SECONDS: '1' } });
