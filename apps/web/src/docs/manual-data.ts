@@ -16,6 +16,11 @@ export type ManualSection = {
     credits: Credits | null;
   }[];
   credits?: Credits;
+  table?: {
+    caption: string;
+    columns: readonly string[];
+    rows: readonly { label: string; cells: readonly (string | number)[] }[];
+  } | null;
   media?: { card: string; options: readonly string[] } | null;
   markdown?: string;
 };

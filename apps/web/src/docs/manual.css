@@ -320,3 +320,37 @@
 .manual-original dd {
   color: var(--dim);
 }
+
+.manual-table {
+  overflow-x: auto;
+  margin: 8px 0 14px;
+}
+
+.manual-table table {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.manual-table caption {
+  padding-bottom: 6px;
+  color: var(--dim);
+  text-align: left;
+}
+
+.manual-table th,
+.manual-table td {
+  padding: 3px 12px 3px 0;
+  border-bottom: 1px solid var(--docs-line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.manual-table th[scope='row'] {
+  text-align: left;
+}
+
+.manual-table thead th {
+  color: var(--dim);
+  font-weight: 400;
+}
