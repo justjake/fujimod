@@ -94,8 +94,8 @@ impl Target {
                 node: node.clone(),
                 route: *route,
                 register: *register,
-                mask: *mask,
-                value: if value != 0 { *mask } else { 0 },
+                mask: u16::from(*mask),
+                value: if value != 0 { u16::from(*mask) } else { 0 },
             }],
             Self::Analog { node, channel } => vec![Signal::Analog {
                 node: node.clone(),

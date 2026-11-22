@@ -624,9 +624,9 @@ pub fn power(row: &LocatedControl, nodes: &Nodes) -> Result<Option<Power>, Strin
                         node: graph::name(node),
                         route: route.index,
                         register,
-                        mask: mask8,
-                        value: u8::try_from(if on { *on_value } else { *off_value })
-                            .map_err(|_| "Power switch status value exceeds 8 bits")?,
+                        mask: u16::from(mask8),
+                        value: u16::try_from(if on { *on_value } else { *off_value })
+                            .map_err(|_| "Power switch status value exceeds 16 bits")?,
                     },
                 ],
             })

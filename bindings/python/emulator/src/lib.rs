@@ -74,7 +74,7 @@ mod binding {
     #[cfg(not(target_os = "emscripten"))]
     #[pymodule_export]
     use super::board::{
-        AnalogInputs, Board, CardMedium, Checkpoint, DeviceContext, NandMedium, Xp4,
+        Board, CardMedium, Checkpoint, DeviceContext, NandMedium, Xp4,
         normalize_card_files, persistent_packet,
     };
 

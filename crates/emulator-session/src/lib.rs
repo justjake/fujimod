@@ -135,7 +135,7 @@ impl Session {
         name: &str,
         route: usize,
         register: u8,
-        value: u8,
+        value: u16,
     ) -> Result<(), String> {
         self.board
             .edit_capability::<dyn SerialStatus, _>(
@@ -181,10 +181,12 @@ impl Session {
         self.board.inputs_changed(self.node(name)?)
     }
     pub fn rotate_edges(&mut self, name: &str, edges: i32) -> Result<(), String> {
-        self.resources
-            .encoder(name)?
-            .queue_edges(self.board.now(), edges)?;
-        self.board.inputs_changed(self.node(name)?)
+        let now = self.board.now();
+        self.board
+            .edit_capability::<dyn fujimod_emulator_devices::capability::RotaryInput, _>(
+                self.node(name)?,
+                |dial| dial.queue_edges(now, edges),
+            )
     }
     fn image_inputs_changed(&mut self, name: &str) -> Result<(), String> {
         for user in self.resources.image_users(name)? {

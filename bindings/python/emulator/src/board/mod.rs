@@ -870,17 +870,6 @@ impl Board {
             .rprofile_identity(value)
             .map_err(error)
     }
-    fn analog_inputs(&self, node: &str) -> PyResult<AnalogInputs> {
-        let session = self.session()?;
-        let inputs = session
-            .board
-            .inspect_capability::<dyn fujimod_emulator_devices::capability::AnalogInputs, _>(
-                session.node(node).map_err(error)?,
-                |adc| Ok(adc.external_inputs()),
-            )
-            .map_err(error)?;
-        Ok(AnalogInputs { inputs })
-    }
     fn adc_samples(&self, node: &str) -> PyResult<Vec<u16>> {
         self.session()?.adc_samples(node).map_err(error)
     }
@@ -1081,7 +1070,7 @@ impl Board {
         node: &str,
         route: usize,
         register: u8,
-        value: u8,
+        value: u16,
     ) -> PyResult<()> {
         self.session_mut()?
             .serial_status_input(node, route, register, value)
@@ -1946,18 +1935,3 @@ pub(super) use context::DeviceContext;
 pub(super) use storage::{normalize_card_files, persistent_packet};
 pub(super) use xp4::Xp4;
 
-#[pyclass(unsendable, module = "fujimod._native.emulator")]
-pub struct AnalogInputs {
-    inputs: fujimod_emulator_devices::parts::analog::Samples,
-}
-#[pymethods]
-impl AnalogInputs {
-    #[getter]
-    fn samples(&self) -> Vec<u16> {
-        self.inputs.values()
-    }
-    #[setter]
-    fn set_samples(&self, values: Vec<u16>) -> PyResult<()> {
-        self.inputs.replace(&values).map_err(error)
-    }
-}

@@ -30,7 +30,6 @@ NATIVE_EXPORTS = frozenset({
     "Checkpoint",
     "Xp4",
     "xpp_definition",
-    "AnalogInputs",
     "CardMedium",
     "NandMedium",
     "DeviceContext",

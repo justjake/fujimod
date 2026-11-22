@@ -56,10 +56,26 @@ impl Capability for dyn GpioInputs {
     }
 }
 
+/// A command dial the host turns by detent edges, each applied at its own due time.
+pub trait RotaryInput {
+    /// Refuse a turn the dial cannot queue, without queuing any of it.
+    fn admit_edges(&self, now: u64, edges: i32) -> Result<(), String>;
+    /// Queue a turn; the board wakes the device afterwards.
+    fn queue_edges(&mut self, now: u64, edges: i32) -> Result<(), String>;
+}
+impl Capability for dyn RotaryInput {
+    fn of(device: &dyn Device) -> Option<&Self> {
+        device.rotary_input()
+    }
+    fn of_mut(device: &mut dyn Device) -> Option<&mut Self> {
+        device.rotary_input_mut()
+    }
+}
+
 /// Status registers of serial endpoints that external inputs drive.
 pub trait SerialStatus {
-    fn status_value(&self, route: usize, register: u8) -> Result<u8, String>;
-    fn status_input(&mut self, route: usize, register: u8, value: u8) -> Result<(), String>;
+    fn status_value(&self, route: usize, register: u8) -> Result<u16, String>;
+    fn status_input(&mut self, route: usize, register: u8, value: u16) -> Result<(), String>;
 }
 impl Capability for dyn SerialStatus {
     fn of(device: &dyn Device) -> Option<&Self> {

@@ -77,6 +77,7 @@ fn main() -> Result<(), String> {
                 .map(|core| Processor {
                     model: Model::ArmV8A,
                     released: true,
+                    parked_until_sgi: false,
                     rprofile: None,
                     mprofile: None,
                     registers: vec![
@@ -128,6 +129,7 @@ fn main() -> Result<(), String> {
                     let mut board = graph(vec![Processor {
                         model: Model::ArmV8A,
                         released: true,
+                        parked_until_sgi: false,
                         rprofile: None,
                         mprofile: None,
                         registers: vec![
@@ -209,6 +211,7 @@ fn main() -> Result<(), String> {
                         .map(|core| Processor {
                             model: Model::ArmV8A,
                             released: true,
+                            parked_until_sgi: false,
                             rprofile: None,
                             mprofile: None,
                             registers: vec![
@@ -1043,6 +1046,7 @@ fn main() -> Result<(), String> {
                 mprofile: None,
                 model: Model::ArmV8A,
                 released: true,
+                parked_until_sgi: false,
                 registers: vec![
                     (Register::Pstate, 0x345),
                     (Register::Pc, 0x10000),
@@ -1184,6 +1188,7 @@ fn main() -> Result<(), String> {
                     rprofile: None,
                     mprofile: None,
                     released: true,
+                    parked_until_sgi: false,
                     registers: vec![
                         (Register::Pstate, 0x345),
                         (Register::Pc, 0x10000),
@@ -1201,6 +1206,7 @@ fn main() -> Result<(), String> {
                         vector_base: 0,
                     }),
                     released: false,
+                    parked_until_sgi: false,
                     registers: vec![],
                 },
             ],
@@ -1356,6 +1362,7 @@ fn main() -> Result<(), String> {
                     rprofile: None,
                     mprofile: None,
                     released: true,
+                    parked_until_sgi: false,
                     registers: vec![
                         (Register::Pc, 0x10000),
                         (Register::X(1), if replace_code { 0x31004 } else { 0x30200 }),
@@ -1375,6 +1382,7 @@ fn main() -> Result<(), String> {
                         vector_base: 0,
                     }),
                     released: true,
+                    parked_until_sgi: false,
                     registers: vec![(arm::CORE[0], 99), (arm::CORE[1], 0x200)],
                 },
             ],

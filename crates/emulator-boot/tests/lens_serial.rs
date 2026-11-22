@@ -75,7 +75,7 @@ fn spi2_menu_status_read_keeps_the_lens_deselected_and_delivers_the_reply() {
             .device
             .serial_status_mut()
             .unwrap()
-            .status_input(1, 0x60, status)
+            .status_input(1, 0x60, u16::from(status))
             .unwrap();
         let mut host = Clock(0);
         for (id, address, value) in [

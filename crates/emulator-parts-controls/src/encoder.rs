@@ -161,7 +161,23 @@ impl Encoder {
         self.phase
     }
 }
+impl fujimod_emulator_devices::capability::RotaryInput for Encoder {
+    fn admit_edges(&self, now: u64, edges: i32) -> Result<(), String> {
+        self.input.admit_edges(now, edges)
+    }
+    fn queue_edges(&mut self, now: u64, edges: i32) -> Result<(), String> {
+        self.input.queue_edges(now, edges)
+    }
+}
 impl Device for Encoder {
+    fn rotary_input(&self) -> Option<&(dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
+        Some(self)
+    }
+    fn rotary_input_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
+        Some(self)
+    }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),

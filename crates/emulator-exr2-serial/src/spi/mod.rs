@@ -384,10 +384,11 @@ impl Device for SpiController {
 }
 
 impl fujimod_emulator_devices::capability::SerialStatus for SpiController {
-    fn status_value(&self, route: usize, register: u8) -> std::result::Result<u8, String> {
-        SpiController::status_value(self, route, register)
+    fn status_value(&self, route: usize, register: u8) -> std::result::Result<u16, String> {
+        SpiController::status_value(self, route, register).map(u16::from)
     }
-    fn status_input(&mut self, route: usize, register: u8, value: u8) -> std::result::Result<(), String> {
+    fn status_input(&mut self, route: usize, register: u8, value: u16) -> std::result::Result<(), String> {
+        let value = u8::try_from(value).map_err(|_| "serial status register holds 8 bits")?;
         SpiController::status_input(self, route, register, value)
     }
 }

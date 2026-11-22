@@ -13,6 +13,7 @@ fn board() -> Result<Board, String> {
         processors: vec![Processor {
             model: Model::ArmV8A,
             released: true,
+            parked_until_sgi: false,
             registers: vec![
                 (Register::Pc, 0x10000),
                 (Register::Pstate, 0x3c5),

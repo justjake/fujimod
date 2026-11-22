@@ -23,8 +23,8 @@ pub enum Signal {
         node: String,
         route: usize,
         register: u8,
-        mask: u8,
-        value: u8,
+        mask: u16,
+        value: u16,
     },
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -169,7 +169,7 @@ impl SwitchPanel {
                             if *mask == 0 || value & !mask != 0 {
                                 return Err("invalid serial status contact mask".into());
                             }
-                            (0..8)
+                            (0..16)
                                 .filter(|bit| mask >> bit & 1 != 0)
                                 .map(|bit| format!("serial_status:{node}:{route}:{register}:{bit}"))
                                 .collect()
@@ -335,7 +335,7 @@ mod tests {
         duplicate.circuits.push(duplicate.circuits[0].clone());
         assert!(SwitchPanel::new(duplicate).is_err());
     }
-    fn status_buttons(masks: [u8; 2]) -> Spec {
+    fn status_buttons(masks: [u16; 2]) -> Spec {
         let names = ["play", "power"];
         Spec {
             controls: names

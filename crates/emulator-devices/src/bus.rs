@@ -348,6 +348,12 @@ pub trait Device: Send + std::any::Any {
     fn gpio_inputs_mut(&mut self) -> Option<&mut (dyn crate::capability::GpioInputs + 'static)> {
         None
     }
+    fn rotary_input(&self) -> Option<&(dyn crate::capability::RotaryInput + 'static)> {
+        None
+    }
+    fn rotary_input_mut(&mut self) -> Option<&mut (dyn crate::capability::RotaryInput + 'static)> {
+        None
+    }
     fn serial_status(&self) -> Option<&(dyn crate::capability::SerialStatus + 'static)> {
         None
     }

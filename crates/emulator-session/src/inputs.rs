@@ -262,9 +262,11 @@ impl Session {
             })
             .ok_or("physical rotary control is unavailable")?;
         let edges = steps.checked_mul(edges_per_step).ok_or("rotary step overflow")?;
-        self.resources
-            .encoder(node)?
-            .admit_edges(self.board.now(), edges)?;
+        self.board
+            .inspect_capability::<dyn fujimod_emulator_devices::capability::RotaryInput, _>(
+                self.node(node)?,
+                |dial| dial.admit_edges(self.board.now(), edges),
+            )?;
         Ok((node.clone(), edges))
     }
     pub fn touch_input(
