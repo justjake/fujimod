@@ -1,34 +1,50 @@
-# Candidate lens mount for the X-E5, taken unchanged from the X-T5 4.31 fragment of the same name (the decode notes
-# below describe the X-T5 firmware, not the X-E5). Every pin, interrupt line and timing is INHERITED and
-# UNVERIFIED for the X-E5; it is here to see whether the X-E5 lens task detects the virtual lens (the shooting
-# screen shows F 0 without one, and the lens-present gate drops S1).
-# Lens mount: serial controller instance 0 (PL022 at ff910000) and the virtual X-mount lens.
+# X-E5 1.12 lens mount.
+# VERIFIED: the lens communication state table at 0x01a89c50 selects the
+# driver that opens SSP client 20 at 0x0150c08c.
+# Client 20 (0x01a60190) replaces the inherited descriptor index 17. It selects
+# instance 0, 8-bit frames, prescaler 0x20, and DMA mode (0x01495228, 0x01495298,
+# 0x014951b8). SSP uses PL022 register offsets and a 0x1000 instance stride
+# from base 0xff910000 (0x01495298).
 #
-# Bus (static, 4.31): the lens task opens SSP client descriptor 17 (0x18e7f10; open 0x13ec3a8):
-# instance 0, 8-bit frames, prescaler 0x20, DMA mode. The base is (instance + 0xff910) << 12
-# (0x137c394). The DMA request pair for instance 0 is receive 0 / transmit 1 (0x18e7b30), served by
-# general-DMA bank 1 (0xff931000): descriptor 0x18e9660 #0 {channel 2, request 0} and #1 {channel 3,
-# request 1}; their completions are A53 INTIDs 239/240 (a53_irq_base 237 in 22-general-dma.toml).
-# The open writes IMSC = 0xf, so the controller interrupt needs a line: logical interrupt
-# 0x18e8258[0] = 0x1c, record 0x18ea918 + 0x1c * 16 = INTID 36, edge. Whether that table is indexed by
-# controller instance is inferred, not verified; the lens path completes on DMA, not on this line.
-# source_hz: the same unverified 48 MHz root as the companion controller (60-mcore.toml).
+# VERIFIED: the SSP DMA pair at 0x01a5fd20 supplies transmit descriptor 1 and
+# receive descriptor 0 (0x01494190, 0x01494d64). Descriptors 0x01a619a0 and
+# 0x01a619b4 select RX request 0 on channel 2 and TX request 1 on channel 3.
+# Both channels use general-DMA bank 1 at 0xff931000 (0x014adfac). The receive
+# completion drives the lens callback (0x01493cfc, 0x01494120). Channel INTIDs
+# 239 and 240 follow the channel map in 22-general-dma.toml.
 #
-# Connector (lens driver 0x13f22f8, 0x13f2c84; see the decode notes in scratch/lens/REPORT.md):
-# - detect 0.11 low = attached (key scanner row 101, UI code 0x33);
-# - sense pads 10.0/10.1/10.2 must read 1/0/1 (pattern A, an X-mount lens) before power;
-# - supplies: the driver latches 15.9 at detect start and 15.10 when the pattern passes;
-# - ready 14.1: high before power; the driver selects pad function 3 and then waits for
-#   INTID 131 (selector 0x9d, ready low) after power, and later for INTID 115 (selectors 0x9b/0x9c,
-#   ready high). The first lens startup polls INTID 131 pending for about 10 ms (LENSFAST) before it
-#   falls back to the edge wait (LENSSLOW).
-# The ready waveform (low startup_us after both supplies, high busy_us later, low during each focus or
-# aperture move) and every timing are inferred, not measured. The lens identity and status words are
-# invented scenario values (crates/emulator-parts-lens/src/x_mount_model.rs).
+# UNVERIFIED: gic_line 36 is inherited. SSP enables IMSC 0xf (0x014953a0).
+# The timer driver (0x01495f70) looks up logical ID 0x1c at 0x01a604d8,
+# which resolves to INTID 36 (0x01a62e18). The SSP open and transfer paths
+# yielded no controller interrupt mapping.
+# UNVERIFIED: source_hz 48 MHz is inherited. The SSP clock selection and
+# divider writes (0x014941f4, 0x01495298) left the input rate undetermined.
+# ticks_per_second is the emulator time scale.
 #
-# Lens selection: `lens` is the default ("xf18-55", "prime" or "none"). The environment variable
-# XT5_LENS=none|xf18-55|prime overrides it for one run; XT5_LENS_READY=STARTUP_US,BUSY_US overrides the
-# ready timing. Snapshots record the selection: a snapshot saved with one lens does not load with another.
+# VERIFIED: detect 0.11 is active low (0x01512414, 0x01513e6c). The scanner
+# uses row 0, physical key 6 (0x01e02e70), in place of the inherited row 101.
+# The lens task posts UI code 0x33 (0x0150fcd4). The standard lens path
+# requires sense pads 10.0, 10.1, and 10.2 to read 1/0/1: 10.0 must equal 1
+# (read 0x01512468, compare 0x01512470), 10.1 must read 0 (0x01512480,
+# 0x01512484) and 10.2 must equal 1 (0x0151253c, 0x01512540), with no
+# mismatch flag set (0x01512548). The driver enables 15.9 at detect start
+# (0x015123b4) and 15.10 after the sense check (0x01512564).
+# VERIFIED: ready 14.1 must read high before the second supply (0x01512428).
+# The driver selects pad function 3 (0x01512574) and waits for INTID 131
+# for ready low (selectors 0x9d/0x9e, records 0x01a63628/0x01a63638) and
+# INTID 115 for ready high (selectors 0x9b/0x9c, records
+# 0x01a63608/0x01a63618) at 0x01503a54.
+#
+# HARDWARE-ONLY: startup_us, busy_us, operation_us, the lens selection, and
+# identity and status responses are scenario values. Firmware polls INTID 131 up to
+# ten times with one delay unit per miss (0x01512d3c) before the interrupt wait.
+# Its subsequent ready-low wait uses timeout arguments 550 or 5000
+# (0x01512df0, 0x01512db4). The ready-high wait uses 5000 (0x01510278).
+# These are firmware wait limits.
+#
+# XT5_LENS=none|xf18-55|prime selects the lens for one run.
+# XT5_LENS_READY=STARTUP_US,BUSY_US overrides the ready timing.
+# Snapshots require the same lens selection when loaded.
 [[device]]
 base = 0xff910000
 size = 0x1000
