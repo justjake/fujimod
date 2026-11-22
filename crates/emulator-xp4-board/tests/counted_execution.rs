@@ -459,3 +459,116 @@ fn contended_exclusives_match_the_per_instruction_hook_at_every_quantum() {
         assert!(exact.2 == counted.2, "RAM at quantum {quantum}");
     }
 }
+
+/// Core 0 rewrites an instruction that follows the store in the same block,
+/// alternating `mov r0, #2` and `mov r0, #3` while it adds r0 up. Counted
+/// execution must run each new word (the sum is 500), at every quantum, and
+/// match the hook wherever the hook does too: the hook's slice of two or more
+/// instructions can run the stale translation of an instruction its own store
+/// rewrote, and counted traces read their words after the run; the test
+/// tolerates both.
+const REWRITE: &[(u32, &[u32])] = &[
+    (
+        CORE0,
+        &[
+            0xe301_101c, // movw r1, #0x101c (the target)
+            0xe300_2002, // movw r2, #2
+            0xe34e_23a0, // movt r2, #0xe3a0 (mov r0, #2)
+            0xe303_4100, // movw r4, #0x3100
+            0xe3a0_6000, // mov r6, #0
+            0xe3a0_5000, // mov r5, #0
+            0xe581_2000, // 1: str r2, [r1]
+            0xe3a0_0001, // target: mov r0, #1
+            0xe085_5000, // add r5, r5, r0
+            0xe222_2001, // eor r2, r2, #1
+            0xe286_6001, // add r6, r6, #1
+            0xe356_00c8, // cmp r6, #200
+            0xbaff_fff8, // blt 1b
+            0xe584_5000, // str r5, [r4]
+            0xe320_f003, // 2: wfi
+            0xeaff_fffd, // b 2b
+        ],
+    ),
+    (
+        CORE1,
+        &[
+            0xe320_f003, // wfi
+            0xeaff_fffd, // b wfi
+        ],
+    ),
+];
+
+#[test]
+fn a_store_that_rewrites_the_rest_of_its_block_runs_the_new_word_at_every_quantum() {
+    for quantum in [1, 2, 3, 5, 7, 64, 1000, 20_000] {
+        let mut outcomes = Vec::new();
+        for counted in [false, true] {
+            let session = session_with(counted, REWRITE);
+            for _ in 0..4 {
+                session.run_board(1500, quantum).unwrap();
+            }
+            let state = session.state(false);
+            assert!(state.failure.is_none(), "quantum {quantum}, counted {counted}: {:?}", state.failure);
+            outcomes.push(outcome(&session));
+        }
+        let (exact, counted) = (&outcomes[0], &outcomes[1]);
+        let word = |ram: &[u8]| u32::from_le_bytes(ram[0x3100..0x3104].try_into().unwrap());
+        assert_eq!(word(&counted.2), 500, "quantum {quantum}: counted ran a stale word");
+        assert_eq!(word(&exact.2), 500, "quantum {quantum}: the hook ran a stale word");
+        // The trace's words are read after the run, so a rewritten
+        // instruction shows its new word there; everything else matches.
+        let (mut exact_state, mut counted_state) = (exact.0.clone(), counted.0.clone());
+        for state in [&mut exact_state, &mut counted_state] {
+            state["history"]["recent"] = Value::Null;
+        }
+        assert_eq!(exact_state, counted_state, "state at quantum {quantum}");
+        assert!(exact.2 == counted.2, "RAM at quantum {quantum}");
+    }
+}
+
+/// Core 0 counts alone while core 1 waits: its slices follow one another with
+/// nothing between them, so counted execution runs them as one. Whole state
+/// and RAM match the hook for every quantum and call size.
+const ALONE: &[(u32, &[u32])] = &[
+    (
+        CORE0,
+        &[
+            0xe303_4100, // movw r4, #0x3100
+            0xe3a0_5000, // mov r5, #0
+            0xe285_5001, // 1: add r5, r5, #1
+            0xe584_5000, // str r5, [r4]
+            0xe355_0e4b, // cmp r5, #0x4b0
+            0xbaff_fffb, // blt 1b
+            0xe320_f003, // 2: wfi
+            0xeaff_fffd, // b 2b
+        ],
+    ),
+    (
+        CORE1,
+        &[
+            0xe320_f003, // wfi
+            0xeaff_fffd, // b wfi
+        ],
+    ),
+];
+
+#[test]
+fn a_core_running_alone_across_slice_ends_matches_the_hook() {
+    for quantum in [1, 2, 3, 7, 64, 500, 1000, 20_000] {
+        let mut outcomes = Vec::new();
+        for counted in [false, true] {
+            let session = session_with(counted, ALONE);
+            for limit in [777, 1500, 2500, 31, 4000] {
+                session.run_board(limit, quantum).unwrap();
+            }
+            let state = session.state(false);
+            assert!(state.failure.is_none(), "quantum {quantum}, counted {counted}: {:?}", state.failure);
+            outcomes.push(outcome(&session));
+        }
+        let (exact, counted) = (&outcomes[0], &outcomes[1]);
+        let word = |ram: &[u8]| u32::from_le_bytes(ram[0x3100..0x3104].try_into().unwrap());
+        assert_eq!(word(&exact.2), 0x4b0, "quantum {quantum}: the loop did not finish");
+        assert_eq!(exact.0, counted.0, "state at quantum {quantum}");
+        assert!(exact.2 == counted.2, "RAM at quantum {quantum}");
+    }
+}

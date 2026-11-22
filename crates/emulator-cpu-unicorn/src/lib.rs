@@ -196,6 +196,19 @@ impl Core {
             .ok_or("CPU backend has no block-entry exit control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
     }
+    /// Keep the exit helper at block entry but call it only when an exit or a
+    /// block retry is pending, and test no exit request after memory accesses.
+    /// Every stop a device or exception callback raises then takes effect at
+    /// the next block entry; accesses that can stop end their blocks.
+    pub(crate) fn set_entry_exits(&self, enabled: bool) -> Result<(), String> {
+        self.check_tlbi_mutation()?;
+        let set = self
+            .api
+            .extensions
+            .set_entry_exits
+            .ok_or("CPU backend has no entry-exit control")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
     pub(crate) fn set_instruction_counter(&self, enabled: bool) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         let set = self
