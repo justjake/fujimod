@@ -29,12 +29,34 @@ catalog by `fujimod_emulator_controls`. Hosts press, release, turn, move and
 touch controls by catalog control id through the session; the control
 catalog a frontend lays out is the driver's `ControlInput` table.
 
-XP5 bodies use the same path. Their GPIO, ADC and serial status owners are
-named device nodes in the session definition, and their catalog wiring
-compiles to switch-panel circuits like any other body. A position whose
-firmware scanner records are not yet located has no confirmation checks; the
-transition completes when its contacts are applied. The XP5 key-input models
-and `Inputs::key`/`Inputs::set_position` are removed once nothing calls them.
+The switch panel drives devices only through device capabilities:
+`GpioInputs` for GPIO pads, `AnalogInputs` for converter channels and
+`SerialStatus` for serial status registers. It never reaches into a
+processor's resource tables.
+
+XP5 bodies use the same path. Getting there takes four changes:
+
+1. **Wires from the body's ladders.** For most X-T5 controls the firmware's
+   located inputs name a key but carry no electrical predicate; the bands are
+   in the body's `ladders` table (`catalog/bodies/xt5/controls.json`), which
+   today only the XP5 key model reads. `fujimod_catalog_wiring::locate`
+   builds each such input's wire from its ladder rung: an ADC rung becomes an
+   ADC band on its channel, and a GPIO connection becomes a GPIO wire.
+2. **The power controller's ladder registers are analog inputs.** Registers
+   52 and 53 of the X-T5 power controller report 10-bit levels of two button
+   ladders. The XP5 SPI controller offers them as `AnalogInputs` channels of
+   its power-controller part, and the panel's analog target names its
+   converter node, so a body can have more than one analog owner.
+3. **XP5 devices accept panel signals.** The XP5 ADC implements
+   `AnalogInputs`; the XP5 GPIO controller implements `GpioInputs`. The XP5
+   session definition lists its device nodes by kind and name, which is what
+   `fujimod_emulator_controls::Nodes` reads.
+4. **No second key model.** Once the panel drives every XP5 control, the
+   ladder and resistor key models, `Inputs::key` and `Inputs::set_position`
+   are deleted, and key scripts (`--keys`) name catalog control positions.
+
+A position without located firmware scanner records has no confirmation
+checks; its transition completes when its contacts are applied.
 
 ## One run loop
 
