@@ -86,8 +86,6 @@ struct RunState {
     discovery: Discovery,
     failure: Option<String>,
     redirected: Option<u32>,
-    /// The redirect that is pending finished a board instruction that leaves the slice running.
-    resume: bool,
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     pages: BTreeMap<u64, Vec<Box<MmioHook>>>,
@@ -376,13 +374,6 @@ impl Cluster {
         }
         self.write_reg(core, arm::PC, pc)?;
         self.cpus[core].stop()
-    }
-    /// A redirect after a board instruction that changed nothing the scheduler
-    /// reads: the slice goes on at the next instruction.
-    fn redirect_resume(&self, core: usize, pc: u32) -> Result<(), String> {
-        self.redirect(core, pc)?;
-        unsafe { (*self.state.get()).resume = true };
-        Ok(())
     }
     fn substitute_callee(&self, core: usize, address: u64) -> Result<bool, String> {
         let result = unsafe { &mut *self.state.get() }.callee_stubs.get_mut(&(core, address))
@@ -1063,12 +1054,12 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
     if load_exclusive || store_exclusive {
         return match exclusive(c, core, address, word, false)? {
             Exclusive::Aborted => Ok(()),
-            _ => c.redirect_resume(core, address as u32 + 4),
+            _ => c.redirect(core, address as u32 + 4),
         };
     }
     if word == 0xf57ff01f {
         state.exclusive[core] = None;
-        return c.redirect_resume(core, address as u32 + 4);
+        return c.redirect(core, address as u32 + 4);
     }
     // MPIDR is an architectural cluster input (Unicorn standalone engines
     // each default to CPU0). CBAR is an explicit reset input, never inferred.
@@ -1078,7 +1069,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             return Err("Unsupported CCSIDR-to-APSR read".into());
         }
         c.write_reg(core, arm::CORE[rd], c.cp(core, 0, 0, 1, 0)? as u32)?;
-        return c.redirect_resume(core, address as u32 + 4);
+        return c.redirect(core, address as u32 + 4);
     }
     if cp_read == 0x0e100fb0 || cp_read == 0x0e9f0f10 {
         if (word >> 12) & 15 == 15 {
@@ -1102,13 +1093,13 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             c.cbar.unwrap_or(0)
         };
         c.write_reg(core, arm::CORE[((word >> 12) & 15) as usize], value)?;
-        return c.redirect_resume(core, address as u32 + 4);
+        return c.redirect(core, address as u32 + 4);
     }
     if hint == 0x0320f003 || hint == 0x0320f002 {
         // architectural WFI/WFE
         if hint == 0x0320f002 && state.events[core] {
             state.events[core] = false;
-            return c.redirect_resume(core, address as u32 + 4);
+            return c.redirect(core, address as u32 + 4);
         }
         state.waiting[core] = if hint == 0x0320f003 { 1 } else { 2 };
         return c.redirect(core, address as u32 + 4);
@@ -1120,7 +1111,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
                 *wait = 0;
             }
         }
-        return c.redirect_resume(core, address as u32 + 4);
+        return c.redirect(core, address as u32 + 4);
     }
     Ok(())
 }
@@ -1662,7 +1653,6 @@ impl Session {
                     fujimod_emulator_cpu_unicorn::memory::Memory::default(),
                 )?;
                 core.set_owner_exclusives(true)?;
-                core.set_owner_mpidr(0x8000_0000 | index as u32)?;
                 core.set_owner_interrupts(true)?;
                 core.set_owner_aborts(true)?;
                 core.set_entry_trace(32)?;
@@ -2339,7 +2329,6 @@ impl Session {
                 discovery: ledger,
                 failure: None,
                 redirected: None,
-                resume: false,
                 pages: BTreeMap::new(),
                 xip: BTreeMap::new(),
                 xip_source,
@@ -2461,11 +2450,6 @@ impl Session {
             }));
             let data = (&*inner.hooks[core] as *const Hook).cast_mut().cast();
             if inner.counted {
-                if let counted::Processor::Counted(engine) = &inner.cpus[core] {
-                    unsafe {
-                        engine.set_owner_inline_instructions(Some(counted::counted_inline), data)
-                    }?;
-                }
                 // Labels are single-address observers in counted runs.
                 let labels = inner.labels.clone();
                 for label in labels {
@@ -2973,51 +2957,30 @@ impl Session {
                 state.discovery.settle_trials(core, state.per_core[core]);
                 return Ok(());
             }
-            let entered_before = unsafe { &*c.state.get() }.per_core[core];
-            let mut begin = u64::from(start);
-            loop {
-                unsafe { (*c.state.get()).resume = false };
-                let entered = unsafe { &*c.state.get() }.per_core[core] - entered_before;
-                let left = if budget == 0 { 0 } else { budget - entered as usize };
-                let mut exit = cpu.run(Run {
-                    begin,
-                    until,
-                    watchdog_us: 0,
-                    instructions: Some(left),
-                });
-                let raw_error = exit.as_ref().err().map(ToString::to_string);
-                c.maintenance.settle(&c.cpus, core, raw_error.as_deref())?;
-                c.healthy()?;
-                // Unicorn reports disabled VFP as an invalid instruction rather than
-                // delivering ARM's undefined exception. Let the guest's vector enable
-                // and restore its FP context; never enable it from the host.
-                if matches!(&exit, Err(ExecutionError::InvalidInstruction(_)))
-                    && c.disabled_vfp_exception(core)?
-                {
-                    exit = Ok(Exit::Stopped);
-                }
-                match exit {
-                    Ok(Exit::Stopped) => (),
-                    Ok(other) => return Err(format!("Unexpected ARMv7-A execution exit {other:?}")),
-                    Err(error) => return Err(error.to_string()),
-                };
-                let Some(pc) = (unsafe { (*c.state.get()).redirected.take() }) else {
-                    break;
-                };
+            let mut exit = cpu.run(Run {
+                begin: u64::from(start),
+                until,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            });
+            let raw_error = exit.as_ref().err().map(ToString::to_string);
+            c.maintenance.settle(&c.cpus, core, raw_error.as_deref())?;
+            c.healthy()?;
+            // Unicorn reports disabled VFP as an invalid instruction rather than
+            // delivering ARM's undefined exception. Let the guest's vector enable
+            // and restore its FP context; never enable it from the host.
+            if matches!(&exit, Err(ExecutionError::InvalidInstruction(_)))
+                && c.disabled_vfp_exception(core)?
+            {
+                exit = Ok(Exit::Stopped);
+            }
+            match exit {
+                Ok(Exit::Stopped) => (),
+                Ok(other) => return Err(format!("Unexpected ARMv7-A execution exit {other:?}")),
+                Err(error) => return Err(error.to_string()),
+            };
+            if let Some(pc) = unsafe { (*c.state.get()).redirected.take() } {
                 c.write_reg(core, arm::PC, pc)?;
-                // A board instruction that left the slice running: the next
-                // instruction follows in the same slice, as in counted runs.
-                let state = unsafe { &*c.state.get() };
-                let entered = state.per_core[core] - entered_before;
-                if !state.resume
-                    || state.failure.is_some()
-                    || state.waiting[core] != 0
-                    || (budget != 0 && entered >= budget as u64)
-                    || until.is_some_and(|target| u64::from(pc) == target)
-                {
-                    break;
-                }
-                begin = u64::from(pc | (c.reg(core, arm::CPSR)? >> 5 & 1));
             }
             c.due();
             c.healthy()?;
