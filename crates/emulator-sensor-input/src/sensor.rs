@@ -193,6 +193,24 @@ impl StillRaw {
         self.address < other.end() && other.address < self.end()
     }
 }
+/// The frame length of one decoded sensor readout (opt-in, [`Sensor::with_frame_timing`]).
+///
+/// X-T5 4.31: the S1 contrast AF switches the sensor to a fast readout (firmware readout mode
+/// 0x113, sensor register 0x01 = 0x07) and plans its scan in frames of that readout: the AF
+/// frame period [0x44a37d8] comes from 0x3032cfc, which takes the mode's row of the table at
+/// 0x36d9fb8 (row 96: 386 lines of 432 clocks at 72 MHz = 6 us a line, 2316 us) and lengthens
+/// it for the exposure (2593 us = 432 lines). The sensor's frame-length register (0x18 low,
+/// 0x19 high) counts line pairs less two: 191 for the 386-line base frame, then 214 for the
+/// 432-line frame. Frames of that readout therefore last (value + 2) x 2 lines of 6 us. The
+/// other readouts' line lengths are not decoded; their frames keep the device's stand-in
+/// period.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameTiming {
+    /// The value of sensor register 0x01 that selects the decoded readout.
+    pub readout: u8,
+    /// The length of one line of that readout in ticks (nanoseconds).
+    pub line_ticks: u64,
+}
 #[derive(Clone)]
 pub struct Sensor(
     pub Arc<Mutex<SensorState>>,
@@ -200,10 +218,29 @@ pub struct Sensor(
     (u16, u8),
     Option<StillChannel>,
     ExposureHandle,
+    Option<FrameTiming>,
 );
 impl Sensor {
     pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
-        Self(Arc::default(), routes, read_gate, None, ExposureHandle::default())
+        Self(Arc::default(), routes, read_gate, None, ExposureHandle::default(), None)
+    }
+    /// Let the frame length follow the sensor's registers in one decoded readout (see
+    /// [`FrameTiming`]). Set it before the sensor is cloned into its devices.
+    pub fn with_frame_timing(mut self, timing: FrameTiming) -> Self {
+        self.5 = Some(timing);
+        self
+    }
+    /// The length of the current frame in ticks: in the decoded readout ([`FrameTiming`]) the
+    /// programmed frame length, otherwise `stand_in` (the device's configured period).
+    pub fn frame_ticks(&self, stand_in: u64) -> u64 {
+        let Some(timing) = self.5 else { return stand_in };
+        let s = self.0.lock().unwrap();
+        let r = |a: u16| u64::from(s.registers.get(&a).copied().unwrap_or(0));
+        if r(0x01) != u64::from(timing.readout) {
+            return stand_in;
+        }
+        let pairs = r(0x18) | r(0x19) << 8;
+        (pairs + 2) * 2 * timing.line_ticks
     }
     /// The exposure the sensor's programming selects ([`Command`] updates it from the gain
     /// registers, see [`exposure_of`]); shared with every clone, so other models (statistics,

@@ -17,6 +17,12 @@ kind = "imaging-sensor"
 retain_words = true
 # Functional scheduled latency per packet, not measured camera timing.
 command_latency_us = 1
+# The S1 contrast AF's fast readout (sensor register 0x01 = 0x07, firmware readout mode 0x113):
+# its frames last (frame-length register 0x18/0x19 + 2) x 2 lines of 432 clocks at 72 MHz
+# (mode table 0x36d9fb8 row 96; the AF frame period [0x44a37d8] from 0x3032cfc). The receivers'
+# frames and the statistics input buffer follow it; other readouts keep the stand-in periods.
+frame_timing_readout = 7
+frame_timing_line_ns = 6000
 
 # The other imaging windows are adapted from the X100VI fragment (x100vi/1.31/xp5-boot/
 # manifest.d/50-imaging.toml). The window addresses are the XP5 SoC profile's
