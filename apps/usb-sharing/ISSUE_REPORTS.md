@@ -1,4 +1,4 @@
-# Camera issue reports
+# Issue reports
 
 `POST /issue-reports` accepts an explicitly selected TAR, its QR descriptor and a
 reporter's description. The browser never sends the URL fragment during page load.
@@ -25,6 +25,23 @@ retains the archive and never automatically repeats the GitHub request. Retrieve
 that ID from the private bucket to reconcile it manually. Receipts also include
 `shareUrl`; see [Shared files](SHARED_FILES.md). Records and archives persist until maintainers delete
 them; there is no automatic retention policy yet.
+
+## Reports without a camera QR link
+
+The same endpoint accepts multipart submissions with `kind=general`, a
+`description`, and optional `archive=zip`. The browser creates a single ZIP
+of the selected files and sends it through the resumable contributions
+protocol with `reportArchive: true`. This mode accepts a single ZIP of up to
+1 GiB and returns a private receipt without a publication. At least a
+description or a stored ZIP is required.
+
+The reporter can include `name`, `contact-type` (Instagram, Twitter, GitHub,
+or Email), and `contact-value`. The GitHub issue contains the description and
+report ID. The `share-contact=on` option adds the supplied contact to the issue.
+The `share-files=on` option adds a public download link for the ZIP alone.
+Retrieve `<id>/report.zip` and `<id>/metadata.json` from the private R2 bucket.
+General report receipts contain the report ID and the GitHub issue URL when
+creation is confirmed.
 
 ## Index
 

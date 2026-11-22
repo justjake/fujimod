@@ -2,20 +2,32 @@ import { createSignal } from 'solid-js';
 import { Icon } from '@fujimod/emulator-ui/ui/icons';
 import './file-drop.css';
 
-/** A dashed drop target with a "choose a file" link for one file. */
-export function FileDrop(props: {
+/** A dashed drop target with a "choose a file" link for one or more files. */
+interface FileDropOptions {
   inputId: string;
   title: string;
   /** Text before the "choose a file" link, such as "Drop a Fujifilm .DAT file here, or". */
   prompt: string;
-  accept: string;
+  accept?: string;
   /** Accessible name of the hidden file input. */
   label: string;
   /** Tints the target blue when it is the next thing to do. */
   highlighted?: boolean;
   disabled?: boolean;
-  onFile(file: File | undefined): void;
-}) {
+}
+export function FileDrop(
+  props: FileDropOptions &
+    (
+      | { multiple?: false; onFile(file: File | undefined): void }
+      | { multiple: true; onFiles(files: File[]): void }
+    ),
+) {
+  let input: HTMLInputElement | undefined;
+  function choose(files: FileList | null | undefined) {
+    if (props.disabled) return;
+    if (props.multiple) props.onFiles(Array.from(files ?? []));
+    else props.onFile(files?.[0]);
+  }
   const [dragging, setDragging] = createSignal(false);
   return (
     <div
@@ -34,7 +46,7 @@ export function FileDrop(props: {
         event.preventDefault();
         event.stopPropagation();
         setDragging(false);
-        if (!props.disabled) props.onFile(event.dataTransfer?.files[0]);
+        choose(event.dataTransfer?.files);
       }}
     >
       <span class="file-drop-icon">
@@ -43,19 +55,29 @@ export function FileDrop(props: {
       <strong>{props.title}</strong>
       <span>
         {props.prompt}{' '}
-        <label class="file-drop-choose" for={props.inputId}>
-          choose a file
-        </label>
+        <button
+          class="file-drop-choose"
+          type="button"
+          disabled={props.disabled}
+          onClick={() => input?.click()}
+        >
+          {props.multiple ? 'choose files' : 'choose a file'}
+        </button>
       </span>
       <input
+        ref={(element) => {
+          input = element;
+        }}
         class="visually-hidden"
+        tabindex={-1}
         id={props.inputId}
         type="file"
         accept={props.accept}
+        multiple={props.multiple}
         aria-label={props.label}
         disabled={props.disabled}
         onChange={(event) => {
-          props.onFile(event.currentTarget.files?.[0]);
+          choose(event.currentTarget.files);
           event.currentTarget.value = '';
         }}
       />

@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { BudgetRecord, Env } from './env.ts';
 import { completeUpload, indexExisting, putObject, startUpload } from './bucket.ts';
 import { publishUpload } from './publications.ts';
+import { MAX_REPORT_ARCHIVE_BYTES } from '../web/src/bug/general-report.ts';
 
 const MiB = 1024 * 1024;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
@@ -22,9 +23,10 @@ interface FileRecord extends Identity {
 interface Contribution {
   files: FileRecord[];
   finished: boolean;
+  reportArchive?: true;
 }
 const fileEntry = (id: string, file: FileRecord) => ({
-  kind: 'contribution' as const,
+  kind: file.key === `${id}/report.zip` ? ('issue-report' as const) : ('contribution' as const),
   id,
   summary: file.name,
   metadata: { model: file.model, serial: file.serial, bytes: file.bytes },
@@ -118,6 +120,7 @@ function segment(value: unknown): string {
 /** A single coordinator makes creation and the daily budget atomic with respect to requests. */
 export class Contributions extends DurableObject<Env> {
   private async receipt(id: string, contribution: Contribution) {
+    if (contribution.reportArchive) return { id };
     const shareUrl = await publishUpload(this.env, `contribution:${id}`, [
       ...contribution.files.map((file) => ({ key: file.key, name: `${file.name}.gz` })),
       { key: `contributions/${id}/manifest.json`, name: 'manifest.json' },
@@ -149,6 +152,8 @@ export class Contributions extends DurableObject<Env> {
       const body = record(await metadata(request));
       if (!Array.isArray(body.files) || !body.files.length || body.files.length > 256)
         throw new Invalid('Invalid files');
+      const reportArchive = body.reportArchive === true ? true : undefined;
+      if (reportArchive && body.files.length !== 1) throw new Invalid('Expected one ZIP archive');
       const files = body.files.map((value): FileRecord => {
         const file = record(value);
         const model = segment(file.model),
@@ -156,12 +161,21 @@ export class Contributions extends DurableObject<Env> {
           name = segment(file.name);
         if (!Number.isSafeInteger(file.bytes) || (file.bytes as number) < 0)
           throw new Invalid('Invalid file size');
+        if (
+          reportArchive &&
+          (name !== 'report.zip' ||
+            (file.bytes as number) <= 0 ||
+            (file.bytes as number) > MAX_REPORT_ARCHIVE_BYTES)
+        )
+          throw new Invalid('Invalid ZIP archive');
         return {
           model,
           serial,
           name,
           bytes: file.bytes as number,
-          key: `models/${model}/cameras/${serial}/${id}/${name}.gz`,
+          key: reportArchive
+            ? `${id}/report.zip`
+            : `models/${model}/cameras/${serial}/${id}/${name}.gz`,
           complete: false,
           parts: [],
         };
@@ -170,6 +184,7 @@ export class Contributions extends DurableObject<Env> {
         throw new Invalid('Duplicate file identity');
       if (contribution) {
         if (
+          contribution.reportArchive !== reportArchive ||
           JSON.stringify(
             contribution.files.map(({ model, serial, name, bytes }) => ({
               model,
@@ -178,9 +193,9 @@ export class Contributions extends DurableObject<Env> {
               bytes,
             })),
           ) !==
-          JSON.stringify(
-            files.map(({ model, serial, name, bytes }) => ({ model, serial, name, bytes })),
-          )
+            JSON.stringify(
+              files.map(({ model, serial, name, bytes }) => ({ model, serial, name, bytes })),
+            )
         )
           throw new Invalid('Contribution files changed', 409);
         return json({
@@ -193,7 +208,7 @@ export class Contributions extends DurableObject<Env> {
       const budget = await this.ctx.storage.get<BudgetRecord>('budget');
       const count = budget?.day === day ? budget.count : 0;
       if (count >= 50) throw new Invalid('Daily contribution limit reached', 429);
-      contribution = { files, finished: false };
+      contribution = { files, finished: false, reportArchive };
       await this.ctx.storage.put({ [key]: contribution, budget: { day, count: count + 1 } });
       return json({ id, ...contribution }, 201);
     }
@@ -203,6 +218,11 @@ export class Contributions extends DurableObject<Env> {
       if (contribution.finished) return json(await this.receipt(id, contribution));
       if (!contribution.files.every((file) => file.complete))
         throw new Invalid('Files incomplete', 409);
+      if (contribution.reportArchive) {
+        contribution.finished = true;
+        await this.ctx.storage.put(key, contribution);
+        return json({ id });
+      }
       const body = record(await metadata(request));
       if (
         !Object.hasOwn(body, 'manifest') ||
@@ -255,7 +275,9 @@ export class Contributions extends DurableObject<Env> {
     if (!match[3] && request.method === 'POST') {
       if (!file.uploadId) {
         const upload = await startUpload(this.env, file.key, fileEntry(id, file), {
-          httpMetadata: { contentType: 'application/gzip' },
+          httpMetadata: {
+            contentType: contribution.reportArchive ? 'application/zip' : 'application/gzip',
+          },
         });
         file.uploadId = upload.uploadId;
         await this.ctx.storage.put(key, contribution);
@@ -272,6 +294,11 @@ export class Contributions extends DurableObject<Env> {
       if (previous) return json(previous);
       const body = await bounded(request, 64 * MiB);
       if (!body.byteLength) throw new Invalid('Empty part');
+      if (
+        contribution.reportArchive &&
+        file.parts.reduce((sum, part) => sum + part.bytes, body.byteLength) > file.bytes
+      )
+        throw new Invalid('ZIP exceeds declared size', 413);
       const part = await upload.uploadPart(partNumber, body);
       const receipt = { ...part, bytes: body.byteLength };
       file.parts.push(receipt);
@@ -282,6 +309,8 @@ export class Contributions extends DurableObject<Env> {
     if (match[3] === 'complete' && request.method === 'POST') {
       const body = record(await metadata(request));
       if (
+        (contribution.reportArchive &&
+          file.parts.reduce((sum, part) => sum + part.bytes, 0) !== file.bytes) ||
         body.parts !== file.parts.length ||
         !file.parts.length ||
         file.parts.some(
