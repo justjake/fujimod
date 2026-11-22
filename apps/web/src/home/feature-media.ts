@@ -1,5 +1,15 @@
-/** Preview recording: clean clip, still, and each option's range in the clip. */
-export type Media = { video: string; still: string; clips: Record<string, [number, number]> };
+/** A photograph a recording kept: its settings caption, a page-size image and
+ * the full-resolution image with its pixel size. */
+export type Photo = { label: string; image: string; full: string; width: number; height: number };
+
+/** Preview recording: clean clip, still, each option's range in the clip, and
+ * the photographs worth comparing. */
+export type Media = {
+  video: string;
+  still: string;
+  clips: Record<string, [number, number]>;
+  photos?: Photo[];
+};
 
 export type ReelCue = { start: number; end: number; text: string };
 export type ReelMedia = Pick<Media, 'video' | 'still'> & { cues: ReelCue[] };
@@ -16,6 +26,16 @@ declare const __FUJIMOD_FEATURE_MEDIA__: FeatureMedia | null;
 const validAssets = (media: Pick<Media, 'video' | 'still'>) =>
   /^[0-9a-f]{24}\.mp4$/.test(media.video) && /^[0-9a-f]{24}\.webp$/.test(media.still);
 
+const validPhoto = (photo: Photo) =>
+  typeof photo.label === 'string' &&
+  !!photo.label.trim() &&
+  /^[0-9a-f]{24}\.webp$/.test(photo.image) &&
+  /^[0-9a-f]{24}\.(webp|jpg)$/.test(photo.full) &&
+  Number.isInteger(photo.width) &&
+  Number.isInteger(photo.height) &&
+  photo.width > 0 &&
+  photo.height > 0;
+
 export function validateFeatureMedia(value: unknown): FeatureMedia {
   const manifest = value as FeatureMedia;
   if (manifest?.schema !== 1 || typeof manifest.cards !== 'object')
@@ -25,7 +45,9 @@ export function validateFeatureMedia(value: unknown): FeatureMedia {
       !validAssets(media) ||
       Object.values(media.clips).some(
         (range) => range.length !== 2 || !(range[0] >= 0 && range[1] > range[0]),
-      )
+      ) ||
+      (media.photos !== undefined &&
+        (!Array.isArray(media.photos) || media.photos.some((photo) => !validPhoto(photo))))
     )
       throw Error(`Invalid feature media: ${card}`);
   if (manifest.reels !== undefined && (!manifest.reels || typeof manifest.reels !== 'object'))
