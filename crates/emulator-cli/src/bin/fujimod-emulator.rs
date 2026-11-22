@@ -41,7 +41,7 @@ Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 38] = [
+const VALUED: [&str; 43] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -228,16 +228,20 @@ impl Boot {
     }
 
     fn sd_files(&self) -> Result<Vec<(String, PathBuf)>, String> {
-        self.card_files
-            .iter()
-            .map(|specification| {
-                specification
-                    .split_once('=')
-                    .filter(|(name, path)| !name.is_empty() && !path.is_empty())
-                    .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
-                    .ok_or("--card-file needs NAME=PATH".into())
-            })
-            .collect()
+        Self::named_files(&self.card_files, "--card-file")
+    }
+
+    fn second_sd_files(&self) -> Result<Vec<(String, PathBuf)>, String> {
+        Self::named_files(&self.second_card_files, "--card-file-2")
+    }
+
+    fn named_files(specifications: &[String], option: &str) -> Result<Vec<(String, PathBuf)>, String> {
+        specifications.iter().map(|specification| {
+            specification.split_once('=')
+                .filter(|(name, path)| !name.is_empty() && !path.is_empty())
+                .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
+                .ok_or(format!("{option} needs NAME=PATH"))
+        }).collect()
     }
 
     /// The second card slot is modeled for XP5 loader starts only.
