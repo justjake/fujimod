@@ -57,6 +57,15 @@ fn restating_held_configuration_during_a_transfer_is_not_reconfiguration(){
     assert_eq!(m.save(),held);
 }
 #[test]
+fn restating_control_during_a_pending_stop_keeps_the_stop(){
+    let mut m=model(Peer::Empty);let mut h=TestHost::default();init(&mut m,&mut h);
+    write(&mut m,&mut h,16,0x60);write(&mut m,&mut h,4,0x52);complete(&mut m,&mut h);
+    write(&mut m,&mut h,4,0x42);let stopping=m.save();
+    write(&mut m,&mut h,4,0x42);assert_eq!(m.save(),stopping);
+    let mut cx=Cx::new(&mut h,0,0,4);m.write(&mut cx,BASE+4,1,0x4a);assert!(cx.refusal().is_some());
+    complete(&mut m,&mut h);assert_eq!(read(&mut m,&mut h,0),0);
+}
+#[test]
 fn rejected_accesses_do_not_change_state_irq_or_events(){
     let mut m=model(Peer::Empty);let mut h=TestHost::default();init(&mut m,&mut h);
     for (o,size,v) in [(24,4,3),(1,1,0),(24,1,256),(0,1,0),(12,1,1),(4,1,0x46)] {
