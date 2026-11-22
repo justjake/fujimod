@@ -431,6 +431,14 @@ pub trait Device: Send + std::any::Any {
     /// A read of `size` bytes at `address` (absolute, so one model can own
     /// several windows).
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64;
+    /// Whether a read of `size` bytes at `address` is a stable status read:
+    /// it changes nothing in the model, and every later read returns the same
+    /// value until the model's `next_deadline`, a write to it or an event it
+    /// is delivered. A board may then run a guest loop that only polls such
+    /// reads in one step up to the next deadline.
+    fn read_stable(&self, _address: u64, _size: u8) -> bool {
+        false
+    }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64);
     /// Optional side-effect-free admission check used only by explicit
     /// discovery before choosing a transport continuation. Strict execution

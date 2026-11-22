@@ -103,6 +103,7 @@ impl Tracker {
             bytes: self.len,
             bitmap: NonNull::new(self.dirty.as_ptr() as *mut AtomicU64).unwrap(),
             page_shift: 12,
+            summary: None,
         })
     }
     pub fn mark(&self, offset: usize, bytes: usize) -> Result<(), String> {

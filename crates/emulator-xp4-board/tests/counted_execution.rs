@@ -126,6 +126,10 @@ fn open(definition: Definition, nor: Option<Vec<u8>>, counted: bool) -> Session 
 }
 
 fn session(counted: bool) -> Session {
+    session_with(counted, PROGRAM)
+}
+
+fn session_with(counted: bool, program: &[(u32, &[u32])]) -> Session {
     let definition: Definition = serde_json::from_value(json!({
         "ram_size": 65536, "cores": 2, "discovery": false, "cbar": CBAR,
         "labels": [BUMP],
@@ -133,7 +137,7 @@ fn session(counted: bool) -> Session {
     }))
     .unwrap();
     let session = open(definition, None, counted);
-    for (address, words) in PROGRAM {
+    for (address, words) in program {
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         session.write(*address as usize, &bytes).unwrap();
     }
@@ -366,5 +370,92 @@ mod execute_in_place {
                 assert!(exact.2 == counted.2, "{name}: RAM, chunk {chunk}");
             }
         }
+    }
+}
+
+/// Two cores contend for one word: core 0 increments it with LDREX/STREX and
+/// counts its failed STREXes; core 1 increments its second byte with
+/// LDREXB/STREXB (a different reservation granule that overlaps core 0's), counts
+/// its failures, and between its attempts stores to a byte of the word (which
+/// clears core 0's reservation) and to a word beside it (which does not).
+const CONTENTION: &[(u32, &[u32])] = &[
+    (
+        CORE0,
+        &[
+            0xe303_2000, // movw r2, #0x3000
+            0xe303_b010, // movw r11, #0x3010
+            0xe3a0_6000, // mov r6, #0
+            0xe3a0_8000, // mov r8, #0
+            0xe192_3f9f, // 1: ldrex r3, [r2]
+            0xe1a0_0000, // nop
+            0xe1a0_0000, // nop
+            0xe283_3001, // add r3, r3, #1
+            0xe182_4f93, // strex r4, r3, [r2]
+            0xe354_0000, // cmp r4, #0
+            0x1288_8001, // addne r8, r8, #1
+            0x1aff_fff7, // bne 1b
+            0xe286_6001, // add r6, r6, #1
+            0xe356_0f4b, // cmp r6, #300
+            0xbaff_fff4, // blt 1b
+            0xe58b_8000, // str r8, [r11]
+            0xe58b_6004, // str r6, [r11, #4]
+            0xe320_f003, // 2: wfi
+            0xeaff_fffd, // b 2b
+        ],
+    ),
+    (
+        CORE1,
+        &[
+            0xe303_2000, // movw r2, #0x3000
+            0xe303_a001, // movw r10, #0x3001
+            0xe303_b020, // movw r11, #0x3020
+            0xe3a0_9000 | 0x5a, // mov r9, #0x5a
+            0xe3a0_6000, // mov r6, #0
+            0xe3a0_8000, // mov r8, #0
+            0xe1da_3f9f, // 1: ldrexb r3, [r10]
+            0xe1a0_0000, // nop
+            0xe283_3001, // add r3, r3, #1
+            0xe1ca_4f93, // strexb r4, r3, [r10]
+            0xe354_0000, // cmp r4, #0
+            0x1288_8001, // addne r8, r8, #1
+            0x1aff_fff8, // bne 1b
+            0xe5c2_9002, // strb r9, [r2, #2]
+            0xe582_9008, // str r9, [r2, #8]
+            0xe286_6001, // add r6, r6, #1
+            0xe356_0f4b, // cmp r6, #300
+            0xbaff_fff3, // blt 1b
+            0xe58b_8000, // str r8, [r11]
+            0xe58b_6004, // str r6, [r11, #4]
+            0xe320_f003, // 2: wfi
+            0xeaff_fffd, // b 2b
+        ],
+    ),
+];
+
+#[test]
+fn contended_exclusives_match_the_per_instruction_hook_at_every_quantum() {
+    for quantum in [1, 2, 3, 5, 7, 64, 1000] {
+        let mut outcomes = Vec::new();
+        for counted in [false, true] {
+            let session = session_with(counted, CONTENTION);
+            for _ in 0..8 {
+                session.run_board(2500, quantum).unwrap();
+            }
+            let state = session.state(false);
+            assert!(state.failure.is_none(), "quantum {quantum}, counted {counted}: {:?}", state.failure);
+            outcomes.push(outcome(&session));
+        }
+        let (exact, counted) = (&outcomes[0], &outcomes[1]);
+        let word = |at: usize| u32::from_le_bytes(exact.2[at..at + 4].try_into().unwrap());
+        assert_eq!(word(0x3014), 300, "quantum {quantum}: core 0 did not finish");
+        assert_eq!(word(0x3024), 300, "quantum {quantum}: core 1 did not finish");
+        if quantum <= 7 {
+            assert!(
+                word(0x3010) + word(0x3020) > 0,
+                "quantum {quantum}: no STREX failed"
+            );
+        }
+        assert_eq!(exact.0, counted.0, "state at quantum {quantum}");
+        assert!(exact.2 == counted.2, "RAM at quantum {quantum}");
     }
 }

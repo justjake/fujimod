@@ -877,6 +877,14 @@ impl Device for Command {
             }
         }
     }
+    fn read_stable(&self, address: u64, size: u8) -> bool {
+        let o = address.wrapping_sub(self.base);
+        // Words backed by stored state only: the image registers are read
+        // through the sensor and are not covered.
+        size == 4
+            && o & 3 == 0
+            && matches!(o, 0 | 0x180..=0x1b0 | 0x200..=0x21c | 0x224..=0x240)
+    }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let o = address.wrapping_sub(self.base);
         self.advance(cx);

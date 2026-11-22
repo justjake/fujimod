@@ -92,10 +92,17 @@ impl Session {
                 .find(|core| *core >= self.next_core.get())
                 .unwrap_or(runnable[0]);
             self.next_core.set((core + 1) % self.inner.cpus.len());
-            self.run(
+            unsafe {
+                let state = &mut *self.inner.state.get();
+                state.quantum = quantum as u64;
+                state.solo_window = if runnable.len() == 1 { remaining } else { 0 };
+            }
+            let result = self.run(
                 core,
                 quantum.min(usize::try_from(remaining).unwrap_or(usize::MAX)),
-            )?;
+            );
+            unsafe { (*self.inner.state.get()).solo_window = 0 };
+            result?;
         }
     }
 
