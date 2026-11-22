@@ -15,8 +15,9 @@
 //!   units, `N%` a fraction of the travel from the low end. A position outside the travel
 //!   cannot be reached, which is how a run asks for an autofocus failure. Unset: the scene is
 //!   in focus at every lens position (no blur, no phase shift), as before this module.
-//! - `XT5_FOCUS_BLUR` (optional, default 6): the blur-circle diameter, as a percentage of the
-//!   picture width, when the defocus equals the full lens travel.
+//! - `XT5_FOCUS_BLUR` (optional): the blur-circle diameter, as a percentage of the picture
+//!   width, when the defocus equals the full lens travel. Unset: the attached lens's own
+//!   value ([`attach_lens`]), or 6 for a lens that gives none.
 //! - `XT5_FOCUS_PHASE` (optional, default 2): the separation of the two phase-detect views, as
 //!   a percentage of the picture width, when the defocus equals the full lens travel.
 //!
@@ -112,7 +113,14 @@ struct Attached {
     position: Lens,
     min: f64,
     max: f64,
+    blur_at_travel: Option<f64>,
 }
+
+/// Blur-circle diameter over picture width at a defocus of the full travel, for a lens that
+/// gives none and without `XT5_FOCUS_BLUR`.
+const DEFAULT_BLUR_AT_TRAVEL: f64 = 0.06;
+/// Whether `XT5_FOCUS_BLUR` set the blur of [`host_optics`].
+static BLUR_FROM_HOST: AtomicBool = AtomicBool::new(false);
 
 static LENS: Mutex<Option<Attached>> = Mutex::new(None);
 static ACTIVE: AtomicBool = AtomicBool::new(false);
@@ -141,14 +149,19 @@ pub fn host_optics() -> Option<Optics> {
                 .unwrap_or(default)
                 / 100.
         };
+        let host_blur = std::env::var("XT5_FOCUS_BLUR").is_ok_and(|v| !v.trim().is_empty());
+        BLUR_FROM_HOST.store(host_blur, Ordering::Relaxed);
         let optics = Optics {
             scene,
-            blur_at_travel: percent("XT5_FOCUS_BLUR", 6.),
+            blur_at_travel: percent("XT5_FOCUS_BLUR", DEFAULT_BLUR_AT_TRAVEL * 100.),
             phase_at_travel: percent("XT5_FOCUS_PHASE", 2.),
         };
+        let blur = match host_blur {
+            true => format!("{:.1}%", optics.blur_at_travel * 100.),
+            false => "the lens's own".into(),
+        };
         eprintln!(
-            "XT5_SCENE_FOCUS: scene in focus at {text} (blur {:.1}% and phase separation {:.1}% of the width per full travel)",
-            optics.blur_at_travel * 100.,
+            "XT5_SCENE_FOCUS: scene in focus at {text} (blur {blur} and phase separation {:.1}% of the width per full travel)",
             optics.phase_at_travel * 100.
         );
         Some(optics)
@@ -156,12 +169,21 @@ pub fn host_optics() -> Option<Optics> {
 }
 
 /// Attaches the virtual lens: `position(now)` is the focus motor position at board time `now`,
-/// and `min..=max` its travel. The newest attachment wins (one lens per board).
-pub fn attach_lens(position: impl Fn(u64) -> u16 + Send + Sync + 'static, min: u16, max: u16) {
+/// and `min..=max` its travel. `blur_at_travel` is the lens's blur-circle diameter over the
+/// picture width at a defocus of the whole travel (its focal length, closest distance and
+/// aperture set it), used unless `XT5_FOCUS_BLUR` gives one. The newest attachment wins (one
+/// lens per board).
+pub fn attach_lens(
+    position: impl Fn(u64) -> u16 + Send + Sync + 'static,
+    min: u16,
+    max: u16,
+    blur_at_travel: Option<f64>,
+) {
     *LENS.lock().unwrap_or_else(|e| e.into_inner()) = Some(Attached {
         position: Box::new(position),
         min: f64::from(min),
         max: f64::from(max),
+        blur_at_travel: blur_at_travel.filter(|blur| blur.is_finite() && *blur >= 0.),
     });
 }
 
@@ -188,7 +210,15 @@ pub fn defocus_with(optics: &Optics, now: u64) -> Option<Defocus> {
 /// [`blur`] and [`phase`] report to renderers. `None` (and no defocus) without a lens or
 /// without `XT5_SCENE_FOCUS`.
 pub fn sample(now: u64) -> Option<Defocus> {
-    let defocus = host_optics().and_then(|optics| defocus_with(&optics, now));
+    let defocus = host_optics().and_then(|mut optics| {
+        if !BLUR_FROM_HOST.load(Ordering::Relaxed) {
+            let lens = LENS.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(blur) = lens.as_ref().and_then(|lens| lens.blur_at_travel) {
+                optics.blur_at_travel = blur;
+            }
+        }
+        defocus_with(&optics, now)
+    });
     store(defocus.unwrap_or_default());
     defocus
 }
@@ -254,41 +284,73 @@ pub fn blur_rgb(rgb: &mut [u8], width: usize, height: usize, diameter: f64) {
     }
 }
 
-/// One row blurred by a box of `width` samples (any width of at least one sample; the box may
-/// cover fractions of samples), borders repeated. Two passes of the half-width box make the
-/// smooth profile of a blur circle of that diameter.
-fn box_row(row: &[f64], width: f64, out: &mut Vec<f64>, prefix: &mut Vec<f64>) {
-    let n = row.len();
-    prefix.clear();
-    prefix.push(0.);
-    for value in row {
-        prefix.push(prefix[prefix.len() - 1] + value);
+/// The integral of the edge response of a uniform blur disc of radius 1: the step response
+/// `1/2 + (asin u + u sqrt(1 - u^2)) / pi` integrated from below the disc (0 for `u <= -1`,
+/// `u` for `u >= 1`).
+fn disc_edge_integral(u: f64) -> f64 {
+    if u <= -1. {
+        return 0.;
     }
-    // Integral of the row from 0 to `t` (samples are unit-wide steps; borders repeat).
-    let integral = |t: f64| -> f64 {
-        if t <= 0. {
-            return t * row[0];
+    if u >= 1. {
+        return u;
+    }
+    let root = (1. - u * u).sqrt();
+    u / 2. + (u * u.asin() + root - root * root * root / 3.) / std::f64::consts::PI
+}
+
+/// The sample weights of a defocused row: what one sample of a sharp row spreads to when the
+/// lens images every point as a uniform disc (the blur circle) of `diameter` samples and each
+/// output sample averages the picture over its own width. Weight `k` belongs to the sample
+/// `k - (len - 1) / 2` places away; the weights are symmetric and sum to 1. A zero diameter
+/// gives the single weight 1.
+///
+/// A disc gives an edge a smooth S-shaped profile whose slope and curvature change with
+/// every change of the diameter, also below one sample, so the contrast of a scene has a
+/// single maximum exactly at focus (two box passes gave a triangle profile: flat contrast
+/// under two samples of blur, and kinks at the ends of the profile that travelled through
+/// the picture as the lens moved).
+pub fn defocus_kernel(diameter: f64) -> Vec<f64> {
+    let radius = diameter / 2.;
+    if !(radius > 1e-9) {
+        return vec![1.];
+    }
+    let reach = radius.ceil() as isize + 1;
+    let edge = |d: f64| radius * disc_edge_integral(d / radius);
+    (-reach..=reach)
+        .map(|d| {
+            let d = d as f64;
+            edge(d + 1.) - 2. * edge(d) + edge(d - 1.)
+        })
+        .collect()
+}
+
+/// Samples `from..to` of `row` defocused with the weights of [`defocus_kernel`], appended to
+/// `out`. Samples beyond the ends of the row repeat its border.
+pub fn defocus_row(row: &[f64], kernel: &[f64], from: usize, to: usize, out: &mut Vec<f64>) {
+    let reach = (kernel.len() / 2) as isize;
+    let last = row.len() as isize - 1;
+    for x in from as isize..to as isize {
+        if reach == 0 {
+            out.push(row[x.clamp(0, last) as usize]);
+            continue;
         }
-        if t >= n as f64 {
-            return prefix[n] + (t - n as f64) * row[n - 1];
+        let mut sum = 0.;
+        for (k, weight) in kernel.iter().enumerate() {
+            sum += weight * row[(x + k as isize - reach).clamp(0, last) as usize];
         }
-        let i = t.floor() as usize;
-        prefix[i] + (t - i as f64) * row[i]
-    };
-    out.clear();
-    for x in 0..n {
-        let centre = x as f64 + 0.5;
-        out.push((integral(centre + width / 2.) - integral(centre - width / 2.)) / width);
+        out.push(sum);
     }
 }
 
-/// Contrast (focus) evaluation of `levels`, `height` rows of `width` linear samples: for each
-/// cell of a `columns` x `rows` grid (row-major) and each entry `s` of `scales`, the sum over
-/// the cell of `|L(x) - (L(x - s) + L(x + s)) / 2|`, the response of a horizontal band-pass
-/// filter of period about `4 s` samples. Before the filter each row is blurred by a blur circle
-/// of `diameter` samples (fractions allowed), so the sums fall as the picture defocuses: a
-/// band of scale `s` keeps its level while the circle is smaller than `s` and then falls
-/// roughly as `s / diameter`. One vector of `columns * rows` sums per scale.
+/// Band-pass contrast sums of a picture over a grid of cells: the focus measure of a
+/// contrast-detect autofocus system.
+///
+/// `levels` holds `width * height` linear sample values. Each row is first defocused by a
+/// blur circle of `diameter` samples ([`defocus_kernel`]). For each scale `s` of `scales`
+/// the response of a sample is `|v[x] - (v[x - s] + v[x + s]) / 2|` (a horizontal band-pass
+/// at wavelength about `4 s`); the result holds, per scale, the sum of the responses in each
+/// of the `columns * rows` cells. The sums fall as the blur circle grows, the fine scales
+/// first, so a sweep of the lens shows a peak at focus in every cell that has detail.
 pub fn contrast_grid(
     levels: &[f64],
     width: usize,
@@ -302,14 +364,13 @@ pub fn contrast_grid(
     if width == 0 || height == 0 || columns == 0 || rows == 0 || levels.len() != width * height {
         return sums;
     }
-    let (mut once, mut twice, mut prefix) = (Vec::new(), Vec::new(), Vec::new());
+    let kernel = defocus_kernel(diameter);
+    let mut blurred = Vec::new();
     for (y, row) in levels.chunks_exact(width).enumerate() {
-        let row: &[f64] = if diameter > 1. {
-            // Two boxes of half the diameter: a triangle whose base is the diameter.
-            let half = (diameter / 2.).max(1.);
-            box_row(row, half, &mut once, &mut prefix);
-            box_row(&once, half, &mut twice, &mut prefix);
-            &twice
+        let row: &[f64] = if kernel.len() > 1 {
+            blurred.clear();
+            defocus_row(row, &kernel, 0, width, &mut blurred);
+            &blurred
         } else {
             row
         };
@@ -370,7 +431,7 @@ mod tests {
             blur_at_travel: 0.1,
             phase_at_travel: 0.1,
         };
-        attach_lens(|now| (now / 10) as u16, 0, 2000);
+        attach_lens(|now| (now / 10) as u16, 0, 2000, Some(0.02));
         assert_eq!(defocus_with(&optics, 10_000).unwrap().units, 0.);
         assert_eq!(defocus_with(&optics, 5_000).unwrap().units, -500.);
         detach_lens();
@@ -440,7 +501,7 @@ mod tests {
         assert!((sharp[1] / sharp[0] - 2.).abs() < 0.2 && (sharp[2] / sharp[0] - 4.).abs() < 0.6);
         // Every band falls monotonically with the circle, the fine band first.
         let mut previous = sharp;
-        for diameter in [1.5, 2., 3., 4.5, 6., 9., 14., 22.] {
+        for diameter in [0.25, 1., 1.5, 2., 3., 4.5, 6., 9., 14., 22.] {
             let now = [total(diameter, 0), total(diameter, 1), total(diameter, 2)];
             for band in 0..3 {
                 assert!(now[band] <= previous[band] + 1e-6, "band {band} at {diameter}");
@@ -452,6 +513,59 @@ mod tests {
         // A flat picture has no contrast at any focus.
         let flat = vec![500.; w * h];
         assert!(contrast_grid(&flat, w, h, 8, 2, &[1, 2, 4], 0.).iter().flatten().all(|v| *v == 0.));
+    }
+
+    #[test]
+    fn the_defocus_kernel_is_a_normalised_disc_profile() {
+        assert_eq!(defocus_kernel(0.), vec![1.]);
+        for diameter in [0.01, 0.5, 1., 2.5, 7., 40., 123.4] {
+            let kernel = defocus_kernel(diameter);
+            let reach = kernel.len() / 2;
+            assert_eq!(kernel.len(), 2 * (((diameter / 2.) as f64).ceil() as usize + 1) + 1);
+            assert!((kernel.iter().sum::<f64>() - 1.).abs() < 1e-9, "{diameter}");
+            for k in 0..reach {
+                assert!((kernel[k] - kernel[2 * reach - k]).abs() < 1e-9, "{diameter} symmetric");
+                assert!(kernel[k] >= -1e-12 && kernel[k] <= kernel[k + 1] + 1e-12, "{diameter} rises to the centre");
+            }
+        }
+        // A wide disc spreads a sample as the chord lengths of the circle: the centre weight is
+        // the diameter over the disc area.
+        let wide = defocus_kernel(100.);
+        assert!((wide[wide.len() / 2] - 100. / (std::f64::consts::PI * 2500.)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn a_small_blur_circle_already_lowers_the_contrast() {
+        // A sweep through focus in steps far below one sample of blur: the fine band has one
+        // strict maximum at focus, with no flat top and no second bump in any cell.
+        let (w, h) = (256, 2);
+        let levels: Vec<f64> = (0..w * h).map(|i| if i % w < 128 { 0. } else { 1000. }).collect();
+        let cells = |diameter: f64| contrast_grid(&levels, w, h, 8, 1, &[1, 2, 4, 8], diameter);
+        let sharp = cells(0.)[0][4];
+        let mut previous = sharp;
+        for step in 1..=40 {
+            let now = cells(f64::from(step) * 0.1)[0][4];
+            assert!(now < previous, "diameter {}", f64::from(step) * 0.1);
+            previous = now;
+        }
+        // The blurred edge stays inside its blur circle: a cell further away sees nothing.
+        let far = cells(20.);
+        for band in 0..4 {
+            assert_eq!(far[band][1], 0., "band {band}");
+            assert!(far[band][4] > 0. || far[band][3] > 0., "band {band}");
+        }
+    }
+
+    #[test]
+    fn a_defocused_row_can_be_cut_from_a_longer_row() {
+        let row: Vec<f64> = (0..64).map(|x| if x < 20 { 100. } else { 900. }).collect();
+        let kernel = defocus_kernel(9.);
+        let (mut whole, mut part) = (Vec::new(), Vec::new());
+        defocus_row(&row, &kernel, 0, 64, &mut whole);
+        defocus_row(&row, &kernel, 12, 30, &mut part);
+        assert_eq!(part, whole[12..30]);
+        assert_eq!((whole[0], whole[63]), (100., 900.));
+        assert!((whole[19] + whole[20] - 1000.).abs() < 1e-9 && whole[19] < whole[20]);
     }
 
     #[test]
