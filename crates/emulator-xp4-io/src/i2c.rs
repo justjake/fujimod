@@ -278,6 +278,12 @@ impl ByteI2c {
         match offset {
             0 => return Err("I2C bus status is read-only".into()),
             4 => {
+                // Restating the control bits a pending STOP already latched
+                // changes nothing, so the STOP stays scheduled as it was.
+                if self.state.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop)
+                    && value & (INT|BER) == 0 && value == self.state.bcr & !(INT|BER) {
+                    return Ok(());
+                }
                 let op=self.command(value)?;
                 let pending=if let Some(operation)=op {
                     Some(Pending {submitted:cx.now(),deadline:cx.now().checked_add(self.profile.byte_ticks).ok_or("I2C deadline overflow")?,operation})
