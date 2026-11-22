@@ -474,7 +474,7 @@ fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board
         processors: vec![Processor {
             model: Model::CortexM4,
             registers: vec![],
-            released: true,
+            released: true, parked_until_sgi: false,
             rprofile: None,
             mprofile: Some(crate::board::mprofile::Config {
                 clock_hz: 1_000_000_000,
@@ -692,7 +692,7 @@ fn m4_pair(mode: LoopMode) -> Board {
     let processor = |vector_base| Processor {
         model: Model::CortexM4,
         registers: vec![],
-        released: true,
+        released: true, parked_until_sgi: false,
         rprofile: None,
         mprofile: Some(crate::board::mprofile::Config {
             clock_hz: 1_000_000_000,
@@ -827,7 +827,7 @@ fn m4_ssp(mode: LoopMode, peer: bool) -> Board {
     let processor = |vector_base| Processor {
         model: Model::CortexM4,
         registers: vec![],
-        released: true,
+        released: true, parked_until_sgi: false,
         rprofile: None,
         mprofile: Some(crate::board::mprofile::Config {
             clock_hz: 1_000_000_000,

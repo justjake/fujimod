@@ -185,6 +185,7 @@ fn board(released: Vec<bool>) -> (Board, Readings) {
             .map(|released| Processor {
                 model: Model::CortexR5F,
                 released,
+                parked_until_sgi: false,
                 mprofile: None,
                 rprofile: Some(rprofile::core::Options {
                     cp14_identity: 0,

@@ -211,7 +211,7 @@ fn factory_owns_alias_backing_and_maps_peripherals_to_physical_bus_addresses() {
             mprofile: None,
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
-            released: true,
+            released: true, parked_until_sgi: false,
         }],
         dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x4000)],
         ram: vec![Ram {
@@ -390,7 +390,7 @@ fn pausing_inside_a_quantum_preserves_multicore_interleaving() {
                     mprofile: None,
                     model: Model::CortexR5F,
                     registers: vec![(Register::Pc, 0x10000)],
-                    released: true,
+                    released: true, parked_until_sgi: false,
                 })
                 .collect(),
             dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x4000)],
@@ -459,7 +459,7 @@ fn mprofile_systick_wakes_wfi_and_executes_a_real_exception_handler() {
             processors: vec![Processor {
                 model: Model::CortexM4,
                 registers: vec![],
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -626,7 +626,7 @@ fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>
                 model: Model::CortexR5F,
                 rprofile: Some(Default::default()),
                 mprofile: None,
-                released: true,
+                released: true, parked_until_sgi: false,
                 registers: vec![
                     (Register::Pc, 0x1000 + core * 0x1000),
                     (Register::Pstate, 0x53),

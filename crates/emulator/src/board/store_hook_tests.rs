@@ -24,7 +24,7 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
             Processor {
                 model: Model::CortexM4,
                 registers: vec![(arm32(0), 0x11000), (arm32(3), 0xaabbccdd)],
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -40,7 +40,7 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
                     (Register::X(1), 0x11000),
                     (Register::X(2), 99),
                 ],
-                released: true,
+                released: true, parked_until_sgi: false,
                 rprofile: None,
                 mprofile: None,
             },

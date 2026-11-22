@@ -182,7 +182,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
                     model: Model::CortexR5F,
                     mprofile: None,
                     rprofile: Some(Default::default()),
-                    released: core == 0,
+                    released: core == 0, parked_until_sgi: false,
                     registers: vec![
                         (Register::Pc, 0x10000 + core as u64 * 0x1000),
                         (Register::Pstate, 0xd3),

@@ -18,7 +18,7 @@ fn a7_graph() -> Graph {
         processors: vec![Processor {
             model: Model::CortexA7,
             registers: vec![(Register::Pc, CODE), (Register::Pstate, 0xd3)],
-            released: true,
+            released: true, parked_until_sgi: false,
             mprofile: None,
             rprofile: None,
         }],
@@ -489,7 +489,7 @@ fn r5f_board() -> Board {
         processors: vec![Processor {
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
-            released: true,
+            released: true, parked_until_sgi: false,
             mprofile: None,
             rprofile: Some(Default::default()),
         }],
