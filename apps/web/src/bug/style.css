@@ -229,12 +229,20 @@
   margin-top: 6px;
 }
 
-.bug-general details {
-  margin-top: 6px;
+.bug-general .format-guide {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
 }
 
-.bug-general details summary {
-  cursor: pointer;
+.bug-public-options {
+  display: grid;
+  gap: 6px;
+}
+
+.bug-general .bug-public-options input[type='checkbox'] {
+  width: auto;
+  margin-inline-start: 0;
 }
 
 .bug-general button.pill {

@@ -3,6 +3,7 @@ import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { uploadReportArchive } from '../files/contribute';
+import { DesktopSystemGuide } from '../install/FormatGuide';
 import { desktopSdCardLocations } from './file-guide';
 import { sdCardFiles, type ReportFile } from './sd-card-files';
 import { FileDrop } from '../ui/file-drop';
@@ -59,11 +60,6 @@ export function GeneralReport() {
 
   function selectContact(event: Event & { currentTarget: HTMLSelectElement }) {
     const value = event.currentTarget.value;
-    if (value === 'GitHub') {
-      event.currentTarget.value = contact() ?? '';
-      location.assign('https://github.com/justjake/fujimod/issues/new?template=bug.yml');
-      return;
-    }
     setContact(CONTACT_TYPES.find((type) => type === value));
   }
 
@@ -147,18 +143,11 @@ export function GeneralReport() {
                 <p id="bug-sd-help" class="bug-status">
                   Choose the SD card drive to attach FujiMod files, boot diagnostics, and backups.
                 </p>
-                <details>
-                  <summary>Where is my SD card?</summary>
-                  <ul>
-                    <For each={Object.entries(desktopSdCardLocations)}>
-                      {([platform, location]) => (
-                        <li>
-                          <strong>{platform}</strong> · {location}
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </details>
+                <DesktopSystemGuide
+                  instructions={(system) => (
+                    <p class="bug-status">{desktopSdCardLocations[system]} → your SD card</p>
+                  )}
+                />
                 <Show when={sdError()}>
                   <p role="alert">{sdError()}</p>
                 </Show>
@@ -211,10 +200,7 @@ export function GeneralReport() {
                 Contact for updates (optional)
                 <select name="contact-type" onChange={selectContact}>
                   <option value="">None</option>
-                  <option>Instagram</option>
-                  <option>Twitter</option>
-                  <option>GitHub</option>
-                  <option value="Email">Email</option>
+                  <For each={CONTACT_TYPES}>{(type) => <option>{type}</option>}</For>
                 </select>
               </label>
               <Show when={contact()} keyed>
@@ -230,10 +216,15 @@ export function GeneralReport() {
                   </label>
                 )}
               </Show>
-              <p class="bug-status">
-                Your description is posted publicly on GitHub. Your name, contact details, and files
-                stay private.
-              </p>
+              <div class="bug-public-options">
+                <label>
+                  <input name="share-contact" type="checkbox" /> Share contact info publicly
+                </label>
+                <label>
+                  <input name="share-files" type="checkbox" /> Share uploaded files publicly
+                </label>
+              </div>
+              <p class="bug-status">Your description is posted publicly on GitHub.</p>
               <button type="submit" class="pill primary">
                 Submit report
               </button>
