@@ -72,6 +72,25 @@ struct AppState {
     command: Mutex<Option<LaunchRequest>>,
 }
 
+fn log_session(line: impl AsRef<str>) {
+    let path = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches")))
+        .unwrap_or_else(std::env::temp_dir)
+        .join("fujimod/emulator-gui.log");
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "{}", line.as_ref());
+    }
+}
+
 impl Drop for Running {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Release);
@@ -159,6 +178,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     let thread = thread::Builder::new()
         .name("fujimod-emulator-session".into())
         .spawn(move || {
+            log_session("session: opening camera");
             let run = fujimod_emulator_boot::xp5::Run {
                 configuration: resolved.clone(),
                 load_snapshot: None,
@@ -191,7 +211,9 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 execution_policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
                 output,
             };
-            let opened = fujimod_emulator_boot::xp5::open_gui(run)?;
+            let opened = fujimod_emulator_boot::xp5::open_gui(run)
+                .inspect_err(|error| log_session(format!("session: {error}")))?;
+            log_session("session: camera opened");
             let fujimod_emulator_boot::Opened::Xp5(started) = opened else {
                 return Err("This run did not open an XP5 camera.".into());
             };
@@ -208,6 +230,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     Default::default(),
                 )
                 .run_until(&thread_stop)
+                .inspect_err(|error| log_session(format!("session: {error}")))
         })
         .map_err(|error| error.to_string())?;
     let launched = LaunchedCamera {
