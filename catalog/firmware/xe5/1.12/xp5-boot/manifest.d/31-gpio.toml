@@ -9,6 +9,9 @@ kind = "gpio"
 # reports readiness through mailbox status at local 0x3f76 and 0x3f9c.
 # UNVERIFIED for this startup path: the pad read behavior, a feedback wire to 0.4,
 # its 30 ms delay and high latch, and a rising input interrupt on NVIC 27.
+# Emulator finding (not firmware evidence): without the data-latch pad model the shooting
+# screen stays black; removing the feedback or the NVIC 27 route leaves the screen and the
+# key walk unchanged. Only the pad model is needed to light the screen.
 pad_model = "data-latch"
 feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true }]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
