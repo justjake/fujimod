@@ -4,13 +4,12 @@ base = 0xff907000
 size = 0x1000
 kind = "gpio"
 [device.options]
-# Candidate, INHERITED from the X-H2S 7.30 manifest (30-power-input.toml there) and UNVERIFIED for the X-E5.
-# The X-H2S application reads pad 0.4 after its companion START and the default pad model (+8 enable, +4
-# data) read a driven 0, so the stabiliser start never completed; the shooting screen needed the
-# data-latch model. The X-E5 left its LCD black with all cores idle after the first-start pages.
+# Stabilizer GPIO model inherited from the X-H2S. X-E5 application code enables output
+# 1.14 at 0x01519444 and clears its +0 latch at 0x015178fc. The X-E5 companion
+# reports readiness through mailbox status at local 0x3f76 and 0x3f9c.
+# UNVERIFIED for this startup path: the pad read behavior, a feedback wire to 0.4,
+# its 30 ms delay and high latch, and a rising input interrupt on NVIC 27.
 pad_model = "data-latch"
-# X-H2S: the application drives 1.14 high at the companion START and pad 0.4 answers after a delay and then
-# stays high; the companion handles the rise on NVIC 27. A delay of 30 ms is a board guess.
 feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true }]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
 # Shutter release: the scanner rows (kind 4, sources 0 and 1; physical keys 25 and 26) read GPIO 0.0 (S1) and 0.1 (S2),
