@@ -180,25 +180,27 @@ fn focus_moves_to_its_target_and_feedback_reports_it() {
 }
 
 #[test]
-fn a_drive_without_the_absolute_flag_sweeps_toward_the_named_end() {
+fn a_scan_move_without_the_absolute_flag_goes_to_its_target_at_the_scan_speed() {
     let mut port = lens();
     let mut time = 0;
     powered(&port, &mut time);
     time += 20 * MS;
-    // The scan start: absolute (0x55 bit 0) to 200.
+    // The scan start: absolute (0x55 bit 0) to 179.
     request(&mut port, FOCUS_FLAGS, 0x201, &mut time);
-    request(&mut port, FOCUS_TARGET, 200, &mut time);
+    request(&mut port, FOCUS_TARGET, 179, &mut time);
     time += 100 * MS;
-    assert_eq!(port.focus(time), (200, 200));
-    // The sweep: not absolute, toward the high end, at 6000 units per second.
+    assert_eq!(port.focus(time), (179, 179));
+    // The scan move: +2 = 0, to the planned scan end 3815 at 6000 units per second.
     request(&mut port, FOCUS_SPEED, 6000, &mut time);
     request(&mut port, FOCUS_FLAGS, 0x200, &mut time);
-    request(&mut port, FOCUS_TARGET, 200, &mut time);
+    request(&mut port, FOCUS_TARGET, 3815, &mut time);
     time += 100 * MS;
     let (position, target) = port.focus(time);
-    assert_eq!(target, 4000);
+    assert_eq!(target, 3815);
     assert!(position > 600 && position < 900, "{position}");
-    // The final move is absolute again and stops the sweep.
+    time += 1000 * MS;
+    assert_eq!(port.focus(time), (3815, 3815));
+    // The final move is absolute again.
     request(&mut port, FOCUS_FLAGS, 0x101, &mut time);
     request(&mut port, FOCUS_TARGET, 300, &mut time);
     assert_eq!(port.focus(time).1, 300);
@@ -212,15 +214,24 @@ fn a_focus_stop_holds_the_position_the_sweep_reached() {
     time += 20 * MS;
     request(&mut port, FOCUS_SPEED, 6000, &mut time);
     request(&mut port, FOCUS_FLAGS, 0x200, &mut time);
-    request(&mut port, FOCUS_TARGET, 200, &mut time);
+    request(&mut port, FOCUS_TARGET, 3815, &mut time);
     time += 100 * MS;
     let (reached, _) = port.focus(time);
     assert!(reached > 200 && reached < 4000, "{reached}");
     // The AF's stop (family 0x58 with 0) ends the sweep where it is, not at position 0.
+    port.tick(time, true);
+    assert!(!port.ready_high(), "the scan move holds ready low");
     request(&mut port, FOCUS_DRIVE, 0, &mut time);
     let (stopped, target) = port.focus(time);
     assert_eq!(target, stopped);
     assert!(stopped.abs_diff(reached) < 10, "{stopped} {reached}");
+    // The stop ends the busy period of the scan move: ready rises after the shortest
+    // operation, long before the scan end would have been reached, so the body sees the
+    // drive complete where the lens stopped.
+    let release = port.next_event_tick(time, true).unwrap();
+    assert!(release < time + 50 * MS, "ready held until {release}");
+    port.tick(release, true);
+    assert!(port.ready_high());
     time += 100 * MS;
     assert_eq!(port.focus(time), (stopped, stopped));
 }
@@ -497,6 +508,42 @@ fn the_lens_data_focus_tables_rise_from_infinity_inside_the_travel() {
     }
     // 0x1539228 uses the +0x63b and +0x704 tables only for zoom steps below +0x1213.
     assert_eq!(read(0x721213), read(0x720f80));
+    // The scan range clip (0x2fadf20): far limit 0x720a6b, near limit 0x7209a2 (s16 a zoom step),
+    // the margin at 0x720243 zero, so the planner's range inside the travel is kept.
+    assert_eq!(u16_at(&read, 0x720a6b), spec.focus.min);
+    assert_eq!(u16_at(&read, 0x7209a2), spec.focus.max);
+    assert_eq!(u16_at(&read, 0x720243), 0);
+}
+
+#[test]
+fn the_lens_data_focus_sensitivity_makes_a_depth_of_focus_a_short_distance() {
+    // 0x153a564: u16 0x722640 x curve (0x731b00 + 22z, 11 values) / 1000, the image-plane
+    // shift of one focus unit in 0.01 um. XF18-55 at 18 mm (z 0): f^2 / (d - f) = 1.149 mm
+    // over the 3400 units from infinity to the ordinary near end = 34; at 55 mm (z 7) 363.
+    let spec = Spec::preset("xf18-55").unwrap();
+    let read = configuration(&spec.catalogs[0]);
+    assert_eq!(u16_at(&read, 0x722640), 1000);
+    assert_eq!(u16_at(&read, 0x722643), 180);
+    for i in 0..11 {
+        assert_eq!(u16_at(&read, 0x731b00 + 2 * i), 34);
+        assert_eq!(u16_at(&read, 0x731b00 + 22 * 7 + 2 * i), 363);
+    }
+    // One depth of focus at F2.8 (0x153a5f0 with config 0x5800 = 33: 2 x 2800 x 33 / 100 =
+    // 1848 in 0.01 um) is then about 54 focus units, not half the travel.
+    assert_eq!(1848 / (u32::from(u16_at(&read, 0x722640)) * u32::from(u16_at(&read, 0x731b00)) / 1000), 54);
+}
+
+#[test]
+fn every_preset_keeps_the_range_limit_table_clear_of_the_0x720989_table() {
+    // 0x7209a2 + 2z starts 25 bytes after 0x720989 + 2z: at most 12 zoom steps keep them apart.
+    for name in ["xf18-55", "prime", "xf23"] {
+        let spec = Spec::preset(name).unwrap();
+        let read = configuration(&spec.catalogs[0]);
+        let steps = u32::from(read(0x720f80));
+        assert!((1..=12).contains(&steps), "{name}");
+        let last = steps - 1;
+        assert_eq!(u16_at(&read, 0x7209a2 + 2 * last), spec.focus.max, "{name}");
+    }
 }
 
 #[test]
