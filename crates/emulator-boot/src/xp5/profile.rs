@@ -56,17 +56,24 @@ pub(crate) fn place(
         .as_slice()
         .try_into()
         .map_err(|_| "an XP5 profile header has eight bytes")?;
-    let handoff = handoff_block(resolved)?;
-    state.preload.push(Preload {
-        address: handoff + loader_offset,
-        value: Some(u64::from_le_bytes(header)),
-        size: Some(8),
-        dat_offset: None,
-        length: None,
-        sha256: None,
-        word_size: None,
-        words: None,
-    });
+    // A start whose startup profile names a hand-off block (the X-T5 loader start, x21) gets
+    // the header preloaded there. A start without one (the X-H2S 7.30 loader start runs stage
+    // one, which builds the hand-off block itself from the power-controller registers) gets the
+    // header only through those registers, so it must name them.
+    match handoff_block(resolved) {
+        Ok(handoff) => state.preload.push(Preload {
+            address: handoff + loader_offset,
+            value: Some(u64::from_le_bytes(header)),
+            size: Some(8),
+            dat_offset: None,
+            length: None,
+            sha256: None,
+            word_size: None,
+            words: None,
+        }),
+        Err(_) if located.power_register.is_some() => {}
+        Err(error) => return Err(error),
+    }
     if let Some(first) = located.power_register {
         set_power_registers(state, &power_words(first, &header))?;
     }
