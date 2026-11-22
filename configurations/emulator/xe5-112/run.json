@@ -9,8 +9,8 @@
   "kind": "loader"
  },
  "dram_address_space": {
-  "limit_bytes": 1743781888,
-  "basis": "The vendor X-E5 device tree maps 366 MiB of Linux DRAM at 0x40000000 plus the AMP (0x56E00000), rpmsg (0x66D00000) and ISGC (0x66E00000) shared arenas; the stock firmware drains the bus with a discarded read at 0x67F00000, the first address past the mapped extent, so the software-visible DRAM space ends there."
+  "limit_bytes": 2147483648,
+  "basis": "The vendor X-E5 device tree maps 366 MiB of Linux DRAM at 0x40000000 plus the AMP (0x56E00000), rpmsg (0x66D00000) and ISGC (0x66E00000) shared arenas, but the application also writes 0x7ec00000 (a memset from 0x3271124) and drains 0x68000000 and 0x80000000, so the software-visible DRAM space is taken to end at 0x80000000, where the stock early mappings of the X-T5 end too. The installed capacity is unmeasured."
  },
  "execution": {
   "mode": "strict",

@@ -1,0 +1,11 @@
+# Input reset gate at 0xff950000, declared as on the X-T5 board (51-imaging-reset.toml there): the
+# shared model owns +0x0 and +0x4; the later registers read back their last write. The X-E5's first
+# access is a 4-byte read of +0x4 from 0x9eda8 right after the last first-start page, so the
+# application is entering its imaging start. INHERITED from the X-T5 and UNVERIFIED for the X-E5:
+# which registers beyond +0x4 the X-E5 uses is not read from its firmware yet.
+[[device]]
+base = 0xff950000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+retain_words = true

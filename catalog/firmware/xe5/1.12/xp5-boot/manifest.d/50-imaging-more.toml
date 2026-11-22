@@ -1,0 +1,48 @@
+# Taken from the X-T5 4.31 board fragment of the same name (the SoC profile's imaging windows are shared
+# by the XP5 bodies), keeping only the windows the X-E5 manifest does not declare yet. Every value is
+# INHERITED and UNVERIFIED for the X-E5: its use of these blocks has not been read from its firmware.
+
+[[device]]
+base = 0xff946000
+size = 0x1000
+kind = "imaging-input"
+[device.options]
+# Word 15 (+0x17c) reads as the idle status the REC task waits for (3030610, 2ff7930).
+idle_status = true
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff973000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff982000
+size = 0x1000
+kind = "imaging-resize"
+[device.options]
+completion_us = 1000
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff976000
+size = 0x1000
+kind = "imaging-paf"
+[device.options]
+# Bring-up: unmodeled words read back their last write.
+retain_words = true
+
+[[device]]
+base = 0xff913000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 19, pin = 15, active_high = false }
+part = { kind = "generic-sink", miso_high = false }
