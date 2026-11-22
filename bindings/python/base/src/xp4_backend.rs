@@ -51,6 +51,8 @@ pub trait Xp4Backend {
     fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()>;
     fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()>;
     fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()>;
+    fn touch_period(&self) -> PyResult<u64>;
+    fn touch(&self, phase: &str, x: u16, y: u16) -> PyResult<()>;
     fn set_usb_connected(&self, connected: bool) -> PyResult<()>;
     fn usb_bus_reset(&self) -> PyResult<()>;
     fn usb_transaction(

@@ -195,6 +195,8 @@ impl Xp4Session {
     forward!(set_adc_input(channel: usize, sample: u16) -> ());
     forward!(set_gpio_input(port: usize, pin: usize, high: bool) -> ());
     forward!(turn_dial(name: &str, edges: i32) -> ());
+    forward!(touch_period() -> u64);
+    forward!(touch(phase: &str, x: u16, y: u16) -> ());
     forward!(set_usb_connected(connected: bool) -> ());
     forward!(usb_bus_reset() -> ());
     forward!(usb_transaction(physical_endpoint: usize, setup: bool, out: Option<Vec<u8>>) -> u64);
@@ -340,6 +342,12 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()> {
         Xp4Session::turn_dial(self, name, edges)
+    }
+    fn touch_period(&self) -> PyResult<u64> {
+        Xp4Session::touch_period(self)
+    }
+    fn touch(&self, phase: &str, x: u16, y: u16) -> PyResult<()> {
+        Xp4Session::touch(self, phase, x, y)
     }
     fn set_usb_connected(&self, connected: bool) -> PyResult<()> {
         Xp4Session::set_usb_connected(self, connected)
