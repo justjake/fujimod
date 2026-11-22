@@ -106,10 +106,10 @@ kind = "write-only-registers"
 # Audio serial instance 1 (0xff991000) moved to 62-audio.toml as an `audio-serial` window.
 
 # Tier 3 (capture and develop stages) is left out on purpose: a clean strict stop at the first
-# capture block is easier to model than a hang. Candidate stubs: scratch/mmiogap/49-gap-stubs.toml.
+# capture block is easier to model than a hang.
 
 # Capture register tables: 0.19 s after S2 the table writer 0x1370e54/0x1370ec8 (CPU3) writes
-# 0xff961000..0xff96b18f (about 11,000 words; discovery run scratch/up/run17, 2026-11-18). Reads not
+# 0xff961000..0xff96b18f (about 11,000 words; found in a discovery run on the X-T5, 2026-11-18). Reads not
 # seen yet, so this is a plain register file.
 [[device]]
 base = 0xff961000
