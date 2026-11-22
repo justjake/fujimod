@@ -746,6 +746,50 @@ mod tests {
         }
     }
     #[test]
+    fn bank1_blank_then_enabled_plane_and_disabled_scanout() {
+        let (mut d, mut h) = setup(1);
+        let base = d.base();
+        // Give the empty bank a canvas and a programmed pixel clock.
+        let mut pll = crate::panel_clock::PanelPll::new(0xffa11000, d.clocks.clone()).unwrap();
+        write(&mut pll, &mut h, 0xffa11000, 1);
+        write(&mut d, &mut h, base + 0x14, 2);
+        write(&mut d, &mut h, base + 0x24, 2);
+        write(&mut d, &mut h, base + 8, 0);
+        due(&mut d, &mut h);
+        due(&mut d, &mut h);
+        assert_eq!(h.frames.len(), 1);
+        assert_eq!((h.frames[0].output, h.frames[0].width, h.frames[0].height), (1, 2, 2));
+        assert_eq!(h.frames[0].rgba, [0, 0, 0, 255].repeat(4));
+        let blank_sequence = h.frames[0].sequence;
+
+        // The preconfigured 2x2 OSD uses synthetic pixels from the host's RAM.
+        write(&mut d, &mut h, base + 0x5c, 0);
+        write(&mut d, &mut h, base + 8, 1 << 20);
+        for _ in 0..3 {
+            due(&mut d, &mut h);
+        }
+        assert_eq!(h.frames.len(), 2);
+        assert_eq!(h.frames[1].sequence, blank_sequence + 1);
+        assert_eq!(h.frames[1].output, 1);
+        assert_eq!(h.frames[1].rgba, [
+            255, 0, 0, 255, 0, 255, 0, 255,
+            0, 0, 255, 255, 255, 255, 255, 255,
+        ]);
+
+        let token = d.state.generation;
+        write(&mut d, &mut h, base + 4, 0);
+        let frame_count = h.frames.len();
+        let irq_count = h.irqs.len();
+        h.now += 1_000_000_000;
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        d.event(&mut cx, token);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(d.next_deadline(h.now), None);
+        assert_eq!(h.frames.len(), frame_count);
+        assert_eq!(h.irqs.len(), irq_count);
+    }
+
+    #[test]
     fn packed_picture_uses_dma_crop_and_rejects_split_packing() {
         let (mut d, mut h) = setup(1);
         let base = d.base();
