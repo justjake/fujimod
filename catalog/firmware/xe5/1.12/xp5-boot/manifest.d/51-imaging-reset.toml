@@ -1,8 +1,8 @@
-# Input reset gate at 0xff950000, declared as on the X-T5 board (51-imaging-reset.toml there): the
-# shared model owns +0x0 and +0x4; the later registers read back their last write. The X-E5's first
-# access is a 4-byte read of +0x4 from 0x9eda8 right after the last first-start page, so the
-# application is entering its imaging start. INHERITED from the X-T5 and UNVERIFIED for the X-E5:
-# which registers beyond +0x4 the X-E5 uses is not read from its firmware yet.
+# VERIFIED X-E5 1.12 input reset gate base. The driver writes 0 to +0x0
+# and polls bit 0 for 1 (0x0147bea8). It reads and updates +0x4 bit 0
+# (0x0147beec) and +0x8 bit 4 (0x0147c00c). The diagnostic range reaches
+# +0x7ac (0x04360ec0, read by 0x03349e1c).
+# Exact aperture size and general last-write read-back are UNVERIFIED.
 [[device]]
 base = 0xff950000
 size = 0x1000

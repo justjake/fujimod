@@ -1,42 +1,35 @@
-# The options of the windows below are the X-T5 4.31 board fragment's (50-imaging.toml there): frame periods of
-# 33333 us because the REC start sequence gives up after about 1 s without a frame, and read-back words.
-# INHERITED and UNVERIFIED for the X-E5: its own periods and registers are not read from its firmware yet.
-# XP5 receiver and image-processing windows for the catalog run scene.
+# X-E5 1.12 imaging. VERIFIED marks firmware addresses and accepted register values.
+# Window sizes are catalog allocations. The register dumps and accessors show the used
+# offsets, with no evidence of the exact hardware aperture sizes.
+# Frame periods are UNVERIFIED fixed cadences. The sensor timing calculation uses line
+# length, frame line count, and clock parameters for the selected mode (0x034ed2cc,
+# 0x034dfeac, 0x03445ad0).
+# source_luma and retain_words are UNVERIFIED model inputs.
+#
+# VERIFIED sensor command / input buffer base (0x0146aec4). Reset clears +0x0 bit 0
+# and waits for it to read 1. The driver writes +0x440..+0x47c (0x0146db84,
+# 0x0146e048), reads those words (0x0146e50c, 0x0146e658), and also accesses
+# +0x480/+0x484 and +0x4c0/+0x4c4 (0x0146d528, 0x0146d6d0).
 [[device]]
 base = 0xff948000
 size = 0x1000
 kind = "imaging-sensor"
 [device.options]
-# Bring-up: X-T5 4.31 writes +0x440..+0x484 and uses +0x4c0..+0x4e8 (meaning unknown); they read back
-# their last write.
 retain_words = true
-# Functional scheduled latency per packet, not measured camera timing.
-command_latency_us = 1
+command_latency_us = 1 # UNVERIFIED packet latency.
 
-# The other imaging windows are adapted from the X100VI fragment (x100vi/1.31/xp5-boot/
-# manifest.d/50-imaging.toml). The window addresses are the XP5 SoC profile's
-# (catalog/soc/xp5/soc.json), which the former X-T5 bring-up runner used unchanged for this body.
-# Differences from the X100VI fragment:
-#   - Frame periods are 33333 us (30 frames per second): the X-T5 REC start sequence gives up
-#     after about 1 s without a frame. A functional cadence, not measured sensor timing.
-#   - No imaging-statistics window at 0xff800000 (size 0xeb40). The former runner omitted it, and it
-#     shares its base with the boot SRAM that the SD-card start turns into RAM (card-handoff.toml,
-#     pc = 0xff800000).
-#   - No focus or iris actuator: on the X-T5, SSP4 (0xff914000) is the audio codec link
-#     (40-serial.toml) and SSP5 (0xff915000) carries the panels (43-panel-serial.toml).
-#   - The receiver PHY (0xff944000) and the input reset gate (0xff950000) are declared in
-#     52-imaging-phy.toml and 51-imaging-reset.toml.
-# Not checked against X-T5 hardware: these are FujiMod's functional stand-ins, as on the X100VI.
-
-# Sensor stream and receiver enables gate RAW14-LE16 ramp production.
-# Guest-programmed raw input DMA receives pixels; causes 1/0 drive stock IRQs.
+# VERIFIED SLVS-EC receiver bases and 0x1000 bank stride (0x01484d8c, 0x01484dec).
+# The reset tables write +0x0 bit 16, then also bit 0 for the enabled links
+# (0x04375df0, 0x043760b0). They clear +0x104, later write 0x4001 there, and
+# write 3 at +0x10c (0x04375e20, 0x04375e08, 0x043760c0).
+# The diagnostic ranges extend to +0x254 (0x04360b78, 0x04360bf0).
 [[device]]
 base = 0xff940000
 size = 0x1000
 kind = "imaging-receiver"
 [device.options]
 frame_period_us = 33333
-frame_active_us = 10000 # Functional phase interval; DMA completes after frame-end.
+frame_active_us = 10000 # UNVERIFIED frame phase interval.
 [[device]]
 base = 0xff941000
 size = 0x1000
@@ -44,7 +37,10 @@ kind = "imaging-receiver"
 [device.options]
 frame_period_us = 33333
 
-# Input-engine reset/ready gate used by native imgdc startup.
+# VERIFIED MOVDC bases and 0x1000 bank stride (0x0147931c, called with indices
+# 0 through 2 at 0x030e4644, 0x030e4654, 0x030e4664). Each reset writes 0 at
+# +0x0 and waits for bit 0 to read 1. The diagnostic ranges end at +0x114
+# (0x04361148, 0x04361160, 0x04361178).
 [[device]]
 base = 0xff970000
 size = 0x1000
@@ -52,7 +48,6 @@ kind = "movdc"
 [device.options]
 frame_period_us = 33333
 source_luma = 128
-# Bring-up: unmodeled words read back their last write.
 retain_words = true
 [[device]]
 base = 0xff971000
@@ -61,7 +56,6 @@ kind = "movdc"
 [device.options]
 frame_period_us = 33333
 source_luma = 128
-# Bring-up: unmodeled words read back their last write.
 retain_words = true
 [[device]]
 base = 0xff972000
@@ -70,8 +64,11 @@ kind = "movdc"
 [device.options]
 frame_period_us = 33333
 source_luma = 128
-# Bring-up: unmodeled words read back their last write.
 retain_words = true
+
+# VERIFIED preview base (0x01471910). Reset waits for +0x0 bit 0 and +0x504 bit 16,
+# clears +0x500 bit 8, then waits for selected busy bits at +0x20 to clear
+# (0x01471410). The diagnostic ranges extend to +0x508 (0x043611d8).
 [[device]]
 base = 0xff974000
 size = 0x1000
@@ -79,46 +76,40 @@ kind = "imaging-preview"
 [device.options]
 frame_period_us = 33333
 source_luma = 128
-# Bring-up: unmodeled words read back their last write.
 retain_words = true
-# Statistics planes 0..3 (output +0x400) are read only by the AF service (0x2fea380,
-# 0x2fe36e0): 13 x 9 cells of the four contrast filters, not 7 x 7 colour sums.
+# UNVERIFIED output interpretation. The driver programs the first output at
+# +0x400/+0x404 (0x01475268, 0x030e390c).
 focus_filters = true
-# The focus outputs measure the window of words +0x7c / +0x80 (origin << 16 | (count - 1) << 12 |
-# cell size): a 3 x 3 grid over the AF point in AF-S, not the full frame.
+# VERIFIED programmable grid at +0x7c/+0x80 (0x01472970, 0x01472ce4).
+# Each word encodes origin in bits 27:16, count minus one in 15:12,
+# and cell size minus one in 8:0. AF-S grid dimensions are UNVERIFIED.
 focus_window = true
 
-# RIFP I/O DMA. The still path (0x2c51f98, recfRecifProcess / recfRecizProcess) uses it only
-# in register-list mode: it reads the recf register queue (0x13c0e54 / 0x13c0e94, 8-byte
-# entries value, address) from DRAM and performs each entry as a 32-bit MMIO write, which
-# starts RIFP (0xffd02004 = 1). START +0x40, IRQ enable +0x44, done +0x48 (w1c), INTID 230.
-# queue_completion_us is functional, not measured.
+# VERIFIED RIFP register-list DMA base and bit 0 at START +0x40, IRQ enable
+# +0x44, and acknowledge +0x48 (0x030e85dc, 0x030e8640, 0x030e86a4).
+# The register dump reaches +0x17c (0x030e9be4).
+# The still path submits 8-byte value/address entries (0x031be890, 0x030cbb48,
+# 0x014df984), including RIFP START at 0xffd02004 = 1 (0x030cc08c).
+# DMA IRQ maps to INTID 230 (0x0380d350, 0x014be12c, 0x01a62da8).
 [[device]]
 base = 0xffd01000
 size = 0x1000
 kind = "imaging-rifp-io"
 [device.options]
-queue_completion_us = 5
+queue_completion_us = 5 # UNVERIFIED queue latency.
 
-# The window also holds the register pages of the RIFP sub-blocks 0xffd03000..0xffd0bfff (the
-# recf develop blocks between RIFP and RESZ; no INTID, no start, no poll found). Most of their
-# writes come from the recf register queue. 0xffd03000..0xffd03464 and 0xffd05000..0xffd050ec:
-# RCIF register dumps 0x2c573d0 / 0x2c6024c (called from 0x2c522b8). 0xffd07004, 0xffd0a020,
-# 0xffd0b050: read-modify-write in the RIFP band restart 0x2c531fc (ISR 0x2c517fc, more than
-# 0x500 lines left). 0xffd04000, 0xffd06000: a few sites in 0x1377848..0x1378adc. The words
-# are retained; the still path reads the colour-path words of a run from them
-# (emulator-xp5-imaging imaging_colour.rs).
+# VERIFIED RIFP base (0x030cc050). Reset writes 0 at +0x0 and waits for bit 0
+# to read 1. The ISR tests +0x144 bit 0 and writes 1 to +0x14c (0x030cb2f0,
+# 0x030cccf4, 0x030ccd78). It restarts in 0x500-line bands (0x030ccebc).
+# The still path writes sub-block pages 0xffd03000 through 0xffd08000 and
+# 0xffd0a000 through 0xffd0b000 (0x030cbec8, tables at 0x0380b478 and
+# 0x0380ce28). The last page is used through 0xffd0b800 (0x0380ce20).
+# RESZ starts at 0xffd0c000 (0x014dbe9c).
 [[device]]
 base = 0xffd02000
 size = 0xa000
 kind = "imaging-rifp"
 [device.options]
-completion_us = 1000
+completion_us = 1000 # UNVERIFIED RIFP latency.
 source_luma = 128
-# Bring-up: unmodeled words read back their last write.
 retain_words = true
-
-# SSP instance 3. The former X-T5 runner found no GPIO chip select for it (a controller-native
-# select, like the X100VI's imaging serial output) and bound an unidentified peer to GPIO 19.15,
-# an unused latch that stays low, so the endpoint is always selected. The peer accepts every
-# frame and answers low. The select pin, the peer and source_hz are UNVERIFIED bring-up inputs.
