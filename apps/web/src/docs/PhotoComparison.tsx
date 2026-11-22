@@ -10,9 +10,10 @@ const zooms = [1, 4] as const;
 /** A point on every frame, as fractions of its width and height. */
 type Point = { u: number; v: number };
 
-/** A frame's height in frame widths, which the photograph fills around the
- * focus point (fractions of the photograph's width and height). */
-export type PhotoFrame = { height: number; focus: readonly number[] };
+/** A frame's height, a fraction of the screen's height but at least
+ * min_height CSS pixels, which the photograph fills around the focus point
+ * (fractions of the photograph's width and height). */
+export type PhotoFrame = { screen_height: number; min_height: number; focus: readonly number[] };
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
@@ -28,6 +29,7 @@ export function PhotoComparison(props: { photos: readonly Photo[]; frame?: Photo
   const [zoom, setZoom] = createSignal(0);
   const [dpr, setDpr] = createSignal(2);
   const [frameWidth, setFrameWidth] = createSignal(1);
+  const [frameHeight, setFrameHeight] = createSignal(1);
   let row!: HTMLDivElement;
 
   onSettled(() => {
@@ -41,10 +43,14 @@ export function PhotoComparison(props: { photos: readonly Photo[]; frame?: Photo
       row.style.marginLeft = `${left - natural}px`;
       row.style.width = `${document.documentElement.clientWidth - left}px`;
       setDpr(devicePixelRatio);
-      setFrameWidth(row.querySelector('.photo-frame')?.clientWidth ?? 1);
+      const frame = row.querySelector('.photo-frame');
+      setFrameWidth(frame?.clientWidth ?? 1);
+      setFrameHeight(frame?.clientHeight ?? 1);
     };
     const observer = new ResizeObserver(fit);
     observer.observe(document.documentElement);
+    const frame = row.querySelector('.photo-frame');
+    if (frame) observer.observe(frame);
     fit();
     return () => observer.disconnect();
   });
@@ -56,7 +62,7 @@ export function PhotoComparison(props: { photos: readonly Photo[]; frame?: Photo
    * the offset of its top left corner, centered on the focus point. */
   const fill = (photo: Photo) => {
     const width = frameWidth();
-    const height = props.frame ? width * props.frame.height : (width * photo.height) / photo.width;
+    const height = props.frame ? frameHeight() : (width * photo.height) / photo.width;
     const cover = Math.max(width / photo.width, height / photo.height);
     const [fx = 0.5, fy = 0.5] = props.frame?.focus ?? [];
     return {
@@ -138,11 +144,13 @@ export function PhotoComparison(props: { photos: readonly Photo[]; frame?: Photo
           <figure class="photo-cell">
             <div
               class="photo-frame"
-              style={{
-                'aspect-ratio': props.frame
-                  ? `1 / ${props.frame.height}`
-                  : `${photo.width} / ${photo.height}`,
-              }}
+              style={
+                props.frame
+                  ? {
+                      height: `max(${props.frame.screen_height * 100}svh, ${props.frame.min_height}px)`,
+                    }
+                  : { 'aspect-ratio': `${photo.width} / ${photo.height}` }
+              }
             >
               <img
                 style={{ 'object-position': `${fill(photo).x}px ${fill(photo).y}px` }}
