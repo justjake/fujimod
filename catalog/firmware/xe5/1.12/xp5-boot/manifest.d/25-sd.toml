@@ -1,10 +1,27 @@
-# SD slots 0 and 1 at 0xff9b0000 + (n << 14), declared as on the X-T5 board (25-sd.toml there; the
-# driver layout is documented there): per instance the UHS-I SDHCI host, its selection words and the
-# UHS-II register file at +0x2200 with the PHY block at +0x2000. The application's first access is a
-# read at 0xff9b2080 from 0x14c4f10. Every value is INHERITED and UNVERIFIED for the X-E5:
-# transfer_ticks, clock_ticks and rca are session assumptions, ram_bytes is the run's DRAM limit, and
-# capabilities sets only bit 35 (UHS-II support) as on the X-T5; the X-E5's slot count and UHS-II
-# support are not read from its firmware yet. No interrupt line is declared: the boot polls.
+# VERIFIED SD controller layout: the X-E5 1.12 driver addresses slot n (n < 2) at
+# 0xff9b0000 + (n << 14), with UHS-I SDHCI at +0x0000 (vendor registers through +0x124,
+# 0x014c74dc), sd-interface selection words at +0x01e0/+0x01e4 (0x014c6ae4), UHS-II PHY at +0x2000
+# (first access 0xff9b2080 |= 0xf00 at 0x014c4f0c..0x014c4f18; power-down poll +0x2060 bit 1 and
+# +0x207c bit 0 at 0x014c6b78), and UHS-II SDHCI at +0x2200 (capabilities bit 35 at +0x2244 bit 3,
+# 0x014c6d90; present state bit 31 at 0x014c51c0 and bit 30 at 0x014c6f5c; clock stable +0x2c bit 1
+# at 0x014c5e78/0x014c6000; UHS-I present state +0x24 bit 16 at 0x014c6cc4 and bits 0..1 at
+# 0x014c5d24; software resets +0x2e bits 9..10 at 0x014c5b84/0x014c5bf4 and +0x22c0 bit 1 at
+# 0x014c73bc; DMA address-high at 0xff90e7d8 / 0xff90e7d0..4 for slot 0 and 0xff90e7e4 for slot 1 at
+# 0x014c78a4).
+#
+# VERIFIED single-slot body wiring: only slot 0 (0xff9b0000) is wired on the X-E5: pins 11.11 and
+# 11.12 (0xb000b, 0xb000c, 0x014c5024; 11.12 also polled for SD card detect in 0x014c5c88), power
+# GPIOs 13.6 and 5.7 (0xd0006, 0x50007, driven high in 0x014c4e28 and low in 0x014c491c), clock and
+# reset controls (0x014c4ce8 -> 0xff90c940 bits 0..1 via 0x014ca2b0 and 0x50/0x51 via 0x014c9fac),
+# and interrupts (0x014c2e88: source 0x84 INTID 262 for UHS-I, 0x85 INTID 267 for UHS-II, table
+# 0x01a62c58). Slot 1 (0xff9b4000) has no pin, power, or interrupt wiring in those routines (0x014c5c88
+# passes 0xffffffff; 0x014c2e88 returns an error); its windows remain declared here only to match
+# the second [[sd]] entry in manifest.toml.
+#
+# HARDWARE-ONLY / UNVERIFIED: protocol, transfer_ticks, clock_ticks, rca, and SD card responses are
+# session assumptions; ram_bytes is a session DRAM limit; capabilities sets bit 35 (the UHS-II bit
+# tested by 0x014c6d90) and leaves all other capability bits UNVERIFIED. No interrupt line is
+# declared: the boot polls.
 
 [[device]]
 base = 0xff9b0000
