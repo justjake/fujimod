@@ -17,6 +17,9 @@ struct State {
     generation: u64,
     words: Vec<u16>,
     transfers: u64,
+    // Mode-0 peer is unidentified. Keep a bounded bus trace, not a guessed display.
+    #[serde(default)]
+    mode0_words: Vec<u16>,
     deadline: Option<u64>,
 }
 pub struct PanelSerial {
@@ -43,6 +46,13 @@ impl PanelSerial {
     }
     fn complete(&mut self, cx: &mut Cx<'_>, word: u16) {
         self.s.transfers += 1;
+        if self.s.control & 0xff == 0x0f {
+            if self.s.mode0_words.len() == 4096 { self.s.mode0_words.remove(0); }
+            self.s.mode0_words.push(word);
+            self.s.rx = Some(0); // Declared idle MISO, not a measured response.
+            cx.log(&format!("SPI9 unidentified mode-0 tx{word:#06x}"));
+            return;
+        }
         if self.s.words.len() == 4096 {
             self.s.words.remove(0);
         }
@@ -113,7 +123,7 @@ impl Device for PanelSerial {
             }
             0x24 if v == 0 => self.s.interrupt_enable = 0,
             8 if v <= 0xffff => {
-                if self.s.control & 0xff != 0xcf || self.s.enable & 2 == 0 || self.s.divider == 0 {
+                if !matches!(self.s.control & 0xff, 0x0f | 0xcf) || self.s.enable & 2 == 0 || self.s.divider == 0 {
                     cx.fail("unsupported/unconfigured SPI9 panel mode");
                     return;
                 }
@@ -121,7 +131,7 @@ impl Device for PanelSerial {
                     cx.fail("SPI9 unread receive word");
                     return;
                 }
-                if self
+                if self.s.control & 0xff == 0xcf && self
                     .pins
                     .lock()
                     .unwrap()
@@ -238,14 +248,8 @@ mod tests {
         let mut host = RecordingHost::default();
         {
             let mut cx = Cx::new(&mut host, 0, 0, 0);
-            for (o, v) in [(0, 0x0f), (4, 2), (0x10, 16), (8, 0)] {
-                panel.write(&mut cx, BASE + o, 4, v);
-            }
-            assert!(cx.refusal().unwrap().contains("mode"));
-        }
-        assert_eq!(panel.next_deadline(0), None);
-        {
-            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            panel.write(&mut cx, BASE + 4, 4, 2);
+            panel.write(&mut cx, BASE + 0x10, 4, 16);
             panel.write(&mut cx, BASE, 4, 0xc7); // 8-bit, mode 3
             panel.write(&mut cx, BASE + 8, 4, 0);
             assert!(cx.refusal().unwrap().contains("mode"));
@@ -273,6 +277,31 @@ mod tests {
             panel.write(&mut cx, BASE, 4, 0x0f);
             assert!(cx.refusal().unwrap().contains("during panel transfer"));
         }
+    }
+
+    #[test]
+    fn mode0_transfers_are_timed_and_recorded_separately() {
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new()).unwrap();
+        let mut panel = PanelSerial::new(pins, (15, 13), 48_000_000).unwrap();
+        let mut host = RecordingHost::default();
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            // Panel is deselected; mode 0 is a separate, unidentified bus path.
+            gpio.write(&mut cx, 0xff9073c0, 4, (1 << 29) | (1 << 13));
+            for (o, v) in [(0, 0x0f), (4, 2), (0x10, 28), (8, 0x1234)] {
+                panel.write(&mut cx, BASE + o, 4, v);
+            }
+            assert!(cx.refusal().is_none());
+            assert_eq!(panel.read(&mut cx, BASE + 0xc, 4), 0x12);
+        }
+        host.now = panel.next_deadline(0).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(panel.read(&mut cx, BASE + 0xc, 4), 7);
+        assert_eq!(panel.read(&mut cx, BASE + 8, 4), 0);
+        assert_eq!(panel.save()["mode0_words"], serde_json::json!([0x1234]));
+        assert_eq!(panel.save()["words"], serde_json::json!([]));
+        assert!(cx.refusal().is_none());
     }
 
 }
