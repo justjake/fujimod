@@ -1,23 +1,18 @@
 //! The XP5 bring-up run: open a session from explicit inputs, drive it in slices and record
 //! the outcome in the run directory.
-use super::{Started, Startup, open as session_open};
-use crate::host::{parse_gpio, parse_number, parse_poke, parse_stub};
-use crate::mod_loader;
-use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator::board::Board;
-use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_devices::graphics::scanout::Frame;
-use fujimod_emulator_parts_controls::key_input::Key;
-use fujimod_emulator_session::Session;
-use serde_json::{Value, json};
-use std::{
-    path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::{Duration, Instant},
+use super::{
+    Startup, Started, open as session_open,
 };
+use crate::mod_loader;
+use crate::host::{parse_gpio, parse_number, parse_stub, parse_timed_poke};
+use fujimod_emulator::board::Board;
+use fujimod_emulator_devices::graphics::scanout::Frame;
+use fujimod_emulator_session::Session;
+use fujimod_catalog_resolution::ResolvedConfiguration;
+use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_parts_controls::key_input::Key;
+use serde_json::{Value, json};
+use std::{collections::VecDeque, path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 
 /// Write one little-endian word for --poke: a physical address first, else CPU0's virtual view.
 fn poke_word(board: &fujimod_emulator::board::Board, address: u64, value: u32) -> Result<(), String> {
@@ -91,6 +86,82 @@ fn shared_boot_summary(
         "unmodeled": state["bus"]["unmodeled"],
         "frontier": state["bus"]["frontier"],
     })
+}
+
+
+/// One physical input requested through the frame viewer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ViewerInput {
+    /// A key of the body's key model.
+    Key(Key),
+    /// The shutter release: half (S1) or full (S2) press.
+    Shutter { full: bool },
+    /// A dial or switch position (viewer `POST /set`, sent as `SET CONTROL=POSITION`).
+    Set { control: String, position: String },
+}
+
+impl ViewerInput {
+    /// Validate a viewer key name. The names are the `--press` key names; `SET CONTROL=POSITION`
+    /// is a position change in the `--set` syntax, without a time.
+    fn parse(name: &str) -> Result<Self, String> {
+        if let Some(setting) = name.strip_prefix("SET ") {
+            let mut changes = crate::host::parse_settings(setting)?;
+            return match (changes.pop(), changes.is_empty()) {
+                (Some(change), true) if change.at_ms == 0 && !setting.contains('@') => {
+                    Ok(Self::Set { control: change.control, position: change.position })
+                }
+                _ => Err("viewer position changes take one CONTROL=POSITION and no time".into()),
+            };
+        }
+        Ok(match Key::parse(name)? {
+            Key::ShutterHalf => Self::Shutter { full: false },
+            Key::ShutterFull => Self::Shutter { full: true },
+            key => Self::Key(key),
+        })
+    }
+}
+
+/// Viewer key requests waiting for the next run slice. The viewer's client threads push them;
+/// the run loop applies them at the guest time it reaches between slices.
+type ViewerQueue = std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<(ViewerInput, bool)>>>;
+
+fn viewer_key_handler(queue: ViewerQueue) -> crate::frame_viewer::KeyHandler {
+    std::sync::Arc::new(move |name: &str, pressed: bool| {
+        let input = ViewerInput::parse(name)?;
+        queue.lock().map_err(|_| "viewer key queue is poisoned".to_string())?.push_back((input, pressed));
+        Ok(())
+    })
+}
+
+/// Apply one viewer input at guest time `now`. A body whose key model has no shutter wiring
+/// (the X-T5 ladder keys) gets the shutter as its GPIO release lines: half press drives 0:0 low,
+/// full press drives 0:1 low and holds 0:0 low while it is down.
+fn apply_viewer_input(
+    inputs: &fujimod_emulator_xp5_board::session::Inputs,
+    session: &mut fujimod_emulator_session::Session,
+    now: u64,
+    shutter: &mut [bool; 2],
+    (input, pressed): (ViewerInput, bool),
+) -> Result<(), String> {
+    match input {
+        ViewerInput::Key(key) => inputs.key(session, now, key, pressed),
+        ViewerInput::Set { control, position } => inputs.set_position(session, now, &control, &position),
+        ViewerInput::Shutter { full } => {
+            let key = if full { Key::ShutterFull } else { Key::ShutterHalf };
+            if inputs.key(session, now, key, pressed).is_ok() {
+                return Ok(());
+            }
+            let (half_high, full_high) = shutter_levels(shutter, full, pressed);
+            inputs.gpio(session, 0, 0, half_high)?;
+            inputs.gpio(session, 0, 1, full_high)
+        }
+    }
+}
+
+/// Record a shutter edge and return the active-low GPIO levels of 0:0 (S1) and 0:1 (S2).
+fn shutter_levels(shutter: &mut [bool; 2], full: bool, pressed: bool) -> (bool, bool) {
+    shutter[usize::from(full)] = pressed;
+    (!(shutter[0] || shutter[1]), !shutter[1])
 }
 
 /// One XP5 boot: the run configuration plus the caller's input files.
@@ -176,17 +247,21 @@ pub struct RunHost {
     slice: u64,
     patches: crate::patch::Schedule,
     fujimod: Option<mod_loader::Loaded>,
-    stubbed: Vec<u64>,
     interrupted: Arc<AtomicBool>,
     limits: crate::host::Limits,
     save_snapshot: Option<PathBuf>,
     screenshot: Option<PathBuf>,
-    pc_trace: Option<(
-        crate::TraceOutput,
-        fujimod_emulator::board::observation::PcTrace,
-    )>,
+    pc_trace: Option<(crate::TraceOutput, fujimod_emulator::board::observation::PcTrace)>,
     dumps: Vec<(u64, usize)>,
     hashes: Vec<(u64, u64)>,
+    card_write_back: Vec<super::loader_card::WriteBack>,
+    timed_gpio: VecDeque<(u64, u64, (u8, u8, bool))>,
+    timed_pokes: VecDeque<(u64, u64, (u64, u32))>,
+    watch_pcs: Vec<u64>,
+    watch_writes: Vec<(u64, u64)>,
+    watch_after: Option<(u64, u64)>,
+    viewer_queue: ViewerQueue,
+    viewer_shutter: [bool; 2],
     frames: Vec<Frame>,
     latest_frame: Option<Frame>,
 }
@@ -201,6 +276,7 @@ impl RunHost {
             update,
             manifest,
             watch_pcs,
+            watch_writes,
             pc_trace,
             screenshot,
             viewer_port,
@@ -209,10 +285,14 @@ impl RunHost {
             boot_rom: rom_path,
             card_image: sd_image,
             card_files,
+            second_card_image,
+            second_card_files,
             keys: key_script,
-            gpio,
+            gpio: gpio_spec,
             pokes,
             press,
+            settings,
+            camera_settings,
             discovery,
             stubs,
             patch_file,
@@ -235,6 +315,7 @@ impl RunHost {
             .iter()
             .map(|stub| parse_stub(stub))
             .collect::<Result<Vec<_>, _>>()?;
+        let configuration_id = configuration.configuration.id.clone();
         let mut watch_pcs = watch_pcs
             .as_deref()
             .unwrap_or_default()
@@ -244,6 +325,10 @@ impl RunHost {
             .collect::<Result<Vec<_>, _>>()?;
         watch_pcs.sort_unstable();
         watch_pcs.dedup();
+        let watch_writes = parse_ranges(
+            "--watch-writes",
+            &watch_writes.unwrap_or_default().replace(',', ";"),
+        )?;
         let dumps = parse_dumps(dump.as_deref().unwrap_or_default())?;
         let hashes = parse_ranges("--hash", hash.as_deref().unwrap_or_default())?;
         let patches = crate::patch::Schedule::from_path(
@@ -254,35 +339,61 @@ impl RunHost {
             .into_iter()
             .map(|edge| Ok((edge.delay, Key::parse(&edge.name)?, edge.pressed)))
             .collect::<Result<Vec<_>, String>>()?;
-        let gpio = gpio
+        let settings = crate::host::parse_settings(settings.as_deref().unwrap_or_default())?;
+        let mut gpio = Vec::new();
+        let mut timed_gpio = Vec::new();
+        for item in gpio_spec
             .as_deref()
-            .map(|spec| {
-                spec.split(',')
-                    .map(parse_gpio)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()?
-            .unwrap_or_default();
-        let pokes = pokes
-            .iter()
-            .map(|spec| parse_poke(spec))
-            .collect::<Result<Vec<_>, _>>()?;
-        let configuration_id = configuration.configuration.id.clone();
-        let host_configuration = configuration.clone();
+            .unwrap_or_default()
+            .split(',')
+            .filter(|item| !item.trim().is_empty())
+        {
+            match item.trim().split_once('@') {
+                Some((level, at)) => {
+                    let at_ms: u64 = at.trim().parse().map_err(|_| {
+                        format!("--gpio {item}: the time after @ is whole milliseconds")
+                    })?;
+                    timed_gpio.push((at_ms, parse_gpio(level)?));
+                }
+                None => gpio.push(parse_gpio(item.trim())?),
+            }
+        }
+        timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
+        let watch_after_ms = match std::env::var("XT5_WATCH_AFTER_MS") {
+            Ok(value) => Some(value.trim().parse::<u64>().map_err(|_| {
+                "XT5_WATCH_AFTER_MS needs whole milliseconds".to_string()
+            })?)
+            .filter(|ms| *ms > 0),
+            Err(_) => None,
+        };
+        let mut timed_pokes = Vec::new();
+        let mut untimed_pokes = Vec::new();
+        for spec in &pokes {
+            match parse_timed_poke(spec)? {
+                (Some(at_ms), address, value) => timed_pokes.push((at_ms, (address, value))),
+                (None, address, value) => untimed_pokes.push((address, value)),
+            }
+        }
+        timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
+        let viewer_queue = ViewerQueue::default();
         let request = Startup {
             update,
             manifest,
             boot_rom: rom_path,
             card_image: sd_image,
             card_files,
+            second_card_image,
+            second_card_files,
             scene,
             output: Some(run_directory.clone()),
             viewer_port,
+            viewer_keys: viewer_port.map(|_| viewer_key_handler(viewer_queue.clone())),
             mode,
             quantum: quantum_override,
+            camera_settings,
         };
         let crate::Opened::Xp5(started) =
-            crate::open(configuration, crate::StartupInputs::Xp5(request))?
+            crate::open(configuration.clone(), crate::StartupInputs::Xp5(request))?
         else {
             return Err("XP5 startup returned another processor generation".into());
         };
@@ -290,6 +401,7 @@ impl RunHost {
             firmware,
             state,
             opened,
+            card_write_back,
         } = *started;
         let session_open::Opened {
             mut session,
@@ -302,15 +414,13 @@ impl RunHost {
         if let Some(path) = load_snapshot {
             crate::load_snapshot(&mut session, &path)?;
         }
-        session
-            .board
-            .install_discovery_callee_stubs(&callee_stubs)?;
+        session.board.install_discovery_callee_stubs(&callee_stubs)?;
         session.board.set_execution_policy(policy)?;
-        session.board.watch_pcs(&watch_pcs)?;
-        let trace = pc_trace
-            .as_ref()
-            .map(|output| output.begin(&session))
-            .transpose()?;
+        if watch_after_ms.is_none() {
+            session.board.watch_pcs(&watch_pcs)?;
+            session.board.watch_writes(&watch_writes)?;
+        }
+        let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
         let fujimod = if mod_specs.is_empty() {
             None
         } else {
@@ -341,13 +451,8 @@ impl RunHost {
         for (port, pin, high) in gpio {
             inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
         }
-        for (address, value) in pokes {
-            let bytes = value.to_le_bytes();
-            session
-                .board
-                .write_physical(address, &bytes)
-                .or_else(|_| session.board.write_memory(0, address, &bytes))
-                .map_err(|error| format!("poke {address:#x}: {error}"))?;
+        for (address, value) in untimed_pokes {
+            poke_word(&session.board, address, value)?;
         }
         let start = session.board.now();
         for (delay, key, pressed) in keys {
@@ -359,19 +464,37 @@ impl RunHost {
                 pressed,
             )?;
         }
+        let millisecond_tick = |ms: u64| {
+            start.saturating_add(crate::host::duration_ticks(
+                std::time::Duration::from_millis(ms),
+                ticks_per_second,
+            ))
+        };
+        for change in settings {
+            inputs.set_position(
+                &mut session,
+                millisecond_tick(change.at_ms),
+                &change.control,
+                &change.position,
+            )?;
+        }
+        let timed_gpio = timed_gpio
+            .into_iter()
+            .map(|(at_ms, level)| (millisecond_tick(at_ms), at_ms, level))
+            .collect();
+        let timed_pokes = timed_pokes
+            .into_iter()
+            .map(|(at_ms, write)| (millisecond_tick(at_ms), at_ms, write))
+            .collect();
+        let watch_after = watch_after_ms.map(|ms| (millisecond_tick(ms), ms));
         let interrupted = Arc::new(AtomicBool::new(false));
         let signal = interrupted.clone();
         ctrlc::set_handler(move || signal.store(true, Ordering::Release))
             .map_err(|error| error.to_string())?;
-        let limits =
-            crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?
-                .with_wall(wall_seconds);
-        let stubbed = callee_stubs
-            .iter()
-            .map(|stub| stub.address)
-            .collect::<Vec<_>>();
+        let limits = crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?
+            .with_wall(wall_seconds);
         Ok(Self {
-            configuration: host_configuration,
+            configuration,
             configuration_id,
             firmware: firmware.id,
             policy,
@@ -382,14 +505,15 @@ impl RunHost {
             quantum,
             run_directory: run_directory.clone(),
             start,
-            next_status: start
-                .saturating_add(crate::host::duration_ticks(status_every, ticks_per_second)),
+            next_status: start.saturating_add(crate::host::duration_ticks(
+                status_every,
+                ticks_per_second,
+            )),
             status_every,
             next_wall_status: Instant::now() + WALL_STATUS_EVERY,
             slice: ((ticks_per_second / 1_000).max(1)).min(100_000_000),
             patches,
             fujimod,
-            stubbed,
             interrupted,
             limits,
             save_snapshot,
@@ -397,6 +521,14 @@ impl RunHost {
             pc_trace: pc_trace.zip(trace),
             dumps,
             hashes,
+            card_write_back,
+            timed_gpio,
+            timed_pokes,
+            watch_pcs,
+            watch_writes,
+            watch_after,
+            viewer_queue,
+            viewer_shutter: [false; 2],
             frames: Vec::new(),
             latest_frame: None,
         })
@@ -406,11 +538,10 @@ impl RunHost {
     pub fn step(&mut self) -> Result<(), String> {
         let Self {
             session,
-            inputs: _,
+            inputs,
             outputs,
             patches,
             fujimod,
-            stubbed,
             interrupted,
             limits,
             start,
@@ -422,8 +553,13 @@ impl RunHost {
             next_wall_status,
             frames,
             latest_frame,
-            configuration_id,
-            firmware,
+            timed_gpio,
+            timed_pokes,
+            watch_pcs,
+            watch_writes,
+            watch_after,
+            viewer_queue,
+            viewer_shutter,
             policy,
             ..
         } = self;
@@ -438,17 +574,67 @@ impl RunHost {
         if let Some(loaded) = fujimod.as_mut() {
             loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
         }
-        let until = next_patch.map_or(now.saturating_add(*slice), |at| {
-            at.min(now.saturating_add(*slice))
-        });
-        // Keep the desktop responsive while the guest makes progress: one host-sized slice per
-        // poll, not the headless driver's full budget.
+        while let Some(&(at, at_ms, (port, pin, high))) = timed_gpio.front() {
+            if at > now {
+                break;
+            }
+            timed_gpio.pop_front();
+            inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
+            eprintln!(
+                "FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})",
+                u8::from(high)
+            );
+        }
+        while let Some(&(at, at_ms, (address, value))) = timed_pokes.front() {
+            if at > now {
+                break;
+            }
+            timed_pokes.pop_front();
+            poke_word(&session.board, address, value)?;
+            eprintln!("FUJIMOD XP5 poke: {address:#x}={value:#x} at {at_ms} ms (tick {now})");
+        }
+        let requested: Vec<_> = viewer_queue
+            .lock()
+            .map_err(|_| "viewer key queue is poisoned".to_string())?
+            .drain(..)
+            .collect();
+        for request in requested {
+            if let Err(error) = apply_viewer_input(
+                inputs,
+                session,
+                now,
+                viewer_shutter,
+                request.clone(),
+            ) {
+                eprintln!("FUJIMOD XP5 viewer key {request:?}: {error}");
+            } else {
+                eprintln!("FUJIMOD XP5 viewer key {request:?} at tick {now}");
+            }
+        }
+        if let Some((at, after_ms)) = *watch_after
+            && at <= now
+        {
+            *watch_after = None;
+            session.board.watch_pcs(watch_pcs)?;
+            session.board.watch_writes(watch_writes)?;
+            eprintln!("FUJIMOD XP5 watch-pcs armed at {after_ms} ms (tick {now})");
+        }
+        let until = [
+            next_patch,
+            timed_gpio.front().map(|item| item.0),
+            timed_pokes.front().map(|item| item.0),
+            watch_after.map(|item| item.0),
+        ]
+        .into_iter()
+        .flatten()
+        .fold(now.saturating_add(*slice), u64::min);
+        // One bounded slice per frontend poll keeps the desktop responsive.
         let result = session.run_with_limits(1_000_000, *quantum, None, Some(until));
         for line in session.board.take_console() {
             println!("{line}");
         }
+        print_write_notes(&session.board, *ticks_per_second);
         for frame in session.board.take_frames() {
-            // The body's primary LCD can be any modeled output bank.
             *latest_frame = Some(frame.clone());
             frames.push(frame.clone());
             outputs.frame(frame)?;
@@ -477,12 +663,9 @@ impl RunHost {
                 "FUJIMOD XP5 status: {}",
                 shared_boot_summary(&state, &session.board, *policy)
             );
-            *next_status = now.saturating_add(crate::host::duration_ticks(
-                *status_every,
-                *ticks_per_second,
-            ));
+            *next_status = now
+                .saturating_add(crate::host::duration_ticks(*status_every, *ticks_per_second));
         }
-        let _ = (configuration_id, firmware, stubbed);
         Ok(())
     }
 
@@ -511,7 +694,9 @@ impl RunHost {
     }
 
     /// The session and its physical input handle, borrowed together for one input change.
-    pub fn parts_mut(&mut self) -> (&mut Session, &fujimod_emulator_xp5_board::session::Inputs) {
+    pub fn parts_mut(
+        &mut self,
+    ) -> (&mut Session, &fujimod_emulator_xp5_board::session::Inputs) {
         (&mut self.session, &self.inputs)
     }
 
@@ -566,6 +751,7 @@ impl RunHost {
             pc_trace,
             dumps,
             hashes,
+            card_write_back,
             ..
         } = self;
         let trace_write = pc_trace.map_or(Ok(()), |(output, trace)| output.write(trace));
@@ -573,8 +759,13 @@ impl RunHost {
             .as_ref()
             .map_or(Ok(()), |path| crate::save_snapshot(&session, path));
         let board_finish = session.board.finish();
-        let output_finish =
-            screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
+        let card_write = card_write_back
+            .iter()
+            .try_for_each(|back| back.write(&session));
+        let output_finish = screenshot.map_or_else(
+            || outputs.finish(),
+            |path| outputs.screenshot(&path),
+        );
         let state = session.board.state();
         let state_write = serde_json::to_vec_pretty(&state)
             .map_err(|error| error.to_string())
@@ -589,6 +780,7 @@ impl RunHost {
             ("board", board_finish),
             ("outputs", output_finish),
             ("board state", state_write),
+            ("card image", card_write),
         ]
         .into_iter()
         .filter_map(|(name, result)| result.err().map(|error| format!("{name}={error}")))
@@ -666,9 +858,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     // Input-only parsing comes first, so a malformed spec fails before the run directory exists
     // and before the board is opened. Patch times stay in milliseconds and the key delays stay
     // durations until the run starts and its tick rate is known.
-    let mut watch_pcs = watch_pcs
-        .as_deref()
-        .unwrap_or_default()
+    let mut watch_pcs = watch_pcs.as_deref().unwrap_or_default()
         .split(',')
         .filter(|item| !item.trim().is_empty())
         .map(|item| parse_number(item.trim()))
@@ -679,26 +869,50 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let dumps = parse_dumps(dump.as_deref().unwrap_or_default())?;
     let hashes = parse_ranges("--hash", hash.as_deref().unwrap_or_default())?;
     let mut patches = crate::patch::Schedule::from_path(
-        patch_file.as_deref(),
-        &[0..0x8000_0000, 0xfa20_0000..0xfa30_0000],
+        patch_file.as_deref(), &[0..0x8000_0000, 0xfa20_0000..0xfa30_0000],
     )?;
-    let keys = crate::host::parse_keys(key_script.as_deref(), press.as_deref())?
-        .into_iter()
+    let keys = crate::host::parse_keys(key_script.as_deref(), press.as_deref())?.into_iter()
         .map(|edge| Ok((edge.delay, Key::parse(&edge.name)?, edge.pressed)))
         .collect::<Result<Vec<_>, String>>()?;
-    let gpio = gpio
-        .as_deref()
-        .map(|spec| {
-            spec.split(',')
-                .map(parse_gpio)
-                .collect::<Result<Vec<_>, _>>()
-        })
-        .transpose()?
-        .unwrap_or_default();
-    let pokes = pokes
-        .iter()
-        .map(|spec| parse_poke(spec))
-        .collect::<Result<Vec<_>, _>>()?;
+    let settings = crate::host::parse_settings(settings.as_deref().unwrap_or_default())?;
+    // `PORT:PIN=LEVEL` applies before the run; `PORT:PIN=LEVEL@MS` applies MS milliseconds of
+    // guest time after the run starts (after a snapshot load, like `--press`). The X-T5 shutter
+    // release has no key name: half press is `0:0=0@MS`, full press `0:1=0@MS`, release `=1@MS`.
+    let mut gpio = Vec::new();
+    let mut timed_gpio = Vec::new();
+    for item in gpio_spec.as_deref().unwrap_or_default().split(',').filter(|item| !item.trim().is_empty()) {
+        match item.trim().split_once('@') {
+            Some((level, at)) => {
+                let at_ms: u64 = at.trim().parse()
+                    .map_err(|_| format!("--gpio {item}: the time after @ is whole milliseconds"))?;
+                timed_gpio.push((at_ms, parse_gpio(level)?));
+            }
+            None => gpio.push(parse_gpio(item.trim())?),
+        }
+    }
+    // A stable sort keeps the written order of levels that share a time.
+    timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
+    // XT5_WATCH_AFTER_MS=N arms the --watch-pcs witnesses and --watch-writes ranges only after N ms of guest time from the
+    // run start, so the log shows the first hits after an event (a key press), not earlier ones.
+    let watch_after_ms = match std::env::var("XT5_WATCH_AFTER_MS") {
+        Ok(value) => Some(value.trim().parse::<u64>()
+            .map_err(|_| "XT5_WATCH_AFTER_MS needs whole milliseconds".to_string())?)
+            .filter(|ms| *ms > 0),
+        Err(_) => None,
+    };
+    // `ADDR=U32` writes before the run; `ADDR=U32@MS` writes MS guest milliseconds after the run
+    // starts, scheduled like a timed --gpio level.
+    let mut timed_pokes = Vec::new();
+    let mut untimed_pokes = Vec::new();
+    for spec in &pokes {
+        match parse_timed_poke(spec)? {
+            (Some(at_ms), address, value) => timed_pokes.push((at_ms, (address, value))),
+            (None, address, value) => untimed_pokes.push((address, value)),
+        }
+    }
+    timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
+    let pokes = untimed_pokes;
+    let viewer_queue = ViewerQueue::default();
     let request = Startup {
         update,
         manifest,
@@ -720,11 +934,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     else {
         return Err("XP5 startup returned another processor generation".into());
     };
-    let Started {
-        firmware,
-        state,
-        opened,
-    } = *started;
+    let Started { firmware, state, opened, card_write_back } = *started;
     let session_open::Opened {
         mut session,
         inputs,
@@ -740,60 +950,40 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         .board
         .install_discovery_callee_stubs(&callee_stubs)?;
     session.board.set_execution_policy(policy)?;
-    session.board.watch_pcs(&watch_pcs)?;
-    let trace = pc_trace
-        .as_ref()
-        .map(|output| output.begin(&session))
-        .transpose()?;
+    if watch_after_ms.is_none() {
+        session.board.watch_pcs(&watch_pcs)?;
+        session.board.watch_writes(&watch_writes)?;
+    }
+    let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
     // Emulator-only FujiMod (--mod): built and placed before the run, hook words attached between
     // run slices once the stock UILIB-ready flag holds. See mod_loader.rs.
     let mut fujimod = if mod_specs.is_empty() {
         None
     } else {
         let target = mod_loader::Target {
-            id: &firmware.id,
-            sha256: &firmware.source_sha256,
-            model: fujimod_emulator_cpu::Model::ArmV8A,
+            id: &firmware.id, sha256: &firmware.source_sha256, model: fujimod_emulator_cpu::Model::ArmV8A,
         };
-        let mut loaded = mod_loader::prepare(target, &mod_specs, |address, word| {
-            firmware.expect_word(address, word, "mod patch site")
-        })?;
-        let mut excluded = firmware
-            .regions
-            .iter()
-            .map(|region| (region.address, region.bytes.len() as u64))
+        let mut loaded = mod_loader::prepare(target, &mod_specs,
+            |address, word| firmware.expect_word(address, word, "mod patch site"))?;
+        let mut excluded = firmware.regions.iter().map(|region| (region.address, region.bytes.len() as u64))
             .collect::<Vec<_>>();
         for preload in &state.preload {
             excluded.push((preload.address, super::manifest::preload_length(preload)?));
         }
         let stubbed: Vec<u64> = callee_stubs.iter().map(|stub| stub.address).collect();
-        loaded.place(
-            &mod_loader::BoardMachine(&session.board),
-            &excluded,
-            &stubbed,
-        )?;
+        loaded.place(&mod_loader::BoardMachine(&session.board), &excluded, &stubbed)?;
         Some(loaded)
     };
     for (port, pin, high) in gpio {
         inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
     }
     for (address, value) in pokes {
-        let bytes = value.to_le_bytes();
-        session
-            .board
-            .write_physical(address, &bytes)
-            .or_else(|_| session.board.write_memory(0, address, &bytes))
-            .map_err(|error| format!("poke {address:#x}: {error}"))?;
+        poke_word(&session.board, address, value)?;
     }
     let start = session.board.now();
     for (delay, key, pressed) in keys {
         let delay_ticks = crate::host::duration_ticks(delay, ticks_per_second);
-        inputs.key(
-            &mut session,
-            start.saturating_add(delay_ticks),
-            key,
-            pressed,
-        )?;
+        inputs.key(&mut session, start.saturating_add(delay_ticks), key, pressed)?;
     }
     let millisecond_tick = |ms: u64| {
         start.saturating_add(crate::host::duration_ticks(std::time::Duration::from_millis(ms), ticks_per_second))
@@ -826,9 +1016,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         policy.name(),
         run_directory.display()
     );
-    let outcome = limits.drive(
-        &mut session,
-        quantum,
+    let outcome = limits.drive(&mut session, quantum,
         |session| {
             if interrupted.load(Ordering::Acquire) {
                 return Ok(std::ops::ControlFlow::Break(()));
@@ -838,9 +1026,48 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
             if let Some(loaded) = fujimod.as_mut() {
                 loaded.attach_if_ready(&mod_loader::BoardMachine(&session.board), now)?;
             }
-            let until = next_patch.map_or(now.saturating_add(slice), |at| {
-                at.min(now.saturating_add(slice))
-            });
+            while let Some(&(at, at_ms, (port, pin, high))) = timed_gpio.front() {
+                if at > now {
+                    break;
+                }
+                timed_gpio.pop_front();
+                inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
+                eprintln!("FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})", u8::from(high));
+            }
+            while let Some(&(at, at_ms, (address, value))) = timed_pokes.front() {
+                if at > now {
+                    break;
+                }
+                timed_pokes.pop_front();
+                poke_word(&session.board, address, value)?;
+                eprintln!("FUJIMOD XP5 poke: {address:#x}={value:#x} at {at_ms} ms (tick {now})");
+            }
+            let requested: Vec<_> = viewer_queue.lock()
+                .map_err(|_| "viewer key queue is poisoned".to_string())?
+                .drain(..)
+                .collect();
+            for request in requested {
+                if let Err(error) = apply_viewer_input(&inputs, session, now, &mut viewer_shutter, request.clone()) {
+                    // A key the body does not wire is the user's request failing, not the run's.
+                    eprintln!("FUJIMOD XP5 viewer key {request:?}: {error}");
+                } else {
+                    eprintln!("FUJIMOD XP5 viewer key {request:?} at tick {now}");
+                }
+            }
+            if let Some((at, after_ms)) = watch_after
+                && at <= now
+            {
+                watch_after = None;
+                session.board.watch_pcs(&watch_pcs)?;
+                session.board.watch_writes(&watch_writes)?;
+                eprintln!("FUJIMOD XP5 watch-pcs armed at {after_ms} ms (tick {now})");
+            }
+            // Stop the slice at the next scheduled host action, so it applies at its guest time.
+            let until = [next_patch, timed_gpio.front().map(|item| item.0), timed_pokes.front().map(|item| item.0),
+                watch_after.map(|item| item.0)]
+                .into_iter()
+                .flatten()
+                .fold(now.saturating_add(slice), u64::min);
             Ok(std::ops::ControlFlow::Continue(Some(until)))
         },
         |session, result| {
@@ -881,7 +1108,10 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
                     } else {
                         fujimod_emulator_cpu::Register::X(30)
                     };
-                    if let Ok(lr) = session.board.read_register(core, lr_register) {
+                    if let Ok(lr) = session
+                        .board
+                        .read_register(core, lr_register)
+                    {
                         error = format!("{error}; CPU{core} LR={lr:#x}");
                     }
                 }
@@ -918,20 +1148,15 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     let stop_reason = if interrupted.load(Ordering::Acquire) {
         crate::host::StopReason::Other
     } else {
-        limits
-            .stop_reason(&session)
-            .unwrap_or(crate::host::StopReason::Other)
+        limits.stop_reason(&session).unwrap_or(crate::host::StopReason::Other)
     };
     eprintln!("FUJIMOD XP5 end: {}", stop_reason.name());
-    let trace_write = pc_trace
-        .zip(trace)
-        .map_or(Ok(()), |(output, trace)| output.write(trace));
-    let snapshot_write = save_snapshot
-        .as_ref()
-        .map_or(Ok(()), |path| crate::save_snapshot(&session, path));
+    print_write_notes(&session.board, ticks_per_second);
+    let trace_write = pc_trace.zip(trace).map_or(Ok(()), |(output, trace)| output.write(trace));
+    let snapshot_write = save_snapshot.as_ref().map_or(Ok(()), |path| crate::save_snapshot(&session, path));
     let board_finish = session.board.finish();
-    let output_finish =
-        screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
+    let card_write = card_write_back.iter().try_for_each(|back| back.write(&session));
+    let output_finish = screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
     let state = session.board.state();
     let state_write = serde_json::to_vec_pretty(&state)
         .map_err(|error| error.to_string())
@@ -943,9 +1168,7 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
     if let Some(loaded) = &fujimod {
         let report = loaded.report(&mod_loader::BoardMachine(&session.board));
         eprintln!("FUJIMOD XP5 mod status: {report}");
-        if let Err(error) =
-            std::fs::write(run_directory.join("mod-status.json"), report.to_string())
-        {
+        if let Err(error) = std::fs::write(run_directory.join("mod-status.json"), report.to_string()) {
             eprintln!("FUJIMOD XP5 mod-status.json failed: {error}");
         }
     }
@@ -987,20 +1210,16 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
 const DUMP_LIMIT: u64 = 16 << 20;
 
 fn parse_ranges(option: &str, spec: &str) -> Result<Vec<(u64, u64)>, String> {
-    spec.split(';')
-        .filter(|item| !item.trim().is_empty())
-        .map(|item| {
-            let (address, length) = item
-                .split_once(':')
-                .ok_or_else(|| format!("{option} item {item:?} is not ADDR:LEN"))?;
-            let address = parse_number(address.trim())?;
-            let length = parse_number(length.trim())?;
-            if length == 0 || address.checked_add(length).is_none() {
-                return Err(format!("{option} range {item:?} is empty or overflows"));
-            }
-            Ok((address, length))
-        })
-        .collect()
+    spec.split(';').filter(|item| !item.trim().is_empty()).map(|item| {
+        let (address, length) = item.split_once(':')
+            .ok_or_else(|| format!("{option} item {item:?} is not ADDR:LEN"))?;
+        let address = parse_number(address.trim())?;
+        let length = parse_number(length.trim())?;
+        if length == 0 || address.checked_add(length).is_none() {
+            return Err(format!("{option} range {item:?} is empty or overflows"));
+        }
+        Ok((address, length))
+    }).collect()
 }
 
 /// Print the `--watch-writes` notes recorded since the last call.
@@ -1028,11 +1247,7 @@ fn parse_dumps(spec: &str) -> Result<Vec<(u64, usize)>, String> {
     Ok(dumps)
 }
 
-fn print_hashes(
-    board: &fujimod_emulator::board::Board,
-    run_directory: &Path,
-    ranges: &[(u64, u64)],
-) {
+fn print_hashes(board: &fujimod_emulator::board::Board, run_directory: &Path, ranges: &[(u64, u64)]) {
     if ranges.is_empty() {
         return;
     }
@@ -1063,10 +1278,7 @@ fn post_mortem(
             .map_err(|error| error.to_string())
             .and_then(|()| std::fs::write(&path, &bytes).map_err(|error| error.to_string()))
         {
-            Ok(()) => eprintln!(
-                "FUJIMOD XP5 dump: {address:#x}+{length:#x} -> {}",
-                path.display()
-            ),
+            Ok(()) => eprintln!("FUJIMOD XP5 dump: {address:#x}+{length:#x} -> {}", path.display()),
             Err(error) => eprintln!("FUJIMOD XP5 dump {address:#x}+{length:#x} failed: {error}"),
         }
     }
