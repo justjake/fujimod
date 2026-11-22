@@ -20,7 +20,11 @@ function SectionPhotos(props: { section: ManualSection }) {
     const list = sectionMedia(props.section)?.photos;
     return list?.length ? list : undefined;
   };
-  return <Show when={photos()}>{(photos) => <PhotoComparison photos={photos()} />}</Show>;
+  return (
+    <Show when={photos()}>
+      {(photos) => <PhotoComparison photos={photos()} frame={props.section.media?.frame} />}
+    </Show>
+  );
 }
 
 function hasCredits(credits: Credits) {
