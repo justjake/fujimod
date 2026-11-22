@@ -89,7 +89,15 @@ async function parseSubmission(form: FormData) {
       contactType && contactValue?.trim()
         ? { type: contactType, value: contactValue.trim() }
         : undefined;
-    return { kind: 'general' as const, description, name: name.trim(), contact, hasArchive };
+    return {
+      kind: 'general' as const,
+      description,
+      name: name.trim(),
+      contact,
+      hasArchive,
+      shareContact: !!contact && form.get('share-contact') === 'on',
+      shareFiles: hasArchive && form.get('share-files') === 'on',
+    };
   }
   const source = form.get('metadata');
   if (typeof source !== 'string' || source.length > 4096) throw Error();
@@ -205,6 +213,8 @@ export class IssueReports extends DurableObject<Env> {
           description,
           name: submission.name,
           contact: submission.contact,
+          shareContact: submission.shareContact,
+          shareFiles: submission.shareFiles,
           archive: submission.hasArchive ? 'report.zip' : undefined,
           received,
         };
@@ -213,13 +223,33 @@ export class IssueReports extends DurableObject<Env> {
         httpMetadata: { contentType: 'application/json' },
       });
       const general = submission.kind === 'general';
+      const shareUrl =
+        general && submission.shareFiles
+          ? await publishUpload(this.env, `issue:${id}`, [
+              { key: `${id}/report.zip`, name: 'report.zip' },
+            ])
+          : undefined;
       await this.ctx.storage.put(id, { state: 'submitting', general });
       const camera = metadata && CAMERA_LABELS[metadata.firmware];
       const token = this.env.GITHUB_ISSUES_TOKEN ?? '';
       const publicDescription = description.trim().replaceAll('@', '@\u200b');
       const issueDetails = cameraReport
         ? `Firmware: ${cameraReport.metadata.firmware}\nFujiMod build: ${cameraReport.metadata.commit}\nReport ID: \`${id}\`\n\nDiagnostic archive stored privately for maintainers.\n\nFiles:\n${cameraReport.entries.map((e) => `- ${e.name} (${e.bytes} bytes)`).join('\n')}`
-        : `Report ID: \`${id}\`\n\nZIP attachment: ${submission.kind === 'general' && submission.hasArchive ? 'stored privately' : 'none'}`;
+        : `Report ID: \`${id}\`\n\nZIP attachment: ${
+            shareUrl
+              ? `[Download uploaded files](${new URL(shareUrl, 'https://share.fujimod.com').href})`
+              : general && submission.hasArchive
+                ? 'stored privately'
+                : 'none'
+          }`;
+      const publicContact =
+        general && submission.shareContact && submission.contact
+          ? `${submission.contact.type}: <code>${submission.contact.value
+              .replaceAll('&', '&amp;')
+              .replaceAll('<', '&lt;')
+              .replaceAll('>', '&gt;')
+              .replace(/[\r\n]/g, ' ')}</code>`
+          : undefined;
       try {
         // Without its label GitHub would still apply the name, only without a description.
         if (camera) await ensureLabel(token, camera).catch((error) => console.error(error));
@@ -231,7 +261,7 @@ export class IssueReports extends DurableObject<Env> {
               (general ? '' : '[Camera] ') +
               (publicDescription.split('\n')[0] || 'Bug report').slice(0, 120),
             labels: general ? ['bug'] : ['bug', 'from-camera', ...(camera ? [camera.name] : [])],
-            body: [publicDescription, issueDetails].filter(Boolean).join('\n\n'),
+            body: [publicDescription, issueDetails, publicContact].filter(Boolean).join('\n\n'),
           }),
           signal: AbortSignal.timeout(10000),
         });

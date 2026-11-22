@@ -35,9 +35,10 @@ protocol with `reportArchive: true`. This mode accepts a single ZIP of up to
 1 GiB and returns a private receipt without a publication. At least a
 description or a stored ZIP is required.
 
-The reporter can include `name`, `contact-type` (Instagram, Twitter, or
-Email), and `contact-value`. The website sends GitHub users directly to the
-GitHub bug form. The GitHub issue contains the description and report ID.
+The reporter can include `name`, `contact-type` (Instagram, Twitter, GitHub,
+or Email), and `contact-value`. The GitHub issue contains the description and
+report ID. The `share-contact=on` option adds the supplied contact to the issue.
+The `share-files=on` option adds a public download link for the ZIP alone.
 Retrieve `<id>/report.zip` and `<id>/metadata.json` from the private R2 bucket.
 General report receipts contain the report ID and the GitHub issue URL when
 creation is confirmed.

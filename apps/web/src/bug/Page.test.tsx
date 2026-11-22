@@ -278,10 +278,21 @@ test('without a QR link, users can select arbitrary files and submit a report wi
       'Email',
     ]);
     expect(host.querySelector('input[name="contact-value"]')).toBeNull();
-    select.value = 'Email';
+    const description = host.querySelector<HTMLTextAreaElement>('textarea[name=description]')!;
+    description.value = 'Screen freezes';
+    select.value = 'GitHub';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     flush();
-    host.querySelector<HTMLInputElement>('input[name="contact-value"]')!.value = 'me@example.com';
+    expect(description.value).toBe('Screen freezes');
+    host.querySelector<HTMLInputElement>('input[name="contact-value"]')!.value = '@reporter';
+    const shareContact = host.querySelector<HTMLInputElement>('input[name="share-contact"]')!;
+    const shareFiles = host.querySelector<HTMLInputElement>('input[name="share-files"]')!;
+    expect(shareContact.checked).toBe(false);
+    expect(shareFiles.checked).toBe(false);
+    shareFiles.click();
+    button(host, 'Linux').click();
+    flush();
+    expect(host.textContent).toContain('File manager → Devices');
     host.querySelector<HTMLInputElement>('input[name="name"]')!.value = 'Reporter';
     const picker = host.querySelector<HTMLInputElement>('input[type=file]')!;
     expect(picker.multiple).toBe(true);
@@ -331,8 +342,10 @@ test('without a QR link, users can select arbitrary files and submit a report wi
     });
     const body = fetcher.mock.calls[0]?.[1]?.body as FormData;
     expect(body.get('name')).toBe('Reporter');
-    expect(body.get('contact-type')).toBe('Email');
-    expect(body.get('contact-value')).toBe('me@example.com');
+    expect(body.get('contact-type')).toBe('GitHub');
+    expect(body.get('contact-value')).toBe('@reporter');
+    expect(body.get('share-contact')).toBeNull();
+    expect(body.get('share-files')).toBe('on');
     expect(body.get('archive')).toBe('zip');
     expect(vi.mocked(zipBlob).mock.lastCall?.[0].map((entry) => entry.path)).toEqual([
       'Attachments/1/camera.log',
