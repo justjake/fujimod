@@ -170,39 +170,11 @@ function ManualOptions(props: { section: ManualSection }) {
   );
 }
 
-/** A generated table of the row's facts, such as a strength at each ISO. */
-function ManualTable(props: { table: NonNullable<ManualSection['table']> }) {
-  return (
-    <div class="manual-table">
-      <table>
-        <caption>{props.table.caption}</caption>
-        <thead>
-          <tr>
-            <th />
-            <For each={props.table.columns}>{(column) => <th scope="col">{column}</th>}</For>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.table.rows}>
-            {(row) => (
-              <tr>
-                <th scope="row">{row.label}</th>
-                <For each={row.cells}>{(cell) => <td>{cell}</td>}</For>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function ManualRowContent(props: { section: ManualSection }) {
   return (
     <>
       <Show when={props.section.markdown}>{(text) => <Markdown text={text()} />}</Show>
       <ManualOptions section={props.section} />
-      <Show when={props.section.table}>{(table) => <ManualTable table={table()} />}</Show>
       <Show when={props.section.credits}>{(credits) => <ManualCredits credits={credits()} />}</Show>
       <Show when={sectionMedia(props.section)}>
         {(recording) => (
