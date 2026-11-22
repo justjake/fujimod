@@ -255,6 +255,52 @@ mod tests {
         }
     }
     #[test]
+    fn request_reply_lifecycle_preserves_independent_causes() {
+        let mut m = device();
+        let mut h = TestHost::default();
+        let request = 0x12345678;
+        let reply = 0x87654321;
+
+        // An A53 request is retained and signals the companion only.
+        write(&mut m, &mut h, 0, 0, request);
+        {
+            let mut cx = Cx::new(&mut h, 4, 0, 0);
+            assert_eq!(m.read(&mut cx, 0xff90e100, 4), request);
+            assert_eq!(m.read(&mut cx, 0xff90e120, 4), 1);
+            m.advance(&mut cx);
+            m.event(&mut cx, 1);
+            assert_eq!(m.next_deadline(u64::MAX), None);
+            assert_eq!(m.read(&mut cx, 0xff90e110, 4), 0);
+            assert_eq!(m.read(&mut cx, 0xff90e120, 4), 1);
+        }
+        assert_eq!(h.core, vec![(4, 55, true)]);
+        assert!(h.irqs.is_empty());
+
+        // A separate control cause remains asserted when the request is acknowledged.
+        write(&mut m, &mut h, 0, 0xc, 0x55);
+        write(&mut m, &mut h, 4, 0x20, 1);
+        assert_eq!(m.save()["causes"], 8);
+        assert_eq!(h.core, vec![(4, 55, true), (4, 58, true), (4, 55, false)]);
+        assert!(h.irqs.is_empty());
+
+        // Only a companion write supplies a reply; status is an independent cause.
+        write(&mut m, &mut h, 4, 0x10, reply);
+        write(&mut m, &mut h, 4, 0x14, 0xaa);
+        {
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            assert_eq!(m.read(&mut cx, 0xff90e110, 4), reply);
+            assert_eq!(m.read(&mut cx, 0xff90e120, 4), 0x38);
+        }
+        assert_eq!(h.irqs, vec![(141, true), (142, true)]);
+        write(&mut m, &mut h, 0, 0x20, 0x10);
+        assert_eq!(m.save()["causes"], 0x28);
+        assert_eq!(h.irqs, vec![(141, true), (142, true), (141, false)]);
+        write(&mut m, &mut h, 0, 0x20, 0x28);
+        assert_eq!(m.save()["causes"], 0);
+        assert_eq!(h.core.last(), Some(&(4, 58, false)));
+        assert_eq!(h.irqs.last(), Some(&(142, false)));
+    }
+    #[test]
     fn independent_causes_acknowledge_without_affecting_other_outputs() {
         let mut m = device();
         let mut h = TestHost::default();
