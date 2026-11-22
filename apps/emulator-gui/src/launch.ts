@@ -6,10 +6,11 @@ export interface RunConfiguration {
   updateSha256: string;
   updateBytes: number;
 }
+export type RunEngine = 'unicorn' | 'hypervisor';
 export interface LaunchRequest {
   configuration: string;
   update: string;
-  engine?: 'unicorn' | 'hypervisor';
+  engine?: RunEngine;
   endpoint?: string;
 }
 export interface LaunchedCamera {

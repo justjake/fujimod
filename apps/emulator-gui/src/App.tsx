@@ -9,7 +9,7 @@ import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
-import type { LaunchRequest, RunConfiguration } from './launch';
+import type { LaunchRequest, RunConfiguration, RunEngine } from './launch';
 import { desktopBridge } from './desktop';
 import '@fujimod/emulator-ui/viewport-controls.css';
 import './app.css';
@@ -20,6 +20,7 @@ export default function App() {
   const [configurations, setConfigurations] = createSignal<RunConfiguration[]>([]);
   const [selected, setSelected] = createSignal('');
   const [update, setUpdate] = createSignal('');
+  const [runEngine, setRunEngine] = createSignal<RunEngine>('unicorn');
   const [launcherError, setLauncherError] = createSignal('');
   const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
@@ -124,7 +125,9 @@ export default function App() {
     setBusy(true);
     setLauncherError('');
     try {
-      await startCamera(await bridge.launch({ configuration: selected(), update: update() }));
+      await startCamera(
+        await bridge.launch({ configuration: selected(), update: update(), engine: runEngine() }),
+      );
     } catch (error) {
       setLauncherError(shownError(error));
     } finally {
@@ -212,6 +215,13 @@ export default function App() {
                       {configuration.model} · {configuration.firmware}
                     </option>
                   )}</For>
+                </select>
+              </label>
+              <label>
+                <span>Engine</span>
+                <select value={runEngine()} onChange={(event) => setRunEngine(event.currentTarget.value as RunEngine)}>
+                  <option value="unicorn">Unicorn</option>
+                  <option value="hypervisor">Hypervisor</option>
                 </select>
               </label>
               <div class="file-row">
