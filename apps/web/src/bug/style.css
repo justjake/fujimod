@@ -196,7 +196,8 @@
   min-width: 0;
 }
 
-.bug-general label {
+.bug-general fieldset > label,
+.bug-general label:has(input[type='file']) {
   display: grid;
   gap: 6px;
 }
@@ -228,6 +229,18 @@
   margin-top: 6px;
 }
 
+.bug-general details {
+  margin-top: 6px;
+}
+
+.bug-general details summary {
+  cursor: pointer;
+}
+
+.bug-general button.pill {
+  justify-self: start;
+}
+
 .bug-attachments {
   padding: 0;
   list-style: none;
@@ -255,8 +268,4 @@
 
 .bug-attachments li + li {
   margin-top: 8px;
-}
-
-.bug-general button[type='submit'] {
-  justify-self: start;
 }

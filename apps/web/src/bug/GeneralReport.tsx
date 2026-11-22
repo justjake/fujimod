@@ -3,6 +3,7 @@ import { formatBytes } from '@fujimod/emulator-ui/ui/file-list';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { uploadReportArchive } from '../files/contribute';
+import { desktopSdCardLocations } from './file-guide';
 import { sdCardFiles, type ReportFile } from './sd-card-files';
 import { FileDrop } from '../ui/file-drop';
 import { CONTACT_TYPES, MAX_REPORT_ARCHIVE_BYTES, type ContactType } from './general-report';
@@ -19,6 +20,7 @@ export function GeneralReport() {
   onSettled(() => {
     setReady(true);
   });
+  const [sdError, setSdError] = createSignal('');
   const [error, setError] = createSignal('');
   const [receipt, setReceipt] = createSignal<ReportReceipt>();
   let id: string | undefined;
@@ -43,12 +45,14 @@ export function GeneralReport() {
 
   function readSdCard(event: Event & { currentTarget: HTMLInputElement }) {
     const input = event.currentTarget;
-    const found = sdCardFiles(Array.from(input.files ?? []));
+    if (!input.files?.length) return;
+    const found = sdCardFiles(Array.from(input.files));
     input.value = '';
     if (!found.length) {
-      setError('No FujiMod files found. Select the root of the SD card.');
+      setSdError('No FujiMod files found. Choose the SD card drive.');
       return;
     }
+    setSdError('');
     const manual = files().filter((entry) => entry.path.startsWith('Attachments/'));
     changeFiles([...manual, ...found]);
   }
@@ -103,8 +107,8 @@ export function GeneralReport() {
   }
 
   return (
-    <section class="bug-card bug-general" aria-labelledby="general-bug-title">
-      <h2 id="general-bug-title">Report a bug</h2>
+    <section class="bug-general" aria-labelledby="general-bug-title">
+      <h1 id="general-bug-title">Report a bug</h1>
       <Show
         when={receipt()}
         fallback={
@@ -131,7 +135,7 @@ export function GeneralReport() {
               />
               <div>
                 <label>
-                  Select the SD card
+                  SD card diagnostics
                   <input
                     type="file"
                     webkitdirectory
@@ -141,12 +145,35 @@ export function GeneralReport() {
                   />
                 </label>
                 <p id="bug-sd-help" class="bug-status">
-                  In the folder picker, select the SD card itself, one level above FUJIMOD. Reports
-                  and boot files appear in the checklist below. Backups start unchecked, and photos
-                  in DCIM are skipped.
+                  Choose the SD card drive to attach FujiMod files, boot diagnostics, and backups.
                 </p>
+                <details>
+                  <summary>Where is my SD card?</summary>
+                  <ul>
+                    <For each={Object.entries(desktopSdCardLocations)}>
+                      {([platform, location]) => (
+                        <li>
+                          <strong>{platform}</strong> · {location}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </details>
+                <Show when={sdError()}>
+                  <p role="alert">{sdError()}</p>
+                </Show>
               </div>
               <Show when={files().length}>
+                <button
+                  class="pill"
+                  type="button"
+                  onClick={() => {
+                    const include = !files().some((file) => file.included);
+                    changeFiles(files().map((file) => ({ ...file, included: include })));
+                  }}
+                >
+                  {files().some((file) => file.included) ? 'Uncheck all' : 'Check all'}
+                </button>
                 <ul class="bug-attachments" aria-label="Files to include">
                   <For each={files()} keyed={false}>
                     {(entry, index) => (

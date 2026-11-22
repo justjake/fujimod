@@ -314,9 +314,13 @@ test('without a QR link, users can select arbitrary files and submit a report wi
       [...host.querySelectorAll<HTMLLabelElement>('ul.bug-attachments label')]
         .find((label) => label.textContent?.includes(text))!
         .querySelector('input')!;
-    expect(check('X70_001.IMG').checked).toBe(false);
-    check('X70_001.IMG').click();
+    expect(check('X70_001.IMG').checked).toBe(true);
+    button(host, 'Uncheck all').click();
     flush();
+    expect(host.querySelectorAll('ul.bug-attachments input:checked')).toHaveLength(0);
+    button(host, 'Check all').click();
+    flush();
+    expect(check('X70_001.IMG').checked).toBe(true);
     check('sample.mp4').click();
     flush();
     expect(fetcher).not.toHaveBeenCalled();
