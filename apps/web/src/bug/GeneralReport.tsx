@@ -116,10 +116,21 @@ export function GeneralReport() {
             }}
           >
             <fieldset disabled={!ready() || busy()}>
-              <label>
-                What happened?
-                <textarea name="description" rows="5" maxlength={12000} />
-              </label>
+              <div class="bug-report-description">
+                <label for="bug-description">What happened?</label>
+                <p id="bug-description-help" class="bug-status">
+                  Be as detailed as possible. Include the exact actions you took and the buttons you
+                  pressed. Explain how to trigger the bug as if you were writing for someone who’s
+                  never used a camera before.
+                </p>
+                <textarea
+                  id="bug-description"
+                  name="description"
+                  rows="5"
+                  maxlength={12000}
+                  aria-describedby="bug-description-help"
+                />
+              </div>
               <FileDrop
                 inputId="bug-attachments"
                 title="Attachments"
