@@ -449,7 +449,24 @@ impl ByteI2c {
         }
     }
 }
+impl fujimod_emulator_devices::capability::TouchPanel for ByteI2c {
+    fn touch_period(&self) -> Result<u64, String> {
+        self.state.transport.touch.as_ref().map(TouchChip::touch_period).ok_or_else(|| "No touch chip on this bus".into())
+    }
+    fn admit_touch(&self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> Result<(), String> {
+        self.state.transport.touch.as_ref().ok_or("No touch chip on this bus")?.admit_touch(now, script)
+    }
+    fn touch(&mut self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> Result<(), String> {
+        self.state.transport.touch.as_mut().ok_or("No touch chip on this bus")?.touch(now, script)
+    }
+}
 impl Device for ByteI2c {
+    fn touch_panel(&self) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+        self.state.transport.touch.as_ref().map(|_| self as _)
+    }
+    fn touch_panel_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+        if self.state.transport.touch.is_some() { Some(self) } else { None }
+    }
     fn name(&self)-> &'static str {"byte-i2c"}
     fn read(&mut self,cx:&mut Cx<'_>,address:u64,size:u8)->u64 {
         let o=match self.offset(address,size) {Ok(o)=>o,Err(e)=>{cx.fail(e);return 0;}};

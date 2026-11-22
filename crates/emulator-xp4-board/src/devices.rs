@@ -304,6 +304,17 @@ impl Devices {
             .unwrap()
             .set_input(&mut Cx::new(&mut host, 0, 0, *id), channel, sample)
     }
+    /// Queue a contact script on the touch panel of the byte I2C bus.
+    pub fn touch(&mut self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> Result<(), String> {
+        let panel = self.models.iter_mut().flatten().find_map(|m| m.touch_panel_mut())
+            .ok_or("XP4 touch panel is not wired")?;
+        panel.touch(now, script)
+    }
+    /// Ticks between touch reports.
+    pub fn touch_period(&self) -> Result<u64, String> {
+        self.models.iter().flatten().find_map(|m| m.touch_panel())
+            .ok_or("XP4 touch panel is not wired")?.touch_period()
+    }
     pub fn set_gpio_input(&mut self, port: usize, pin: usize, high: bool) -> Result<(), String> {
         if port >= 16 || pin >= 16 {
             return Err("Invalid XP4 external GPIO pin".into());

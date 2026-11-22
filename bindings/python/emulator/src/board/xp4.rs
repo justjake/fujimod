@@ -172,6 +172,12 @@ impl Xp4 {
     fn set_adc_input(&self, py: Python<'_>, channel: usize, sample: u16) -> PyResult<()> {
         self.with(py, |s| s.set_adc_input(channel, sample))
     }
+    fn touch_period(&self, py: Python<'_>) -> PyResult<u64> {
+        self.with(py, |s| s.touch_period())
+    }
+    fn touch(&self, py: Python<'_>, phase: &str, x: u16, y: u16) -> PyResult<()> {
+        self.with(py, |s| s.touch(phase, x, y))
+    }
     fn set_gpio_input(&self, py: Python<'_>, port: usize, pin: usize, high: bool) -> PyResult<()> {
         self.with(py, |s| s.set_gpio_input(port, pin, high))
     }

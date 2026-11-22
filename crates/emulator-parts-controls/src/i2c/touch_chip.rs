@@ -115,6 +115,16 @@ impl TouchChip {
         self.controller.period()
     }
 
+    /// Check a contact script without queueing it.
+    pub fn admit_touch(&self, now: u64, script: &[ContactInput]) -> Result<(), String> {
+        self.controller.clone().inject(now, script)
+    }
+
+    /// Queue a contact script at absolute ticks.
+    pub fn touch(&mut self, now: u64, script: &[ContactInput]) -> Result<(), String> {
+        self.controller.inject(now, script)
+    }
+
     pub fn press(&mut self, now: u64, x: u16, y: u16) -> Result<(), String> {
         self.input(now, Phase::Down, x, y)
     }
