@@ -663,6 +663,8 @@ mod tests {
     fn unsupported_setup_is_latched_and_refused_only_when_the_aperture_is_read() {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let (storage, mut controller) = mt35xu();
+        // The part answers its 20-dummy fast read only after the volatile register selects it.
+        write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
         let medium = crate::flash_storage::Medium::Nor(storage.clone());
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
