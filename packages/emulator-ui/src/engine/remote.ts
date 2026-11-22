@@ -97,6 +97,11 @@ export class RemoteEngine implements Engine {
     private readonly onError: (error: Error) => void,
   ) {}
 
+  /** Join a native session that publishes events before the first command. */
+  async open(): Promise<void> {
+    await this.connect();
+  }
+
   private async connect(): Promise<WebSocket> {
     if (this.disposed) throw Error('Emulator closed.');
     if (this.unavailable) throw this.unavailable;

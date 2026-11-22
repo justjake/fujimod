@@ -28,6 +28,10 @@ export class NativeEngine implements Engine {
     this.remote = new RemoteEngine(endpoint, onError);
   }
 
+  open() {
+    return this.remote.open();
+  }
+
   state(listener: StateListener) {
     return this.remote.sessionState(listener);
   }
