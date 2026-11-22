@@ -164,6 +164,59 @@ fn a53_software_dma_completion_is_per_channel_and_acknowledged() {
 }
 
 
+
+#[test]
+fn companion_zero_base_routes_each_full_duplex_dma_completion_independently() {
+    let mut f = Fixture::with_dma(json!({"companion_irq_base":0,"a53_irq_base":237}));
+    let bank = 0xff936000; // Channels 12 and 13.
+    f.write(0xff90e518, 0x01010203);
+    f.write(bank, 0x10000000);
+    f.write(GPIO + 0x2c0, 0x00280008); // Select the synthetic configuration endpoint.
+    f.host.ram[0x1000..0x1002].copy_from_slice(&[0xa1, 0]);
+    for (lane, source, destination, ss, ds) in [
+        (0, 0x1000, SPI + 8, 0, 4),
+        (1, SPI + 8, 0x1100, 4, 0),
+    ] {
+        let base = bank + lane * 0x30;
+        for (offset, value) in [(0x10, 1), (0x14, source), (0x18, destination),
+                                (0x1c, ss), (0x20, ds), (0x24, 0)] {
+            f.write(base + offset, value);
+        }
+    }
+    // Configured but not started: neither lane can assert a completion.
+    f.until(100);
+    assert_eq!(&f.host.ram[0x1100..0x1102], &[0xcc; 2]);
+    assert!(f.host.core_irqs.is_empty());
+    assert!(f.host.irqs.is_empty());
+
+    // Receive waits for the clocked SPI endpoint; it cannot complete alone.
+    f.write(bank + 0x58, 0x10309011);
+    f.until(200);
+    assert!(f.host.core_irqs.is_empty());
+    assert!(f.host.irqs.is_empty());
+    f.write(bank + 0x28, 0x10209011);
+    // The transmit FIFO drains before the last received frame is clocked.
+    for _ in 0..100 {
+        if !f.host.core_irqs.is_empty() { break; }
+        f.until(f.host.now + 50);
+    }
+    assert_eq!(f.host.core_irqs, [(4, 12, true)]);
+    assert_eq!(f.host.irqs, [(249, true)]);
+    assert_eq!(f.host.ram[0x1101], 0xcc);
+    f.until(2200);
+    assert_eq!(&f.host.ram[0x1100..0x1102], &[0, 3]);
+    assert_eq!(f.host.core_irqs, [(4, 12, true), (4, 13, true)]);
+    assert_eq!(f.host.irqs, [(249, true), (250, true)]);
+
+    // Clear each lane separately; the other lane's outputs remain asserted.
+    f.write(bank + 0x30, 0);
+    assert_eq!(f.host.core_irqs, [(4, 12, true), (4, 13, true), (4, 12, false)]);
+    assert_eq!(f.host.irqs, [(249, true), (250, true), (249, false)]);
+    f.write(bank + 0x60, 0);
+    assert_eq!(f.host.core_irqs, [(4, 12, true), (4, 13, true), (4, 12, false), (4, 13, false)]);
+    assert_eq!(f.host.irqs, [(249, true), (250, true), (249, false), (250, false)]);
+}
+
 #[test]
 fn graph_connects_both_request_edges_and_clocked_data_to_actual_companion_irq_lines() {
     let mut f = Fixture::new();
