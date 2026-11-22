@@ -4,6 +4,7 @@ import type { Credits } from '../home/catalog';
 import { Rich } from '../home/catalog-parts';
 import { featureMedia, type Media } from '../home/feature-media';
 import { Markdown } from './Markdown';
+import { PhotoComparison } from './PhotoComparison';
 import type { ManualPage, ManualSection } from './manual-data';
 import { manualRoot } from './manual-routes';
 
@@ -12,6 +13,14 @@ const mediaRoot = '/artifacts/docs/';
 
 function sectionMedia(section: ManualSection) {
   return section.media ? mediaForCard(section.media.card) : null;
+}
+
+function SectionPhotos(props: { section: ManualSection }) {
+  const photos = () => {
+    const list = sectionMedia(props.section)?.photos;
+    return list?.length ? list : undefined;
+  };
+  return <Show when={photos()}>{(photos) => <PhotoComparison photos={photos()} />}</Show>;
 }
 
 function hasCredits(credits: Credits) {
@@ -247,6 +256,7 @@ function ManualEntry(props: {
       <Show when={section().summary}>
         <p class="manual-summary">{section().summary}</p>
       </Show>
+      <SectionPhotos section={section()} />
       <ManualRowContent section={section()} />
       <Show when={camerasDiffer()}>
         <p class="manual-cameras">{section().cameras.join(' · ')} only</p>
@@ -297,6 +307,7 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
           {(section) => (
             <>
               <AlternatePaths section={section} base={layout().base} />
+              <SectionPhotos section={section} />
               <ManualRowContent section={section} />
             </>
           )}
