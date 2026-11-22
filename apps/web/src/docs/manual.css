@@ -314,3 +314,9 @@
   opacity: 1;
   transition: none;
 }
+
+.manual-original,
+.manual-original dt,
+.manual-original dd {
+  color: var(--dim);
+}

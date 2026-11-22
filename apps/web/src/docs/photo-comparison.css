@@ -38,17 +38,47 @@
   image-rendering: pixelated;
 }
 
-/* A one-device-pixel black cross marks the same point on every photograph. */
+/* A black one-device-pixel cross with a white halo, open at the center so the
+   pixel under it stays visible. */
 .photo-cross {
-  --hair: calc(1px / var(--dpr, 2));
   position: absolute;
-  width: 13px;
-  height: 13px;
+  width: 21px;
+  height: 21px;
   translate: -50% -50%;
+  overflow: visible;
   pointer-events: none;
-  background:
-    linear-gradient(#000, #000) center / var(--hair) 100% no-repeat,
-    linear-gradient(#000, #000) center / 100% var(--hair) no-repeat;
+  fill: none;
+  shape-rendering: crispEdges;
+}
+
+.photo-cross-halo {
+  stroke: #fff;
+  stroke-width: calc(var(--hair) * 3);
+  vector-effect: non-scaling-stroke;
+}
+
+.photo-cross-line {
+  stroke: #000;
+  stroke-width: var(--hair);
+  vector-effect: non-scaling-stroke;
+}
+
+/* The whole photograph, with the part in view outlined. */
+.photo-minimap {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 64px;
+  border: var(--hair) solid rgb(255 255 255 / 70%);
+  background: rgb(0 0 0 / 45%);
+  pointer-events: none;
+}
+
+.photo-minimap span {
+  position: absolute;
+  min-width: 2px;
+  min-height: 2px;
+  background: rgb(255 255 255 / 85%);
 }
 
 .photo-cell figcaption {
@@ -64,5 +94,11 @@
 @media (width <= 700px) {
   .photo-comparison {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .photo-minimap {
+    right: 6px;
+    bottom: 6px;
+    width: 40px;
   }
 }
