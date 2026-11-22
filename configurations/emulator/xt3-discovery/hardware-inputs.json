@@ -244,6 +244,11 @@
           "sectors": 16777216
         }
       }
-    ]
+    ],
+    "byte_i2c_inputs": {
+      "2": {
+        "basis": "The X-T3 5.11 touch controller sits on I2C bus 2, the byte controller at 0xfff3f000 (interrupt 0x43). The bus starts with no peer attached."
+      }
+    }
   }
 }

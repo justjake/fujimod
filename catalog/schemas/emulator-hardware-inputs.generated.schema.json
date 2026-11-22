@@ -37,6 +37,16 @@
           ],
           "description": "Declared battery gauge."
         },
+        "byte_i2c_inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ResetByteI2cInput"
+          },
+          "description": "Byte I2C controllers wired on this body, by bus index.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
         "countdown_dials": {
           "anyOf": [
             {
@@ -639,6 +649,20 @@
         "basis",
         "port",
         "registers"
+      ],
+      "type": "object"
+    },
+    "ResetByteI2cInput": {
+      "additionalProperties": false,
+      "description": "A byte I2C controller present on the body, with an empty bus.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basis"
       ],
       "type": "object"
     },
