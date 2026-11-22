@@ -9,14 +9,12 @@ pub mod launch;
 mod protocol;
 mod server;
 
-pub use protocol::GuiOptions;
-pub use server::{Endpoint, Host, Socket, bind, open, serve};
+pub use server::{Endpoint, Host, Socket, bind};
 
-/// An opened XP5 camera and its physical key handle.
-pub struct Xp5Session {
-    pub configuration: fujimod_catalog_resolution::ResolvedConfiguration,
-    pub session: fujimod_emulator_session::Session,
-    pub inputs: fujimod_emulator_xp5_board::session::Inputs,
-    pub ticks_per_second: u64,
-    pub quantum: usize,
+/// A prepared XP5 run, stopped at the boundary a desktop frontend drives.
+pub use fujimod_emulator_boot::xp5::RunHost;
+
+/// Serve a prepared run once its desktop frontend has joined the endpoint.
+pub fn host(run: RunHost, socket: Socket) -> Result<serde_json::Value, String> {
+    socket.serve(run).run()
 }

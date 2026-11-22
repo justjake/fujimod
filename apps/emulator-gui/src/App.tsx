@@ -137,7 +137,9 @@ export default function App() {
     setBusy(true);
     setLauncherError('');
     try {
-      const launched = await bridge.launch(request);
+      const launched = request.endpoint
+        ? await bridge.connect(request.endpoint)
+        : await bridge.launch(request);
       await startCamera(launched);
     } catch (error) {
       setLauncherError(shownError(error));
@@ -157,6 +159,14 @@ export default function App() {
     void bridge.configurations().then((rows) => {
       setConfigurations(rows);
       setSelected(rows[0]?.configuration ?? '');
+    });
+    void bridge.connection().then(async (endpoint) => {
+      if (!endpoint) return;
+      try {
+        await startCamera(await bridge.connect(endpoint));
+      } catch (error) {
+        setLauncherError(shownError(error));
+      }
     });
     void bridge.launchConnection().then((connection) => {
       if (!connection) return;

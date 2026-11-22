@@ -10,6 +10,7 @@ export interface LaunchRequest {
   configuration: string;
   update: string;
   engine?: 'unicorn' | 'hypervisor';
+  endpoint?: string;
 }
 export interface LaunchedCamera {
   id: string;
@@ -23,6 +24,8 @@ export interface DesktopBridge {
   configurations(): Promise<RunConfiguration[]>;
   chooseUpdate(): Promise<string | undefined>;
   launch(request: LaunchRequest): Promise<LaunchedCamera>;
+  connect(endpoint: string): Promise<LaunchedCamera>;
   launchConnection(): Promise<LaunchRequest | undefined>;
+  connection(): Promise<string | undefined>;
   close(): Promise<void>;
 }

@@ -1,14 +1,11 @@
-use crate::Xp5Session;
+use crate::RunHost;
 use crate::controls::Xp5Controls;
-use crate::protocol::{Event, GuiOptions, Request, command_args};
-use fujimod_emulator_session::Session;
-use serde_json::{Value, json};
+use crate::protocol::{Event, Request, command_args};
+use serde_json::Value;
 use std::{
     io::ErrorKind,
     net::{IpAddr, TcpListener, TcpStream},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 use tungstenite::{
@@ -26,8 +23,7 @@ pub struct Endpoint {
 pub struct Host {
     endpoint: Endpoint,
     listener: TcpListener,
-    camera: Xp5Session,
-    options: GuiOptions,
+    run: RunHost,
 }
 
 /// A listener whose endpoint is known before the camera session is opened.
@@ -41,19 +37,12 @@ impl Socket {
         &self.endpoint
     }
 
-    pub fn serve(self, camera: Xp5Session, options: GuiOptions) -> Host {
+    pub fn serve(self, run: RunHost) -> Host {
         Host {
             endpoint: self.endpoint,
             listener: self.listener,
-            camera,
-            options,
+            run,
         }
-    }
-
-    /// Connect a camera before returning the host that serves it.
-    pub fn open(self, camera: Xp5Session, options: GuiOptions, stop: &AtomicBool) -> Result<Host, String> {
-        accept(&self.listener, stop)?;
-        Ok(self.serve(camera, options))
     }
 }
 
@@ -69,7 +58,7 @@ impl Host {
     }
 
     pub fn run_until(self, stop: &AtomicBool) -> Result<Value, String> {
-        GuiSession::open(self.camera, self.options, self.listener, stop)?.run(stop)
+        GuiSession::open(self.run, self.listener, stop)?.run(stop)
     }
 }
 
@@ -86,21 +75,6 @@ pub fn bind(address: IpAddr) -> Result<Socket, String> {
         },
         listener,
     })
-}
-
-/// Bind a loopback endpoint and serve one native camera.
-pub fn serve(camera: Xp5Session, options: GuiOptions, address: IpAddr) -> Result<Host, String> {
-    Ok(bind(address)?.serve(camera, options))
-}
-
-/// Open a camera and reserve its endpoint before the caller launches a frontend.
-pub fn open(
-    camera: Xp5Session,
-    options: GuiOptions,
-    address: IpAddr,
-    stop: &AtomicBool,
-) -> Result<Host, String> {
-    bind(address)?.open(camera, options, stop)
 }
 
 fn accept(listener: &TcpListener, stop: &AtomicBool) -> Result<WebSocket<TcpStream>, String> {
@@ -125,8 +99,7 @@ fn accept(listener: &TcpListener, stop: &AtomicBool) -> Result<WebSocket<TcpStre
                         Err(refusal)
                     }
                 };
-                return tungstenite::accept_hdr(stream, check)
-                    .map_err(|error| error.to_string());
+                return tungstenite::accept_hdr(stream, check).map_err(|error| error.to_string());
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -142,9 +115,7 @@ struct GuiSession {
     firmware: String,
     controls: Value,
     physical: Xp5Controls,
-    session: Session,
-    inputs: fujimod_emulator_xp5_board::session::Inputs,
-    quantum: usize,
+    run: RunHost,
     socket: WebSocket<TcpStream>,
     frame_number: u64,
     last_frame: Option<Vec<u8>>,
@@ -152,34 +123,16 @@ struct GuiSession {
 }
 
 impl GuiSession {
-    fn open(
-        camera: Xp5Session,
-        options: GuiOptions,
-        listener: TcpListener,
-        stop: &AtomicBool,
-    ) -> Result<Self, String> {
-        let Xp5Session {
-            configuration,
-            mut session,
-            inputs,
-            quantum,
-            ..
-        } = camera;
-        if let Some(path) = options.load_snapshot {
-            fujimod_emulator_boot::load_snapshot(&mut session, &path)?;
-        }
-        session.board.set_execution_policy(options.execution_policy)?;
-        let physical = Xp5Controls::new(&configuration)?;
+    fn open(run: RunHost, listener: TcpListener, stop: &AtomicBool) -> Result<Self, String> {
+        let physical = Xp5Controls::new(run.configuration())?;
         let socket = accept(&listener, stop)?;
         let mut session = Self {
-            configuration_id: configuration.configuration.id,
-            body: configuration.configuration.body_id,
-            firmware: configuration.configuration.firmware_id,
+            configuration_id: run.configuration_id().to_owned(),
+            body: run.body_id().to_owned(),
+            firmware: run.firmware_id().to_owned(),
             controls: physical.document()?,
             physical,
-            session,
-            inputs,
-            quantum,
+            run,
             socket,
             frame_number: 0,
             last_frame: None,
@@ -187,6 +140,7 @@ impl GuiSession {
         };
         session.publish_catalog()?;
         session.publish_session()?;
+        session.publish_latest()?;
         Ok(session)
     }
 
@@ -216,10 +170,10 @@ impl GuiSession {
         })
     }
 
-    fn run(&mut self, stop: &AtomicBool) -> Result<Value, String> {
+    fn run(mut self, stop: &AtomicBool) -> Result<Value, String> {
         loop {
             if stop.load(Ordering::Acquire) {
-                return Ok(json!({"status":"closed"}));
+                return self.finish();
             }
             loop {
                 let message = match self.socket.read() {
@@ -230,20 +184,27 @@ impl GuiSession {
                         break;
                     }
                     Err(tungstenite::Error::ConnectionClosed) => {
-                        return Ok(json!({"status":"closed"}));
+                        return self.finish();
                     }
                     Err(error) => return Err(error.to_string()),
                 };
                 match message {
                     Message::Text(text) => self.receive(text.as_str())?,
-                    Message::Close(_) => return Ok(json!({"status":"closed"})),
-                    Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_) => {}
+                    Message::Close(_) => return self.finish(),
+                    Message::Ping(_)
+                    | Message::Pong(_)
+                    | Message::Binary(_)
+                    | Message::Frame(_) => {}
                 }
             }
             self.advance()?;
             self.publish()?;
             self.publish_session()?;
         }
+    }
+
+    fn finish(self) -> Result<Value, String> {
+        self.run.finish()
     }
 
     fn receive(&mut self, source: &str) -> Result<(), String> {
@@ -267,21 +228,25 @@ impl GuiSession {
     }
 
     fn advance(&mut self) -> Result<(), String> {
-        self.session
-            .run_with_limits(1_000_000, self.quantum, None, None)
+        self.run.step()
     }
 
     fn publish(&mut self) -> Result<(), String> {
-        for _line in self.session.board.take_console() {}
-        let Some(frame) = self
-            .session
-            .board
+        let frame = self
+            .run
             .take_frames()
             .into_iter()
-            .max_by_key(|frame| frame.sequence)
-        else {
-            return Ok(());
-        };
+            .max_by_key(|frame| frame.sequence);
+        if let Some(frame) = frame.as_ref() {
+            self.publish_frame(frame)?;
+        }
+        Ok(())
+    }
+
+    fn publish_frame(
+        &mut self,
+        frame: &fujimod_emulator_devices::graphics::scanout::Frame,
+    ) -> Result<(), String> {
         let jpeg = encode_jpeg(&frame)?;
         if self.last_frame.as_ref() == Some(&jpeg) {
             return Ok(());
@@ -300,28 +265,38 @@ impl GuiSession {
         Ok(())
     }
 
+    /// Send the held LCD image after a frontend joins a running session.
+    fn publish_latest(&mut self) -> Result<(), String> {
+        if let Some(frame) = self.run.latest_frame() {
+            self.publish_frame(&frame)?;
+        }
+        Ok(())
+    }
+
     fn command(&mut self, action: &str, args: Value) -> Result<Value, String> {
         match action {
             "boot" => {
                 self.publish_session()?;
-                serde_json::to_value(self.physical.catalog())
-                    .map_err(|error| error.to_string())
+                serde_json::to_value(self.physical.catalog()).map_err(|error| error.to_string())
             }
             "press" => {
                 let id = string(&args, "id")?;
                 let stage = args.get("stage").and_then(Value::as_str);
-                self.physical.press(&mut self.session, &self.inputs, id, stage)?;
+                let (session, inputs) = self.run.parts_mut();
+                self.physical.press(session, inputs, id, stage)?;
                 Ok(Value::Null)
             }
             "release" => {
+                let (session, inputs) = self.run.parts_mut();
                 self.physical
-                    .release(&mut self.session, &self.inputs, string(&args, "id")?)?;
+                    .release(session, inputs, string(&args, "id")?)?;
                 Ok(Value::Null)
             }
             "set_position" => {
+                let (session, inputs) = self.run.parts_mut();
                 self.physical.set_position(
-                    &mut self.session,
-                    &self.inputs,
+                    session,
+                    inputs,
                     string(&args, "id")?,
                     string(&args, "position")?,
                 )?;
@@ -329,9 +304,10 @@ impl GuiSession {
             }
             "rotate" => {
                 let steps = integer(&args, "steps")?;
+                let (session, inputs) = self.run.parts_mut();
                 self.physical.rotate(
-                    &mut self.session,
-                    &self.inputs,
+                    session,
+                    inputs,
                     string(&args, "id")?,
                     i32::try_from(steps).map_err(|_| "rotate steps exceed i32".to_owned())?,
                 )?;
@@ -342,18 +318,22 @@ impl GuiSession {
                     .map_err(|_| "touch x exceeds 16 bits".to_owned())?;
                 let y = u16::try_from(integer(&args, "y")?)
                     .map_err(|_| "touch y exceeds 16 bits".to_owned())?;
-                let (node, script) = self.session.touch_input(
+                let (node, script) = self.run.session().touch_input(
                     string(&args, "id")?,
                     string(&args, "phase")?,
                     x,
                     y,
                 )?;
-                self.session.touch(&node, &script)?;
+                self.run.session_mut().touch(&node, &script)?;
                 Ok(Value::Null)
             }
             "power" => {
-                let on = args.get("on").and_then(Value::as_bool).ok_or("power needs on")?;
-                self.physical.powered_switch(&mut self.session, &self.inputs, on)?;
+                let on = args
+                    .get("on")
+                    .and_then(Value::as_bool)
+                    .ok_or("power needs on")?;
+                let (session, inputs) = self.run.parts_mut();
+                self.physical.powered_switch(session, inputs, on)?;
                 Ok(Value::Null)
             }
             "close" => Ok(Value::Null),
