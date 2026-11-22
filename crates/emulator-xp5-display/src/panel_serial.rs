@@ -14,6 +14,8 @@ struct State {
     causes: u32,
     pending: Option<u16>,
     rx: Option<u16>,
+    #[serde(default)] tx_fifo: Vec<u16>,
+    #[serde(default)] rx_fifo: Vec<u16>,
     generation: u64,
     words: Vec<u16>,
     transfers: u64,
@@ -44,12 +46,17 @@ impl PanelSerial {
             chip_select,
         })
     }
+    fn receive(&mut self) {
+        if self.s.rx.is_none() { self.s.rx = Some(0); }
+        else if self.s.rx_fifo.len() < 7 { self.s.rx_fifo.push(0); }
+        else { self.s.causes |= 1; }
+    }
     fn complete(&mut self, cx: &mut Cx<'_>, word: u16) {
         self.s.transfers += 1;
         if self.s.control & 0xff == 0x0f {
             if self.s.mode0_words.len() == 4096 { self.s.mode0_words.remove(0); }
             self.s.mode0_words.push(word);
-            self.s.rx = Some(0); // Declared idle MISO, not a measured response.
+            self.receive(); // Declared idle MISO, not a measured response.
             cx.log(&format!("SPI9 unidentified mode-0 tx{word:#06x}"));
             return;
         }
@@ -57,7 +64,7 @@ impl PanelSerial {
             self.s.words.remove(0);
         }
         self.s.words.push(word);
-        self.s.rx = Some(0); // Stock write-only path discards the dummy.
+        self.receive(); // Stock write-only path discards the dummy.
         cx.log(&format!("panel SPI9 tx{word:#06x}"));
     }
 }
@@ -84,10 +91,14 @@ impl Device for PanelSerial {
         match o {
             0 => self.s.control as u64,
             4 => self.s.enable as u64,
-            8 => self.s.rx.take().unwrap_or(0) as u64,
+            8 => {
+                let value = self.s.rx.take().unwrap_or(0);
+                if !self.s.rx_fifo.is_empty() { self.s.rx = Some(self.s.rx_fifo.remove(0)); }
+                value as u64
+            },
             //1467c2c: TFE bit0, TNF bit1, RNE bit2, BSY bit4.
             0xc => {
-                2 | u64::from(self.s.pending.is_none())
+                (u64::from(self.s.tx_fifo.len() < 8) << 1) | u64::from(self.s.pending.is_none() && self.s.tx_fifo.is_empty())
                     | (u64::from(self.s.rx.is_some()) << 2)
                     | (u64::from(self.s.pending.is_some()) << 4)
             }
@@ -107,7 +118,7 @@ impl Device for PanelSerial {
             cx.unmodeled();
             return;
         }
-        if self.s.pending.is_some() && o != 0x14 {
+        if self.s.pending.is_some() && o != 0x14 && o != 0x20 && o != 8 {
             cx.fail("SPI9 register changed during panel transfer");
             return;
         }
@@ -119,16 +130,14 @@ impl Device for PanelSerial {
             0x20 if v & !3 == 0 => {
                 if v & 1 != 0 {
                     self.s.rx = None;
+                    self.s.rx_fifo.clear();
                 }
+                if v & 2 != 0 { self.s.tx_fifo.clear(); }
             }
             0x24 if v == 0 => self.s.interrupt_enable = 0,
             8 if v <= 0xffff => {
                 if !matches!(self.s.control & 0xff, 0x0f | 0xcf) || self.s.enable & 2 == 0 || self.s.divider == 0 {
                     cx.fail("unsupported/unconfigured SPI9 panel mode");
-                    return;
-                }
-                if self.s.rx.is_some() {
-                    cx.fail("SPI9 unread receive word");
                     return;
                 }
                 if self.s.control & 0xff == 0xcf && self
@@ -139,6 +148,11 @@ impl Device for PanelSerial {
                     != 0
                 {
                     cx.fail("SPI9 panel requires its declared active-low GPIO chip select");
+                    return;
+                }
+                if self.s.pending.is_some() {
+                    if self.s.tx_fifo.len() >= 8 { cx.fail("SPI9 transmit FIFO full"); return; }
+                    self.s.tx_fifo.push(v as u16);
                     return;
                 }
                 self.s.pending = Some(v as u16);
@@ -170,6 +184,14 @@ impl Device for PanelSerial {
             self.s.deadline = None;
             if let Some(word) = self.s.pending.take() {
                 self.complete(cx, word);
+                if !self.s.tx_fifo.is_empty() {
+                    self.s.pending = Some(self.s.tx_fifo.remove(0));
+                    self.s.generation += 1;
+                    let ns = (self.s.divider as u64 * 16 * 1_000_000_000).div_ceil(self.source_hz);
+                    let at = cx.now().saturating_add(ns);
+                    self.s.deadline = Some(at);
+                    cx.schedule(at, self.s.generation);
+                }
             }
         }
     }
@@ -277,6 +299,43 @@ mod tests {
             panel.write(&mut cx, BASE, 4, 0x0f);
             assert!(cx.refusal().unwrap().contains("during panel transfer"));
         }
+    }
+
+    #[test]
+    fn fifo_clear_during_transfer_preserves_inflight_word() {
+        let pins = Pins::shared();
+        let mut panel = PanelSerial::new(pins, (15, 13), 48_000_000).unwrap();
+        let mut host = RecordingHost::default();
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            for (o, v) in [(0, 0x0f), (4, 2), (0x10, 28), (8, 0x1234), (0x20, 3)] {
+                panel.write(&mut cx, BASE + o, 4, v);
+            }
+            assert!(cx.refusal().is_none());
+            assert_eq!(panel.save()["pending"], 0x1234);
+        }
+        host.now = panel.next_deadline(0).unwrap();
+        panel.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(panel.save()["mode0_words"], serde_json::json!([0x1234]));
+    }
+
+    #[test]
+    fn queued_words_survive_active_transfer_and_receive_in_order() {
+        let pins = Pins::shared();
+        let mut panel = PanelSerial::new(pins, (15, 13), 48_000_000).unwrap();
+        let mut host = RecordingHost::default();
+        {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            for (o,v) in [(0,0x0f),(4,2),(0x10,28),(8,0x1234),(8,0x5678)] { panel.write(&mut cx, BASE+o,4,v); }
+            assert!(cx.refusal().is_none());
+        }
+        host.now = panel.next_deadline(0).unwrap(); panel.advance(&mut Cx::new(&mut host,0,0,0));
+        host.now = panel.next_deadline(host.now).unwrap(); panel.advance(&mut Cx::new(&mut host,0,0,0));
+        assert_eq!(panel.save()["mode0_words"], serde_json::json!([0x1234,0x5678]));
+        let mut cx=Cx::new(&mut host,0,0,0);
+        assert_ne!(panel.read(&mut cx, BASE+0xc,4)&4,0); panel.read(&mut cx,BASE+8,4);
+        assert_ne!(panel.read(&mut cx, BASE+0xc,4)&4,0); panel.read(&mut cx,BASE+8,4);
+        assert_eq!(panel.read(&mut cx, BASE+0xc,4)&4,0);
     }
 
     #[test]
