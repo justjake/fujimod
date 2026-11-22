@@ -26,7 +26,7 @@ rfd = "0.17"
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tauri = { version = "2.12.7", features = ["devtools"] }
+tauri = { version = "2.12.7", features = [] }
 tauri-plugin-dialog = "2"
 fujimod-workspace-hack.workspace = true
 
