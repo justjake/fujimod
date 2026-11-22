@@ -2830,7 +2830,8 @@
       "event": 34,
       "debug_key": "FUNCTION",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn1_button"
       },
       "scanner": {
         "index": 65,
@@ -2906,7 +2907,8 @@
       "event": 8255,
       "debug_key": "FUNCTION2",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn2_button"
       },
       "scanner": {
         "index": 69,
@@ -2925,7 +2927,8 @@
       "event": 18,
       "debug_key": "DRIVE",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "drive_delete_button"
       },
       "scanner": {
         "index": 70,
@@ -2944,7 +2947,8 @@
       "event": 10,
       "debug_key": "K_PLAY",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "play_button"
       },
       "scanner": {
         "index": 71,
@@ -2963,7 +2967,8 @@
       "event": 8231,
       "debug_key": "AEAF_LOCK",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "ael_afl_button"
       },
       "scanner": {
         "index": 72,
@@ -3020,7 +3025,8 @@
       "event": 64,
       "debug_key": "8DIR_D",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.down"
       },
       "scanner": {
         "index": 75,
@@ -3039,7 +3045,8 @@
       "event": 66,
       "debug_key": "8DIR_L",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.left"
       },
       "scanner": {
         "index": 76,
@@ -3077,7 +3084,8 @@
       "event": 62,
       "debug_key": "8DIR_R",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.right"
       },
       "scanner": {
         "index": 78,
@@ -3115,7 +3123,8 @@
       "event": 60,
       "debug_key": "8DIR_U",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.up"
       },
       "scanner": {
         "index": 80,
@@ -3172,7 +3181,8 @@
       "event": 1,
       "debug_key": "EXE_M",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "menu_ok_button"
       },
       "scanner": {
         "index": 83,
@@ -3191,7 +3201,8 @@
       "event": 9,
       "debug_key": "DISP_B",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "disp_back_button"
       },
       "scanner": {
         "index": 84,
@@ -3343,7 +3354,8 @@
       "event": 44,
       "debug_key": "K_Q",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "q_button"
       },
       "scanner": {
         "index": 92,
