@@ -52,7 +52,7 @@ const preview = (scene: string) => {
   return url;
 };
 
-/** Each photographer's scene photographs as a film strip; a frame opens in a lightbox. */
+/** A row of each photographer's scene photographs; a photograph opens in a lightbox. */
 function Photographs() {
   onSettled(() => {
     const lightbox = Lightbox.init();
