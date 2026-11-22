@@ -116,6 +116,11 @@ impl Device for Requests {
         cx.unmodeled();
         0
     }
+    /// Request, gate and completion words read stored state that only a write
+    /// or the acknowledge event changes.
+    fn read_stable(&self, address: u64, size: u8) -> bool {
+        size == 4 && (self.words.contains_key(&address) || self.in_block(address))
+    }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         if size != 4 {
             cx.unmodeled();

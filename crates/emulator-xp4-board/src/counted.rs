@@ -121,7 +121,7 @@ fn exclusive_word(word: u32) -> bool {
 impl Cluster {
     /// Accounts `n` entered instructions of `core` exactly as `n` single
     /// steps of the per-instruction hook do.
-    fn advance(&self, core: usize, n: u64) -> Result<(), String> {
+    pub(super) fn advance(&self, core: usize, n: u64) -> Result<(), String> {
         if n == 0 {
             return Ok(());
         }
@@ -140,7 +140,7 @@ impl Cluster {
     /// Instructions `core` may still enter before `due()` has work: the one
     /// whose accounting reaches the device scan tick or the next interval
     /// expiry ends the run, so `due()` runs before the following instruction.
-    fn room(&self) -> Result<u64, String> {
+    pub(super) fn room(&self) -> Result<u64, String> {
         let state = unsafe { &*self.state.get() };
         let now = state.ticks;
         let device = (state.devices.is_some() && state.device_scan_at != u64::MAX)
@@ -192,6 +192,7 @@ impl Cluster {
         let wakes = (0..self.cpus.len())
             .any(|c| c != core && state.waiting[c] != 0 && state.gic.next_irq(c).is_some());
         let stop = state.failure.is_some()
+            || self.poll_stop(core)
             || state.cache_dirty
             || wakes
             || self.xip_stale()
@@ -252,11 +253,19 @@ impl Cluster {
         }
         self.advance(core, 1)?;
         let state = unsafe { &mut *self.state.get() };
+        state.observations += 1;
         state.last_observed[core] = Some((address, state.instructions));
         self.record(core, address, word);
         observe(self, core, u64::from(address))?;
         special(self, core, u64::from(address), word)?;
         let state = unsafe { &*self.state.get() };
+        if state.redirected.is_some() && state.resume && state.failure.is_none() && state.waiting[core] == 0 {
+            // The board instruction left the slice running; the redirect only moved PC.
+            let state = unsafe { &mut *self.state.get() };
+            state.redirected = None;
+            state.resume = false;
+            return Ok(false);
+        }
         if state.redirected.is_some() || state.failure.is_some() {
             return Ok(true);
         }
@@ -311,9 +320,10 @@ impl Cluster {
         let cpu = self.cpus[core]
             .counted()
             .ok_or("counted XP4 core without its engine")?;
+        let mut page = None;
         for address in cpu.take_entries()? {
             let address = u32::try_from(address).map_err(|_| "counted XP4 entry above 4 GiB")?;
-            self.record(core, address, self.word(core, u64::from(address))?);
+            self.record(core, address, self.word_near(core, u64::from(address), &mut page)?);
         }
         Ok(())
     }
@@ -321,7 +331,12 @@ impl Cluster {
     /// where the per-instruction hook ends it.
     pub(super) fn run_counted(&self, core: usize, budget: usize) -> Result<(), String> {
         let mut remaining = budget as u64;
+        // The scheduler window this slice belongs to when this core is the
+        // only runnable one; a stable poll may skip across slice ends in it.
+        let mut window = std::mem::take(unsafe { &mut (*self.state.get()).solo_window });
         let mut exit_word: Option<u32> = None;
+        // Other processors ran since this one's last slice.
+        self.poll_abandon(core);
         loop {
             // The hook's instruction budget stops before the next entry, so
             // no boundary work happens once the slice is spent.
@@ -333,6 +348,7 @@ impl Cluster {
             }
             if let Some(word) = exit_word.take() {
                 remaining -= 1;
+                window = window.saturating_sub(1);
                 if self.perform(core, word)? {
                     return Ok(());
                 }
@@ -369,9 +385,11 @@ impl Cluster {
             }
             // A full maintenance queue yields the engine after its MCR, and
             // the exact run ends its slice there.
-            let full = std::borrow::Borrow::<Core>::borrow(&self.cpus[core])
-                .translation_maintenance_status()
-                .is_ok_and(|s| s.pending >= fujimod_emulator_cpu_unicorn::maintenance::CAPACITY);
+            let maintenance = std::borrow::Borrow::<Core>::borrow(&self.cpus[core])
+                .translation_maintenance_status();
+            if maintenance.as_ref().map_or(true, |s| s.pending > 0) {
+                unsafe { (*self.state.get()).tlbi_epoch += 1 };
+            }
             // Entered instructions count even when settlement fails: the
             // per-instruction hook counted them before they executed.
             let entered = cpu.instruction_progress().unwrap_or(0);
@@ -384,20 +402,24 @@ impl Cluster {
                 .settle(&self.cpus, core, raw_error.as_deref())?;
             counted?;
             remaining = remaining.saturating_sub(entered);
+            window = window.saturating_sub(entered);
             self.healthy()?;
             if matches!(&exit, Err(ExecutionError::InvalidInstruction(_)))
                 && self.disabled_vfp_exception(core)?
             {
                 exit = Ok(Exit::Stopped);
             }
+            let stopped = matches!(exit, Ok(Exit::Stopped));
             match exit {
                 Ok(Exit::BeforeInstruction(word)) => exit_word = Some(word),
                 Ok(Exit::Stopped) => {}
                 Ok(other) => return Err(format!("Unexpected counted ARMv7-A exit {other:?}")),
                 Err(error) => return Err(error.to_string()),
             }
-            // An abort or undefined entry, or a yield to translation maintenance.
-            if full || unsafe { (*self.state.get()).redirected.is_some() } {
+            self.poll_run_end(core, &mut remaining, &mut window, stopped)?;
+            // An abort or undefined entry. A yield to translation maintenance
+            // was settled above and the slice goes on, as in the hook.
+            if unsafe { (*self.state.get()).redirected.is_some() } {
                 return Ok(());
             }
         }
@@ -430,6 +452,76 @@ fn condition_passes(condition: u32, cpsr: u32) -> bool {
     }
 }
 
+/// Board instructions performed inside the run (see
+/// `aprofile::Core::set_owner_inline_instructions`).
+pub(super) unsafe fn counted_inline(address: u64, word: u32, data: *mut c_void) -> bool {
+    let hook = unsafe { &*data.cast::<Hook>() };
+    let c = unsafe { &*hook.cluster };
+    let core = hook.core;
+    match c.perform_inline(core, address, word) {
+        Ok(performed) => performed,
+        Err(error) => {
+            c.fail(core, error);
+            let _ = c.cpus[core].stop();
+            true
+        }
+    }
+}
+
+impl Cluster {
+    /// The board instructions that change nothing the scheduler reads and
+    /// need no exit: exclusives, CLREX, SEV and a WFE with an event pending.
+    /// `perform` does what the exit does (count, observe, `special`), at the
+    /// same instruction, without leaving the run. `false` leaves the
+    /// instruction untouched for the exit path.
+    fn perform_inline(&self, core: usize, address: u64, word: u32) -> Result<bool, String> {
+        let hint = word & 0x0fff_ffff;
+        let is_exclusive = word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90;
+        let clrex = word == 0xf57f_f01f;
+        let sev = hint == 0x0320_f004;
+        let wfe = hint == 0x0320_f002;
+        if !(is_exclusive || clrex || sev || wfe) || !self.plain_counted() || !self.counted_core(core) {
+            return Ok(false);
+        }
+        let state = unsafe { &mut *self.state.get() };
+        if state.failure.is_some()
+            || state.observed[core].contains(&(address as u32))
+            || (wfe && !state.events[core])
+        {
+            return Ok(false);
+        }
+        let cpsr = self.reg(core, arm::CPSR)?;
+        let passed = word >> 28 == 15 || condition_passes(word >> 28, cpsr);
+        if passed && is_exclusive {
+            if matches!(exclusive(self, core, address, word, true)?, Exclusive::Declined) {
+                return Ok(false);
+            }
+        }
+        let progress = self.cpus[core]
+            .instruction_progress()
+            .ok_or("counted XP4 inline instruction without an entry count")?;
+        self.sync_to(core, progress)?;
+        let state = unsafe { &mut *self.state.get() };
+        state.observations += 1;
+        state.last_observed[core] = Some((address as u32, state.instructions));
+        if passed {
+            if clrex {
+                state.exclusive[core] = None;
+            } else if wfe {
+                state.events[core] = false;
+            } else if sev {
+                state.events.fill(true);
+                for wait in &mut state.waiting {
+                    if *wait == 2 {
+                        *wait = 0;
+                    }
+                }
+            }
+        }
+        Ok(true)
+    }
+}
+
 /// Counted observer (labels and call returns): the hook's passive
 /// observations at an entered instruction, after it counts.
 pub(super) unsafe fn counted_observer(address: u64, _size: u32, data: *mut c_void) {
@@ -440,7 +532,7 @@ pub(super) unsafe fn counted_observer(address: u64, _size: u32, data: *mut c_voi
         // A board instruction exits right after this callback without being
         // entered; `perform` observes it at the boundary.
         let word = c.word(core, address)?;
-        if fujimod_emulator_cpu::armv7a::framework_instruction(word) || exclusive_word(word) {
+        if (fujimod_emulator_cpu::armv7a::framework_instruction(word) && !fujimod_emulator_cpu::armv7a::mpidr_read(word)) || exclusive_word(word) {
             return Ok(());
         }
         let progress = c.cpus[core]
@@ -453,6 +545,7 @@ pub(super) unsafe fn counted_observer(address: u64, _size: u32, data: *mut c_voi
             return Ok(());
         }
         state.last_observed[core] = Some((address as u32, entered));
+        state.observations += 1;
         c.sync_to(core, progress)?;
         let before = unsafe { (*c.state.get()).calls.len() };
         observe(c, core, address)?;

@@ -544,6 +544,9 @@ pub struct BackingObserver {
     pub bytes: usize,
     pub bitmap: NonNull<AtomicU64>,
     pub page_shift: u32,
+    /// One bit per bitmap word that holds a set bit, when the owner scans
+    /// large bitmaps through it.
+    pub summary: Option<NonNull<AtomicU64>>,
 }
 
 pub trait Cpu {

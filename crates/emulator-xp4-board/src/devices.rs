@@ -76,6 +76,8 @@ pub struct Devices {
     carved: Vec<(u64, u64)>,
     /// The model the last access reached.
     last_access: Option<usize>,
+    /// Whether the last access was a stable status read (`Device::read_stable`).
+    last_read_stable: bool,
     /// Epoch of the serial-flash array and its controller's read state, when this board has them.
     nor_epoch: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
@@ -1096,6 +1098,7 @@ impl Devices {
             outputs: BTreeMap::new(),
             carved: Vec::new(),
             last_access: None,
+            last_read_stable: false,
             nor_epoch: None,
         }
     }
@@ -1267,6 +1270,7 @@ impl Devices {
             ],
             carved: Vec::new(),
             last_access: None,
+            last_read_stable: false,
             nor_epoch: Some(port.lock().unwrap().epoch()),
         };
         if let Some(pad) = pad {
@@ -1955,6 +1959,7 @@ impl Devices {
         write: bool,
         value: u64,
     ) -> Result<Option<(u64, bool)>, String> {
+        self.last_read_stable = false;
         let Some(id) = self.owner(address, size) else {
             return Ok(None);
         };
@@ -1977,6 +1982,7 @@ impl Devices {
         };
         let unmodeled = cx.is_unmodeled();
         let refusal = cx.take_refusal();
+        self.last_read_stable = !write && !unmodeled && refusal.is_none() && model.read_stable(address, size as u8);
         self.models[id] = Some(model);
         if let Some(reason) = refusal
             && !unmodeled
@@ -1984,6 +1990,10 @@ impl Devices {
             return Err(reason);
         }
         Ok(Some((reply, unmodeled)))
+    }
+    /// Whether the last access was a stable status read.
+    pub fn last_read_stable(&self) -> bool {
+        self.last_read_stable
     }
     pub fn next_deadline(&self, now: u64) -> Option<u64> {
         self.events

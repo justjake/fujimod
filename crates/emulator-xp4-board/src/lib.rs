@@ -14,6 +14,7 @@ pub mod observation;
 use observation::Call;
 mod devices;
 mod jpeg;
+mod poll;
 mod dsp;
 mod still;
 mod timer;
@@ -85,6 +86,8 @@ struct RunState {
     discovery: Discovery,
     failure: Option<String>,
     redirected: Option<u32>,
+    /// The redirect that is pending finished a board instruction that leaves the slice running.
+    resume: bool,
     // Native hooks hold raw pointers into each box; boxing keeps them stable as the Vec grows.
     #[allow(clippy::vec_box)]
     pages: BTreeMap<u64, Vec<Box<MmioHook>>>,
@@ -112,6 +115,19 @@ struct RunState {
     accounted: u64,
     counted_core: Option<usize>,
     return_requests: Vec<Vec<u32>>,
+    // Stable-poll proofs per core (`poll.rs`), the count of label and return
+    // observations and of accepted translation maintenance.
+    poll: Vec<poll::Watch>,
+    observations: u64,
+    tlbi_epoch: u64,
+    poll_skipped: u64,
+    /// Instructions the scheduler window still allows while this core is the
+    /// only runnable one (0 otherwise), and the scheduler quantum; both set by
+    /// `run_board_window` for the slice it starts (see `poll_skip`).
+    solo_window: u64,
+    quantum: u64,
+    /// Counted runs never fast-forward a polling loop (`Session::set_poll_fast_forward`).
+    poll_off: bool,
     observed: Vec<BTreeSet<u32>>,
     last_observed: Vec<Option<(u32, u64)>>,
     exclusive: Vec<Option<(u64, usize)>>,
@@ -361,6 +377,13 @@ impl Cluster {
         self.write_reg(core, arm::PC, pc)?;
         self.cpus[core].stop()
     }
+    /// A redirect after a board instruction that changed nothing the scheduler
+    /// reads: the slice goes on at the next instruction.
+    fn redirect_resume(&self, core: usize, pc: u32) -> Result<(), String> {
+        self.redirect(core, pc)?;
+        unsafe { (*self.state.get()).resume = true };
+        Ok(())
+    }
     fn substitute_callee(&self, core: usize, address: u64) -> Result<bool, String> {
         let result = unsafe { &mut *self.state.get() }.callee_stubs.get_mut(&(core, address))
             .map(|(stub, hits)| {
@@ -376,6 +399,33 @@ impl Cluster {
         Ok(false)
     }
 
+    /// `word` for consecutive reads without a run in between: the page a
+    /// previous read translated is reused (`page`: virtual page, physical
+    /// page), so a trace of nearby addresses translates once per page.
+    fn word_near(&self, core: usize, address: u64, page: &mut Option<(u64, u64)>) -> Result<u32, String> {
+        let virtual_page = address & !0xfff;
+        let physical_page = match *page {
+            Some((v, p)) if v == virtual_page => p,
+            _ => match self.cpus[core].translate(virtual_page, Access::Fetch) {
+                Ok(p) => {
+                    *page = Some((virtual_page, p));
+                    p
+                }
+                Err(_) => return self.word(core, address),
+            },
+        };
+        let physical = physical_page + (address & 0xfff);
+        let low = unsafe { (*self.state.get()).low_alias }
+            .map_or(0, |index| self.memory[index].data.len() as u64);
+        if physical_page & 0xfff == 0 && physical >= low && physical & 3 == 0
+            && physical + 4 <= self.ram.len() as u64
+        {
+            return Ok(u32::from_le(unsafe {
+                std::ptr::read(self.ram.as_ptr().add(physical as usize).cast::<u32>())
+            }));
+        }
+        self.word(core, address)
+    }
     fn word(&self, core: usize, address: u64) -> Result<u32, String> {
         // The engine is about to execute this word, so its fetch permission
         // already holds: when it translates into plain DRAM, read the backing
@@ -828,6 +878,127 @@ fn observe(c: &Cluster, core: usize, address: u64) -> Result<(), String> {
     }
     Ok(())
 }
+enum Exclusive {
+    Done,
+    /// The access faulted and the abort was delivered; PC is the handler's.
+    Aborted,
+    /// Inline only: nothing was done, the instruction needs the board.
+    Declined,
+}
+/// A LDREX or STREX of any width whose condition passed. Not `inline`: the
+/// board performs it between runs and the caller moves PC on. `inline`: it
+/// runs inside a counted run; the function then has no effect and returns
+/// `false` for anything it cannot finish without leaving the run (a fault, an
+/// unpredictable encoding, a refused engine call).
+fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) -> Result<Exclusive, String> {
+    let state = unsafe { &mut *c.state.get() };
+    let load_exclusive = word & 0x0f900fff == 0x01900f9f;
+    let rn = ((word >> 16) & 15) as usize;
+    let rd = ((word >> 12) & 15) as usize;
+    if rn == 15 || rd == 15 {
+        if inline {
+            return Ok(Exclusive::Declined);
+        }
+        return Err("Unpredictable ARMv7-A exclusive register".into());
+    }
+    let load = load_exclusive;
+    let size = match (word >> 21) & 3 {
+        0 => 4,
+        1 => 8,
+        2 => 1,
+        _ => 2,
+    };
+    let rt = (word & 15) as usize;
+    if inline
+        && (size == 8 && (rd & 1 != 0 || rd > 12) || (!load && (rt == 15 || size == 8 && (rt & 1 != 0 || rt > 12))))
+    {
+        return Ok(Exclusive::Declined);
+    }
+    let data_address = c.reg(core, arm::CORE[rn])?;
+    let physical = match c.physical_ram(
+        core,
+        data_address,
+        size,
+        if load { Access::Read } else { Access::Write },
+    ) {
+        Ok(physical) => physical,
+        Err(_) if inline => return Ok(Exclusive::Declined),
+        Err(error) => {
+            c.deliver_abort(core, false)
+                .map_err(|abort| format!("{error}: {abort}"))?;
+            return Ok(Exclusive::Aborted);
+        }
+    };
+    if load {
+        if size == 8 && (rd & 1 != 0 || rd > 12) {
+            return Err("Unpredictable LDREXD register pair".into());
+        }
+        if c.counted {
+            // Counted runs see stores on watched pages only: route
+            // every core's stores to this monitor through `store`.
+            for cpu in &c.cpus {
+                match cpu.watch_stores(physical, size as u64) {
+                    Err(_) if inline => return Ok(Exclusive::Declined),
+                    result => result?,
+                }
+            }
+        }
+        let mut bytes = [0u8; 8];
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                c.ram.as_ptr().add(physical as usize),
+                bytes.as_mut_ptr(),
+                size,
+            );
+        }
+        let value = u64::from_le_bytes(bytes);
+        c.write_reg(core, arm::CORE[rd], value as u32)?;
+        if size == 8 {
+            c.write_reg(core, arm::CORE[rd + 1], (value >> 32) as u32)?;
+        }
+        state.exclusive[core] = Some((physical, size));
+    } else {
+        let success = state.exclusive[core] == Some((physical, size));
+        if success {
+            if rt == 15 {
+                return Err("Unpredictable ARMv7-A STREX Rt".into());
+            }
+            if size == 8 && (rt & 1 != 0 || rt > 12) {
+                return Err("Unpredictable STREXD register pair".into());
+            }
+            let mut value = u64::from(c.reg(core, arm::CORE[rt])?);
+            if size == 8 {
+                value |= u64::from(c.reg(core, arm::CORE[rt + 1])?) << 32;
+            }
+            match c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size]) {
+                Err(_) if inline => return Ok(Exclusive::Declined),
+                result => result?,
+            }
+            for monitor in &mut state.exclusive {
+                if monitor
+                    .is_some_and(|(p, n)| p < physical + size as u64 && physical < p + n as u64)
+                {
+                    *monitor = None;
+                }
+            }
+            // Software-emulated exclusives bypass the CPU memory hook.
+            // Preflight checked the complete RAM write and record bound;
+            // record only the store that actually succeeded.
+            if let Some(guard) = &mut state.driver_guard {
+                guard.store(
+                    core,
+                    address,
+                    physical,
+                    size as u32,
+                    value & (u64::MAX >> ((8 - size) * 8)),
+                );
+            }
+        }
+        state.exclusive[core] = None;
+        c.write_reg(core, arm::CORE[rd], u32::from(!success))?;
+    }
+    Ok(Exclusive::Done)
+}
 /// The instructions the board performs itself (PMU profile, exclusives,
 /// CLREX, identity reads, WFI/WFE/SEV) at an entered instruction whose word
 /// is `word`. Anything else returns without effect, for the engine to run.
@@ -890,100 +1061,14 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
         return Ok(());
     }
     if load_exclusive || store_exclusive {
-        let rn = ((word >> 16) & 15) as usize;
-        let rd = ((word >> 12) & 15) as usize;
-        if rn == 15 || rd == 15 {
-            return Err("Unpredictable ARMv7-A exclusive register".into());
-        }
-        let load = load_exclusive;
-        let size = match (word >> 21) & 3 {
-            0 => 4,
-            1 => 8,
-            2 => 1,
-            _ => 2,
+        return match exclusive(c, core, address, word, false)? {
+            Exclusive::Aborted => Ok(()),
+            _ => c.redirect_resume(core, address as u32 + 4),
         };
-        let data_address = c.reg(core, arm::CORE[rn])?;
-        let physical = match c.physical_ram(
-            core,
-            data_address,
-            size,
-            if load { Access::Read } else { Access::Write },
-        ) {
-            Ok(physical) => physical,
-            Err(error) => {
-                return c
-                    .deliver_abort(core, false)
-                    .map_err(|abort| format!("{error}: {abort}"));
-            }
-        };
-        if load {
-            if size == 8 && (rd & 1 != 0 || rd > 12) {
-                return Err("Unpredictable LDREXD register pair".into());
-            }
-            let mut bytes = [0u8; 8];
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    c.ram.as_ptr().add(physical as usize),
-                    bytes.as_mut_ptr(),
-                    size,
-                );
-            }
-            let value = u64::from_le_bytes(bytes);
-            c.write_reg(core, arm::CORE[rd], value as u32)?;
-            if size == 8 {
-                c.write_reg(core, arm::CORE[rd + 1], (value >> 32) as u32)?;
-            }
-            state.exclusive[core] = Some((physical, size));
-            if c.counted {
-                // Counted runs see stores on watched pages only: route
-                // every core's stores to this monitor through `store`.
-                for cpu in &c.cpus {
-                    cpu.watch_stores(physical, size as u64)?;
-                }
-            }
-        } else {
-            let success = state.exclusive[core] == Some((physical, size));
-            state.exclusive[core] = None;
-            if success {
-                let rt = (word & 15) as usize;
-                if rt == 15 {
-                    return Err("Unpredictable ARMv7-A STREX Rt".into());
-                }
-                if size == 8 && (rt & 1 != 0 || rt > 12) {
-                    return Err("Unpredictable STREXD register pair".into());
-                }
-                let mut value = u64::from(c.reg(core, arm::CORE[rt])?);
-                if size == 8 {
-                    value |= u64::from(c.reg(core, arm::CORE[rt + 1])?) << 32;
-                }
-                for monitor in &mut state.exclusive {
-                    if monitor
-                        .is_some_and(|(p, n)| p < physical + size as u64 && physical < p + n as u64)
-                    {
-                        *monitor = None;
-                    }
-                }
-                c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size])?;
-                // Software-emulated exclusives bypass the CPU memory hook.
-                // Preflight checked the complete RAM write and record bound;
-                // record only the store that actually succeeded.
-                if let Some(guard) = &mut state.driver_guard {
-                    guard.store(
-                        core,
-                        address,
-                        physical,
-                        size as u32,
-                        value & (u64::MAX >> ((8 - size) * 8)),
-                    );
-                }
-            }
-            c.write_reg(core, arm::CORE[rd], u32::from(!success))?;
-        }
-        return c.redirect(core, address as u32 + 4);
     }
     if word == 0xf57ff01f {
         state.exclusive[core] = None;
-        return c.redirect(core, address as u32 + 4);
+        return c.redirect_resume(core, address as u32 + 4);
     }
     // MPIDR is an architectural cluster input (Unicorn standalone engines
     // each default to CPU0). CBAR is an explicit reset input, never inferred.
@@ -993,7 +1078,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             return Err("Unsupported CCSIDR-to-APSR read".into());
         }
         c.write_reg(core, arm::CORE[rd], c.cp(core, 0, 0, 1, 0)? as u32)?;
-        return c.redirect(core, address as u32 + 4);
+        return c.redirect_resume(core, address as u32 + 4);
     }
     if cp_read == 0x0e100fb0 || cp_read == 0x0e9f0f10 {
         if (word >> 12) & 15 == 15 {
@@ -1017,15 +1102,15 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
             c.cbar.unwrap_or(0)
         };
         c.write_reg(core, arm::CORE[((word >> 12) & 15) as usize], value)?;
-        return c.redirect(core, address as u32 + 4);
+        return c.redirect_resume(core, address as u32 + 4);
     }
     if hint == 0x0320f003 || hint == 0x0320f002 {
         // architectural WFI/WFE
         if hint == 0x0320f002 && state.events[core] {
             state.events[core] = false;
-        } else {
-            state.waiting[core] = if hint == 0x0320f003 { 1 } else { 2 };
+            return c.redirect_resume(core, address as u32 + 4);
         }
+        state.waiting[core] = if hint == 0x0320f003 { 1 } else { 2 };
         return c.redirect(core, address as u32 + 4);
     }
     if hint == 0x0320f004 {
@@ -1035,7 +1120,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
                 *wait = 0;
             }
         }
-        return c.redirect(core, address as u32 + 4);
+        return c.redirect_resume(core, address as u32 + 4);
     }
     Ok(())
 }
@@ -1163,6 +1248,9 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
         }
         let device = c.device_access(hook.core, address, size, write, value)?;
         if let Some((reply, false)) = device {
+            if counted && !write {
+                c.poll_note(hook.core, pc, address, size, reply);
+            }
             return Ok(reply);
         }
         let state = unsafe { &mut *c.state.get() };
@@ -1254,6 +1342,18 @@ impl Session {
     /// instead of the per-instruction hook.
     pub fn counted_execution(&self) -> bool {
         self.inner.counted
+    }
+    /// Instructions of stable status polling charged without being executed.
+    pub fn polled_instructions(&self) -> u64 {
+        unsafe { (*self.inner.state.get()).poll_skipped }
+    }
+    /// Allows (the default) or forbids charging stable status polling
+    /// without executing it. Forbidden, counted execution runs every
+    /// instruction of a polling loop in native blocks.
+    pub fn set_poll_fast_forward(&self, on: bool) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        unsafe { (*self.inner.state.get()).poll_off = !on };
+        Ok(())
     }
     pub fn ram_bytes(&self) -> usize {
         self.inner.ram.len()
@@ -1547,7 +1647,7 @@ impl Session {
             })
             .transpose()?;
         let cpus = (0..cores)
-            .map(|_| -> Result<counted::Processor, String> {
+            .map(|index| -> Result<counted::Processor, String> {
                 let raw = library.open(cpu::Model::CortexA7, translation_cache_size_bytes)?;
                 if !counted {
                     return Ok(counted::Processor::Exact(raw));
@@ -1557,6 +1657,7 @@ impl Session {
                     fujimod_emulator_cpu_unicorn::memory::Memory::default(),
                 )?;
                 core.set_owner_exclusives(true)?;
+                core.set_owner_mpidr(0x8000_0000 | index as u32)?;
                 core.set_owner_interrupts(true)?;
                 core.set_owner_aborts(true)?;
                 core.set_entry_trace(32)?;
@@ -2222,6 +2323,7 @@ impl Session {
                 discovery: ledger,
                 failure: None,
                 redirected: None,
+                resume: false,
                 pages: BTreeMap::new(),
                 xip: BTreeMap::new(),
                 xip_source,
@@ -2239,6 +2341,13 @@ impl Session {
                 accounted: 0,
                 counted_core: None,
                 return_requests: vec![Vec::new(); cores],
+                poll: (0..cores).map(|_| Default::default()).collect(),
+                poll_off: false,
+                observations: 0,
+                tlbi_epoch: 0,
+                poll_skipped: 0,
+                solo_window: 0,
+                quantum: 0,
                 observed: vec![labels_set.clone(); cores],
                 last_observed: vec![None; cores],
                 exclusive: vec![None; cores],
@@ -2336,6 +2445,11 @@ impl Session {
             }));
             let data = (&*inner.hooks[core] as *const Hook).cast_mut().cast();
             if inner.counted {
+                if let counted::Processor::Counted(engine) = &inner.cpus[core] {
+                    unsafe {
+                        engine.set_owner_inline_instructions(Some(counted::counted_inline), data)
+                    }?;
+                }
                 // Labels are single-address observers in counted runs.
                 let labels = inner.labels.clone();
                 for label in labels {
@@ -2843,30 +2957,51 @@ impl Session {
                 state.discovery.settle_trials(core, state.per_core[core]);
                 return Ok(());
             }
-            let mut exit = cpu.run(Run {
-                begin: u64::from(start),
-                until,
-                watchdog_us: 0,
-                instructions: Some(budget),
-            });
-            let raw_error = exit.as_ref().err().map(ToString::to_string);
-            c.maintenance.settle(&c.cpus, core, raw_error.as_deref())?;
-            c.healthy()?;
-            // Unicorn reports disabled VFP as an invalid instruction rather than
-            // delivering ARM's undefined exception. Let the guest's vector enable
-            // and restore its FP context; never enable it from the host.
-            if matches!(&exit, Err(ExecutionError::InvalidInstruction(_)))
-                && c.disabled_vfp_exception(core)?
-            {
-                exit = Ok(Exit::Stopped);
-            }
-            match exit {
-                Ok(Exit::Stopped) => (),
-                Ok(other) => return Err(format!("Unexpected ARMv7-A execution exit {other:?}")),
-                Err(error) => return Err(error.to_string()),
-            };
-            if let Some(pc) = unsafe { (*c.state.get()).redirected.take() } {
+            let entered_before = unsafe { &*c.state.get() }.per_core[core];
+            let mut begin = u64::from(start);
+            loop {
+                unsafe { (*c.state.get()).resume = false };
+                let entered = unsafe { &*c.state.get() }.per_core[core] - entered_before;
+                let left = if budget == 0 { 0 } else { budget - entered as usize };
+                let mut exit = cpu.run(Run {
+                    begin,
+                    until,
+                    watchdog_us: 0,
+                    instructions: Some(left),
+                });
+                let raw_error = exit.as_ref().err().map(ToString::to_string);
+                c.maintenance.settle(&c.cpus, core, raw_error.as_deref())?;
+                c.healthy()?;
+                // Unicorn reports disabled VFP as an invalid instruction rather than
+                // delivering ARM's undefined exception. Let the guest's vector enable
+                // and restore its FP context; never enable it from the host.
+                if matches!(&exit, Err(ExecutionError::InvalidInstruction(_)))
+                    && c.disabled_vfp_exception(core)?
+                {
+                    exit = Ok(Exit::Stopped);
+                }
+                match exit {
+                    Ok(Exit::Stopped) => (),
+                    Ok(other) => return Err(format!("Unexpected ARMv7-A execution exit {other:?}")),
+                    Err(error) => return Err(error.to_string()),
+                };
+                let Some(pc) = (unsafe { (*c.state.get()).redirected.take() }) else {
+                    break;
+                };
                 c.write_reg(core, arm::PC, pc)?;
+                // A board instruction that left the slice running: the next
+                // instruction follows in the same slice, as in counted runs.
+                let state = unsafe { &*c.state.get() };
+                let entered = state.per_core[core] - entered_before;
+                if !state.resume
+                    || state.failure.is_some()
+                    || state.waiting[core] != 0
+                    || (budget != 0 && entered >= budget as u64)
+                    || until.is_some_and(|target| u64::from(pc) == target)
+                {
+                    break;
+                }
+                begin = u64::from(pc | (c.reg(core, arm::CPSR)? >> 5 & 1));
             }
             c.due();
             c.healthy()?;

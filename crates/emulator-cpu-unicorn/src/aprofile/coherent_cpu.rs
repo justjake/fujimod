@@ -21,7 +21,7 @@
 use super::coherence::{CoherentRanges, Patch};
 use super::translation_attributes::Walk;
 use super::*;
-use std::collections::HashMap;
+use crate::memory::HashMap;
 
 /// Line size and physical `[begin, end)` ranges of device-visible memory.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -297,7 +297,7 @@ impl Core {
             *e.coherence.borrow_mut() = Some(Coherent {
                 domain: domain.clone(),
                 hooks,
-                cacheable: HashMap::new(),
+                cacheable: HashMap::default(),
             });
             e.coherent.set(true);
         }
