@@ -446,10 +446,9 @@ impl RunHost {
             println!("{line}");
         }
         for frame in session.board.take_frames() {
-            if frame.output == 0 {
-                *latest_frame = Some(frame.clone());
-                frames.push(frame.clone());
-            }
+            // The body's primary LCD can be any modeled output bank.
+            *latest_frame = Some(frame.clone());
+            frames.push(frame.clone());
             outputs.frame(frame)?;
         }
         if let Err(error) = result {
