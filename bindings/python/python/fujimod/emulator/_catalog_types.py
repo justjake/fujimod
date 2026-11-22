@@ -2510,6 +2510,13 @@ class HardwareBusSensor(TypedDict, total=False):
     reply_model: Required[str]
 
 
+class HardwareByteI2c(TypedDict, total=False):
+    base: Required[int]
+    basis: Required[str]
+    byte_ticks: Required[int]
+    irq: Required[int]
+
+
 class HardwareCaptureColor(TypedDict, total=False):
     basis: Required[str]
     black: Required[int]
@@ -3096,6 +3103,7 @@ class HardwareRegisterIdleBits(TypedDict, total=False):
 
 class HardwareRegisterLayouts(TypedDict, total=False):
     adc: NotRequired[HardwareAdc | None]
+    byte_i2c: NotRequired[dict[str, HardwareByteI2c] | None]
     control_bus0: NotRequired[HardwarePrimaryBusRegisters | None]
     control_bus1: NotRequired[HardwareSecondaryBusRegistersAddress | None]
     control_requests: NotRequired[HardwareControlRequests | None]

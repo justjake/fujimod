@@ -2020,6 +2020,22 @@ pub struct Spi {
     pub parent_clock_ticks: u64,
 }
 
+/// One byte-oriented I2C controller window.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "HardwareByteI2c"))]
+pub struct ByteI2c {
+    /// Declared base.
+    pub base: u64,
+    /// Declared basis.
+    pub basis: String,
+    /// Virtual ticks per address, data byte or STOP.
+    pub byte_ticks: u64,
+    /// Interrupt line of the controller.
+    pub irq: u32,
+}
+
 /// Declared register maps usb facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -2168,6 +2184,9 @@ pub struct RegisterLayouts {
     /// Declared sd host clocks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sd_host_clocks: Option<SdHostClocks>,
+    /// Declared byte I2C controllers by bus index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub byte_i2c: Option<BTreeMap<String, ByteI2c>>,
     /// Declared serial flash.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub serial_flash: Option<SerialFlash>,

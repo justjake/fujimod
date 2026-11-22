@@ -34,14 +34,30 @@ pub struct Profile {
     /// Positive host virtual ticks per address, data byte, or STOP.
     pub byte_ticks: u64,
 }
-/// Explicit synthetic register-file protocol: first write byte selects a
+/// Width of the register address a peer takes at the start of a write.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AddressBytes {
+    /// One address byte; register addresses are 0..=0xff.
+    #[default]
+    One,
+    /// Two address bytes, high byte first; register addresses are 0..=0xffff.
+    Two,
+}
+impl AddressBytes {
+    fn is_one(&self) -> bool { *self == Self::One }
+    fn max(self) -> u16 { match self { Self::One => 0xff, Self::Two => 0xffff } }
+}
+/// Explicit synthetic register-file protocol: the first write bytes select a
 /// pointer; later writes and reads increment it. Only declared cells exist.
 /// At most 128 byte values may be declared or checkpointed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterPeer {
     pub address: u8,
-    pub registers: BTreeMap<u8, u8>,
+    /// Register address width; one byte when absent.
+    #[serde(default, skip_serializing_if = "AddressBytes::is_one")]
+    pub address_bytes: AddressBytes,
+    pub registers: BTreeMap<u16, u8>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Peer { Empty, Register(RegisterPeer) }
@@ -50,26 +66,45 @@ pub enum Peer { Empty, Register(RegisterPeer) }
 struct Transport {
     peer: Peer,
     selected: bool,
-    pointer: Option<u8>,
+    pointer: Option<u16>,
     expect_pointer: bool,
+    /// High byte of a two-byte register address awaiting its low byte.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pointer_high: Option<u8>,
 }
 impl Transport {
     fn address(&mut self, byte: u8) -> bool {
         self.selected = matches!(&self.peer, Peer::Register(p) if p.address == byte >> 1);
         self.expect_pointer = self.selected && byte & 1 == 0;
+        self.pointer_high = None;
         self.selected
     }
     fn check_write(&self, byte: u8) -> Result<(), String> {
         let Peer::Register(p) = &self.peer else { return Err("No selected I2C peer".into()); };
-        let cell = if self.expect_pointer { byte } else { self.pointer.ok_or("Register pointer missing")? };
+        let cell = if self.expect_pointer {
+            if p.address_bytes == AddressBytes::Two && self.pointer_high.is_none() {
+                // The first of two address bytes selects nothing by itself.
+                return if self.selected { Ok(()) } else { Err("Undeclared synthetic register write/pointer".into()) };
+            }
+            u16::from(self.pointer_high.unwrap_or(0)) << 8 | u16::from(byte)
+        } else {
+            self.pointer.ok_or("Register pointer missing")?
+        };
         if !self.selected || !p.registers.contains_key(&cell) { return Err("Undeclared synthetic register write/pointer".into()); }
         Ok(())
     }
     fn write(&mut self, byte: u8) {
-        if self.expect_pointer { self.pointer = Some(byte); self.expect_pointer = false; }
-        else if let Peer::Register(p) = &mut self.peer {
+        let Peer::Register(p) = &mut self.peer else { return };
+        if self.expect_pointer {
+            if p.address_bytes == AddressBytes::Two && self.pointer_high.is_none() {
+                self.pointer_high = Some(byte);
+            } else {
+                self.pointer = Some(u16::from(self.pointer_high.take().unwrap_or(0)) << 8 | u16::from(byte));
+                self.expect_pointer = false;
+            }
+        } else {
             let pointer = self.pointer.unwrap(); p.registers.insert(pointer, byte);
-            self.pointer = Some(pointer.wrapping_add(1));
+            self.pointer = Some(Self::next(p.address_bytes, pointer));
         }
     }
     fn read(&self) -> Result<u8, String> {
@@ -81,8 +116,14 @@ impl Transport {
         }
         Err("Undeclared synthetic register read".into())
     }
-    fn consume(&mut self) { self.pointer = self.pointer.map(|p| p.wrapping_add(1)); }
-    fn stop(&mut self) { self.selected = false; self.expect_pointer = false; }
+    /// Pointer after one data byte, wrapping at the address width.
+    fn next(width: AddressBytes, pointer: u16) -> u16 { if pointer == width.max() { 0 } else { pointer + 1 } }
+    fn consume(&mut self) {
+        if let Peer::Register(p) = &self.peer {
+            self.pointer = self.pointer.map(|pointer| Self::next(p.address_bytes, pointer));
+        }
+    }
+    fn stop(&mut self) { self.selected = false; self.expect_pointer = false; self.pointer_high = None; }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Phase { Idle, Write, Read, Nacked, ReadEnded }
@@ -118,7 +159,8 @@ impl ByteI2c {
         if let Peer::Register(p) = &peer
             && (!(8..=0x77).contains(&p.address)
                 || p.registers.is_empty()
-                || p.registers.len() > 128)
+                || p.registers.len() > 128
+                || p.registers.keys().any(|key| *key > p.address_bytes.max()))
         {
             return Err("Invalid synthetic I2C peer address or register count".into());
         }
@@ -127,7 +169,7 @@ impl ByteI2c {
         let r = &profile.reset;
         let state = State { ccr:r.ccr, adr:r.adr, csr:r.csr, fsr:r.fsr, bcr:0, bsr:0, dar:0,
             staged:false, rx_ready:false, low_drives:0, phase:Phase::Idle, pending:None,
-            transport:Transport { peer:peer.clone(), selected:false, pointer:None, expect_pointer:false } };
+            transport:Transport { peer:peer.clone(), selected:false, pointer:None, expect_pointer:false, pointer_high:None } };
         Ok(Self {base, irq, profile, factory, initial_peer:peer, state, irq_dirty:true})
     }
     pub fn windows(&self) -> Vec<(u64,u64)> { vec![(self.base, self.base + 0x20)] }
@@ -231,15 +273,20 @@ impl ByteI2c {
         match (&self.initial_peer, &s.transport.peer) {
             (Peer::Empty, Peer::Empty)
                 if s.transport.pointer.is_none()
+                    && s.transport.pointer_high.is_none()
                     && !s.transport.selected
                     && !s.transport.expect_pointer => {}
             (Peer::Register(a), Peer::Register(b))
                 if a.address == b.address
+                    && a.address_bytes == b.address_bytes
                     && a.registers.keys().eq(b.registers.keys())
+                    && s.transport.pointer_high.is_none_or(|_| {
+                        a.address_bytes == AddressBytes::Two && s.transport.expect_pointer
+                    })
                     && s.transport.pointer.is_none_or(|pointer| {
                         a.registers
                             .keys()
-                            .any(|key| *key == pointer || key.wrapping_add(1) == pointer)
+                            .any(|key| *key == pointer || Transport::next(a.address_bytes, *key) == pointer)
                     }) => {}
             _ => return Err("Changed byte I2C peer factory".into()),
         }
