@@ -1,10 +1,9 @@
-# Two output blocks the application configures from 0x153ef3c (through 0x9ed80): a word at
-# 0xff9a2410 after the clock-gate calls 0x14ca57c(4, 0x1000) and 0x14ca2b0(8, 0x20), and, unless
-# setting 0x40d47 is 2, a word at 0xff9a4410 after the calls with 0x2000 and 0x80. The values are
-# packed settings bytes. 0x153f0c4 then polls +0x74 bit 0, and +0xb0 against the mask 0xa90, of
-# each block until set. Both are declared as a bring-up register file whose +0x74 reads 1 and
-# +0xb0 reads 0xa90 (constants, so the polls complete); nothing is established about the block, the
-# values stand in for a ready status and are UNVERIFIED.
+# X-E5 1.12 VERIFIED register addresses and poll predicates. 0x153efbc and
+# 0x153f050 write packed settings to +0x10 in the two blocks. 0x153f194 writes
+# +0x6c, and 0x153f1f8 also writes packed data to +0x70. Setting 0x40d47 equal to
+# 2 skips the second block. The polls at 0x153f100 and 0x153f114 require bit 0
+# at +0x74. The tests at 0x153f12c and 0x153f148 require any bit in mask 0xa90
+# at +0xb0. The constant response words and full 0x1000 apertures are UNVERIFIED.
 [[device]]
 base = 0xff9a2000
 size = 0x1000
