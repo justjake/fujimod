@@ -1,12 +1,12 @@
 use super::*;
 use fujimod_emulator_devices::Host;
 #[derive(Default)]
-struct TestHost { now:u64, levels:Vec<(u32,bool)>, records:Vec<Record> }
+struct TestHost { now:u64, levels:Vec<(u32,bool)>, records:Vec<Record>, raised:Vec<(usize,u32)> }
 impl Host for TestHost {
     fn now(&self)->u64{self.now}
     fn schedule(&mut self,_:usize,_:u64,_:u64){panic!("deadline-driven device")}
     fn set_irq(&mut self,l:u32,h:bool){self.levels.push((l,h));}
-    fn raise_irq(&mut self,_:usize,_:u32)->Result<(),String>{panic!("level IRQ only")}
+    fn raise_irq(&mut self,cpu:usize,line:u32)->Result<(),String>{self.raised.push((cpu,line));Ok(())}
     fn ram_read(&self,_:u64,_:&mut[u8])->Result<(),String>{panic!("no DMA")}
     fn ram_write(&mut self,_:u64,_:&[u8])->Result<(),String>{panic!("no DMA")}
     fn record(&mut self,r:Record){self.records.push(r);}
@@ -235,4 +235,66 @@ fn register_address_width_is_validated_and_one_byte_peers_keep_their_form(){
     // A checkpoint cannot change the address width of its factory.
     let m=model(wide_peer());let mut narrow=model(single(AddressBytes::One,0x1c));
     assert!(narrow.restore(&m.save()).is_err());
+}
+
+fn touch_profile()->TouchProfile {
+    TouchProfile{address:0x55,report_register:0,heartbeat_register:0x1c06,mode_register:0x1c00,
+        writable_registers:vec![0x1c00,0x1c02],contact_ids:[1,2],input_ready_irq:153,ticks_per_second:1000}
+}
+fn touch(m:&mut ByteI2c)->&mut TouchChip {m.state.transport.touch.as_mut().unwrap()}
+/// Write one register of the touch chip through the bus, ending with STOP.
+fn touch_write(m:&mut ByteI2c,h:&mut TestHost,register:u16,value:u8){
+    byte(m,h,0xaa,0x52);byte(m,h,(register>>8) as u8,0x12);byte(m,h,register as u8,0x12);byte(m,h,value,0x12);
+    write(m,h,4,0x02);complete(m,h);
+}
+#[test]
+fn touch_chip_report_is_read_through_a_full_bus_transaction(){
+    let mut m=model(Peer::Touch(touch_profile()));let mut h=TestHost::default();init(&mut m,&mut h);
+    touch_write(&mut m,&mut h,0x1c00,2);
+    assert_eq!(touch(&mut m).register(0x1c00),Some(2));
+    let now=h.now+50;touch(&mut m).press(now,0x123,0x456).unwrap();advance(&mut m,&mut h,now);
+    // Pointer write to register 0, then a repeated start in the read direction.
+    byte(&mut m,&mut h,0xaa,0x52);byte(&mut m,&mut h,0,0x12);byte(&mut m,&mut h,0,0x12);byte(&mut m,&mut h,0xab,0x72);
+    let mut report=Vec::new();
+    for index in 0..11 {
+        write(&mut m,&mut h,4,if index==10 {0x52} else {0x5a});complete(&mut m,&mut h);
+        report.push(read(&mut m,&mut h,16) as u8);
+    }
+    assert_eq!(report,[1,2,1,0x23,0x56,0x41,128,0,0,0,0]);
+    write(&mut m,&mut h,4,0x02);complete(&mut m,&mut h);
+    assert_eq!(m.state.phase,Phase::Idle);
+    // The chip reads its own pointer back: a register outside any range refuses.
+    byte(&mut m,&mut h,0xaa,0x52);byte(&mut m,&mut h,0x1c,0x12);byte(&mut m,&mut h,0x02,0x12);byte(&mut m,&mut h,0xab,0x72);
+    let old=m.save();let mut cx=Cx::new(&mut h,0,0,4);m.write(&mut cx,BASE+4,1,0x5a);
+    assert!(cx.refusal().is_some());assert_eq!(m.save(),old);
+}
+#[test]
+fn touch_chip_input_ready_interrupt_is_raised_at_the_deadline(){
+    let mut m=model(Peer::Touch(touch_profile()));let mut h=TestHost::default();
+    // Power-up edge, due at once.
+    assert_eq!(m.next_deadline(0),Some(0));
+    advance(&mut m,&mut h,0);
+    assert_eq!(h.raised,[(0,153)]);
+    // Further edges wait for reporting to be enabled and for an input.
+    init(&mut m,&mut h);touch_write(&mut m,&mut h,0x1c00,2);
+    assert_eq!(h.raised.len(),1);
+    let base=h.now;touch(&mut m).press(base+500,5,6).unwrap();
+    assert_eq!(m.next_deadline(base),Some(base+500));
+    advance(&mut m,&mut h,base+499);assert_eq!(h.raised.len(),1);
+    advance(&mut m,&mut h,base+500);assert_eq!(h.raised,[(0,153),(0,153)]);
+    assert_ne!(m.next_deadline(base+500),Some(base+500));
+}
+#[test]
+fn touch_chip_state_survives_a_checkpoint_and_binds_to_its_profile(){
+    let mut m=model(Peer::Touch(touch_profile()));let mut h=TestHost::default();init(&mut m,&mut h);
+    touch_write(&mut m,&mut h,0x1c00,2);
+    byte(&mut m,&mut h,0xaa,0x52);byte(&mut m,&mut h,0x1c,0x12);
+    let saved=m.save();
+    let mut restored=model(Peer::Touch(touch_profile()));restored.restore(&saved).unwrap();
+    assert_eq!(restored.save(),saved);assert_eq!(restored.next_deadline(0),Some(0));
+    let mut other=touch_profile();other.input_ready_irq=154;
+    assert!(model(Peer::Touch(other)).restore(&saved).is_err());
+    assert!(model(peer()).restore(&saved).is_err());
+    let mut bad=touch_profile();bad.input_ready_irq=5;
+    assert!(ByteI2c::new(BASE,17,Profile{reset:VirtualIdleReset{ccr:0,adr:0,csr:0,fsr:0},byte_ticks:7},Peer::Touch(bad)).is_err());
 }

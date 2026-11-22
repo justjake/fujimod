@@ -659,6 +659,17 @@
         "basis": {
           "description": "Declared basis.",
           "type": "string"
+        },
+        "touch_chip": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetTouchChipInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Touch chip answering on this bus; the bus has no peer when absent."
         }
       },
       "required": [
@@ -3203,6 +3214,90 @@
       "required": [
         "basis",
         "millicelsius"
+      ],
+      "type": "object"
+    },
+    "ResetTouchChipInput": {
+      "additionalProperties": false,
+      "description": "A touch chip with 16-bit register addresses and an input-ready interrupt.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit bus address.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "contact_ids": {
+          "description": "Slot IDs reported for contacts 0 and 1.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "heartbeat_register": {
+          "description": "Register that returns a counter changing on each read.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "input_ready_irq": {
+          "description": "Interrupt line raised for each input-ready edge.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode_register": {
+          "description": "Register that gates reporting: nonzero enables, zero disables.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "report_register": {
+          "description": "First register of the eleven-byte report.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticks_per_second": {
+          "description": "Host virtual ticks per second; a positive multiple of 100.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "writable_registers": {
+          "description": "Registers that accept writes, including the mode register.",
+          "items": {
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "report_register",
+        "heartbeat_register",
+        "mode_register",
+        "writable_registers",
+        "contact_ids",
+        "input_ready_irq",
+        "ticks_per_second",
+        "basis"
       ],
       "type": "object"
     },
