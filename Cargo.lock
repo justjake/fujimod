@@ -2813,20 +2813,13 @@ dependencies = [
 name = "fujimod-emulator-gui"
 version = "0.1.0"
 dependencies = [
- "fujimod-catalog-configuration",
- "fujimod-catalog-controls",
- "fujimod-catalog-resolution",
- "fujimod-catalog-wiring",
  "fujimod-emulator-boot",
- "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-session",
- "fujimod-emulator-xp5-board",
  "fujimod-workspace-hack",
  "jpeg-encoder",
  "serde",
  "serde_json",
- "sha1 0.11.0",
  "tungstenite 0.30.0",
 ]
 

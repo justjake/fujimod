@@ -1,5 +1,4 @@
 use crate::RunHost;
-use crate::controls::Xp5Controls;
 use crate::protocol::{Event, Request, command_args};
 use serde_json::Value;
 use std::{
@@ -12,6 +11,8 @@ use tungstenite::{
     Message, WebSocket,
     handshake::server::{Request as HttpRequest, Response},
 };
+
+const MAX_MESSAGES_PER_TICK: usize = 64;
 
 /// Address a desktop webview joins for commands and LCD frames.
 #[derive(Clone, Debug)]
@@ -84,12 +85,6 @@ fn accept(listener: &TcpListener, stop: &AtomicBool) -> Result<WebSocket<TcpStre
         }
         match listener.accept() {
             Ok((stream, _)) => {
-                stream
-                    .set_nonblocking(false)
-                    .map_err(|error| error.to_string())?;
-                stream
-                    .set_read_timeout(Some(Duration::from_millis(2)))
-                    .map_err(|error| error.to_string())?;
                 let check = |request: &HttpRequest, response: Response| {
                     if request.uri().path() == "/emulator" {
                         Ok(response)
@@ -99,7 +94,13 @@ fn accept(listener: &TcpListener, stop: &AtomicBool) -> Result<WebSocket<TcpStre
                         Err(refusal)
                     }
                 };
-                return tungstenite::accept_hdr(stream, check).map_err(|error| error.to_string());
+                let mut socket =
+                    tungstenite::accept_hdr(stream, check).map_err(|error| error.to_string())?;
+                socket
+                    .get_mut()
+                    .set_nonblocking(true)
+                    .map_err(|error| error.to_string())?;
+                return Ok(socket);
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(10));
@@ -114,28 +115,26 @@ struct GuiSession {
     body: String,
     firmware: String,
     controls: Value,
-    physical: Xp5Controls,
     run: RunHost,
     socket: WebSocket<TcpStream>,
     frame_number: u64,
-    last_frame: Option<Vec<u8>>,
+    last_rgba: Option<Vec<u8>>,
     last_state: Option<String>,
 }
 
 impl GuiSession {
     fn open(run: RunHost, listener: TcpListener, stop: &AtomicBool) -> Result<Self, String> {
-        let physical = Xp5Controls::new(run.configuration())?;
         let socket = accept(&listener, stop)?;
+        let state = run.session().control_state()?;
         let mut session = Self {
             configuration_id: run.configuration_id().to_owned(),
             body: run.body_id().to_owned(),
             firmware: run.firmware_id().to_owned(),
-            controls: physical.document()?,
-            physical,
+            controls: serde_json::to_value(&state.inputs).map_err(|error| error.to_string())?,
             run,
             socket,
             frame_number: 0,
-            last_frame: None,
+            last_rgba: None,
             last_state: None,
         };
         session.publish_catalog()?;
@@ -145,10 +144,12 @@ impl GuiSession {
     }
 
     fn publish_session(&mut self) -> Result<(), String> {
+        let state = self.run.session().control_state()?;
         let event = Event::State {
-            powered_on: self.physical.powered(),
-            inputs: self.physical.catalog(),
-            positions: self.physical.positions(),
+            // A native session has no cold power-off; the firmware reads the power switch.
+            powered_on: true,
+            inputs: state.inputs,
+            positions: state.positions,
         };
         let serialized = serde_json::to_string(&event).map_err(|error| error.to_string())?;
         if self.last_state.as_deref() != Some(&serialized) {
@@ -175,12 +176,10 @@ impl GuiSession {
             if stop.load(Ordering::Acquire) {
                 return self.finish();
             }
-            loop {
+            for _ in 0..MAX_MESSAGES_PER_TICK {
                 let message = match self.socket.read() {
                     Ok(message) => message,
-                    Err(tungstenite::Error::Io(error))
-                        if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) =>
-                    {
+                    Err(tungstenite::Error::Io(error)) if error.kind() == ErrorKind::WouldBlock => {
                         break;
                     }
                     Err(tungstenite::Error::ConnectionClosed) => {
@@ -250,10 +249,10 @@ impl GuiSession {
         &mut self,
         frame: &fujimod_emulator_devices::graphics::scanout::Frame,
     ) -> Result<(), String> {
-        let jpeg = encode_jpeg(&frame)?;
-        if self.last_frame.as_ref() == Some(&jpeg) {
+        if self.last_rgba.as_deref() == Some(frame.rgba.as_slice()) {
             return Ok(());
         }
+        let jpeg = encode_jpeg(frame)?;
         self.frame_number = self.frame_number.saturating_add(1);
         let mut packet = Vec::with_capacity(20 + jpeg.len());
         packet.extend_from_slice(b"FJMF");
@@ -264,7 +263,7 @@ impl GuiSession {
         self.socket
             .send(Message::Binary(packet.into()))
             .map_err(|error| error.to_string())?;
-        self.last_frame = Some(jpeg);
+        self.last_rgba = Some(frame.rgba.clone());
         Ok(())
     }
 
@@ -280,40 +279,31 @@ impl GuiSession {
         match action {
             "boot" => {
                 self.publish_session()?;
-                serde_json::to_value(self.physical.catalog()).map_err(|error| error.to_string())
+                let state = self.run.session().control_state()?;
+                serde_json::to_value(state.inputs).map_err(|error| error.to_string())
             }
             "press" => {
                 let id = string(&args, "id")?;
                 let stage = args.get("stage").and_then(Value::as_str);
-                let (session, inputs) = self.run.parts_mut();
-                self.physical.press(session, inputs, id, stage)?;
+                self.run.session_mut().contact_input(id, stage, false)?;
                 Ok(Value::Null)
             }
             "release" => {
-                let (session, inputs) = self.run.parts_mut();
-                self.physical
-                    .release(session, inputs, string(&args, "id")?)?;
+                let id = string(&args, "id")?;
+                self.run.session_mut().contact_input(id, None, true)?;
                 Ok(Value::Null)
             }
             "set_position" => {
-                let (session, inputs) = self.run.parts_mut();
-                self.physical.set_position(
-                    session,
-                    inputs,
-                    string(&args, "id")?,
-                    string(&args, "position")?,
-                )?;
+                let (id, position) = (string(&args, "id")?, string(&args, "position")?);
+                self.run.session_mut().set_position(id, position)?;
                 Ok(Value::Null)
             }
             "rotate" => {
-                let steps = integer(&args, "steps")?;
-                let (session, inputs) = self.run.parts_mut();
-                self.physical.rotate(
-                    session,
-                    inputs,
-                    string(&args, "id")?,
-                    i32::try_from(steps).map_err(|_| "rotate steps exceed i32".to_owned())?,
-                )?;
+                let steps = i32::try_from(integer(&args, "steps")?)
+                    .map_err(|_| "rotate steps exceed i32".to_owned())?;
+                let session = self.run.session_mut();
+                let (node, edges) = session.rotation(string(&args, "id")?, steps)?;
+                session.rotate_edges(&node, edges)?;
                 Ok(Value::Null)
             }
             "touch" => {
@@ -328,15 +318,6 @@ impl GuiSession {
                     y,
                 )?;
                 self.run.session_mut().touch(&node, &script)?;
-                Ok(Value::Null)
-            }
-            "power" => {
-                let on = args
-                    .get("on")
-                    .and_then(Value::as_bool)
-                    .ok_or("power needs on")?;
-                let (session, inputs) = self.run.parts_mut();
-                self.physical.powered_switch(session, inputs, on)?;
                 Ok(Value::Null)
             }
             "close" => Ok(Value::Null),

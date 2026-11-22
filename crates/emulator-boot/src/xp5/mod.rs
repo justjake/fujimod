@@ -44,31 +44,19 @@ pub struct Startup {
     pub camera_settings: BTreeMap<String, String>,
 }
 
-pub struct Started {
-    firmware: firmware::Firmware,
-    state: manifest::BootState,
-    opened: open::Opened,
+pub(crate) struct RunFacts {
+    pub firmware: firmware::Firmware,
+    pub state: manifest::BootState,
+    pub inputs: Option<fujimod_emulator_xp5_board::session::Inputs>,
+    pub outputs: crate::output::Outputs,
     /// The loader start's card images, written back at the end of a run.
-    card_write_back: Vec<loader_card::WriteBack>,
-}
-
-impl Started {
-    /// Transfer the opened board and physical input handle to a language binding.
-    pub fn into_session(
-        self,
-    ) -> (fujimod_emulator_session::Session, fujimod_emulator_xp5_board::session::Inputs, usize) {
-        (self.opened.session, self.opened.inputs, self.opened.read_limit)
-    }
-
-    pub fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
-        &mut self.opened.session
-    }
+    pub card_write_back: Vec<loader_card::WriteBack>,
 }
 
 pub(super) fn open_startup(
     configuration: &ResolvedConfiguration,
     startup: Startup,
-) -> Result<Started, String> {
+) -> Result<crate::Camera, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
         second_card_image, second_card_files, scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
         camera_settings } = startup;
@@ -167,5 +155,25 @@ pub(super) fn open_startup(
         profile.as_ref(),
     )?;
     let card_write_back = loader.into_iter().filter_map(|card| card.write_back).collect();
-    Ok(Started { firmware, state, opened, card_write_back })
+    let open::Opened {
+        session,
+        inputs,
+        outputs,
+        ticks_per_second,
+        quantum,
+        read_limit,
+    } = opened;
+    Ok(crate::Camera {
+        session,
+        read_limit,
+        ticks_per_second,
+        quantum,
+        xp5: Some(RunFacts {
+            firmware,
+            state,
+            inputs: Some(inputs),
+            outputs,
+            card_write_back,
+        }),
+    })
 }

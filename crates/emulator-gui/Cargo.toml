@@ -9,19 +9,12 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
-fujimod-catalog-configuration.workspace = true
-fujimod-catalog-resolution.workspace = true
-fujimod-catalog-controls.workspace = true
-fujimod-catalog-wiring.workspace = true
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
-fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-session.workspace = true
-fujimod-emulator-xp5-board.workspace = true
 jpeg-encoder = "0.7.1"
 serde.workspace = true
 serde_json.workspace = true
-sha1 = "0.11"
 tungstenite = "0.30"
 fujimod-workspace-hack.workspace = true
 

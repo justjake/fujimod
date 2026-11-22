@@ -40,23 +40,27 @@ impl Boot for CatalogBoot {
                 return Err("a card in SD slot 2 requires an XP5 run configuration".into());
             }
             let plan = inputs.application_plan.ok_or("application startup needs an application plan")?;
-            let boot::Opened::Application(mut started) = boot::open(resolved, boot::StartupInputs::Application(
-                boot::application::Startup {
-                    update: inputs.update, plan, discovery: inputs.discovery, quantum: inputs.quantum,
-                    card_image: inputs.card_image,
-                    card_files: inputs.card_files,
-                },
-            ))? else {
-                return Err("application startup returned another processor generation".into());
+            let startup = boot::application::Startup {
+                update: inputs.update, plan, discovery: inputs.discovery, quantum: inputs.quantum,
+                card_image: inputs.card_image,
+                card_files: inputs.card_files,
             };
-            if let Some(path) = inputs.scene {
-                started.board.set_scene(&boot::host::read_scene(&path)?)?;
+            if resolved.reference.soc.id == "xp4" {
+                let mut started = boot::application::open(&resolved, startup)?;
+                if let Some(path) = inputs.scene {
+                    started.board.set_scene(&boot::host::read_scene(&path)?)?;
+                }
+                return match started.board {
+                    boot::application::Board::Xp4(session) => fujimod_python_xp4::adopt(*session, started.quantum)
+                        .map(Opened::Xp4).map_err(|error| error.to_string()),
+                    boot::application::Board::Xpp(_) => Err("XP4 startup returned another processor generation".into()),
+                };
             }
-            return match started.board {
-                boot::application::Board::Xp4(session) => fujimod_python_xp4::adopt(*session, started.quantum)
-                    .map(Opened::Xp4).map_err(|error| error.to_string()),
-                boot::application::Board::Xpp(session) => Ok(Opened::Graph(*session)),
-            };
+            let mut camera = boot::open(resolved, boot::StartupInputs::Application(startup))?;
+            if let Some(path) = inputs.scene {
+                camera.session.board.set_scene(&boot::host::read_scene(&path)?)?;
+            }
+            return Ok(Opened::Graph(camera.session));
         }
         if inputs.application_plan.is_some() {
             return Err("application startup plan does not match this configuration".into());
@@ -70,17 +74,17 @@ impl Boot for CatalogBoot {
             {
                 return Err("EXR II startup settings do not apply to XP5".into());
             }
-            let boot::Opened::Xp5(started) = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
+            let mut camera = boot::open(resolved, boot::StartupInputs::Xp5(boot::xp5::Startup {
                 update: inputs.update, manifest: inputs.manifest, boot_rom: inputs.boot_rom,
                 card_image: inputs.card_image, card_files: inputs.card_files,
                 second_card_image: inputs.second_card_image, second_card_files: inputs.second_card_files,
                 scene: inputs.scene,
                 output: None, viewer_port: None, viewer_keys: None,
                 mode, quantum: inputs.quantum, camera_settings: inputs.camera_settings,
-            }))? else {
-                return Err("XP5 startup returned another processor generation".into());
-            };
-            let (session, inputs, read_limit) = started.into_session();
+            }))?;
+            let inputs = camera.take_xp5_inputs()?;
+            let read_limit = camera.read_limit;
+            let session = camera.session;
             return Ok(Opened::Xp5 {session, inputs, read_limit});
         }
         if inputs.manifest.is_some() {
@@ -124,7 +128,7 @@ impl Boot for CatalogBoot {
             access_point,
             capability_reply,
         };
-        let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2()?;
+        let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
         #[cfg(not(target_arch = "wasm32"))]
         boot::media::attach(&mut session, inputs.card_image.as_deref(), &inputs.card_files)?;
         Ok(Opened::Graph(session))

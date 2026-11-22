@@ -422,7 +422,7 @@ fn run_exr2(
         .map(|specification| boot::host::parse_stub(specification))
         .collect::<Result<Vec<_>, _>>()?;
     let mut session =
-        boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.into_exr2()?;
+        boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
     session.board.install_discovery_callee_stubs(&stubs)?;
     if let Some(path) = boot_options.path("--load-snapshot") {
         boot::load_snapshot(&mut session, &path)?;
@@ -688,11 +688,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
                 .into(),
         );
     }
-    let boot::Opened::Application(mut started) =
-        boot::open(resolved, boot::StartupInputs::Application(request))?
-    else {
-        return Err("application startup returned another processor generation".into());
-    };
+    let mut started = boot::application::open(&resolved, request)?;
     let stubs = options
         .stubs
         .iter()

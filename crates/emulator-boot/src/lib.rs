@@ -760,41 +760,107 @@ pub enum StartupInputs {
     Application(application::Startup),
 }
 
-/// An unexecuted session and the generation-specific state needed to drive it.
-pub enum Opened {
-    Exr2(Box<Session>),
+/// One unexecuted camera session with the startup facts needed by its host.
+pub struct Camera {
+    pub session: Session,
+    /// Maximum byte count a host may request from this camera's modeled RAM.
+    pub read_limit: usize,
+    /// Virtual guest ticks in one second.
+    pub ticks_per_second: u64,
+    /// Instructions per scheduler turn.
+    pub quantum: usize,
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-    Xp5(Box<xp5::Started>),
-    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-    Application(application::Started),
+    xp5: Option<xp5::RunFacts>,
 }
 
-impl Opened {
-    /// Extract the EXR II session for callers that drive the EXR II boot workflow.
-    pub fn into_exr2(self) -> Result<Session, String> {
-        match self {
-            Self::Exr2(session) => Ok(*session),
-            #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-            Self::Xp5(_) | Self::Application(_) => Err("EXR II startup returned an application-profile session".into()),
-        }
+impl Camera {
+    /// Take the XP5 physical input handle when transferring a camera to a binding.
+    #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+    pub fn take_xp5_inputs(
+        &mut self,
+    ) -> Result<fujimod_emulator_xp5_board::session::Inputs, String> {
+        self.xp5
+            .as_mut()
+            .and_then(|facts| facts.inputs.take())
+            .ok_or("camera has no XP5 physical input handle".into())
     }
 }
 
-/// Open the configured board from caller-selected files.
-pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Opened, String> {
+fn graph_read_limit(session: &Session) -> Result<usize, String> {
+    let execution: factory::Graph = serde_json::from_value(
+        session.definition["execution"].clone(),
+    )
+    .map_err(|error| format!("session execution graph: {error}"))?;
+    execution
+        .ram
+        .iter()
+        .map(|region| region.size)
+        .chain(
+            execution
+                .processors
+                .iter()
+                .filter_map(|processor| processor.rprofile.clone())
+                .flat_map(|profile| [profile.tcm.atcm.bytes, profile.tcm.btcm.bytes]),
+        )
+        .try_fold(0usize, |sum, bytes| {
+            sum.checked_add(bytes).ok_or_else(|| "declared RAM extent overflows".to_owned())
+        })
+}
+
+fn session_quantum(session: &Session) -> Result<usize, String> {
+    session.definition["quantum"]
+        .as_u64()
+        .and_then(|quantum| usize::try_from(quantum).ok())
+        .filter(|quantum| *quantum > 0)
+        .ok_or_else(|| "configuration declares no positive scheduler quantum".into())
+}
+
+/// Open a supported configured board from caller-selected files.
+/// XP4 keeps its separate application/cluster path and cannot be opened as a `Camera`.
+pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Camera, String> {
+    if resolved.reference.soc.id == "xp4" {
+        return Err("XP4 uses the application CLI path and cannot be opened as a Camera".into());
+    }
     match (resolved.configuration.inputs.as_ref(), inputs) {
         (Some(RunInputs::Exr2(_)), StartupInputs::Exr2 { options, mode }) => {
-            Ok(Opened::Exr2(Box::new(open_exr2(resolved, options, mode)?)))
+            let ticks_per_second = match resolved.configuration.inputs.as_ref() {
+                Some(RunInputs::Exr2(inputs)) => inputs.mcu.rtc.ticks_per_second,
+                _ => return Err("EXR II startup inputs are absent".into()),
+            };
+            let session = open_exr2(resolved, options, mode)?;
+            let quantum = session_quantum(&session)?;
+            let read_limit = graph_read_limit(&session)?;
+            Ok(Camera {
+                session,
+                read_limit,
+                ticks_per_second,
+                quantum,
+                #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+                xp5: None,
+            })
         }
         #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
         (Some(RunInputs::Xp5(_)), StartupInputs::Xp5(inputs)) => {
-            Ok(Opened::Xp5(Box::new(xp5::open_startup(&resolved, inputs)?)))
+            xp5::open_startup(&resolved, inputs)
         }
         #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
         (Some(RunInputs::Xp4(_)) | None, StartupInputs::Application(inputs))
-            if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") =>
+            if resolved.reference.soc.id == "xpp" =>
         {
-            Ok(Opened::Application(application::open(&resolved, inputs)?))
+            let started = application::open(&resolved, inputs)?;
+            let quantum = started.quantum;
+            let ticks_per_second = started.ticks_per_second;
+            let application::Board::Xpp(session) = started.board else {
+                return Err("X-Processor Pro startup returned another processor generation".into());
+            };
+            let read_limit = graph_read_limit(&session)?;
+            Ok(Camera {
+                session: *session,
+                read_limit,
+                ticks_per_second,
+                quantum,
+                xp5: None,
+            })
         }
         _ => Err(format!(
             "startup inputs do not match configuration {}",

@@ -1,8 +1,6 @@
 //! The XP5 bring-up run: open a session from explicit inputs, drive it in slices and record
 //! the outcome in the run directory.
-use super::{
-    Startup, Started, open as session_open,
-};
+use super::{RunFacts, Startup};
 use crate::mod_loader;
 use crate::host::{parse_gpio, parse_number, parse_stub, parse_timed_poke};
 use fujimod_emulator::board::Board;
@@ -392,25 +390,24 @@ impl RunHost {
             quantum: quantum_override,
             camera_settings,
         };
-        let crate::Opened::Xp5(started) =
-            crate::open(configuration.clone(), crate::StartupInputs::Xp5(request))?
+        let crate::Camera {
+            mut session,
+            ticks_per_second,
+            quantum,
+            xp5: Some(facts),
+            ..
+        } = crate::open(configuration.clone(), crate::StartupInputs::Xp5(request))?
         else {
             return Err("XP5 startup returned another processor generation".into());
         };
-        let Started {
+        let RunFacts {
             firmware,
             state,
-            opened,
-            card_write_back,
-        } = *started;
-        let session_open::Opened {
-            mut session,
             inputs,
             outputs,
-            ticks_per_second,
-            quantum,
-            ..
-        } = opened;
+            card_write_back,
+        } = facts;
+        let inputs = inputs.ok_or("XP5 camera has no physical input handle")?;
         if let Some(path) = load_snapshot {
             crate::load_snapshot(&mut session, &path)?;
         }
@@ -929,20 +926,18 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
         quantum: quantum_override,
         camera_settings,
     };
-    let crate::Opened::Xp5(started) =
-        crate::open(configuration, crate::StartupInputs::Xp5(request))?
+    let crate::Camera {
+        mut session,
+        ticks_per_second,
+        quantum,
+        xp5: Some(facts),
+        ..
+    } = crate::open(configuration, crate::StartupInputs::Xp5(request))?
     else {
         return Err("XP5 startup returned another processor generation".into());
     };
-    let Started { firmware, state, opened, card_write_back } = *started;
-    let session_open::Opened {
-        mut session,
-        inputs,
-        outputs,
-        ticks_per_second,
-        quantum,
-        ..
-    } = opened;
+    let RunFacts { firmware, state, inputs, outputs, card_write_back } = facts;
+    let inputs = inputs.ok_or("XP5 camera has no physical input handle")?;
     if let Some(path) = load_snapshot {
         crate::load_snapshot(&mut session, &path)?;
     }

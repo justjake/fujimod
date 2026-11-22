@@ -234,7 +234,7 @@ fn named(
         .collect()
 }
 
-pub(crate) fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Started, String> {
+pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Started, String> {
     let update = bytes(Path::new(""), &startup.update)?;
     let identity = resolved.reference.firmware.update.as_ref().ok_or("firmware has no update identity")?;
     if update.len() as u64 != identity.size || format!("{:x}", Sha256::digest(&update)) != identity.sha256 {

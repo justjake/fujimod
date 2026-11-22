@@ -11,8 +11,6 @@ use serde_json::{Value, json};
 
 use crate::OpenParams;
 
-const TICKS_PER_SECOND: u64 = boot::EXR2_TICKS_PER_SECOND;
-
 /// The `Send` part of an open request, moved to the camera's thread.
 pub struct OpenRequest {
     configuration: String,
@@ -54,6 +52,7 @@ pub struct Camera {
     session: Session,
     resolved: ResolvedConfiguration,
     quantum: usize,
+    ticks_per_second: u64,
     checkpoints: BTreeMap<String, Snapshot>,
     profiling: bool,
     /// Firmware facts `fujimod-remote` reads to deliver and confirm inputs,
@@ -136,20 +135,17 @@ impl Camera {
             access_point: None,
             capability_reply: None,
         };
-        let mut session = boot::open(
+        let opened = boot::open(
             resolve()?,
             boot::StartupInputs::Exr2 {
                 options,
                 mode: boot::discovery_mode(false),
             },
-        )?
-        .into_exr2()?;
+        )?;
+        let quantum = opened.quantum;
+        let ticks_per_second = opened.ticks_per_second;
+        let mut session = opened.session;
         let resolved = resolve()?;
-        let quantum = session.definition["quantum"]
-            .as_u64()
-            .and_then(|quantum| usize::try_from(quantum).ok())
-            .or_else(|| resolved.configuration.execution.as_ref().map(|e| e.quantum))
-            .ok_or("configuration declares no scheduler quantum")?;
         let sd_files = request.sd_card.as_ref().map(sd_card_files).transpose()?;
         boot::media::attach(&mut session, None, sd_files.as_deref().unwrap_or(&[]))?;
         if let Some(policy) = &request.execution_policy {
@@ -162,6 +158,7 @@ impl Camera {
             session,
             resolved,
             quantum,
+            ticks_per_second,
             checkpoints: BTreeMap::new(),
             profiling: false,
             facts,
@@ -179,12 +176,12 @@ impl Camera {
                 &camera.resolved.reference,
                 edges.into_iter().map(|edge| {
                     (
-                        host::duration_ticks(edge.delay, TICKS_PER_SECOND),
+                        host::duration_ticks(edge.delay, ticks_per_second),
                         edge.name,
                         edge.pressed,
                     )
                 }),
-                TICKS_PER_SECOND,
+                ticks_per_second,
             )?;
             if let Some(levels) = &request.gpio {
                 for level in levels.split(',') {
@@ -230,7 +227,7 @@ impl Camera {
             object.remove("setup_presses");
         }
         let now = self.session.board.now();
-        summary["guest_seconds"] = json!(now as f64 / TICKS_PER_SECOND as f64);
+        summary["guest_seconds"] = json!(now as f64 / self.ticks_per_second as f64);
         summary["instructions_per_core"] = json!(self.session.board.instruction_counts());
         summary["profiling"] = json!(self.profiling);
         let png = if screen {
@@ -253,7 +250,7 @@ impl Camera {
         fujimod_emulator_controls::connect(
             &mut self.session,
             &self.resolved.reference,
-            TICKS_PER_SECOND,
+            self.ticks_per_second,
         )
         .map(|_| ())
     }
@@ -294,7 +291,7 @@ impl Camera {
         if !(seconds.is_finite() && (0.0..=3600.0).contains(&seconds)) {
             return Err("seconds must be between 0 and 3600".into());
         }
-        let end = self.session.board.now() + (seconds * TICKS_PER_SECOND as f64) as u64;
+        let end = self.session.board.now() + (seconds * self.ticks_per_second as f64) as u64;
         self.run_to(end)
     }
 
@@ -332,7 +329,7 @@ impl Camera {
             frame_counter_kind: "display-timing".into(),
             frame_counter_pointer: "/0/banks/1/frames".into(),
         };
-        let deadline = self.session.board.now() + 5 * TICKS_PER_SECOND;
+        let deadline = self.session.board.now() + 5 * self.ticks_per_second;
         let mut remote = BoardRemote::new(&mut self.session, facts, options)?;
         futures_lite::future::block_on(operation(&mut remote, deadline))
     }
@@ -370,7 +367,7 @@ impl Camera {
         let summary = json!({
             "checkpoint": name,
             "file": file,
-            "guest_seconds": snapshot.now() as f64 / TICKS_PER_SECOND as f64,
+            "guest_seconds": snapshot.now() as f64 / self.ticks_per_second as f64,
             "instructions_per_core": snapshot.instruction_counts(),
         });
         self.checkpoints.insert(name.into(), snapshot);
