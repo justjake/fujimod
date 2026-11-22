@@ -295,7 +295,12 @@ impl ByteI2c {
                     next.pending=None; next.phase=Phase::Idle; next.bcr=0; next.bsr=0;
                     next.staged=false; next.rx_ready=false; next.transport.stop(); next.ccr=value;
                 } else {
-                    if next.phase!=Phase::Idle || next.pending.is_some() {return Err("Active I2C reconfiguration unsupported".into());}
+                    // Rewriting the value a register already holds changes nothing,
+                    // so drivers may restate their configuration during a transfer.
+                    let held=match offset {8=>next.ccr,12=>next.adr,20=>next.csr,_=>next.fsr};
+                    if value!=held && (next.phase!=Phase::Idle || next.pending.is_some()) {
+                        return Err("Active I2C reconfiguration unsupported".into());
+                    }
                     match offset {
                         8 if value & 0x80 == 0 => next.ccr=value,
                         12 if value==0 => next.adr=value,
