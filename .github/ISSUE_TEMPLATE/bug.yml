@@ -1,0 +1,10 @@
+name: Bug report
+description: Report a FujiMod problem
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+    validations:
+      required: true
