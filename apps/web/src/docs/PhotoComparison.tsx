@@ -7,8 +7,14 @@ const mediaRoot = '/artifacts/docs/';
 /** Device pixels per photograph pixel: hovering shows 1:1, a click magnifies. */
 const zooms = [1, 4] as const;
 
-/** A point on every photograph, as fractions of its width and height. */
+/** A point on every frame, as fractions of its width and height. */
 type Point = { u: number; v: number };
+
+/** A frame's height in frame widths, which the photograph fills around the
+ * focus point (fractions of the photograph's width and height). */
+export type PhotoFrame = { height: number; focus: readonly number[] };
+
+const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
 /** Photographs side by side from the sidebar's edge to the window's edge, or
  * across the whole window when the sidebar is above. With the pointer over a
@@ -17,7 +23,7 @@ type Point = { u: number; v: number };
  * magnifies further and a minimap shows the part in view. On touch screens a
  * tap zooms, another tap magnifies, dragging follows the finger, and a third
  * tap returns. */
-export function PhotoComparison(props: { photos: readonly Photo[] }) {
+export function PhotoComparison(props: { photos: readonly Photo[]; frame?: PhotoFrame | null }) {
   const [point, setPoint] = createSignal<Point>();
   const [zoom, setZoom] = createSignal(0);
   const [dpr, setDpr] = createSignal(2);
@@ -45,6 +51,22 @@ export function PhotoComparison(props: { photos: readonly Photo[] }) {
 
   /** CSS pixels per photograph pixel. */
   const scale = () => zooms[zoom()] / dpr();
+
+  /** Where a photograph lies in its frame: CSS pixels per photograph pixel and
+   * the offset of its top left corner, centered on the focus point. */
+  const fill = (photo: Photo) => {
+    const width = frameWidth();
+    const height = props.frame ? width * props.frame.height : (width * photo.height) / photo.width;
+    const cover = Math.max(width / photo.width, height / photo.height);
+    const [fx = 0.5, fy = 0.5] = props.frame?.focus ?? [];
+    return {
+      width,
+      height,
+      cover,
+      x: clamp(width / 2 - fx * photo.width * cover, width - photo.width * cover, 0),
+      y: clamp(height / 2 - fy * photo.height * cover, height - photo.height * cover, 0),
+    };
+  };
 
   const pointIn = (event: PointerEvent): Point | undefined => {
     const frame = (event.target as Element).closest('.photo-frame');
@@ -114,8 +136,16 @@ export function PhotoComparison(props: { photos: readonly Photo[] }) {
       <For each={props.photos}>
         {(photo) => (
           <figure class="photo-cell">
-            <div class="photo-frame" style={{ 'aspect-ratio': `${photo.width} / ${photo.height}` }}>
+            <div
+              class="photo-frame"
+              style={{
+                'aspect-ratio': props.frame
+                  ? `1 / ${props.frame.height}`
+                  : `${photo.width} / ${photo.height}`,
+              }}
+            >
               <img
+                style={{ 'object-position': `${fill(photo).x}px ${fill(photo).y}px` }}
                 src={mediaRoot + photo.image}
                 alt={photo.label}
                 loading="lazy"
@@ -123,8 +153,26 @@ export function PhotoComparison(props: { photos: readonly Photo[] }) {
               />
               <Show when={point()}>
                 {(at) => {
-                  /** The fraction of the photograph's width (and height) in view. */
-                  const seen = () => Math.min(1, frameWidth() / (photo.width * scale()));
+                  /** The point as fractions of the photograph. */
+                  const image = () => {
+                    const at = fill(photo);
+                    return {
+                      u: (point()!.u * at.width - at.x) / (photo.width * at.cover),
+                      v: (point()!.v * at.height - at.y) / (photo.height * at.cover),
+                    };
+                  };
+                  /** The part of the photograph in view, as fractions of it. */
+                  const view = () => {
+                    const at = fill(photo);
+                    const width = at.width / (photo.width * scale());
+                    const height = at.height / (photo.height * scale());
+                    return {
+                      left: image().u - point()!.u * width,
+                      top: image().v - point()!.v * height,
+                      width,
+                      height,
+                    };
+                  };
                   return (
                     <>
                       <img
@@ -137,7 +185,7 @@ export function PhotoComparison(props: { photos: readonly Photo[] }) {
                           top: `${at().v * 100}%`,
                           width: `${photo.width * scale()}px`,
                           height: `${photo.height * scale()}px`,
-                          transform: `translate(${-at().u * photo.width * scale()}px, ${-at().v * photo.height * scale()}px)`,
+                          transform: `translate(${-image().u * photo.width * scale()}px, ${-image().v * photo.height * scale()}px)`,
                         }}
                       />
                       <svg
@@ -154,10 +202,10 @@ export function PhotoComparison(props: { photos: readonly Photo[] }) {
                       >
                         <span
                           style={{
-                            left: `${at().u * (1 - seen()) * 100}%`,
-                            top: `${at().v * (1 - seen()) * 100}%`,
-                            width: `${seen() * 100}%`,
-                            height: `${seen() * 100}%`,
+                            left: `${clamp(view().left, 0, 1) * 100}%`,
+                            top: `${clamp(view().top, 0, 1) * 100}%`,
+                            right: `${(1 - clamp(view().left + view().width, 0, 1)) * 100}%`,
+                            bottom: `${(1 - clamp(view().top + view().height, 0, 1)) * 100}%`,
                           }}
                         />
                       </div>

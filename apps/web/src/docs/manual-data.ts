@@ -1,5 +1,6 @@
 import manual from './manual.generated.json' with { type: 'json' };
 import type { Credits } from '../home/catalog.ts';
+import type { PhotoFrame } from './PhotoComparison.tsx';
 import { manualMenus, manualPagePath, manualRoot } from './manual-routes.ts';
 
 export type ManualSection = {
@@ -16,7 +17,7 @@ export type ManualSection = {
     credits: Credits | null;
   }[];
   credits?: Credits;
-  media?: { card: string; options: readonly string[] } | null;
+  media?: { card: string; options: readonly string[]; frame?: PhotoFrame } | null;
   markdown?: string;
 };
 
