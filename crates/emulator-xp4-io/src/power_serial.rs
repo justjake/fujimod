@@ -166,6 +166,10 @@ impl PowerSerial {
         for (bank, register, value) in inputs {
             if !matches!(register, 0..=6 | 16 | 21 | 27)
                 || ((3..=6).contains(&register) && value > 1023)
+                || self
+                    .command_output
+                    .as_ref()
+                    .is_some_and(|c| c.bank == bank && c.register == register)
                 || declared.insert((bank, register), value).is_some()
             {
                 return Err("Power SPI bank input is not declarable".into());
@@ -814,6 +818,24 @@ mod tests {
         assert!(make().with_bank_inputs(vec![(true, 32, 0)]).is_err());
         assert!(make().with_bank_inputs(vec![(true, 16, 1), (true, 16, 2)]).is_err());
         assert!(make().with_bank_inputs(vec![(true, 3, 1024)]).is_err());
+    }
+
+    #[test]
+    fn bank_inputs_cannot_shadow_a_command_output_in_the_same_bank() {
+        let pins = Pins::new([0; 16]);
+        let policy = ExactCommandOutput { bank: true, register: 16, value: 0x0100 };
+        let make = |policy| PowerSerial::new(
+            pins.clone(), 12, 5, true, false,
+            [(0, 0), (1, 0), (2, 0), (3, 0), (32, 0), (34, 0), (35, 0)].into(),
+            54_000_000, policy,
+        ).unwrap();
+        assert!(make(Some(policy.clone()))
+            .with_bank_inputs(vec![(true, 16, 2)])
+            .is_err());
+        assert!(make(Some(policy))
+            .with_bank_inputs(vec![(false, 16, 2)])
+            .is_ok());
+        assert!(make(None).with_bank_inputs(vec![(true, 16, 2)]).is_ok());
     }
 
     #[test]
