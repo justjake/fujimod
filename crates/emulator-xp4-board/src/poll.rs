@@ -363,7 +363,7 @@ impl Cluster {
     /// between slices has work, until the board next has device work: every
     /// other core waits without a pending interrupt, no code-coherence or
     /// remap work is queued, and the execute-in-place source is unchanged.
-    fn poll_alone(&self, core: usize) -> bool {
+    pub(super) fn poll_alone(&self, core: usize) -> bool {
         let state = unsafe { &*self.state.get() };
         (0..self.cpus.len()).all(|peer| {
             peer == core || (state.waiting[peer] != 0 && state.gic.next_irq(peer).is_none())

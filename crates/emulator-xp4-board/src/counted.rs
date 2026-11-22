@@ -327,6 +327,28 @@ impl Cluster {
         }
         Ok(())
     }
+    /// A slice just ended while this core runs alone in its scheduler window:
+    /// whether the scheduler would start another slice of the same core with
+    /// nothing in between. Every other core waits without a pending interrupt,
+    /// no deadline is due, no coherence or remap work is queued, no translation
+    /// maintenance is unsettled and the slice ended where the window goes on.
+    /// Then `remaining` is that next slice and the run goes on in place.
+    fn continue_alone(&self, core: usize, remaining: &mut u64, window: &u64) -> Result<bool, String> {
+        let state = unsafe { &*self.state.get() };
+        if *window == 0
+            || state.waiting[core] != 0
+            || state.redirected.is_some()
+            || state.failure.is_some()
+            || state.discovery.enabled
+            || !self.poll_alone(core)
+            || self.room()? == 0
+            || self.maintenance.ready(&self.cpus).is_err()
+        {
+            return Ok(false);
+        }
+        *remaining = state.quantum.max(1).min(*window);
+        Ok(true)
+    }
     /// One scheduler slice of at most `budget` entered instructions, ended
     /// where the per-instruction hook ends it.
     pub(super) fn run_counted(&self, core: usize, budget: usize) -> Result<(), String> {
@@ -341,7 +363,12 @@ impl Cluster {
             // The hook's instruction budget stops before the next entry, so
             // no boundary work happens once the slice is spent.
             if remaining == 0 {
-                return Ok(());
+                if !self.continue_alone(core, &mut remaining, &window)? {
+                    return Ok(());
+                }
+                // The next slice of the same core: it begins as one does.
+                exit_word = None;
+                self.poll_abandon(core);
             }
             if self.boundary(core)? {
                 return Ok(());

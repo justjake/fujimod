@@ -72,13 +72,19 @@ impl Session {
             if let Some(until) = until {
                 remaining = remaining.min(self.inner.instruction_rate.budget(state.ticks, state.tick_phase, until)?);
             }
-            let runnable: Vec<_> = state
-                .waiting
-                .iter()
-                .enumerate()
-                .filter_map(|(core, waiting)| (*waiting == 0).then_some(core))
-                .collect();
-            if runnable.is_empty() {
+            let mut runnable = 0usize;
+            let mut first = None;
+            let mut from_next = None;
+            for (core, waiting) in state.waiting.iter().enumerate() {
+                if *waiting == 0 {
+                    runnable += 1;
+                    first.get_or_insert(core);
+                    if core >= self.next_core.get() {
+                        from_next.get_or_insert(core);
+                    }
+                }
+            }
+            if runnable == 0 {
                 if self.idle_until(until) {
                     continue;
                 }
@@ -86,16 +92,12 @@ impl Session {
                 self.quiescent.set(true);
                 return Ok(());
             }
-            let core = runnable
-                .iter()
-                .copied()
-                .find(|core| *core >= self.next_core.get())
-                .unwrap_or(runnable[0]);
+            let core = from_next.or(first).unwrap();
             self.next_core.set((core + 1) % self.inner.cpus.len());
             unsafe {
                 let state = &mut *self.inner.state.get();
                 state.quantum = quantum as u64;
-                state.solo_window = if runnable.len() == 1 { remaining } else { 0 };
+                state.solo_window = if runnable == 1 { remaining } else { 0 };
             }
             let result = self.run(
                 core,

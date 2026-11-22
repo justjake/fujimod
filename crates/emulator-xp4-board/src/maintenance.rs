@@ -86,20 +86,26 @@ impl Maintenance {
         })
     }
 
+    fn status(&self, cpus: &[impl Borrow<Core>], index: usize) -> Result<Status, String> {
+        if cpus.len() != self.owners.len() {
+            return Err("Translation domain membership changed".into());
+        }
+        let cpu = cpus[index].borrow();
+        if cpu.identity() != self.identities[index] {
+            return Err("Translation processor identity changed".into());
+        }
+        let status = cpu.translation_maintenance_status()?;
+        if status.owner != self.tokens[index] || status.pending > native::CAPACITY {
+            return Err("Invalid translation owner status".into());
+        }
+        Ok(status)
+    }
+
     fn statuses(&self, cpus: &[impl Borrow<Core>]) -> Result<Vec<Status>, String> {
         if cpus.len() != self.owners.len() {
             return Err("Translation domain membership changed".into());
         }
-        cpus.iter().map(Borrow::borrow).enumerate().map(|(index, cpu)| {
-            if cpu.identity() != self.identities[index] {
-                return Err("Translation processor identity changed".into());
-            }
-            let status = cpu.translation_maintenance_status()?;
-            if status.owner != self.tokens[index] || status.pending > native::CAPACITY {
-                return Err("Invalid translation owner status".into());
-            }
-            Ok(status)
-        }).collect()
+        (0..cpus.len()).map(|index| self.status(cpus, index)).collect()
     }
 
     pub fn ready(&self, cpus: &[impl Borrow<Core>]) -> Result<(), String> {
@@ -110,7 +116,8 @@ impl Maintenance {
         if state.pending.is_some() {
             return Err("Translation delivery remains incomplete".into());
         }
-        for (core, status) in self.statuses(cpus)?.iter().enumerate() {
+        for core in 0..cpus.len() {
+            let status = self.status(cpus, core)?;
             if status.pending != 0 || status.poison != 0 {
                 return Err(format!("Core {core} has unsettled translation maintenance: {} pending, poison {}",
                     status.pending, status.poison));
