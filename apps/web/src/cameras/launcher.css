@@ -44,15 +44,8 @@
     width: calc(100% - 32px);
     margin: 48px 0;
   }
-  .stage.idle {
-    margin-inline: 0;
-    border: 0;
-    border-radius: 0;
-    overflow: visible;
-  }
   .stage.idle .viewer {
     min-height: 0;
-    background: none;
   }
   .stage.idle .ghost {
     display: none;
