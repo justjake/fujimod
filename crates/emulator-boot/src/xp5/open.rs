@@ -149,6 +149,7 @@ fn devices_and_resources(
         sd: xp5_board::sd::resolve(state.sd.clone(), assets)?,
         // Replaced by the declared key model when the devices are assembled.
         controls: Arc::new(fujimod_emulator_parts_controls::absent::AbsentControls),
+        counting_dial: None,
         pins,
         clocks: panel_clocks::Clocks::new(),
         companion,
@@ -984,7 +985,7 @@ pub(crate) fn open_from(
         .map(|value| serde_json::to_value(value).map_err(|error| error.to_string()))
         .transpose()?;
     let ladder_keys = fujimod_emulator_xp5_board::ladder_controls::ladder_keys(&resolved)?;
-    let controls = match (resistor_keys, ladder_keys) {
+    let controls = match (resistor_keys, ladder_keys.as_ref()) {
         (Some(_), Some(_)) => {
             return Err(
                 "boot manifest declares resistor keys for a body whose catalog declares ladders".into(),
@@ -996,11 +997,14 @@ pub(crate) fn open_from(
                     .map_err(|error| format!("physical resistor keys: {error}"))?,
             ),
         ),
-        (None, Some(options)) => Some(
-            fujimod_emulator_parts_controls::key_input::ControlsOptions::LadderKeys(options),
-        ),
-        (None, None) => None,
+        // Ladder controls are driven through the session's switch panel.
+        (None, Some(_)) | (None, None) => None,
     };
+    let panel = ladder_keys
+        .map(|options| -> Result<_, String> {
+            Ok((options, fujimod_emulator_xp5_board::ladder_controls::panel_names(&resolved)?))
+        })
+        .transpose()?;
     let run_scene = match resolved.configuration.scene.as_ref() {
         Some(RunScene::Xp5(scene)) => scene,
         _ => return Err("X100VI run configuration has no XP5 scene".into()),
@@ -1119,12 +1123,32 @@ pub(crate) fn open_from(
     let read_limit = execution.ram.iter().try_fold(0usize, |bytes, region| {
         bytes.checked_add(region.size).ok_or("XP5 RAM extent overflows")
     })?;
-    let (mut session, inputs) = xp5_boot::open(xp5_boot::OpenOptions {
+    let gpio_node = windows
+        .iter()
+        .find(|window| window.kind == "gpio")
+        .map(|window| format!("{:#x}", window.base));
+    let mut resources = resources;
+    resources.counting_dial = panel
+        .as_ref()
+        .and_then(|(options, _)| options.rear_dial.as_ref())
+        .map(|dial| dial.register);
+    let front_dial = panel
+        .as_ref()
+        .and_then(|(options, _)| options.front_dial.as_ref())
+        .map(|dial| fujimod_emulator_parts_controls::encoder::Options {
+            pins: Some(dial.pins),
+            outputs: Default::default(),
+            // One detent edge every 2 ms, well inside the sampler's period.
+            phase_ticks: (ticks_per_second / 500).max(1),
+            rest_phase: dial.rest_phase,
+        });
+    let (mut session, mut inputs) = xp5_boot::open(xp5_boot::OpenOptions {
         definition,
         mode,
         processors: execution,
         windows,
         controls,
+        front_dial,
         resources,
         engine: run.engine,
         interrupts,
@@ -1132,6 +1156,16 @@ pub(crate) fn open_from(
         images,
         scene,
     })?;
+    if let Some((options, names)) = panel {
+        fujimod_emulator_xp5_board::panel::connect(
+            &mut session,
+            &mut inputs,
+            options,
+            names,
+            gpio_node.ok_or("ladder controls need the board's GPIO controller")?,
+            ticks_per_second,
+        )?;
+    }
     session.board.set_block_execution(
         state.mprofile_block_execution
             && std::env::var_os("FUJIMOD_MPROFILE_INSTRUCTIONS").is_none(),

@@ -122,6 +122,7 @@ fn session() -> Session {
                             bytes: vec![ack],
                             pointer: None,
                         }],
+                        hold_ticks: 0,
                     })
                     .collect(),
             }],

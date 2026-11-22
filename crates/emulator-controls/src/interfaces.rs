@@ -659,6 +659,7 @@ pub fn power(row: &LocatedControl, nodes: &Nodes) -> Result<Option<Power>, Strin
                     position: position.into(),
                     ready: Vec::new(),
                     expected: Vec::new(),
+                    hold_ticks: 0,
                 })
                 .collect(),
         },

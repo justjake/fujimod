@@ -33,6 +33,18 @@ pub trait Endpoint: Send {
     fn set_input_bits(&mut self, _register: u8, _mask: u16, _value: u16) -> Result<(), String> {
         Err(format!("{} has no external register inputs", self.name()))
     }
+    /// The current value of a register external lines drive.
+    fn input_bits(&self, _register: u8) -> Result<u16, String> {
+        Err(format!("{} has no external register inputs", self.name()))
+    }
+    /// Refuse a dial turn the part cannot count, without counting it.
+    fn admit_steps(&self, _steps: i32) -> Result<(), String> {
+        Err(format!("{} counts no dial", self.name()))
+    }
+    /// Count dial detents the guest reads later.
+    fn count_steps(&mut self, _steps: i32) -> Result<(), String> {
+        Err(format!("{} counts no dial", self.name()))
+    }
 }
 
 /// A wire transaction may latch chip selection at the first serial edge.

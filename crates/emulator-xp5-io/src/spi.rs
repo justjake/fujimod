@@ -329,6 +329,28 @@ impl Spi {
             _ => Err(format!("SPI controller {:#x} has no single {part} part", self.base)),
         }
     }
+    fn route(&self, route: usize) -> Result<&dyn Endpoint, String> {
+        self.attachments
+            .get(route)
+            .map(|a| a.endpoint.as_ref())
+            .ok_or_else(|| format!("SPI controller {:#x} has no route {route}", self.base))
+    }
+    fn counter(&self) -> Result<usize, String> {
+        let mut counters = (0..self.attachments.len())
+            .filter(|&i| self.attachments[i].endpoint.admit_steps(0).is_ok());
+        match (counters.next(), counters.next()) {
+            (Some(index), None) => Ok(index),
+            _ => Err(format!("SPI controller {:#x} has no single dial counter", self.base)),
+        }
+    }
+    /// The attachment index of the one part named `part`.
+    pub fn part_route(&self, part: &str) -> Option<usize> {
+        let mut found = (0..self.attachments.len()).filter(|&i| self.attachments[i].endpoint.name() == part);
+        match (found.next(), found.next()) {
+            (Some(index), None) => Some(index),
+            _ => None,
+        }
+    }
     pub fn has_part(&self, part: &str) -> bool {
         self.attachments.iter().any(|a| a.endpoint.name() == part)
     }
@@ -401,9 +423,45 @@ impl Spi {
         Ok(())
     }
 }
+/// Register inputs of an attached part, by attachment index.
+impl fujimod_emulator_devices::capability::SerialStatus for Spi {
+    fn status_value(&self, route: usize, register: u8) -> Result<u16, String> {
+        self.route(route)?.input_bits(register)
+    }
+    fn status_input(&mut self, route: usize, register: u8, value: u16) -> Result<(), String> {
+        self.route(route)?;
+        self.attachments[route].endpoint.set_input_bits(register, 0xffff, value)
+    }
+}
+/// The one attached part that counts a command dial.
+impl fujimod_emulator_devices::capability::RotaryInput for Spi {
+    fn admit_edges(&self, _now: u64, edges: i32) -> Result<(), String> {
+        self.attachments[self.counter()?].endpoint.admit_steps(edges)
+    }
+    fn queue_edges(&mut self, _now: u64, edges: i32) -> Result<(), String> {
+        let index = self.counter()?;
+        self.attachments[index].endpoint.count_steps(edges)
+    }
+}
 impl Device for Spi {
     fn name(&self) -> &'static str {
         "xp5-spi"
+    }
+    fn serial_status(&self) -> Option<&(dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
+        Some(self)
+    }
+    fn serial_status_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
+        Some(self)
+    }
+    fn rotary_input(&self) -> Option<&(dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
+        Some(self)
+    }
+    fn rotary_input_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
+        Some(self)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         if size != 4 {

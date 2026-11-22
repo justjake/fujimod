@@ -18,6 +18,10 @@ pub struct Pose {
     pub position: String,
     pub ready: Vec<Check>,
     pub expected: Vec<Check>,
+    /// A pose without checks completes once its contacts have been held this
+    /// many ticks, for controls whose firmware scanner records are not located.
+    #[serde(default)]
+    pub hold_ticks: u64,
 }
 /// One host-visible control in the session's input catalog.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -130,10 +134,29 @@ struct Transition {
     position: String,
     started: u64,
 }
+/// A host input applied when the guest clock reaches its time.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Scheduled {
+    Press { id: String, stage: Option<String> },
+    Release { id: String },
+    Position { id: String, position: String },
+    Rotate { id: String, steps: i32 },
+}
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Due {
+    at: u64,
+    input: Scheduled,
+}
+/// Bound of host inputs waiting for their time.
+const SCHEDULE_LIMIT: usize = 4096;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Driver {
     pub spec: Spec,
+    #[serde(default)]
+    scheduled: VecDeque<Due>,
     pending: VecDeque<Transition>,
     active: Option<Transition>,
     requested: BTreeMap<String, String>,
@@ -200,10 +223,18 @@ impl Driver {
                 return Err("contact observer poses differ from physical contacts".into());
             }
             for state in &actuator.states {
-                if actuator.momentary && (state.ready.is_empty() || state.expected.is_empty()) {
+                let unchecked = state.ready.is_empty() && state.expected.is_empty();
+                if actuator.momentary
+                    && !(unchecked && state.hold_ticks > 0)
+                    && (state.ready.is_empty() || state.expected.is_empty())
+                {
                     return Err(
-                        "momentary contact requires checked acknowledgment observations".into(),
+                        "momentary contact requires checked acknowledgment observations or a hold time"
+                            .into(),
                     );
+                }
+                if state.hold_ticks > 0 && !unchecked {
+                    return Err("a checked contact pose has no hold time".into());
                 }
                 if state.ready.len() + state.expected.len() > 128 {
                     return Err("contact observation exceeds its bound".into());
@@ -280,6 +311,7 @@ impl Driver {
         }
         Ok(Self {
             spec,
+            scheduled: VecDeque::new(),
             pending: VecDeque::new(),
             active: None,
             requested: BTreeMap::new(),
@@ -339,7 +371,79 @@ impl Driver {
         Ok(actuator.states[0].position.clone())
     }
     pub fn busy(&self) -> bool {
-        self.active.is_some() || !self.pending.is_empty()
+        self.active.is_some() || !self.pending.is_empty() || !self.scheduled.is_empty()
+    }
+    /// The guest time of the next scheduled host input.
+    pub fn next_scheduled(&self) -> Option<u64> {
+        self.scheduled.front().map(|due| due.at)
+    }
+    fn rotary(&self, id: &str) -> Result<(String, i32), String> {
+        self.spec
+            .interfaces
+            .iter()
+            .find_map(|i| match i {
+                Interface::Rotary {
+                    id: found,
+                    node,
+                    edges_per_step,
+                } if found == id => Some((node.clone(), *edges_per_step)),
+                _ => None,
+            })
+            .ok_or_else(|| format!("physical rotary control is unavailable: {id}"))
+    }
+    fn schedule(&mut self, at: u64, input: Scheduled) -> Result<(), String> {
+        match &input {
+            Scheduled::Press { id, .. } | Scheduled::Release { id } => {
+                if !self.actuator(id)?.momentary {
+                    return Err("use a position for a persistent control".into());
+                }
+            }
+            Scheduled::Position { id, position } => {
+                if !self.actuator(id)?.states.iter().any(|s| &s.position == position) {
+                    return Err(format!("{id} has no position {position}"));
+                }
+            }
+            Scheduled::Rotate { id, .. } => {
+                self.rotary(id)?;
+            }
+        }
+        if self.scheduled.len() >= SCHEDULE_LIMIT {
+            return Err("scheduled host inputs exceed their bound".into());
+        }
+        let index = self.scheduled.partition_point(|due| due.at <= at);
+        self.scheduled.insert(index, Due { at, input });
+        Ok(())
+    }
+    fn apply_due(&mut self, session: &mut Session) -> Result<(), String> {
+        let now = session.board.now();
+        while self.scheduled.front().is_some_and(|due| due.at <= now) {
+            let due = self.scheduled.pop_front().unwrap();
+            match due.input {
+                Scheduled::Press { id, stage } => self.enqueue(session, &id, stage.as_deref(), false)?,
+                Scheduled::Release { id } => self.enqueue(session, &id, None, true)?,
+                Scheduled::Position { id, position } => {
+                    let mut projected = session
+                        .controls
+                        .clone()
+                        .ok_or("physical contacts are not connected")?;
+                    for transition in &self.pending {
+                        projected = projected.transition(&transition.id, &transition.position)?;
+                    }
+                    projected.transition(&id, &position)?;
+                    self.pending.push_back(Transition {
+                        id,
+                        position,
+                        started: now,
+                    });
+                }
+                Scheduled::Rotate { id, steps } => {
+                    let (node, per_step) = self.rotary(&id)?;
+                    let edges = steps.checked_mul(per_step).ok_or("rotary step overflow")?;
+                    session.rotate_edges(&node, edges)?;
+                }
+            }
+        }
+        Ok(())
     }
     pub fn set_watched(&mut self, watched: bool) {
         self.watched = watched;
@@ -460,10 +564,15 @@ impl Driver {
             .ok_or_else(|| "queued contact pose is absent".to_string())
     }
     fn pump(&mut self, session: &mut Session) -> Result<(), String> {
+        self.apply_due(session)?;
         let now = session.board.now();
         if let Some(active) = &self.active {
             let pose = self.pose(active)?;
-            if !Self::matches(session, &pose.ready)? || !Self::matches(session, &pose.expected)? {
+            let held = now.saturating_sub(active.started) >= pose.hold_ticks;
+            if !held
+                || !Self::matches(session, &pose.ready)?
+                || !Self::matches(session, &pose.expected)?
+            {
                 if now.saturating_sub(active.started) > self.spec.max_phase_ticks {
                     return Err(format!(
                         "physical contact acknowledgment timed out: {} {}",
@@ -520,6 +629,13 @@ impl Session {
             .ok_or("physical input automation is not configured")?
             .clone()
             .enqueue(self, id, stage, release)
+    }
+    /// Apply a host input when the guest clock reaches `at`.
+    pub fn schedule_input(&mut self, at: u64, input: Scheduled) -> Result<(), String> {
+        self.contact_driver
+            .as_mut()
+            .ok_or("physical input automation is not configured")?
+            .schedule(at, input)
     }
     pub fn configure_contact_driver(&mut self, spec: Spec) -> Result<(), String> {
         if self.contact_driver.is_some() {
@@ -628,17 +744,19 @@ impl Session {
             }
             // A watched queue is sampled even when idle, so a change made by
             // the opening pump ends the window one poll later at most.
-            let pending = self
-                .contact_driver
-                .as_ref()
-                .filter(|d| d.busy() || d.watched);
-            let horizon = match pending {
-                Some(driver) => Some(
+            // Transitions in flight are sampled every poll; scheduled inputs
+            // wake the window at their own time.
+            let horizon = match self.contact_driver.as_ref() {
+                Some(driver) if driver.active.is_some() || !driver.pending.is_empty() || driver.watched => Some(
                     self.board
                         .now()
                         .saturating_add(driver.spec.poll_ticks)
                         .min(until.unwrap_or(u64::MAX)),
                 ),
+                Some(driver) => driver
+                    .next_scheduled()
+                    .map(|at| at.min(until.unwrap_or(u64::MAX)))
+                    .or(until),
                 None => until,
             };
             let horizon = horizon.into_iter().chain(self.window_action.as_ref().map(|action|

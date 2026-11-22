@@ -12,6 +12,7 @@ use std::time::Duration;
 pub struct Inputs {
     pins: SharedPins,
     controls: Option<std::sync::Arc<dyn KeyInput>>,
+    panel: Option<PanelInputs>,
     gpio_devices: Vec<usize>,
     control_source: usize,
     usb: Option<UsbWiring>,
@@ -34,7 +35,92 @@ const VBUS_REGISTER: u8 = 0x12;
 const VBUS_MASK: u16 = 0x30;
 const VBUS_HOST: u16 = 0x10;
 
+/// How key names and dial positions reach a session's switch panel.
+pub struct PanelInputs {
+    pub options: fujimod_emulator_parts_controls::ladder_keys::Options,
+    pub names: crate::panel::Names,
+    pub ticks_per_second: u64,
+}
+impl PanelInputs {
+    fn at(&self, at_ns: u64) -> u64 {
+        (u128::from(at_ns) * u128::from(self.ticks_per_second) / 1_000_000_000) as u64
+    }
+    fn control(&self, key: Key) -> Result<&str, String> {
+        self.names
+            .keys
+            .get(&key)
+            .map(|(id, _)| id.as_str())
+            .ok_or_else(|| format!("{key:?} is not a control of this body"))
+    }
+    fn input(&self, key: Key, pressed: bool) -> Result<Scheduled, String> {
+        let rotary = |names: &Option<(String, String)>, steps| {
+            names
+                .as_ref()
+                .map(|(id, _)| Scheduled::Rotate { id: id.clone(), steps })
+                .ok_or_else(|| format!("{key:?} is not a control of this body"))
+        };
+        let shutter = || {
+            self.names
+                .shutter
+                .as_ref()
+                .map(|((id, _), _)| id.clone())
+                .ok_or_else(|| "this body has no shutter button".to_string())
+        };
+        Ok(match (key, pressed) {
+            (Key::RearPlus | Key::RearMinus | Key::FrontPlus | Key::FrontMinus, false) => {
+                return Err(format!("{key:?} is a detent, not a held key"));
+            }
+            (Key::RearPlus, true) => rotary(&self.names.rear_dial, 1)?,
+            (Key::RearMinus, true) => rotary(&self.names.rear_dial, -1)?,
+            (Key::FrontPlus, true) => rotary(&self.names.front_dial, 1)?,
+            (Key::FrontMinus, true) => rotary(&self.names.front_dial, -1)?,
+            (Key::ShutterHalf, true) => Scheduled::Press { id: shutter()?, stage: Some("half".into()) },
+            (Key::ShutterFull, true) => Scheduled::Press { id: shutter()?, stage: Some("full".into()) },
+            (Key::ShutterHalf, false) => Scheduled::Release { id: shutter()? },
+            (Key::ShutterFull, false) => Scheduled::Press { id: shutter()?, stage: Some("half".into()) },
+            (key, true) => Scheduled::Press { id: self.control(key)?.into(), stage: None },
+            (key, false) => Scheduled::Release { id: self.control(key)?.into() },
+        })
+    }
+    fn position(&self, dial: &str, position: &str) -> Result<Scheduled, String> {
+        let wanted = dial.trim();
+        let (model, label) = if let Some(found) = self.options.dials.iter().find(|d| {
+            d.name.eq_ignore_ascii_case(wanted) || d.aliases.iter().any(|a| a.eq_ignore_ascii_case(wanted))
+        }) {
+            let label = found
+                .positions
+                .iter()
+                .find(|p| {
+                    let name = position.trim();
+                    std::iter::once(&p.label).chain(&p.aliases).any(|l| l.eq_ignore_ascii_case(name))
+                        || matches!((p.label.parse::<f64>(), name.parse::<f64>()), (Ok(a), Ok(b)) if (a - b).abs() < 1e-9)
+                })
+                .ok_or_else(|| format!("{} has no position {position}", found.name))?;
+            (found.name.clone(), label.label.clone())
+        } else if let Some(found) = self.options.switches.iter().find(|s| s.name.eq_ignore_ascii_case(wanted)) {
+            let label = [&found.set, &found.clear]
+                .into_iter()
+                .find(|l| l.eq_ignore_ascii_case(position.trim()))
+                .ok_or_else(|| format!("{} has no position {position}", found.name))?;
+            (found.name.clone(), label.clone())
+        } else {
+            return Err(format!("this body has no dial or switch {dial}"));
+        };
+        let (id, _) = self
+            .names
+            .positions
+            .get(&model)
+            .ok_or_else(|| format!("{model} has no catalog control"))?;
+        Ok(Scheduled::Position { id: id.clone(), position: label })
+    }
+}
+use fujimod_emulator_session::contact_driver::Scheduled;
+
 impl Inputs {
+    /// Send key edges and position changes to the session's switch panel.
+    pub fn use_panel(&mut self, panel: PanelInputs) {
+        self.panel = Some(panel);
+    }
     pub(crate) fn new(
         pins: SharedPins,
         controls: Option<std::sync::Arc<dyn KeyInput>>,
@@ -45,6 +131,7 @@ impl Inputs {
         Self {
             pins,
             controls,
+            panel: None,
             gpio_devices,
             control_source,
             usb,
@@ -150,6 +237,9 @@ impl Inputs {
         key: Key,
         pressed: bool,
     ) -> Result<(), String> {
+        if let Some(panel) = &self.panel {
+            return session.schedule_input(panel.at(at_ns), panel.input(key, pressed)?);
+        }
         self.controls
             .as_ref()
             .ok_or("this XP5 body has no physical key model; key edges are refused")?
@@ -167,6 +257,9 @@ impl Inputs {
         dial: &str,
         position: &str,
     ) -> Result<(), String> {
+        if let Some(panel) = &self.panel {
+            return session.schedule_input(panel.at(at_ns), panel.position(dial, position)?);
+        }
         self.controls
             .as_ref()
             .ok_or("this XP5 body has no physical key model; position changes are refused")?

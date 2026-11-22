@@ -197,6 +197,7 @@ impl Checks<'_> {
             position: observation.position.clone(),
             ready,
             expected,
+            hold_ticks: 0,
         })
     }
 }
@@ -320,6 +321,7 @@ pub fn compile(
                         position: state.position.clone(),
                         ready: Vec::new(),
                         expected: Vec::new(),
+                        hold_ticks: 0,
                     })
                 }
             })

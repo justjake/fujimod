@@ -146,11 +146,81 @@ impl Endpoint for LadderDriven {
     }
 }
 
+/// A power controller that counts command-dial detents in one register. The
+/// count loads when the guest starts to read the register, and that read
+/// consumes the count it returns: bits 2..0 are the magnitude and bit 3 the
+/// sign, so one read reports at most seven detents either way.
+struct CountingDial {
+    inner: PowerController,
+    register: u8,
+    count: i32,
+}
+/// Bound of detents the host may queue ahead of the guest's reads.
+const COUNT_LIMIT: i32 = 1 << 16;
+impl Endpoint for CountingDial {
+    fn name(&self) -> &'static str {
+        self.inner.name()
+    }
+    fn validate(&self, frame: fujimod_emulator_parts_io::serial::Frame) -> Result<(), String> {
+        self.inner.validate(frame)
+    }
+    fn reset_transaction(&mut self) {
+        self.inner.reset_transaction()
+    }
+    fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, now_ns: u64) -> u16 {
+        let command = frame.word as u8;
+        if self.inner.transfer_position() == 0 && command & 0x80 == 0 && command & 0x7f == self.register {
+            let steps = self.count.clamp(-8, 7);
+            self.count -= steps;
+            self.inner.set_register(self.register, (steps as u16) & 0xf);
+        }
+        self.inner.transfer(frame, now_ns)
+    }
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        if self.count != 0 {
+            return Err("command-dial detents are waiting for the guest; run before saving".into());
+        }
+        self.inner.checkpoint()
+    }
+    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.inner.validate_checkpoint(saved)
+    }
+    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.count = 0;
+        self.inner.restore_checkpoint(saved)
+    }
+    fn save(&self) -> serde_json::Value {
+        self.inner.save()
+    }
+    fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
+        self.count = 0;
+        self.inner.restore(state)
+    }
+    fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
+        self.inner.set_input_bits(register, mask, value)
+    }
+    fn input_bits(&self, register: u8) -> Result<u16, String> {
+        self.inner.input_bits(register)
+    }
+    fn admit_steps(&self, steps: i32) -> Result<(), String> {
+        match self.count.checked_add(steps) {
+            Some(count) if count.abs() <= COUNT_LIMIT => Ok(()),
+            _ => Err("command-dial detents exceed their bound".into()),
+        }
+    }
+    fn count_steps(&mut self, steps: i32) -> Result<(), String> {
+        self.admit_steps(steps)?;
+        self.count += steps;
+        Ok(())
+    }
+}
+
 pub fn build(
     base: u64,
     pins: SharedPins,
     options: &toml::Table,
     controls: Arc<dyn Controls>,
+    counting_dial: Option<u8>,
 ) -> Result<Spi, String> {
     let wiring: Wiring = toml::Value::Table(options.clone())
         .try_into()
@@ -159,7 +229,7 @@ pub fn build(
         base,
         pins,
         wiring.source_hz,
-        attachments(wiring.endpoints, Some(controls))?,
+        attachments(wiring.endpoints, Some(controls), counting_dial)?,
     )
 }
 /// Parse `XT5_POWER_REGISTERS="REGISTER=VALUE,..."` (numbers decimal or `0x` hexadecimal):
@@ -191,7 +261,11 @@ fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
         })
         .collect()
 }
-fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn Endpoint>, String> {
+fn endpoint(
+    part: Part,
+    controls: Option<Arc<dyn Controls>>,
+    counting_dial: Option<u8>,
+) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
         Part::PowerController {
             rtc_seconds,
@@ -223,7 +297,14 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
                     driven.refresh();
                     Box::new(driven)
                 }
-                None => Box::new(part),
+                None => match counting_dial {
+                    Some(register) => Box::new(CountingDial {
+                        inner: part,
+                        register,
+                        count: 0,
+                    }),
+                    None => Box::new(part),
+                },
             }
         }
         Part::SerialCalibrationRegisters { miso_high } => {
@@ -252,13 +333,14 @@ fn endpoint(part: Part, controls: Option<Arc<dyn Controls>>) -> Result<Box<dyn E
 fn attachments(
     connections: Vec<Connection>,
     controls: Option<Arc<dyn Controls>>,
+    counting_dial: Option<u8>,
 ) -> Result<Vec<Attachment>, String> {
     connections
         .into_iter()
         .map(|connection| {
             Ok(Attachment::new(
                 connection.select,
-                endpoint(connection.part, controls.clone())?,
+                endpoint(connection.part, controls.clone(), counting_dial)?,
             ))
         })
         .collect()
@@ -266,7 +348,7 @@ fn attachments(
 pub(super) fn dedicated_wire(
     part: Part,
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
-    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None)?)))
+    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None, None)?)))
 }
 pub(super) fn gpio_wire(
     pins: SharedPins,
@@ -274,7 +356,7 @@ pub(super) fn gpio_wire(
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
     Ok(Box::new(fujimod_emulator_xp5_io::spi::GpioWire::new(
         pins,
-        attachments(connections, None)?,
+        attachments(connections, None, None)?,
     )?))
 }
 
@@ -358,6 +440,7 @@ mod tests {
                 rtc_valid: true,
             },
             Some(controls),
+            None,
         )
         .unwrap()
     }
@@ -409,7 +492,7 @@ mod tests {
             "{ kind = 'serial-command-registers', bits = 8, mode = 0, read_flag = 1, miso_high = false }",
         )
         .unwrap();
-        let mut part = endpoint(burst.part, None).unwrap();
+        let mut part = endpoint(burst.part, None, None).unwrap();
         for word in [0x0a, 0x11, 0x22] {
             let frame = Frame { bits: 8, mode: 0, word };
             part.validate(frame).unwrap();

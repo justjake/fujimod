@@ -37,6 +37,8 @@ pub struct Companion {
 pub struct Resources {
     pub sd: BTreeMap<u64, sd::Media>,
     pub controls: Arc<dyn Controls>,
+    /// The power-controller register that counts a command dial's detents.
+    pub counting_dial: Option<u8>,
     pub pins: fujimod_emulator_devices::xp5::pins::SharedPins,
     pub clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks,
     pub companion: Option<Companion>,
@@ -576,6 +578,7 @@ fn register_with_resources(
                     resources.pins.clone(),
                     &window.options,
                     resources.controls.clone(),
+                    resources.counting_dial,
                 )?),
             )?;
         }

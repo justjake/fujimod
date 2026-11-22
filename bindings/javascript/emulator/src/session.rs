@@ -199,6 +199,7 @@ impl Session {
                 }
                 let mut resources = board::Resources {
                     controls: input.clone() as Arc<dyn Controls>,
+                    counting_dial: None,
                     pins,
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
                     companion: None,

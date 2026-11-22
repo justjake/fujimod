@@ -30,6 +30,12 @@ impl super::serial::Endpoint for PowerController {
         self.set_register(register, (old & !mask) | value);
         Ok(())
     }
+    fn input_bits(&self, register: u8) -> Result<u16, String> {
+        if register > 0x7f {
+            return Err("power-controller register is outside 0..=0x7f".into());
+        }
+        Ok(self.register(register))
+    }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         Checkpoint::encode(self.name(), self)
     }

@@ -406,6 +406,91 @@ count, bit 3 sign. The firmware never writes it, so the controller clears the co
     Ok(())
 }
 
+/// Catalog identities of the board table's controls that are not a catalog
+/// rung: pad diagonals, dial pushes, latched dials and switches, by body.
+fn extension_ids(body: &str) -> (&'static [(Key, &'static str, &'static str)], &'static [(&'static str, &'static str)]) {
+    match body {
+        "xt5" => (
+            &[
+                (Key::StickUpLeft, "focus_stick.up_left", "Focus stick up-left"),
+                (Key::StickUpRight, "focus_stick.up_right", "Focus stick up-right"),
+                (Key::StickDownLeft, "focus_stick.down_left", "Focus stick down-left"),
+                (Key::StickDownRight, "focus_stick.down_right", "Focus stick down-right"),
+                (Key::RearPush, "rear_command_dial.push", "Rear command dial press"),
+                (Key::FrontPush, "front_command_dial.push", "Front command dial press"),
+            ],
+            &[
+                ("drive", "drive_dial"),
+                ("ev", "exposure_compensation_dial"),
+                ("mode", "still_movie_mode_dial"),
+                ("focus", "focus_mode_selector"),
+                ("iso", "sensitivity_dial"),
+                ("ss", "shutter_speed_dial"),
+                ("power", "power_switch"),
+            ],
+        ),
+        _ => (&[], &[]),
+    }
+}
+
+/// Catalog identities and labels of the resolved body's ladder controls.
+pub fn panel_names(resolved: &ResolvedConfiguration) -> Result<crate::panel::Names, String> {
+    let body = &resolved.reference.body.id;
+    let document = resolved
+        .reference
+        .physical_controls
+        .as_ref()
+        .ok_or_else(|| format!("body {body} has no physical controls"))?;
+    let controls = PhysicalControls::decode_document(document, body)?;
+    let label = |id: &str| -> Result<String, String> {
+        let (control, direction) = id.split_once('.').map_or((id, None), |(c, d)| (c, Some(d)));
+        let name = &controls
+            .controls
+            .get(control)
+            .ok_or_else(|| format!("{body} catalog has no control {control}"))?
+            .name;
+        Ok(match direction {
+            Some(direction) => format!("{name} {direction}"),
+            None => name.clone(),
+        })
+    };
+    let mut keys = std::collections::BTreeMap::new();
+    for rung in controls.ladders.iter().flat_map(|ladder| &ladder.rungs) {
+        if let Some(key) = key_for_control(&rung.control_id) {
+            keys.insert(key, (rung.control_id.clone(), label(&rung.control_id)?));
+        }
+    }
+    let (extra_keys, positions) = extension_ids(body);
+    for &(key, id, name) in extra_keys {
+        keys.insert(key, (id.to_owned(), name.to_owned()));
+    }
+    let positions = positions
+        .iter()
+        .map(|&(model, id)| Ok((model.to_owned(), (id.to_owned(), label(id)?))))
+        .collect::<Result<_, String>>()?;
+    let shutter = match controls.controls.get("shutter_button") {
+        Some(control) if body == "xt5" => Some((
+            ("shutter_button".to_owned(), control.name.clone()),
+            // S1 (half press) on GPIO 0.0 and S2 on 0.1, both active low.
+            [Pin { port: 0, pin: 0 }, Pin { port: 0, pin: 1 }],
+        )),
+        _ => None,
+    };
+    let dial = |id: &str| -> Result<Option<(String, String)>, String> {
+        Ok(match controls.controls.contains_key(id) {
+            true => Some((id.to_owned(), label(id)?)),
+            false => None,
+        })
+    };
+    Ok(crate::panel::Names {
+        keys,
+        positions,
+        shutter,
+        rear_dial: dial("rear_command_dial")?,
+        front_dial: dial("front_command_dial")?,
+    })
+}
+
 /// The run's sample on one channel of its single ADC block input.
 fn adc_sample(inputs: &ApplicationRunInputs, channel: u8) -> Result<u16, String> {
     let mut adc = inputs.blocks.iter().filter_map(|block| match block {

@@ -232,6 +232,7 @@ impl Definition {
             sd: board::sd::resolve(sd, assets)?,
             // Replaced by the declared key model when the devices are assembled.
             controls: Arc::new(AbsentControls),
+            counting_dial: None,
             pins,
             storage,
             clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
@@ -258,6 +259,7 @@ impl Definition {
             processors: graph,
             windows,
             controls,
+            front_dial: None,
             resources,
             engine,
             interrupts: interrupts.map(Interrupts::open).transpose()?,
