@@ -60,6 +60,8 @@ pub struct Devices {
     models: Vec<Option<Box<dyn Device>>>,
     events: BTreeSet<(u64, usize, u64)>,
     windows: Vec<(u64, u64, usize)>,
+    /// Address-sorted copy of `windows` when none overlap, as of its length.
+    owner_index: std::cell::RefCell<(usize, Option<Vec<(u64, u64, usize)>>)>,
     pub log: Vec<Record>,
     prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
@@ -72,6 +74,8 @@ pub struct Devices {
     pub outputs: BTreeMap<usize, serde_json::Value>,
     /// Single words owned by a declared model inside another block's range.
     carved: Vec<(u64, u64)>,
+    /// The model the last access reached.
+    last_access: Option<usize>,
     /// Epoch of the serial-flash array and its controller's read state, when this board has them.
     nor_epoch: Option<Arc<std::sync::atomic::AtomicU64>>,
 }
@@ -226,6 +230,15 @@ impl Host for PhysicalHost<'_> {
                 }
             }
             state.cache_dirty = true;
+            let skew = (address & 0xfff) as usize;
+            let first = address & !0xfff;
+            let last = (address + bytes.len() as u64 - 1) & !0xfff;
+            let page_pointer = (target as usize).wrapping_sub(skew);
+            for page in (first..=last).step_by(0x1000) {
+                state
+                    .dirty_pages
+                    .insert(page, page_pointer.wrapping_add((page - first) as usize));
+            }
         }
         Ok(())
     }
@@ -1070,6 +1083,7 @@ impl Devices {
             models: vec![],
             events: Default::default(),
             windows: vec![],
+            owner_index: Default::default(),
             log: vec![],
             prior_records: 0,
             pins: None,
@@ -1081,6 +1095,7 @@ impl Devices {
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
             carved: Vec::new(),
+            last_access: None,
             nor_epoch: None,
         }
     }
@@ -1163,6 +1178,7 @@ impl Devices {
         }
         if let Some(window) = tail { self.windows.push(window); }
         self.windows.retain(|(lo, hi, _)| lo < hi);
+        self.owner_index = Default::default();
     }
     pub fn storage(
         jedec: u32,
@@ -1241,6 +1257,7 @@ impl Devices {
             usb_presence: None,
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
+            owner_index: Default::default(),
             windows: vec![
                 (storage::CONTROLLER, storage::CONTROLLER + 0x100, 0),
                 (storage::FLASH, storage::FLASH + storage::FLASH_SIZE, 0),
@@ -1249,6 +1266,7 @@ impl Devices {
                 (0xfff4a800, 0xfff4a880, 1),
             ],
             carved: Vec::new(),
+            last_access: None,
             nor_epoch: Some(port.lock().unwrap().epoch()),
         };
         if let Some(pad) = pad {
@@ -1897,10 +1915,30 @@ impl Devices {
         Ok(())
     }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {
-        self.windows
-            .iter()
-            .find(|&&(lo, hi, _)| lo <= address && address + u64::from(size) <= hi)
-            .map(|x| x.2)
+        let end = address + u64::from(size);
+        let mut index = self.owner_index.borrow_mut();
+        if index.0 != self.windows.len() {
+            // Windows only grow. Without overlaps the window holding an
+            // address is the last one starting at or below it.
+            let mut sorted: Vec<_> = self.windows.clone();
+            sorted.sort_unstable();
+            let disjoint = sorted.windows(2).all(|pair| pair[0].1 <= pair[1].0);
+            *index = (self.windows.len(), disjoint.then_some(sorted));
+        }
+        match &index.1 {
+            Some(sorted) => {
+                let at = sorted.partition_point(|&(lo, _, _)| lo <= address);
+                at.checked_sub(1)
+                    .map(|at| sorted[at])
+                    .filter(|&(_, hi, _)| end <= hi)
+                    .map(|x| x.2)
+            }
+            None => self
+                .windows
+                .iter()
+                .find(|&&(lo, hi, _)| lo <= address && end <= hi)
+                .map(|x| x.2),
+        }
     }
     pub fn owns(&self, address: u64, size: u32) -> bool {
         self.owner(address, size).is_some()
@@ -1920,6 +1958,7 @@ impl Devices {
         let Some(id) = self.owner(address, size) else {
             return Ok(None);
         };
+        self.last_access = Some(id);
         let mut model = self.models[id].take().unwrap();
         let mut host = PhysicalHost {
             cluster: c,
@@ -1960,10 +1999,18 @@ impl Devices {
             )
             .min()
     }
+    /// The earliest deadline an access to one model can have created: that model's own and the scheduled events'.
+    pub fn deadline_after_access(&self, now: u64) -> Option<u64> {
+        let own = self
+            .last_access
+            .and_then(|id| self.models[id].as_ref())
+            .and_then(|m| m.next_deadline(now));
+        [self.events.first().map(|e| e.0), own].into_iter().flatten().min()
+    }
     pub fn due(&mut self, c: &Cluster) -> Result<(), String> {
         let now = unsafe { (*c.state.get()).ticks };
         for _ in 0..64 {
-            let event = self.events.iter().next().copied().filter(|e| e.0 <= now);
+            let event = self.events.first().copied().filter(|e| e.0 <= now);
             let id = event.map(|e| e.1).or_else(|| {
                 self.models.iter().position(|m| {
                     m.as_ref()
@@ -2079,10 +2126,11 @@ impl Cluster {
             return Ok(None);
         };
         let result = devices.access(self, core, address, size, write, value);
-        unsafe {
-            (*self.state.get()).devices = Some(devices);
-            (*self.state.get()).device_scan_at = 0;
-        }
+        let state = unsafe { &mut *self.state.get() };
+        state.device_scan_at = state
+            .device_scan_at
+            .min(devices.deadline_after_access(state.ticks).unwrap_or(u64::MAX));
+        state.devices = Some(devices);
         result
     }
     pub fn flush_dma(&self) -> Result<(), String> {
@@ -2106,12 +2154,42 @@ impl Cluster {
             state.remap_ready = false;
         }
         if unsafe { (*self.state.get()).cache_dirty } {
-            for cpu in &self.cpus {
-                cpu.invalidate_code(None)?;
-            }
+            let state = unsafe { &mut *self.state.get() };
+            let all = std::mem::take(&mut state.dirty_all);
+            let pages = std::mem::take(&mut state.dirty_pages);
+            state.cache_dirty = false;
             if let Some(view) = &self.executable_nor { unsafe { view.clear_dirty(); } }
-            unsafe {
-                (*self.state.get()).cache_dirty = false;
+            if all || pages.is_empty() {
+                for cpu in &self.cpus {
+                    cpu.invalidate_code(None)?;
+                }
+            } else {
+                // The engine drops only translations of the written bytes.
+                let mut runs: Vec<(u64, usize, usize)> = Vec::new();
+                for (page, pointer) in pages {
+                    match runs.last_mut() {
+                        Some(run)
+                            if run.0 + run.2 as u64 == page && run.1.wrapping_add(run.2) == pointer =>
+                        {
+                            run.2 += 0x1000;
+                        }
+                        _ => runs.push((page, pointer, 0x1000)),
+                    }
+                }
+                for (physical, pointer, bytes) in runs {
+                    let Some(backing) = std::ptr::NonNull::new(pointer as *mut u8) else {
+                        continue;
+                    };
+                    for cpu in &self.cpus {
+                        if unsafe { cpu.backing_written(physical, backing, bytes) }.is_err() {
+                            // Not a declared backing mapping: drop everything.
+                            for cpu in &self.cpus {
+                                cpu.invalidate_code(None)?;
+                            }
+                            return Ok(());
+                        }
+                    }
+                }
             }
         }
         Ok(())

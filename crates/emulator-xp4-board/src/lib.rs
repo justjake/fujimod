@@ -122,6 +122,12 @@ struct RunState {
     callee_stubs: BTreeMap<(usize, u64), (CalleeStub, u64)>,
     devices: Option<devices::Devices>,
     cache_dirty: bool,
+    /// Host-written RAM pages (physical page address to the host address of
+    /// the same page) since the last flush: only code translated from them is
+    /// dropped.
+    dirty_pages: BTreeMap<u64, usize>,
+    /// Drop every translation (remap, restore).
+    dirty_all: bool,
     pmu: Vec<Option<fujimod_emulator::board::armv7a::Profile>>,
     // Memory window shown at physical 0 until the guest selects the remap.
     low_alias: Option<usize>,
@@ -678,6 +684,7 @@ fn instruction(c: &Cluster, core: usize, address: u64, size: u32) -> Result<(), 
         unsafe {
             (*c.state.get()).remap_ready = true;
             (*c.state.get()).cache_dirty = true;
+            (*c.state.get()).dirty_all = true;
         }
     }
     if unsafe { (*c.state.get()).cache_dirty } {
@@ -2242,6 +2249,8 @@ impl Session {
                 callee_stubs: BTreeMap::new(),
                 devices,
                 cache_dirty: false,
+                dirty_pages: BTreeMap::new(),
+                dirty_all: false,
                 pmu: (0..cores)
                     .map(|core| {
                         pmu_cycles_per_tick.map(|cycles_per_tick| {
