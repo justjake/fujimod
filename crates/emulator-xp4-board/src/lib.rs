@@ -873,23 +873,15 @@ enum Exclusive {
     Done,
     /// The access faulted and the abort was delivered; PC is the handler's.
     Aborted,
-    /// Inline only: nothing was done, the instruction needs the board.
-    Declined,
 }
-/// A LDREX or STREX of any width whose condition passed. Not `inline`: the
-/// board performs it between runs and the caller moves PC on. `inline`: it
-/// runs inside a counted run; the function then has no effect and returns
-/// `false` for anything it cannot finish without leaving the run (a fault, an
-/// unpredictable encoding, a refused engine call).
-fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) -> Result<Exclusive, String> {
+/// A LDREX or STREX of any width whose condition passed. The board performs it
+/// between runs and the caller moves PC on.
+fn exclusive(c: &Cluster, core: usize, address: u64, word: u32) -> Result<Exclusive, String> {
     let state = unsafe { &mut *c.state.get() };
     let load_exclusive = word & 0x0f900fff == 0x01900f9f;
     let rn = ((word >> 16) & 15) as usize;
     let rd = ((word >> 12) & 15) as usize;
     if rn == 15 || rd == 15 {
-        if inline {
-            return Ok(Exclusive::Declined);
-        }
         return Err("Unpredictable ARMv7-A exclusive register".into());
     }
     let load = load_exclusive;
@@ -900,11 +892,6 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) ->
         _ => 2,
     };
     let rt = (word & 15) as usize;
-    if inline
-        && (size == 8 && (rd & 1 != 0 || rd > 12) || (!load && (rt == 15 || size == 8 && (rt & 1 != 0 || rt > 12))))
-    {
-        return Ok(Exclusive::Declined);
-    }
     let data_address = c.reg(core, arm::CORE[rn])?;
     let physical = match c.physical_ram(
         core,
@@ -913,7 +900,6 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) ->
         if load { Access::Read } else { Access::Write },
     ) {
         Ok(physical) => physical,
-        Err(_) if inline => return Ok(Exclusive::Declined),
         Err(error) => {
             c.deliver_abort(core, false)
                 .map_err(|abort| format!("{error}: {abort}"))?;
@@ -929,8 +915,7 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) ->
             // every core's stores to this monitor through `store`.
             for cpu in &c.cpus {
                 match cpu.watch_stores(physical, size as u64) {
-                    Err(_) if inline => return Ok(Exclusive::Declined),
-                    result => result?,
+                                result => result?,
                 }
             }
         }
@@ -962,8 +947,7 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32, inline: bool) ->
                 value |= u64::from(c.reg(core, arm::CORE[rt + 1])?) << 32;
             }
             match c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size]) {
-                Err(_) if inline => return Ok(Exclusive::Declined),
-                result => result?,
+                        result => result?,
             }
             for monitor in &mut state.exclusive {
                 if monitor
@@ -1052,7 +1036,7 @@ fn special(c: &Cluster, core: usize, address: u64, word: u32) -> Result<(), Stri
         return Ok(());
     }
     if load_exclusive || store_exclusive {
-        return match exclusive(c, core, address, word, false)? {
+        return match exclusive(c, core, address, word)? {
             Exclusive::Aborted => Ok(()),
             _ => c.redirect(core, address as u32 + 4),
         };
