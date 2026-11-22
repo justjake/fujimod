@@ -2813,6 +2813,7 @@ dependencies = [
 name = "fujimod-emulator-gui"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-configuration",
  "fujimod-catalog-controls",
  "fujimod-catalog-resolution",
  "fujimod-catalog-wiring",

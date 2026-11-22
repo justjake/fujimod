@@ -3,7 +3,6 @@ use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_gui::{GuiOptions, Xp5Session};
 use boot::host::Memory;
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode, time::Duration};
 
@@ -457,15 +456,10 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
     let pc_trace = boot_options.pc_trace()?;
     let execution_policy = boot_options.execution_policy(pc_trace.is_some())?;
     let gpio = boot_options.text("--gpio")?;
-    let gui_options = GuiOptions {
-        load_snapshot: boot_options.path("--load-snapshot"),
-        discovery: boot_options.discovery,
-        execution_policy,
-    };
     let gui = boot_options.gui;
     let run = xp5::Run {
         configuration: resolved,
-        load_snapshot: gui_options.load_snapshot.clone(),
+        load_snapshot: boot_options.path("--load-snapshot"),
         save_snapshot: boot_options.path("--save-snapshot"),
         manifest: boot_options.path("--manifest"),
         watch_pcs: boot_options.text("--watch-pcs")?,
@@ -514,31 +508,12 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         output: boot_options.path("--output").ok_or("required option: --output")?,
     };
     if gui {
-        let configuration = run.configuration.clone();
-        let boot::Opened::Xp5(started) = xp5::open_gui(run)? else {
-            return Err("XP5 GUI startup returned another processor generation".into());
-        };
-        let (session, inputs, ticks_per_second, quantum, _) = started.into_gui_parts();
-        let host = fujimod_emulator_gui::serve(
-            Xp5Session {
-                configuration: configuration.clone(),
-                session,
-                inputs,
-                ticks_per_second,
-                quantum,
-            },
-            gui_options,
-            std::net::Ipv4Addr::LOCALHOST.into(),
-        )?;
-        eprintln!("FUJIMOD GUI {}", host.endpoint().url);
-        let mut window = fujimod_emulator_gui::launch::open(
-            host.endpoint(),
-            &configuration.configuration.body_id,
-            &configuration.reference.body.id,
-        )?;
-        let result = host.run();
-        let _ = window.wait();
-        result?;
+        let configuration_id = run.configuration.configuration.id.clone();
+        let update = run.update.clone();
+        let engine = run.configuration.configuration.execution.map(|execution| execution.engine);
+        fujimod_emulator_gui::launch::open(&configuration_id, &update, engine)?
+            .wait()
+            .map_err(|error| error.to_string())?;
         return Ok(Outcome { success: true });
     }
     let report = xp5::run_boot(run)?;

@@ -9,6 +9,7 @@ publish.workspace = true
 license.workspace = true
 
 [dependencies]
+fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-wiring.workspace = true

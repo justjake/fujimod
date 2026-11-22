@@ -42,10 +42,13 @@ impl Configuration {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct LaunchRequest {
     configuration: String,
     update: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    engine: Option<fujimod_catalog_configuration::RunEngine>,
 }
 
 #[derive(Clone, Serialize)]
@@ -64,9 +67,9 @@ struct Running {
     thread: Option<JoinHandle<Result<serde_json::Value, String>>>,
 }
 
-#[derive(Default)]
 struct AppState {
     running: Mutex<Option<Running>>,
+    command: Mutex<Option<LaunchRequest>>,
 }
 
 impl Drop for Running {
@@ -137,7 +140,10 @@ fn checked_update(
 }
 
 fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), String> {
-    let resolved = ResolvedConfiguration::bundled(&request.configuration)?;
+    let mut resolved = ResolvedConfiguration::bundled(&request.configuration)?;
+    if let Some(engine) = request.engine {
+        resolved.override_engine(engine)?;
+    }
     if !matches!(resolved.configuration.start, RunStart::Loader | RunStart::Rom)
         || !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
     {
@@ -260,9 +266,7 @@ fn output_directory(configuration: &str) -> Result<PathBuf, String> {
 
 #[derive(Default)]
 struct WindowLaunch {
-    endpoint: Option<String>,
-    body: Option<String>,
-    model: Option<String>,
+    command: Option<LaunchRequest>,
 }
 
 fn window_launch() -> Result<WindowLaunch, String> {
@@ -272,45 +276,55 @@ fn window_launch() -> Result<WindowLaunch, String> {
         let (key, inline) = argument
             .split_once('=')
             .map_or((argument.as_str(), None), |(key, value)| (key, Some(value)));
-        let mut value = || {
-            inline
-                .map(str::to_owned)
-                .or_else(|| arguments.next())
-                .ok_or_else(|| format!("{key} needs a value"))
-        };
         match key {
-            "--connect" => launch.endpoint = Some(value()?),
-            "--body" => launch.body = Some(value()?),
-            "--model" => launch.model = Some(value()?),
+            "--configuration" => {
+                launch.command.get_or_insert_with(LaunchRequest::default).configuration =
+                    inline.map(str::to_owned).or_else(|| arguments.next()).ok_or("--configuration needs a value")?;
+            }
+            "--update" => {
+                launch.command.get_or_insert_with(LaunchRequest::default).update =
+                    inline.map(str::to_owned).or_else(|| arguments.next()).ok_or("--update needs a value")?;
+            }
+            "--engine" => {
+                let value = inline
+                    .map(str::to_owned)
+                    .or_else(|| arguments.next())
+                    .ok_or("--engine needs a value")?;
+                launch.command.get_or_insert_with(LaunchRequest::default).engine =
+                    Some(value.parse().map_err(|_| "unknown --engine value")?);
+            }
             other => return Err(format!("unknown option: {other}")),
         }
     }
-    match (&launch.endpoint, &launch.body, &launch.model) {
-        (None, None, None) => {}
-        (Some(_), Some(_), Some(_)) => {}
-        _ => return Err("--connect, --body and --model are given together".into()),
+    if let Some(command) = &launch.command
+        && (command.configuration.is_empty() || command.update.is_empty())
+    {
+        return Err("--configuration and --update are given together".into());
     }
     Ok(launch)
 }
 
-fn connect_script(launch: &WindowLaunch) -> Option<String> {
-    let endpoint = launch.endpoint.as_deref()?;
-    Some(format!(
-        "window.fujimodLaunch = {{ endpoint: {}, body: {}, model: {} }};",
-        serde_json::to_string(endpoint).ok()?,
-        serde_json::to_string(launch.body.as_deref().unwrap_or("")).ok()?,
-        serde_json::to_string(launch.model.as_deref().unwrap_or("")).ok()?,
-    ))
+#[tauri::command]
+fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest> {
+    let command = state.command.lock().ok()?.clone();
+    if command.is_some() {
+        *state.command.lock().ok()? = None;
+    }
+    command
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let connection = window_launch()?;
+    let devtools = connection.command.is_some();
     tauri::Builder::default()
-        .manage(AppState::default())
+        .manage(AppState {
+            running: Mutex::new(None),
+            command: Mutex::new(connection.command),
+        })
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            let mut window = tauri::WebviewWindowBuilder::new(
+            let window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
@@ -318,17 +332,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             .title("FujiMod Emulator")
             .inner_size(1280.0, 900.0)
             .min_inner_size(720.0, 600.0)
-            .visible(false);
-            if let Some(script) = connect_script(&connection) {
-                window = window.initialization_script(script);
+            .devtools(true)
+            .visible(false)
+            .build()?;
+            if devtools {
+                window.open_devtools();
             }
-            window.build()?.show()?;
+            window.show()?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             configurations,
             choose_update,
             launch,
+            launch_connection,
             close
         ])
         .run(tauri::generate_context!())?;
