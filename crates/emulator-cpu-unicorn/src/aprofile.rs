@@ -74,9 +74,6 @@ struct Execution {
     board_mpidr: Cell<bool>,
     owner_interrupts: Cell<bool>,
     owner_aborts: Cell<bool>,
-    // The owner's in-run performer of board instructions (see
-    // `Core::set_owner_inline_instructions`).
-    inline: Cell<Option<(InlineInstruction, *mut std::ffi::c_void)>>,
     // Newest entered instruction addresses, oldest first, while an owner
     // keeps an entry trace (`Core::set_entry_trace`).
     trace: RefCell<Option<EntryTrace>>,
@@ -155,7 +152,6 @@ impl Core {
             board_mpidr: Cell::new(false),
             owner_interrupts: Cell::new(false),
             owner_aborts: Cell::new(false),
-            inline: Cell::new(None),
             trace: RefCell::new(None),
         });
         let owner: Rc<dyn CodeOwner> = e.clone();
@@ -274,28 +270,6 @@ impl Core {
         }
         self.owner_option(|e| &e.owner_aborts, on)
     }
-    /// ARMv7-A owners that perform some of their board instructions without
-    /// leaving the run: where the engine would exit before such an
-    /// instruction, it calls `perform(address, word, data)` once the
-    /// instruction is entered and counted. `true` means the owner performed it
-    /// (registers and memory, never PC) and the run goes on after it; `false`
-    /// leaves it untouched and the engine exits before entry as usual.
-    ///
-    /// # Safety
-    /// `data` must outlive every run, and `perform` may call back into this
-    /// processor only as an instruction observer may.
-    pub unsafe fn set_owner_inline_instructions(
-        &self,
-        perform: Option<InlineInstruction>,
-        data: *mut std::ffi::c_void,
-    ) -> Result<(), String> {
-        let e = &self.execution;
-        if e.active.get() || !e.a32 {
-            return Err("owner options need a stopped ARMv7-A processor".into());
-        }
-        e.inline.set(perform.map(|perform| (perform, data)));
-        Ok(())
-    }
     /// Keeps the addresses of the newest `capacity` entered instructions
     /// (0 stops), in entry order, as the accounting ring settles them. The
     /// owner drains them with [`Core::take_entries`].
@@ -325,10 +299,6 @@ impl Core {
         Ok(trace.entries.drain(..).collect())
     }
 }
-/// The owner's in-run performer of a board instruction: the instruction's
-/// address, its word and the owner's data. See
-/// [`Core::set_owner_inline_instructions`].
-pub type InlineInstruction = unsafe fn(u64, u32, *mut std::ffi::c_void) -> bool;
 /// ARMv7-A ARM-state LDREX/STREX family (any width) and CLREX encodings.
 fn exclusive_instruction(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f
@@ -591,24 +561,17 @@ impl Execution {
             }
         }
         let intercepted = self.stopped.get();
-        let mut performed = false;
         if !intercepted && self.scalar(Register::Pc)? == address {
             let mut bytes = [0; 4];
             self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
             let word = u32::from_le_bytes(bytes);
             if self.framework(word) {
-                if let Some((perform, data)) = self.inline.get()
-                    && unsafe { perform(address, word, data) }
-                {
-                    performed = true;
-                } else {
-                    self.count.set(self.count.get() - 1);
-                    self.exit.set(Some(word));
-                    self.cpu.stop()?;
-                }
+                self.count.set(self.count.get() - 1);
+                self.exit.set(Some(word));
+                self.cpu.stop()?;
             }
         }
-        if self.is_coherent() && self.exit.get().is_none() && !intercepted && !performed {
+        if self.is_coherent() && self.exit.get().is_none() && !intercepted {
             self.coherent_instruction(address)?;
         }
         if traced
