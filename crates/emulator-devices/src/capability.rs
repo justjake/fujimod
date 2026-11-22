@@ -13,8 +13,6 @@ pub trait Capability: 'static {
 
 /// Analog input samples an ADC converts.
 pub trait AnalogInputs {
-    /// The shared external input levels the converter samples.
-    fn external_inputs(&self) -> crate::parts::analog::Samples;
     fn samples(&self) -> Vec<u16>;
     fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String>;
 }

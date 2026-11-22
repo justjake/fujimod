@@ -203,9 +203,6 @@ impl Device for Converter {
 }
 
 impl fujimod_emulator_devices::capability::AnalogInputs for Converter {
-    fn external_inputs(&self) -> fujimod_emulator_devices::parts::analog::Samples {
-        Converter::external_inputs(self)
-    }
     fn samples(&self) -> Vec<u16> {
         Converter::samples(self)
     }

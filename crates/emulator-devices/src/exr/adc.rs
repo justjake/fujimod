@@ -184,10 +184,6 @@ impl Device for Adc {
 }
 
 impl AnalogInputs for Adc {
-    fn external_inputs(&self) -> Samples {
-        self.samples.clone()
-    }
-
     fn samples(&self) -> Vec<u16> {
         self.samples.values()
     }

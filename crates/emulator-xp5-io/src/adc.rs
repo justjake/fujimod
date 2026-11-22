@@ -73,7 +73,38 @@ impl Adc {
     }
 }
 
+/// The idle external levels; a host override (`XT5_ADC`) wins while it is set.
+impl fujimod_emulator_devices::capability::AnalogInputs for Adc {
+    fn samples(&self) -> Vec<u16> {
+        (0..15)
+            .map(|n| self.overrides[n].unwrap_or(self.state.samples[n]))
+            .collect()
+    }
+    fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
+        if value > 4095 {
+            return Err("XP5 ADC input levels are 12-bit".into());
+        }
+        *self
+            .state
+            .samples
+            .get_mut(channel)
+            .ok_or("XP5 ADC channel is outside 0..=14")? = value;
+        self.overrides[channel] = None;
+        Ok(())
+    }
+}
+
 impl Device for Adc {
+    fn analog_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
+    fn analog_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
     fn name(&self) -> &'static str {
         "adc-sequencer-input"
     }
