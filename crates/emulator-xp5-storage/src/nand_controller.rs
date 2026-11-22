@@ -689,7 +689,7 @@ mod tests {
         let mut c = controller(vec![0xff; PAGE + 2]);
         let mut host = RecordingHost::default();
         c.state.regs[0] = 1;
-        let mut strobe_cmd = |c: &mut NandController, cmd: u32| {
+        let strobe_cmd = |c: &mut NandController, cmd: u32| {
             c.state.regs[0x40 / 4] = cmd;
             c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
         };
@@ -722,7 +722,7 @@ mod tests {
         let mut c = controller(vec![0xff; PAGE + 2]);
         let mut host = RecordingHost::default();
         c.state.regs[0] = 1;
-        let mut run = |c: &mut NandController, cmd: u32| {
+        let run = |c: &mut NandController, cmd: u32| {
             c.state.regs[0x40 / 4] = cmd;
             c.write(&mut Cx::new(&mut RecordingHost::default(), 0, 0, 0), 0xff90a0c0, 4, 1);
         };
