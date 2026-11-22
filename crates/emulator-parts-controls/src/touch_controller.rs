@@ -29,6 +29,10 @@ struct Contact {
     paired: bool,
 }
 
+fn default_contact_ids() -> [u8; 2] {
+    [1, 1]
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TouchController {
     ticks_per_second: u64,
@@ -44,6 +48,9 @@ pub struct TouchController {
     pair_distance: Option<i64>,
     #[serde(default)]
     long_press_tick: Option<u64>,
+    /// Slot ID each contact carries in report byte 2 while it is active.
+    #[serde(default = "default_contact_ids")]
+    contact_ids: [u8; 2],
     pub reports_sent: u64,
     pub reports_completed: u64,
 }
@@ -66,9 +73,19 @@ impl TouchController {
             sample_tick: None,
             pair_distance: None,
             long_press_tick: None,
+            contact_ids: default_contact_ids(),
             reports_sent: 0,
             reports_completed: 0,
         })
+    }
+
+    /// Set the slot IDs (1..=15) reported for contacts 0 and 1 in byte 2.
+    pub fn with_contact_ids(mut self, ids: [u8; 2]) -> Result<Self, String> {
+        if ids.iter().any(|id| !(1..=15).contains(id)) {
+            return Err("Touch contact IDs must be 1 to 15".into());
+        }
+        self.contact_ids = ids;
+        Ok(self)
     }
 
     /// Append absolute guest ticks, atomically validating the entire script.
@@ -141,7 +158,9 @@ impl TouchController {
         frame[1] = kind;
         if kind != 4 && kind != 10 {
             for (i, c) in self.contacts.iter().enumerate() {
-                frame[2] |= u8::from(c.active) << (i * 4);
+                if c.active {
+                    frame[2] |= self.contact_ids[i] << (i * 4);
+                }
                 let offset = 3 + i * 4;
                 frame[offset] = c.x as u8;
                 frame[offset + 1] = c.y as u8;
