@@ -8,21 +8,26 @@
 //!   layout's `loader_offset`, which stock code reads on the first profile load,
 //!   and into the power-controller registers from `power_register`, which it
 //!   reads on later loads;
-//! - each sealed journal record is seeded into the NOR flash session overlay at
-//!   its 64 KiB unit, where the stock journal reader finds it.
+//! - each sealed journal record is seeded into the flash storage at its erase block
+//!   (64 KiB on serial NOR, 256 KiB on serial NAND), where the stock journal reader
+//!   finds it.
 //!
 //! No firmware bytes are stored: the records start from the update's own
 //! defaults and the catalog only names addresses, sizes and hashes.
 
 use super::{firmware::Firmware, manifest::{BootState, Preload}};
+use fujimod_emulator_devices::graph::DeviceWindow;
+use fujimod_emulator_xp5_storage::nand_storage;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use std::collections::BTreeMap;
 
-/// One NOR flash unit of a profile record's `block` number.
+/// One serial NOR flash unit of a profile record's `block` number.
 const NOR_UNIT: u64 = 0x1_0000;
+/// One serial NAND erase block of a profile record's `block` number.
+const NAND_UNIT: u64 = nand_storage::PAGE as u64 * nand_storage::PAGES_PER_BLOCK as u64;
 
 /// A profile ready for the board: the requested settings (part of the run's
-/// identity) and the sealed records as `(NOR offset, bytes)`.
+/// identity) and the sealed records as `(flash offset, bytes)`.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(crate) struct Placed {
     pub requested: BTreeMap<String, String>,
@@ -48,7 +53,12 @@ pub(crate) fn place(
     let loader_offset = located
         .loader_offset
         .ok_or("an XP5 user profile needs the header's hand-off offset")?;
-    let flash = nor_image(state, firmware)?;
+    let flash = update_payload(state, firmware)?;
+    let unit = match medium(state)? {
+        "nor" => NOR_UNIT,
+        "serial-nand" => NAND_UNIT,
+        other => return Err(format!("unknown flash storage medium {other}")),
+    };
     let built = fujimod_settings::build(layout, &flash, requested, None)?;
     let profile = built.profile.ok_or("the settings layout built no user profile")?;
     let header: [u8; 8] = profile
@@ -80,18 +90,28 @@ pub(crate) fn place(
     let records = profile
         .records
         .into_iter()
-        .map(|record| (u64::from(record.block) * NOR_UNIT, record.bytes))
+        .map(|record| (u64::from(record.block) * unit, record.bytes))
         .collect();
     Ok(Placed { requested: requested.clone(), records })
 }
 
-/// The installed NOR image the manifest's flash storage serves.
-fn nor_image(state: &BootState, firmware: &Firmware) -> Result<Vec<u8>, String> {
-    let window = state
+/// The medium of the manifest's flash storage window, `nor` unless it names another.
+fn medium(state: &BootState) -> Result<&str, String> {
+    let window = flash_window(state)?;
+    Ok(window.options.get("medium").and_then(toml::Value::as_str).unwrap_or("nor"))
+}
+
+fn flash_window(state: &BootState) -> Result<&DeviceWindow, String> {
+    state
         .device
         .iter()
         .find(|window| window.kind == "flash-storage")
-        .ok_or("a user profile needs the NOR flash storage window")?;
+        .ok_or_else(|| "a user profile needs the flash storage window".into())
+}
+
+/// The original update payload the manifest's flash storage serves.
+fn update_payload(state: &BootState, firmware: &Firmware) -> Result<Vec<u8>, String> {
+    let window = flash_window(state)?;
     let number = |key: &str| {
         window
             .options

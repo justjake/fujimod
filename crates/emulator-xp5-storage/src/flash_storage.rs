@@ -211,14 +211,14 @@ impl Medium {
             Medium::Nand(s) => s.lock().unwrap().read_device(offset, n),
         }
     }
-    /// File-backed seed bytes (NOR overlay only).
+    /// Declared seed bytes: a NOR session overlay, or initial main-area input of the NAND die.
     pub fn seed_bytes(&self, offset: u64, bytes: &[u8]) -> Result<(), String> {
         match self {
             Medium::Nor(s) => s.lock().unwrap().seed_bytes(offset, bytes),
-            Medium::Nand(_) => Err("serial NAND storage takes no data seeds".into()),
+            Medium::Nand(s) => s.lock().unwrap().seed_bytes(offset, bytes),
         }
     }
-    /// Declared data seeds are a NOR-overlay concept; the NAND die takes none.
+    /// One declared data byte seed; a NAND die takes its seeds as ranges through `seed_bytes`.
     pub fn seed(&self, offset: u64, value: u8) -> Result<(), String> {
         match self {
             Medium::Nor(s) => s.lock().unwrap().seed(offset, value),

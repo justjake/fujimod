@@ -3,7 +3,7 @@
 //! reads are recorded exactly like the NOR medium; page writes wait for the
 //! controller protocol and refuse until then.
 use crate::flash_storage::SIZE;
-use fujimod_emulator_devices::parts::nand::{Nand, Options};
+use fujimod_emulator_devices::parts::nand::{Nand, Options, Overlay};
 use fujimod_emulator_devices::storage_reads::StorageReads;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -48,6 +48,19 @@ impl NandStorage {
             die,
             session: NandSession::default(),
         })
+    }
+
+    /// Declared initial main-area bytes, placed over the base image before the guest has
+    /// programmed or erased anything. The die refuses overlaps and a programmed medium.
+    pub fn seed_bytes(&mut self, offset: u64, bytes: &[u8]) -> Result<(), String> {
+        self.die = self.die.with_inputs(
+            vec![Overlay {
+                offset,
+                bytes: Arc::from(bytes),
+            }],
+            std::collections::BTreeMap::new(),
+        )?;
+        Ok(())
     }
 
     pub fn read(&self, offset: u64, n: usize) -> Result<Vec<u8>, String> {
@@ -117,6 +130,19 @@ mod tests {
 
     fn storage(base: Vec<u8>) -> NandShared {
         Arc::new(Mutex::new(NandStorage::new(base).unwrap()))
+    }
+
+    #[test]
+    fn seeded_bytes_read_back_over_the_base_and_the_erased_tail() {
+        let storage = storage(vec![0xa5; PAGE + 2]);
+        let mut die = storage.lock().unwrap();
+        die.seed_bytes(PAGE as u64 - 1, &[1, 2, 3]).unwrap();
+        assert_eq!(die.read(PAGE as u64 - 2, 6).unwrap(), [0xa5, 1, 2, 3, 0xff, 0xff]);
+        die.seed_bytes(0x40000, &[9]).unwrap();
+        assert_eq!(die.read(0x40000, 2).unwrap(), [9, 0xff]);
+        // A seed over a seed is refused, and so is one past the medium.
+        assert!(die.seed_bytes(PAGE as u64, &[7]).is_err());
+        assert!(die.seed_bytes(SIZE, &[7]).is_err());
     }
 
     #[test]
