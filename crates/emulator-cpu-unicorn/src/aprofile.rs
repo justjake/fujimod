@@ -16,6 +16,14 @@ use std::{
     rc::Rc,
 };
 mod backend;
+pub mod coherence;
+mod coherent_cpu;
+#[cfg(test)]
+mod coherent_cpu_tests;
+mod translation_attributes;
+#[cfg(test)]
+mod translation_attributes_tests;
+pub use coherent_cpu::{CoherenceDomain, CoherenceOptions};
 #[cfg(test)]
 mod tests;
 
@@ -55,6 +63,8 @@ struct Execution {
     next: Cell<usize>,
     devices: RefCell<BTreeMap<u64, (usize, HookId)>>,
     write_hook: Cell<Option<HookId>>,
+    coherence: RefCell<Option<coherent_cpu::Coherent>>,
+    coherent: Cell<bool>,
     wide_code_watch: Cell<bool>,
     stores: RefCell<Vec<(Access, u64, i32, i64)>>,
     // ARMv7-A owner options (see `Core::set_owner_exclusives` and the
@@ -131,6 +141,8 @@ impl Core {
             next: Cell::new(1),
             devices: RefCell::new(BTreeMap::new()),
             write_hook: Cell::new(None),
+            coherence: RefCell::new(None),
+            coherent: Cell::new(false),
             wide_code_watch: Cell::new(false),
             stores: RefCell::new(vec![]),
             exclusive_exits: Cell::new(false),
@@ -395,6 +407,9 @@ impl Execution {
                 InstructionDisposition::Replace
             } else if address > u32::MAX as u64
                 || boundary
+                || (self.is_coherent()
+                    && (coherent_cpu::maintenance(word).is_some()
+                        || coherent_cpu::translation_change(word)))
                 || !self.index.borrow().stores.is_empty()
                 || !self.index.borrow().instructions.at(address).is_empty()
             {
@@ -522,6 +537,9 @@ impl Execution {
                 self.exit.set(Some(word));
                 self.cpu.stop()?;
             }
+        }
+        if self.is_coherent() && self.exit.get().is_none() && !intercepted {
+            self.coherent_instruction(address)?;
         }
         if traced
             && self.exit.get().is_none()

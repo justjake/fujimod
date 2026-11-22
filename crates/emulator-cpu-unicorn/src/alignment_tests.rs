@@ -23,7 +23,15 @@ const ACCESSES: [(u32, &str); 5] = [
 const LDRB: u32 = 0xe5d0_2000;
 
 fn cp(crn: u32, crm: u32, opc1: u32, opc2: u32) -> arm::Coprocessor {
-    arm::Coprocessor { cp: 15, crn, crm, opc1, opc2, secure: 1, wide: false }
+    arm::Coprocessor {
+        cp: 15,
+        crn,
+        crm,
+        opc1,
+        opc2,
+        secure: 1,
+        wide: false,
+    }
 }
 fn set(cpu: &Core, register: Register, value: u32) {
     cpu.write_register(register, &value.to_le_bytes()).unwrap();
@@ -36,11 +44,15 @@ fn reg(cpu: &Core, register: Register) -> u32 {
 
 /// Secure SVC with `instruction` at CODE and r0 = `address`.
 fn core(instruction: u32, address: u32) -> Core {
-    let cpu = test_support::library().open(Model::CortexA7, 1 << 20).unwrap();
+    let cpu = test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
     cpu.map_zeroed(0, 0x40_0000, 7).unwrap();
     cpu.write_memory(CODE, &instruction.to_le_bytes()).unwrap();
-    cpu.write_memory(0x2000, &0x4433_2211u32.to_le_bytes()).unwrap();
-    cpu.write_memory(0x2004, &0x8877_6655u32.to_le_bytes()).unwrap();
+    cpu.write_memory(0x2000, &0x4433_2211u32.to_le_bytes())
+        .unwrap();
+    cpu.write_memory(0x2004, &0x8877_6655u32.to_le_bytes())
+        .unwrap();
     // Secure SVC: SCR.NS=0 selects the Secure SCTLR, TTBR0 and DACR below.
     cpu.coprocessor(cp(1, 1, 0, 0), Some(0)).unwrap();
     set(&cpu, arm::CPSR, 0xd3);
@@ -50,16 +62,31 @@ fn core(instruction: u32, address: u32) -> Core {
 }
 
 unsafe fn taken(exception: arm::Exception, data: *mut c_void) {
-    unsafe { &*data.cast::<RefCell<Vec<arm::Exception>>>() }.borrow_mut().push(exception);
+    unsafe { &*data.cast::<RefCell<Vec<arm::Exception>>>() }
+        .borrow_mut()
+        .push(exception);
 }
 
 /// Execute the one instruction at CODE; returns the exceptions it took.
 fn step(cpu: &Core) -> Vec<arm::Exception> {
     let exceptions = Box::new(RefCell::new(Vec::new()));
-    let data = (&*exceptions as *const RefCell<Vec<arm::Exception>>).cast_mut().cast();
-    let hook = unsafe { cpu.install_hook(Hook::Exception { callback: taken, data }) }.unwrap();
-    cpu.run(Run { begin: CODE, until: Some(CODE + 4), instructions: Some(1), watchdog_us: 1_000_000 })
-        .unwrap();
+    let data = (&*exceptions as *const RefCell<Vec<arm::Exception>>)
+        .cast_mut()
+        .cast();
+    let hook = unsafe {
+        cpu.install_hook(Hook::Exception {
+            callback: taken,
+            data,
+        })
+    }
+    .unwrap();
+    cpu.run(Run {
+        begin: CODE,
+        until: Some(CODE + 4),
+        instructions: Some(1),
+        watchdog_us: 1_000_000,
+    })
+    .unwrap();
     cpu.remove_hook(hook).unwrap();
     exceptions.into_inner()
 }
@@ -68,7 +95,8 @@ fn step(cpu: &Core) -> Vec<arm::Exception> {
 fn translation_on(cpu: &Core) {
     for index in 0..4u32 {
         let section = index << 20 | 0x0c0e; // AP=0b11, C=1, B=1: Normal.
-        cpu.write_memory(0x4000 + u64::from(index) * 4, &section.to_le_bytes()).unwrap();
+        cpu.write_memory(0x4000 + u64::from(index) * 4, &section.to_le_bytes())
+            .unwrap();
     }
     cpu.coprocessor(cp(2, 0, 0, 0), Some(0x4000)).unwrap(); // TTBR0.
     cpu.coprocessor(cp(3, 0, 0, 0), Some(0xffff_ffff)).unwrap(); // DACR: manager.
@@ -80,16 +108,30 @@ fn translation_on(cpu: &Core) {
 fn unaligned_data_access_with_the_mmu_off_takes_an_alignment_fault() {
     for (instruction, name) in ACCESSES {
         let cpu = core(instruction, 0x2001);
-        assert_eq!(cpu.coprocessor(cp(1, 0, 0, 0), None).unwrap() & 3, 0, "MMU and SCTLR.A off");
+        assert_eq!(
+            cpu.coprocessor(cp(1, 0, 0, 0), None).unwrap() & 3,
+            0,
+            "MMU and SCTLR.A off"
+        );
         let taken = step(&cpu);
-        assert!(!taken.is_empty() && taken.iter().all(|e| *e == arm::Exception::DataAbort),
-            "{name} with the MMU off: {taken:?}");
+        assert!(
+            !taken.is_empty() && taken.iter().all(|e| *e == arm::Exception::DataAbort),
+            "{name} with the MMU off: {taken:?}"
+        );
         // The access is refused: no register or memory changes, no progress.
         assert_eq!(reg(&cpu, arm::PC), CODE as u32, "{name}");
-        assert_eq!((reg(&cpu, arm::CORE[2]), reg(&cpu, arm::CORE[3])), (0, 0), "{name}");
+        assert_eq!(
+            (reg(&cpu, arm::CORE[2]), reg(&cpu, arm::CORE[3])),
+            (0, 0),
+            "{name}"
+        );
         let mut memory = [0; 8];
         cpu.read_memory(0x2000, &mut memory).unwrap();
-        assert_eq!(memory, [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88], "{name}");
+        assert_eq!(
+            memory,
+            [0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88],
+            "{name}"
+        );
     }
 }
 

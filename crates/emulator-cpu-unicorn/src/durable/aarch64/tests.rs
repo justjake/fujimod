@@ -46,14 +46,14 @@ fn registers_simd_and_system_state_resume_in_a_fresh_engine() {
         put32(&cpu, Register::Fpcr, 0x01400000).unwrap();
         put32(&cpu, Register::Fpsr, 0x10).unwrap();
         for (encoding, value) in [
-            (0xc600, 0x2000),      // VBAR_EL1
-            (0xc681, 7),           // CONTEXTIDR_EL1
-            (0xc684, 0x5678),      // TPIDR_EL1
-            (0xc290, 0x96000004),  // ESR_EL1
-            (0xc300, 0xdead0000),  // FAR_EL1
-            (0xc208, 0x1f00),      // SP_EL0
-            (0xe208, 0x1e00),      // SP_EL1
-            (0xde82, 0x1234),      // TPIDR_EL0
+            (0xc600, 0x2000),     // VBAR_EL1
+            (0xc681, 7),          // CONTEXTIDR_EL1
+            (0xc684, 0x5678),     // TPIDR_EL1
+            (0xc290, 0x96000004), // ESR_EL1
+            (0xc300, 0xdead0000), // FAR_EL1
+            (0xc208, 0x1f00),     // SP_EL0
+            (0xe208, 0x1e00),     // SP_EL1
+            (0xde82, 0x1234),     // TPIDR_EL0
         ] {
             put64(&cpu, system(encoding), value).unwrap();
         }

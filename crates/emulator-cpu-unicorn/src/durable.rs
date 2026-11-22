@@ -3,8 +3,8 @@
 use super::*;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-mod aarch64;
 mod a7;
+mod aarch64;
 mod m4;
 mod r5;
 

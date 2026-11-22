@@ -22,10 +22,14 @@ fn store_over_translated_code(hooks: bool) {
         .open(Model::CortexA7, 1 << 20)
         .unwrap();
     cpu.map_zeroed(0, 0x8000, 7).unwrap();
-    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
     if hooks {
         let data = std::ptr::null_mut();
-        let range = HookRange::Inclusive { begin: 0, end: 0x7fff };
+        let range = HookRange::Inclusive {
+            begin: 0,
+            end: 0x7fff,
+        };
         for hook in [
             Hook::Instruction {
                 callback: instruction,
@@ -50,7 +54,14 @@ fn store_over_translated_code(hooks: bool) {
     words(
         &cpu,
         0x2000,
-        &[0xe59f_1008, 0xe59f_2008, 0xe582_1000, 0xe12f_ff12, 0xe3a0_0002, 0],
+        &[
+            0xe59f_1008,
+            0xe59f_2008,
+            0xe582_1000,
+            0xe12f_ff12,
+            0xe3a0_0002,
+            0,
+        ],
     );
     cpu.run(Run {
         begin: 0,

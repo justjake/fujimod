@@ -192,10 +192,7 @@ fn portable_mapping_identity_is_independent_of_host_allocation_adjacency() {
     let target = mapped(true);
     let imported = target.cpu.import_snapshot(&bytes).unwrap();
     target.cpu.restore(imported.as_ref()).unwrap();
-    assert_eq!(
-        source.cpu.state().unwrap(),
-        target.cpu.state().unwrap()
-    );
+    assert_eq!(source.cpu.state().unwrap(), target.cpu.state().unwrap());
 }
 
 #[test]

@@ -1,11 +1,11 @@
 //! Counted R-profile execution over the pinned Unicorn accelerator.
 //! The owner supplies physical backing and interrupt pins; devices never see
 //! translation metadata or the processor's architectural state.
+use crate::Core as UnicornCore;
 use crate::{
     accounting::{Accounting, Span},
     memory::{Memory, OwnerBarrierLease},
 };
-use crate::Core as UnicornCore;
 use fujimod_emulator_cpu::memory::Backing;
 use fujimod_emulator_cpu::*;
 use std::cell::{Cell, RefCell, UnsafeCell};

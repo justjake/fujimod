@@ -47,7 +47,9 @@ fn guest_profile_weights_each_block_by_retired_instructions_and_phase() {
 }
 
 unsafe fn stop_before_for_counter(_: u64, _: u32, data: *mut c_void) {
-    unsafe { &*data.cast::<Core>() }.stop_before_instruction().unwrap();
+    unsafe { &*data.cast::<Core>() }
+        .stop_before_instruction()
+        .unwrap();
 }
 
 #[test]
@@ -223,7 +225,8 @@ fn execution_policy_cannot_change_during_a_run_reservation() {
             .contains("requires a stopped processor")
     );
     drop(run);
-    cpu.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
 }
 
 #[test]
@@ -947,8 +950,11 @@ fn repeated_thumb_blocks_publish_clock_on_the_common_path() {
 
     let cpu = processor(&Memory::default());
     cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
-    cpu.write_memory(0x1800, &[0x01, 0x30, 0x00, 0xe0, 0xc0, 0x46, 0x01, 0x30, 0xfa, 0xe7])
-        .unwrap(); // two Thumb blocks that each add and branch to the other
+    cpu.write_memory(
+        0x1800,
+        &[0x01, 0x30, 0x00, 0xe0, 0xc0, 0x46, 0x01, 0x30, 0xfa, 0xe7],
+    )
+    .unwrap(); // two Thumb blocks that each add and branch to the other
     cpu.set_guest_clock(Clock {
         now: 50,
         phase: 0,
@@ -978,7 +984,9 @@ fn repeated_thumb_blocks_publish_clock_on_the_common_path() {
     );
     assert_eq!(
         *ticks.borrow(),
-        (0_u64..101).map(|entry| Some(50 + 2 * (entry / 2))).collect::<Vec<_>>()
+        (0_u64..101)
+            .map(|entry| Some(50 + 2 * (entry / 2)))
+            .collect::<Vec<_>>()
     );
     assert_eq!(cpu.execution.clock.get().unwrap().now, 151);
     assert!(cpu.execution.block_hook_thumb_common_path.get() > 0);

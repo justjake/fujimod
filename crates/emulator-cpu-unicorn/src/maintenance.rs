@@ -47,17 +47,31 @@ impl Core {
         {
             return Err("CPU backend lacks the accepted-TLBI owner ABI".into());
         }
-        let attach = self.api.extensions.tlbi_attach.ok_or("Missing TLBI attachment ABI")?;
+        let attach = self
+            .api
+            .extensions
+            .tlbi_attach
+            .ok_or("Missing TLBI attachment ABI")?;
         static NEXT: AtomicU64 = AtomicU64::new(1);
-        let token = NEXT.try_update(Ordering::Relaxed, Ordering::Relaxed,
-            |value| value.checked_add(1)).map_err(|_| "TLBI owner identity exhausted")?;
+        let token = NEXT
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| "TLBI owner identity exhausted")?;
         self.check(unsafe { attach(self.raw, ABI, token) })?;
         self.tlbi_owner.set(Some(token));
-        Ok(Owner { cpu: self.identity, token })
+        Ok(Owner {
+            cpu: self.identity,
+            token,
+        })
     }
 
     pub fn translation_maintenance_status(&self) -> Result<Status, String> {
-        let get = self.api.extensions.tlbi_status.ok_or("Missing TLBI status ABI")?;
+        let get = self
+            .api
+            .extensions
+            .tlbi_status
+            .ok_or("Missing TLBI status ABI")?;
         let mut status = Status::default();
         self.check(unsafe { get(self.raw, ABI, &mut status) })?;
         Ok(status)
@@ -71,13 +85,21 @@ impl Core {
     }
 
     /// Acknowledge the exact front record after all selected peers were handled.
-    pub fn acknowledge_translation_maintenance(&self, owner: &Owner, event: &Event) -> Result<(), String> {
+    pub fn acknowledge_translation_maintenance(
+        &self,
+        owner: &Owner,
+        event: &Event,
+    ) -> Result<(), String> {
         self.check_translation_owner(owner)?;
         let status = self.translation_maintenance_status()?;
         if status.pending == 0 || status.poison != 0 || status.front != *event {
             return Err("Translation acknowledgment is stale, incomplete, or poisoned".into());
         }
-        let ack = self.api.extensions.tlbi_ack.ok_or("Missing TLBI acknowledgment ABI")?;
+        let ack = self
+            .api
+            .extensions
+            .tlbi_ack
+            .ok_or("Missing TLBI acknowledgment ABI")?;
         self.check(unsafe { ack(self.raw, ABI, owner.token, event.sequence) })
     }
 
@@ -120,8 +142,10 @@ impl Core {
         if self.tlbi_owner.get().is_some() {
             let status = self.translation_maintenance_status()?;
             if status.pending != 0 || status.poison != 0 {
-                return Err(format!("Translation owner has {} pending events, poison {}",
-                    status.pending, status.poison));
+                return Err(format!(
+                    "Translation owner has {} pending events, poison {}",
+                    status.pending, status.poison
+                ));
             }
         }
         Ok(())
