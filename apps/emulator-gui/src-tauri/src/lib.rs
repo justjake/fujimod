@@ -178,7 +178,10 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     let thread = thread::Builder::new()
         .name("fujimod-emulator-session".into())
         .spawn(move || {
-            log_session("session: opening camera");
+            log_session(format!(
+                "session: opening camera engine={:?}",
+                resolved.configuration.execution.map(|execution| execution.engine)
+            ));
             let run = fujimod_emulator_boot::xp5::Run {
                 configuration: resolved.clone(),
                 load_snapshot: None,
@@ -329,11 +332,7 @@ fn window_launch() -> Result<WindowLaunch, String> {
 
 #[tauri::command]
 fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest> {
-    let command = state.command.lock().ok()?.clone();
-    if command.is_some() {
-        *state.command.lock().ok()? = None;
-    }
-    command
+    state.command.lock().ok()?.clone()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
