@@ -2,6 +2,7 @@
 //! Endpoint addresses, topology, protocol fields and reply inputs come from
 //! checked construction data; the remaining fields hold transfer state.
 pub mod command_registers;
+pub mod touch_chip;
 pub mod touch_panel;
 
 use fujimod_emulator_devices::{Value, WordMap};
