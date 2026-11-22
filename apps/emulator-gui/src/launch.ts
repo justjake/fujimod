@@ -25,4 +25,5 @@ export interface DesktopBridge {
   launch(request: LaunchRequest): Promise<LaunchedCamera>;
   launchConnection(): Promise<LaunchRequest | undefined>;
   close(): Promise<void>;
+  note(message: string): Promise<void>;
 }

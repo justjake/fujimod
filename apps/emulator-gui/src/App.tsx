@@ -137,10 +137,13 @@ export default function App() {
 
   async function openCamera(request: LaunchRequest) {
     if (!bridge || busy()) return;
+    void bridge.note(`open ${request.configuration} engine=${request.engine ?? 'default'}`);
     setBusy(true);
     setLauncherError('');
     try {
-      await startCamera(await bridge.launch(request));
+      const launched = await bridge.launch(request);
+      void bridge.note(`launched ${launched.endpoint}`);
+      await startCamera(launched);
     } catch (error) {
       setLauncherError(shownError(error));
     } finally {

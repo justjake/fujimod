@@ -7,6 +7,7 @@ const bridge: DesktopBridge = {
   launch: (request: LaunchRequest) => invoke<LaunchedCamera>('launch', { request }),
   launchConnection: () => invoke<LaunchRequest | undefined>('launch_connection'),
   close: () => invoke<void>('close'),
+  note: (message: string) => invoke<void>('note', { message }),
 };
 
 export function desktopBridge(): DesktopBridge | undefined {
