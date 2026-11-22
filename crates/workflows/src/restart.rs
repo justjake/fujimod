@@ -541,6 +541,24 @@ mod tests {
     }
 
     #[test]
+    fn an_x_processor_4_request_is_refused_before_camera_io() {
+        let restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../catalog-restart/tests/fixtures/xp4-wake-deadline.json"
+        ))
+        .unwrap();
+        let (mut session, script) = opened(vec![fujimod_usb::testing::Exchange::Read {
+            maximum: 8,
+            data: vec![0; 8],
+        }]);
+        let result = block_on(request(&mut session, &restart, limits(), false));
+        assert!(
+            matches!(&result, Err(BulkError::Check(message)) if message.contains("power-off")),
+            "{result:?}"
+        );
+        assert_eq!(script.remaining(), 1, "no camera I/O before the refusal");
+    }
+
+    #[test]
     fn deferred_guard_contract_uses_the_published_timer_and_wake_abi() {
         let restart: FirmwareRestart = serde_json::from_str(include_str!(
             "../../../catalog/firmware/x70/1.10/restart.generated.json"

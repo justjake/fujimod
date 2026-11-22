@@ -17853,12 +17853,15 @@
           "type": "integer"
         },
         "parameters": {
-          "additionalProperties": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
+          "additionalProperties": false,
           "description": "Sender parameters carried in the payload, keyed by their payload byte\noffset and mapped to their parameter byte offset.",
+          "patternProperties": {
+            "^\\d+$": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
           "type": "object"
         },
         "payload_bytes": {
