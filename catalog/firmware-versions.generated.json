@@ -11,6 +11,14 @@
       "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx100rf/"
     },
     {
+      "firmware_id": "gfx100s-213",
+      "product": "GFX100S",
+      "version": "2.13",
+      "internal_version": "1.94",
+      "update_sha256": "ea997915ac5accc79699392b47909bb29506f66ec8d571e5804dd1fb0408fd12",
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx100s/"
+    },
+    {
       "firmware_id": "gfx50r-311",
       "product": "GFX 50R",
       "version": "3.11",
@@ -478,8 +486,8 @@
       "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-t2/",
       "boot_rom": {
         "content": {
-          "size": 65536,
-          "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+          "size": 32768,
+          "sha256": "632445259ac679bf36281ea3f707b127759e0802bd507ba2b8d5b926492fd59f"
         },
         "address": 4293918720
       }
