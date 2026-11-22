@@ -193,10 +193,11 @@ impl FocusFrame {
     }
 
     /// The planes of an sRGB raster of [`FOCUS_WIDTH`] x [`FOCUS_LINES`] (or of no picture:
-    /// all zero) at relative exposure `exposure`, blurred by a circle of `diameter` samples,
-    /// over the 13 x 9 full-frame grid or over a programmed [`FocusWindow`]. A window's cells
-    /// take its columns of the raster and, per cell row, lines spread over that row (the
-    /// filters are horizontal); its sums are scaled to the lines of a full-frame cell.
+    /// all zero) at relative exposure `exposure`, defocused by a blur circle of `diameter`
+    /// samples ([`fujimod_emulator_imaging::focus::defocus_kernel`]), over the 13 x 9
+    /// full-frame grid or over a programmed [`FocusWindow`]. A window's cells take its columns
+    /// of the defocused raster and, per cell row, lines spread over that row (the filters are
+    /// horizontal); its sums are scaled to the lines of a full-frame cell.
     fn measure(rgb: &[u8], exposure: f64, diameter: f64, window: Option<FocusWindow>) -> Self {
         static OPTIONS: std::sync::OnceLock<(f64, u32)> = std::sync::OnceLock::new();
         let (gain, aux) = *OPTIONS.get_or_init(|| {
@@ -209,8 +210,9 @@ impl FocusFrame {
         }
         let response = xtrans::Response::xt5(exposure);
         let clip = f64::from(xtrans::WHITE - xtrans::BLACK);
-        // Linear luma as the green-referred sensor signal above the pedestal.
-        let levels: Vec<f64> = rgb
+        // Linear luma as the green-referred sensor signal above the pedestal. The lens blurs
+        // the light before the sensor clips it.
+        let light: Vec<f64> = rgb
             .as_chunks::<3>()
             .0
             .iter()
@@ -218,36 +220,56 @@ impl FocusFrame {
                 let luma = 0.30 * xtrans::srgb_to_linear(p[0])
                     + 0.59 * xtrans::srgb_to_linear(p[1])
                     + 0.11 * xtrans::srgb_to_linear(p[2]);
-                (luma * response.exposure * response.white).clamp(0., clip)
+                (luma * response.exposure * response.white).max(0.)
             })
             .collect();
+        let kernel = fujimod_emulator_imaging::focus::defocus_kernel(diameter);
         // The raster the cells are measured on: the whole frame, or the window's columns and
-        // lines (`cell_lines` lines a cell row).
+        // lines (`cell_lines` lines a cell row). Each line is defocused over the whole frame
+        // width first, so detail outside a window blurs into it.
         let full_lines = FOCUS_LINES / FOCUS_ROWS;
+        let line = |y: usize, from: usize, to: usize, raster: &mut Vec<f64>| {
+            let at = raster.len();
+            fujimod_emulator_imaging::focus::defocus_row(
+                &light[y * FOCUS_WIDTH..(y + 1) * FOCUS_WIDTH],
+                &kernel,
+                from,
+                to,
+                raster,
+            );
+            for level in &mut raster[at..] {
+                *level = level.clamp(0., clip);
+            }
+        };
         let (columns, rows, width, cell_lines, cell_samples, raster, scale, cell_pixels) = match window {
-            None => (
-                FOCUS_COLUMNS,
-                FOCUS_ROWS,
-                FOCUS_WIDTH,
-                full_lines,
-                FOCUS_WIDTH / FOCUS_COLUMNS,
-                levels.clone(),
-                1.,
-                FOCUS_CELL_PIXELS,
-            ),
+            None => {
+                let mut raster = Vec::with_capacity(FOCUS_WIDTH * FOCUS_LINES);
+                for y in 0..FOCUS_LINES {
+                    line(y, 0, FOCUS_WIDTH, &mut raster);
+                }
+                (
+                    FOCUS_COLUMNS,
+                    FOCUS_ROWS,
+                    FOCUS_WIDTH,
+                    full_lines,
+                    FOCUS_WIDTH / FOCUS_COLUMNS,
+                    raster,
+                    1.,
+                    FOCUS_CELL_PIXELS,
+                )
+            }
             Some(w) => {
                 let (columns, rows) = (w.columns.clamp(1, 16), w.rows.clamp(1, 16));
-                let cell_samples = ((w.width * FOCUS_WIDTH as f64).round() as usize).max(1);
+                let cell_samples = ((w.width * FOCUS_WIDTH as f64).round() as usize).clamp(1, FOCUS_WIDTH / columns);
                 let width = columns * cell_samples;
-                let start = ((w.x * FOCUS_WIDTH as f64).round().max(0.) as usize).min(FOCUS_WIDTH - width.min(FOCUS_WIDTH));
+                let start = ((w.x * FOCUS_WIDTH as f64).round().max(0.) as usize).min(FOCUS_WIDTH - width);
                 let cell_lines = ((w.height * FOCUS_LINES as f64).round() as usize).clamp(1, full_lines);
                 let mut raster = Vec::with_capacity(width * rows * cell_lines);
                 for row in 0..rows {
                     for j in 0..cell_lines {
                         let y = w.y + (row as f64 + (j as f64 + 0.5) / cell_lines as f64) * w.height;
-                        let line = ((y * FOCUS_LINES as f64).floor().max(0.) as usize).min(FOCUS_LINES - 1);
-                        let from = &levels[line * FOCUS_WIDTH..(line + 1) * FOCUS_WIDTH];
-                        raster.extend((0..width).map(|x| from[(start + x).min(FOCUS_WIDTH - 1)]));
+                        let y = ((y * FOCUS_LINES as f64).floor().max(0.) as usize).min(FOCUS_LINES - 1);
+                        line(y, start, start + width, &mut raster);
                     }
                 }
                 let pixels = w.width * FOCUS_INPUT.0 * w.height * FOCUS_INPUT.1;
@@ -261,7 +283,7 @@ impl FocusFrame {
             columns,
             rows,
             &FOCUS_SCALES,
-            diameter,
+            0.,
         );
         for row in 0..rows {
             for column in 0..columns {

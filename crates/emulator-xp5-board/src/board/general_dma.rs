@@ -145,8 +145,12 @@ pub fn register_all(
                 if let Some(port) = &port {
                     // Virtual focus: the image models read the focus motor position
                     // (fujimod_emulator_imaging::focus).
+                    // The lens gives its blur circle in micrometres; the picture is the
+                    // width of the APS-C sensor.
+                    const SENSOR_WIDTH_UM: f64 = 23_500.;
                     let (motor, (min, max)) = (port.clone(), port.focus_range());
-                    fujimod_emulator_imaging::focus::attach_lens(move |now| motor.focus(now).0, min, max);
+                    let blur = port.defocus_circle_um().map(|um| f64::from(um) / SENSOR_WIDTH_UM);
+                    fujimod_emulator_imaging::focus::attach_lens(move |now| motor.focus(now).0, min, max, blur);
                 }
                 lens = Some((options, choice, port));
                 wire
