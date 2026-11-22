@@ -22,6 +22,7 @@ export function FileDrop(
       | { multiple: true; onFiles(files: File[]): void }
     ),
 ) {
+  let input: HTMLInputElement | undefined;
   function choose(files: FileList | null | undefined) {
     if (props.disabled) return;
     if (props.multiple) props.onFiles(Array.from(files ?? []));
@@ -54,12 +55,21 @@ export function FileDrop(
       <strong>{props.title}</strong>
       <span>
         {props.prompt}{' '}
-        <label class="file-drop-choose" for={props.inputId}>
+        <button
+          class="file-drop-choose"
+          type="button"
+          disabled={props.disabled}
+          onClick={() => input?.click()}
+        >
           {props.multiple ? 'choose files' : 'choose a file'}
-        </label>
+        </button>
       </span>
       <input
+        ref={(element) => {
+          input = element;
+        }}
         class="visually-hidden"
+        tabindex={-1}
         id={props.inputId}
         type="file"
         accept={props.accept}

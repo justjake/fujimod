@@ -22,7 +22,7 @@ export function sdCardFiles(files: File[]): ReportFile[] {
       const [, ...parts] = file.webkitRelativePath.split('/');
       if (
         !parts.length ||
-        parts.some((part) => !part || part.startsWith('.') || part.includes('\\'))
+        parts.some((part) => !part || part === '.' || part === '..' || part.includes('\\'))
       )
         return [];
       const [root, ...children] = parts.map((part) => part.toUpperCase());
@@ -32,7 +32,7 @@ export function sdCardFiles(files: File[]): ReportFile[] {
       const fromFujiMod = root === 'FUJIMOD' && children.length > 0;
       const fromBoot = children.length === 0 && bootFiles.has(root);
       return fromBackup || fromFujiMod || fromBoot
-        ? [{ file, path: parts.join('/'), included: !fromBackup }]
+        ? [{ file, path: parts.join('/'), included: true }]
         : [];
     })
     .sort((a, b) => a.path.localeCompare(b.path));
