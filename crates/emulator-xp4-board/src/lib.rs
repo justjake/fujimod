@@ -131,6 +131,8 @@ struct RunState {
 }
 
 struct Cluster {
+    // Declared data-cache coherence ranges that device accesses go through.
+    coherent: Vec<(u64, u64)>,
     // Destroy processors before their RAM backing and callback contexts.
     cpus: Vec<counted::Processor>,
     // Counted native-block execution (`counted.rs`) instead of the
@@ -1300,6 +1302,7 @@ impl Session {
         card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     ) -> Result<Self, String> {
         let Definition {
+            coherent_ranges,
             byte_i2c,
             ram_size,
             cores,
@@ -1506,7 +1509,10 @@ impl Session {
         let translation_cache_size_bytes =
             fujimod_emulator::board::factory::translation_cache_size_bytes(cores)?;
         let library = Library::linked()?;
-        let mut counted = counted::requested();
+        // Declared coherent ranges select counted execution: the processors
+        // hook those ranges and observe data-cache maintenance, which the
+        // per-instruction hook path does not.
+        let mut counted = counted::requested() || coherent_ranges.is_some();
         if counted
             && let Some(name) = counted::unsupported(
                 boot_rom,
@@ -1514,9 +1520,25 @@ impl Session {
                 storage_immutable_prefix.is_some(),
             )
         {
+            if coherent_ranges.is_some() {
+                return Err(format!(
+                    "Coherent ranges need counted execution, which does not support {name}"
+                ));
+            }
             eprintln!("FUJIMOD_XP4_COUNTED ignored: counted execution does not support {name}");
             counted = false;
         }
+        let coherence = coherent_ranges
+            .as_ref()
+            .map(|declared| {
+                fujimod_emulator_cpu_unicorn::aprofile::CoherenceDomain::new(
+                    &fujimod_emulator_cpu_unicorn::aprofile::CoherenceOptions {
+                        line_bytes: declared.line_bytes,
+                        ranges: declared.ranges.clone(),
+                    },
+                )
+            })
+            .transpose()?;
         let cpus = (0..cores)
             .map(|_| -> Result<counted::Processor, String> {
                 let raw = library.open(cpu::Model::CortexA7, translation_cache_size_bytes)?;
@@ -1531,6 +1553,9 @@ impl Session {
                 core.set_owner_interrupts(true)?;
                 core.set_owner_aborts(true)?;
                 core.set_entry_trace(32)?;
+                if let Some(domain) = &coherence {
+                    core.set_coherence(Some(domain))?;
+                }
                 Ok(counted::Processor::Counted(core))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -2159,6 +2184,7 @@ impl Session {
         let xip_source = devices.as_ref().and_then(|d| d.nor_epoch());
         let labels_set: BTreeSet<u32> = labels.iter().copied().collect();
         let mut inner = Box::new(Cluster {
+            coherent: coherent_ranges.map(|c| c.ranges).unwrap_or_default(),
             cpus,
             counted,
             maintenance,

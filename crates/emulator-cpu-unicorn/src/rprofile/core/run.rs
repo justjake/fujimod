@@ -20,8 +20,10 @@ impl Core {
                 e.settle(0, true)
             };
             let settlement = if result.is_ok()
-                && matches!(e.exception.get(), None | Some(arm::Exception::SupervisorCall))
-            {
+                && matches!(
+                    e.exception.get(),
+                    None | Some(arm::Exception::SupervisorCall)
+                ) {
                 // A retiring SVC has no faulting memory access to discard.
                 settlement.and_then(|_| e.publish_stores())
             } else {

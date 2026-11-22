@@ -130,7 +130,8 @@ fn a7_reset_guest_rmw_and_reserved_bits() {
 
 #[test]
 fn a7_nonsecure_pl1_and_pl2_only_change_permitted_smp() {
-    for mode in [0x13, 0x1a] { // SVC (PL1), Hyp (PL2).
+    for mode in [0x13, 0x1a] {
+        // SVC (PL1), Hyp (PL2).
         for nsacr in [0, NS_SMP] {
             let cpu = core(Model::CortexA7);
             assert_eq!(write(&cpu, MASK), MASK);
@@ -163,8 +164,7 @@ fn a7_monitor_write_is_secure_even_when_scr_ns_is_set() {
 fn a7_failed_condition_does_not_write_or_trap() {
     let cpu = core(Model::CortexA7);
     state(&cpu, true, 0x13, NS_SMP);
-    cpu.coprocessor(cp(4, 1, 0, 0), Some(1 << 21))
-        .unwrap(); // HCR.TAC: an executed ACTLR access would trap.
+    cpu.coprocessor(cp(4, 1, 0, 0), Some(1 << 21)).unwrap(); // HCR.TAC: an executed ACTLR access would trap.
     assert_eq!(cpu.coprocessor(cp(4, 1, 0, 0), None).unwrap(), 1 << 21);
     set_reg(&cpu, arm::CORE[0], u32::MAX);
     run(&cpu, FALSE_WRITE, 1); // Z=0, so there is no access and no trap.

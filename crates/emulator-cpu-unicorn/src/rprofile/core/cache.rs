@@ -36,9 +36,7 @@ impl Execution {
     /// Whether an ARM word reads CCSIDR, which this processor answers from its
     /// cache geometry. Set/way walks size themselves from it.
     pub(super) fn reads_cache_geometry(&self, word: u32) -> bool {
-        self.data_cache.borrow().is_some()
-            && word >> 28 != 15
-            && word & 0x0fff_0fff == 0x0e30_0f10
+        self.data_cache.borrow().is_some() && word >> 28 != 15 && word & 0x0fff_0fff == 0x0e30_0f10
     }
 
     /// CCSIDR for the CSSELR selection: the level-1 data cache, or none.

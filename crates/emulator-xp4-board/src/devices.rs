@@ -200,6 +200,9 @@ impl Host for PhysicalHost<'_> {
             if let Some(guard) = &mut (*self.cluster.state.get()).driver_guard {
                 guard.model_access(address, out.len() as u64, false)?;
             }
+            if let Some(core) = self.cluster.coherent_core(address, out.len()) {
+                return core.coherent_device_read(address, out);
+            }
             std::ptr::copy_nonoverlapping(source, out.as_mut_ptr(), out.len());
         }
         Ok(())
@@ -210,7 +213,10 @@ impl Host for PhysicalHost<'_> {
             if let Some(guard) = &mut (*self.cluster.state.get()).driver_guard {
                 guard.model_access(address, bytes.len() as u64, true)?;
             }
-            std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, bytes.len());
+            match self.cluster.coherent_core(address, bytes.len()) {
+                Some(core) => core.coherent_device_write(address, bytes)?,
+                None => std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, bytes.len()),
+            }
             let state = &mut *self.cluster.state.get();
             for monitor in &mut state.exclusive {
                 if monitor.is_some_and(|(a, n)| {

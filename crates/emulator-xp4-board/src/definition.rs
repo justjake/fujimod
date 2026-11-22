@@ -25,9 +25,24 @@ pub struct StandaloneDma {
     pub timing_profile: String,
 }
 
+/// Physical ranges where the processor's data cache is modeled against bus
+/// masters (display, GPU): a store reaches them only once cleaned.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CoherentRanges {
+    pub line_bytes: u32,
+    /// Half-open `[begin, end)` physical ranges.
+    pub ranges: Vec<(u64, u64)>,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
+    /// Declared data-cache coherence ranges; off when absent. Every core
+    /// shares one model. Selects counted execution and is refused for a
+    /// definition that keeps the per-instruction hook.
+    #[serde(default)]
+    pub coherent_ranges: Option<CoherentRanges>,
     #[serde(default)]
     pub discovery_tx_receiver: Option<DiscoveryTxReceiver>,
     /// Explicit byte I2C controllers and their declared external peers.
