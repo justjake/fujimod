@@ -470,8 +470,14 @@ impl ReszJob {
                 steps[0], steps[1]
             ));
         }
-        // Only the source pixels the crop reaches must fit the pitch: the X-T5 playback full-size
-        // resize programs a 7760-pixel source with a 15488-byte pitch and a 7740-pixel crop.
+        // The block fetches source line y at the source address + y * pitch and reads the pixels
+        // the crop reaches from there; the source size word is not bounded by the pitch. The
+        // X-T5 4.31 playback full-size resizes program a source wider than the pitch: a JPEG
+        // gives a 7760-pixel source, a 15488-byte (7744-pixel) pitch and a 7740-pixel crop, the
+        // preview of a RAF a 4432-pixel source, a 0x2280-byte (4416-pixel) pitch and a
+        // 4420-pixel crop. So a crop wider than the pitch reads on into the next line's bytes,
+        // as the fetch addresses them; the read below covers the last line's whole crop. A RIFP
+        // stream has no lines in memory: its crop must fit the stream line.
         let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
         if output == 0
             || crop.0 == 0
@@ -479,7 +485,8 @@ impl ReszJob {
             || origin.0 + crop.0 > decimated.0
             || origin.1 + crop.1 > decimated.1
             || out.0 % 2 != 0
-            || pitch < 2 * used
+            || pitch == 0
+            || (stream.is_some() && pitch < 2 * used)
             || out_pitch < 2 * out.0
             // A stream has only the lines the RIFP run delivers.
             || stream.is_some_and(|(_, l)| (origin.1 + (out.1 - 1) * crop.1 / out.1) << shift.1 >= l)
@@ -1711,6 +1718,47 @@ mod tests {
         resz.advance(&mut Cx::new(&mut host, 0, 0, 0));
         assert_eq!(resz.read(&mut Cx::new(&mut host, 0, 0, 0), 0xffd0c10c, 4) & 1, 1);
         assert!(host.irqs.contains(&(203, true)));
+    }
+
+    /// A source wider than its pitch (the X-T5 4.31 RAF preview: a 4432-pixel source and a
+    /// 4420-pixel crop at a 4416-pixel pitch): each line is fetched at the source address +
+    /// line * pitch, so the pixels past the pitch are the next line's first pixels, and the
+    /// last line reads on past the picture. A zero pitch still refuses.
+    #[test]
+    fn a_resz_crop_wider_than_the_pitch_reads_on_into_the_next_line() {
+        let start = |pitch: u32| {
+            let mut resz = resz();
+            let mut host = RecordingHost {
+                ram_base: RAM,
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            // 8 pixels by 4 lines at a 16-byte (8-pixel) pitch; the source is 10 pixels wide.
+            host.ram[..64].copy_from_slice(&picture(8, 4, 16));
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            for (o, v) in [
+                (0x14, 3 << 16 | 9),
+                (0x20, 3 << 16 | 9),
+                (0xd4, RAM as u32),
+                (0xe0, pitch),
+                (0xe8, RAM as u32 + 0x1000),
+                (0xf4, 20),
+                (0x04, 1),
+            ] {
+                resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
+            }
+            let refused = cx.refusal().is_some();
+            (refused, host.ram)
+        };
+        let (refused, ram) = start(16);
+        assert!(!refused);
+        // Line 0: pixels 0..7 of line 0, then pixels 0 and 1 of line 1 (the chroma of its pair).
+        assert_eq!(&ram[0x1000..0x1004], [0, 1, 0x80, 0x40]);
+        assert_eq!(&ram[0x1010..0x1014], [16, 17, 0x80, 0x41]);
+        // Line 3: its last pair reads the bytes after the picture.
+        assert_eq!(&ram[0x103c..0x1040], [48, 49, 0x80, 0x43]);
+        assert_eq!(&ram[0x104c..0x1050], [0, 0, 0, 0]);
+        assert!(start(0).0);
     }
 
     /// A RIFP device with the still and movie paths as given, its I/O DMA in register-list
