@@ -184,7 +184,6 @@ pub struct MessageQueue {
     pub payload_bytes: u32,
     /// Sender parameters carried in the payload, keyed by their payload byte
     /// offset and mapped to their parameter byte offset.
-    #[cfg_attr(feature = "schema", schemars(with = "BTreeMap<String, u32>"))]
     pub parameters: BTreeMap<u32, u32>,
     /// Payload bytes the sender leaves uninitialized.
     pub uninitialized_payload_offsets: Vec<u32>,
@@ -822,10 +821,15 @@ impl FirmwareRestart {
                 return fail("a queued parameter starts past the payload or the parameters");
             }
         }
+        let parameter_covers = |offset: u32| {
+            queue.parameters.keys().any(|start| {
+                u64::from(*start) <= u64::from(offset) && u64::from(offset) < u64::from(*start) + 4
+            })
+        };
         if queue
             .uninitialized_payload_offsets
             .iter()
-            .any(|offset| *offset >= queue.payload_bytes || queue.parameters.contains_key(offset))
+            .any(|offset| *offset >= queue.payload_bytes || parameter_covers(*offset))
         {
             return fail("an uninitialized payload byte holds no parameter");
         }
@@ -851,6 +855,8 @@ impl FirmwareRestart {
             || clock.read_order.iter().any(|register| {
                 *register != clock.registers.low && *register != clock.registers.high
             })
+            || !clock.read_order.contains(&clock.registers.low)
+            || !clock.read_order.contains(&clock.registers.high)
             || clock.start_value == clock.stop_value
         {
             return fail("the clock publishes its routines, registers and read order");
@@ -920,7 +926,9 @@ fn validate_transport(
     deadline_offset: u32,
     output_holds_parameters: bool,
 ) -> Result<(), &'static str> {
-    let fits = |offset: u32| offset.is_multiple_of(4) && offset + 4 <= parameter_bytes;
+    let fits = |offset: u32| {
+        offset.is_multiple_of(4) && u64::from(offset) + 4 <= u64::from(parameter_bytes)
+    };
     if !fits(request_offset) || !fits(deadline_offset) || request_offset == deadline_offset {
         return Err("request and deadline must be distinct parameter words");
     }
@@ -964,4 +972,26 @@ fn validate_transport(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_aligned_parameter_offset_cannot_wrap_its_length_check() {
+        let transport = RequestTransport::BorrowedQuery {
+            callback_table: 0,
+            callback_offset: 0,
+            stock_callback: 1,
+            output_fields: 0,
+            output_bytes: 12,
+            tag_decoder: None,
+            forward: None,
+        };
+        assert_eq!(
+            validate_transport(&transport, 12, u32::MAX - 3, 4, true),
+            Err("request and deadline must be distinct parameter words")
+        );
+    }
 }

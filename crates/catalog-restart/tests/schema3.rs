@@ -1,11 +1,10 @@
 //! Schema 3: the X-Processor 4 message request, which publishes no power-off.
 //!
-//! The fixture carries the facts `tools/bringup/locators/wake_deadline.py:xp4`
-//! locates on the X-T30 2.01 update: the rewritten request word, the queue that
-//! carries it, the clock the deadline is compared against and the diagnostic
-//! query it leaves through. It names the sender code check that locator's own
-//! tests pin; the catalog generator also publishes the queue builder, clock and
-//! query routines, which these tests do not restate.
+//! The fixture carries the facts the public catalog publishes for the X-T30
+//! 2.01 update: the rewritten request word, the queue that carries it, the
+//! clock the deadline is compared against and the diagnostic query it leaves
+//! through. The catalog also publishes the sender code check, the queue
+//! builder, clock and query routines, which these tests do not restate.
 use fujimod_catalog_restart::{
     DeadlineUnit, FirmwareRestart, RestartKind, WAKE_DEADLINE_SCHEMA, XP4_WAKE_DEADLINE_SCHEMA,
 };
@@ -101,6 +100,24 @@ fn the_queue_layout_must_carry_the_request_and_deadline() {
             .unwrap_err()
             .contains("uninitialized payload byte")
     );
+}
+
+#[test]
+fn an_uninitialized_offset_inside_a_queued_parameter_is_rejected() {
+    let mut value = document();
+    value["mechanism"]["queue"]["uninitialized_payload_offsets"] = json!([9]);
+    let error = parse(&value).validate().unwrap_err();
+    assert!(error.contains("uninitialized payload byte"), "{error}");
+}
+
+#[test]
+fn the_clock_read_order_must_take_both_halves() {
+    let restart = parse(&document());
+    let registers = restart.mechanism.clock.as_ref().unwrap().registers;
+    let mut value = document();
+    value["mechanism"]["clock"]["read_order"] = json!([registers.low, registers.low]);
+    let error = parse(&value).validate().unwrap_err();
+    assert!(error.contains("read order"), "{error}");
 }
 
 #[test]
