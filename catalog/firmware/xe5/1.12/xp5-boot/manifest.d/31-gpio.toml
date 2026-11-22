@@ -13,3 +13,7 @@ pad_model = "data-latch"
 # stays high; the companion handles the rise on NVIC 27. A delay of 30 ms is a board guess.
 feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true }]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
+# Shutter release: the scanner rows (kind 4, sources 0 and 1; physical keys 25 and 26) read GPIO 0.0 (S1) and 0.1 (S2),
+# active low, and the registration path takes their interrupt IDs from records 1 and 2 of the table at 0x01a62c58: 116
+# and 117, as on the X-T5. Drive them with `--gpio 0:0=0@MS` (press) and `--gpio 0:0=1@MS` (release).
+input_irqs = [{ port = 0, pin = 0, line = 116, active_high = false }, { port = 0, pin = 1, line = 117, active_high = false }]
