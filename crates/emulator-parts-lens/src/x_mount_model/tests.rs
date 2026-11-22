@@ -555,3 +555,77 @@ fn every_preset_catalog_fits_the_x_t5_lens_data_window() {
         assert_eq!(catalog.marker_block, Some(catalog.blocks - 4));
     }
 }
+
+/// The body's focus position for another aperture (X-T5 4.31 0x153b4dc with 0x1537754 and
+/// 0x1537808), in 0.1 unit steps as the body computes it.
+fn position_at_aperture(read: &impl Fn(u32) -> u8, zoom: u32, position: i32, from: u32, to: u32) -> i32 {
+    let s8 = |at: u32| i32::from(read(at) as i8);
+    let infinity = i32::from(u16_at(read, 0x720317 + 2 * zoom) as i16);
+    let grid: Vec<i32> = std::iter::once(infinity * 10)
+        .chain((0..6).map(|k| (infinity + i32::from(u16_at(read, 0x72c000 + 12 * zoom + 2 * k))) * 10))
+        .collect();
+    let curve = |code: u32| -> Vec<i32> {
+        let scale = s8(0x72270c);
+        let mut out: Vec<i32> = (0..7u32)
+            .map(|j| grid[j as usize] + (0..code.min(9)).map(|i| s8(0x72c4b0 + 63 * zoom + 9 * j + i) * scale).sum::<i32>())
+            .collect();
+        if code >= 10 {
+            for k in 0..4u32 {
+                out[2 * k as usize] += (10..=code).map(|i| s8(0x72dd42 + 84 * zoom + 21 * k + i) * scale).sum::<i32>();
+            }
+            for j in [1usize, 3, 5] {
+                let (g0, g1, g2) = (grid[j - 1], grid[j], grid[j + 1]);
+                let rise = i64::from(out[j + 1] - out[j - 1]) * i64::from(g1 - g0);
+                out[j] = out[j - 1] + if g0 == g2 { rise } else { rise / i64::from(g2 - g0) } as i32;
+            }
+        }
+        out
+    };
+    let (source, target) = (curve(from), curve(to));
+    let segment = (1..6).find(|&k| position * 10 < source[k]).unwrap_or(6);
+    let (s0, s1) = (source[segment - 1], source[segment]);
+    let tenths = if s0 == s1 {
+        target[segment]
+    } else {
+        target[segment - 1]
+            + (i64::from(position * 10 - s0) * i64::from(target[segment] - target[segment - 1]) / i64::from(s1 - s0)) as i32
+    };
+    // 0x153208c: round to the nearest unit.
+    (tenths + if tenths < 0 { -5 } else { 5 }) / 10
+}
+
+#[test]
+fn a_focus_position_is_the_same_at_every_aperture() {
+    // 0x153b4dc moves the AF result from the scan's aperture to the shooting aperture. With
+    // the catalog's curve at 0x72c000 and no shift tables every position maps to itself, at
+    // each zoom step and for codes on both sides of the code-10 table switch.
+    for name in ["xf18-55", "prime", "xf23"] {
+        let spec = Spec::preset(name).unwrap();
+        let read = configuration(&spec.catalogs[0]);
+        let steps = u32::from(read(0x720f80));
+        for zoom in [0, steps - 1] {
+            let offsets: Vec<u16> = (0..6).map(|k| u16_at(&read, 0x72c000 + 12 * zoom + 2 * k)).collect();
+            assert!(offsets[0] > 0 && offsets.windows(2).all(|pair| pair[0] < pair[1]), "{name} {offsets:?}");
+            for position in [spec.focus.min, spec.focus.min + 200, (spec.focus.min + spec.focus.max) / 2, spec.focus.max] {
+                for (from, to) in [(0, 5), (0, 18), (12, 0)] {
+                    let position = i32::from(position);
+                    assert_eq!(position_at_aperture(&read, zoom, position, from, to), position, "{name} z{zoom}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn the_blur_circle_of_the_whole_travel_follows_the_lens_geometry() {
+    // XF18-55 at 18 mm F2.8, closest 30 cm: the image moves f^2 / (d - f) = 1.149 mm between
+    // infinity and the closest distance, 17/20 of the travel, so the whole travel is 1.352 mm
+    // of image shift and a blur circle of 1.352 / 2.8 = 0.483 mm (2 % of an APS-C frame).
+    let spec = Spec::preset("xf18-55").unwrap();
+    assert_eq!(spec.defocus_circle_um, 483);
+    let port = Port::new(spec, timing()).unwrap();
+    assert_eq!(port.defocus_circle_um(), Some(483));
+    for name in ["prime", "xf23"] {
+        assert!(Spec::preset(name).unwrap().defocus_circle_um > 0, "{name}");
+    }
+}

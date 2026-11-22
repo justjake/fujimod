@@ -134,6 +134,10 @@ pub struct Spec {
     pub focus_ring: u16,
     pub focus: Axis,
     pub aperture: Axis,
+    /// Diameter of the blur circle on the image plane, in micrometres, when the focus is
+    /// wrong by the whole focus travel (wide open at the short end); 0 when not known.
+    #[serde(default)]
+    pub defocus_circle_um: u32,
     /// Declared payloads for families this model does not drive itself.
     #[serde(default)]
     pub replies: Vec<FixedReply>,
@@ -437,7 +441,34 @@ impl Identity<'_> {
             })
             .collect();
         put(0x731b00, le(&curve));
+        // Focus shift with the aperture (0x153b4dc: the AF result, found at the scan's
+        // aperture, is moved to the position for the shooting aperture before the final
+        // drive, 0x2ef207c -> 0x2f5058c). The body builds a curve of seven focus positions a
+        // zoom step, infinity (0x1538f7c) and infinity + the six u16 at 0x72c000 + 12z, in
+        // 0.1 unit, and shifts each point for an aperture code c: the sum of the s8 at
+        // 0x72c4b0 + 63z + 9j + i for i in 0..c (codes up to 9, point j, 0x1537754), then at
+        // points 0, 2, 4 and 6 the s8 at 0x72dd42 + 84z + 21k + i for codes 10..=c with the
+        // odd points interpolated (0x1537808), all times the s8 at 0x72270c. A position is
+        // mapped from the curve of one code to the curve of the other, piecewise linearly
+        // (the end segments extend). Left zero, the seven points were all infinity, the
+        // segments had no length, and every position at another aperture became infinity:
+        // the AF found the peak and then drove the lens to the far end. This lens has no
+        // focus shift (shift tables and scale stay zero); its curve is six even steps from
+        // infinity to the nearest position, which makes the mapping the identity.
+        let grid: Vec<u16> = (1..=6u32).map(|k| (span * k / 6) as u16).collect();
+        put(0x72c000, le(&grid.repeat(steps)));
         Catalog { selector: 6, blocks: LENS_BLOCKS + 4, marker_block: Some(LENS_BLOCKS), sections }
+    }
+    /// The blur circle of a defocus of the whole focus travel, in micrometres, wide open at the
+    /// short end: the thin-lens image shift from infinity to the closest distance,
+    /// f^2 / (d - f), spread over the units the catalog puts between them (17/20 of the
+    /// travel, [`Self::lens_data`]), divided by the F-number.
+    pub fn defocus_circle_um(&self) -> u32 {
+        let f = f64::from(self.focal.0) / 10.;
+        let closest_mm = f64::from(self.closest_cm) * 10.;
+        let shift_mm = f * f / (closest_mm - f).max(f);
+        let f_number = f64::from(self.f_numbers.0.max(1)) / 10.;
+        (shift_mm * 20. / 17. / f_number * 1000.).round() as u32
     }
     /// Invented extended record: layout version 1, zero fill, zero byte sum.
     pub fn extended_record(&self) -> Vec<u8> {
@@ -528,6 +559,7 @@ impl Spec {
             focus_ring: 0xffff,
             focus,
             aperture,
+            defocus_circle_um: identity.defocus_circle_um(),
             replies: vec![],
             catalogs: vec![identity.lens_data()],
         })
@@ -1276,6 +1308,11 @@ impl Port {
     pub fn focus_range(&self) -> (u16, u16) {
         let unit = self.0.lock().unwrap();
         (unit.spec.focus.min, unit.spec.focus.max)
+    }
+    /// The blur circle of a defocus of the whole focus travel, in micrometres on the image
+    /// plane ([`Spec::defocus_circle_um`]); `None` when the lens does not give it.
+    pub fn defocus_circle_um(&self) -> Option<u32> {
+        Some(self.0.lock().unwrap().spec.defocus_circle_um).filter(|um| *um > 0)
     }
     /// Aperture index and target at `now`.
     pub fn aperture(&self, now: u64) -> (u16, u16) {
