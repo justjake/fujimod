@@ -101,6 +101,11 @@ impl Drop for Running {
 }
 
 #[tauri::command]
+fn note(message: String) {
+    log_session(format!("desktop: {message}"));
+}
+
+#[tauri::command]
 fn configurations() -> Vec<Configuration> {
     fujimod_catalog_configuration::RunConfiguration::bundled_ids()
         .filter_map(|id| {
@@ -359,6 +364,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            note,
             configurations,
             choose_update,
             launch,

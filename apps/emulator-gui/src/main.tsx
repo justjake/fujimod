@@ -21,6 +21,7 @@ if ('__TAURI_INTERNALS__' in window) {
     launch: (request) => invoke('launch', { request }),
     launchConnection: () => invoke('launch_connection'),
     close: () => invoke('close'),
+    note: (message) => invoke('note', { message }),
   };
 }
 
