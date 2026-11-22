@@ -49,16 +49,7 @@ export default function App() {
     });
     engine = photo;
     let catalog: NativeCatalog | undefined;
-    const stopCatalog = photo.catalog((value) => {
-      catalog = value;
-      setCatalog(value);
-      if (nativeState) void boot(nativeState, value);
-    });
     let nativeState: NativeState | undefined;
-    const stopState = photo.state((latest) => {
-      nativeState = latest;
-      if (catalog) void boot(latest, catalog);
-    });
     let sessionInitialized = false;
     const session = startSession(state() as never, updateState as never, { viewer, lcd }, {
       async createEngine() {
@@ -79,9 +70,21 @@ export default function App() {
       cameraSaved() {},
     });
     runtime = session;
-    async function boot(initial: NativeState, metadata: NativeCatalog | undefined) {
-      if (sessionInitialized) return;
+    const bootWhenReady = () => {
+      if (!catalog || !nativeState || sessionInitialized) return;
       sessionInitialized = true;
+      void boot(nativeState, catalog);
+    };
+    const stopCatalog = photo.catalog((value) => {
+      catalog = value;
+      setCatalog(value);
+      bootWhenReady();
+    });
+    const stopState = photo.state((latest) => {
+      nativeState = latest;
+      bootWhenReady();
+    });
+    async function boot(initial: NativeState, metadata: NativeCatalog | undefined) {
       const controls = metadata?.controls as PhysicalControls | undefined;
       if (!metadata || !controls) throw Error('The native camera catalog did not arrive.');
       const panel = nativePanel(metadata.body, initial.inputs, controls);
