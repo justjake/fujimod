@@ -127,3 +127,60 @@
     grid-template-columns: minmax(0, 760px);
   }
 }
+
+.credits-photos {
+  margin: 0;
+  font-size: 13px;
+}
+
+.credits-photos dt {
+  margin-bottom: 8px;
+  color: #f2f2f7;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.credits-photos dd {
+  margin: 0 0 22px;
+}
+
+/* Frames between rows of sprocket holes. */
+.credits-page main .film-strip {
+  --hole: rgb(255 255 255 / 16%);
+  display: flex;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  padding: 22px 8px;
+  overflow-x: auto;
+  list-style: none;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 5px, var(--hole) 5px 15px, transparent 15px 20px)
+      left 0 top 7px / 100% 8px no-repeat,
+    repeating-linear-gradient(90deg, transparent 0 5px, var(--hole) 5px 15px, transparent 15px 20px)
+      left 0 bottom 7px / 100% 8px no-repeat,
+    #0c0c0d;
+}
+
+.film-strip li {
+  flex: none;
+  margin: 0;
+}
+
+.film-strip a {
+  display: block;
+}
+
+.film-strip img {
+  display: block;
+  width: auto;
+  height: 240px;
+}
+
+@media (width <= 700px) {
+  .film-strip img {
+    height: 160px;
+  }
+}

@@ -510,5 +510,15 @@
         }
       ]
     }
+  ],
+  "photographers": [
+    {
+      "name": "@justjake",
+      "photos": [
+        { "scene": "default-scene", "title": "Elogio del Horizonte, Gijón", "camera": "X70" },
+        { "scene": "streetlamp", "title": "Streetlamp in a tree at dusk", "camera": "X70" }
+      ],
+      "source": "https://github.com/justjake"
+    }
   ]
 }

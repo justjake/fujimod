@@ -1,11 +1,9 @@
 # Scenes
 
 Real photographs the emulated camera can take as its sensor input, each the
-camera's own RAF compressed with zstd. The camera's serial number is removed.
-Each photograph is licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-by the GitHub user who took it; the site credits them by their contributor
-attribution.
-
-| File | Photograph | Camera | Photographer |
-|---|---|---|---|
-| `streetlamp.raf.zst` | A streetlamp in a tree against a deep blue evening sky; ISO 2000, 1/100 s, f/2.8 | X70 | justjake |
+camera's own RAF compressed with zstd, with the camera's serial number removed.
+[`../scenes.json`](../scenes.json) lists every scene, the default scene
+included, with its title, camera and photographer's GitHub login. Each
+photograph is licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+by its photographer; the credits page names them by their contributor
+attribution and shows the photographs.

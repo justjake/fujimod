@@ -1,0 +1,14 @@
+{
+  "default-scene": {
+    "file": "default-scene.raf.zst",
+    "title": "Elogio del Horizonte, Gijón",
+    "camera": "X70",
+    "photographer": "justjake"
+  },
+  "streetlamp": {
+    "file": "scenes/streetlamp.raf.zst",
+    "title": "Streetlamp in a tree at dusk",
+    "camera": "X70",
+    "photographer": "justjake"
+  }
+}
