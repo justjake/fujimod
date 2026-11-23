@@ -351,7 +351,11 @@ pub(super) fn can_run_inline(word: u32) -> bool {
                     let rd = ((instruction >> 4) & 8) | (instruction & 7);
                     let rm = (instruction >> 3) & 15;
                     let low_register_cmp = (instruction >> 8) & 3 == 1 && rd < 8 && rm < 8;
-                    rd < 13 && rm < 13 && !low_register_cmp
+                    if (instruction >> 8) & 3 == 1 {
+                        rd < 15 && rm < 15 && !low_register_cmp
+                    } else {
+                        rd < 13 && rm < 13
+                    }
                 })
             // CBZ/CBNZ are immediate, non-linking branches with no flag or
             // control-state effects.
@@ -412,13 +416,21 @@ pub(super) fn can_run_inline(word: u32) -> bool {
             _ => false,
         };
     }
-    // MUL is the multiply family with Ra=15. All named operands are
-    // ordinary registers and no instruction here can trap on its values.
+    // Register-specified LSL, LSR, ASR and ROR. The shift count
+    // and destination are ordinary registers.
+    if first & 0xff80 == 0xfa00 {
+        return second & 0xf0f0 == 0xf000 && first & 15 <= 12 && second & 15 <= 12 && rd <= 12;
+    }
+    // MUL is the Ra=15 alias of MLA. MLS has a distinct operation
+    // field and requires an actual accumulator register.
     if first & 0xfff0 == 0xfb00 {
-        return second & 0xf0f0 == 0xf000
-            && first & 15 <= 12
-            && second & 15 <= 12
-            && rd <= 12;
+        let ra = second >> 12;
+        let valid_operation = match second & 0xf0 {
+            0 => ra <= 12 || ra == 15,
+            0x10 => ra <= 12,
+            _ => false,
+        };
+        return valid_operation && first & 15 <= 12 && second & 15 <= 12 && rd <= 12;
     }
     // ADD/ADC/SBC/SUB (shifted register), with a register-controlled pure arithmetic
     // result. Exclude SP and PC in all three register fields and reserved bit
@@ -574,6 +586,13 @@ mod tests {
         assert!(!can_run_inline(0xea4f_440f)); // shifted operand PC
         assert!(can_run_inline(0xeb41_71e2)); // adc.w r1,r1,r2,asr #31
         assert!(can_run_inline(0xfb04_f303)); // mul r3,r4,r3
+        assert!(can_run_inline(0xfb03_4401)); // mla r4,r3,r1,r4
+        assert!(can_run_inline(0xfb03_4411)); // mls r4,r3,r1,r4
+        assert!(can_run_inline(0xfa03_f101)); // lsl.w r1,r3,r1
+        assert!(can_run_inline(0x45b6)); // cmp lr,r6
+        assert!(!can_run_inline(0x45b7 | 0x78)); // cmp with PC
+        assert!(!can_run_inline(0xfb03_f411)); // MLS with no accumulator
+        assert!(!can_run_inline(0xfa03_f10f)); // PC shift count
         assert!(can_run_inline(0xf006_fcf7)); // BL
         assert!(can_run_inline(0xf000_81a6)); // BEQ.W
         assert!(can_run_inline(0xf000_b940)); // B.W
