@@ -57,7 +57,8 @@
     "firmware_id",
     "firmware_sha256",
     "source",
-    "scene_variants"
+    "scene_variants",
+    "sprite_records"
   ],
   "title": "OsdItems",
   "type": "object",
@@ -232,6 +233,13 @@
           "const": "event_id - 1",
           "type": "string"
         },
+        "canvas_packet_bytes": {
+          "const": 92,
+          "type": "integer"
+        },
+        "canvas_packet_draw": {
+          "$ref": "#/$defs/address"
+        },
         "row_bytes": {
           "const": 28,
           "type": "integer"
@@ -248,7 +256,9 @@
         "table_address",
         "row_bytes",
         "row_count",
-        "index"
+        "index",
+        "canvas_packet_draw",
+        "canvas_packet_bytes"
       ],
       "type": "object"
     },
@@ -256,6 +266,7 @@
       "additionalProperties": false,
       "properties": {
         "artwork_id": {
+          "description": "Stock canvas resource id, or null when the packet resolves artwork dynamically.",
           "minimum": 0,
           "type": [
             "integer",
@@ -274,6 +285,7 @@
           "type": "string"
         },
         "palette": {
+          "description": "Packed primary canvas color word in 0xRRGGBBAA form, or null when zero.",
           "minimum": 0,
           "type": [
             "integer",
@@ -285,6 +297,7 @@
         },
         "position": {
           "additionalProperties": false,
+          "description": "Coordinates stored in the packet template before any draw-time panel updates.",
           "properties": {
             "x": {
               "type": "integer"
