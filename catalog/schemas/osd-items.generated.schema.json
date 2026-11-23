@@ -38,8 +38,6 @@
       "items": {
         "$ref": "#/$defs/scene_variant"
       },
-      "maxItems": 40,
-      "minItems": 40,
       "type": "array"
     },
     "source": {
@@ -244,15 +242,10 @@
         },
         "table_address": {
           "$ref": "#/$defs/address"
-        },
-        "table_sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
         }
       },
       "required": [
         "table_address",
-        "table_sha256",
         "row_bytes",
         "row_count",
         "index"

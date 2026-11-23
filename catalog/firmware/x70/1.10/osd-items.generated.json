@@ -6,7 +6,6 @@
   "firmware_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
   "source": {
     "table_address": "0x01b43878",
-    "table_sha256": "481391081fd4811e91d06f24dc9fb970ec045c295647091936dfc92a56bac0c1",
     "row_bytes": 28,
     "row_count": 508,
     "index": "event_id - 1"
