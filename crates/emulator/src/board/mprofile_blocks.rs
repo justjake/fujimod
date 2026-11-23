@@ -305,13 +305,27 @@ pub(super) fn can_run_inline(word: u32) -> bool {
 
     let first = (word >> 16) as u16;
     let second = word as u16;
-    // Only non-flag-setting AND (immediate) with an unexpanded imm8 is
-    // admitted from the 32-bit data-processing encodings. Requiring zero
-    // imm3 rejects the ThumbExpandImm replication and rotation forms; exact
-    // opcode bits reject reserved operations and flag-writing aliases.
+    // Accept only the modified-immediate encodings with i=imm3=0, so the
+    // value is an ordinary imm8. This excludes ThumbExpandImm rotations and
+    // replication patterns, including their reserved zero forms.
+    if first & 0xfc00 != 0xf000 || second & 0xf000 != 0 {
+        return false;
+    }
+    let opcode = (first >> 5) & 0x1f;
+    let set_flags = first & 0x10 != 0;
     let rn = first & 15;
     let rd = (second >> 8) & 15;
-    first & 0xfff0 == 0xf000 && rn <= 12 && second & 0xf000 == 0 && rd <= 12
+    match opcode {
+        // AND/ANDS, including the flag-only TST alias.
+        0 => rn <= 12 && (rd <= 12 || (set_flags && rd == 15)),
+        // ORR/ORRS with Rn=PC is MOV/MOVS immediate. No other ORR form is
+        // admitted here, and the destination must remain a general register.
+        2 => rn == 15 && rd <= 12,
+        // ADD/ADDS and SUB/SUBS. Rd=PC is accepted only for the flag-only
+        // CMN/CMP aliases; SP and PC are never arithmetic operands.
+        8 | 13 => rn <= 12 && (rd <= 12 || (set_flags && rd == 15)),
+        _ => false,
+    }
 }
 
 /// Count the executed instruction prefix reported by a memory-hook restart.
@@ -397,14 +411,34 @@ mod tests {
 
         // The first halfword of a 32-bit encoding occupies the upper half.
         assert!(can_run_inline(0xf000_0107)); // and.w r1,r0,#7
-        assert!(can_run_inline(0xf001_0504)); // and.w r5,r1,#4
-        assert!(!can_run_inline(0xf001_0d04)); // destination SP
-        assert!(!can_run_inline(0xf00d_0104)); // source SP
-        assert!(!can_run_inline(0xf00f_0104)); // source PC
-        assert!(!can_run_inline(0xf001_0f04)); // destination PC
-        assert!(!can_run_inline(0xf001_1104)); // nonzero imm3
-        assert!(!can_run_inline(0xf010_0104)); // S bit / different operation
-        assert!(!can_run_inline(0xf020_0104)); // different operation
+        assert!(can_run_inline(0xf011_0504)); // ands.w r5,r1,#4
+        assert!(can_run_inline(0xf101_0007)); // add.w r0,r1,#7
+        assert!(can_run_inline(0xf111_0007)); // adds.w r0,r1,#7
+        assert!(can_run_inline(0xf1a1_0007)); // sub.w r0,r1,#7
+        assert!(can_run_inline(0xf1b1_0007)); // subs.w r0,r1,#7
+        assert!(can_run_inline(0xf1b1_0f07)); // cmp r1,#7
+        assert!(can_run_inline(0xf04f_0007)); // mov.w r0,#7
+        assert!(can_run_inline(0xf05f_0cff)); // movs.w r12,#255
+        for instruction in [
+            0xf101_0d07, // destination SP
+            0xf101_0f07, // PC destination without compare semantics
+            0xf10d_0007, // source SP
+            0xf10f_0007, // source PC / ADR alias
+            0xf1ad_0007, // SUB source SP
+            0xf1af_0007, // SUB source PC
+            0xf1b1_0007, // CMP encoding without S
+            0xf1bd_0f07, // CMP source SP
+            0xf1bf_0f07, // CMP source PC
+            0xf101_1007, // nonzero imm3
+            0xf501_0007, // i bit selects ThumbExpandImm
+            0xf011_1007, // nonzero imm3 with S
+            0xf121_0007, // ADC opcode
+            0xf021_0007, // BIC opcode
+            0xf04f_0f07, // MOV destination PC
+            0xf04d_0007, // MOV alias with SP in Rn field
+        ] {
+            assert!(!can_run_inline(instruction), "{instruction:#010x}");
+        }
         assert!(!can_run_inline(0xf000_f800)); // BL
         assert!(!can_run_inline(0xf8c0_1000)); // str.w
         assert!(!can_run_inline(0x0001_0001)); // unrecognized prefix
