@@ -76,9 +76,7 @@
       "manual_page": 83,
       "face": "AE-L",
       "icon": null,
-      "connection_ids": [
-        "controls-adc-11"
-      ],
+      "connection_ids": [],
       "assignable": true,
       "default_function": "Lock exposure.",
       "role": null,
@@ -99,9 +97,7 @@
       "manual_page": 83,
       "face": "AF-L",
       "icon": null,
-      "connection_ids": [
-        "controls-adc-11"
-      ],
+      "connection_ids": [],
       "assignable": true,
       "default_function": "Lock focus.",
       "role": null,
@@ -590,10 +586,7 @@
       "manual_page": 4,
       "face": null,
       "icon": null,
-      "connection_ids": [
-        "controls-adc-3",
-        "controls-adc-9"
-      ],
+      "connection_ids": [],
       "assignable": false,
       "default_function": "Tilt or press to select the focus area; it can also navigate menus.",
       "role": null,
