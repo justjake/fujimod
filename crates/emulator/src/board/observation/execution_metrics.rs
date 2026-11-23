@@ -42,7 +42,7 @@ impl Board {
             .filter(|(_, cpu)| cpu.model() == Model::CortexM4)
             .map(|(core, _)| {
                 let blocks = state.blocks.get(core).and_then(Option::as_ref);
-                json!({
+                let mut row = json!({
                     "core": core,
                     "inline_instructions": blocks.map_or(0, |blocks| blocks.inline.entries),
                     "callbacks": {
@@ -52,7 +52,17 @@ impl Board {
                         "store": blocks.map_or(0, |blocks| blocks.store_callbacks),
                         "mmio": blocks.map_or(0, |blocks| blocks.mmio_callbacks),
                     },
-                })
+                });
+                if let Some(counters) = state
+                    .store_observer
+                    .as_ref()
+                    .and_then(|counters| counters.get(core))
+                {
+                    row.as_object_mut()
+                        .expect("M4 metrics row is a JSON object")
+                        .insert("store_observer".into(), counters.json());
+                }
+                row
             })
             .collect::<Vec<_>>();
         json!({

@@ -168,6 +168,79 @@ fn engine_end_reason(
     EngineEndReason::OtherExit
 }
 
+#[derive(Clone, Copy)]
+enum StoreObserverReason {
+    ExplicitWriteWatchOverlap,
+    MProfileAliasWrite,
+    LiveExclusiveReservation,
+    RestartAttempt,
+}
+
+#[derive(Clone, Default)]
+struct StoreObserverCounters {
+    callbacks_total: u64,
+    completed_callbacks: u64,
+    early_restart_attempts: u64,
+    failed_before_classification: u64,
+    callbacks_with_any_observed_reason: u64,
+    callbacks_with_multiple_observed_reasons: u64,
+    no_recorded_reason: u64,
+    explicit_write_watch_overlaps: u64,
+    mprofile_alias_writes: u64,
+    code_shadow_store_checks: u64,
+    live_exclusive_reservation_before_write: u64,
+}
+
+impl StoreObserverCounters {
+    fn observe_reason(&mut self, reason: StoreObserverReason) {
+        let counter = match reason {
+            StoreObserverReason::ExplicitWriteWatchOverlap => {
+                &mut self.explicit_write_watch_overlaps
+            }
+            StoreObserverReason::MProfileAliasWrite => &mut self.mprofile_alias_writes,
+            StoreObserverReason::LiveExclusiveReservation => {
+                &mut self.live_exclusive_reservation_before_write
+            }
+            StoreObserverReason::RestartAttempt => &mut self.early_restart_attempts,
+        };
+        *counter = counter.saturating_add(1);
+    }
+
+    fn finish_observation(&mut self, reasons: u8, complete: bool) {
+        if reasons != 0 {
+            self.callbacks_with_any_observed_reason =
+                self.callbacks_with_any_observed_reason.saturating_add(1);
+        }
+        if reasons > 1 {
+            self.callbacks_with_multiple_observed_reasons =
+                self.callbacks_with_multiple_observed_reasons.saturating_add(1);
+        }
+        if complete {
+            self.completed_callbacks = self.completed_callbacks.saturating_add(1);
+            if reasons == 0 {
+                self.no_recorded_reason = self.no_recorded_reason.saturating_add(1);
+            }
+        }
+    }
+
+    fn json(&self) -> Value {
+        serde_json::json!({
+            "callbacks_total": self.callbacks_total,
+            "completed_callbacks": self.completed_callbacks,
+            "early_restart_attempts": self.early_restart_attempts,
+            "failed_before_classification": self.failed_before_classification,
+            "callbacks_with_any_observed_reason": self.callbacks_with_any_observed_reason,
+            "callbacks_with_multiple_observed_reasons": self.callbacks_with_multiple_observed_reasons,
+            "no_recorded_reason": self.no_recorded_reason,
+            "explicit_write_watch_overlaps": self.explicit_write_watch_overlaps,
+            "mprofile_alias_writes": self.mprofile_alias_writes,
+            "code_shadow_store_checks": self.code_shadow_store_checks,
+            "live_exclusive_reservation_before_write": self.live_exclusive_reservation_before_write,
+            "reason_counts_are_nonexclusive": true,
+        })
+    }
+}
+
 struct State {
     continuation: Rc<RefCell<continuation::Stops>>,
     host_pause: Rc<Cell<bool>>,
@@ -243,6 +316,7 @@ struct State {
     memory_access: bool,
     mprofile_loops: loops::MProfileLoops,
     access_histogram: Option<access_histogram::SharedStatistics>,
+    store_observer: Option<Vec<StoreObserverCounters>>,
 }
 /// Host-only record that pushing interrupt pins and refreshing processor
 /// deadlines is a fixed point.
@@ -546,6 +620,8 @@ impl Board {
         let memory = Rc::new(memory);
         let mmio_callback_counts = Rc::new(RefCell::new(vec![0; n]));
         let register_access_histogram = access_histogram::new();
+        let store_observer = std::env::var_os("FUJIMOD_EXECUTION_COUNTERS")
+            .map(|_| vec![StoreObserverCounters::default(); n]);
         let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
         let host_pause = Rc::new(Cell::new(false));
         let state = Rc::new(RefCell::new(State {
@@ -604,6 +680,7 @@ impl Board {
             memory_access: false,
             mprofile_loops: loops::MProfileLoops::new(n),
             access_histogram: register_access_histogram.clone(),
+            store_observer: store_observer.clone(),
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
@@ -2197,6 +2274,37 @@ fn set(cpu: &dyn Cpu, r: Register, v: u64) -> Result<(), String> {
     cpu.write_register(r, &v.to_le_bytes()[..n])
 }
 impl State {
+    fn observe_store_reason(&mut self, core: usize, reason: StoreObserverReason) {
+        if let Some(counters) = self
+            .store_observer
+            .as_mut()
+            .and_then(|counters| counters.get_mut(core))
+        {
+            counters.observe_reason(reason);
+        }
+    }
+
+    fn finish_store_observation(&mut self, core: usize, reasons: u8, complete: bool) {
+        if let Some(counters) = self
+            .store_observer
+            .as_mut()
+            .and_then(|counters| counters.get_mut(core))
+        {
+            counters.finish_observation(reasons, complete);
+        }
+    }
+
+    fn fail_store_observation_before_classification(&mut self, core: usize) {
+        if let Some(counters) = self
+            .store_observer
+            .as_mut()
+            .and_then(|counters| counters.get_mut(core))
+        {
+            counters.failed_before_classification =
+                counters.failed_before_classification.saturating_add(1);
+        }
+    }
+
     fn finish_exit(
         &mut self,
         cpu: &dyn Cpu,
@@ -3912,8 +4020,36 @@ unsafe fn written(
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    let mut diagnostic_m4 = false;
+    let mut observed_reasons = 0u8;
+    let mut classification_finished = false;
     let result = {
         let mut state = b.state.borrow_mut();
+        diagnostic_m4 = cpus[b.core].model() == fujimod_emulator_cpu::Model::CortexM4
+            && state
+                .store_observer
+                .as_ref()
+                .is_some_and(|counters| counters.get(b.core).is_some());
+        if diagnostic_m4 {
+            if let Some(counters) = state
+                .store_observer
+                .as_mut()
+                .and_then(|counters| counters.get_mut(b.core))
+            {
+                counters.callbacks_total = counters.callbacks_total.saturating_add(1);
+            }
+            let reservation_live = state
+                .exclusive
+                .lock()
+                .is_ok_and(|monitors| monitors.active());
+            if reservation_live {
+                state.observe_store_reason(
+                    b.core,
+                    StoreObserverReason::LiveExclusiveReservation,
+                );
+                observed_reasons = observed_reasons.saturating_add(1);
+            }
+        }
         if let Some(blocks) = state.blocks[b.core].as_mut() {
             blocks.store_callbacks += 1;
         }
@@ -3941,11 +4077,33 @@ unsafe fn written(
                             _ => false,
                         };
                         if !terminal {
+                            if diagnostic_m4 {
+                                state.observe_store_reason(
+                                    b.core,
+                                    StoreObserverReason::RestartAttempt,
+                                );
+                                observed_reasons = observed_reasons.saturating_add(1);
+                                state.finish_store_observation(
+                                    b.core,
+                                    observed_reasons,
+                                    false,
+                                );
+                                classification_finished = true;
+                            }
                             return cpu.request_restart();
                         }
                     } else if let Some((_, _, _, last)) = blocks.pending
                         && scalar(cpu, Register::Pc)? & !1 != last
                     {
+                        if diagnostic_m4 {
+                            state.observe_store_reason(
+                                b.core,
+                                StoreObserverReason::RestartAttempt,
+                            );
+                            observed_reasons = observed_reasons.saturating_add(1);
+                            state.finish_store_observation(b.core, observed_reasons, false);
+                            classification_finished = true;
+                        }
                         return cpu.request_restart();
                     }
                 }
@@ -3957,31 +4115,72 @@ unsafe fn written(
                 state.polls.last[b.core] = None;
                 let address =
                     cpus[b.core].translate(address, fujimod_emulator_cpu::Access::Write)?;
-                if state.memory.watching_writes() {
-                    write_watch::observe_store(&state, &*cpus[b.core], b.core, address, size, value);
+                let explicit_write_watch_overlap = state.memory.watching_writes()
+                    && write_watch::observe_store(
+                        &state,
+                        &*cpus[b.core],
+                        b.core,
+                        address,
+                        size,
+                        value,
+                    );
+                if diagnostic_m4 && explicit_write_watch_overlap {
+                    state.observe_store_reason(
+                        b.core,
+                        StoreObserverReason::ExplicitWriteWatchOverlap,
+                    );
+                    observed_reasons = observed_reasons.saturating_add(1);
                 }
-                if state.mprofile[b.core]
+                let mprofile_alias_write = state.mprofile[b.core]
                     .as_ref()
-                    .is_some_and(|p| p.writes_an_alias(address, size))
-                {
+                    .is_some_and(|p| p.writes_an_alias(address, size));
+                if mprofile_alias_write {
+                    if diagnostic_m4 {
+                        state.observe_store_reason(
+                            b.core,
+                            StoreObserverReason::MProfileAliasWrite,
+                        );
+                        observed_reasons = observed_reasons.saturating_add(1);
+                    }
                     state.code_run = None;
                 }
-                if state.execution_policy == ExecutionPolicy::Exact
-                    && let Some(shadow) = state.code_shadow[b.core].as_mut()
-                {
-                    shadow.stored(&*cpus[b.core], address, size);
+                if state.execution_policy == ExecutionPolicy::Exact {
+                    let code_shadow_active = state.code_shadow[b.core].is_some();
+                    if diagnostic_m4 && code_shadow_active {
+                        if let Some(counters) = state
+                            .store_observer
+                            .as_mut()
+                            .and_then(|counters| counters.get_mut(b.core))
+                        {
+                            counters.code_shadow_store_checks =
+                                counters.code_shadow_store_checks.saturating_add(1);
+                        }
+                    }
+                    if let Some(shadow) = state.code_shadow[b.core].as_mut() {
+                        shadow.stored(&*cpus[b.core], address, size);
+                    }
                 }
-                notify_memory(
+                let result = notify_memory(
                     &cpus,
                     &state.mprofile,
                     &state.exclusive,
                     b.core,
                     address,
                     size,
-                )
+                );
+                if diagnostic_m4 {
+                    state.finish_store_observation(b.core, observed_reasons, true);
+                    classification_finished = true;
+                }
+                result
             })
     };
     if let Err(e) = result {
+        if diagnostic_m4 && !classification_finished {
+            let mut state = b.state.borrow_mut();
+            state.fail_store_observation_before_classification(b.core);
+            state.finish_store_observation(b.core, observed_reasons, false);
+        }
         b.state.borrow_mut().fail(e);
         let _ = cpus[b.core].stop();
     }
