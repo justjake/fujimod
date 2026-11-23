@@ -450,6 +450,19 @@ fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest>
     state.command.lock().ok()?.take()
 }
 
+#[cfg(target_os = "macos")]
+mod window_shape;
+
+/// Width of the controls panel beside the camera screen, in points.
+const PANEL: f64 = 360.0;
+/// Width over height of the camera screen.
+const SCREEN: f64 = 3.0 / 2.0;
+
+/// Content width of the camera window for a content height.
+fn window_width(height: f64) -> f64 {
+    height * SCREEN + PANEL
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let startup = window_launch()?;
@@ -469,10 +482,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tauri::WebviewUrl::App("index.html".into()),
             )
             .title("FujiMod Emulator")
-            .inner_size(1440.0, 720.0)
-            .min_inner_size(720.0, 600.0)
+            .inner_size(window_width(720.0), 720.0)
+            .min_inner_size(window_width(540.0), 540.0)
             .visible(false)
             .build()?;
+            #[cfg(target_os = "macos")]
+            window_shape::constrain(window.ns_window()?)?;
             window.show()?;
             Ok(())
         })

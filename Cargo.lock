@@ -2845,6 +2845,8 @@ dependencies = [
  "fujimod-emulator-xp5-board",
  "fujimod-webrtc",
  "fujimod-workspace-hack",
+ "objc2",
+ "objc2-foundation",
  "rfd 0.17.2",
  "serde",
  "serde_json",
