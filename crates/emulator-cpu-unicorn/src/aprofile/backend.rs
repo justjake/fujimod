@@ -54,6 +54,9 @@ impl Cpu for Core {
     fn exception_entries(&self) -> Option<armv7a::Entries> {
         self.execution.a32.then(|| self.execution.entries.get())
     }
+    fn set_armv7a_affinity(&self, mpidr: u32) -> Result<(), String> {
+        self.install_mpidr(mpidr).map(|_| ())
+    }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let e = &self.execution;
         e.memory.prepare_external_write()?;
