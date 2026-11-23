@@ -748,3 +748,116 @@ fn bench_block_execution() {
         );
     }
 }
+/// Isolated PUSH at the end of a translated block. The watched case writes
+/// into the code page; the fault case places the second word just beyond RAM.
+fn push_program(blocks: bool, stack: u32, wide: bool) -> Board {
+    let mut b = board(blocks);
+    b.set_execution_policy(ExecutionPolicy::Interactive)
+        .unwrap();
+    b.state.borrow_mut().settled.verify = 0;
+    b.write_physical(0x10000, &stack.to_le_bytes()).unwrap();
+
+    // movs r4,#0x44; movs r5,#0x55; push {r4,r5}; adds r6,#1; b .
+    let code: &[u16] = if wide {
+        &[0x2444, 0x2555, 0xe92d, 0x0030, 0x3601, 0xe7fd]
+    } else {
+        &[0x2444, 0x2555, 0xb430, 0x3601, 0xe7fd]
+    };
+    let bytes: Vec<u8> = code.iter().flat_map(|half| half.to_le_bytes()).collect();
+    b.write_physical(0x10100, &bytes).unwrap();
+    b
+}
+
+fn stack_words(board: &Board, base: u32) -> [u8; 8] {
+    let mut bytes = [0; 8];
+    board.read_physical(base.into(), &mut bytes).unwrap();
+    bytes
+}
+
+#[test]
+fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
+    for wide in [false, true] {
+        // Both words are in the translated code page. This exercises the
+        // watched-store terminal path without replaying an earlier push word.
+        let mut reference = push_program(false, 0x10808, wide);
+        let mut translated = push_program(true, 0x10808, wide);
+        let a = reference.run_until(3, 3);
+        let b = translated.run_until(3, 3);
+        assert!(a.is_ok(), "watched reference PUSH: {a:?}");
+        assert!(b.is_ok(), "watched translated PUSH: {b:?}");
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "wide={wide}");
+        assert_eq!(actual.state, expected.state, "wide={wide}");
+        assert_eq!(actual.memory, expected.memory, "wide={wide}");
+        assert_eq!(
+            stack_words(&translated, 0x10800),
+            stack_words(&reference, 0x10800)
+        );
+        let watched_words = stack_words(&translated, 0x10800);
+        assert_eq!(&watched_words[..4], &0x44u32.to_le_bytes());
+        assert_eq!(&watched_words[4..], &0x55u32.to_le_bytes());
+        assert_eq!(actual.registers[4], 0x44);
+        assert_eq!(actual.registers[5], 0x55);
+        assert_eq!(
+            scalar(translated.cpu(0).unwrap(), Register::Sp).unwrap(),
+            0x10800
+        );
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions
+        );
+        assert_eq!(
+            translated.state.borrow().timeline.now(),
+            reference.state.borrow().timeline.now()
+        );
+        let blocks = translated.state.borrow();
+        let stats = blocks.blocks[0].as_ref().unwrap();
+        assert!(stats.watching, "wide={wide}");
+        assert!(stats.watched.contains(&0x10000), "wide={wide}");
+        assert!(
+            stats.store_callbacks >= 2,
+            "wide={wide}: {}",
+            stats.store_callbacks
+        );
+        assert_eq!(stats.restart_callbacks, 0, "wide={wide}");
+
+        // The first push word lands at the final mapped word. The second
+        // faults at 0x18000; its prior successful write must remain visible.
+        let mut reference = push_program(false, 0x18004, wide);
+        let mut translated = push_program(true, 0x18004, wide);
+        let a = reference.run_until(3, 3);
+        let b = translated.run_until(3, 3);
+        assert!(
+            a.as_ref()
+                .err()
+                .is_some_and(|e| e.to_ascii_lowercase().contains("unmapped")),
+            "expected observer PUSH fault, got {a:?}"
+        );
+        assert!(
+            b.as_ref()
+                .err()
+                .is_some_and(|e| e.to_ascii_lowercase().contains("unmapped")),
+            "expected translated PUSH fault, got {b:?}"
+        );
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "fault wide={wide}");
+        assert_eq!(actual.state, expected.state, "fault wide={wide}");
+        assert_eq!(actual.memory, expected.memory, "fault wide={wide}");
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions,
+            "fault wide={wide}"
+        );
+        assert_eq!(
+            translated.state.borrow().timeline.now(),
+            reference.state.borrow().timeline.now(),
+            "fault wide={wide}"
+        );
+        let mut committed = [0; 4];
+        translated.read_physical(0x17ffc, &mut committed).unwrap();
+        assert_eq!(u32::from_le_bytes(committed), 0x44, "fault wide={wide}");
+    }
+}
+
