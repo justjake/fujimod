@@ -231,23 +231,29 @@ pub struct ClockIo {
     /// Stock routine that reads the counter.
     pub reader: u64,
     /// Stock routine that writes the counter.
-    pub writer: u64,
+    pub writer: Option<u64>,
     /// Stock routine that reads one counter register.
     pub register_reader: u64,
     /// Stock routine that writes one counter register.
-    pub register_writer: u64,
+    pub register_writer: Option<u64>,
     /// Serial transaction both register helpers target.
-    pub transaction: u64,
+    pub transaction: Option<u64>,
     /// Byte both register helpers read as their bank.
     pub bank_pointer: u64,
+    /// Routine that reads the live register shadow when no bus writer is known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_reader: Option<u64>,
+    /// Explanation for an absent counter writer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub absent_reason: Option<String>,
     /// Counter registers.
     pub registers: ClockRegisters,
     /// Register selectors read, in order, to take one counter reading.
     pub read_order: Vec<u32>,
     /// Value the writer stores in the control register to start the counter.
-    pub start_value: u32,
+    pub start_value: Option<u32>,
     /// Value the writer stores in the control register to stop it.
-    pub stop_value: u32,
+    pub stop_value: Option<u32>,
 }
 
 /// The counter registers a writer frames and a reader selects.
@@ -260,7 +266,7 @@ pub struct ClockIo {
 )]
 pub struct ClockRegisters {
     /// Control register the start and stop values are written to.
-    pub control: u32,
+    pub control: Option<u32>,
     /// Low halfword of the counter.
     pub low: u32,
     /// High halfword of the counter.
@@ -458,6 +464,9 @@ pub enum RequestTransport {
         output_fields: u64,
         /// Bytes in the output fields.
         output_bytes: u32,
+        /// Diagnostic query command byte, when located.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        command: Option<u8>,
         /// Stock routine that decodes the query tag, where the image locates
         /// the decoder separately from the query (X-Processor 4).
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -743,8 +752,8 @@ impl FirmwareRestart {
         if m.runtime_qualified.is_none() {
             return fail("an X-Processor 4 restart states its runtime qualification");
         }
-        if m.deferred_timer.is_some() || m.early_boot.is_some() {
-            return fail("this restart publishes no callback timer or early boot");
+        if m.early_boot.is_some() {
+            return fail("this restart publishes no early boot");
         }
         let (
             Some(transport),
@@ -843,12 +852,8 @@ impl FirmwareRestart {
             return fail("the configuration override needs its enable and delay keys");
         }
         if clock.reader == 0
-            || clock.writer == 0
             || clock.register_reader == 0
-            || clock.register_writer == 0
-            || clock.transaction == 0
             || clock.bank_pointer == 0
-            || clock.registers.control == 0
             || clock.registers.low == 0
             || clock.registers.high == 0
             || clock.registers.low == clock.registers.high
@@ -858,11 +863,32 @@ impl FirmwareRestart {
             })
             || !clock.read_order.contains(&clock.registers.low)
             || !clock.read_order.contains(&clock.registers.high)
-            || clock.start_value == clock.stop_value
         {
             return fail("the clock publishes its routines, registers and read order");
         }
-        Ok(())
+        let bus = matches!((clock.writer, clock.register_writer, clock.transaction,
+            clock.registers.control, clock.start_value, clock.stop_value),
+            (Some(w), Some(r), Some(t), Some(c), Some(start), Some(stop))
+                if w != 0 && r != 0 && t != 0 && c != 0 && start != stop)
+            && clock.live_reader.is_none()
+            && clock.absent_reason.is_none();
+        let shadow = clock.writer.is_none()
+            && clock.register_writer.is_none()
+            && clock.transaction.is_none()
+            && clock.registers.control.is_none()
+            && clock.start_value.is_none()
+            && clock.stop_value.is_none()
+            && clock.live_reader.is_some_and(|reader| reader != 0)
+            && clock
+                .absent_reason
+                .as_ref()
+                .is_some_and(|reason| !reason.trim().is_empty());
+        if !bus && !shadow {
+            return fail(
+                "the clock needs a complete bus writer or a live shadow reader and absence reason",
+            );
+        }
+        self.validate_optional_mechanisms()
     }
 
     /// Early boot and deferred timer facts a wake-deadline mechanism may carry.
@@ -987,6 +1013,7 @@ mod tests {
             stock_callback: 1,
             output_fields: 0,
             output_bytes: 12,
+            command: None,
             tag_decoder: None,
             forward: None,
         };

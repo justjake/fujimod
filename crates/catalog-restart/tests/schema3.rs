@@ -25,17 +25,17 @@ fn the_published_x_processor_4_document_validates() {
     let restart = parse(&document());
     restart.validate().unwrap();
     assert_eq!(restart.schema, XP4_WAKE_DEADLINE_SCHEMA);
-    assert_eq!(
-        restart.mechanism.kind,
-        Some(RestartKind::Xp4WakeDeadline)
-    );
+    assert_eq!(restart.mechanism.kind, Some(RestartKind::Xp4WakeDeadline));
     assert!(restart.mechanism.power_off.is_none());
     assert_eq!(restart.mechanism.runtime_qualified, Some(false));
     let deadline = restart.mechanism.deadline.as_ref().unwrap();
     assert_eq!(deadline.payload_offset, 8);
     assert_eq!(deadline.unit, DeadlineUnit::EpochSeconds);
     let queue = restart.mechanism.queue.as_ref().unwrap();
-    assert_eq!(queue.parameters.get(&8), Some(&restart.mechanism.deadline_offset.unwrap()));
+    assert_eq!(
+        queue.parameters.get(&8),
+        Some(&restart.mechanism.deadline_offset.unwrap())
+    );
 }
 
 #[test]
@@ -164,5 +164,43 @@ fn a_wake_deadline_document_still_validates_and_rejects_message_facts() {
             .validate()
             .unwrap_err()
             .contains("unsupported schema")
+    );
+}
+
+#[test]
+fn a_shadow_clock_requires_a_live_reader_and_explanation() {
+    let value: Value =
+        serde_json::from_str(include_str!("fixtures/xp4-shadow-clock.json")).unwrap();
+    parse(&value).validate().unwrap();
+    for field in ["live_reader", "absent_reason"] {
+        let mut invalid = value.clone();
+        invalid["mechanism"]["clock"][field] = Value::Null;
+        assert!(parse(&invalid).validate().is_err(), "{field}");
+    }
+    let mut partial = value.clone();
+    partial["mechanism"]["clock"]["writer"] = json!(1);
+    assert!(parse(&partial).validate().is_err());
+    let mut bus = document();
+    bus["mechanism"]["clock"]["transaction"] = Value::Null;
+    assert!(parse(&bus).validate().is_err());
+}
+
+#[test]
+fn an_xp4_callback_timer_must_pass_the_common_timer_checks() {
+    let mut value = document();
+    value["mechanism"]["deferred_timer"] = json!({
+        "kind": "software-timer-callback-v1",
+        "period_unit": "milliseconds",
+        "one_shot_periodic": 0,
+        "periodic_nonzero": true,
+        "callback_arguments": 0,
+        "start": {"address": 1, "size": 4},
+        "cancel": {"address": 2, "size": 4}
+    });
+    assert!(
+        parse(&value)
+            .validate()
+            .unwrap_err()
+            .contains("matching code checks")
     );
 }

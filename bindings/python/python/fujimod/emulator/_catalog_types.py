@@ -525,20 +525,22 @@ class ClockDomain(TypedDict, total=False):
 
 
 class ClockIo(TypedDict, total=False):
+    absent_reason: NotRequired[str | None]
     bank_pointer: Required[int]
+    live_reader: NotRequired[int | None]
     read_order: Required[list[int]]
     reader: Required[int]
     register_reader: Required[int]
-    register_writer: Required[int]
+    register_writer: NotRequired[int | None]
     registers: Required[ClockRegisters]
-    start_value: Required[int]
-    stop_value: Required[int]
-    transaction: Required[int]
-    writer: Required[int]
+    start_value: NotRequired[int | None]
+    stop_value: NotRequired[int | None]
+    transaction: NotRequired[int | None]
+    writer: NotRequired[int | None]
 
 
 class ClockRegisters(TypedDict, total=False):
-    control: Required[int]
+    control: NotRequired[int | None]
     high: Required[int]
     low: Required[int]
 
@@ -3709,10 +3711,13 @@ type MenuTablesVariant2 = dict[str, Never]
 class MessageQueue(TypedDict, total=False):
     enqueue: Required[int]
     id: Required[int]
-    parameters: Required[dict[str, int]]
+    parameters: Required[MessageQueueVariant0]
     payload_bytes: Required[int]
     sender: Required[int]
     uninitialized_payload_offsets: Required[list[int]]
+
+
+type MessageQueueVariant0 = dict[str, Never]
 
 
 class MicrocontrollerAssembly(TypedDict, total=False):
@@ -4492,6 +4497,7 @@ type RequestTransport = RequestTransportVariant0 | RequestTransportVariant1
 class RequestTransportVariant0(TypedDict, total=False):
     callback_offset: Required[int]
     callback_table: Required[int]
+    command: NotRequired[int | None]
     forward: NotRequired[int | None]
     kind: Required[Literal["borrowed_query"]]
     output_bytes: Required[int]
