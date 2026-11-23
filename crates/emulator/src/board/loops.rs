@@ -120,7 +120,9 @@ impl State {
         core: usize,
         pc: u64,
     ) -> Result<bool, String> {
-        if self.mprofile_loops.mode == LoopMode::Disabled {
+        if self.execution_policy != ExecutionPolicy::Exact
+            || self.mprofile_loops.mode == LoopMode::Disabled
+        {
             return Ok(false);
         }
         let mut word = [0; 4];
@@ -148,8 +150,7 @@ impl State {
         }
         l.count(core, "loop_candidate_entries", 1);
         let end = l.run_end.filter(|(run, _)| *run == core).map(|(_, end)| end);
-        let window = self.execution_policy == ExecutionPolicy::Exact
-            && self.parallel.is_none()
+        let window = self.parallel.is_none()
             && !cpu.features().instruction_progress
             && self.bus.loop_window();
         let (true, Some(end)) = (window, end) else {
