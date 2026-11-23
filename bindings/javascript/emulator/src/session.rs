@@ -8,13 +8,12 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame, parts::{controls::{Controls, Source}, pins::DriveInput}};
-use fujimod_emulator_parts_controls::key_input::{ControlsOptions, Key, KeyInput};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame};
 use fujimod_framebuffer::raster::PixelOrder;
 use fujimod_emulator_xp5_board::board;
 use fujimod_emulator_xp5_display::display;
 use serde::Deserialize;
-use std::{collections::BTreeMap, rc::Rc, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -88,7 +87,8 @@ enum Body {
     Bare,
     Xp5 {
         windows: Vec<DeviceWindow>,
-        controls: ControlsOptions,
+        #[serde(default)]
+        controls: Option<fujimod_emulator_session::inputs::Panel>,
         displays: Vec<Display>,
     },
 }
@@ -147,7 +147,6 @@ pub struct Session {
     pub(super) owner: u32,
     pub(crate) camera: Option<super::camera::Metadata>,
     pub(super) quantum: usize,
-    pub(super) input: Option<(Arc<dyn KeyInput>, usize)>,
     pub frames: BTreeMap<usize, Arc<Frame>>,
     pub(super) history: Option<super::history::History>,
     pub failed: bool,
@@ -167,17 +166,14 @@ impl Session {
         }
         let images = decode(&config.scenario.firmware, firmware)?;
         let mut devices = DeviceGraph::new();
-        let input = match config.body {
-            Body::Bare => None,
+        let (panel, nodes) = match config.body {
+            Body::Bare => (None, BTreeMap::new()),
             Body::Xp5 {
                 windows,
                 controls,
                 displays,
             } => {
                 let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
-                let driver: Arc<dyn DriveInput> = pins.clone();
-                let input = controls.open(driver)?;
-                input.start(Duration::ZERO);
                 let mut scanouts = BTreeMap::new();
                 for d in displays {
                     let mut formats = [None; 4];
@@ -198,7 +194,6 @@ impl Session {
                     }
                 }
                 let mut resources = board::Resources {
-                    controls: input.clone() as Arc<dyn Controls>,
                     counting_dial: None,
                     pins,
                     clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),
@@ -214,17 +209,11 @@ impl Session {
                 if !resources.displays.is_empty() {
                     return Err("unused display configuration".into());
                 }
-                let source = devices.attach(Box::new(Source::new(input.clone() as Arc<dyn Controls>)));
-                for w in windows
-                    .iter()
-                    .filter(|w| matches!(w.kind.as_str(), "gpio" | "gpio-port3" | "adc"))
-                {
-                    let id = devices.at(w.base)?;
-                    let mut causes = devices.nodes[id].native_dependencies.clone();
-                    causes.push(source);
-                    devices.depend_on(id, causes)?;
+                let mut nodes = BTreeMap::new();
+                for w in &windows {
+                    nodes.insert(format!("{:#x}", w.base), devices.at(w.base)?);
                 }
-                Some((input, source))
+                (controls, nodes)
             }
         };
         let p = config.processor;
@@ -324,7 +313,7 @@ impl Session {
                 contact_driver: None,
                 board,
                 resources: Default::default(),
-                nodes: Default::default(),
+                nodes,
                 contacts: Default::default(),
                 power_cycle: None,
                 window_action: None,
@@ -336,11 +325,13 @@ impl Session {
             powered_on: true,
             generation: 0,
             quantum: config.scenario.quantum,
-            input,
             frames: BTreeMap::new(),
             history: None,
             failed: false,
         };
+        if let Some(panel) = panel {
+            session.core.install_panel(panel)?;
+        }
         session.reset_image = session.core.checkpoint(None).ok().map(Rc::new);
         Ok(session)
     }
@@ -389,20 +380,6 @@ impl Session {
         result: &[u8],
     ) -> Result<(), String> {
         self.core.board.complete_host_request(device, id, result)
-    }
-    pub fn input(&mut self, key: &str, pressed: bool, at: u64) -> Result<(), String> {
-        if self.history.is_some() {
-            return Err("legacy queued keys do not have a shared history input".into());
-        }
-        if at < self.core.board.now() {
-            return Err("input edge precedes current guest time".into());
-        }
-        let (input, source) = self
-            .input
-            .as_ref()
-            .ok_or("board has no physical controls")?;
-        input.enqueue(Duration::from_nanos(at), Key::parse(key)?, pressed)?;
-        self.core.board.inputs_changed(*source)
     }
 }
 
@@ -508,16 +485,27 @@ mod tests {
         .into_bytes()
     }
 
-    fn ladder_keys() -> serde_json::Value {
-        json!({"kind":"ladder-keys","ladders":[{"wire":{"kind":"adc","channel":1},"levels":4096,"rungs":[
-            {"key":"Menu","band_low":100,"band_high":200,"sample":150,"basis":"test fixture"},
-            {"key":"StickPush","band_low":300,"band_high":400,"sample":350,"basis":"test fixture"}]}]})
+    /// One button on ADC 1: idle RELEASED, 150 while pressed.
+    fn panel() -> serde_json::Value {
+        let level = |value: u16| json!({"kind":"analog","node":format!("{ADC:#x}"),"channel":1,"value":value});
+        json!({
+            "wiring":{
+                "controls":[{"id":"menu_ok_button","label":"MENU/OK","kind":"button",
+                    "positions":["released","pressed"],"initial":"released","unavailable":null}],
+                "circuits":[{"controls":["menu_ok_button"],"cases":[
+                    {"positions":["released"],"signals":[level(RELEASED)]},
+                    {"positions":["pressed"],"signals":[level(150)]}]}]},
+            "confirmation":{"poll_ticks":1,"max_phase_ticks":1000,
+                "catalog":[{"id":"menu_ok_button","label":"MENU/OK","kind":"button","supported":true}],
+                "actuators":[{"id":"menu_ok_button","momentary":true,"states":[
+                    {"position":"released","ready":[],"expected":[],"hold_ticks":1},
+                    {"position":"pressed","ready":[],"expected":[],"hold_ticks":1}]}]}})
     }
 
     #[test]
     fn decode_preserves_size_mappings_and_format_checks_without_hashing() {
         let program = program();
-        let config: Config = serde_json::from_slice(&config(&program, ladder_keys())).unwrap();
+        let config: Config = serde_json::from_slice(&config(&program, panel())).unwrap();
         let mut firmware = config.scenario.firmware;
         let mut changed = program.clone();
         changed[0] ^= 0xff;
@@ -556,39 +544,19 @@ mod tests {
     }
 
     #[test]
-    fn ladder_key_edges_reach_the_adc_the_guest_reads() {
+    fn panel_presses_reach_the_adc_the_guest_reads() {
         let program = program();
         let mut session = Session::create(
-            &config(&program, ladder_keys()),
+            &config(&program, panel()),
             &program,
             fujimod_emulator_cpu::ExecutionPolicy::Exact,
         )
         .unwrap();
         assert_eq!(sample(&mut session), RELEASED);
-        let now = session.core.board.now();
-        session.input("STICK_PUSH", true, now).unwrap();
-        assert_eq!(sample(&mut session), 350);
-        let now = session.core.board.now();
-        session.input("STICK_PUSH", false, now).unwrap();
-        session.input("MENU", true, now).unwrap();
+        session.press("menu_ok_button".into(), None).unwrap();
         assert_eq!(sample(&mut session), 150);
-        let now = session.core.board.now();
-        let error = session.input("DISP/BACK", true, now).unwrap_err();
-        assert!(error.contains("no declared ladder rung"), "{error}");
-    }
-
-    #[test]
-    fn camera_named_key_models_are_refused() {
-        let program = program();
-        let mut controls = ladder_keys();
-        controls["kind"] = json!("x100vi");
-        let error = Session::create(
-            &config(&program, controls),
-            &program,
-            fujimod_emulator_cpu::ExecutionPolicy::Exact,
-        )
-        .err()
-        .unwrap();
-        assert!(error.contains("unknown variant"), "{error}");
+        session.release("menu_ok_button".into()).unwrap();
+        assert_eq!(sample(&mut session), RELEASED);
+        assert!(session.press("disp_back_button".into(), None).is_err());
     }
 }

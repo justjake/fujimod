@@ -1,7 +1,7 @@
 //! Caller-side construction of the X100VI run on FujiMod's standard board.
 //!
-//! Firmware paths, preloads, device options and resistor-key geometry remain
-//! inputs owned by this application. CPU execution and device scheduling are
+//! Firmware paths, preloads and device options remain inputs owned by this
+//! application. CPU execution and device scheduling are
 //! delegated to FujiMod's catalog-resolved XP5 session.
 
 use super::{
@@ -113,7 +113,6 @@ fn initial_images(
 fn devices_and_resources(
     state: &BootState,
     firmware: &Firmware,
-    controls: Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
     run_directory: Option<&Path>,
     outputs: &crate::output::Outputs,
     viewer_keys: Option<crate::frame_viewer::KeyHandler>,
@@ -121,14 +120,7 @@ fn devices_and_resources(
     assets: &BTreeMap<String, Vec<u8>>,
     card_images: &[(u64, &fujimod_emulator_devices::parts::sd_card::Card)],
     companion_core: Option<usize>,
-) -> Result<
-    (
-        Vec<DeviceWindow>,
-        xp5_board::Resources,
-        Option<fujimod_emulator_parts_controls::key_input::ControlsOptions>,
-    ),
-    String,
-> {
+) -> Result<(Vec<DeviceWindow>, xp5_board::Resources), String> {
     let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
     let companion = if state.device.iter().any(|window| window.kind == "interprocessor-mailbox") {
         Some(xp5_board::Companion {
@@ -147,8 +139,6 @@ fn devices_and_resources(
     };
     let mut resources = xp5_board::Resources {
         sd: xp5_board::sd::resolve(state.sd.clone(), assets)?,
-        // Replaced by the declared key model when the devices are assembled.
-        controls: Arc::new(fujimod_emulator_parts_controls::absent::AbsentControls),
         counting_dial: None,
         pins,
         clocks: panel_clocks::Clocks::new(),
@@ -173,9 +163,6 @@ fn devices_and_resources(
         .map(|window| window.base);
     for window in &mut windows {
         match window.kind.as_str() {
-            "adc" => {
-                window.options.remove("resistor_keys");
-            }
             "interprocessor-mailbox" => window.options.clear(),
             "flash-storage" => {
                 let number = |key: &str| {
@@ -229,7 +216,7 @@ fn devices_and_resources(
             _ => {}
         }
     }
-    Ok((windows, resources, controls))
+    Ok((windows, resources))
 }
 
 /// Write the flash image into the RAM that backs the CPU's flash aperture in a ROM start. A DMA
@@ -964,43 +951,15 @@ pub(crate) fn open_from(
     }
     let interrupts = startup.interrupts;
     let aprofile = startup.aprofile;
-    // The body's key model has one source. A body whose catalog record declares
-    // ladders gets the ladder-key model built from those ladders and the run's
-    // key-free values; otherwise the manifest's ADC window may name the
-    // caller-owned resistor-key layout (GPIO pads and two ADC channels). A
-    // manifest copy of ladder wiring is refused, and so is a body with both.
-    let adc_options = state
-        .device
-        .iter()
-        .find(|window| window.kind == "adc")
-        .map(|window| &window.options);
-    if adc_options.is_some_and(|options| options.contains_key("ladder_keys")) {
-        return Err(
-            "ladder keys come from the body's catalog ladders and the run configuration, not the boot manifest"
-                .into(),
-        );
+    // A body whose catalog record declares ladders drives them through the
+    // session's switch panel; a manifest copy of ladder wiring is refused.
+    if state.device.iter().any(|window| {
+        window.kind == "adc" && window.options.keys().any(|key| key != "samples")
+    }) {
+        return Err("controls come from the body's catalog ladders, not the boot manifest".into());
     }
-    let resistor_keys = adc_options
-        .and_then(|options| options.get("resistor_keys"))
-        .map(|value| serde_json::to_value(value).map_err(|error| error.to_string()))
-        .transpose()?;
-    let ladder_keys = fujimod_emulator_xp5_board::ladder_controls::ladder_keys(&resolved)?;
-    let controls = match (resistor_keys, ladder_keys.as_ref()) {
-        (Some(_), Some(_)) => {
-            return Err(
-                "boot manifest declares resistor keys for a body whose catalog declares ladders".into(),
-            );
-        }
-        (Some(options), None) => Some(
-            fujimod_emulator_parts_controls::key_input::ControlsOptions::ResistorKeys(
-                serde_json::from_value(options)
-                    .map_err(|error| format!("physical resistor keys: {error}"))?,
-            ),
-        ),
-        // Ladder controls are driven through the session's switch panel.
-        (None, Some(_)) | (None, None) => None,
-    };
-    let panel = ladder_keys
+    let ladders = fujimod_emulator_xp5_board::ladder_controls::ladders(&resolved)?;
+    let panel = ladders
         .map(|options| -> Result<_, String> {
             Ok((options, fujimod_emulator_xp5_board::ladder_controls::panel_names(&resolved)?))
         })
@@ -1012,10 +971,9 @@ pub(crate) fn open_from(
     let mut windows = state.device.clone();
     xp5_boot::apply_run_scene(&resolved, &mut windows, run_scene, ticks_per_second)?;
     let outputs = crate::output::Outputs::default();
-    let (windows, resources, controls) = devices_and_resources(
+    let (windows, resources) = devices_and_resources(
         state,
         firmware,
-        controls,
         run_directory,
         &outputs,
         viewer_keys,
@@ -1128,27 +1086,34 @@ pub(crate) fn open_from(
         .find(|window| window.kind == "gpio")
         .map(|window| format!("{:#x}", window.base));
     let mut resources = resources;
-    resources.counting_dial = panel
-        .as_ref()
-        .and_then(|(options, _)| options.rear_dial.as_ref())
-        .map(|dial| dial.register);
-    let front_dial = panel
-        .as_ref()
-        .and_then(|(options, _)| options.front_dial.as_ref())
-        .map(|dial| fujimod_emulator_parts_controls::encoder::Options {
+    use fujimod_emulator_xp5_board::ladders::CommandDial;
+    let options = panel.as_ref().map(|(options, _)| options);
+    resources.counting_dial = match options.and_then(|options| options.rear_dial.as_ref()) {
+        Some(CommandDial::Counting(dial)) => Some(dial.register),
+        _ => None,
+    };
+    let encoder = |dial: &fujimod_emulator_xp5_board::ladders::QuadratureDial| {
+        fujimod_emulator_parts_controls::encoder::Options {
             pins: Some(dial.pins),
             outputs: Default::default(),
             // One detent edge every 2 ms, well inside the sampler's period.
             phase_ticks: (ticks_per_second / 500).max(1),
             rest_phase: dial.rest_phase,
-        });
+        }
+    };
+    let dials = xp5_boot::Dials {
+        rear: match options.and_then(|options| options.rear_dial.as_ref()) {
+            Some(CommandDial::Quadrature(dial)) => Some(encoder(dial)),
+            _ => None,
+        },
+        front: options.and_then(|options| options.front_dial.as_ref()).map(encoder),
+    };
     let (mut session, mut inputs) = xp5_boot::open(xp5_boot::OpenOptions {
         definition,
         mode,
         processors: execution,
         windows,
-        controls,
-        front_dial,
+        dials,
         resources,
         engine: run.engine,
         interrupts,

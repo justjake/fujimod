@@ -327,10 +327,6 @@ impl Camera {
             guest: true,
         })
     }
-    /// Queue a physical key edge at guest tick `at` (resolved bodies).
-    pub fn input(&mut self, key: &str, pressed: bool, at: u64) -> Result<(), Failure> {
-        self.with(|s| s.input(key, pressed, at))
-    }
     pub fn status(&self) -> Status {
         self.session.status()
     }

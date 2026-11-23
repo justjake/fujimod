@@ -373,11 +373,7 @@ export class WasmWorkerRuntime {
         return s.usbStatus(request.node);
       case 'press':
       case 'release': {
-        if (this.manifest?.construction === 'resolved') {
-          if (request.action === 'press' && request.stage)
-            throw Error('Resolved key ABI does not support staged or touch input.');
-          s.input(request.id, request.action === 'press', s.status().ticks);
-        } else if (request.action === 'press') this.observe(s.press(request.id, request.stage));
+        if (request.action === 'press') this.observe(s.press(request.id, request.stage));
         else this.observe(s.release(request.id));
         return;
       }

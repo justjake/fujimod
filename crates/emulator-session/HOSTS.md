@@ -34,26 +34,22 @@ The switch panel drives devices only through device capabilities:
 `SerialStatus` for serial status registers. It never reaches into a
 processor's resource tables.
 
-XP5 bodies use the same path. Getting there takes four changes:
+XP5 bodies use the same path. A body whose catalog record declares
+`ladders` (`catalog/bodies/<body>/controls.json`) gets its panel from
+`fujimod_emulator_xp5_board::panel`: each ladder wire becomes one circuit
+over the controls that read it, with a case for every declared band, and the
+board table in `ladder_controls` adds what the catalog schema cannot yet hold
+(contact sets, position dials, shutter pads, command dials, push pads). ADC
+ladders drive the ADC's `AnalogInputs`; the power controller's ladder
+registers drive its `SerialStatus` registers; shutter and push pads drive
+`GpioInputs`. A quadrature command dial is an encoder node turned through
+`RotaryInput`; a counting dial is a power-controller register. The panel is
+installed with `Session::install_panel`, the same call the browser and
+Python bindings use for a caller-described board.
 
-1. **Wires from the body's ladders.** For most X-T5 controls the firmware's
-   located inputs name a key but carry no electrical predicate; the bands are
-   in the body's `ladders` table (`catalog/bodies/xt5/controls.json`), which
-   today only the XP5 key model reads. `fujimod_catalog_wiring::locate`
-   builds each such input's wire from its ladder rung: an ADC rung becomes an
-   ADC band on its channel, and a GPIO connection becomes a GPIO wire.
-2. **The power controller's ladder registers are analog inputs.** Registers
-   52 and 53 of the X-T5 power controller report 10-bit levels of two button
-   ladders. The XP5 SPI controller offers them as `AnalogInputs` channels of
-   its power-controller part, and the panel's analog target names its
-   converter node, so a body can have more than one analog owner.
-3. **XP5 devices accept panel signals.** The XP5 ADC implements
-   `AnalogInputs`; the XP5 GPIO controller implements `GpioInputs`. The XP5
-   session definition lists its device nodes by kind and name, which is what
-   `fujimod_emulator_controls::Nodes` reads.
-4. **No second key model.** Once the panel drives every XP5 control, the
-   ladder and resistor key models, `Inputs::key` and `Inputs::set_position`
-   are deleted, and key scripts (`--keys`) name catalog control positions.
+XP5 key scripts (`--press`, `--keys`) and the frame viewer name physical keys
+(`MENU`, `STICK_UP`, `REAR+`); `Inputs::key` maps each to its catalog control
+and schedules it on the session. There is no second key model.
 
 A position without located firmware scanner records has no confirmation
 checks; its transition completes when its contacts are applied.
@@ -82,9 +78,3 @@ this one loop; no host keeps its own copy.
   `Camera`; the XP5 `RunHost` adds its startup actions. `fujimod-emulator
   --gui` uses `Live` for every processor except XP5 boots, which use
   `RunHost`.
-
-## Remaining
-
-- Delete the XP5 ladder and resistor key models (`resistor_keys`, the X100VI
-  key inputs and the wasm `Body::Xp5` path) once every XP5 body's controls
-  compile to a panel.

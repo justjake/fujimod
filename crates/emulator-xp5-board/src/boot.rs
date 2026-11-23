@@ -19,14 +19,13 @@ use fujimod_catalog::{
     soc::{ApplicationHardware, InterruptControllerHardware},
 };
 use fujimod_emulator_cpu::{Register, arm64};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::{controls::{Controls, Source}, gpio::Feedback, pins::DriveInput}};
-use fujimod_emulator_parts_controls::key_input::{ControlsOptions, KeyInput};
+use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::gpio::Feedback};
 use fujimod_emulator::board::aprofile::generic_timer;
 use fujimod_emulator_ip_arm::gicv3::Gic;
 use crate::board as xp5_board;
 use serde_json::Value;
-use std::time::Duration;
-use std::{collections::BTreeMap, sync::Arc};
+
+use std::collections::BTreeMap;
 
 /// Generic CPU and interrupt-controller state declared by a caller-selected
 /// firmware startup profile. The profile is data; opening the board does not
@@ -585,29 +584,24 @@ impl fujimod_emulator_devices::parts::pins::Pins for DialPads {
     }
 }
 
-/// Session node name of the front command dial's encoder.
+/// Session node names of the command dials' encoders.
+pub const REAR_DIAL_NODE: &str = "rear-dial";
 pub const FRONT_DIAL_NODE: &str = "front-dial";
+
+/// The encoders of a body's quadrature command dials.
+#[derive(Default)]
+pub struct Dials {
+    pub rear: Option<fujimod_emulator_parts_controls::encoder::Options>,
+    pub front: Option<fujimod_emulator_parts_controls::encoder::Options>,
+}
 
 pub fn assemble_devices(
     windows: Vec<DeviceWindow>,
-    controls_options: Option<ControlsOptions>,
-    front_dial: Option<fujimod_emulator_parts_controls::encoder::Options>,
+    dials: Dials,
     mut resources: xp5_board::Resources,
     mode: Mode,
 ) -> Result<DeviceAssembly, String> {
     let contacts = resources.sd.iter().map(|(base, media)| (format!("{base:#x}"), media.contacts.clone())).collect();
-    let input_driver: Arc<dyn DriveInput> = resources.pins.clone();
-    let controls: Option<Arc<dyn KeyInput>> = controls_options
-        .map(|options| options.open(input_driver))
-        .transpose()?;
-    if let Some(controls) = &controls {
-        controls.start(Duration::ZERO);
-    }
-    let control_interface: Arc<dyn Controls> = match &controls {
-        Some(controls) => controls.clone() as Arc<dyn Controls>,
-        None => Arc::new(fujimod_emulator_parts_controls::absent::AbsentControls),
-    };
-    resources.controls = control_interface.clone();
     let mut graph = DeviceGraph::new();
     let mut unknown = |window: &fujimod_emulator_devices::graph::DeviceWindow| {
         Err(format!(
@@ -620,21 +614,20 @@ pub fn assemble_devices(
     if !resources.displays.is_empty() {
         return Err("XP5 profile has unused display configurations".into());
     }
-    let control_source = graph.attach(Box::new(Source::new(control_interface)));
-    let front_dial = front_dial
-        .map(|options| -> Result<usize, String> {
-            let encoder = fujimod_emulator_parts_controls::encoder::Encoder::new(
-                options,
-                fujimod_emulator_parts_controls::encoder::Wiring {
-                    outputs: fujimod_emulator_parts_controls::encoder::OutputWiring::Gpio(Box::new(
-                        DialPads(resources.pins.clone()),
-                    )),
-                    counter: None,
-                },
-            )?;
-            Ok(graph.attach(Box::new(encoder)))
-        })
-        .transpose()?;
+    let mut encoders = Vec::new();
+    for (name, options) in [(REAR_DIAL_NODE, dials.rear), (FRONT_DIAL_NODE, dials.front)] {
+        let Some(options) = options else { continue };
+        let encoder = fujimod_emulator_parts_controls::encoder::Encoder::new(
+            options,
+            fujimod_emulator_parts_controls::encoder::Wiring {
+                outputs: fujimod_emulator_parts_controls::encoder::OutputWiring::Gpio(Box::new(
+                    DialPads(resources.pins.clone()),
+                )),
+                counter: None,
+            },
+        )?;
+        encoders.push((name, graph.attach(Box::new(encoder))));
+    }
     let gpio_devices = windows
         .iter()
         .filter(|window| matches!(window.kind.as_str(), "gpio" | "gpio-port3"))
@@ -661,12 +654,11 @@ pub fn assemble_devices(
     }
     for &device in &gpio_devices {
         let mut causes = graph.nodes[device].native_dependencies.clone();
-        causes.push(control_source);
-        causes.extend(front_dial);
+        causes.extend(encoders.iter().map(|(_, node)| *node));
         graph.depend_on(device, causes)?;
     }
-    if let Some(node) = front_dial {
-        nodes.insert(FRONT_DIAL_NODE.into(), node);
+    for (name, node) in encoders {
+        nodes.insert(name.into(), node);
     }
     let usb = windows
         .iter()
@@ -690,13 +682,7 @@ pub fn assemble_devices(
     Ok(DeviceAssembly {
         contacts,
         bus,
-        inputs: crate::session::Inputs::new(
-            resources.pins,
-            controls,
-            gpio_devices,
-            control_source,
-            usb,
-        ),
+        inputs: crate::session::Inputs::new(resources.pins, gpio_devices, usb),
         nodes,
     })
 }
@@ -717,10 +703,8 @@ pub struct OpenOptions {
     pub mode: Mode,
     pub processors: factory::Graph,
     pub windows: Vec<DeviceWindow>,
-    /// `None` when the body has no key model; key edges are then refused.
-    pub controls: Option<ControlsOptions>,
-    /// The front command dial's encoder, for bodies whose controls are on the switch panel.
-    pub front_dial: Option<fujimod_emulator_parts_controls::encoder::Options>,
+    /// The encoders of the body's quadrature command dials.
+    pub dials: Dials,
     pub resources: xp5_board::Resources,
     pub engine: RunEngine,
     pub interrupts: Option<InterruptMap>,
@@ -771,8 +755,7 @@ pub fn open(
     options.processors.validate()?;
     let assembly = assemble_devices(
         options.windows,
-        options.controls,
-        options.front_dial,
+        options.dials,
         options.resources,
         options.mode,
     )?;

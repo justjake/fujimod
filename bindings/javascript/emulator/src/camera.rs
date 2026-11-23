@@ -556,7 +556,6 @@ impl Session {
             powered_on: true,
             generation: 0,
             quantum: a.quantum,
-            input: None,
             frames: Default::default(),
             history: None,
             failed: false,

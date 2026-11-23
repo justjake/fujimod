@@ -2,6 +2,8 @@
 pub mod board;
 pub mod boot;
 pub mod definition;
+pub mod keys;
+pub mod ladders;
 pub mod ladder_controls;
 pub mod panel;
 pub mod session;

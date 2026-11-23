@@ -44,11 +44,11 @@ try {
     result.textContent = message;
   });
   const bootMilliseconds = performance.now() - started;
-  assert(inputs[0]?.id === 'MENU', 'Physical input metadata differs.');
+  assert(inputs[0]?.id === 'menu_ok_button', 'Physical input metadata differs.');
   // Cross the worker's 10 Hz presentation deadlines with real guest execution.
   await engine.replay([
     { action: 'advance', ticks: 2_000_000 },
-    { action: 'press', id: 'MENU' },
+    { action: 'press', id: 'menu_ok_button' },
     { action: 'advance', ticks: 102_500_000 },
   ]);
   assert(
@@ -57,7 +57,7 @@ try {
   );
   await engine.replay([
     { action: 'advance', ticks: 500_000 },
-    { action: 'release', id: 'MENU' },
+    { action: 'release', id: 'menu_ok_button' },
     { action: 'advance', ticks: 100_000_000 },
   ]);
   assert(

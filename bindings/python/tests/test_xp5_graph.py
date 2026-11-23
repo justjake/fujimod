@@ -67,36 +67,6 @@ def scenario() -> tuple[Definition, dict[str, bytes]]:
             kind="xp5",
             boot_entry="rom",
             windows=[dict(kind="gpio", base=0xFF90B000, size=4096, options={})],
-            controls=dict(
-                layout=dict(
-                    shutter_half=dict(port=0, pin=0),
-                    shutter_full=dict(port=0, pin=1),
-                    rear_dial=[dict(port=1, pin=0), dict(port=1, pin=1)],
-                    front_dial=[dict(port=2, pin=0), dict(port=2, pin=1)],
-                ),
-                initial_levels=[
-                    dict(pin=dict(port=port, pin=pin), high=high)
-                    for port, pin, high in [
-                        (0, 0, True),
-                        (0, 1, True),
-                        (1, 0, False),
-                        (1, 1, False),
-                        (2, 0, False),
-                        (2, 1, False),
-                    ]
-                ],
-                samples=dict(
-                    menu=100,
-                    back=200,
-                    menu_back=150,
-                    up=300,
-                    down=400,
-                    left=500,
-                    right=600,
-                ),
-                detent_return_ns=100,
-                shutter_half_delay_ns=100,
-            ),
             storage=None,
             companion=None,
             displays=[],
@@ -113,7 +83,6 @@ def test_xp5_definition_executes_at_el3_and_drives_physical_inputs() -> None:
     with make_board(definition, assets) as board:
         session = board.session
         session.xp5_gpio_input(0, 7, True)
-        session.xp5_key(0, "DISP/BACK", True)
         board.run(4)
         assert board.failure is None
         assert board.read_memory(0x11000, 4) == struct.pack("<I", 12)
@@ -133,13 +102,17 @@ LADDER_RELEASED = 0x456
 
 
 def ladder_scenario() -> tuple[Definition, dict[str, bytes]]:
-    """An XP5 body whose keys are an ADC ladder; the guest loops reading it.
+    """An XP5 body with two buttons on one ADC channel; the guest loops reading it.
 
     The bands and samples are synthetic test inputs, not body facts.
     """
     # ldr w0, [x1, #0x14] (ADC channel 1); str w0, [x2]; b back to the load.
     rom = struct.pack("<3I", 0xB9401420, 0xB9000040, 0x17FFFFFE) + bytes(0x4000 - 12)
-    rungs = [("Menu", 100, 200, 150), ("StickPush", 300, 400, 350)]
+    buttons = [("menu_ok_button", 150), ("focus_stick", 350)]
+
+    def level(value: int) -> dict[str, object]:
+        return dict(kind="analog", node=f"{ADC:#x}", channel=1, value=value)
+
     return Definition(
         execution=execution(ADC, [[{"X": 1}, ADC], [{"X": 2}, 0x11000]]),
         devices=dict(
@@ -153,23 +126,60 @@ def ladder_scenario() -> tuple[Definition, dict[str, bytes]]:
                     options=dict(samples=[LADDER_RELEASED] * 15),
                 )
             ],
-            ladder_keys=dict(
-                ladders=[
-                    dict(
-                        wire=dict(kind="adc", channel=1),
-                        levels=4096,
-                        rungs=[
-                            dict(
-                                key=key,
-                                band_low=low,
-                                band_high=high,
-                                sample=sample,
-                                basis="test fixture",
-                            )
-                            for key, low, high, sample in rungs
-                        ],
-                    )
-                ]
+            controls=dict(
+                wiring=dict(
+                    controls=[
+                        dict(
+                            id=control,
+                            label=control,
+                            kind="button",
+                            positions=["released", "pressed"],
+                            initial="released",
+                            unavailable=None,
+                        )
+                        for control, _ in buttons
+                    ],
+                    circuits=[
+                        dict(
+                            controls=[control for control, _ in buttons],
+                            cases=[
+                                dict(
+                                    positions=["released", "released"],
+                                    signals=[level(LADDER_RELEASED)],
+                                ),
+                                *(
+                                    dict(
+                                        positions=[
+                                            "pressed" if other == control else "released"
+                                            for other, _ in buttons
+                                        ],
+                                        signals=[level(sample)],
+                                    )
+                                    for control, sample in buttons
+                                ),
+                            ],
+                        )
+                    ],
+                ),
+                confirmation=dict(
+                    poll_ticks=1,
+                    max_phase_ticks=1000,
+                    catalog=[
+                        dict(id=control, label=control, kind="button", supported=True)
+                        for control, _ in buttons
+                    ],
+                    actuators=[
+                        dict(
+                            id=control,
+                            momentary=True,
+                            states=[
+                                dict(position=position, ready=[], expected=[], hold_ticks=1)
+                                for position in ("released", "pressed")
+                            ],
+                        )
+                        for control, _ in buttons
+                    ],
+                ),
             ),
             storage=None,
             companion=None,
@@ -182,7 +192,7 @@ def ladder_scenario() -> tuple[Definition, dict[str, bytes]]:
     ), {"rom": rom}
 
 
-def test_xp5_ladder_keys_reach_the_adc_the_guest_reads() -> None:
+def test_xp5_panel_presses_reach_the_adc_the_guest_reads() -> None:
     definition, assets = ladder_scenario()
     with make_board(definition, assets) as board:
         session = board.session
@@ -193,12 +203,10 @@ def test_xp5_ladder_keys_reach_the_adc_the_guest_reads() -> None:
             return struct.unpack("<I", board.read_memory(0x11000, 4))[0]
 
         assert sample() == LADDER_RELEASED
-        session.xp5_key(board.virtual_ticks, "STICK_PUSH", True)
+        session.press("focus_stick")
         assert sample() == 350
-        session.xp5_key(board.virtual_ticks, "STICK_PUSH", False)
-        session.xp5_key(board.virtual_ticks, "MENU", True)
+        session.release("focus_stick")
+        session.press("menu_ok_button")
         assert sample() == 150
-        with pytest.raises(
-            _native.emulator.NativeError, match="no declared ladder rung"
-        ):
-            session.xp5_key(board.virtual_ticks, "DISP/BACK", True)
+        with pytest.raises(_native.emulator.NativeError, match="unavailable"):
+            session.press("disp_back_button")

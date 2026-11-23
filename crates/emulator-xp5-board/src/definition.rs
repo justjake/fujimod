@@ -5,12 +5,6 @@ use fujimod_emulator::board::{InterruptMap, InterruptRegisters, aprofile, bus::M
 use fujimod_emulator_cpu::{Model, arm64};
 use fujimod_emulator_devices::graph::DeviceWindow;
 use fujimod_emulator_ip_arm::gicv3::Gic;
-use fujimod_emulator_parts_controls::{
-    absent::AbsentControls,
-    key_input::ControlsOptions,
-    ladder_keys,
-    resistor_keys,
-};
 use fujimod_emulator_xp5_display::display;
 use fujimod_emulator_xp5_io::mailbox;
 use fujimod_emulator_xp5_storage::{flash_storage, nand_storage};
@@ -45,14 +39,9 @@ pub enum Definition {
     Xp5 {
         boot_entry: Entry,
         windows: Vec<DeviceWindow>,
-        /// GPIO shutter and dial pads plus ADC-sampled keys (X100VI-style).
+        /// The body's physical controls; without them inputs are refused.
         #[serde(default)]
-        controls: Option<resistor_keys::Options>,
-        /// Keys read as ADC ladder bands or power-controller register ladders.
-        /// At most one of `controls` and `ladder_keys` may be declared; with
-        /// neither the body has no key model and key edges are refused.
-        #[serde(default)]
-        ladder_keys: Option<ladder_keys::Options>,
+        controls: Option<fujimod_emulator_session::inputs::Panel>,
         storage: Option<String>,
         #[serde(default)]
         sd: Vec<board::sd::MediaInputs>,
@@ -188,7 +177,6 @@ impl Definition {
             boot_entry: _,
             windows,
             controls,
-            ladder_keys,
             storage,
             sd,
             companion,
@@ -205,14 +193,6 @@ impl Definition {
             return Err("XP5 companion must name a declared M-profile processor".into());
         }
         let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
-        let controls = match (controls, ladder_keys) {
-            (Some(_), Some(_)) => {
-                return Err("XP5 definition declares both resistor keys and ladder keys".into());
-            }
-            (Some(options), None) => Some(ControlsOptions::ResistorKeys(options)),
-            (None, Some(options)) => Some(ControlsOptions::LadderKeys(options)),
-            (None, None) => None,
-        };
         let medium = storage_medium(&windows);
         let storage = storage
             .map(|name| {
@@ -230,8 +210,6 @@ impl Definition {
             .transpose()?;
         let resources = board::Resources {
             sd: board::sd::resolve(sd, assets)?,
-            // Replaced by the declared key model when the devices are assembled.
-            controls: Arc::new(AbsentControls),
             counting_dial: None,
             pins,
             storage,
@@ -253,20 +231,23 @@ impl Definition {
                 .collect::<Result<_, _>>()?,
             pwm: Default::default(),
         };
-        boot::open(boot::OpenOptions {
+        let (mut session, inputs) = boot::open(boot::OpenOptions {
             definition,
             mode,
             processors: graph,
             windows,
-            controls,
-            front_dial: None,
+            dials: Default::default(),
             resources,
             engine,
             interrupts: interrupts.map(Interrupts::open).transpose()?,
             aprofile,
             images: vec![],
             scene: None,
-        })
+        })?;
+        if let Some(panel) = controls {
+            session.install_panel(panel)?;
+        }
+        Ok((session, inputs))
     }
 }
 
@@ -275,19 +256,27 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // Synthetic fixture: one button that pulls GPIO 0.2 low while pressed.
+    fn panel() -> serde_json::Value {
+        let gpio = |high: bool| json!({"kind":"gpio","node":"0xff90b000","pin":{"port":0,"pin":2},"high":high});
+        json!({
+            "wiring":{
+                "controls":[{"id":"menu_ok_button","label":"MENU/OK","kind":"button",
+                    "positions":["released","pressed"],"initial":"released","unavailable":null}],
+                "circuits":[{"controls":["menu_ok_button"],"cases":[
+                    {"positions":["released"],"signals":[gpio(true)]},
+                    {"positions":["pressed"],"signals":[gpio(false)]}]}]},
+            "confirmation":{"poll_ticks":1,"max_phase_ticks":1000,
+                "catalog":[{"id":"menu_ok_button","label":"MENU/OK","kind":"button","supported":true}],
+                "actuators":[{"id":"menu_ok_button","momentary":true,"states":[
+                    {"position":"released","ready":[],"expected":[],"hold_ticks":1},
+                    {"position":"pressed","ready":[],"expected":[],"hold_ticks":1}]}]}})
+    }
+
     fn specification() -> serde_json::Value {
         json!({"kind":"xp5","boot_entry":"rom",
             "windows":[{"kind":"gpio","base":0xff90b000u64,"size":0x1000,"options":{}}],
-            "controls":{
-                "layout":{"shutter_half":{"port":0,"pin":0},"shutter_full":{"port":0,"pin":1},
-                    "rear_dial":[{"port":1,"pin":0},{"port":1,"pin":1}],
-                    "front_dial":[{"port":2,"pin":0},{"port":2,"pin":1}]},
-                "initial_levels":[
-                {"pin":{"port":0,"pin":0},"high":true}, {"pin":{"port":0,"pin":1},"high":true},
-                {"pin":{"port":1,"pin":0},"high":false}, {"pin":{"port":1,"pin":1},"high":false},
-                {"pin":{"port":2,"pin":0},"high":false}, {"pin":{"port":2,"pin":1},"high":false}],"samples":{"menu":100,"back":200,"menu_back":150,
-                    "up":300,"down":400,"left":500,"right":600},
-                "detent_return_ns":100,"shutter_half_delay_ns":100},
+            "controls":panel(),
             "storage":null,"companion":null,"displays":[],"interrupts":null,"aprofile":[]})
     }
     fn graph() -> factory::Graph {
@@ -322,9 +311,8 @@ mod tests {
             .collect();
         session.board.write_physical(0x10000, &code).unwrap();
         inputs.gpio(&mut session, 0, 7, true).unwrap();
-        inputs
-            .key(&mut session, 0, crate::session::Key::Back, true)
-            .unwrap();
+        assert!(inputs.gpio_level(0, 2).unwrap(), "released button idles high");
+        session.contact_input("menu_ok_button", None, false).unwrap();
         assert_eq!(
             session
                 .board
@@ -346,41 +334,14 @@ mod tests {
         definition.open(graph(), &BTreeMap::new(), RunEngine::Unicorn, Mode::Strict, value)
     }
 
-    // Synthetic ladder fixture: the band and sample are test inputs.
-    fn ladder_keys() -> serde_json::Value {
-        json!({"ladders":[{"wire":{"kind":"adc","channel":1},"levels":4096,
-            "rungs":[{"key":"Left","band_low":100,"band_high":200,"sample":150,"basis":"test fixture"}]}]})
-    }
-
     #[test]
-    fn a_body_declares_exactly_one_key_model_and_undeclared_keys_are_refused() {
-        // Resistor keys: unchanged shape.
-        let (mut session, inputs) = open(specification()).unwrap();
-        assert!(inputs.key(&mut session, 0, crate::session::Key::Back, true).is_ok());
-
-        // Ladder keys replace the resistor-key model.
-        let mut ladder = specification();
-        ladder.as_object_mut().unwrap().remove("controls");
-        ladder["ladder_keys"] = ladder_keys();
-        let (mut session, inputs) = open(ladder.clone()).unwrap();
-        inputs.key(&mut session, 0, crate::session::Key::Left, true).unwrap();
-        for key in [crate::session::Key::Back, crate::session::Key::ShutterHalf] {
-            let error = inputs.key(&mut session, 0, key, true).unwrap_err();
-            assert!(error.contains("no declared ladder rung"), "{error}");
-        }
-
-        // Neither declared: no key model, every edge is refused.
-        let mut none = ladder.clone();
-        none.as_object_mut().unwrap().remove("ladder_keys");
+    fn a_body_without_declared_controls_refuses_inputs() {
+        let mut none = specification();
+        none.as_object_mut().unwrap().remove("controls");
         let (mut session, inputs) = open(none).unwrap();
-        let error = inputs.key(&mut session, 0, crate::session::Key::Left, true).unwrap_err();
-        assert!(error.contains("no physical key model"), "{error}");
-
-        // Both declared: ambiguous, so the definition does not open.
-        let mut both = ladder;
-        both["controls"] = specification()["controls"].clone();
-        let error = open(both).err().unwrap();
-        assert!(error.contains("both resistor keys and ladder keys"), "{error}");
+        let error = inputs.key(&mut session, 0, crate::session::Key::Menu, true).unwrap_err();
+        assert!(error.contains("no physical controls"), "{error}");
+        assert!(session.contact_input("menu_ok_button", None, false).is_err());
     }
 
     #[test]

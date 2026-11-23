@@ -1,20 +1,16 @@
 //! External XP5 controls and GPIO inputs of an opened XP5 session.
 use fujimod_emulator_session::Session;
 use fujimod_emulator_devices::xp5::pins::SharedPins;
-pub use fujimod_emulator_parts_controls::key_input::Key;
-use fujimod_emulator_parts_controls::key_input::KeyInput;
+pub use crate::keys::Key;
 use fujimod_emulator_ip::usb::dwc3::{Dwc3, Reply};
-use std::time::Duration;
 
 /// External XP5 controls retained after device construction, for the session
 /// `boot::open` returned with them. Their modeled state is checkpointed by the
 /// devices that consume them.
 pub struct Inputs {
     pins: SharedPins,
-    controls: Option<std::sync::Arc<dyn KeyInput>>,
     panel: Option<PanelInputs>,
     gpio_devices: Vec<usize>,
-    control_source: usize,
     usb: Option<UsbWiring>,
 }
 
@@ -37,7 +33,7 @@ const VBUS_HOST: u16 = 0x10;
 
 /// How key names and dial positions reach a session's switch panel.
 pub struct PanelInputs {
-    pub options: fujimod_emulator_parts_controls::ladder_keys::Options,
+    pub options: crate::ladders::Options,
     pub names: crate::panel::Names,
     pub ticks_per_second: u64,
 }
@@ -52,7 +48,8 @@ impl PanelInputs {
             .map(|(id, _)| id.as_str())
             .ok_or_else(|| format!("{key:?} is not a control of this body"))
     }
-    fn input(&self, key: Key, pressed: bool) -> Result<Scheduled, String> {
+    /// The panel input for one key edge; a detent's release has none.
+    fn input(&self, key: Key, pressed: bool) -> Result<Option<Scheduled>, String> {
         let rotary = |names: &Option<(String, String)>, steps| {
             names
                 .as_ref()
@@ -66,9 +63,9 @@ impl PanelInputs {
                 .map(|((id, _), _)| id.clone())
                 .ok_or_else(|| "this body has no shutter button".to_string())
         };
-        Ok(match (key, pressed) {
+        Ok(Some(match (key, pressed) {
             (Key::RearPlus | Key::RearMinus | Key::FrontPlus | Key::FrontMinus, false) => {
-                return Err(format!("{key:?} is a detent, not a held key"));
+                return Ok(None);
             }
             (Key::RearPlus, true) => rotary(&self.names.rear_dial, 1)?,
             (Key::RearMinus, true) => rotary(&self.names.rear_dial, -1)?,
@@ -80,7 +77,7 @@ impl PanelInputs {
             (Key::ShutterFull, false) => Scheduled::Press { id: shutter()?, stage: Some("half".into()) },
             (key, true) => Scheduled::Press { id: self.control(key)?.into(), stage: None },
             (key, false) => Scheduled::Release { id: self.control(key)?.into() },
-        })
+        }))
     }
     fn position(&self, dial: &str, position: &str) -> Result<Scheduled, String> {
         let wanted = dial.trim();
@@ -123,19 +120,21 @@ impl Inputs {
     }
     pub(crate) fn new(
         pins: SharedPins,
-        controls: Option<std::sync::Arc<dyn KeyInput>>,
         gpio_devices: Vec<usize>,
-        control_source: usize,
         usb: Option<UsbWiring>,
     ) -> Self {
         Self {
             pins,
-            controls,
             panel: None,
             gpio_devices,
-            control_source,
             usb,
         }
+    }
+
+    fn panel(&self) -> Result<&PanelInputs, String> {
+        self.panel
+            .as_ref()
+            .ok_or_else(|| "this XP5 body has no physical controls; inputs are refused".into())
     }
 
     fn usb(&self) -> Result<&UsbWiring, String> {
@@ -237,14 +236,11 @@ impl Inputs {
         key: Key,
         pressed: bool,
     ) -> Result<(), String> {
-        if let Some(panel) = &self.panel {
-            return session.schedule_input(panel.at(at_ns), panel.input(key, pressed)?);
+        let panel = self.panel()?;
+        match panel.input(key, pressed)? {
+            Some(input) => session.schedule_input(panel.at(at_ns), input),
+            None => Ok(()),
         }
-        self.controls
-            .as_ref()
-            .ok_or("this XP5 body has no physical key model; key edges are refused")?
-            .enqueue(Duration::from_nanos(at_ns), key, pressed)?;
-        session.board.inputs_changed(self.control_source)
     }
 
     /// Queue a latched dial or switch position change (`iso`, `ss`, `ev`,
@@ -257,14 +253,8 @@ impl Inputs {
         dial: &str,
         position: &str,
     ) -> Result<(), String> {
-        if let Some(panel) = &self.panel {
-            return session.schedule_input(panel.at(at_ns), panel.position(dial, position)?);
-        }
-        self.controls
-            .as_ref()
-            .ok_or("this XP5 body has no physical key model; position changes are refused")?
-            .set_position(Duration::from_nanos(at_ns), dial, position)?;
-        session.board.inputs_changed(self.control_source)
+        let panel = self.panel()?;
+        session.schedule_input(panel.at(at_ns), panel.position(dial, position)?)
     }
 
     /// Drive one external XP5 GPIO input level and wake its registered devices.

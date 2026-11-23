@@ -5,7 +5,7 @@
 //! lists the level the wire presents for one combination of held keys and
 //! latched positions; a combination without a declared band has no case and
 //! is refused. Rungs, contact sets and position bands come from the body's
-//! [`ladder_keys::Options`]; the level a wire reads with nothing held comes
+//! [`crate::ladders::Options`]; the level a wire reads with nothing held comes
 //! from the run.
 use std::collections::BTreeMap;
 
@@ -13,9 +13,9 @@ use fujimod_emulator_devices::parts::{
     pins::Pin,
     switch_panel::{Case, Circuit, Control, Signal, Spec},
 };
-use fujimod_emulator_parts_controls::{
-    key_input::Key,
-    ladder_keys::{Ladder, Options, PositionDial, Wire},
+use crate::{
+    keys::Key,
+    ladders::{CommandDial, Ladder, Options, PositionDial, Wire},
 };
 use fujimod_emulator_session::contact_driver::{
     self, Actuator, ControlChoice, ControlInput, Interface, Pose,
@@ -30,7 +30,8 @@ pub struct Nodes {
     pub gpio: String,
     /// The SPI controller node and attachment index of the power controller.
     pub power: (String, usize),
-    /// The front command dial's encoder node, when the body has one.
+    /// The rear and front command dials' encoder nodes, for quadrature dials.
+    pub rear_dial: Option<String>,
     pub front_dial: Option<String>,
 }
 
@@ -53,11 +54,7 @@ pub struct Idle<'a> {
     pub register: &'a dyn Fn(u8) -> Result<u16, String>,
 }
 
-/// The compiled panel and the host input driver over it.
-pub struct Panel {
-    pub wiring: Spec,
-    pub confirmation: contact_driver::Spec,
-}
+pub use fujimod_emulator_session::inputs::Panel;
 
 const RELEASED: &str = "released";
 const PRESSED: &str = "pressed";
@@ -413,8 +410,10 @@ pub fn compile(
         });
         Ok(())
     };
-    if options.rear_dial.is_some() {
-        rotary(&names.rear_dial, Some(&nodes.power.0))?;
+    match &options.rear_dial {
+        Some(CommandDial::Counting(_)) => rotary(&names.rear_dial, Some(&nodes.power.0))?,
+        Some(CommandDial::Quadrature(_)) => rotary(&names.rear_dial, nodes.rear_dial.as_ref())?,
+        None => {}
     }
     if options.front_dial.is_some() {
         rotary(&names.front_dial, nodes.front_dial.as_ref())?;
@@ -465,6 +464,8 @@ pub fn connect(
         adc: adc.clone(),
         gpio,
         power,
+        rear_dial: matches!(options.rear_dial, Some(CommandDial::Quadrature(_)))
+            .then(|| crate::boot::REAR_DIAL_NODE.to_owned()),
         front_dial: options
             .front_dial
             .is_some()
@@ -489,11 +490,7 @@ pub fn connect(
         },
         ticks_per_second,
     )?;
-    session.configure_controls(panel.wiring)?;
-    if let Err(error) = session.configure_contact_driver(panel.confirmation) {
-        session.controls = None;
-        return Err(error);
-    }
+    session.install_panel(panel)?;
     inputs.use_panel(crate::session::PanelInputs {
         options,
         names,
@@ -510,7 +507,7 @@ mod tests {
 
     fn xt5() -> Panel {
         let resolved = ResolvedConfiguration::bundled("xt5-431").unwrap();
-        let options = crate::ladder_controls::ladder_keys(&resolved).unwrap().unwrap();
+        let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
         let names = crate::ladder_controls::panel_names(&resolved).unwrap();
         // The run's idle ADC levels: every dial at its stock position, every ladder released.
         let mut adc = vec![4095u16; 15];
@@ -522,6 +519,7 @@ mod tests {
             adc: "adc".into(),
             gpio: "gpio".into(),
             power: ("spi".into(), 2),
+            rear_dial: None,
             front_dial: Some("front-dial".into()),
         };
         compile(
@@ -560,5 +558,46 @@ mod tests {
         assert!(up.transition("selector_down_button", "pressed").is_err());
         let ids: Vec<_> = panel.confirmation.interfaces.iter().map(|i| i.id().to_owned()).collect();
         assert_eq!(ids, ["rear_command_dial", "front_command_dial"]);
+    }
+
+    #[test]
+    fn x100vi_controls_compile_to_one_panel() {
+        let resolved = ResolvedConfiguration::bundled("x100vi-131").unwrap();
+        let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
+        let names = crate::ladder_controls::panel_names(&resolved).unwrap();
+        let nodes = Nodes {
+            adc: "adc".into(),
+            gpio: "gpio".into(),
+            power: ("spi".into(), 0),
+            rear_dial: Some("rear-dial".into()),
+            front_dial: Some("front-dial".into()),
+        };
+        let panel = compile(
+            &options,
+            &names,
+            &nodes,
+            &Idle { adc: &[4095; 15], register: &|_| Ok(0) },
+            1_000_000_000,
+        )
+        .unwrap();
+        let switches = SwitchPanel::new(panel.wiring.clone()).unwrap();
+        let menu = switches.transition("menu_ok_button", "pressed").unwrap();
+        assert!(menu.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 11, value: 3472 }));
+        let both = menu.transition("disp_back_button", "pressed").unwrap();
+        assert!(both.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 11, value: 1999 }));
+        let up = switches.transition("focus_stick.up", "pressed").unwrap();
+        assert!(up.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 14, value: 1558 }));
+        let half = switches.transition("shutter_button", "half").unwrap();
+        assert!(half.signals().unwrap().contains(&Signal::Gpio { node: "gpio".into(), pin: Pin { port: 0, pin: 0 }, high: false }));
+        let dials: Vec<_> = panel
+            .confirmation
+            .interfaces
+            .iter()
+            .map(|interface| match interface {
+                Interface::Rotary { id, node, .. } => (id.as_str(), node.as_str()),
+                _ => panic!("only command dials are interfaces"),
+            })
+            .collect();
+        assert_eq!(dials, [("rear_command_dial", "rear-dial"), ("front_command_dial", "front-dial")]);
     }
 }

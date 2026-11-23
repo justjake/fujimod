@@ -21,7 +21,6 @@ fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
 fujimod-emulator-ip-arm.workspace = true
-fujimod-emulator-parts-controls.workspace = true
 toml = "1.1"
 
 [lints.rust]

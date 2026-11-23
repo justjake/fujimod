@@ -4,6 +4,15 @@ use super::contact_driver::{ControlChoice, ControlInput, QueueState};
 use fujimod_emulator_devices::parts::pins::Pin;
 use fujimod_emulator_devices::parts::switch_panel::{Signal, Spec, SwitchPanel};
 use std::collections::BTreeMap;
+
+/// A body's physical controls: switch-panel wiring and the confirmation that
+/// paces inputs through it.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Panel {
+    pub wiring: Spec,
+    pub confirmation: super::contact_driver::Spec,
+}
 use fujimod_emulator_devices::capability::{
     AnalogInputs, GpioInputs, GravityInput, SerialStatus, TouchPanel,
 };
@@ -48,6 +57,15 @@ impl Session {
             .edit_capability::<dyn GravityInput, _>(self.node(node)?, |sensor| {
                 sensor.set_gravity_g(gravity)
             })
+    }
+    /// Install a compiled panel: its wiring and its input confirmation together.
+    pub fn install_panel(&mut self, panel: Panel) -> Result<(), String> {
+        self.configure_controls(panel.wiring)?;
+        if let Err(error) = self.configure_contact_driver(panel.confirmation) {
+            self.controls = None;
+            return Err(error);
+        }
+        Ok(())
     }
     pub fn configure_controls(&mut self, spec: Spec) -> Result<(), String> {
         if self.controls.is_some() {

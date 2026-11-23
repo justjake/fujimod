@@ -68,10 +68,6 @@ declare class Camera {
      */
     static fromSnapshot(bytes: Uint8Array): Camera;
     history(): InputLog;
-    /**
-     * Queue a physical key edge at guest tick `at` (resolved bodies).
-     */
-    input(key: string, pressed: boolean, at: bigint): void;
     memoryRead(address: bigint, size: number): Uint8Array;
     /**
      * Power off and on again, holding `inputs` during the boot.

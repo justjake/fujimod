@@ -8,7 +8,7 @@ use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_session::Session;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_parts_controls::key_input::Key;
+use fujimod_emulator_xp5_board::keys::Key;
 use serde_json::{Value, json};
 use std::{collections::VecDeque, path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 
@@ -131,9 +131,9 @@ fn viewer_key_handler(queue: ViewerQueue) -> crate::frame_viewer::KeyHandler {
     })
 }
 
-/// Apply one viewer input at guest time `now`. A body whose key model has no shutter wiring
-/// (the X-T5 ladder keys) gets the shutter as its GPIO release lines: half press drives 0:0 low,
-/// full press drives 0:1 low and holds 0:0 low while it is down.
+/// Apply one viewer input at guest time `now`. A body whose panel has no shutter wiring gets the
+/// shutter as its GPIO release lines: half press drives 0:0 low, full press drives 0:1 low and
+/// holds 0:0 low while it is down.
 fn apply_viewer_input(
     inputs: &fujimod_emulator_xp5_board::session::Inputs,
     session: &mut fujimod_emulator_session::Session,

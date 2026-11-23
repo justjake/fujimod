@@ -9,32 +9,6 @@ pub trait Controls: Send + Sync {
     fn next_deadline(&self) -> Option<u64>;
     /// Observe the current resistor ladder; host inspection never advances it.
     fn sample(&self, channel: usize, fallback: u16) -> u16;
-    /// Registers of a power controller whose value these controls drive, in
-    /// ascending order. Bodies whose keys are not register ladders drive none.
-    fn register_ladders(&self) -> Vec<u8> {
-        Vec::new()
-    }
-    /// Current value of a driven register ladder; `None` for any register
-    /// that is not one. Host inspection never advances the controls.
-    fn register_sample(&self, _register: u8) -> Option<u16> {
-        None
-    }
-    /// Every power-controller register these controls drive, in ascending
-    /// order: the register ladders plus any register whose bits a switch
-    /// drives or whose count a dial accumulates.
-    fn driven_registers(&self) -> Vec<u8> {
-        self.register_ladders()
-    }
-    /// Value of a driven register given its current value, or `None` to leave
-    /// it unchanged. Host inspection never advances the controls.
-    fn drive_register(&self, register: u8, _current: u16) -> Option<u16> {
-        self.register_sample(register)
-    }
-    /// Value one guest read of a counting register returns. The read consumes
-    /// what it returns; `None` for any register that does not count.
-    fn take_register(&self, _register: u8) -> Option<u16> {
-        None
-    }
     fn save(&self) -> Value;
     fn restore(&self, state: &Value) -> Result<(), String>;
     /// Exact future-affecting state, including held keys and queued edges.
@@ -50,49 +24,5 @@ pub trait Controls: Send + Sync {
     }
     fn restore_checkpoint(&self, _: &crate::checkpoint::Checkpoint) -> Result<(), String> {
         Err("physical controls have no exact checkpoint implementation".into())
-    }
-}
-
-/// A physical input queue is a non-MMIO source on the same device timeline.
-/// Its host API enqueues edges; only a due guest event applies those edges.
-pub struct Source(std::sync::Arc<dyn Controls>);
-impl Source {
-    pub fn new(controls: std::sync::Arc<dyn Controls>) -> Self {
-        Self(controls)
-    }
-}
-impl crate::Device for Source {
-    fn name(&self) -> &'static str {
-        "physical-controls"
-    }
-    fn read(&mut self, cx: &mut crate::Cx<'_>, _: u64, _: u8) -> u64 {
-        cx.unmodeled();
-        0
-    }
-    fn write(&mut self, cx: &mut crate::Cx<'_>, _: u64, _: u8, _: u64) {
-        cx.unmodeled();
-    }
-    fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.0.next_deadline()
-    }
-    fn advance(&mut self, cx: &mut crate::Cx<'_>) {
-        for line in self.0.advance(cx.now()) {
-            cx.log(&line);
-        }
-    }
-    fn save(&self) -> Value {
-        self.0.save()
-    }
-    fn restore(&mut self, state: &Value) -> Result<(), String> {
-        self.0.restore(state)
-    }
-    fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
-        self.0.checkpoint()
-    }
-    fn validate_checkpoint(&self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
-        self.0.validate_checkpoint(saved)
-    }
-    fn restore_checkpoint(&mut self, saved: &crate::checkpoint::Checkpoint) -> Result<(), String> {
-        self.0.restore_checkpoint(saved)
     }
 }

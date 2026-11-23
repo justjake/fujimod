@@ -1,7 +1,6 @@
 //! Pure XP5 device construction. Firmware transport, CPU execution and host
 //! output publication are supplied by the application, outside these models.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
-use fujimod_emulator_devices::parts::controls::Controls;
 use fujimod_emulator_xp5_io::{
     adc, connection_status, discarded_read, gates, gpio, mailbox, memory_configuration,
     reset_handshake, timer, write_only_registers,
@@ -15,7 +14,6 @@ use fujimod_emulator_xp5_storage::{
 };
 use fujimod_emulator_xp5_imaging::serial_sink;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 pub mod audio;
 pub mod clocks;
 pub mod codec;
@@ -36,7 +34,6 @@ pub struct Companion {
 }
 pub struct Resources {
     pub sd: BTreeMap<u64, sd::Media>,
-    pub controls: Arc<dyn Controls>,
     /// The power-controller register that counts a command dial's detents.
     pub counting_dial: Option<u8>,
     pub pins: fujimod_emulator_devices::xp5::pins::SharedPins,
@@ -454,7 +451,6 @@ fn register_with_resources(
                 window.base,
                 window.size,
                 Box::new(adc::Adc::new(
-                    resources.controls.clone(),
                     serde_json::from_value(
                         serde_json::to_value(
                             window
@@ -577,7 +573,6 @@ fn register_with_resources(
                     window.base,
                     resources.pins.clone(),
                     &window.options,
-                    resources.controls.clone(),
                     resources.counting_dial,
                 )?),
             )?;

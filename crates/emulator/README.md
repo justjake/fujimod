@@ -98,8 +98,8 @@ a fresh session directly. Browser reports include this complete
 
 Rust callers can open an XP5 board through
 `fujimod_emulator_xp5_board::boot::open`. `OpenOptions` supplies a validated CPU
-graph, explicit device windows, interrupt state, A-profile setup, resistor-key
-options, device resources, and initial memory images. The function builds the
+graph, explicit device windows, interrupt state, A-profile setup, command-dial
+encoders, device resources, and initial memory images. The function builds the
 same `board::factory::Graph`, strict device bus and `fujimod_emulator_session::Session` used by
 the rest of the emulator. `xp5_device_windows` converts a selected SoC
 hardware profile to device windows; callers supply any run-specific device

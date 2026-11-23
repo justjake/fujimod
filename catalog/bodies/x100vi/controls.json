@@ -941,5 +941,71 @@
       "positions": [],
       "short_name": "VIEW"
     }
-  }
+  },
+  "ladders": [
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 11
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads ADC channel 11 at 12-bit resolution through cfg_u16_read band pairs (research/x100vi-131/ui-path.md, physical controls). No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "menu_ok_button",
+          "band_low": 3111,
+          "band_high": 3834,
+          "sample": 3472,
+          "basis": "Band 3111..3834 is [cfg3935, cfg3933] of the X100VI 1.31 default configuration page (read in the emulator from configuration RAM 0x7508000 after cfg_initialize loads it from flash defaults); callback 0x14dcce0 accepts it for scanner code 0x75 (UI 1, MENU/OK) with no other key held. The sample is the band midpoint."
+        },
+        {
+          "control_id": "disp_back_button",
+          "band_low": 2112,
+          "band_high": 2342,
+          "sample": 2227,
+          "basis": "Band 2112..2342 is [cfg3929, cfg3927] of the X100VI 1.31 default configuration page (read in the emulator from configuration RAM 0x7508000 after cfg_initialize loads it from flash defaults); callback 0x14dcbb8 accepts it for scanner code 0x77 (UI 9, DISP/BACK) with no other key held. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 14
+      },
+      "levels": 4096,
+      "released": null,
+      "basis": "The firmware reads ADC channel 14 at 12-bit resolution through cfg_u16_read band pairs (research/x100vi-131/ui-path.md, physical controls). No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1438,
+          "band_high": 1679,
+          "sample": 1558,
+          "basis": "Band 1438..1679 is [cfg3891, cfg388f] of the X100VI 1.31 default configuration page (read in the emulator from configuration RAM 0x7508000 after cfg_initialize loads it from flash defaults); the ADC14 scanner row accepts it for scanner code 0x6c (UI 0x3c) with no other key held. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 1923,
+          "band_high": 2214,
+          "sample": 2068,
+          "basis": "Band 1923..2214 is [cfg3899, cfg3897] of the X100VI 1.31 default configuration page (read in the emulator from configuration RAM 0x7508000 after cfg_initialize loads it from flash defaults); the ADC14 scanner row accepts it for scanner code 0x6a (UI 0x3e) with no other key held. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2606,
+          "band_high": 3052,
+          "sample": 2829,
+          "basis": "Band 2606..3052 is [cfg38a1, cfg389f] of the X100VI 1.31 default configuration page (read in the emulator from configuration RAM 0x7508000 after cfg_initialize loads it from flash defaults); the ADC14 scanner row accepts it for scanner code 0x68 (UI 0x42) with no other key held. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3053,
+          "band_high": 3765,
+          "sample": 3409,
+          "basis": "Band 3053..3765 is [cfg38a5, cfg38a3] of the X100VI 1.31 default configuration page (read in the emulator from configuration RAM 0x7508000 after cfg_initialize loads it from flash defaults); the ADC14 scanner row accepts it for scanner code 0x67 (UI 0x40) with no other key held. The sample is the band midpoint."
+        }
+      ]
+    }
+  ]
 }

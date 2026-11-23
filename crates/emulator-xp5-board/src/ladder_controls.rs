@@ -1,4 +1,4 @@
-//! A body's catalog ladders as options of the ladder-key model.
+//! A body's catalog ladders as the panel's ladder wiring.
 //!
 //! The bands, samples and evidence come from the body's physical-controls
 //! record. The value each wire reads with no control held comes from the run:
@@ -21,7 +21,7 @@ use fujimod_catalog_configuration::{
 use fujimod_catalog_controls::{ControlLadder, LadderWire, PhysicalControls};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_devices::parts::pins::Pin;
-use fujimod_emulator_parts_controls::{key_input::Key, ladder_keys};
+use crate::{keys::Key, ladders};
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
@@ -60,11 +60,11 @@ pub fn key_for_control(control_id: &str) -> Option<Key> {
         .map(|(_, key)| *key)
 }
 
-/// The resolved body's ladders as ladder-key options, or `None` when the body
-/// declares no ladder.
-pub fn ladder_keys(
+/// The resolved body's ladder wiring, or `None` when the body declares no
+/// ladder.
+pub fn ladders(
     resolved: &ResolvedConfiguration,
-) -> Result<Option<ladder_keys::Options>, String> {
+) -> Result<Option<ladders::Options>, String> {
     let body = &resolved.reference.body.id;
     let Some(document) = resolved.reference.physical_controls.as_ref() else {
         return Ok(None);
@@ -83,7 +83,7 @@ pub fn ladder_keys(
         .iter()
         .map(|ladder| model_ladder(body, ladder, inputs))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut options = ladder_keys::Options {
+    let mut options = ladders::Options {
         ladders,
         dials: Vec::new(),
         switches: Vec::new(),
@@ -100,7 +100,7 @@ fn model_ladder(
     body: &str,
     ladder: &ControlLadder,
     inputs: &ApplicationRunInputs,
-) -> Result<ladder_keys::Ladder, String> {
+) -> Result<ladders::Ladder, String> {
     let wire = ladder.wire;
     let unmapped: Vec<&str> = ladder
         .rungs
@@ -128,7 +128,7 @@ fn model_ladder(
                     rung.control_id
                 ));
             }
-            ladder_keys::Wire::Adc { channel }
+            ladders::Wire::Adc { channel }
         }
         LadderWire::PowerControllerRegister { register } => {
             let supplied = inputs
@@ -149,16 +149,16 @@ fn model_ladder(
                     ));
                 }
             };
-            ladder_keys::Wire::PowerControllerRegister { register, released }
+            ladders::Wire::PowerControllerRegister { register, released }
         }
     };
-    Ok(ladder_keys::Ladder {
+    Ok(ladders::Ladder {
         wire,
         levels: ladder.levels,
         rungs: ladder
             .rungs
             .iter()
-            .map(|rung| ladder_keys::Rung {
+            .map(|rung| ladders::Rung {
                 key: key_for_control(&rung.control_id).expect("checked above"),
                 band_low: rung.band_low,
                 band_high: rung.band_high,
@@ -179,10 +179,10 @@ fn midpoint(low: u16, high: u16) -> u16 {
     low + (high - low) / 2
 }
 
-fn positions(entries: &[(&str, &[&str], u16, u16, bool)]) -> Vec<ladder_keys::Position> {
+fn positions(entries: &[(&str, &[&str], u16, u16, bool)]) -> Vec<ladders::Position> {
     entries
         .iter()
-        .map(|&(label, aliases, low, high, contact)| ladder_keys::Position {
+        .map(|&(label, aliases, low, high, contact)| ladders::Position {
             label: label.into(),
             aliases: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
             band_low: low,
@@ -195,34 +195,76 @@ fn positions(entries: &[(&str, &[&str], u16, u16, bool)]) -> Vec<ladder_keys::Po
 
 /// The board's table of decoded controls the catalog cannot yet express, by
 /// body. Bodies without an entry are unchanged.
-fn extension(body: &str, options: &mut ladder_keys::Options) -> Result<(), String> {
-    if body != "xt5" {
-        return Ok(());
+fn extension(body: &str, options: &mut ladders::Options) -> Result<(), String> {
+    match body {
+        "xt5" => xt5_extension(options),
+        "x100vi" => x100vi_extension(options),
+        _ => Ok(()),
     }
-    let adc = |channel| move |wire: ladder_keys::Wire| wire == ladder_keys::Wire::Adc { channel };
+}
+
+const X100VI_BANDS: &str = "Band of the X100VI 1.31 default configuration page, read in the emulator from \
+configuration RAM 0x7508000 after cfg_initialize; research/x100vi-131/ui-path.md, physical controls.";
+
+fn x100vi_extension(options: &mut ladders::Options) -> Result<(), String> {
+    let menu = options
+        .ladders
+        .iter_mut()
+        .find(|ladder| ladder.wire == ladders::Wire::Adc { channel: 11 })
+        .ok_or("the X100VI catalog ladders lack ADC 11")?;
+    // MENU/OK callback 0x14dcce0 and DISP/BACK callback 0x14dcbb8 both accept
+    // [cfg3925, cfg3923] = 1887..2111, the two keys held together.
+    menu.sets.push(ladders::ContactSet {
+        keys: vec![Key::Menu, Key::Back],
+        position: None,
+        band_low: 1887,
+        band_high: 2111,
+        sample: midpoint(1887, 2111),
+        basis: X100VI_BANDS.into(),
+    });
+    let dial = |pins: [Pin; 2], basis: &str| ladders::QuadratureDial {
+        pins,
+        rest_phase: 0,
+        basis: basis.into(),
+    };
+    options.rear_dial = Some(ladders::CommandDial::Quadrature(dial(
+        [Pin { port: 5, pin: 7 }, Pin { port: 5, pin: 9 }],
+        "Scanner codes 0x7f/0x80 (UI 0x26/0x27) read GPIO 5.7 and 5.9; cfg3805 bit 3 sets the \
+direction. Both pads idle low.",
+    )));
+    options.front_dial = Some(dial(
+        [Pin { port: 5, pin: 8 }, Pin { port: 13, pin: 5 }],
+        "Scanner codes 0x82/0x83 (UI 0x46/0x47) read GPIO 5.8 and 13.5; cfg3805 bit 2 sets the \
+direction. Both pads idle low.",
+    ));
+    Ok(())
+}
+
+fn xt5_extension(options: &mut ladders::Options) -> Result<(), String> {
+    let adc = |channel| move |wire: ladders::Wire| wire == ladders::Wire::Adc { channel };
     let register = |number| {
-        move |wire: ladder_keys::Wire| {
-            matches!(wire, ladder_keys::Wire::PowerControllerRegister { register, .. } if register == number)
+        move |wire: ladders::Wire| {
+            matches!(wire, ladders::Wire::PowerControllerRegister { register, .. } if register == number)
         }
     };
     fn ladder<'a>(
-        options: &'a mut ladder_keys::Options,
-        is: &dyn Fn(ladder_keys::Wire) -> bool,
-    ) -> Result<&'a mut ladder_keys::Ladder, String> {
+        options: &'a mut ladders::Options,
+        is: &dyn Fn(ladders::Wire) -> bool,
+    ) -> Result<&'a mut ladders::Ladder, String> {
         options
             .ladders
             .iter_mut()
             .find(|ladder| is(ladder.wire))
             .ok_or_else(|| "the catalog ladders lack a wire the board table extends".to_owned())
     }
-    let rung = |key, low, high| ladder_keys::Rung {
+    let rung = |key, low, high| ladders::Rung {
         key,
         band_low: low,
         band_high: high,
         sample: midpoint(low, high),
         basis: XT5_BANDS.into(),
     };
-    let set = |keys: &[Key], position: Option<&str>, low, high| ladder_keys::ContactSet {
+    let set = |keys: &[Key], position: Option<&str>, low, high| ladders::ContactSet {
         keys: keys.to_vec(),
         position: position.map(str::to_owned),
         band_low: low,
@@ -268,7 +310,7 @@ fn extension(body: &str, options: &mut ladder_keys::Options) -> Result<(), Strin
         set(&[Key::Right, Key::Up], None, 283, 315),
     ]);
     let dial = |name: &str, aliases: &[&str], channel, entries: &[(&str, &[&str], u16, u16, bool)]| {
-        ladder_keys::PositionDial {
+        ladders::PositionDial {
             name: name.into(),
             aliases: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
             channel,
@@ -366,7 +408,7 @@ fn extension(body: &str, options: &mut ladder_keys::Options) -> Result<(), Strin
     ];
     // Row 0 reads POWER held while register 0x00 bit 10 is clear; that set
     // means OFF is a guess of the decode.
-    options.switches = vec![ladder_keys::RegisterSwitch {
+    options.switches = vec![ladders::RegisterSwitch {
         name: "power".into(),
         register: 0x00,
         bit: 10,
@@ -376,13 +418,13 @@ fn extension(body: &str, options: &mut ladder_keys::Options) -> Result<(), Strin
 copy of power-controller register 0x00 that 0x1407d2c refreshes each scan."
             .into(),
     }];
-    options.rear_dial = Some(ladder_keys::CountingDial {
+    options.rear_dial = Some(ladders::CommandDial::Counting(ladders::CountingDial {
         register: 0x36,
         basis: "0x1407d2c reads power-controller register 0x36 each scan through 0x13d5834: bits 2..0 \
 count, bit 3 sign. The firmware never writes it, so the controller clears the count on read."
             .into(),
-    });
-    options.front_dial = Some(ladder_keys::QuadratureDial {
+    }));
+    options.front_dial = Some(ladders::QuadratureDial {
         pins: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 10 }],
         rest_phase: 3,
         basis: "Sampler 0x140a5bc: phase = level(0.9) << 1 | level(0.10), idle 3; transition table \
@@ -390,13 +432,13 @@ count, bit 3 sign. The firmware never writes it, so the controller clears the co
             .into(),
     });
     options.gpio_keys = vec![
-        ladder_keys::GpioKey {
+        ladders::GpioKey {
             key: Key::RearPush,
             pin: Pin { port: 0, pin: 13 },
             active_high: false,
             basis: "Scanner row 97 (physical 0x1e, UI 0x25) reads GPIO 0.13 low.".into(),
         },
-        ladder_keys::GpioKey {
+        ladders::GpioKey {
             key: Key::FrontPush,
             pin: Pin { port: 0, pin: 14 },
             active_high: false,
@@ -469,7 +511,7 @@ pub fn panel_names(resolved: &ResolvedConfiguration) -> Result<crate::panel::Nam
         .map(|&(model, id)| Ok((model.to_owned(), (id.to_owned(), label(id)?))))
         .collect::<Result<_, String>>()?;
     let shutter = match controls.controls.get("shutter_button") {
-        Some(control) if body == "xt5" => Some((
+        Some(control) if matches!(body.as_str(), "xt5" | "x100vi") => Some((
             ("shutter_button".to_owned(), control.name.clone()),
             // S1 (half press) on GPIO 0.0 and S2 on 0.1, both active low.
             [Pin { port: 0, pin: 0 }, Pin { port: 0, pin: 1 }],
@@ -513,8 +555,6 @@ fn adc_sample(inputs: &ApplicationRunInputs, channel: u8) -> Result<u16, String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_controls::key_input::ControlsOptions;
-    use std::time::Duration;
 
     fn xt5() -> ResolvedConfiguration {
         ResolvedConfiguration::bundled("xt5-431").unwrap()
@@ -528,18 +568,18 @@ mod tests {
     }
 
     #[test]
-    fn xt5_ladders_become_the_ladder_key_model() {
-        let options = ladder_keys(&xt5()).unwrap().unwrap();
+    fn xt5_ladders_become_the_ladder_wiring() {
+        let options = ladders(&xt5()).unwrap().unwrap();
         let wires: Vec<_> = options.ladders.iter().map(|ladder| ladder.wire).collect();
         assert_eq!(
             wires,
             [
-                ladder_keys::Wire::Adc { channel: 1 },
-                ladder_keys::Wire::Adc { channel: 2 },
-                ladder_keys::Wire::Adc { channel: 14 },
-                ladder_keys::Wire::PowerControllerRegister { register: 0x34, released: 1023 },
-                ladder_keys::Wire::PowerControllerRegister { register: 0x35, released: 1023 },
-                ladder_keys::Wire::Adc { channel: 11 },
+                ladders::Wire::Adc { channel: 1 },
+                ladders::Wire::Adc { channel: 2 },
+                ladders::Wire::Adc { channel: 14 },
+                ladders::Wire::PowerControllerRegister { register: 0x34, released: 1023 },
+                ladders::Wire::PowerControllerRegister { register: 0x35, released: 1023 },
+                ladders::Wire::Adc { channel: 11 },
             ]
         );
         // 19 catalog rungs plus the four focus-lever diagonals of the board table.
@@ -560,116 +600,28 @@ mod tests {
         assert_eq!(rung(Key::Up), (377, 420, 398));
         assert_eq!(rung(Key::Play), (2102, 2325, 2213));
 
-        let keys = ControlsOptions::LadderKeys(options)
-            .open(fujimod_emulator_devices::xp5::pins::Pins::shared())
-            .unwrap();
-        assert_eq!(keys.register_sample(0x34), Some(1023));
-        keys.enqueue(Duration::from_nanos(1), Key::Menu, true).unwrap();
-        keys.enqueue(Duration::from_nanos(1), Key::Quick, true).unwrap();
-        keys.advance(1);
-        assert_eq!(keys.register_sample(0x34), Some(554));
-        assert_eq!(keys.sample(2, 4095), 2213);
-        // PLAY pulls ADC11 (focus-mode selector at C) into the shared band.
-        assert_eq!(keys.sample(11, 4095), 4095);
-        keys.enqueue(Duration::from_nanos(1), Key::Play, true).unwrap();
-        keys.advance(1);
-        assert_eq!(keys.sample(11, 4095), 2213);
-        let error = keys.enqueue(Duration::from_nanos(2), Key::ShutterHalf, true).unwrap_err();
-        assert!(error.contains("no declared ladder rung"), "{error}");
     }
 
-    fn xt5_keys() -> std::sync::Arc<dyn fujimod_emulator_parts_controls::key_input::KeyInput> {
-        ControlsOptions::LadderKeys(ladder_keys(&xt5()).unwrap().unwrap())
-            .open(fujimod_emulator_devices::xp5::pins::Pins::shared())
+    #[test]
+    fn x100vi_ladders_wire_its_buttons_stick_and_dials() {
+        let options = ladders(&ResolvedConfiguration::bundled("x100vi-131").unwrap())
             .unwrap()
-    }
-
-    fn at(ns: u64) -> Duration {
-        Duration::from_nanos(ns)
-    }
-
-    #[test]
-    fn xt5_contact_sets_read_their_band_midpoints() {
-        let keys = xt5_keys();
-        for key in [Key::AeLock, Key::AfOn, Key::StickUpLeft] {
-            keys.enqueue(at(1), key, true).unwrap();
-        }
-        keys.advance(1);
-        assert_eq!(keys.register_sample(0x34), Some(711));
-        assert_eq!(keys.sample(1, 4095), 2842);
-        assert_eq!(keys.sample(14, 4095), 1347);
-        // Pairs on one wire.
-        keys.enqueue(at(2), Key::Menu, true).unwrap();
-        keys.enqueue(at(2), Key::Fn2, true).unwrap();
-        keys.enqueue(at(2), Key::Left, true).unwrap();
-        keys.enqueue(at(2), Key::Up, true).unwrap();
-        keys.advance(2);
-        assert_eq!(keys.register_sample(0x34), Some(449), "AE-L + MENU 427..471");
-        assert_eq!(keys.sample(1, 4095), 2471, "Fn2 + AF-ON 2326..2617");
-        assert_eq!(keys.register_sample(0x35), Some(332), "LEFT + UP 316..348");
-        // Undecoded sets: three keys on ADC 1, DELETE with another key, two
-        // focus-lever directions, the lever push with MENU.
-        let error = keys.enqueue(at(3), Key::ViewMode, true).unwrap_err();
-        assert!(error.contains("no band is declared"), "{error}");
-        let error = keys.enqueue(at(3), Key::StickUp, true).unwrap_err();
-        assert!(error.contains("no band is declared"), "{error}");
-        let error = keys.enqueue(at(3), Key::StickPush, true).unwrap_err();
-        assert!(error.contains("no band is declared"), "{error}");
-        let keys = xt5_keys();
-        keys.enqueue(at(1), Key::Delete, true).unwrap();
-        assert!(keys.enqueue(at(1), Key::Fn2, true).is_err());
-    }
-
-    #[test]
-    fn xt5_shared_wires_follow_the_lever_and_focus_positions() {
-        let keys = xt5_keys();
-        keys.enqueue(at(1), Key::Quick, true).unwrap();
-        keys.enqueue(at(1), Key::Play, true).unwrap();
-        keys.advance(1);
-        // Window samples as with XT5_ADC=2=3400,11=3400: lever MOVIE, focus S.
-        assert_eq!(keys.sample(2, 3400), 1990, "MOVIE + Q 1880..2101");
-        assert_eq!(keys.sample(11, 3400), 1990, "S + PLAY 1880..2101");
-        assert_eq!(keys.sample(2, 4095), 2213, "STILL: Q alone");
-        assert_eq!(keys.sample(11, 4095), 2213, "C: PLAY alone");
-        keys.set_position(at(2), "focus", "M").unwrap();
-        keys.set_position(at(2), "mode", "MOVIE").unwrap();
-        keys.enqueue(at(2), Key::Fn1, true).unwrap();
-        keys.advance(2);
-        assert_eq!(keys.sample(11, 4095), 1790, "M + PLAY 1701..1879");
-        assert_eq!(keys.sample(2, 4095), 900, "MOVIE + Fn1 + Q 100..1700");
-    }
-
-    #[test]
-    fn xt5_dials_switch_and_command_dials_are_declared() {
-        let keys = xt5_keys();
-        for (dial, position, channel, sample) in [
-            ("iso", "800", 12, 1591),
-            ("ss", "1/250", 13, 2543),
-            ("ss", "T", 13, 453),
-            ("ev", "-2/3", 7, 2648),
-            ("ev", "+1", 7, 1627),
-            ("drive", "CH", 3, 2300),
-            ("focus", "S", 11, 3408),
-            ("mode", "STILL", 2, 3923),
-        ] {
-            keys.set_position(at(5), dial, position).unwrap();
-            keys.advance(5);
-            assert_eq!(keys.sample(channel, 4095), sample, "{dial}={position}");
-        }
-        assert!(keys.set_position(at(6), "iso", "100").is_err());
-        assert!(keys.set_position(at(6), "drive", "VIDEO").is_err());
-        keys.set_position(at(6), "power", "OFF").unwrap();
-        keys.advance(6);
-        assert_eq!(keys.driven_registers(), [0x00, 0x34, 0x35]);
-        assert_eq!(keys.drive_register(0x00, 0x280), Some(0x680));
-        for _ in 0..2 {
-            keys.enqueue(at(7), Key::RearPlus, true).unwrap();
-        }
-        keys.enqueue(at(7), Key::FrontPlus, true).unwrap();
-        keys.enqueue(at(7), Key::FrontPush, true).unwrap();
-        keys.advance(7);
-        assert_eq!(keys.take_register(0x36), Some(2));
-        assert_eq!(keys.take_register(0x36), Some(0));
+            .unwrap();
+        let rung = |key: Key| {
+            options
+                .ladders
+                .iter()
+                .flat_map(|ladder| &ladder.rungs)
+                .find(|rung| rung.key == key)
+                .map(|rung| (rung.band_low, rung.band_high))
+                .unwrap()
+        };
+        assert_eq!(rung(Key::Menu), (3111, 3834));
+        assert_eq!(rung(Key::Back), (2112, 2342));
+        assert_eq!(rung(Key::StickUp), (1438, 1679));
+        assert_eq!(rung(Key::StickDown), (3053, 3765));
+        assert!(matches!(options.rear_dial, Some(ladders::CommandDial::Quadrature(_))));
+        assert!(options.front_dial.is_some());
     }
 
     #[test]
@@ -691,34 +643,24 @@ mod tests {
     }
 
     #[test]
-    fn xe5_ladders_become_the_ladder_key_model() {
-        let options = ladder_keys(&ResolvedConfiguration::bundled("xe5-112").unwrap())
+    fn xe5_ladders_become_the_ladder_wiring() {
+        let options = ladders(&ResolvedConfiguration::bundled("xe5-112").unwrap())
             .unwrap()
             .unwrap();
         let channels: Vec<u8> = options
             .ladders
             .iter()
             .filter_map(|ladder| match ladder.wire {
-                ladder_keys::Wire::Adc { channel } => Some(channel),
+                ladders::Wire::Adc { channel } => Some(channel),
                 _ => None,
             })
             .collect();
         assert_eq!(channels, [1, 2, 8, 11, 14]);
-        let keys = ladder_keys::LadderKeys::new(options).unwrap();
-        // Keys that share a wire are pressed one at a time: no combined band is declared.
-        for (step, key) in [Key::Menu, Key::Back, Key::StickUp, Key::StickDown, Key::Play, Key::Quick]
-            .into_iter()
-            .enumerate()
-        {
-            let at = |offset| Duration::from_nanos(2 * step as u64 + offset);
-            keys.enqueue(at(1), key, true).unwrap();
-            keys.enqueue(at(2), key, false).unwrap();
-        }
     }
 
     #[test]
-    fn xh2s_ladders_become_the_ladder_key_model() {
-        let options = ladder_keys(&ResolvedConfiguration::bundled("xh2s-730").unwrap())
+    fn xh2s_ladders_become_the_ladder_wiring() {
+        let options = ladders(&ResolvedConfiguration::bundled("xh2s-730").unwrap())
             .unwrap()
             .unwrap();
         assert_eq!(options.ladders.len(), 5);
@@ -730,14 +672,14 @@ mod tests {
         inputs(&mut resolved).ladders.retain(|input| {
             input.wire != LadderWire::PowerControllerRegister { register: 0x35 }
         });
-        let error = ladder_keys(&resolved).unwrap_err();
+        let error = ladders(&resolved).unwrap_err();
         assert!(error.contains("register 0x35 ladder has no released value"), "{error}");
 
         let mut resolved = xt5();
         let mut document = resolved.reference.physical_controls.take().unwrap();
         document["ladders"][3]["released"] = serde_json::json!(1000);
         resolved.reference.physical_controls = Some(document);
-        let error = ladder_keys(&resolved).unwrap_err();
+        let error = ladders(&resolved).unwrap_err();
         assert!(error.contains("from both the body and the run"), "{error}");
     }
 
@@ -747,14 +689,14 @@ mod tests {
         let mut document = resolved.reference.physical_controls.take().unwrap();
         document["ladders"][0]["rungs"][0]["control_id"] = serde_json::json!("rear_command_dial");
         resolved.reference.physical_controls = Some(document.clone());
-        let error = ladder_keys(&resolved).unwrap_err();
+        let error = ladders(&resolved).unwrap_err();
         assert!(error.contains("rear_command_dial have no emulator key"), "{error}");
 
         // A 10-bit register ladder declared with 12-bit resolution is not the model's wire.
         let mut document = xt5().reference.physical_controls.unwrap();
         document["ladders"][3]["levels"] = serde_json::json!(4096);
         resolved.reference.physical_controls = Some(document);
-        let error = ladder_keys(&resolved).unwrap_err();
+        let error = ladders(&resolved).unwrap_err();
         assert!(error.contains("the model reads 1024"), "{error}");
     }
 
@@ -766,14 +708,14 @@ mod tests {
                 samples[14] = 1604;
             }
         }
-        let error = ladder_keys(&resolved).unwrap_err();
+        let error = ladders(&resolved).unwrap_err();
         assert!(error.contains("channel 14 sample 1604 holds focus_stick.up"), "{error}");
     }
 
     #[test]
     fn bodies_without_ladders_have_no_ladder_model() {
         assert!(
-            ladder_keys(&ResolvedConfiguration::bundled("x100vi-131").unwrap())
+            ladders(&ResolvedConfiguration::bundled("xe5-112").unwrap())
                 .unwrap()
                 .is_none()
         );

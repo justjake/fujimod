@@ -36,6 +36,12 @@ export async function wasmFixture(fault = false) {
   const sha256 = [...new Uint8Array(await crypto.subtle.digest('SHA-256', dat))]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+  const adc = (value: number) => ({
+    kind: 'analog',
+    node: `0x${ADC.toString(16)}`,
+    channel: 11,
+    value,
+  });
   const manifest: EmulatorManifest = {
     schema: 1,
     abi: 1,
@@ -85,30 +91,45 @@ export async function wasmFixture(fault = false) {
               { base: ADC, size: 0x1000, kind: 'adc', options: { samples: Array(15).fill(0x456) } },
             ],
             controls: {
-              kind: 'resistor-keys',
-              layout: {
-                shutter_half: { port: 0, pin: 0 },
-                shutter_full: { port: 0, pin: 1 },
-                rear_dial: [
-                  { port: 5, pin: 7 },
-                  { port: 5, pin: 9 },
+              // One button on ADC 11, the channel the program reads.
+              wiring: {
+                controls: [
+                  {
+                    id: 'menu_ok_button',
+                    label: 'Menu',
+                    kind: 'button',
+                    positions: ['released', 'pressed'],
+                    initial: 'released',
+                    unavailable: null,
+                  },
                 ],
-                front_dial: [
-                  { port: 5, pin: 8 },
-                  { port: 13, pin: 5 },
+                circuits: [
+                  {
+                    controls: ['menu_ok_button'],
+                    cases: [
+                      { positions: ['released'], signals: [adc(0x456)] },
+                      { positions: ['pressed'], signals: [adc(0x123)] },
+                    ],
+                  },
                 ],
               },
-              initial_levels: [
-                { pin: { port: 0, pin: 0 }, high: true },
-                { pin: { port: 0, pin: 1 }, high: true },
-                { pin: { port: 5, pin: 7 }, high: false },
-                { pin: { port: 5, pin: 9 }, high: false },
-                { pin: { port: 5, pin: 8 }, high: false },
-                { pin: { port: 13, pin: 5 }, high: false },
-              ],
-              samples: { menu: 0x123, back: 2, menu_back: 3, up: 4, down: 5, left: 6, right: 7 },
-              detent_return_ns: 60000000,
-              shutter_half_delay_ns: 30000000,
+              confirmation: {
+                poll_ticks: 1,
+                max_phase_ticks: 1000,
+                catalog: [{ id: 'menu_ok_button', label: 'Menu', kind: 'button', supported: true }],
+                actuators: [
+                  {
+                    id: 'menu_ok_button',
+                    momentary: true,
+                    states: ['released', 'pressed'].map((position) => ({
+                      position,
+                      ready: [],
+                      expected: [],
+                      hold_ticks: 1,
+                    })),
+                  },
+                ],
+              },
             },
             displays: [
               { base: LCD, period_ns: 3_000_000, raw_formats: ['bgra', null, null, null] },
@@ -137,6 +158,6 @@ export async function wasmFixture(fault = false) {
   return {
     dat,
     manifest,
-    inputs: { inputs: [{ id: 'MENU', label: 'Menu', kind: 'button', supported: true }] },
+    inputs: { inputs: [{ id: 'menu_ok_button', label: 'Menu', kind: 'button', supported: true }] },
   };
 }

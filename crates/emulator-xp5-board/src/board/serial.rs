@@ -2,9 +2,7 @@
 use fujimod_emulator_parts_io::{power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters};
 use fujimod_emulator_devices::xp5::pins::SharedPins;
 use fujimod_emulator_xp5_io::spi::{Attachment, Select, Spi};
-use fujimod_emulator_devices::parts::controls::Controls;
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -78,71 +76,6 @@ impl Endpoint for GenericSink {
         self.transfers = state["transfers"].as_u64().unwrap_or(0);
         self.last = state["last"].as_array().map(|a| a.iter().filter_map(|v| v.as_u64().map(|v| v as u16)).collect()).unwrap_or_default();
         Ok(())
-    }
-}
-/// A power controller whose key-ladder registers, switch bits and dial count
-/// are driven by the body's controls. Ladder and switch registers are
-/// refreshed before every transfer, so the guest reads the held keys' ladder
-/// value, or the declared released value, and a guest write to them does not
-/// stick. A counting register is loaded when the guest starts to read it, and
-/// that read consumes the count it returns.
-struct LadderDriven {
-    inner: PowerController,
-    controls: Arc<dyn Controls>,
-    registers: Vec<u8>,
-}
-impl LadderDriven {
-    fn refresh(&mut self) {
-        for &register in &self.registers {
-            if let Some(value) = self.controls.drive_register(register, self.inner.register(register)) {
-                self.inner.set_register(register, value);
-            }
-        }
-    }
-}
-impl Endpoint for LadderDriven {
-    fn name(&self) -> &'static str {
-        self.inner.name()
-    }
-    fn validate(&self, frame: fujimod_emulator_parts_io::serial::Frame) -> Result<(), String> {
-        self.inner.validate(frame)
-    }
-    fn reset_transaction(&mut self) {
-        self.inner.reset_transaction()
-    }
-    fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, now_ns: u64) -> u16 {
-        self.refresh();
-        let command = frame.word as u8;
-        if self.inner.transfer_position() == 0
-            && command & 0x80 == 0
-            && let Some(count) = self.controls.take_register(command & 0x7f)
-        {
-            self.inner.set_register(command & 0x7f, count);
-        }
-        self.inner.transfer(frame, now_ns)
-    }
-    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        self.inner.checkpoint()
-    }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        self.inner.validate_checkpoint(saved)
-    }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        self.inner.restore_checkpoint(saved)
-    }
-    fn save(&self) -> serde_json::Value {
-        self.inner.save()
-    }
-    fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
-        self.inner.restore(state)?;
-        self.refresh();
-        Ok(())
-    }
-    fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
-        if self.registers.contains(&register) {
-            return Err("power-controller register is driven by the body controls".into());
-        }
-        Endpoint::set_input_bits(&mut self.inner, register, mask, value)
     }
 }
 
@@ -219,7 +152,6 @@ pub fn build(
     base: u64,
     pins: SharedPins,
     options: &toml::Table,
-    controls: Arc<dyn Controls>,
     counting_dial: Option<u8>,
 ) -> Result<Spi, String> {
     let wiring: Wiring = toml::Value::Table(options.clone())
@@ -229,7 +161,7 @@ pub fn build(
         base,
         pins,
         wiring.source_hz,
-        attachments(wiring.endpoints, Some(controls), counting_dial)?,
+        attachments(wiring.endpoints, counting_dial)?,
     )
 }
 /// Parse `XT5_POWER_REGISTERS="REGISTER=VALUE,..."` (numbers decimal or `0x` hexadecimal):
@@ -263,7 +195,6 @@ fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
 }
 fn endpoint(
     part: Part,
-    controls: Option<Arc<dyn Controls>>,
     counting_dial: Option<u8>,
 ) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
@@ -284,27 +215,13 @@ fn endpoint(
                     part.set_register(address, value);
                 }
             }
-            match controls
-                .map(|controls| (controls.driven_registers(), controls))
-                .filter(|(registers, _)| !registers.is_empty())
-            {
-                Some((registers, controls)) => {
-                    let mut driven = LadderDriven {
-                        inner: part,
-                        controls,
-                        registers,
-                    };
-                    driven.refresh();
-                    Box::new(driven)
-                }
-                None => match counting_dial {
-                    Some(register) => Box::new(CountingDial {
-                        inner: part,
-                        register,
-                        count: 0,
-                    }),
-                    None => Box::new(part),
-                },
+            match counting_dial {
+                Some(register) => Box::new(CountingDial {
+                    inner: part,
+                    register,
+                    count: 0,
+                }),
+                None => Box::new(part),
             }
         }
         Part::SerialCalibrationRegisters { miso_high } => {
@@ -332,7 +249,6 @@ fn endpoint(
 }
 fn attachments(
     connections: Vec<Connection>,
-    controls: Option<Arc<dyn Controls>>,
     counting_dial: Option<u8>,
 ) -> Result<Vec<Attachment>, String> {
     connections
@@ -340,7 +256,7 @@ fn attachments(
         .map(|connection| {
             Ok(Attachment::new(
                 connection.select,
-                endpoint(connection.part, controls.clone(), counting_dial)?,
+                endpoint(connection.part, counting_dial)?,
             ))
         })
         .collect()
@@ -348,7 +264,7 @@ fn attachments(
 pub(super) fn dedicated_wire(
     part: Part,
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
-    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None, None)?)))
+    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None)?)))
 }
 pub(super) fn gpio_wire(
     pins: SharedPins,
@@ -356,7 +272,7 @@ pub(super) fn gpio_wire(
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
     Ok(Box::new(fujimod_emulator_xp5_io::spi::GpioWire::new(
         pins,
-        attachments(connections, None, None)?,
+        attachments(connections, None)?,
     )?))
 }
 
@@ -372,47 +288,7 @@ mod tests {
         assert!(parse_power_registers("0x80=1").unwrap_err().contains("invalid register"));
         assert!(parse_power_registers("3=0x10000").unwrap_err().contains("invalid value"));
     }
-    use fujimod_emulator_parts_controls::ladder_keys::{CountingDial, Ladder, LadderKeys, Options, RegisterSwitch, Rung, Wire};
-    use fujimod_emulator_parts_controls::resistor_keys::Key;
     use fujimod_emulator_parts_io::serial::Frame;
-    use std::time::Duration;
-
-    // Synthetic fixture: bands and samples are test inputs, not camera values.
-    fn keys() -> Arc<LadderKeys> {
-        let rung = |key, sample| Rung {
-            key,
-            band_low: sample,
-            band_high: sample,
-            sample,
-            basis: "test fixture".into(),
-        };
-        Arc::new(
-            LadderKeys::new(Options {
-                ladders: vec![Ladder {
-                    wire: Wire::PowerControllerRegister {
-                        register: 0x34,
-                        released: 1023,
-                    },
-                    levels: 1024,
-                    rungs: vec![rung(Key::Menu, 77)],
-                    sets: vec![],
-                }],
-                dials: vec![],
-                switches: vec![RegisterSwitch {
-                    name: "power".into(),
-                    register: 0,
-                    bit: 10,
-                    set: "OFF".into(),
-                    clear: "ON".into(),
-                    basis: "test fixture".into(),
-                }],
-                rear_dial: Some(CountingDial { register: 0x36, basis: "test fixture".into() }),
-                front_dial: None,
-                gpio_keys: vec![],
-            })
-            .unwrap(),
-        )
-    }
 
     fn read(endpoint: &mut dyn Endpoint, register: u8) -> u16 {
         let request = [register, 0, 0, !register];
@@ -432,53 +308,22 @@ mod tests {
         u16::from_be_bytes([reply[1], reply[2]])
     }
 
-    fn attach(controls: Arc<dyn Controls>) -> Box<dyn Endpoint> {
-        endpoint(
+    #[test]
+    fn the_dial_count_reaches_the_power_controller_and_clears_on_read() {
+        let mut endpoint = endpoint(
             Part::PowerController {
                 registers: Default::default(),
                 rtc_seconds: 0,
                 rtc_valid: true,
             },
-            Some(controls),
-            None,
+            Some(0x36),
         )
-        .unwrap()
-    }
-
-    #[test]
-    fn declared_register_ladders_reach_the_power_controller_registers() {
-        let keys = keys();
-        let mut endpoint = attach(keys.clone());
-        assert_eq!(read(endpoint.as_mut(), 0x34), 1023);
-        keys.enqueue(Duration::from_nanos(5), Key::Menu, true).unwrap();
-        assert_eq!(read(endpoint.as_mut(), 0x34), 1023, "edge is not due");
-        keys.advance(5);
-        assert_eq!(read(endpoint.as_mut(), 0x34), 77);
-        // Registers the controls do not drive keep the controller's own value.
-        assert_eq!(read(endpoint.as_mut(), 0x35), 0);
-        keys.enqueue(Duration::from_nanos(9), Key::Menu, false).unwrap();
-        keys.advance(9);
-        assert_eq!(read(endpoint.as_mut(), 0x34), 1023);
-    }
-
-    #[test]
-    fn switch_bits_and_the_dial_count_reach_the_power_controller() {
-        let keys = keys();
-        let mut endpoint = attach(keys.clone());
-        assert_eq!(read(endpoint.as_mut(), 0x00), 0x200, "no position: reset value");
+        .unwrap();
         assert_eq!(read(endpoint.as_mut(), 0x36), 0);
-        keys.set_position(Duration::from_nanos(3), "power", "OFF").unwrap();
-        for _ in 0..3 {
-            keys.enqueue(Duration::from_nanos(3), Key::RearMinus, true).unwrap();
-        }
-        keys.advance(3);
-        assert_eq!(read(endpoint.as_mut(), 0x00), 0x600);
+        endpoint.count_steps(-3).unwrap();
         // -3 as a signed nibble, then cleared by that read.
         assert_eq!(read(endpoint.as_mut(), 0x36), 0xd);
         assert_eq!(read(endpoint.as_mut(), 0x36), 0);
-        keys.set_position(Duration::from_nanos(4), "power", "ON").unwrap();
-        keys.advance(4);
-        assert_eq!(read(endpoint.as_mut(), 0x00), 0x200);
     }
 
     #[test]
@@ -492,7 +337,7 @@ mod tests {
             "{ kind = 'serial-command-registers', bits = 8, mode = 0, read_flag = 1, miso_high = false }",
         )
         .unwrap();
-        let mut part = endpoint(burst.part, None, None).unwrap();
+        let mut part = endpoint(burst.part, None).unwrap();
         for word in [0x0a, 0x11, 0x22] {
             let frame = Frame { bits: 8, mode: 0, word };
             part.validate(frame).unwrap();
@@ -506,13 +351,5 @@ mod tests {
             )
             .is_err()
         );
-    }
-
-    #[test]
-    fn controls_without_register_ladders_leave_the_controller_unwrapped() {
-        let controls: Arc<dyn Controls> =
-            Arc::new(fujimod_emulator_parts_controls::absent::AbsentControls);
-        let mut endpoint = attach(controls);
-        assert_eq!(read(endpoint.as_mut(), 0x34), 0);
     }
 }
