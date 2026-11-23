@@ -841,6 +841,20 @@ impl Bus {
         let mut continuation = None;
         let mut posted = Vec::new();
         if let Some(id) = index {
+            if self.mode == Mode::Strict
+                && value.is_none()
+                && let Some(result) =
+                    self.windows[id].device.read_without_advance(address, size, host.now())
+            {
+                let started = fujimod_perf::device(
+                    u16::try_from(id).unwrap_or(u16::MAX),
+                    self.windows[id].device.name(),
+                    fujimod_perf::DevicePhase::AdvanceRead,
+                );
+                drop(started);
+                self.wake_dependents(host, id)?;
+                return Ok(result & mask);
+            }
             let publication = self.publication_before(id);
             let started = fujimod_perf::device(
                 u16::try_from(id).unwrap_or(u16::MAX),
