@@ -8,7 +8,8 @@ import type { EngineConfig } from '@fujimod/emulator-ui/engine/api';
 import { faultFrom } from '@fujimod/emulator-ui/engine/fault';
 import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
-import { NativeEngine, type NativeCamera, type NativeCatalog, type NativeState } from './native';
+import { RemoteEngine } from '@fujimod/emulator-ui/engine/remote';
+import type { NativeCamera, NativeCatalog, NativeSessionState } from './native';
 import type { LaunchRequest, RunConfiguration, RunEngine } from './launch';
 import { desktopBridge } from './desktop';
 import '@fujimod/emulator-ui/viewport-controls.css';
@@ -26,7 +27,7 @@ export default function App() {
   const [busy, setBusy] = createSignal(false);
   const [runtime, setRuntime] = createSignal<ReturnType<typeof startSession>>();
   let viewer!: HTMLDivElement, lcd!: HTMLCanvasElement;
-  let engine: NativeEngine | undefined;
+  let engine: RemoteEngine | undefined;
   const updateState = (write: (value: ReturnType<typeof sessionState>) => void) => {
     const value = state();
     write(value);
@@ -40,7 +41,7 @@ export default function App() {
       value.promptVisible = false;
       value.message = 'Connecting to native emulator…';
     });
-    const photo = new NativeEngine(launched.endpoint, (error) => {
+    const photo = new RemoteEngine(launched.endpoint, (error) => {
       updateState((value) => {
         value.message = shownError(error);
         value.error = true;
@@ -49,7 +50,7 @@ export default function App() {
     void photo.open().catch((error) => session.showFault(faultFrom(error)));
     engine = photo;
     let catalog: NativeCatalog | undefined;
-    let nativeState: NativeState | undefined;
+    let nativeState: NativeSessionState | undefined;
     let sessionInitialized = false;
     const session = startSession(state() as never, updateState as never, { viewer, lcd }, {
       async createEngine() {
@@ -79,11 +80,11 @@ export default function App() {
       catalog = value;
       bootWhenReady();
     });
-    const stopState = photo.state((latest) => {
+    const stopState = photo.sessionState((latest) => {
       nativeState = latest;
       bootWhenReady();
     });
-    async function boot(initial: NativeState, metadata: NativeCatalog | undefined) {
+    async function boot(initial: NativeSessionState, metadata: NativeCatalog | undefined) {
       const controls = metadata?.controls as PhysicalControls | undefined;
       if (!metadata || !controls) throw Error('The native camera catalog did not arrive.');
       const panel = nativePanel(metadata.body, initial.inputs, controls);

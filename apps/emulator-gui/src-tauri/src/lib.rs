@@ -218,41 +218,14 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 .inspect_err(|error| log_session(format!("session: {error}")));
             }
             let run = fujimod_emulator_boot::xp5::Run {
-                configuration: resolved.clone(),
                 load_snapshot: request.load_snapshot,
-                save_snapshot: None,
-                update,
-                manifest: None,
-                watch_pcs: None,
-                watch_writes: None,
-                pc_trace: None,
-                screenshot: None,
-                viewer_port: None,
-                dump: None,
-                hash: None,
                 boot_rom: request.boot_rom,
-                card_image: None,
-                card_files: Vec::new(),
-                second_card_image: None,
-                second_card_files: Vec::new(),
-                keys: None,
-                gpio: None,
-                pokes: Vec::new(),
-                press: None,
-                settings: None,
-                camera_settings: std::collections::BTreeMap::new(),
-                discovery: false,
-                stubs: Vec::new(),
-                patch_file: None,
-                mods: Vec::new(),
-                scene: None,
-                quantum: None,
-                seconds: None,
-                instruction_limit: None,
-                wall_seconds: None,
-                status_every: std::time::Duration::from_secs(30),
-                execution_policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
-                output,
+                ..fujimod_emulator_boot::xp5::Run::new(
+                    resolved.clone(),
+                    update,
+                    fujimod_emulator_cpu::ExecutionPolicy::Interactive,
+                    output,
+                )
             };
             let run =
                 RunHost::open(run).inspect_err(|error| log_session(format!("session: {error}")))?;

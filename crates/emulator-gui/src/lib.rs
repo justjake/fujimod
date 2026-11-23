@@ -23,16 +23,16 @@ impl Run for RunHost {
         RunHost::session_mut(self)
     }
     fn step(&mut self) -> Result<(), String> {
-        RunHost::step(self)
+        RunHost::step(self).map(drop)
     }
     fn settle(&mut self) -> Result<(), String> {
-        RunHost::step(self)
+        RunHost::step(self).map(drop)
     }
     fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
         Ok(self.take_frames())
     }
     fn finish(self) -> Result<serde_json::Value, String> {
-        RunHost::finish(self)
+        RunHost::finish(self, Ok(()))
     }
 }
 
