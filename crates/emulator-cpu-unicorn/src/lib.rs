@@ -124,6 +124,16 @@ impl Library {
         if let Some(enable) = core.api.extensions.page_hooks {
             check(&core.api, unsafe { enable(raw, model != Model::ArmV8A) })?;
         }
+        if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some()
+            && core.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0
+        {
+            let enable = core
+                .api
+                .extensions
+                .set_guard_diagnostics
+                .ok_or("CPU backend has no block guard refusal diagnostics")?;
+            check(&core.api, unsafe { enable(raw, true) })?;
+        }
         Ok(core)
     }
 }
@@ -207,6 +217,15 @@ impl Core {
             .extensions
             .set_entry_exits
             .ok_or("CPU backend has no entry-exit control")?;
+        check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+    #[cfg(test)]
+    fn set_guard_diagnostics(&self, enabled: bool) -> Result<(), String> {
+        let set = self
+            .api
+            .extensions
+            .set_guard_diagnostics
+            .ok_or("CPU backend has no block guard refusal diagnostics")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
     }
     pub(crate) fn set_instruction_counter(&self, enabled: bool) -> Result<(), String> {
@@ -1395,9 +1414,26 @@ impl Cpu for Core {
         } else {
             &[]
         };
-        let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len() + extra.len()) };
+        let guard = [
+            "guard_classifier_slow_callbacks",
+            "guard_other_slow_callbacks",
+            "guard_thumb_page_span_callbacks",
+            "guard_disarmed_callbacks",
+            "guard_page_mismatch_callbacks",
+            "guard_budget_callbacks",
+            "guard_pause_callbacks",
+        ];
+        let guard_extra: &[&str] = if self.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0 {
+            &guard
+        } else {
+            &[]
+        };
+        let values = unsafe {
+            std::slice::from_raw_parts(read(self.raw), names.len() + extra.len() + guard_extra.len())
+        };
         Ok(names.into_iter()
             .chain(extra.iter().copied())
+            .chain(guard_extra.iter().copied())
             .zip(values.iter().copied())
             .collect())
     }
@@ -1539,6 +1575,7 @@ mod tests {
         callbacks: usize,
         stop_after: usize,
         classifications: usize,
+        observe_block: bool,
     }
     struct ThumbRecoveryProbe {
         cpu: *const Core,
@@ -1563,7 +1600,7 @@ mod tests {
         unsafe { (*data.cast::<ThumbBlockProbe>()).classifications += 1 };
         Translation {
             instruction: InstructionDisposition::Execute,
-            observe_block: false,
+            observe_block: unsafe { (*data.cast::<ThumbBlockProbe>()).observe_block },
         }
     }
     unsafe fn thumb_memory_execute(_: *mut c_void, _: u64, _: u32) -> Translation {
@@ -1877,6 +1914,7 @@ mod tests {
     #[test]
     fn thumb_coarse_guard_reuses_cached_mixed_width_block_only_on_its_page() {
         let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_guard_diagnostics(true).unwrap();
         assert!(cpu.features().thumb_block_accounting);
         cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
         // MOVS R0,#1; MOVW R1,#0x1234 (32-bit); ADDS R0,#1 twice; B 0x1000.
@@ -1890,6 +1928,7 @@ mod tests {
             callbacks: 0,
             stop_after: 1,
             classifications: 0,
+            observe_block: false,
         };
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
@@ -1958,6 +1997,36 @@ mod tests {
         assert_eq!(blocks.callbacks, 6);
         assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
         assert_eq!(blocks.classifications, classifications);
+
+        let counters = cpu.exit_counters().unwrap();
+        assert!(counters["guard_budget_callbacks"] >= 2);
+        assert_eq!(counters["guard_disarmed_callbacks"], 2);
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 2);
+        assert_eq!(counters["guard_classifier_slow_callbacks"], 0);
+        assert_eq!(counters["guard_other_slow_callbacks"], 0);
+        assert_eq!(counters["guard_thumb_page_span_callbacks"], 0);
+
+        // An explicit filter request is attributed to the classifier refusal
+        // counter, separately from runtime guard misses.
+        blocks.observe_block = true;
+        let callbacks_before_classifier = blocks.callbacks;
+        cpu.write_memory(
+            0x1000,
+            &[0x01, 0x20, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0x01, 0x30, 0xf9, 0xe7],
+        )
+        .unwrap();
+        cpu.invalidate_code(None).unwrap();
+        blocks.stop_after = blocks.callbacks + 1;
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(blocks.callbacks, callbacks_before_classifier + 1);
+        let after_classifier = cpu.exit_counters().unwrap();
+        assert!(after_classifier["guard_classifier_slow_callbacks"] > 0);
     }
     #[test]
     fn thumb_memory_restart_exposes_exact_precharged_mixed_width_span() {
