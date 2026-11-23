@@ -370,6 +370,22 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     if matches!(first & 0xfbf0, 0xf240 | 0xf2c0) {
         return second & 0x8000 == 0 && rd <= 12;
     }
+    // Data processing with an immediate shift of Rm. Rn=15 is legal
+    // only for the MOV/shift and MVN aliases, and Rd=15 only for TST/TEQ.
+    if first & 0xff00 == 0xea00 {
+        let rn = first & 15;
+        let rm = second & 15;
+        let set_flags = first & 0x10 != 0;
+        if second & 0x8000 != 0 || rm > 12 {
+            return false;
+        }
+        return match first & 0xffe0 {
+            0xea00 | 0xea80 => rn <= 12 && (rd <= 12 || set_flags && rd == 15),
+            0xea20 => rn <= 12 && rd <= 12,
+            0xea40 | 0xea60 => (rn <= 12 || rn == 15) && rd <= 12,
+            _ => false,
+        };
+    }
     // ADD/SUB (shifted register), with a register-controlled pure arithmetic
     // result. Exclude SP and PC in all three register fields and reserved bit
     // 15 of the second halfword. Every immediate shift amount/type is defined.
@@ -511,6 +527,12 @@ mod tests {
         assert!(can_run_inline(0xf2c0_0001)); // movt r0,#1
         assert!(can_run_inline(0xf640_0c01)); // movw r12 with i=1
         assert!(can_run_inline(0xf6c0_0c01)); // movt r12 with i=1
+        assert!(can_run_inline(0xea4f_4410)); // shift alias with Rn=15
+        assert!(can_run_inline(0xea11_0f02)); // TST, no PC write
+        assert!(can_run_inline(0xea91_0f02)); // TEQ, no PC write
+        assert!(!can_run_inline(0xea0f_0002)); // AND reads PC
+        assert!(!can_run_inline(0xea01_0f02)); // no TST alias without S
+        assert!(!can_run_inline(0xea4f_440f)); // shifted operand PC
         assert!(can_run_inline(0xeb01_0002)); // add.w r0,r1,r2
         assert!(can_run_inline(0xeb11_1042)); // adds.w r0,r1,r2,lsl #5
         assert!(can_run_inline(0xeba1_0002)); // sub.w r0,r1,r2
