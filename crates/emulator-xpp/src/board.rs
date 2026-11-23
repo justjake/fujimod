@@ -511,7 +511,13 @@ impl Device for Timers {
         self.schedule(cx);
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        for irq in self.model.tick(cx.now()) {
+        let now = cx.now();
+        // The queued event is at or before every running channel's expiry.
+        // A counter can be read many times while waiting for that event.
+        if self.scheduled.is_some_and(|at| now < at) {
+            return;
+        }
+        for irq in self.model.tick(now) {
             cx.set_irq(irq as u32, true);
             cx.set_irq(irq as u32, false);
         }

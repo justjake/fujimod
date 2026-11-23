@@ -569,6 +569,11 @@ pub trait Cpu {
     fn exception_entries(&self) -> Option<armv7a::Entries> {
         None
     }
+    /// Set the wired affinity for a backend that implements MPIDR reads.
+    /// The board supplies these reads for backends that use its instruction observer.
+    fn set_armv7a_affinity(&self, _mpidr: u32) -> Result<(), String> {
+        Ok(())
+    }
     /// Configure instruction-proven loops; statistics remain observational.
     fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
         if mode == loops::LoopMode::Disabled {

@@ -2029,7 +2029,7 @@ impl State {
                         let profile = self.armv7a[core]
                             .as_mut()
                             .ok_or("ARMv7-A framework instruction without a profile")?;
-                        match profile.before(cpu, pc, now)? {
+                        match profile.before_counted(cpu, pc, now, word)? {
                             // A failed condition retires the instruction unexecuted.
                             armv7a::Entry::Execute => set(cpu, Register::Pc, pc.wrapping_add(4))?,
                             armv7a::Entry::Completed => (),
@@ -2641,9 +2641,10 @@ impl State {
     }
     fn tighten(&self, cpu: &dyn Cpu, core: usize) -> Result<(), String> {
         if cpu.features().tighten_instruction_limit {
-            let entered = cpu
-                .instruction_progress()
-                .ok_or("active entry count is unavailable")?;
+            // The MMIO path already synchronized this processor. Device
+            // work can change deadlines, but the processor remains stopped
+            // in the same access while the new budget is calculated.
+            let entered = self.accounted[core];
             let remaining = match self.parallel.as_ref() {
                 Some(epoch) => epoch.room(core),
                 None => self.timeline.processor_budget(
