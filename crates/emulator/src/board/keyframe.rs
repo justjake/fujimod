@@ -151,6 +151,8 @@ impl State {
             // Host loop fast-forward configuration, wiring and counters; the
             // proof leaves no architectural trace to restore.
             mprofile_loops: _,
+            // Host-only diagnostics; not part of a keyframe.
+            access_histogram: _,
         } = self;
         Saved {
             execution_policy: *execution_policy,
