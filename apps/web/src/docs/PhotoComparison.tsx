@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onCleanup, onSettled } from 'solid-js';
+import { For, Show, createSignal, onSettled } from 'solid-js';
 import type { Photo } from '../home/feature-media';
 import './photo-comparison.css';
 
@@ -125,8 +125,10 @@ export function PhotoComparison(props: { photos: readonly Photo[]; frame?: Photo
   const outside = (event: PointerEvent) => {
     if (point() && !row.contains(event.target as Node)) close();
   };
-  window.addEventListener('pointerdown', outside);
-  onCleanup(() => window.removeEventListener('pointerdown', outside));
+  onSettled(() => {
+    window.addEventListener('pointerdown', outside);
+    return () => window.removeEventListener('pointerdown', outside);
+  });
 
   return (
     <div
