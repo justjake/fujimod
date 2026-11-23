@@ -737,6 +737,12 @@ pub fn register_all(
                 if w.base != 0xff90a000 || w.size != 0x1000 {
                     return Err("invalid serial-flash storage window".into());
                 }
+                if w.options
+                    .keys()
+                    .any(|key| !matches!(key.as_str(), "jedec_id" | "inherited_dummy_cycles"))
+                {
+                    return Err("unknown serial-flash storage-controller option".into());
+                }
                 let jedec = w
                     .options
                     .get("jedec_id")
@@ -751,13 +757,23 @@ pub fn register_all(
                 {
                     flash_storage::Medium::Nor(storage) => {
                         let part = flash_storage_controller::Part::from_jedec(jedec)?;
-                        bus.register(
-                            w.base,
-                            w.size,
-                            Box::new(flash_storage_controller::Controller::new(storage, part)),
-                        )?;
+                        let mut controller =
+                            flash_storage_controller::Controller::new(storage, part);
+                        // The part's volatile dummy-cycle register as an earlier boot
+                        // stage left it, when the manifest declares that inherited state.
+                        if let Some(value) = w.options.get("inherited_dummy_cycles") {
+                            let cycles = value
+                                .as_integer()
+                                .and_then(|n| u8::try_from(n).ok())
+                                .ok_or("inherited_dummy_cycles must be a byte")?;
+                            controller = controller.inherit_volatile_dummy_cycles(cycles)?;
+                        }
+                        bus.register(w.base, w.size, Box::new(controller))?;
                     }
                     flash_storage::Medium::Nand(storage) => {
+                        if w.options.contains_key("inherited_dummy_cycles") {
+                            return Err("serial NAND has no inherited dummy-cycle register".into());
+                        }
                         // The X-E5 part identifies as W25N01JW-family 0xEFDC21.
                         if jedec != 0xefdc21 {
                             return Err("only 0xefdc21 serial-NAND geometry is supported".into());

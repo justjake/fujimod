@@ -137,6 +137,14 @@ impl Controller {
             part,
         }
     }
+    /// The part as an earlier boot stage left it: its volatile dummy-cycle
+    /// register already selects `cycles`, as if register 1 had been written
+    /// with that value before this controller ran. Only settings the part
+    /// models are accepted.
+    pub fn inherit_volatile_dummy_cycles(mut self, cycles: u8) -> Result<Self, String> {
+        self.state.volatile_dummy_cycles = Some(self.part.volatile_dummy_cycles(1, cycles)?);
+        Ok(self)
+    }
     /// The aperture's configured read opcode and dummy cycles must be a read
     /// the installed part answers.
     fn check_aperture_read(&self) -> Result<(), String> {
@@ -657,6 +665,32 @@ mod tests {
         controller.state.regs[0x74 / 4] = 10;
         assert!(controller.check_aperture_read().is_err());
         assert_eq!(Part::from_jedec(0xef4018).unwrap_err(), "unsupported serial NOR part 0xef4018");
+    }
+
+    #[test]
+    fn inherited_dummy_cycles_stand_in_for_an_earlier_stage_write() {
+        let (_, controller) = mt35xu();
+        let mut controller = controller.inherit_volatile_dummy_cycles(20).unwrap();
+        controller.state.regs[0x44 / 4] = 0xfd;
+        controller.state.regs[0x74 / 4] = 20;
+        assert!(controller.check_aperture_read().is_ok());
+        let saved = controller.save();
+        controller.state.volatile_dummy_cycles = None;
+        controller.restore(&saved).unwrap();
+        assert_eq!(controller.state.volatile_dummy_cycles, Some(20));
+        // A later write of the same setting is still checked as before.
+        write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
+        // Only a setting the part models can be inherited, and only by a part
+        // whose aperture reads are checked.
+        let (_, controller) = mt35xu();
+        let err = controller.inherit_volatile_dummy_cycles(16).err().unwrap();
+        assert!(
+            err.contains("register 0x1 write 0x10 is not modeled"),
+            "{err}"
+        );
+        let storage = Arc::new(Mutex::new(Storage::new(vec![0; 0x100]).unwrap()));
+        let quad = Controller::new(storage, Part::from_jedec(0x20bb20).unwrap());
+        assert!(quad.inherit_volatile_dummy_cycles(20).is_err());
     }
 
     #[test]
