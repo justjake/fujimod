@@ -280,48 +280,48 @@ class BitmapResources(TypedDict, total=False):
     table: Required[int]
 
 
-type BlockHardware = (
-    BlockHardwareVariant0
-    | BlockHardwareVariant1
-    | BlockHardwareVariant2
-    | BlockHardwareVariant3
-    | BlockHardwareVariant4
-    | BlockHardwareVariant5
+type BlockDevice = (
+    BlockDeviceVariant0
+    | BlockDeviceVariant1
+    | BlockDeviceVariant2
+    | BlockDeviceVariant3
+    | BlockDeviceVariant4
+    | BlockDeviceVariant5
 )
 
 
-class BlockHardwareVariant0(TypedDict, total=False):
+class BlockDeviceVariant0(TypedDict, total=False):
     channels: Required[int]
-    kind: Required[Literal["dma"]]
+    model: Required[Literal["dma"]]
     request_mux_block_id: Required[str]
 
 
-class BlockHardwareVariant1(TypedDict, total=False):
+class BlockDeviceVariant1(TypedDict, total=False):
     aperture_block_id: Required[str]
-    kind: Required[Literal["serial_flash"]]
+    model: Required[Literal["serial_flash"]]
 
 
-class BlockHardwareVariant2(TypedDict, total=False):
+class BlockDeviceVariant2(TypedDict, total=False):
     bank_bytes: Required[int]
-    kind: Required[Literal["imaging_input_buffer"]]
+    model: Required[Literal["imaging_input_buffer"]]
     sram_region_id: Required[str]
 
 
-class BlockHardwareVariant3(TypedDict, total=False):
-    kind: Required[Literal["display"]]
+class BlockDeviceVariant3(TypedDict, total=False):
+    model: Required[Literal["display"]]
     picture_layout: NotRequired[PictureLayout | None]
     video_layout: NotRequired[VideoLayout | None]
 
 
-class BlockHardwareVariant4(TypedDict, total=False):
-    kind: Required[Literal["serial_dma"]]
+class BlockDeviceVariant4(TypedDict, total=False):
+    model: Required[Literal["serial_dma"]]
     receive_request: Required[int]
     transmit_request: Required[int]
 
 
-class BlockHardwareVariant5(TypedDict, total=False):
+class BlockDeviceVariant5(TypedDict, total=False):
     companion_irq_base: Required[int]
-    kind: Required[Literal["companion_dma"]]
+    model: Required[Literal["companion_dma"]]
 
 
 type BlockSignal = Literal["detect", "write_protect", "data_ready", "clock"]
@@ -5741,6 +5741,7 @@ Soc = TypedDict(
 class SocBlock(TypedDict, total=False):
     base: Required[int]
     clock_id: NotRequired[str | None]
+    device: NotRequired[BlockDevice | None]
     id: Required[str]
     interrupts: NotRequired[list[SocBlockInterrupt]]
     kind: Required[SocBlockKind]
@@ -5783,7 +5784,6 @@ class SocBlockView(TypedDict, total=False):
 
 class SocHardware(TypedDict, total=False):
     application: NotRequired[ApplicationHardware | None]
-    blocks: Required[dict[str, BlockHardware]]
     companion: NotRequired[CompanionHardware | None]
     interrupt_controller: NotRequired[InterruptControllerHardware | None]
     power_on_ram_fill: NotRequired[int | None]

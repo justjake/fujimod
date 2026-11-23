@@ -48,9 +48,14 @@ impl Profile {
                     fujimod_framebuffer_xp4::REGISTER_BYTES as u64,
                 ) =>
             {
-                use fujimod_catalog::soc::BlockHardware;
-                let b = soc.hardware.as_ref()?.blocks.get("lcdc1")?;
-                let BlockHardware::Display {
+                use fujimod_catalog::soc::BlockDevice;
+                let b = soc
+                    .blocks
+                    .iter()
+                    .find(|block| block.id == "lcdc1")?
+                    .device
+                    .as_ref()?;
+                let BlockDevice::Display {
                     picture_layout,
                     video_layout,
                 } = b

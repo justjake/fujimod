@@ -139,7 +139,11 @@
           "output": "interrupt",
           "line": 35
         }
-      ]
+      ],
+      "device": {
+        "model": "serial_flash",
+        "aperture_block_id": "flash-aperture"
+      }
     },
     {
       "id": "flash-aperture",
@@ -797,12 +801,6 @@
       "lines": 512
     },
     "companion": null,
-    "blocks": {
-      "flash-controller": {
-        "kind": "serial_flash",
-        "aperture_block_id": "flash-aperture"
-      }
-    },
     "profiles": {
       "xpp": {
         "cpu_model": "Cortex-A7",

@@ -121,8 +121,13 @@ fn xp4_display_channels_declare_the_same_plane_layouts() {
     let soc: Soc = serde_json::from_str(include_str!("../../../catalog/soc/xp4/soc.json")).unwrap();
     soc.validate(&soc.id).unwrap();
     let hardware = soc.hardware.as_ref().expect("xp4 declares hardware");
-    let block = |id: &str| match hardware.blocks.get(id) {
-        Some(fujimod_catalog::soc::BlockHardware::Display {
+    let block = |id: &str| match soc
+        .blocks
+        .iter()
+        .find(|block| block.id == id)
+        .and_then(|block| block.device.as_ref())
+    {
+        Some(fujimod_catalog::soc::BlockDevice::Display {
             picture_layout,
             video_layout,
         }) => (

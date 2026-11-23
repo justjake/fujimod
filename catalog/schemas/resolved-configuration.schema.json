@@ -1209,8 +1209,8 @@
       ],
       "type": "object"
     },
-    "BlockHardware": {
-      "description": "Hardware parameters for a named SoC register block.",
+    "BlockDevice": {
+      "description": "Hardware parameters for a SoC block, selected by its model tag.",
       "oneOf": [
         {
           "additionalProperties": false,
@@ -1222,7 +1222,7 @@
               "minimum": 0,
               "type": "integer"
             },
-            "kind": {
+            "model": {
               "const": "dma",
               "type": "string"
             },
@@ -1232,7 +1232,7 @@
             }
           },
           "required": [
-            "kind",
+            "model",
             "channels",
             "request_mux_block_id"
           ],
@@ -1246,13 +1246,13 @@
               "description": "Flash aperture block identity.",
               "type": "string"
             },
-            "kind": {
+            "model": {
               "const": "serial_flash",
               "type": "string"
             }
           },
           "required": [
-            "kind",
+            "model",
             "aperture_block_id"
           ],
           "type": "object"
@@ -1267,7 +1267,7 @@
               "minimum": 0,
               "type": "integer"
             },
-            "kind": {
+            "model": {
               "const": "imaging_input_buffer",
               "type": "string"
             },
@@ -1277,7 +1277,7 @@
             }
           },
           "required": [
-            "kind",
+            "model",
             "sram_region_id",
             "bank_bytes"
           ],
@@ -1287,7 +1287,7 @@
           "additionalProperties": false,
           "description": "Display-channel pixel packing declared by the controller contract.",
           "properties": {
-            "kind": {
+            "model": {
               "const": "display",
               "type": "string"
             },
@@ -1317,7 +1317,7 @@
             }
           },
           "required": [
-            "kind"
+            "model"
           ],
           "type": "object"
         },
@@ -1325,7 +1325,7 @@
           "additionalProperties": false,
           "description": "Serial-controller DMA request lines.",
           "properties": {
-            "kind": {
+            "model": {
               "const": "serial_dma",
               "type": "string"
             },
@@ -1343,7 +1343,7 @@
             }
           },
           "required": [
-            "kind",
+            "model",
             "receive_request",
             "transmit_request"
           ],
@@ -1359,13 +1359,13 @@
               "minimum": 0,
               "type": "integer"
             },
-            "kind": {
+            "model": {
               "const": "companion_dma",
               "type": "string"
             }
           },
           "required": [
-            "kind",
+            "model",
             "companion_irq_base"
           ],
           "type": "object"
@@ -27607,6 +27607,17 @@
             "null"
           ]
         },
+        "device": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlockDevice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Device model and its typed parameters, when declared."
+        },
         "id": {
           "description": "Block identity used by bodies and run inputs.",
           "type": "string"
@@ -27810,13 +27821,6 @@
           "default": null,
           "description": "Application-processor identification and cache topology, when declared."
         },
-        "blocks": {
-          "additionalProperties": {
-            "$ref": "#/$defs/BlockHardware"
-          },
-          "description": "Additional block parameters, keyed by the block's identity.",
-          "type": "object"
-        },
         "companion": {
           "anyOf": [
             {
@@ -27859,9 +27863,6 @@
           "type": "object"
         }
       },
-      "required": [
-        "blocks"
-      ],
       "type": "object"
     },
     "SocProfile": {
