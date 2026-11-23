@@ -262,6 +262,76 @@ fn translated_transfers_match_at_watched_stores_and_data_faults() {
     }
 }
 
+/// A sampled M-core table scan uses `LDRH.W Rt,[Rn,Rm,LSL #1]`. Exercise its
+/// register-offset and scaled-address form in RAM, then at the end of mapped
+/// RAM where the second load faults after one successful iteration.
+fn register_offset_load_loop(blocks: bool, address: u32) -> Board {
+    let mut b = board(blocks);
+    b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    b.state.borrow_mut().settled.verify = 0;
+    // ldr r0,literal; movs r1,#0; loop: ldrh.w r2,[r0,r1,LSL #1];
+    // adds r1,#1; cmp r1,#8; bne loop; wfi; literal address.
+    let code = [
+        0x4803u16, 0x2100, 0xf830, 0x2011, 0x3101, 0x2908, 0xd1fa, 0xbf30,
+    ];
+    let mut bytes: Vec<u8> = code.iter().flat_map(|half| half.to_le_bytes()).collect();
+    bytes.extend_from_slice(&address.to_le_bytes());
+    b.write_physical(0x10100, &bytes).unwrap();
+    b.write_physical(0x12000, &[1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0])
+        .unwrap();
+    b
+}
+
+#[test]
+fn shifted_register_offset_loads_match_in_ram_and_on_fault() {
+    for address in [0x12000, 0x17ffe] {
+        let mut reference = register_offset_load_loop(false, address);
+        let mut translated = register_offset_load_loop(true, address);
+        let reference_result = reference.run_until(100, 8);
+        let translated_result = translated.run_until(100, 8);
+        assert_eq!(
+            reference_result.is_err(),
+            translated_result.is_err(),
+            "results for base {address:#x}: {reference_result:?} / {translated_result:?}"
+        );
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "registers at {address:#x}");
+        assert_eq!(actual.memory, expected.memory, "RAM at {address:#x}");
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions,
+            "instruction count at {address:#x}"
+        );
+        assert_eq!(
+            translated.state.borrow().timeline.now(),
+            reference.state.borrow().timeline.now(),
+            "board clock at {address:#x}"
+        );
+        if address == 0x12000 {
+            assert!(reference_result.is_ok());
+            assert_eq!(actual.registers[1], 8);
+            assert_eq!(actual.registers[2], 8);
+            assert_eq!(actual.state, expected.state);
+            assert!(
+                translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 0,
+                "scaled register-offset load did not enter translated accounting"
+            );
+        } else {
+            assert!(
+                reference_result.as_ref().err().is_some_and(|error| error.to_ascii_lowercase().contains("unmapped")),
+                "expected the reference load to fault outside RAM: {reference_result:?}"
+            );
+            assert!(
+                translated_result.as_ref().err().is_some_and(|error| error.to_ascii_lowercase().contains("unmapped")),
+                "expected the translated load to fault outside RAM: {translated_result:?}"
+            );
+            assert_eq!(actual.registers[1], 1);
+            assert_eq!(actual.registers[2], 0);
+        }
+    }
+}
+
 /// Which hooks the execution core holds at an instant is a host choice. A
 /// keyframe taken before block execution set its hooks up restores after it,
 /// one taken in block execution restores with the instruction observer, and

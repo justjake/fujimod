@@ -271,7 +271,8 @@ fn thumb_size(word: u16) -> usize {
 
 /// Whether a Thumb instruction transfers one register to or from memory using
 /// an ordinary single-register addressing mode. Literal reads are admitted
-/// only for legal general-register destinations. Multiple transfers and stack
+/// only for legal general-register destinations. Register-offset transfers
+/// require a legal shift and ordinary GPRs. Multiple transfers and stack
 /// push/pop encodings are excluded.
 pub(super) fn is_single_transfer(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
@@ -286,6 +287,18 @@ pub(super) fn is_single_transfer(word: u32) -> bool {
     let first = (word >> 16) as u16;
     let second = word as u16;
     let operation = first & 0xfff0;
+    if matches!(
+        operation,
+        0xf800 | 0xf810 | 0xf820 | 0xf830 | 0xf840 | 0xf850 | 0xf910 | 0xf930
+    ) {
+        let rn = first & 15;
+        let rt = second >> 12;
+        let rm = second & 15;
+        // T32 register-offset forms have no writeback. Bits 11:6 are
+        // reserved; bits 5:4 encode the legal LSL amount, including the
+        // scaled halfword load used by the M-core table scan.
+        return second & 0x0fc0 == 0 && rt <= 12 && rn < 15 && rm <= 12;
+    }
     if !matches!(
         operation,
         0xf8c0 | 0xf8d0 | 0xf880 | 0xf890 | 0xf8a0 | 0xf8b0 | 0xf990 | 0xf9b0
@@ -501,6 +514,21 @@ mod tests {
         ] {
             assert!(is_single_transfer(instruction), "{instruction:#010x}");
         }
+        // T32 register-offset forms have one transfer and no base writeback.
+        // Include the sampled LDRH.W r3,[r10,r3,LSL #1] table-scan form.
+        for instruction in [
+            0xf800_3012, // STRB r3,[r0,r2]
+            0xf810_3012, // LDRB r3,[r0,r2]
+            0xf820_3012, // STRH r3,[r0,r2]
+            0xf830_3013, // LDRH r3,[r0,r3,LSL #1]
+            0xf83a_3013, // LDRH r3,[r10,r3,LSL #1]
+            0xf840_3012, // STR r3,[r0,r2]
+            0xf850_3012, // LDR r3,[r0,r2]
+            0xf910_3012, // LDRSB r3,[r0,r2]
+            0xf930_3012, // LDRSH r3,[r0,r2]
+        ] {
+            assert!(is_single_transfer(instruction), "{instruction:#010x}");
+        }
         // PUSH/POP, LDM/STM, undefined and special encodings, and unsupported
         // 32-bit memory or exclusive operations have different effects.
         for instruction in [
@@ -515,6 +543,11 @@ mod tests {
             0xf8cf_0004, // STR with PC base
             0xf8df_d004, // literal LDR to SP
             0xf8df_f004, // literal LDR to PC
+            0xf83a_d013, // register-offset LDRH to SP
+            0xf83a_f013, // register-offset LDRH to PC
+            0xf83f_3013, // register-offset LDRH from PC base
+            0xf83a_301f, // register-offset LDRH with PC offset
+            0xf83a_3c13, // reserved register-offset bits
             0x0001_6000, 0xffff_5000,
         ] {
             assert!(!is_single_transfer(instruction), "{instruction:#010x}");
