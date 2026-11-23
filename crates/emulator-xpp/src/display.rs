@@ -287,7 +287,7 @@ impl Output {
         let ((width, height, rgba, source), hash) = if let Some(cached) = cached {
             cached
         } else {
-            self.last = None;
+            let previous = self.last.take();
             let frame = match self.compose(cx) {
                 Ok(Some(frame)) => frame,
                 Ok(None) => {
@@ -302,14 +302,24 @@ impl Output {
                     return;
                 }
             };
-            // FNV-1a: a stable digest for the image-change sequence.
-            let hash = [frame.0, frame.1]
-                .iter()
-                .flat_map(|v| v.to_le_bytes())
-                .chain(frame.2.iter().copied())
-                .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-                    (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
-                });
+            // A buffer flip or a register update can produce identical pixels.
+            let hash = match previous {
+                Some((_, old, hash))
+                    if (old.0, old.1, &old.2) == (frame.0, frame.1, &frame.2) =>
+                {
+                    hash
+                }
+                _ => {
+                    // FNV-1a: a stable digest for the image-change sequence.
+                    [frame.0, frame.1]
+                        .iter()
+                        .flat_map(|v| v.to_le_bytes())
+                        .chain(frame.2.iter().copied())
+                        .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+                            (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+                        })
+                }
+            };
             if let Some(inputs) = inputs {
                 self.last = Some((inputs, frame.clone(), hash));
             }
