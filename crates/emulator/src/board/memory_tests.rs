@@ -21,14 +21,16 @@ fn physical_ranges_are_checked_before_any_byte_changes() {
     .unwrap();
     let domain = fujimod_emulator_cpu::exclusive::Shared::default();
     memory
-        .write_dma(&[], &domain, 0x1002, &[1, 2, 3, 4])
+        .write_dma(&[], &domain, 0x1002, &[1, 2, 3, 4], |_, _| {})
         .unwrap();
     let mut bytes = [0; 8];
     memory.read_host(0x1000, &mut bytes).unwrap();
     assert_eq!(bytes, [0, 0, 1, 2, 3, 4, 0, 0]);
     assert!(memory.host_bytes_equal(0x1000, &bytes).unwrap());
     assert!(!memory.host_bytes_equal(0x1002, &[1, 2, 3, 5]).unwrap());
-    assert!(memory.write_dma(&[], &domain, 0x1007, &[9, 9, 9]).is_err());
+    assert!(memory
+        .write_dma(&[], &domain, 0x1007, &[9, 9, 9], |_, _| {})
+        .is_err());
     memory.read_host(0x1000, &mut bytes).unwrap();
     assert_eq!(bytes, [0, 0, 1, 2, 3, 4, 0, 0]);
     bytes.fill(0x55);
@@ -76,13 +78,17 @@ fn bus_permissions_preflight_a_whole_transfer_and_host_loading_is_explicit() {
         .unwrap();
     let owner = domain.lock().unwrap().register(4).unwrap();
     domain.lock().unwrap().load(owner, 0x1000, 4);
-    assert!(memory.write_dma(&[], &domain, 0x1002, &[9; 4]).is_err());
+    assert!(memory
+        .write_dma(&[], &domain, 0x1002, &[9; 4], |_, _| {})
+        .is_err());
     assert!(domain.lock().unwrap().reservation(owner).is_some());
     let mut bytes = [0; 8];
     memory.read_host(0x1000, &mut bytes).unwrap();
     assert_eq!(bytes, [1, 2, 3, 4, 5, 6, 7, 8]);
     assert!(memory.read_dma(0x40001000, &mut bytes).is_err());
-    memory.write_dma(&[], &domain, 0x40001000, &[0; 4]).unwrap();
+    memory
+        .write_dma(&[], &domain, 0x40001000, &[0; 4], |_, _| {})
+        .unwrap();
     assert!(domain.lock().unwrap().reservation(owner).is_none());
     memory.read_host(0x1000, &mut bytes).unwrap();
     assert_eq!(bytes, [0, 0, 0, 0, 5, 6, 7, 8]);
@@ -100,7 +106,7 @@ fn high_canonical_backing_and_invalid_bus_maps_do_not_wrap_or_fall_back() {
     };
     let memory = memory::Memory::new(vec![(base, Backing::zeros(0x1000))], vec![map]).unwrap();
     let domain = fujimod_emulator_cpu::exclusive::Shared::default();
-    memory.write_dma(&[], &domain, 0x2001, &[42]).unwrap();
+    memory.write_dma(&[], &domain, 0x2001, &[42], |_, _| {}).unwrap();
     let mut byte = [0];
     memory.read_dma(0x2001, &mut byte).unwrap();
     assert_eq!(byte, [42]);

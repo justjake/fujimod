@@ -188,7 +188,10 @@ impl State {
             unmodeled_system: unmodeled_system.clone(),
             processor_deadlines: processor_deadlines.clone(),
             processor_generations: processor_generations.clone(),
-            code_run: *code_run,
+            code_run: match code_run {
+                RunCode::Running(core) => Some(*core),
+                RunCode::Unknown | RunCode::DmaStopped(_) => None,
+            },
             gic: interrupts.as_ref().map(|g| g.gic.save()),
         }
     }
@@ -230,7 +233,7 @@ impl State {
             .clone_from(&saved.processor_deadlines);
         self.processor_generations
             .clone_from(&saved.processor_generations);
-        self.code_run = saved.code_run;
+        self.code_run = saved.code_run.map_or(RunCode::Unknown, RunCode::Running);
         self.code_write_deferred = false;
         if let (Some(interrupts), Some(gic)) = (&mut self.interrupts, &saved.gic) {
             interrupts.gic.restore(gic)?;

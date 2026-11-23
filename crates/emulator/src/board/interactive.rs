@@ -135,7 +135,7 @@ impl Board {
                 budget as u64,
                 boundary,
             ));
-            state.code_run = None;
+            state.code_run = RunCode::Unknown;
         }
         let result = self.interactive_cohort(cores, quantum);
         let mut state = self.state.borrow_mut();

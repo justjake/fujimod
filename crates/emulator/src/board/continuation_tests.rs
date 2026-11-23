@@ -360,7 +360,7 @@ fn modeled_bus_store_has_no_cpu_owner() {
     let state = board.state.borrow();
     board
         .physical_memory
-        .write_dma(&board.cpus, &state.exclusive, 0x10000, &[1])
+        .write_dma(&board.cpus, &state.exclusive, 0x10000, &[1], |_, _| {})
         .unwrap();
     drop(state);
 
