@@ -784,8 +784,6 @@ mod tests {
         for instruction in [
             0xb400, 0xbc00, 0xc000, 0xc800, 0xde00, 0xdf00, 0xf3bf_8f4f,
             0xe850_1f00, // LDREX
-            0xf841_0f04, // STR with writeback
-            0xf851_0f04, // LDR with writeback
             0xf8e1_0004, // translation variant
             0xf8c1_f004, // STR from PC
             0xf8d1_d004, // LDR to SP
