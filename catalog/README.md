@@ -28,15 +28,18 @@ Every processor uses the same record shape. A processor's hardware is one
 | --- | --- |
 | `id`, `kind`, `base`, `size` | Identity and the register window |
 | `clock_id` | The clock domain that drives it |
-| `interrupts` | Each named output and the interrupt-controller line it raises |
-| `device` | Typed parameters of the device model for its `kind` |
+| `views` | Per-core addresses where a core sees the block somewhere other than `base` |
+| `interrupts` | Each named output, the interrupt-controller line it raises and, for fixed routing, the core |
+| `device` | The device model, tagged by `model`, with its typed parameters |
 | `registers` | Optional register layout: named registers at offsets, with width, reset value, access and named bit fields with their values |
 | `evidence` | How the facts were established |
 
-There are no separate peripheral, interrupt-input, per-block parameter or
-register-map lists, and no per-profile window lists. A device model reads its
-parameters from its block's `device` and its register behavior from its
-block's `registers`; an untyped object is never a substitute for either.
+There are no separate peripheral, interrupt-route, interrupt-input, per-block
+parameter or register-map lists, and no per-profile window lists. The board
+builder selects each block's implementation by its `device` model; the model
+reads its parameters from `device` and its register behavior from `registers`.
+An untyped object is never a substitute for either, and each `kind` allows a
+fixed set of models.
 
 `evidence` is typed, not prose. Its `kind` is one of:
 
@@ -54,9 +57,9 @@ record.
 
 A body record lists the chips on its buses, its wiring to processor blocks,
 its panels, its DRAM and its controls. It adds to or changes a processor block
-only through typed fields: `block_overrides` entries name a processor block ID
-and replace individual `device` parameters or `registers` entries, merged field
-by field over the processor's block. A body never redeclares a processor
+only through typed fields: a `block_overrides` entry names a processor block ID
+and replaces its `device` with another value of the same model, or replaces
+individual `registers` entries by name. A body never redeclares a processor
 block's window, and lists processor blocks the body leaves unconnected under
 `absent_blocks`. Control and dial wiring, including command dials, lives in
 `controls.json` connections, so every consumer reads one record.
@@ -85,7 +88,7 @@ Catalog validation refuses:
 - a firmware record that declares a device window or device model;
 - a body that redeclares a processor block instead of overriding its typed
   fields;
-- a block whose `device` parameters do not match its `kind`;
+- a block whose `device` model its `kind` does not allow;
 - a block without `evidence`.
 
 ## Board construction
