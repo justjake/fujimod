@@ -1313,6 +1313,17 @@ impl Processor {
         }
         Ok(false)
     }
+    fn disable_single_step(&self) -> Result<(), String> {
+        let mdscr = self.sys(ffi::MDSCR)?;
+        if mdscr & 1 != 0 {
+            self.set_sys(ffi::MDSCR, mdscr & !1)?;
+        }
+        let pstate = self.reg(ffi::PSTATE)?;
+        if pstate & (1 << 21) != 0 {
+            self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+        }
+        Ok(())
+    }
     fn run_interactive(
         &mut self,
         request: Run,
@@ -1346,10 +1357,7 @@ impl Processor {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
-        let mdscr = self.sys(ffi::MDSCR)?;
-        self.set_sys(ffi::MDSCR, mdscr & !1)?;
-        let pstate = self.reg(ffi::PSTATE)?;
-        self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+        self.disable_single_step()?;
         loop {
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
@@ -1359,10 +1367,7 @@ impl Processor {
             }
 
             self.deliver_interrupt()?;
-            let pstate = self.reg(ffi::PSTATE)?;
-            self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
-            let mdscr = self.sys(ffi::MDSCR)?;
-            self.set_sys(ffi::MDSCR, mdscr & !1)?;
+            self.disable_single_step()?;
             self.shared.native_active.store(true, Ordering::Release);
             if self.shared.stop.load(Ordering::Acquire) {
                 self.shared.native_active.store(false, Ordering::Release);
@@ -1424,10 +1429,7 @@ impl Processor {
         }
     }
     fn run_to_native_exit(&self) -> Result<NativeExit, String> {
-        let mdscr = self.sys(ffi::MDSCR)?;
-        self.set_sys(ffi::MDSCR, mdscr & !1)?;
-        let pstate = self.reg(ffi::PSTATE)?;
-        self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
+        self.disable_single_step()?;
         if self.shared.stop.load(Ordering::Acquire) {
             return Ok(NativeExit::Canceled);
         }
