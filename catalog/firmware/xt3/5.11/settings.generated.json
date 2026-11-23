@@ -114,6 +114,18 @@
           1
         ]
       }
+    },
+    "shoot_without_lens": {
+      "store": "main",
+      "offset": 1003,
+      "values": {
+        "on": [
+          0
+        ],
+        "off": [
+          1
+        ]
+      }
     }
   },
   "sections": []
