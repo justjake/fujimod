@@ -98,18 +98,19 @@ impl Gic {
     pub fn set_line(&mut self, line: usize, high: bool) {
         if line >= 32 && line < self.lines {
             let edge = self.config[line / 16] & (2 << (line % 16 * 2)) != 0;
-            if !edge || high && !self.levels[line] {
-                self.pending[0][line] = high;
-            }
+            let update_pending = !edge || high && !self.levels[line];
             self.levels[line] = high;
+            if update_pending && self.pending[0][line] != high {
+                self.pending[0][line] = high;
+                self.refresh();
+            }
         }
-        self.refresh();
     }
     pub fn pulse(&mut self, line: usize) {
-        if line < self.lines && line >= 32 {
+        if line < self.lines && line >= 32 && !self.pending[0][line] {
             self.pending[0][line] = true;
+            self.refresh();
         }
-        self.refresh();
     }
     pub fn next_irq(&self, core: usize) -> Option<usize> {
         self.eligible[core]
