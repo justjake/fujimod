@@ -54,6 +54,8 @@ struct LaunchRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     application_plan: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    load_snapshot: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     engine: Option<fujimod_catalog_configuration::RunEngine>,
 }
 
@@ -191,7 +193,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             ));
             if !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
                 let selection = resolved.reference.clone();
-                let request = fujimod_emulator_boot::Request {
+                let boot_request = fujimod_emulator_boot::Request {
                     update,
                     boot_rom: request.boot_rom,
                     nand: None,
@@ -201,8 +203,12 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     card_files: Vec::new(),
                     discovery: false,
                 };
-                let camera = fujimod_emulator_boot::open_request(resolved, request)
+                let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
+                if let Some(path) = request.load_snapshot {
+                    fujimod_emulator_boot::load_snapshot(&mut camera.session, &path)
+                        .inspect_err(|error| log_session(format!("session: {error}")))?;
+                }
                 log_session("session: camera opened");
                 return fujimod_emulator_gui::serve(
                     fujimod_emulator_gui::Live::new(camera, selection),
@@ -213,7 +219,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             }
             let run = fujimod_emulator_boot::xp5::Run {
                 configuration: resolved.clone(),
-                load_snapshot: None,
+                load_snapshot: request.load_snapshot,
                 save_snapshot: None,
                 update,
                 manifest: None,
@@ -401,7 +407,7 @@ fn window_launch() -> Result<WindowLaunch, String> {
                     .or_else(|| arguments.next())
                     .ok_or("--update needs a value")?;
             }
-            "--boot-rom" | "--camera" | "--application-plan" => {
+            "--boot-rom" | "--camera" | "--application-plan" | "--load-snapshot" => {
                 let value = inline
                     .map(str::to_owned)
                     .or_else(|| arguments.next())
@@ -411,7 +417,8 @@ fn window_launch() -> Result<WindowLaunch, String> {
                 match key {
                     "--boot-rom" => command.boot_rom = path,
                     "--camera" => command.camera = path,
-                    _ => command.application_plan = path,
+                    "--application-plan" => command.application_plan = path,
+                    _ => command.load_snapshot = path,
                 }
             }
             "--engine" => {
