@@ -140,17 +140,27 @@ pub fn composite_snapshot(
     {
         // Packed 4:2:2 pairs share chroma and replace both pixels at full
         // opacity. Unscaled scanout needs neither coordinate nor blend math.
+        let mut previous: Option<(&[u8], &[u8])> = None;
         for (row, output) in s.rows.iter().zip(rgba.chunks_exact_mut(width as usize * 4)) {
-            for (pair, pixels) in row[..shown_width * 2]
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .zip(output[..shown_width * 4].as_chunks_mut::<8>().0)
+            let row = &row[..shown_width * 2];
+            let output = &mut output[..shown_width * 4];
+            if let Some((previous_row, pixels)) = previous
+                && previous_row == row
             {
-                let [left, right, cb, cr] = *pair;
-                pixels[..4].copy_from_slice(&p.order.rgba(&[left, cb, cr, 0]));
-                pixels[4..].copy_from_slice(&p.order.rgba(&[right, cb, cr, 0]));
+                output.copy_from_slice(pixels);
+            } else {
+                for (pair, pixels) in row
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(output.as_chunks_mut::<8>().0)
+                {
+                    let [left, right, cb, cr] = *pair;
+                    pixels[..4].copy_from_slice(&p.order.rgba(&[left, cb, cr, 0]));
+                    pixels[4..].copy_from_slice(&p.order.rgba(&[right, cb, cr, 0]));
+                }
             }
+            previous = Some((row, output));
         }
         return Ok(());
     }
@@ -199,7 +209,7 @@ mod tests {
         let rows = [
             [8, 235, 190, 64, 82, 120, 15, 218],
             [15, 16, 30, 211, 39, 70, 221, 29],
-            [246, 170, 176, 80, 18, 236, 44, 32],
+            [15, 16, 30, 211, 39, 70, 221, 29],
         ];
         let unscaled = Plane {
             address: 0,
