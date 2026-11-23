@@ -1,0 +1,614 @@
+{
+  "$schema": "https://fujimod.com/schemas/osd-items.generated.schema.json",
+  "schema": 1,
+  "id": "x70-110-osd-items",
+  "firmware_id": "x70-110",
+  "firmware_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+  "source": {
+    "table_address": "0x01b43878",
+    "table_sha256": "481391081fd4811e91d06f24dc9fb970ec045c295647091936dfc92a56bac0c1",
+    "row_bytes": 28,
+    "row_count": 508,
+    "index": "event_id - 1"
+  },
+  "scene_variants": [
+    {
+      "event_id": 41,
+      "family_id": 258,
+      "predicate": "0x01b2bdac",
+      "header": "0x01b2be04",
+      "draw": "0x01b2be9c",
+      "footer": "0x01b2be88",
+      "regional_panels": [
+        "0x01aa3284",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01aa9914",
+        "0x01ab988c",
+        "0x01a6adb4",
+        "0x01a3712c"
+      ]
+    },
+    {
+      "event_id": 42,
+      "family_id": 258,
+      "predicate": "0x01b2b6e0",
+      "header": "0x01b2b77c",
+      "draw": "0x01b2b814",
+      "footer": "0x01b2b800",
+      "regional_panels": [
+        "0x01aa132c",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01ab3dd8",
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 43,
+      "family_id": 258,
+      "predicate": "0x01b2ba9c",
+      "header": "0x01b2bb38",
+      "draw": "0x01b2bbcc",
+      "footer": "0x01b2bbb8",
+      "regional_panels": [
+        "0x01aa22dc",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01ab680c",
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 44,
+      "family_id": 258,
+      "predicate": "0x01b2c514",
+      "header": "0x01b2c564",
+      "draw": "0x01b2c5a8",
+      "footer": "0x01b2c594",
+      "regional_panels": [
+        "0x01aab900",
+        "0x01a6adb4",
+        "0x01a3712c"
+      ]
+    },
+    {
+      "event_id": 45,
+      "family_id": 258,
+      "predicate": "0x01b2c124",
+      "header": "0x01b2c1b4",
+      "draw": "0x01b2c1f8",
+      "footer": "0x01b2c1e4",
+      "regional_panels": [
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 46,
+      "family_id": 258,
+      "predicate": "0x01b2c31c",
+      "header": "0x01b2c3ac",
+      "draw": "0x01b2c3f0",
+      "footer": "0x01b2c3dc",
+      "regional_panels": [
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 47,
+      "family_id": 258,
+      "predicate": "0x01b33414",
+      "header": "0x01b33468",
+      "draw": "0x01b33500",
+      "footer": "0x01b334ec",
+      "regional_panels": [
+        "0x01ad60f4",
+        "0x01aa3284",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01aa9914",
+        "0x01a9d664",
+        "0x01a79350",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 48,
+      "family_id": 258,
+      "predicate": "0x01b32d4c",
+      "header": "0x01b32de4",
+      "draw": "0x01b32e7c",
+      "footer": "0x01b32e68",
+      "regional_panels": [
+        "0x01acef74",
+        "0x01aa132c",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01a95678",
+        "0x01a74764",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 49,
+      "family_id": 258,
+      "predicate": "0x01b33104",
+      "header": "0x01b3319c",
+      "draw": "0x01b33234",
+      "footer": "0x01b33220",
+      "regional_panels": [
+        "0x01ad2834",
+        "0x01aa22dc",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01a99344",
+        "0x01a74764",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 50,
+      "family_id": 258,
+      "predicate": "0x01b33b70",
+      "header": "0x01b33bbc",
+      "draw": "0x01b33c00",
+      "footer": "0x01b33bec",
+      "regional_panels": [
+        "0x01aab900",
+        "0x01a79350",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 51,
+      "family_id": 258,
+      "predicate": "0x01b33788",
+      "header": "0x01b33814",
+      "draw": "0x01b33858",
+      "footer": "0x01b33844",
+      "regional_panels": [
+        "0x01a74764",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 52,
+      "family_id": 258,
+      "predicate": "0x01b3397c",
+      "header": "0x01b33a08",
+      "draw": "0x01b33a4c",
+      "footer": "0x01b33a38",
+      "regional_panels": [
+        "0x01a74764",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 53,
+      "family_id": 258,
+      "predicate": "0x01b284b4",
+      "header": "0x01b284f0",
+      "draw": "0x01b28560",
+      "footer": "0x01b2854c",
+      "regional_panels": [
+        "0x01a5e8a0",
+        "0x01a8dc44",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01a83428",
+        "0x01a2ad30"
+      ]
+    },
+    {
+      "event_id": 54,
+      "family_id": 258,
+      "predicate": "0x01b27620",
+      "header": "0x01b2769c",
+      "draw": "0x01b2770c",
+      "footer": "0x01b276f8",
+      "regional_panels": [
+        "0x01a8d724",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01a7de14",
+        "0x01a599c8",
+        "0x01a294f8"
+      ]
+    },
+    {
+      "event_id": 55,
+      "family_id": 258,
+      "predicate": "0x01b279f0",
+      "header": "0x01b27a6c",
+      "draw": "0x01b27adc",
+      "footer": "0x01b27ac8",
+      "regional_panels": [
+        "0x01a8d8d8",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01a805f8",
+        "0x01a599c8",
+        "0x01a294f8"
+      ]
+    },
+    {
+      "event_id": 56,
+      "family_id": 258,
+      "predicate": "0x01b001b0",
+      "header": "0x01b00200",
+      "draw": "0x01b00294",
+      "footer": "0x01b00280",
+      "regional_panels": [
+        "0x01aa3284",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01aa9914",
+        "0x01a92f74",
+        "0x01a79350",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 57,
+      "family_id": 258,
+      "predicate": "0x01afeeec",
+      "header": "0x01afef80",
+      "draw": "0x01aff014",
+      "footer": "0x01aff000",
+      "regional_panels": [
+        "0x01aa132c",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01a8ddf8",
+        "0x01a53438",
+        "0x01a26718"
+      ]
+    },
+    {
+      "event_id": 58,
+      "family_id": 258,
+      "predicate": "0x01aff29c",
+      "header": "0x01aff330",
+      "draw": "0x01aff3c4",
+      "footer": "0x01aff3b0",
+      "regional_panels": [
+        "0x01aa22dc",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01a904fc",
+        "0x01a53438",
+        "0x01a26718"
+      ]
+    },
+    {
+      "event_id": 59,
+      "family_id": 258,
+      "predicate": "0x01b0092c",
+      "header": "0x01b00988",
+      "draw": "0x01b009cc",
+      "footer": "0x01b009b8",
+      "regional_panels": [
+        "0x01aab900",
+        "0x01a79350",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 60,
+      "family_id": 258,
+      "predicate": "0x01b0051c",
+      "header": "0x01b005bc",
+      "draw": "0x01b00600",
+      "footer": "0x01b005ec",
+      "regional_panels": [
+        "0x01a53438",
+        "0x01a26718"
+      ]
+    },
+    {
+      "event_id": 61,
+      "family_id": 258,
+      "predicate": "0x01b00724",
+      "header": "0x01b007c4",
+      "draw": "0x01b00808",
+      "footer": "0x01b007f4",
+      "regional_panels": [
+        "0x01a53438",
+        "0x01a26718"
+      ]
+    },
+    {
+      "event_id": 62,
+      "family_id": 258,
+      "predicate": "0x01b2fea8",
+      "header": "0x01b2ffb4",
+      "draw": "0x01b30048",
+      "footer": "0x01b30034",
+      "regional_panels": [
+        "0x01aa3284",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01aa9914",
+        "0x01a9d664",
+        "0x01a6adb4",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 63,
+      "family_id": 258,
+      "predicate": "0x01b2e898",
+      "header": "0x01b2ea2c",
+      "draw": "0x01b2eac0",
+      "footer": "0x01b2eaac",
+      "regional_panels": [
+        "0x01aa132c",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01a95678",
+        "0x01a6fa8c",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 64,
+      "family_id": 258,
+      "predicate": "0x01b2ed48",
+      "header": "0x01b2eedc",
+      "draw": "0x01b2ef70",
+      "footer": "0x01b2ef5c",
+      "regional_panels": [
+        "0x01aa22dc",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01a99344",
+        "0x01a6fa8c",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 65,
+      "family_id": 258,
+      "predicate": "0x01b307d0",
+      "header": "0x01b308a8",
+      "draw": "0x01b308ec",
+      "footer": "0x01b308d8",
+      "regional_panels": [
+        "0x01aab900",
+        "0x01a6adb4",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 66,
+      "family_id": 258,
+      "predicate": "0x01b302d0",
+      "header": "0x01b303e8",
+      "draw": "0x01b3042c",
+      "footer": "0x01b30418",
+      "regional_panels": [
+        "0x01a6fa8c",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 67,
+      "family_id": 258,
+      "predicate": "0x01b30550",
+      "header": "0x01b30668",
+      "draw": "0x01b306ac",
+      "footer": "0x01b30698",
+      "regional_panels": [
+        "0x01a6fa8c",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 68,
+      "family_id": 258,
+      "predicate": "0x01b32498",
+      "header": "0x01b324ec",
+      "draw": "0x01b3257c",
+      "footer": "0x01b32568",
+      "regional_panels": [
+        "0x01aa3284",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01aa9914",
+        "0x01acdd64",
+        "0x01a6adb4",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 69,
+      "family_id": 258,
+      "predicate": "0x01b31218",
+      "header": "0x01b312b0",
+      "draw": "0x01b31328",
+      "footer": "0x01b31314",
+      "regional_panels": [
+        "0x01aa132c",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01acb3e4",
+        "0x01a660dc",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 70,
+      "family_id": 258,
+      "predicate": "0x01b315b0",
+      "header": "0x01b31648",
+      "draw": "0x01b316c0",
+      "footer": "0x01b316ac",
+      "regional_panels": [
+        "0x01aa22dc",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01acc5f4",
+        "0x01a660dc",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 71,
+      "family_id": 258,
+      "predicate": "0x01b32bac",
+      "header": "0x01b32bf8",
+      "draw": "0x01b32c1c",
+      "footer": "0x01b32c08",
+      "regional_panels": [
+        "0x01aab900",
+        "0x01a6adb4",
+        "0x01a3a464"
+      ]
+    },
+    {
+      "event_id": 72,
+      "family_id": 258,
+      "predicate": "0x01b32804",
+      "header": "0x01b32890",
+      "draw": "0x01b328b4",
+      "footer": "0x01b328a0",
+      "regional_panels": [
+        "0x01a660dc",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 73,
+      "family_id": 258,
+      "predicate": "0x01b329d8",
+      "header": "0x01b32a64",
+      "draw": "0x01b32a88",
+      "footer": "0x01b32a74",
+      "regional_panels": [
+        "0x01a660dc",
+        "0x01a38f20"
+      ]
+    },
+    {
+      "event_id": 74,
+      "family_id": 258,
+      "predicate": "0x01b26c74",
+      "header": "0x01b26cbc",
+      "draw": "0x01b26d54",
+      "footer": "0x01b26d40",
+      "regional_panels": [
+        "0x01aa3284",
+        "0x01aa7238",
+        "0x01aab0b0",
+        "0x01aab900",
+        "0x01aa9914",
+        "0x01ab13d4",
+        "0x01a6adb4",
+        "0x01a3712c"
+      ]
+    },
+    {
+      "event_id": 75,
+      "family_id": 258,
+      "predicate": "0x01b265c4",
+      "header": "0x01b26650",
+      "draw": "0x01b266e8",
+      "footer": "0x01b266d4",
+      "regional_panels": [
+        "0x01aa132c",
+        "0x01aa4234",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01aab97c",
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 76,
+      "family_id": 258,
+      "predicate": "0x01b26970",
+      "header": "0x01b269fc",
+      "draw": "0x01b26a94",
+      "footer": "0x01b26a80",
+      "regional_panels": [
+        "0x01aa22dc",
+        "0x01aa5ad8",
+        "0x01aaa890",
+        "0x01aa8998",
+        "0x01aae384",
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 77,
+      "family_id": 258,
+      "predicate": "0x01b27434",
+      "header": "0x01b27480",
+      "draw": "0x01b274e4",
+      "footer": "0x01b274d0",
+      "regional_panels": [
+        "0x01aab900",
+        "0x01a6adb4",
+        "0x01a3712c"
+      ]
+    },
+    {
+      "event_id": 78,
+      "family_id": 258,
+      "predicate": "0x01b26fdc",
+      "header": "0x01b27068",
+      "draw": "0x01b270e4",
+      "footer": "0x01b270d0",
+      "regional_panels": [
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 79,
+      "family_id": 258,
+      "predicate": "0x01b27214",
+      "header": "0x01b272a0",
+      "draw": "0x01b27304",
+      "footer": "0x01b272f0",
+      "regional_panels": [
+        "0x01a660dc",
+        "0x01a359f4"
+      ]
+    },
+    {
+      "event_id": 80,
+      "family_id": 258,
+      "predicate": "0x01b0d694",
+      "header": "0x01b0d6c4",
+      "draw": "0x01b0d77c",
+      "footer": "0x01b0d764",
+      "regional_panels": [
+        "0x01a54a68",
+        "0x01a3712c"
+      ]
+    }
+  ]
+}

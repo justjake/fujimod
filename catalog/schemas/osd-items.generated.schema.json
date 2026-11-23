@@ -1,0 +1,340 @@
+{
+  "$id": "https://fujimod.com/schemas/osd-items.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated stock OSD scene routines, sprite records, selectors, and joined items.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/osd-items.generated.schema.json",
+      "type": "string"
+    },
+    "disp_custom_selectors": {
+      "items": {
+        "$ref": "#/$defs/disp_custom_selector"
+      },
+      "type": "array"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/item"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "const": 1,
+      "type": "integer"
+    },
+    "scene_variants": {
+      "items": {
+        "$ref": "#/$defs/scene_variant"
+      },
+      "maxItems": 40,
+      "minItems": 40,
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "sprite_records": {
+      "items": {
+        "$ref": "#/$defs/sprite_record"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "firmware_sha256",
+    "source",
+    "scene_variants"
+  ],
+  "title": "OsdItems",
+  "type": "object",
+  "$defs": {
+    "address": {
+      "pattern": "^0x[0-9a-f]{8}$",
+      "type": "string"
+    },
+    "box": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "width": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "x": {
+          "type": "integer"
+        },
+        "y": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "disp_custom_selector": {
+      "additionalProperties": false,
+      "properties": {
+        "selector_id": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "selector_id",
+        "setting_id"
+      ],
+      "type": "object"
+    },
+    "item": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor": {
+          "type": "string"
+        },
+        "artwork_ids": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "boxes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/box"
+          },
+          "minProperties": 1,
+          "type": "object"
+        },
+        "record_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "setting_id": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "anchor",
+        "record_ids",
+        "artwork_ids",
+        "setting_id",
+        "boxes"
+      ],
+      "type": "object"
+    },
+    "scene_variant": {
+      "additionalProperties": false,
+      "properties": {
+        "draw": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "event_id": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "family_id": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "footer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "header": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "predicate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/address"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "regional_panels": {
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "event_id",
+        "family_id",
+        "predicate",
+        "header",
+        "draw",
+        "footer",
+        "regional_panels"
+      ],
+      "type": "object"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "const": "event_id - 1",
+          "type": "string"
+        },
+        "row_bytes": {
+          "const": 28,
+          "type": "integer"
+        },
+        "row_count": {
+          "const": 508,
+          "type": "integer"
+        },
+        "table_address": {
+          "$ref": "#/$defs/address"
+        },
+        "table_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table_address",
+        "table_sha256",
+        "row_bytes",
+        "row_count",
+        "index"
+      ],
+      "type": "object"
+    },
+    "sprite_record": {
+      "additionalProperties": false,
+      "properties": {
+        "artwork_id": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "text",
+            "fill"
+          ],
+          "type": "string"
+        },
+        "palette": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "panel": {
+          "$ref": "#/$defs/address"
+        },
+        "position": {
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "type": "object"
+        },
+        "size": {
+          "additionalProperties": false,
+          "properties": {
+            "height": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "width": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "width",
+            "height"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "panel",
+        "kind",
+        "artwork_id",
+        "position",
+        "size",
+        "palette"
+      ],
+      "type": "object"
+    }
+  }
+}
