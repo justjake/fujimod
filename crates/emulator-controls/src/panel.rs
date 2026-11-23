@@ -126,10 +126,14 @@ fn interval_mask(
 ) -> Result<Mask, Unresolved> {
     let (low, high) = match interval {
         AdcInterval::Literal { lower, upper, .. } => (u32::from(*lower), u32::from(*upper)),
-        AdcInterval::ConfigurationU16 { lower, upper, .. } => (
-            calibrated(calibration, *lower)?,
-            calibrated(calibration, *upper)?,
-        ),
+        AdcInterval::ConfigurationU16 { lower, upper, .. } => {
+            let low = calibrated(calibration, *lower)?;
+            let high = calibrated(calibration, *upper)?;
+            if low == 0 && high == 0 {
+                return Err("ADC calibration band is zero-filled".into());
+            }
+            (low, high)
+        }
     };
     if !(low <= high && high < analog_levels) {
         return Err("ADC calibration is outside the converter range".into());
@@ -816,4 +820,22 @@ pub fn compile(
         unavailable,
         problems,
     })
+}
+
+#[cfg(test)]
+mod calibration_tests {
+    use super::*;
+
+    #[test]
+    fn calibrated_band_requires_loaded_bounds() {
+        let interval = AdcInterval::ConfigurationU16 {
+            lower: 0,
+            upper: 2,
+            when: None,
+            unless: Vec::new(),
+        };
+        assert!(interval_mask(&interval, Some(&vec![0; 4]), 1024).is_err());
+        assert!(interval_mask(&interval, Some(&vec![0xff; 4]), 1024).is_err());
+        assert!(interval_mask(&interval, Some(&vec![0, 0, 29, 0]), 1024).is_ok());
+    }
 }
