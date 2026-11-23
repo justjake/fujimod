@@ -3491,6 +3491,10 @@ unsafe fn block_classify_transfers(
     word: u32,
 ) -> fujimod_emulator_cpu::Translation {
     let mut classification = unsafe { block_classify(data, pc, word) };
+    if mprofile_blocks::can_run_in_it(word) {
+        classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteItSafe;
+        classification.observe_block = false;
+    }
     // PUSH can make several independent writes. Keeping it last lets each
     // MMIO or watched store complete without restarting an earlier write.
     let short_push = word & 0xffff_fe00 == 0xb400 && word & 0x01ff != 0;

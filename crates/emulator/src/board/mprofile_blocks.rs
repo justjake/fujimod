@@ -491,6 +491,25 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     }
 }
 
+/// An IT instruction or a register-only member with no branch or memory
+/// restart. Unicorn evaluates conditions and preserves ITSTATE at TB exits.
+pub(super) fn can_run_in_it(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        let instruction = word as u16;
+        if instruction & 0xff00 == 0xbf00 {
+            return instruction & 15 != 0 && (instruction >> 4) & 15 < 14;
+        }
+        if matches!(instruction, 0xd000..=0xe7ff) || instruction & 0xf500 == 0xb100 {
+            return false;
+        }
+    } else if word >> 27 == 0b11110 && word & 0x8000 != 0 {
+        // The wide branch space also contains system instructions. Leave
+        // those observed when conditional, including mask-register reads.
+        return false;
+    }
+    can_run_inline(word)
+}
+
 /// Count the executed instruction prefix reported by a memory-hook restart.
 /// Admission constraints on those already executed entries need no rescan.
 pub(super) fn count_entries(mut code: &[u8]) -> Result<u64, String> {
@@ -687,6 +706,17 @@ mod tests {
         assert!(!can_run_inline(0xf8c0_1000)); // str.w
         assert!(!can_run_inline(0x0001_0001)); // unrecognized prefix
     }
+    #[test]
+    fn it_classifier_admits_pure_members_without_control_transfers() {
+        for word in [0xbf0c, 0xbfb8, 0x2001, 0xf240_0301, 0xfba5_2302] {
+            assert!(can_run_in_it(word), "{word:#x}");
+        }
+        for word in [0xbf00, 0xbff8, 0xb672, 0xbf30, 0x6008, 0xb430, 0x4770,
+                     0xb170, 0xd001, 0xf006_fcf7, 0xf3ef_8110, 0xf8d0_0004] {
+            assert!(!can_run_in_it(word), "{word:#x}");
+        }
+    }
+
     #[test]
     fn single_transfer_classifier_accepts_only_single_register_memory_forms() {
         // Register-offset transfers, covering word/byte/halfword and signed
