@@ -276,7 +276,6 @@
     }
   },
   "overlays": [],
-  "debug_usb_overlays": ["x70-110-browser-usb", "x70-110-usb-debug"],
   "purpose": "rom_boot",
   "preset": {
     "factory_options": {},

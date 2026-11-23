@@ -4656,7 +4656,6 @@ RunConfiguration = TypedDict(
         ],
         "body_id": Required["str"],
         "browser_camera": NotRequired["RunBrowserCamera | None"],
-        "debug_usb_overlays": NotRequired["list[str]"],
         "dram_address_space": NotRequired["RunDramAddressSpace | None"],
         "execution": NotRequired["RunExecution | None"],
         "firmware_id": Required["str"],

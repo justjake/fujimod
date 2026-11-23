@@ -67,10 +67,6 @@ pub struct RunConfiguration {
     pub scene: Option<RunScene>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
-    /// Further overlays that connect the camera's USB in debug mode, for a
-    /// host that shares the camera with Dev Tools.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub debug_usb_overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "schema", schemars(default))]
@@ -120,15 +116,11 @@ impl RunConfiguration {
         fujimod_catalog_identity::validate_id(&self.id)?;
         fujimod_catalog_identity::validate_id(&self.body_id)?;
         fujimod_catalog_identity::validate_id(&self.firmware_id)?;
-        // A resolved run lists the debug USB overlays it applied among its
-        // overlays, so the two lists are checked separately.
-        for list in [&self.overlays, &self.debug_usb_overlays] {
-            let mut overlays = BTreeSet::new();
-            for overlay in list {
-                fujimod_catalog_identity::validate_id(overlay)?;
-                if !overlays.insert(overlay) {
-                    return Err("run configuration repeats an overlay identity".into());
-                }
+        let mut overlays = BTreeSet::new();
+        for overlay in &self.overlays {
+            fujimod_catalog_identity::validate_id(overlay)?;
+            if !overlays.insert(overlay) {
+                return Err("run configuration repeats an overlay identity".into());
             }
         }
         if let Some(execution) = &self.execution {
