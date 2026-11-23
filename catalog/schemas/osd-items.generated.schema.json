@@ -58,7 +58,8 @@
     "firmware_sha256",
     "source",
     "scene_variants",
-    "sprite_records"
+    "sprite_records",
+    "disp_custom_selectors"
   ],
   "title": "OsdItems",
   "type": "object",
@@ -97,10 +98,12 @@
       "additionalProperties": false,
       "properties": {
         "selector_id": {
+          "description": "Selector index passed to the stock DISP. CUSTOM setting gate.",
           "minimum": 0,
           "type": "integer"
         },
         "setting_id": {
+          "description": "Stock LCD CUSTOM setting id selected by this selector.",
           "minimum": 0,
           "type": "integer"
         }
@@ -240,6 +243,12 @@
         "canvas_packet_draw": {
           "$ref": "#/$defs/address"
         },
+        "disp_custom_function": {
+          "$ref": "#/$defs/address"
+        },
+        "disp_custom_selector_table": {
+          "$ref": "#/$defs/address"
+        },
         "row_bytes": {
           "const": 28,
           "type": "integer"
@@ -258,7 +267,9 @@
         "row_count",
         "index",
         "canvas_packet_draw",
-        "canvas_packet_bytes"
+        "canvas_packet_bytes",
+        "disp_custom_function",
+        "disp_custom_selector_table"
       ],
       "type": "object"
     },

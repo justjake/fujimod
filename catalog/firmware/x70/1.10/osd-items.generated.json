@@ -10,7 +10,9 @@
     "row_count": 508,
     "index": "event_id - 1",
     "canvas_packet_draw": "0x019cb9bc",
-    "canvas_packet_bytes": 92
+    "canvas_packet_bytes": 92,
+    "disp_custom_function": "0x01a20acc",
+    "disp_custom_selector_table": "0x01a20b40"
   },
   "scene_variants": [
     {
@@ -72672,6 +72674,104 @@
         "height": 0
       },
       "palette": 4294967140
+    }
+  ],
+  "disp_custom_selectors": [
+    {
+      "selector_id": 0,
+      "setting_id": 569
+    },
+    {
+      "selector_id": 1,
+      "setting_id": 571
+    },
+    {
+      "selector_id": 2,
+      "setting_id": 574
+    },
+    {
+      "selector_id": 3,
+      "setting_id": 575
+    },
+    {
+      "selector_id": 4,
+      "setting_id": 572
+    },
+    {
+      "selector_id": 5,
+      "setting_id": 570
+    },
+    {
+      "selector_id": 6,
+      "setting_id": 581
+    },
+    {
+      "selector_id": 7,
+      "setting_id": 577
+    },
+    {
+      "selector_id": 8,
+      "setting_id": 578
+    },
+    {
+      "selector_id": 9,
+      "setting_id": 578
+    },
+    {
+      "selector_id": 10,
+      "setting_id": 573
+    },
+    {
+      "selector_id": 11,
+      "setting_id": 579
+    },
+    {
+      "selector_id": 12,
+      "setting_id": 580
+    },
+    {
+      "selector_id": 13,
+      "setting_id": 567
+    },
+    {
+      "selector_id": 14,
+      "setting_id": 582
+    },
+    {
+      "selector_id": 15,
+      "setting_id": 568
+    },
+    {
+      "selector_id": 16,
+      "setting_id": 576
+    },
+    {
+      "selector_id": 17,
+      "setting_id": 583
+    },
+    {
+      "selector_id": 18,
+      "setting_id": 584
+    },
+    {
+      "selector_id": 19,
+      "setting_id": 585
+    },
+    {
+      "selector_id": 20,
+      "setting_id": 586
+    },
+    {
+      "selector_id": 21,
+      "setting_id": 587
+    },
+    {
+      "selector_id": 22,
+      "setting_id": 588
+    },
+    {
+      "selector_id": 23,
+      "setting_id": 589
     }
   ]
 }
