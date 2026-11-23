@@ -184,7 +184,7 @@ fn interactive_ordered_blocks_equal_the_instruction_observer() {
 /// the portable form is the same bytes either way.
 #[test]
 fn keyframes_do_not_bind_to_the_execution_core_s_own_hooks() {
-    let reference = run(100, false, 2500, &[]);
+    let reference = run(100, false, 2500, &[], ExecutionPolicy::Exact);
     let mut board = board(true);
     let start = board.checkpoint(None).unwrap();
     let portable_start = start.export().unwrap().to_bytes().unwrap();
