@@ -1,6 +1,7 @@
 //! Explicit, bounded CPU/bus observation. No device consumes these records.
 pub mod calls;
 pub mod ranges;
+mod execution_metrics;
 use super::{Board, State, factory::MemoryMap, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register, arm};
 use serde_json::{Value, json};

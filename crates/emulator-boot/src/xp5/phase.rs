@@ -128,6 +128,7 @@ impl PhaseRecorder {
             "instructions_by_core": board.instruction_counts(),
             "engine_exit_counters_by_core": engine_exit_counters_by_core,
             "mmio_callbacks_by_core": board.mmio_trap_callback_counts(),
+            "board_execution": board.execution_metrics(),
         });
         if let Some((bank, archive_sequence, modeled_sequence)) = frame {
             let fields = record
