@@ -247,12 +247,18 @@ impl Cpu for Core {
         let _reservation = e
             .memory
             .reserve_run(e.id.get(), ExecutionPolicy::Exact, false)?;
-        e.memory.flush()?;
+        if e.memory.flush_pending() {
+            e.memory.flush()?;
+        }
         let mut begin = request.begin;
         loop {
-            e.cpu.write_register(Register::Pc, &begin.to_le_bytes())?;
-            if e.deliver_interrupt()? {
-                return Ok(Exit::Stopped);
+            // The engine installs the start PC itself. Seed it early only
+            // when an interrupt might read it before any guest execution.
+            if e.irq.get() || e.fiq.get() {
+                e.cpu.write_register(Register::Pc, &begin.to_le_bytes())?;
+                if e.deliver_interrupt()? {
+                    return Ok(Exit::Stopped);
+                }
             }
             e.memory.start(e.id.get())?;
             e.active.set(true);
@@ -297,16 +303,12 @@ impl Cpu for Core {
             if flush {
                 e.memory.flush()?;
             }
-            // Accepted shared translation maintenance must reach the owner
-            // before this engine runs again.
-            let maintenance = e
-                .cpu
-                .translation_maintenance_status()
-                .is_ok_and(|s| s.pending != 0 || s.poison != 0);
             if !e.stopped.get()
-                && !maintenance
                 && (flush || e.restart.get().is_some())
                 && e.count.get() < e.cap.get()
+                // Accepted shared translation maintenance must reach the
+                // owner before any internal retry.
+                && !e.cpu.translation_maintenance_status().is_ok_and(|s| s.pending != 0 || s.poison != 0)
             {
                 begin = e.restart.get().unwrap_or(e.scalar(Register::Pc)?);
                 continue;
