@@ -34,4 +34,12 @@ rtc_valid = true
 #   and return 1; 0x0325760c also tests register 0x10 bit 1 directly when register 0 bit 10 is clear.
 # HARDWARE-ONLY / UNVERIFIED: what the physical chip reports in registers 0 and 0x10, and reading
 # register 0x10 bit 1 specifically as the physical power button (remains an INFERENCE).
-registers = { "0" = 0x8200, "10" = 0x2 }
+# VERIFIED firmware condition on register 0x0e (read through the cached reader 0x014f3a70, whose
+# descriptor 0x01e02500 has cache class 1): the supply classifier 0x014f3b50 reports a data host
+# (register 0x12 bits 5:4 = 0x10) only when register 0x0e bit 4 is set and the power-policy word at
+# 0x0225b400 is nonzero. Only the power-policy init 0x014f3da0 invalidates class 1 (0x014f3794; the
+# periodic charge policy 0x014f4a7c invalidates classes 2 and 4), so the classifier sees the value
+# read at startup. INFERENCE (not measured): bit 4 reads set while the camera runs, because the
+# classifier could never report a host that connects after startup otherwise. Bit 0 is the installed
+# battery (the part's default).
+registers = { "0" = 0x8200, "e" = 0x11, "10" = 0x2 }
