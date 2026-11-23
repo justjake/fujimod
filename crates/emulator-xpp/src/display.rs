@@ -157,9 +157,12 @@ impl Device for FrameClock {
     }
 }
 
-use fujimod_framebuffer_xpp::{CONTROL, VIDEO_ENABLE, LAYER_ENABLE, LAYER_BUFFER, VIDEO_SIZE, VIDEO_BUFFER, LAYER_SIZE};
+use fujimod_framebuffer_xpp::LAYER_BUFFER;
 #[cfg(test)]
-use fujimod_framebuffer_xpp::{LAYER_ORIGIN, OSD_ENABLE, OUTPUT_SIZE, PACKED_422, VIDEO_FORMAT};
+use fujimod_framebuffer_xpp::{
+    CONTROL, LAYER_ENABLE, LAYER_ORIGIN, LAYER_SIZE, OSD_ENABLE, OUTPUT_SIZE, PACKED_422,
+    VIDEO_BUFFER, VIDEO_ENABLE, VIDEO_FORMAT, VIDEO_SIZE,
+};
 
 /// Host output index and capture period of a scanned-out display output.
 #[derive(Clone, Copy, Debug)]
@@ -181,6 +184,12 @@ struct Handshake {
     status: bool,
     due: Option<u64>,
 }
+struct RenderedFrame {
+    inputs: fujimod_framebuffer_xpp::Capture,
+    rgba: Vec<u8>,
+    hash: u64,
+}
+
 pub struct Output {
     base: u64,
     size: u64,
@@ -189,8 +198,7 @@ pub struct Output {
     words: BTreeMap<u64, u32>,
     scanout: Option<Scanout>,
     capture: Capture,
-    /// The last composed frame and its hash, keyed by the inputs `compose` read.
-    last: Option<(Vec<u8>, (u32, u32, Vec<u8>, u64), u64)>,
+    last: Option<RenderedFrame>,
     handshake_ticks: Option<u64>,
     handshake: Handshake,
 }
@@ -253,84 +261,51 @@ impl Output {
     fn word(&self, offset: u64) -> u32 {
         self.words.get(&offset).copied().unwrap_or(0)
     }
-    fn compose(&self,cx:&mut Cx<'_>)->Result<Option<(u32,u32,Vec<u8>,u64)>,()> {
-        fujimod_framebuffer_xpp::Decoder{words:&self.words}.compose(|a,n|cx.ram_bytes(a,n))
-    }
-    /// The registers and source bytes `compose` reads; equal inputs compose
-    /// the same frame. `None` when a layer cannot be read.
-    fn inputs(&self, cx: &mut Cx<'_>) -> Option<Vec<u8>> {
-        let mut key: Vec<u8> = self
-            .words
-            .iter()
-            .flat_map(|(offset, value)| offset.to_le_bytes().into_iter().chain(value.to_le_bytes()))
-            .collect();
-        if self.word(CONTROL) & VIDEO_ENABLE != 0 {
-            let (w, h) = fujimod_framebuffer_xpp::Decoder::extent(self.word(VIDEO_SIZE))?;
-            let buffer = u64::from(self.word(VIDEO_BUFFER));
-            key.extend(cx.ram_bytes(buffer, w as usize * h as usize * 2).ok()?);
-        }
-        for layer in (0..4u64).filter(|n| self.word(LAYER_ENABLE) & 1 << n != 0) {
-            let (w, h) = fujimod_framebuffer_xpp::Decoder::extent(self.word(LAYER_SIZE + 4 * layer))?;
-            let buffer = u64::from(self.word(LAYER_BUFFER + 4 * layer));
-            key.extend(cx.ram_bytes(buffer, w as usize * h as usize * 4).ok()?);
-        }
-        Some(key)
-    }
     fn scan(&mut self, cx: &mut Cx<'_>, scanout: Scanout) {
-        let inputs = self.inputs(cx);
-        let cached = match (&inputs, &self.last) {
-            (Some(inputs), Some((key, frame, hash))) if inputs == key => {
-                Some((frame.clone(), *hash))
+        let decoder = fujimod_framebuffer_xpp::Decoder { words: &self.words };
+        let (inputs, source) = match decoder.capture(|address, len| cx.ram_bytes(address, len)) {
+            Ok(Some(frame)) => frame,
+            Ok(None) => {
+                let _ =
+                    cx.output_status(scanout.output, json!({ "active": false, "tick": cx.now() }));
+                return;
             }
-            _ => None,
+            Err(()) => {
+                cx.unmodeled();
+                return;
+            }
         };
-        let ((width, height, rgba, source), hash) = if let Some(cached) = cached {
-            cached
-        } else {
-            let previous = self.last.take();
-            let frame = match self.compose(cx) {
-                Ok(Some(frame)) => frame,
-                Ok(None) => {
-                    let _ = cx.output_status(
-                        scanout.output,
-                        json!({ "active": false, "tick": cx.now() }),
-                    );
-                    return;
-                }
+        let (width, height) = inputs.extent();
+        if !self.last.as_ref().is_some_and(|last| last.inputs == inputs) {
+            let rgba = match inputs.render() {
+                Ok(rgba) => rgba,
                 Err(()) => {
                     cx.unmodeled();
                     return;
                 }
             };
-            // A buffer flip or a register update can produce identical pixels.
-            let hash = match previous {
-                Some((_, old, hash))
-                    if (old.0, old.1, &old.2) == (frame.0, frame.1, &frame.2) =>
-                {
-                    hash
+            // FNV-1a: a stable digest for the image-change sequence.
+            let hash = match &self.last {
+                Some(last) if last.inputs.extent() == (width, height) && last.rgba == rgba => {
+                    last.hash
                 }
-                _ => {
-                    // FNV-1a: a stable digest for the image-change sequence.
-                    [frame.0, frame.1]
-                        .iter()
-                        .flat_map(|v| v.to_le_bytes())
-                        .chain(frame.2.iter().copied())
-                        .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-                            (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
-                        })
-                }
+                _ => [width, height]
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .chain(rgba.iter().copied())
+                    .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+                        (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+                    }),
             };
-            if let Some(inputs) = inputs {
-                self.last = Some((inputs, frame.clone(), hash));
-            }
-            (frame, hash)
-        };
+            self.last = Some(RenderedFrame { inputs, rgba, hash });
+        }
+        let RenderedFrame { rgba, hash, .. } = self.last.as_ref().unwrap();
+        let hash = *hash;
         if self.capture.hash != Some(hash) {
             self.capture.sequence += 1;
             self.capture.hash = Some(hash);
         }
         let sequence = self.capture.sequence;
-        let decoder = fujimod_framebuffer_xpp::Decoder { words: &self.words };
         let video = decoder.video_shown();
         let layers = decoder.layers_shown();
         let status = json!({
@@ -348,7 +323,7 @@ impl Output {
                 sequence,
                 width,
                 height,
-                rgba,
+                rgba: rgba.clone(),
             })
         });
         if let Err(error) = delivered {
@@ -551,6 +526,7 @@ impl Output {
         Ok(())
     }
     fn apply(&mut self, state: OutputState) {
+        self.last = None;
         self.words = state.words;
         self.capture = state.capture;
         self.handshake = state.handshake;
@@ -622,6 +598,7 @@ mod tests {
         ram: Vec<u8>,
         frames: Vec<Frame>,
         active: Vec<bool>,
+        source: Option<String>,
     }
     impl Host for Screen {
         fn now(&self) -> u64 {
@@ -652,6 +629,7 @@ mod tests {
         }
         fn output_status(&mut self, _: usize, state: Value) -> Result<(), String> {
             self.active.push(state["active"] == true);
+            self.source = state["source"].as_str().map(str::to_owned);
             Ok(())
         }
         fn record(&mut self, _: Record) {}
@@ -774,18 +752,28 @@ mod tests {
         let frame = host.frames.last().unwrap();
         assert_eq!(frame.rgba, [0, 0, 255, 255, 128, 128, 255, 255]);
         assert_eq!(frame.sequence, 2);
+        let cached_pixels = out.last.as_ref().unwrap().rgba.as_ptr();
+        host.ram.copy_within(0x80..0x88, 0x90);
+        write(&mut out, &mut host, LAYER_BUFFER, 0x90);
+        host.now = 30;
+        out.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        let frame = host.frames.last().unwrap();
+        assert_eq!(frame.sequence, 2);
+        assert_eq!(frame.rgba, [0, 0, 255, 255, 128, 128, 255, 255]);
+        assert_eq!(host.source.as_deref(), Some("0x90"));
+        assert_eq!(out.last.as_ref().unwrap().rgba.as_ptr(), cached_pixels);
         // With the OSD group disabled (+0x000 bit 2 clear) the video layer
         // stays: the playback information-off page (PLAYSTART_OSDOFF) writes
         // 0x1010101 there with the photo still programmed as the video layer.
         write(&mut out, &mut host, CONTROL, VIDEO_ENABLE);
-        host.now = 30;
+        host.now = 40;
         out.advance(&mut Cx::new(&mut host, 0, 0, 0));
         let frame = host.frames.last().unwrap();
         assert_eq!(frame.rgba, [0, 0, 255, 255, 0, 0, 255, 255]);
         // Only the packed 4:2:2 format is modeled.
         write(&mut out, &mut host, CONTROL, VIDEO_ENABLE | OSD_ENABLE);
         write(&mut out, &mut host, VIDEO_FORMAT, 0x222);
-        host.now = 40;
+        host.now = 50;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         out.advance(&mut cx);
         assert!(cx.is_unmodeled());
