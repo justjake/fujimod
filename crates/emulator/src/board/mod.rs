@@ -2010,29 +2010,116 @@ impl Drop for Board {
     }
 }
 /// Host-only diagnostic: with `FUJIMOD_ACCESS_HISTOGRAM` set, count device
-/// accesses by processor, address, PC and direction, and print the most
-/// frequent ones when a board is dropped.
+/// accesses by processor, address, PC and direction, sample service time, and
+/// print the most frequent accesses when a board is dropped.
 mod access_histogram {
     use std::cell::RefCell;
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
+    use std::time::Instant;
     type Counts = HashMap<(usize, u64, u64, bool), u64>;
+    pub(super) const SERVICE_TIME_SAMPLE_DENOMINATOR: u64 = 1024;
+
+    struct Statistics {
+        counts: Counts,
+        sampled_service: HashMap<(usize, u64, bool), (u64, u64)>,
+        sample_sequences: HashMap<(usize, u64, bool), u64>,
+    }
+
     thread_local! {
-        static COUNTS: RefCell<Option<Counts>> = RefCell::new(
-            std::env::var_os("FUJIMOD_ACCESS_HISTOGRAM").map(|_| HashMap::new()),
+        static COUNTS: RefCell<Option<Statistics>> = RefCell::new(
+            std::env::var_os("FUJIMOD_ACCESS_HISTOGRAM").map(|_| Statistics {
+                counts: HashMap::new(),
+                sampled_service: HashMap::new(),
+                sample_sequences: HashMap::new(),
+            }),
         );
     }
+
+    pub(super) struct SampledAccess {
+        key: (usize, u64, bool),
+        started: Instant,
+    }
+
+    fn sample_this_access(key: (usize, u64, bool), sequence: u64) -> bool {
+        // Hash each register's occurrence independently so hot addresses do not
+        // align with a fixed global sampling stride.
+        let (core, address, write) = key;
+        let mut value = address
+            ^ (core as u64).wrapping_mul(0x9e3779b97f4a7c15)
+            ^ (write as u64).wrapping_mul(0xbf58476d1ce4e5b9)
+            ^ sequence.wrapping_mul(0x94d049bb133111eb);
+        value = (value ^ (value >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94d049bb133111eb);
+        value ^= value >> 31;
+        value.is_multiple_of(SERVICE_TIME_SAMPLE_DENOMINATOR)
+    }
+
+    impl Drop for SampledAccess {
+        fn drop(&mut self) {
+            let elapsed_ns = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            COUNTS.with(|counts| {
+                if let Ok(mut counts) = counts.try_borrow_mut()
+                    && let Some(statistics) = counts.as_mut()
+                {
+                    let sample = statistics.sampled_service.entry(self.key).or_default();
+                    sample.0 = sample.0.saturating_add(1);
+                    sample.1 = sample.1.saturating_add(elapsed_ns);
+                }
+            });
+        }
+    }
+
     #[inline]
-    pub(super) fn count(core: usize, address: u64, pc: u64, write: bool) {
+    pub(super) fn count(
+        core: usize,
+        address: u64,
+        pc: u64,
+        write: bool,
+    ) -> Option<SampledAccess> {
         COUNTS.with(|counts| {
-            if let Some(counts) = counts.borrow_mut().as_mut() {
-                *counts.entry((core, address, pc, write)).or_default() += 1;
-            }
+            let mut counts = counts.borrow_mut();
+            let statistics = counts.as_mut()?;
+            *statistics
+                .counts
+                .entry((core, address, pc, write))
+                .or_default() += 1;
+            let key = (core, address, write);
+            let sequence = statistics.sample_sequences.entry(key).or_default();
+            *sequence = sequence.wrapping_add(1);
+            sample_this_access(key, *sequence).then(|| SampledAccess {
+                key,
+                started: Instant::now(),
+            })
         });
     }
+
+    pub(super) fn snapshot() -> Option<Vec<(usize, u64, bool, u64, u64, u64)>> {
+        COUNTS.with(|counts| {
+            counts.borrow().as_ref().map(|statistics| {
+                let mut totals = BTreeMap::<(usize, u64, bool), (u64, u64, u64)>::new();
+                for (&(core, address, _, write), &count) in &statistics.counts {
+                    let total = totals.entry((core, address, write)).or_default();
+                    total.0 = total.0.saturating_add(count);
+                }
+                for (&key, &(samples, duration_ns)) in &statistics.sampled_service {
+                    let total = totals.entry(key).or_default();
+                    total.1 = total.1.saturating_add(samples);
+                    total.2 = total.2.saturating_add(duration_ns);
+                }
+                totals
+                    .into_iter()
+                    .map(|((core, address, write), (count, samples, duration_ns))| {
+                        (core, address, write, count, samples, duration_ns)
+                    })
+                    .collect()
+            })
+        })
+    }
+
     pub(super) fn report() {
         COUNTS.with(|counts| {
-            if let Some(counts) = counts.borrow_mut().as_mut() {
-                let mut rows: Vec<_> = counts.drain().collect();
+            if let Some(statistics) = counts.borrow_mut().as_mut() {
+                let mut rows: Vec<_> = statistics.counts.drain().collect();
                 rows.sort_by_key(|&(key, n)| (std::cmp::Reverse(n), key));
                 for ((core, address, pc, write), n) in rows.into_iter().take(32) {
                     eprintln!(
@@ -2785,7 +2872,7 @@ impl State {
         self.sync(&*cpus[core], core)?;
         self.due(cpus)?;
         let pc = scalar(&*cpus[core], Register::Pc)?;
-        access_histogram::count(core, address, pc, value.is_some());
+        let _access_sample = access_histogram::count(core, address, pc, value.is_some());
         if let Some(p) = &mut self.mprofile[core]
             && (0xe0000000..0xe0100000).contains(&address)
         {

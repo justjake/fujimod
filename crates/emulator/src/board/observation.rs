@@ -2,6 +2,10 @@
 pub mod calls;
 pub mod ranges;
 mod execution_metrics;
+pub use execution_metrics::{
+    PublishedFastReadMappingKey, RegisterAccessKey, RegisterAccessSnapshot,
+    RegisterAccessTotals,
+};
 use super::{Board, State, factory::MemoryMap, scalar};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register, arm};
 use serde_json::{Value, json};

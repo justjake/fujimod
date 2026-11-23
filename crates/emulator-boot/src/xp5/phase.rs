@@ -1,5 +1,6 @@
 //! Opt-in, cumulative timing and execution snapshots for XP5 boots.
 use fujimod_emulator::board::Board;
+use fujimod_emulator::board::observation::RegisterAccessSnapshot;
 use serde_json::{Value, json};
 use std::{
     fs::{File, OpenOptions},
@@ -23,6 +24,7 @@ pub(super) struct PhaseRecorder {
     firmware: String,
     execution_policy: String,
     backend: Value,
+    previous_register_access: Option<RegisterAccessSnapshot>,
     _perf_scope: Option<fujimod_perf::GuideScope>,
 }
 
@@ -67,6 +69,7 @@ impl PhaseRecorder {
             firmware: firmware.to_owned(),
             execution_policy: execution_policy.to_owned(),
             backend,
+            previous_register_access: None,
             _perf_scope: perf_scope,
         })
     }
@@ -97,13 +100,16 @@ impl PhaseRecorder {
         frame: Option<(usize, u64, u64)>,
         outcome: Option<(bool, &str, Option<&str>)>,
     ) -> Result<(), String> {
-        let Some(output) = self.output.as_mut() else {
+        if self.output.is_none() {
             return Ok(());
-        };
+        }
 
         let wall_elapsed_ns =
             u64::try_from(self.wall_start.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let guest_tick = board.now();
+        let register_access_delta = board
+            .register_access_snapshot()
+            .map(|snapshot| self.register_access_delta(snapshot));
         let engine_exit_counters_by_core = board
             .exit_counters()
             .into_iter()
@@ -130,6 +136,12 @@ impl PhaseRecorder {
             "mmio_callbacks_by_core": board.mmio_trap_callback_counts(),
             "board_execution": board.execution_metrics(),
         });
+        if let Some(register_access_delta) = register_access_delta {
+            record
+                .as_object_mut()
+                .expect("phase record is a JSON object")
+                .insert("register_access_delta".into(), register_access_delta);
+        }
         if let Some((bank, archive_sequence, modeled_sequence)) = frame {
             let fields = record
                 .as_object_mut()
@@ -148,8 +160,76 @@ impl PhaseRecorder {
                 fields.insert("error".into(), json!(error));
             }
         }
+        let output = self.output.as_mut().expect("phase output was checked");
         writeln!(output, "{record}")
             .and_then(|()| output.flush())
             .map_err(|error| format!("{}: {error}", self.path.display()))
+    }
+
+    fn register_access_delta(&mut self, current: RegisterAccessSnapshot) -> Value {
+        let Some(previous) = self.previous_register_access.take() else {
+            let service_sampling_denominator = current.service_sampling_denominator;
+            self.previous_register_access = Some(current);
+            return json!({
+                "service_sampling_probability": {
+                    "numerator": 1,
+                    "denominator": service_sampling_denominator,
+                },
+                "accesses": [],
+                "published_fast_read_hits_subset_by_mapping": [],
+            });
+        };
+        let accesses = current
+            .totals
+            .iter()
+            .filter_map(|(key, totals)| {
+                let old = previous.totals.get(key).copied().unwrap_or_default();
+                let calls = totals.calls.saturating_sub(old.calls);
+                let service_samples = totals.service_samples.saturating_sub(old.service_samples);
+                let sampled_service_ns = totals
+                    .sampled_service_ns
+                    .saturating_sub(old.sampled_service_ns);
+                (calls != 0 || service_samples != 0 || sampled_service_ns != 0).then(|| {
+                    json!({
+                        "core": key.core,
+                        "address": key.address,
+                        "operation": if key.write { "write" } else { "read" },
+                        "calls": calls,
+                        "service_samples": service_samples,
+                        "sampled_service_ns": sampled_service_ns,
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        let published_fast_read_hits_subset_by_mapping = current
+            .published_fast_read_hits
+            .iter()
+            .filter_map(|(key, &hits)| {
+                let old = previous
+                    .published_fast_read_hits
+                    .get(key)
+                    .copied()
+                    .unwrap_or(0);
+                let count = hits.saturating_sub(old);
+                (count != 0).then(|| {
+                    json!({
+                        "core": key.core,
+                        "mapping_base": key.mapping_base,
+                        "count": count,
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        let delta = json!({
+            "service_sampling_probability": {
+                "numerator": 1,
+                "denominator": current.service_sampling_denominator,
+            },
+            "accesses": accesses,
+            "published_fast_read_hits_subset_by_mapping":
+                published_fast_read_hits_subset_by_mapping,
+        });
+        self.previous_register_access = Some(current);
+        delta
     }
 }
