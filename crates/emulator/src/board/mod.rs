@@ -3706,8 +3706,18 @@ unsafe fn written(
                     let cpu = &*cpus[b.core];
                     if let Some((start, bytes, _)) = blocks.inline.charged_block() {
                         let pc = scalar(cpu, Register::Pc)? & !1;
-                        // All recoverable store encodings currently have one halfword.
-                        if pc + 2 != start + u64::from(bytes) {
+                        let remaining = (start + u64::from(bytes)).checked_sub(pc)
+                            .ok_or("watched store outside its charged Thumb block")?;
+                        let terminal = match remaining {
+                            2 => true,
+                            4 => {
+                                let mut buffer = Vec::new();
+                                let code = state.block_code(cpu, b.core, pc, 4, &mut buffer)?;
+                                mprofile_blocks::count_entries(code)? == 1
+                            }
+                            _ => false,
+                        };
+                        if !terminal {
                             return cpu.request_restart();
                         }
                     } else if let Some((_, _, _, last)) = blocks.pending
