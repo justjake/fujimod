@@ -207,6 +207,14 @@ impl Core {
         self.parked.set(!resumes);
         result
     }
+    /// Send a response for the ordered synchronous run. The next event is
+    /// already the synchronization point, so this path needs no separate ack.
+    fn send_run_response(&self, op: Op) -> Result<(), String> {
+        self.parked.set(false);
+        self.commands
+            .send(op)
+            .map_err(|_| "HVF worker disconnected".to_string())
+    }
     /// PC or PSTATE published by the parked worker, without a round trip.
     fn parked_register(&self, register: Register) -> Option<u64> {
         if !self.parked.get() || !self.shared.parked_valid.load(Ordering::Acquire) {
@@ -752,17 +760,25 @@ impl Cpu for Core {
             let result = match event {
                 Event::Before(pc) => {
                     self.before(pc);
-                    self.rpc(Op::Resume(true)).map(|_| ()).map_err(ExecutionError::Backend)
+                    self.send_run_response(Op::RunResume(true))
+                        .map_err(ExecutionError::Backend)
                 }
-                Event::Trap => {
-                    self.rpc(Op::Resume(false)).map(|_| ()).map_err(ExecutionError::Backend)
-                }
+                Event::Trap => self
+                    .send_run_response(Op::RunResume(false))
+                    .map_err(ExecutionError::Backend),
                 Event::Mmio(trap, access) => {
                     let outcome = self.mmio_trap(trap, &access, false).unwrap_or_else(|e| {
                         error = Some(e);
                         MmioOutcome::Resume(false)
                     });
-                    self.resume(outcome)
+                    match outcome {
+                        MmioOutcome::Resume(handled) => self
+                            .send_run_response(Op::RunResume(handled))
+                            .map_err(ExecutionError::Backend),
+                        MmioOutcome::Complete(updates) => self
+                            .send_run_response(Op::RunCompleteMmio(updates))
+                            .map_err(ExecutionError::Backend),
+                    }
                 }
                 Event::Done(result) => return error.map_or(result, Err),
             };

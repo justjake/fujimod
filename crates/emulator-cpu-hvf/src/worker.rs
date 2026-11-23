@@ -24,9 +24,13 @@ pub enum Op {
     Run(Run, ExecutionPolicy, bool),
     RunToNativeExit,
     Resume(bool),
+    /// Resume an ordered synchronous run without waiting for a separate ack.
+    RunResume(bool),
     /// Retire a parked guest MMIO access: write these registers (loaded
     /// values, base writeback and the next PC), then continue the run.
     CompleteMmio(MmioUpdates),
+    /// Complete MMIO in an ordered synchronous run; failures reach Event::Done.
+    RunCompleteMmio(MmioUpdates),
     /// Device-published reads this vCPU may serve without its owner.
     FastWindows(Vec<FastWindow>),
     Shutdown,
@@ -929,12 +933,21 @@ impl Processor {
                 let _ = self.reply.send(Ok(Value::Empty));
                 return Ok(handled);
             }
+            if let Op::RunResume(handled) = op {
+                return Ok(handled);
+            }
             if let Op::CompleteMmio(updates) = op {
                 let result = updates
                     .iter()
                     .try_for_each(|&(register, value)| self.write(register, &value.to_le_bytes()));
                 let _ = self.reply.send(result.clone().map(|()| Value::Empty));
                 result?;
+                return Ok(true);
+            }
+            if let Op::RunCompleteMmio(updates) = op {
+                updates.iter().try_for_each(|&(register, value)| {
+                    self.write(register, &value.to_le_bytes())
+                })?;
                 return Ok(true);
             }
             if matches!(op, Op::Run(..)) {
