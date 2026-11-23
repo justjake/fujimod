@@ -815,6 +815,81 @@ fn session_quantum(session: &Session) -> Result<usize, String> {
         .ok_or_else(|| "configuration declares no positive scheduler quantum".into())
 }
 
+/// The files a host has for a camera. [`open_request`] uses the ones the
+/// configuration's processor needs and refuses a missing one, so a host never
+/// selects startup inputs by processor generation.
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+#[derive(Clone, Default)]
+pub struct Request {
+    pub update: std::path::PathBuf,
+    pub boot_rom: Option<std::path::PathBuf>,
+    pub nand: Option<std::path::PathBuf>,
+    pub settings: Option<std::path::PathBuf>,
+    /// Directory of the camera's NAND sections, for a run whose settings name a camera.
+    pub camera: Option<std::path::PathBuf>,
+    /// The application startup plan of an X-Processor Pro body.
+    pub application_plan: Option<std::path::PathBuf>,
+    pub card_files: Vec<(String, std::path::PathBuf)>,
+    pub discovery: bool,
+}
+
+/// Open any configuration `open` supports from a host's files.
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result<Camera, String> {
+    // EXR II cards are formatted after the board opens; other starts build
+    // their loader card from the files.
+    let mut card_after_open = Vec::new();
+    let inputs = match resolved.configuration.inputs.as_ref() {
+        Some(RunInputs::Exr2(_)) => StartupInputs::Exr2 {
+            options: Options {
+                update: request.update,
+                boot_rom: request.boot_rom.ok_or("this camera needs its boot ROM")?,
+                nand: request.nand,
+                settings: request.settings,
+                clock_seconds_2000: None,
+                preferred_languages: Vec::new(),
+                camera: request.camera,
+                access_point: None,
+                capability_reply: None,
+            },
+            mode: {
+                card_after_open = request.card_files;
+                discovery_mode(request.discovery)
+            },
+        },
+        Some(RunInputs::Xp5(_)) => StartupInputs::Xp5(xp5::Startup {
+            update: request.update,
+            manifest: None,
+            boot_rom: request.boot_rom,
+            card_image: None,
+            card_files: request.card_files,
+            second_card_image: None,
+            second_card_files: Vec::new(),
+            scene: None,
+            output: None,
+            viewer_port: None,
+            viewer_keys: None,
+            mode: discovery_mode(request.discovery),
+            quantum: None,
+            camera_settings: Default::default(),
+        }),
+        _ if resolved.reference.soc.id == "xpp" => StartupInputs::Application(application::Startup {
+            update: request.update,
+            plan: request
+                .application_plan
+                .ok_or("this camera needs its application startup plan")?,
+            discovery: request.discovery,
+            quantum: None,
+            card_image: None,
+            card_files: request.card_files,
+        }),
+        _ => return Err(format!("{} cannot be opened as a camera", resolved.configuration.id)),
+    };
+    let mut camera = open(resolved, inputs)?;
+    media::attach(&mut camera.session, None, &card_after_open)?;
+    Ok(camera)
+}
+
 /// Open a supported configured board from caller-selected files.
 /// XP4 keeps its separate application/cluster path and cannot be opened as a `Camera`.
 pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Camera, String> {

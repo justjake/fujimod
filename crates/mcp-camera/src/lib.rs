@@ -34,7 +34,8 @@ const INSTRUCTIONS: &str = "Emulated cameras that stay running between calls. Op
 camera_open (it boots to REC, or restores a checkpoint file), list its controls with \
 camera_controls, then operate them with camera_press or camera_turn and read the reply's screen \
 and state. Save named checkpoints with camera_checkpoint and return to them with camera_restore \
-instead of booting again. To find what code runs, call camera_profile_start, act, then \
+instead of booting again. camera_show opens a camera in the desktop emulator window, where it \
+runs live. To find what code runs, call camera_profile_start, act, then \
 camera_profile_collect; compare two collections with camera_profile_diff.";
 
 type Job = Box<dyn FnOnce(&mut Camera) + Send>;
@@ -144,8 +145,10 @@ pub struct OpenParams {
     pub overlays: Vec<String>,
     /// Path of the firmware update file (FPUPDATE.DAT) the configuration names.
     pub update: String,
-    /// Path of the 16 KiB boot ROM dump.
-    pub boot_rom: String,
+    /// Path of the boot ROM dump, for a camera that starts from it.
+    pub boot_rom: Option<String>,
+    /// Application startup plan, for an X-Processor Pro camera.
+    pub application_plan: Option<String>,
     /// Directory of the camera's `nand-<section>.bin.zst` files, when the
     /// configuration's settings name a camera.
     pub camera_sections: Option<String>,
@@ -324,7 +327,23 @@ state and screen."
                         return;
                     }
                 };
-                while let Ok(job) = receive.recv() {
+                loop {
+                    // A shown camera runs live between jobs; otherwise it waits.
+                    let job = if camera.shown() {
+                        match receive.try_recv() {
+                            Ok(job) => job,
+                            Err(mpsc::TryRecvError::Empty) => {
+                                camera.serve_window();
+                                continue;
+                            }
+                            Err(mpsc::TryRecvError::Disconnected) => break,
+                        }
+                    } else {
+                        match receive.recv() {
+                            Ok(job) => job,
+                            Err(_) => break,
+                        }
+                    };
                     job(&mut camera);
                 }
             });
@@ -521,6 +540,20 @@ return the new state and screen."
             .await;
         match result {
             Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
+        description = "Show the camera in the desktop emulator window. While the window is open the \
+camera runs live between tool calls and the window's controls operate it."
+    )]
+    async fn camera_show(
+        &self,
+        Parameters(params): Parameters<CameraParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        match self.on(&params.camera, |camera| camera.show()).await {
+            Ok(summary) => reply(summary, None),
             Err(error) => failed(error),
         }
     }

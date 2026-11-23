@@ -19,6 +19,9 @@ fujimod-emulator-cpu.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-catalog-remote.workspace = true
 fujimod-emulator-controls.workspace = true
+fujimod-emulator-devices.workspace = true
+fujimod-emulator-gui.workspace = true
+fujimod-recording.workspace = true
 fujimod-remote = { path = "../remote", default-features = false, features = ["board"] }
 futures-lite.workspace = true
 serde = { workspace = true, features = ["derive"] }

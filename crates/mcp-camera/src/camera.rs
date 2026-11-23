@@ -16,7 +16,8 @@ pub struct OpenRequest {
     configuration: String,
     overlays: Vec<String>,
     update: PathBuf,
-    boot_rom: PathBuf,
+    boot_rom: Option<PathBuf>,
+    application_plan: Option<PathBuf>,
     camera_sections: Option<PathBuf>,
     nand: Option<PathBuf>,
     settings: Option<PathBuf>,
@@ -34,7 +35,8 @@ impl From<OpenParams> for OpenRequest {
             configuration: p.configuration,
             overlays: p.overlays,
             update: p.update.into(),
-            boot_rom: p.boot_rom.into(),
+            boot_rom: p.boot_rom.map(Into::into),
+            application_plan: p.application_plan.map(Into::into),
             camera_sections: p.camera_sections.map(Into::into),
             nand: p.nand.map(Into::into),
             settings: p.settings.map(Into::into),
@@ -58,6 +60,40 @@ pub struct Camera {
     /// Firmware facts `fujimod-remote` reads to deliver and confirm inputs,
     /// or why the catalog has none for this firmware.
     facts: Result<Facts, String>,
+    /// The last LCD image the camera showed.
+    latest: Option<fujimod_emulator_devices::graphics::scanout::Frame>,
+    /// The desktop window showing this camera; the guest runs live while it is open.
+    shown: Option<Shown>,
+}
+
+struct Shown {
+    viewer: fujimod_emulator_gui::Viewer,
+    app: std::process::Child,
+    /// Why live running stopped; the window still shows the last image.
+    stopped: Option<String>,
+}
+
+/// The window's commands and images reach the camera between guest slices.
+impl fujimod_emulator_gui::Run for Camera {
+    fn session(&self) -> &Session {
+        &self.session
+    }
+    fn session_mut(&mut self) -> &mut Session {
+        &mut self.session
+    }
+    fn step(&mut self) -> Result<(), String> {
+        // About one LCD frame of guest time per slice keeps the window responsive.
+        let until = self.session.board.now() + (self.ticks_per_second / 60).max(1);
+        self.session.run_window(u64::MAX, self.quantum, None, Some(until))
+    }
+    fn frames(
+        &mut self,
+    ) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
+        Ok(self.collect_frames())
+    }
+    fn finish(self) -> Result<Value, String> {
+        Ok(Value::Null)
+    }
 }
 
 /// The catalog facts `fujimod-remote` needs for a resolved selection.
@@ -124,30 +160,24 @@ impl Camera {
     pub fn open(request: OpenRequest) -> Result<(Self, (Value, Option<Vec<u8>>)), String> {
         let resolve =
             || ResolvedConfiguration::with_overlays(&request.configuration, &request.overlays);
-        let options = boot::Options {
-            update: request.update.clone(),
-            boot_rom: request.boot_rom.clone(),
-            nand: request.nand.clone(),
-            settings: request.settings.clone(),
-            clock_seconds_2000: None,
-            preferred_languages: Vec::new(),
-            camera: request.camera_sections.clone(),
-            access_point: None,
-            capability_reply: None,
-        };
-        let opened = boot::open(
+        let sd_files = request.sd_card.as_ref().map(sd_card_files).transpose()?;
+        let opened = boot::open_request(
             resolve()?,
-            boot::StartupInputs::Exr2 {
-                options,
-                mode: boot::discovery_mode(false),
+            boot::Request {
+                update: request.update.clone(),
+                boot_rom: request.boot_rom.clone(),
+                nand: request.nand.clone(),
+                settings: request.settings.clone(),
+                camera: request.camera_sections.clone(),
+                application_plan: request.application_plan.clone(),
+                card_files: sd_files.unwrap_or_default(),
+                discovery: false,
             },
         )?;
         let quantum = opened.quantum;
         let ticks_per_second = opened.ticks_per_second;
         let mut session = opened.session;
         let resolved = resolve()?;
-        let sd_files = request.sd_card.as_ref().map(sd_card_files).transpose()?;
-        boot::media::attach(&mut session, None, sd_files.as_deref().unwrap_or(&[]))?;
         if let Some(policy) = &request.execution_policy {
             session
                 .board
@@ -162,6 +192,8 @@ impl Camera {
             checkpoints: BTreeMap::new(),
             profiling: false,
             facts,
+            shown: None,
+            latest: None,
         };
         let started = std::time::Instant::now();
         if let Some(snapshot) = &request.snapshot {
@@ -169,6 +201,12 @@ impl Camera {
                 return Err("a restored camera takes no boot gpio or keys".into());
             }
             boot::load_snapshot(&mut camera.session, snapshot)?;
+        } else if boot::scanout_node(&camera.session).is_err() {
+            // The emulator recognizes no REC screen for this camera: it opens
+            // at power-on and camera_run advances it.
+            if request.gpio.is_some() || request.keys.is_some() {
+                return Err("boot gpio and keys need a camera whose REC screen the emulator recognizes".into());
+            }
         } else {
             let edges = host::parse_keys(request.keys.as_deref(), None)?;
             let automatic_setup = edges.is_empty();
@@ -217,10 +255,105 @@ impl Camera {
         Ok((camera, (summary, png)))
     }
 
+    /// Open the desktop window on this camera. Until it closes, the guest
+    /// runs live between tool calls and the window's input reaches it.
+    pub fn show(&mut self) -> Result<Value, String> {
+        if self.shown.is_some() {
+            return Err("this camera is already shown".into());
+        }
+        self.connect()?;
+        let socket = fujimod_emulator_gui::bind(std::net::Ipv4Addr::LOCALHOST.into())?;
+        let endpoint = socket.endpoint().url.clone();
+        let mut app = fujimod_emulator_gui::launch::connect(&endpoint)?;
+        // The window has 30 seconds to join before the request gives up.
+        let expired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let timer = expired.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            timer.store(true, std::sync::atomic::Ordering::Release);
+        });
+        let viewer = match socket.join(self, &expired) {
+            Ok(viewer) => viewer,
+            Err(error) => {
+                let _ = app.kill();
+                return Err(error);
+            }
+        };
+        self.shown = Some(Shown {
+            viewer,
+            app,
+            stopped: None,
+        });
+        Ok(json!({ "endpoint": endpoint }))
+    }
+
+    /// The last published LCD image as PNG.
+    fn latest_png(&self) -> Option<Vec<u8>> {
+        let frame = self.latest.as_ref()?;
+        let rgb: Vec<u8> = frame.rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
+        fujimod_recording::Frame::rgb(frame.width, frame.height, rgb)
+            .ok()?
+            .png()
+            .ok()
+            .map(|png| png.to_vec())
+    }
+
+    /// Keep the newest LCD image the camera published.
+    fn collect_frames(&mut self) -> Vec<fujimod_emulator_devices::graphics::scanout::Frame> {
+        let frames = boot::lcd_frames(&mut self.session).unwrap_or_default();
+        if let Some(frame) = frames.iter().max_by_key(|frame| frame.sequence) {
+            self.latest = Some(frame.clone());
+        }
+        frames
+    }
+
+    pub fn shown(&self) -> bool {
+        self.shown.is_some()
+    }
+
+    /// One live slice for the window: its input, a guest slice, its image.
+    pub fn serve_window(&mut self) {
+        use fujimod_emulator_gui::Run as _;
+        let Some(mut shown) = self.shown.take() else {
+            return;
+        };
+        let open = match shown.viewer.service(self) {
+            Ok(open) => open,
+            Err(error) => {
+                eprintln!("camera window: {error}");
+                false
+            }
+        };
+        if !open {
+            let _ = shown.app.wait();
+            return;
+        }
+        if shown.stopped.is_none() {
+            let before = self.progress();
+            let shown_frames = self.step().and_then(|()| self.frames());
+            match shown_frames {
+                Ok(frames) => {
+                    if let Err(error) = shown.viewer.show(&frames) {
+                        eprintln!("camera window: {error}");
+                    }
+                    if self.progress() == before {
+                        shown.stopped = Some("no guest progress".into());
+                    }
+                }
+                Err(error) => shown.stopped = Some(error),
+            }
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(16));
+        }
+        self.shown = Some(shown);
+    }
+
     /// Boot progress, UI state and guest time; the screen when asked.
     pub fn observe(&self, screen: bool) -> Result<(Value, Option<Vec<u8>>), String> {
-        let report = boot::status(&self.session)?;
-        let mut summary = serde_json::to_value(&report).map_err(|error| error.to_string())?;
+        let mut summary = match boot::status(&self.session) {
+            Ok(report) => serde_json::to_value(&report).map_err(|error| error.to_string())?,
+            Err(error) => json!({ "status_error": error }),
+        };
         if let Some(object) = summary.as_object_mut() {
             object.remove("discovery_callee_stubs");
             object.remove("translation_cache_size_bytes");
@@ -231,7 +364,7 @@ impl Camera {
         summary["instructions_per_core"] = json!(self.session.board.instruction_counts());
         summary["profiling"] = json!(self.profiling);
         let png = if screen {
-            match boot::screenshot(&self.session) {
+            match boot::screenshot(&self.session).or_else(|error| self.latest_png().ok_or(error)) {
                 Ok(png) => Some(png),
                 Err(error) => {
                     summary["screen_error"] = json!(error);
@@ -283,6 +416,7 @@ impl Camera {
                 return Err(format!("the camera stopped: {failure}"));
             }
         }
+        self.collect_frames();
         Ok(())
     }
 
