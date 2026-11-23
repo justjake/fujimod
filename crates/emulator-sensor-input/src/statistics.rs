@@ -579,6 +579,16 @@ impl Statistics {
             exposure: None,
         })
     }
+    /// Statistics whose banks are guest RAM: every DMA destination is written
+    /// through the bus, so no aperture may be registered for these banks.
+    pub fn ram_backed(bank_size: usize) -> Result<Self, String> {
+        let mut statistics = Self::new(0, bank_size)?;
+        statistics.ram_backed = true;
+        Ok(statistics)
+    }
+    pub fn is_ram_backed(&self) -> bool {
+        self.ram_backed
+    }
 
     /// Measure the host scene through the X-T5 sensor response at the exposure `exposure`
     /// holds at each completion (see the module notes).
@@ -645,6 +655,11 @@ impl Device for Statistics {
         "imaging-statistics-sram"
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        if self.ram_backed {
+            // The banks are guest RAM; a registered aperture would hide them.
+            cx.unmodeled();
+            return 0;
+        }
         let Some(at) = address
             .checked_sub(self.base)
             .and_then(|n| usize::try_from(n).ok())
@@ -669,6 +684,10 @@ impl Device for Statistics {
         u64::from_le_bytes(bytes)
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        if self.ram_backed {
+            cx.unmodeled();
+            return;
+        }
         let Some(at) = address
             .checked_sub(self.base)
             .and_then(|n| usize::try_from(n).ok())

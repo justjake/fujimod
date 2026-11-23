@@ -50,6 +50,7 @@ fn card_session_with_power_alias_and_fill(
             clock_ticks: 2,
             rca: 0x1234,
             ram_bytes: 0x1000,
+            name: sdhc::SlotName::MemoryCard,
             initialization_fault: sdhc::InitializationFault::None,
             latency: None,
             high_speed: false,

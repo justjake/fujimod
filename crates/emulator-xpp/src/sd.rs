@@ -65,6 +65,7 @@ impl Controller {
             clock_ticks: options.clock_ticks,
             rca: options.rca,
             ram_bytes: options.ram_bytes,
+            name: host::SlotName::MemoryCard,
             initialization_fault: host::InitializationFault::None,
             latency: options.latency.clone(),
             high_speed: options.high_speed,
