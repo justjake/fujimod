@@ -1,0 +1,168 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "xt4-212-bulk",
+  "firmware_id": "xt4-212",
+  "product": "X-T4",
+  "internal_version": "2.16",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern",
+    "registered_buffer": 41444224,
+    "source_state": 54325040,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 16777216,
+    "size": 37748736
+  },
+  "code_checks": [
+    {
+      "name": "code_116674c",
+      "address": 18245452,
+      "size": 100,
+      "sha256": "87324f127a9e42636aac34c07ad15b59cd03223317f0eb8a538247e17e9e47fb"
+    },
+    {
+      "name": "code_211391c",
+      "address": 34683164,
+      "size": 336,
+      "sha256": "dfec09dde12c06e1216fba6c4a318cedb44f336b9609850ef00b5119bc6f3a60"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 34213052,
+      "size": 252,
+      "sha256": "8329fafbb9a146823d68e2142d31cbaec6b1576f70830a456a6ea647e5a6819e"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 34215968,
+      "size": 196,
+      "sha256": "4174e7478daf2f17cbf3f9ef6f598c084153695edc93034f24186aee649b5e00"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 34214032,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_pattern",
+      "address": 34219684,
+      "size": 220,
+      "sha256": "13a3711901342512828414cfd1ef75d16a0ea7981084129af16afa7b8f2e5bb0"
+    },
+    {
+      "name": "bulk_register_buffer",
+      "address": 34216704,
+      "size": 132,
+      "sha256": "c5a684e84569b5cff18a49f77e93f8871d76f9b2d19b7eb2bdd42bc59a171478"
+    },
+    {
+      "name": "bulk_le32",
+      "address": 34214084,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "bulk_store_le32",
+      "address": 34213984,
+      "size": 48,
+      "sha256": "a79a6f803e486fa12fea9be63b0ab18cc89d0c3efee1321d8b165d3944d13688"
+    },
+    {
+      "name": "pattern_opcode_compare",
+      "address": 34220620,
+      "size": 16,
+      "sha256": "4834466e7fb1001c65a7bce9b659537d136c1f80879bf3ed2ba932e28ff2714c"
+    },
+    {
+      "name": "pattern_opcode_case",
+      "address": 34220636,
+      "size": 20,
+      "sha256": "05b7ef5e2022678c4cbb2e359be7faed398c02e144897ccd9d101d7f56e77828"
+    }
+  ],
+  "probes": [
+    {
+      "address": 18245452,
+      "size": 100
+    },
+    {
+      "address": 34683164,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 34209792,
+    "size": 65536,
+    "sha256": "16649f897a2fd5ca31299738a437b6942b913f41d408780610807e015d0f1be2"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 16777216,
+          "size": 37748736
+        }
+      ]
+    }
+  ],
+  "upload": {
+    "pointer": 41444224,
+    "pointer_bytes": 4,
+    "capacity_address": 41444228,
+    "configuration_checks": [],
+    "piece_bytes": 65536,
+    "address_alignment": 32,
+    "code_checks": [
+      {
+        "name": "bulk_upload_command",
+        "address": 34215252,
+        "size": 188,
+        "sha256": "f0833ba8b15717f8024f4602207f865ac6456a92e5c010d6111cedd4efcdede8"
+      },
+      {
+        "name": "bulk_upload_data",
+        "address": 34215592,
+        "size": 176,
+        "sha256": "bad2781f4399a79ad31897ca5f562bcd42df27707bd78443464060961a129c43"
+      },
+      {
+        "name": "bulk_upload_complete",
+        "address": 34213512,
+        "size": 324,
+        "sha256": "86351140ffa76a9565c7dab3bc90f828e772735a672ac4338bacbc6231ea02ff"
+      },
+      {
+        "name": "bulk_upload_setup",
+        "address": 34219448,
+        "size": 236,
+        "sha256": "511f5e13db13204352e3227d7591029792b46a873ce8149e43792a5738ab75db"
+      },
+      {
+        "name": "bulk_upload_le32",
+        "address": 34214084,
+        "size": 52,
+        "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+      },
+      {
+        "name": "bulk_upload_opcode_compare",
+        "address": 34220672,
+        "size": 16,
+        "sha256": "73f3d184bc6134409ee10c89ee3e008b58d9eee33649adf01dbd2fb5801340da"
+      },
+      {
+        "name": "bulk_upload_opcode_case",
+        "address": 34220688,
+        "size": 20,
+        "sha256": "3e20a526d1bb336c08ecaea4316fd431f6fb373785e987c219e2164c89d04272"
+      }
+    ]
+  }
+}
