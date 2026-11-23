@@ -10,6 +10,8 @@ license.workspace = true
 
 [dependencies]
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-catalog.workspace = true
+fujimod-emulator-controls.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-session.workspace = true
 jpeg-encoder = "0.7.1"

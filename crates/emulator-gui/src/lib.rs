@@ -37,13 +37,18 @@ const FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33)
 /// An opened camera of any processor, run live for its window.
 pub struct Live {
     camera: fujimod_emulator_boot::Camera,
+    selection: fujimod_catalog::reference::ResolvedSelection,
     read_at: std::time::Instant,
 }
 
 impl Live {
-    pub fn new(camera: fujimod_emulator_boot::Camera) -> Self {
+    pub fn new(
+        camera: fujimod_emulator_boot::Camera,
+        selection: fujimod_catalog::reference::ResolvedSelection,
+    ) -> Self {
         Self {
             camera,
+            selection,
             read_at: std::time::Instant::now() - FRAME_INTERVAL,
         }
     }
@@ -67,6 +72,14 @@ impl Run for Live {
             return Ok(Vec::new());
         }
         self.read_at = std::time::Instant::now();
+        // The wiring is located once the firmware has loaded its configuration.
+        if self.camera.session.controls.is_none() {
+            let _ = fujimod_emulator_controls::connect(
+                &mut self.camera.session,
+                &self.selection,
+                self.camera.ticks_per_second,
+            );
+        }
         fujimod_emulator_boot::lcd_frames(&mut self.camera.session)
     }
     fn finish(self) -> Result<serde_json::Value, String> {

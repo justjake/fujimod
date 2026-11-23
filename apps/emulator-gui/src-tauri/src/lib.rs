@@ -108,7 +108,6 @@ fn configurations() -> Vec<Configuration> {
             let configuration = ResolvedConfiguration::bundled(id).ok()?;
             let run = &configuration.configuration;
             if !matches!(run.start, RunStart::Loader | RunStart::Rom)
-                || !matches!(run.inputs, Some(RunInputs::Xp5(_)))
                 || run
                     .preset
                     .as_ref()
@@ -164,8 +163,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     if !matches!(
         resolved.configuration.start,
         RunStart::Loader | RunStart::Rom
-    ) || !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
-    {
+    ) {
         return Err("This camera cannot start from the firmware file alone.".into());
     }
     let camera = Configuration::from_resolved(&resolved)?;
@@ -185,6 +183,28 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     .execution
                     .map(|execution| execution.engine)
             ));
+            if !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+                let selection = resolved.reference.clone();
+                let request = fujimod_emulator_boot::Request {
+                    update,
+                    boot_rom: None,
+                    nand: None,
+                    settings: None,
+                    camera: None,
+                    application_plan: None,
+                    card_files: Vec::new(),
+                    discovery: false,
+                };
+                let camera = fujimod_emulator_boot::open_request(resolved, request)
+                    .inspect_err(|error| log_session(format!("session: {error}")))?;
+                log_session("session: camera opened");
+                return fujimod_emulator_gui::serve(
+                    fujimod_emulator_gui::Live::new(camera, selection),
+                    socket,
+                    &thread_stop,
+                )
+                .inspect_err(|error| log_session(format!("session: {error}")));
+            }
             let run = fujimod_emulator_boot::xp5::Run {
                 configuration: resolved.clone(),
                 load_snapshot: None,

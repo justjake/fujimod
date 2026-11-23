@@ -831,11 +831,12 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         card_files: options.sd_files()?,
         discovery: options.discovery,
     };
+    let selection = resolved.reference.clone();
     let camera = boot::open_request(resolved, request)?;
     let socket = fujimod_emulator_gui::bind(std::net::Ipv4Addr::LOCALHOST.into())?;
     let mut app = fujimod_emulator_gui::launch::connect(&socket.endpoint().url)?;
     let report = fujimod_emulator_gui::serve(
-        fujimod_emulator_gui::Live::new(camera),
+        fujimod_emulator_gui::Live::new(camera, selection),
         socket,
         &std::sync::atomic::AtomicBool::new(false),
     )?;

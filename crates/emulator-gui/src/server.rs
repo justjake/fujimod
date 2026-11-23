@@ -121,6 +121,7 @@ pub struct Viewer {
     frame_number: u64,
     last: Option<Frame>,
     last_state: Option<String>,
+    catalog_sent: bool,
 }
 
 impl Viewer {
@@ -130,17 +131,25 @@ impl Viewer {
             frame_number: 0,
             last: None,
             last_state: None,
+            catalog_sent: false,
         };
-        let state = session.control_state()?;
-        viewer.send_json(Event::Catalog {
+        viewer.publish_state(session)?;
+        Ok(viewer)
+    }
+
+    /// The control catalog, once the session's controls are connected.
+    fn publish_catalog(&mut self, session: &Session) -> Result<(), String> {
+        let Ok(state) = session.control_state() else {
+            return Ok(());
+        };
+        self.catalog_sent = true;
+        self.send_json(Event::Catalog {
             configuration: identity(session, "configuration_id"),
             body: identity(session, "body_id"),
             model: identity(session, "firmware_id"),
             firmware: identity(session, "firmware_id"),
             controls: serde_json::to_value(&state.inputs).map_err(|error| error.to_string())?,
-        })?;
-        viewer.publish_state(session)?;
-        Ok(viewer)
+        })
     }
 
     /// Apply the window's pending commands to `run` and send its control
@@ -192,6 +201,12 @@ impl Viewer {
     }
 
     fn publish_state(&mut self, session: &Session) -> Result<(), String> {
+        if !self.catalog_sent {
+            self.publish_catalog(session)?;
+            if !self.catalog_sent {
+                return Ok(());
+            }
+        }
         let state = session.control_state()?;
         let event = Event::State {
             // A native session has no cold power-off; the firmware reads the power switch.
