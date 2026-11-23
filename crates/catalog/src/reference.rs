@@ -214,6 +214,60 @@ impl Soc {
                     self.id, block.id
                 ));
             }
+            if let Some(device) = &block.device {
+                if !device.allowed_for(block.kind) {
+                    return Err(format!(
+                        "SoC {} block {} device model is not allowed by its kind",
+                        self.id, block.id
+                    ));
+                }
+                match device {
+                    crate::soc::BlockDevice::Dma {
+                        channels,
+                        request_mux_block_id,
+                    } => {
+                        if !blocks.contains(request_mux_block_id.as_str()) {
+                            return Err(format!(
+                                "SoC {} DMA block {} refers to missing request multiplexer {}",
+                                self.id, block.id, request_mux_block_id
+                            ));
+                        }
+                        if *channels == 0 {
+                            return Err(format!(
+                                "SoC {} DMA block {} has no channels",
+                                self.id, block.id
+                            ));
+                        }
+                    }
+                    crate::soc::BlockDevice::SerialFlash { aperture_block_id } => {
+                        if !blocks.contains(aperture_block_id.as_str()) {
+                            return Err(format!(
+                                "SoC {} serial flash block {} refers to missing aperture {}",
+                                self.id, block.id, aperture_block_id
+                            ));
+                        }
+                    }
+                    crate::soc::BlockDevice::ImagingInputBuffer {
+                        sram_region_id,
+                        bank_bytes,
+                    } => {
+                        if !self
+                            .memory_regions
+                            .iter()
+                            .any(|item| item.id == *sram_region_id)
+                            || *bank_bytes == 0
+                        {
+                            return Err(format!(
+                                "SoC {} input buffer {} has invalid SRAM banks",
+                                self.id, block.id
+                            ));
+                        }
+                    }
+                    crate::soc::BlockDevice::Display { .. }
+                    | crate::soc::BlockDevice::SerialDma { .. }
+                    | crate::soc::BlockDevice::CompanionDma { .. } => {}
+                }
+            }
         }
         for mapping in &self.mappings {
             if !cores.contains(mapping.core.as_str()) {
@@ -490,6 +544,13 @@ pub struct SocBlock {
     /// Interrupt outputs raised by this block.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub interrupts: Vec<SocBlockInterrupt>,
+    /// Device model and its typed parameters, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "BlockDevice | null")
+    )]
+    pub device: Option<crate::soc::BlockDevice>,
 }
 
 /// One processor core's address window into a SoC block.

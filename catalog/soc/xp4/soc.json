@@ -174,7 +174,12 @@
           "output": "channel1",
           "line": 113
         }
-      ]
+      ],
+      "device": {
+        "model": "display",
+        "picture_layout": "abgr8888-straight",
+        "video_layout": "yycbcr422"
+      }
     },
     {
       "id": "lcdc1",
@@ -191,7 +196,12 @@
           "output": "channel1",
           "line": 118
         }
-      ]
+      ],
+      "device": {
+        "model": "display",
+        "picture_layout": "abgr8888-straight",
+        "video_layout": "yycbcr422"
+      }
     },
     {
       "id": "sensor-command",
@@ -246,7 +256,12 @@
           "output": "interrupt",
           "line": 106
         }
-      ]
+      ],
+      "device": {
+        "model": "imaging_input_buffer",
+        "sram_region_id": "input-buffer-sram",
+        "bank_bytes": 28672
+      }
     },
     {
       "id": "control-request-0",
@@ -391,7 +406,11 @@
           "output": "interrupt",
           "line": 37
         }
-      ]
+      ],
+      "device": {
+        "model": "serial_flash",
+        "aperture_block_id": "flash-aperture"
+      }
     },
     {
       "id": "flash-aperture",
@@ -471,7 +490,12 @@
           "output": "channel15",
           "line": 222
         }
-      ]
+      ],
+      "device": {
+        "model": "dma",
+        "channels": 16,
+        "request_mux_block_id": "dma-request-mux"
+      }
     },
     {
       "id": "dma-request-mux",
@@ -560,32 +584,6 @@
       "lines": 512
     },
     "companion": null,
-    "blocks": {
-      "lcdc0": {
-        "kind": "display",
-        "picture_layout": "abgr8888-straight",
-        "video_layout": "yycbcr422"
-      },
-      "lcdc1": {
-        "kind": "display",
-        "picture_layout": "abgr8888-straight",
-        "video_layout": "yycbcr422"
-      },
-      "input-buffer": {
-        "kind": "imaging_input_buffer",
-        "sram_region_id": "input-buffer-sram",
-        "bank_bytes": 28672
-      },
-      "serial-flash": {
-        "kind": "serial_flash",
-        "aperture_block_id": "flash-aperture"
-      },
-      "dma": {
-        "kind": "dma",
-        "channels": 16,
-        "request_mux_block_id": "dma-request-mux"
-      }
-    },
     "profiles": {
       "xp4": {
         "cpu_model": "Cortex-A7",

@@ -149,7 +149,11 @@
       "base": 4287823872,
       "size": 32768,
       "kind": "dma",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "companion_dma",
+        "companion_irq_base": 83
+      }
     },
     {
       "id": "spi8",
@@ -422,7 +426,12 @@
       "base": 4287696896,
       "size": 4096,
       "kind": "serial-controller",
-      "clock_id": "serial-source"
+      "clock_id": "serial-source",
+      "device": {
+        "model": "serial_dma",
+        "receive_request": 2,
+        "transmit_request": 3
+      }
     },
     {
       "id": "capture0",
@@ -971,17 +980,6 @@
         "reply": 141,
         "status": 142,
         "fault": 143
-      }
-    },
-    "blocks": {
-      "dma": {
-        "kind": "companion_dma",
-        "companion_irq_base": 83
-      },
-      "serial": {
-        "kind": "serial_dma",
-        "receive_request": 2,
-        "transmit_request": 3
       }
     },
     "profiles": {

@@ -30,8 +30,6 @@ pub struct SocHardware {
     /// Companion-processor clock and mailbox connections, when present.
     #[serde(default)]
     pub companion: Option<CompanionHardware>,
-    /// Additional block parameters, keyed by the block's identity.
-    pub blocks: BTreeMap<String, BlockHardware>,
     /// The byte every RAM cell holds at power-on, as read on a camera. Absent
     /// when unmeasured; the emulator then starts RAM zeroed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -103,40 +101,6 @@ impl SocHardware {
             core(&companion.processor_id)?;
             clock(&companion.clock_id)?;
             block(&companion.mailbox_block_id)?;
-        }
-        for (id, parameters) in &self.blocks {
-            block(id)?;
-            match parameters {
-                BlockHardware::Dma {
-                    channels,
-                    request_mux_block_id,
-                } => {
-                    block(request_mux_block_id)?;
-                    if *channels == 0 {
-                        return Err(format!("SoC {} DMA block {id} has no channels", soc.id));
-                    }
-                }
-                BlockHardware::SerialFlash { aperture_block_id } => block(aperture_block_id)?,
-                BlockHardware::ImagingInputBuffer {
-                    sram_region_id,
-                    bank_bytes,
-                } => {
-                    if !soc
-                        .memory_regions
-                        .iter()
-                        .any(|item| item.id == *sram_region_id)
-                        || *bank_bytes == 0
-                    {
-                        return Err(format!(
-                            "SoC {} input buffer {id} has invalid SRAM banks",
-                            soc.id
-                        ));
-                    }
-                }
-                BlockHardware::Display { .. }
-                | BlockHardware::SerialDma { .. }
-                | BlockHardware::CompanionDma { .. } => {}
-            }
         }
         Ok(())
     }
@@ -275,17 +239,17 @@ pub struct CompanionMailbox {
     pub fault: u32,
 }
 
-/// Hardware parameters for a named SoC register block.
+/// Hardware parameters for a SoC block, selected by its model tag.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(tag = "model", rename_all = "snake_case", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
 #[cfg_attr(
     all(target_arch = "wasm32", not(target_os = "emscripten")),
     derive(tsify::Tsify),
     tsify(hashmap_as_object, missing_as_null)
 )]
-pub enum BlockHardware {
+pub enum BlockDevice {
     /// DMA channel count and request-multiplexer connection.
     Dma {
         /// Number of DMA channels.
@@ -326,6 +290,28 @@ pub enum BlockHardware {
         /// First companion interrupt line for the DMA controller.
         companion_irq_base: u32,
     },
+}
+
+impl BlockDevice {
+    /// Whether a block of `kind` may carry this device model.
+    pub fn allowed_for(&self, kind: crate::reference::SocBlockKind) -> bool {
+        use crate::reference::SocBlockKind;
+        matches!(
+            (kind, self),
+            (
+                SocBlockKind::Dma,
+                BlockDevice::Dma { .. } | BlockDevice::CompanionDma { .. }
+            ) | (
+                SocBlockKind::SerialController,
+                BlockDevice::SerialDma { .. }
+            ) | (SocBlockKind::DisplayController, BlockDevice::Display { .. })
+                | (
+                    SocBlockKind::ImagingController,
+                    BlockDevice::ImagingInputBuffer { .. }
+                )
+                | (SocBlockKind::AddressWindow, BlockDevice::SerialFlash { .. })
+        )
+    }
 }
 
 /// Picture-plane pixel packing declared by a display controller.

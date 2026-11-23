@@ -1988,7 +1988,6 @@
     ]
   },
   "hardware": {
-    "blocks": {},
     "power_on_ram_fill": 255,
     "profiles": {
       "exr2-service-transports": {
