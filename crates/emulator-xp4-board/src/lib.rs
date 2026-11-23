@@ -1534,12 +1534,6 @@ impl Session {
             return Err("Invalid ARMv7-A peripheral reset inputs".to_owned());
         }
         let ram = Backing::zeros(ram_size);
-        // The boot ROM window runs Thumb code, which only the
-        // per-instruction hook counts.
-        let boot_rom = xpp_boot.is_some()
-            || memory_regions
-                .iter()
-                .any(|r| r.base < 0xfff0_8000 && 0xfff0_0000 < r.base + r.size as u64);
         let memory = memory::allocate(memory_regions, ram_size)?;
         let low_alias = xpp_boot
             .as_ref()
@@ -1602,7 +1596,7 @@ impl Session {
         let mut counted = counted::requested() || coherent_ranges.is_some();
         if counted
             && let Some(name) = counted::unsupported(
-                boot_rom,
+                low_alias.is_some(),
                 pmu_cycles_per_tick.is_some(),
                 storage_immutable_prefix.is_some(),
             )
