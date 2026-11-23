@@ -69,7 +69,7 @@ pub(super) struct Blocks {
     pub scans: ScanCache,
 }
 
-/// Host-only: the scans of recently entered blocks, by address. An entry
+/// Host-only: the scans of recently entered blocks, by address and length. An entry
 /// holds the code it was made from and answers only for the same bytes, so
 /// rewritten code is scanned again. A scan is a function of the bytes alone.
 pub(super) struct ScanCache {
@@ -97,13 +97,15 @@ impl ScanCache {
     const BYTES: usize = 44;
     const SLOTS: usize = 4096;
     #[inline]
-    fn slot(pc: u64) -> usize {
-        (pc >> 1) as usize & (Self::SLOTS - 1)
+    fn slot(pc: u64, len: usize) -> usize {
+        // A shortened admission and the full translation at its PC can
+        // both be hot. Keep them in separate slots.
+        ((pc >> 1) as usize ^ len.wrapping_mul(0x9e37)) & (Self::SLOTS - 1)
     }
     /// The scan of the block at `pc` when it was made from exactly `code`.
     #[inline]
     pub fn get(&self, pc: u64, code: &[u8]) -> Option<Scan> {
-        let entry = &self.entries[Self::slot(pc)];
+        let entry = &self.entries[Self::slot(pc, code.len())];
         (entry.pc == pc && entry.code[..usize::from(entry.len)] == *code).then_some(entry.scan)
     }
     /// The bytes of a block short enough to keep.
@@ -118,7 +120,7 @@ impl ScanCache {
     }
     #[inline]
     pub fn put(&mut self, pc: u64, (len, code): (u8, [u8; Self::BYTES]), scan: Scan) {
-        self.entries[Self::slot(pc)] = ScanEntry { pc, len, code, scan };
+        self.entries[Self::slot(pc, usize::from(len))] = ScanEntry { pc, len, code, scan };
     }
 }
 
@@ -420,11 +422,18 @@ mod tests {
         assert_eq!(cache.get(0x100, &first[..2]), None);
         assert_eq!(cache.get(0x100, &code(&[0x3001, 0x4770, 0x3001])), None);
         assert_eq!(cache.get(0x102, &first), None);
-        // Two addresses of one slot: the later one replaces the earlier.
+        // Full and shortened translations of the same code keep both scans.
+        let short = &first[..2];
+        let short_scan = scan(short).unwrap();
+        cache.put(0x100, ScanCache::key(short).unwrap(), short_scan);
+        assert_eq!(cache.get(0x100, &first), Some(scanned));
+        assert_eq!(cache.get(0x100, short), Some(short_scan));
+        // Equal-length translations can still collide and replace each other.
         let other = 0x100 + (ScanCache::SLOTS as u64) * 2;
-        cache.put(other, ScanCache::key(&first[..2]).unwrap(), scan(&first[..2]).unwrap());
+        cache.put(other, ScanCache::key(&first).unwrap(), scanned);
         assert_eq!(cache.get(0x100, &first), None);
-        assert_eq!(cache.get(other, &first[..2]), scan(&first[..2]).ok());
+        assert_eq!(cache.get(other, &first), Some(scanned));
+        assert_eq!(cache.get(0x100, short), Some(short_scan));
         // Empty and long blocks are not kept.
         assert!(ScanCache::key(&[]).is_none());
         assert!(ScanCache::key(&[0; ScanCache::BYTES + 1]).is_none());
