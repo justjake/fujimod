@@ -388,8 +388,7 @@
       },
       "type": "integer",
       "minimum": -3,
-      "maximum": 51200,
-      "default": 200
+      "maximum": 51200
     },
     "exposure_compensation_thirds": {
       "title": "EXPOSURE COMP.",
@@ -416,8 +415,7 @@
       },
       "type": "integer",
       "minimum": -9,
-      "maximum": 9,
-      "default": 0
+      "maximum": 9
     },
     "highlight": {
       "title": "HIGHLIGHT TONE",
@@ -464,8 +462,7 @@
           ],
           "type": "integer",
           "minimum": 100,
-          "maximum": 6400,
-          "default": 200
+          "maximum": 6400
         },
         "maximum": {
           "title": "MAX",
@@ -478,8 +475,7 @@
           ],
           "type": "integer",
           "minimum": 400,
-          "maximum": 6400,
-          "default": 800
+          "maximum": 6400
         },
         "min_shutter_denominator": {
           "title": "MIN. SHUTTER",
@@ -519,8 +515,7 @@
           },
           "type": "integer",
           "minimum": 4,
-          "maximum": 500,
-          "default": 60
+          "maximum": 500
         }
       }
     },
@@ -553,8 +548,7 @@
           ],
           "type": "integer",
           "minimum": 100,
-          "maximum": 6400,
-          "default": 200
+          "maximum": 6400
         },
         "maximum": {
           "title": "MAX",
@@ -567,8 +561,7 @@
           ],
           "type": "integer",
           "minimum": 400,
-          "maximum": 6400,
-          "default": 800
+          "maximum": 6400
         },
         "min_shutter_denominator": {
           "title": "MIN. SHUTTER",
@@ -608,8 +601,7 @@
           },
           "type": "integer",
           "minimum": 4,
-          "maximum": 500,
-          "default": 60
+          "maximum": 500
         }
       }
     },
@@ -642,8 +634,7 @@
           ],
           "type": "integer",
           "minimum": 100,
-          "maximum": 6400,
-          "default": 200
+          "maximum": 6400
         },
         "maximum": {
           "title": "MAX",
@@ -656,8 +647,7 @@
           ],
           "type": "integer",
           "minimum": 400,
-          "maximum": 6400,
-          "default": 800
+          "maximum": 6400
         },
         "min_shutter_denominator": {
           "title": "MIN. SHUTTER",
@@ -697,8 +687,7 @@
           },
           "type": "integer",
           "minimum": 4,
-          "maximum": 500,
-          "default": 60
+          "maximum": 500
         }
       }
     },

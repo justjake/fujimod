@@ -103,5 +103,14 @@ test('a camera recipe round-trips without changing its values', () => {
   const text = documentText(filled(recipe, recipeSchema), recipeSchema);
   expect(problems(JSON.parse(text), recipeSchema).size).toBe(0);
   const { v: _, ...changed } = recipe;
-  expect(JSON.parse(text)).toEqual({ ...changed, auto_iso1: { base: 640, maximum: 1600 } });
+  // ISO and AUTO ISO have no default: what the file names is kept, at any value.
+  expect(JSON.parse(text)).toEqual(changed);
+});
+
+test('settings a recipe leaves out stay out', () => {
+  const text = documentText(
+    filled({ name: 'Plain', film_simulation: 'Velvia' }, recipeSchema),
+    recipeSchema,
+  );
+  expect(JSON.parse(text)).toEqual({ name: 'Plain', film_simulation: 'Velvia' });
 });
