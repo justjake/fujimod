@@ -68,14 +68,16 @@ impl Processor {
     }
 }
 
+const THUMB_REFUSED: &str = "Thumb execution is unsupported";
+
 pub(super) fn requested() -> bool {
     std::env::var_os("FUJIMOD_XP4_COUNTED").is_some_and(|v| v != "0")
 }
 
 /// What keeps a definition on the per-instruction hook, if anything.
-pub(super) fn unsupported(boot_rom: bool, pmu: bool, frozen_nor: bool) -> Option<&'static str> {
+pub(super) fn unsupported(low_alias: bool, pmu: bool, frozen_nor: bool) -> Option<&'static str> {
     [
-        (boot_rom, "the boot ROM (Thumb code and low alias)"),
+        (low_alias, "a low-memory alias of the boot ROM"),
         (pmu, "the PMU profile"),
         (frozen_nor, "a frozen NOR prefix"),
     ]
@@ -344,6 +346,19 @@ impl Cluster {
     }
     /// One scheduler slice of at most `budget` entered instructions, ended
     /// where the per-instruction hook ends it.
+    /// Names the core and address of a Thumb entry the counted engine refused.
+    fn thumb_refusal(&self, core: usize, error: String) -> String {
+        if !error.contains(THUMB_REFUSED) {
+            return error;
+        }
+        let pc = self.reg(core, arm::PC).unwrap_or(0);
+        format!(
+            "Core {core} entered Thumb state at PC {pc:#010x}: counted execution does not \
+             support Thumb state, so this run must use exact execution (run without \
+             FUJIMOD_XP4_COUNTED)"
+        )
+    }
+
     pub(super) fn run_counted(&self, core: usize, budget: usize) -> Result<(), String> {
         let mut remaining = budget as u64;
         // The scheduler window this slice belongs to when this core is the
@@ -437,7 +452,7 @@ impl Cluster {
                 Ok(Exit::BeforeInstruction(word)) => exit_word = Some(word),
                 Ok(Exit::Stopped) => {}
                 Ok(other) => return Err(format!("Unexpected counted ARMv7-A exit {other:?}")),
-                Err(error) => return Err(error.to_string()),
+                Err(error) => return Err(self.thumb_refusal(core, error.to_string())),
             }
             self.poll_run_end(core, &mut remaining, &mut window, stopped)?;
             // An abort or undefined entry, or a yield to translation maintenance.

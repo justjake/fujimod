@@ -572,3 +572,113 @@ fn a_core_running_alone_across_slice_ends_matches_the_hook() {
         assert!(exact.2 == counted.2, "RAM at quantum {quantum}");
     }
 }
+
+/// A boot ROM window with the program in it, one core, and SRAM beside it.
+mod boot_rom {
+    use super::*;
+
+    const ROM: u32 = 0xfff0_0000;
+    const SRAM: u32 = 0xfff1_0000;
+    const PROGRAM: &[u32] = &[
+        0xe300_1000, // movw r1, #0
+        0xe34f_1ff1, // movt r1, #0xfff1 (SRAM)
+        0xe3a0_0000, // mov r0, #0
+        0xe280_0001, // 1: add r0, r0, #1
+        0xe581_0000, // str r0, [r1]
+        0xe350_0064, // cmp r0, #100
+        0xbaff_fffb, // blt 1b
+        0xe320_f003, // 2: wfi
+        0xeaff_fffd, // b 2b
+    ];
+    /// The same program entered in Thumb state: `bx` of an odd address.
+    const THUMB_ENTRY: &[u32] = &[
+        0xe28f_0001, // add r0, pc, #1
+        0xe12f_ff10, // bx r0
+        0xe7fe_e7fe, // b . (Thumb)
+    ];
+
+    fn definition(alias: bool) -> Definition {
+        let mut input = json!({
+            "ram_size": 65536, "cores": 1, "discovery": false, "cbar": CBAR,
+            "memory_regions": [
+                {"base": ROM, "size": 4096, "permissions": 5},
+                {"base": SRAM, "size": 4096, "permissions": 7}],
+            "initial_registers": [[["Pc", ROM]]]
+        });
+        if alias {
+            input["memory_regions"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"base": 0x8000_0000u32, "size": 4096, "permissions": 7}));
+            input["xpp_reset_gates"] = json!(0xfff2_0000u32);
+            input["xpp_power"] = json!(0xfff2_1000u32);
+            input["xpp_dram"] = json!([0xfff2_2000u32, 0]);
+            input["xpp_boot"] = json!({
+                "options": {
+                    "selector_base": 0xfff2_0000u32, "clock_base": 0xfff2_1000u32,
+                    "ddr_base": 0xfff2_2000u32, "remap_base": 0xfff2_3000u32,
+                    "bus_bases": [], "memory_port_bases": [], "decoder": 0,
+                    "normal_selector": 0, "card_selector": 1,
+                    "settle_ticks": 1, "refresh_level": 0
+                },
+                "card_strap": false,
+                "low_alias": 0x8000_0000u32
+            });
+        }
+        serde_json::from_value(input).unwrap()
+    }
+
+    fn session(counted: bool, program: &[u32]) -> Session {
+        let session = open(definition(false), None, counted);
+        let bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
+        session.write(ROM as usize, &bytes).unwrap();
+        session
+    }
+
+    #[test]
+    fn a_boot_rom_without_a_low_alias_runs_counted_like_exact() {
+        for quantum in [1, 7, 1000] {
+            let mut outcomes = Vec::new();
+            for counted in [false, true] {
+                let session = session(counted, PROGRAM);
+                for _ in 0..3 {
+                    session.run_board(150, quantum).unwrap();
+                }
+                let state = session.state(false);
+                assert!(state.failure.is_none(), "{:?}", state.failure);
+                let mut sram = [0; 4];
+                session.read(SRAM as usize, &mut sram).unwrap();
+                assert_eq!(u32::from_le_bytes(sram), 100);
+                outcomes.push((serde_json::to_value(session.state(true)).unwrap(), sram));
+            }
+            assert_eq!(outcomes[0], outcomes[1], "quantum {quantum}");
+        }
+    }
+
+    #[test]
+    fn a_low_alias_keeps_the_per_instruction_hook() {
+        let definition = definition(true);
+        let _environment = ENVIRONMENT.lock().unwrap();
+        // SAFETY: sessions in this binary are opened under the lock above.
+        unsafe { std::env::set_var("FUJIMOD_XP4_COUNTED", "1") };
+        let session = Session::new(definition, None, vec![]);
+        unsafe { std::env::remove_var("FUJIMOD_XP4_COUNTED") };
+        assert!(!session.unwrap().counted_execution());
+    }
+
+    #[test]
+    fn entering_thumb_state_under_counted_execution_is_an_error() {
+        let session = session(true, THUMB_ENTRY);
+        let error = session.run_board(100, 64).err().map(|e| e.to_string());
+        let message = error
+            .or_else(|| session.state(false).failure)
+            .expect("Thumb entry must fail");
+        assert!(message.contains("Core 0"), "{message}");
+        assert!(message.contains("0xfff00"), "{message}");
+        assert!(
+            message.contains("counted execution does not support Thumb state"),
+            "{message}"
+        );
+        assert!(message.contains("exact execution"), "{message}");
+    }
+}
