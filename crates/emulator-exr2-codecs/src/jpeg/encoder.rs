@@ -110,7 +110,7 @@ impl Encoder {
             || w % 16 != 0
             || h < 8
             || h % 8 != 0
-            || w * h > 32_000_000
+            || w * h > 64_000_000
         {
             return Err("JPEG configuration exceeds packed422 input law".into());
         }

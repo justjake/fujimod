@@ -29,7 +29,9 @@ impl Clock {
     }
 }
 
-pub const MAX_BYTES: usize = 64 * 1024 * 1024;
+/* One full composed still can exceed 64 MiB: a 7344x5712 packed422 matte
+ * canvas is 83,897,856 bytes. Keep a bounded DRAM sanity ceiling at 128 MiB. */
+pub const MAX_BYTES: usize = 128 * 1024 * 1024;
 
 /// Normalize the uncached DRAM alias within its 30-bit aperture and reject
 /// vector/ROM space. The runtime bus enforces the selected body's backing;
@@ -60,10 +62,13 @@ pub struct Raster {
 }
 impl Raster {
     pub fn validate(self, row_bytes: usize) -> Result<(), String> {
+        /* A composed still may be wider than a sensor raster: a 4896x3264
+         * photograph with a 5% matte at 17:6 is 10656x3760. The packed422
+         * input class, not a sensor height, bounds that canvas. */
         if self.width == 0
-            || self.width > 8192
+            || self.width > 16384
             || self.height == 0
-            || self.height > 8192
+            || self.height > 16384
             || row_bytes == 0
             || self.pitch < row_bytes
             || self.pitch > MAX_BYTES
