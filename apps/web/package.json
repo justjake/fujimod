@@ -41,6 +41,8 @@
     "better-auth": "1.7.18",
     "drizzle-orm": "^0.45.4",
     "fujimod": "workspace:*",
+    "lightbox3": "1.4.0",
+    "minisearch": "7.2.0",
     "solid-js": "2.0.0-rc.20"
   },
   "devDependencies": {

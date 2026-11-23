@@ -1511,7 +1511,7 @@
       "summary": "Add a film-like red glow around light sources in JPEG photographs.",
       "card": null,
       "attached": false,
-      "media_cards": ["halation_strength_item", "halation_color_item"],
+      "media_cards": ["halation_strength_item", "halation_color_item", "halation_size_item"],
       "controls": [
         {
           "title": "STRENGTH",
@@ -1563,6 +1563,29 @@
             },
             {
               "label": "RED",
+              "stock": false,
+              "icon": null
+            }
+          ],
+          "actions": []
+        },
+        {
+          "title": "SIZE",
+          "primary": false,
+          "card": "halation_size_item",
+          "choices": [
+            {
+              "label": "REALISTIC",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "MEDIUM",
+              "stock": false,
+              "icon": null
+            },
+            {
+              "label": "LARGE",
               "stock": false,
               "icon": null
             }
@@ -3005,6 +3028,21 @@
       "title": "COLOR",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
       "summary": "Choose warm, neutral or red halation.",
+      "choices": {},
+      "related": [],
+      "changes": null,
+      "drive_mode": null,
+      "credits": {
+        "premiere": false,
+        "inspired": [],
+        "thanks": []
+      },
+      "choice_credits": {}
+    },
+    "halation_size_item": {
+      "title": "SIZE",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
+      "summary": "Choose how far the glow spreads around light sources.",
       "choices": {},
       "related": [],
       "changes": null,
@@ -4677,16 +4715,6 @@
       "icon": null
     },
     {
-      "title": "HIDE FEATURES",
-      "path": ["SET-UP", "FUJIMOD SET-UP"],
-      "order": 420,
-      "kind": "page",
-      "stock": false,
-      "card": null,
-      "feature": null,
-      "icon": "mod-fm-features-setup-row"
-    },
-    {
       "title": "MODS",
       "path": ["SET-UP", "FUJIMOD SET-UP"],
       "order": 1,
@@ -4937,6 +4965,16 @@
       "icon": "mod-ae-af-lock-item"
     },
     {
+      "title": "AE/AF-LOCK BUTTON",
+      "path": ["SHOOTING MENU"],
+      "order": 37,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "path": ["SHOOTING MENU"],
       "title": "AUTOFOCUS SETTING",
       "kind": "page",
@@ -5167,6 +5205,16 @@
       "icon": null
     },
     {
+      "title": "SCENE POSITION",
+      "path": ["SHOOTING MENU"],
+      "order": 28,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": null
+    },
+    {
       "title": "SHADOW TONE",
       "path": ["SHOOTING MENU"],
       "order": 17,
@@ -5277,6 +5325,16 @@
       "icon": null
     },
     {
+      "title": "ENTER AUTHOR INFO",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 4,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": "mod-recipes-root-owner"
+    },
+    {
       "title": "FAVORITES",
       "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
       "order": 1,
@@ -5293,6 +5351,16 @@
       "kind": "group",
       "stock": false,
       "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "SETTING CONTROL",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING"],
+      "order": 3,
+      "kind": "page",
+      "stock": false,
+      "card": "setting_control",
       "feature": "recipes",
       "icon": null
     },
@@ -5463,6 +5531,96 @@
       "icon": "mod-recipes-root-uses-custom"
     },
     {
+      "title": "CLARITY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 3,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "COLOR CHROME",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 1,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "D RANGE PRIORITY",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 5,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "DATE STAMP",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 8,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "FILM BORDERS",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 6,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "GRAIN EFFECT",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 0,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "HALATION",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 2,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "LIGHT LEAKS",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 4,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
+      "title": "NEGATIVE",
+      "path": ["SHOOTING MENU", "EDIT/SAVE CUSTOM SETTING", "SETTING CONTROL"],
+      "order": 7,
+      "kind": "value",
+      "stock": false,
+      "card": null,
+      "feature": "recipes",
+      "icon": null
+    },
+    {
       "title": "DATE STAMP",
       "path": ["SHOOTING MENU", "FILM EFFECTS"],
       "order": 4,
@@ -5583,6 +5741,16 @@
       "icon": null
     },
     {
+      "title": "SIZE",
+      "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
+      "order": 2,
+      "kind": "value",
+      "stock": false,
+      "card": "halation_size_item",
+      "feature": "halation",
+      "icon": null
+    },
+    {
       "title": "STRENGTH",
       "path": ["SHOOTING MENU", "FILM EFFECTS", "HALATION"],
       "order": 0,
@@ -5661,6 +5829,16 @@
       "card": null,
       "feature": "disposable",
       "icon": "mod-disposable-item"
+    },
+    {
+      "title": "HIDE FEATURES",
+      "path": ["SHOOTING MENU", "FUJIMOD"],
+      "order": 420,
+      "kind": "page",
+      "stock": false,
+      "card": null,
+      "feature": null,
+      "icon": "mod-fm-features-shooting-row"
     },
     {
       "title": "HIDE FILMS",

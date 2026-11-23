@@ -127,3 +127,49 @@
     grid-template-columns: minmax(0, 760px);
   }
 }
+
+.credits-photos {
+  margin: 0;
+  font-size: 13px;
+}
+
+.credits-photos dt {
+  margin-bottom: 8px;
+  color: #f2f2f7;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.credits-photos dd {
+  margin: 0 0 22px;
+}
+
+.credits-page main .film-strip {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.film-strip li {
+  flex: none;
+  margin: 0;
+}
+
+.film-strip a {
+  display: block;
+}
+
+.film-strip img {
+  display: block;
+  width: auto;
+  height: 240px;
+}
+
+@media (width <= 700px) {
+  .film-strip img {
+    height: 160px;
+  }
+}

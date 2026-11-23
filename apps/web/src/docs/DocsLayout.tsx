@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import './docs-layout.css';
 
 type DocLink = { title: string; href: string };
@@ -11,22 +11,9 @@ export function DocsLayout(props: {
   chapters: readonly DocChapter[];
   path: string;
   index?: DocLink;
-  searchLabel?: string;
+  search?: JSX.Element;
   children: JSX.Element;
 }) {
-  const [query, setQuery] = createSignal('');
-  const visibleChapters = createMemo(() => {
-    const search = query().trim().toLowerCase();
-    if (!search) return props.chapters;
-    return props.chapters
-      .map((chapter) => ({
-        ...chapter,
-        pages: chapter.title.toLowerCase().includes(search)
-          ? chapter.pages
-          : chapter.pages.filter((page) => page.title.toLowerCase().includes(search)),
-      }))
-      .filter((chapter) => chapter.pages.length);
-  });
   const current = (href: string) =>
     props.path === href || props.path + '/' === href ? 'page' : undefined;
 
@@ -40,41 +27,36 @@ export function DocsLayout(props: {
             </a>
           )}
         </Show>
-        <Show when={props.searchLabel}>
-          <input
-            type="search"
-            aria-label={props.searchLabel}
-            placeholder={props.searchLabel}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-          />
-        </Show>
-        <ul>
-          <For each={visibleChapters()}>
-            {(chapter) => (
-              <li class="docs-chapter">
-                <span>{chapter.title}</span>
-                <ul>
-                  <For each={chapter.pages}>
-                    {(page) => (
-                      <li>
-                        <a href={page.href} aria-current={current(page.href)}>
-                          {page.title}
-                        </a>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </li>
+        {props.search}
+        <div class="docs-sidebar-pages">
+          <ul>
+            <For each={props.chapters}>
+              {(chapter) => (
+                <li class="docs-chapter">
+                  <span>{chapter.title}</span>
+                  <ul>
+                    <For each={chapter.pages}>
+                      {(page) => (
+                        <li>
+                          <a href={page.href} aria-current={current(page.href)}>
+                            {page.title}
+                          </a>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </li>
+              )}
+            </For>
+          </ul>
+          <Show when={props.index}>
+            {(index) => (
+              <a class="docs-index" href={index().href} aria-current={current(index().href)}>
+                {index().title}
+              </a>
             )}
-          </For>
-        </ul>
-        <Show when={props.index}>
-          {(index) => (
-            <a class="docs-index" href={index().href} aria-current={current(index().href)}>
-              {index().title}
-            </a>
-          )}
-        </Show>
+          </Show>
+        </div>
       </nav>
       <main>{props.children}</main>
     </div>

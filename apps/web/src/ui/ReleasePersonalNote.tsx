@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import { ManualFeatureLink } from './ManualFeatureLink';
 import { releaseData, releaseDate, type SiteReleaseData } from '../release-data';
+import { personalNoteDate } from '../personal-note';
 import './release-personal-note.css';
 
 const credits = '/credits';
@@ -53,13 +54,9 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
   return (
     <Show when={announced()} fallback={<UnderConstruction />}>
       <article class="release-personal-note" aria-label="A note from Jake">
-        <Show when={data().current}>
-          {(release) => (
-            <time datetime={release().publishedAt}>
-              {releaseDate.format(new Date(release().publishedAt))}
-            </time>
-          )}
-        </Show>
+        <time datetime={personalNoteDate}>
+          {releaseDate.format(new Date(`${personalNoteDate}T12:00:00-05:00`))}
+        </time>
         <p>
           Today we’re releasing the second version of Fujimod, a firmware modification that unlocks
           the full potential of your Fujifilm camera.

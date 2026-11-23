@@ -94,12 +94,28 @@ page outline. Each row is a link to its place on the manual page that covers
 it. One mapping from menu paths to manual pages drives both the index and
 the chapters, and every shown row maps to a page.
 
+### Photo comparisons
+
+A section whose recordings kept photographs shows them between the section's
+title (with its summary) and its options. The photographs sit side by side in
+one row with a narrow gap, from the text column's left edge to the window's
+right edge. Each photograph is captioned with its settings as the camera shows
+them, and the default setting is always among them, so readers see what they
+get without changing anything.
+
+With the pointer over a photograph, every photograph shows its 1:1 pixels at
+the same point, following the pointer, and a black one-pixel cross replaces
+the pointer at that point on every photograph. Leaving the row returns to the
+whole photographs. On touch screens a tap zooms, dragging follows the finger,
+and another tap returns.
+
 ## Other pages
 
 - `/safety`: the risks of custom firmware and how Fujimod mitigates them.
 - `/credits`: GitHub Contributors (from `contributors/`), Testing & Feedback,
   Recipe Authors (each author with their recipes, linked to each recipe's
-  source) and Open Source (generated from a CycloneDX SBOM of everything the
+  source), Photographs (a row of each photographer's scene photographs;
+  a photograph opens in a lightbox) and Open Source (generated from a CycloneDX SBOM of everything the
   camera image, website and emulator ship, with each license's full text and
   a link to the source at the shipped version).
 - `/releases`: all release notes, read from the GitHub releases at build time.

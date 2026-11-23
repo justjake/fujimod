@@ -5,8 +5,8 @@
   "model": "X-E5",
   "version": "1.12",
   "facts": {
-    "located": 18,
-    "total": 19
+    "located": 20,
+    "total": 21
   },
   "boot_rom": null,
   "tracks": [
@@ -38,27 +38,27 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "fail"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "fail"
+          "result": "stale"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "controls",
@@ -68,7 +68,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -125,15 +125,15 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -141,15 +141,15 @@
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -157,7 +157,7 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -174,7 +174,7 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -226,7 +226,7 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
@@ -306,9 +306,9 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {

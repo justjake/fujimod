@@ -1,9 +1,10 @@
-import { For, Show, createMemo } from 'solid-js';
-import { Dynamic } from '@solidjs/web';
+import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Dynamic, type JSX } from '@solidjs/web';
 import type { Credits } from '../home/catalog';
 import { Rich } from '../home/catalog-parts';
-import { featureMedia, type Media } from '../home/feature-media';
+import { featureMedia, type Media, type Photo } from '../home/feature-media';
 import { Markdown } from './Markdown';
+import { PhotoComparison } from './PhotoComparison';
 import type { ManualPage, ManualSection } from './manual-data';
 import { manualRoot } from './manual-routes';
 
@@ -12,6 +13,21 @@ const mediaRoot = '/artifacts/docs/';
 
 function sectionMedia(section: ManualSection) {
   return section.media ? mediaForCard(section.media.card) : null;
+}
+
+/** One comparison per scene, in the order the scenes first appear. */
+function SectionPhotos(props: { section: ManualSection }) {
+  const scenes = () => {
+    const groups = new Map<string | undefined, Photo[]>();
+    for (const photo of sectionMedia(props.section)?.photos ?? [])
+      groups.set(photo.scene, [...(groups.get(photo.scene) ?? []), photo]);
+    return [...groups.values()];
+  };
+  return (
+    <For each={scenes()}>
+      {(photos) => <PhotoComparison photos={photos} frame={props.section.media?.frame} />}
+    </For>
+  );
 }
 
 function hasCredits(credits: Credits) {
@@ -117,9 +133,14 @@ function ManualOptions(props: { section: ManualSection }) {
         fallback={
           <>
             <p class="manual-choices">
-              {options()
-                .map((option) => option.label)
-                .join(' · ')}
+              <For each={options()}>
+                {(option, index) => (
+                  <>
+                    {index() ? ' · ' : ''}
+                    <span class={{ 'manual-original': !!option.stock }}>{option.label}</span>
+                  </>
+                )}
+              </For>
             </p>
             <For each={options()}>
               {(option) => (
@@ -139,7 +160,7 @@ function ManualOptions(props: { section: ManualSection }) {
         <dl class="manual-options">
           <For each={options()}>
             {(option) => (
-              <div>
+              <div class={{ 'manual-original': !!option.stock }}>
                 <dt>{option.label}</dt>
                 <dd>
                   {option.summary}
@@ -187,8 +208,46 @@ function ManualRowContent(props: { section: ManualSection }) {
 
 const rowHeadings = ['h2', 'h3', 'h4', 'h5', 'h6'] as const;
 
+/** A heading that copies a link to itself when clicked. */
+function CopyLinkHeading(props: {
+  level: 'h1' | (typeof rowHeadings)[number];
+  /** The page's path, and the heading's anchor on it. */
+  path: string;
+  anchor?: string;
+  children: JSX.Element;
+}) {
+  const [copied, setCopied] = createSignal(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const href = () => (props.anchor ? `${props.path}#${props.anchor}` : props.path);
+  const copy = async (event: MouseEvent) => {
+    event.preventDefault();
+    const url = new URL(href(), location.origin);
+    history.replaceState(history.state, '', url);
+    await navigator.clipboard.writeText(url.href);
+    setCopied(true);
+    clearTimeout(timer);
+    timer = setTimeout(() => setCopied(false), 1500);
+  };
+  onCleanup(() => clearTimeout(timer));
+  return (
+    <Dynamic component={props.level} class="manual-heading">
+      <a href={href()} onClick={copy}>
+        {props.children}
+      </a>
+      <span
+        class={{ 'manual-link-copied': true, shown: copied() }}
+        role="status"
+        aria-hidden={copied() ? undefined : 'true'}
+      >
+        Link copied
+      </span>
+    </Dynamic>
+  );
+}
+
 function ManualEntry(props: {
   row: ManualRow;
+  path: string;
   base: MenuPath;
   cameras: readonly string[];
   depth: number;
@@ -198,13 +257,18 @@ function ManualEntry(props: {
     section().cameras.length && section().cameras.length !== props.cameras.length;
   return (
     <section class={['manual-entry', { 'manual-subentry': props.depth > 0 }]} id={section().anchor}>
-      <Dynamic component={rowHeadings[Math.min(props.depth, rowHeadings.length - 1)]}>
+      <CopyLinkHeading
+        level={rowHeadings[Math.min(props.depth, rowHeadings.length - 1)]}
+        path={props.path}
+        anchor={section().anchor}
+      >
         {section().title}
-      </Dynamic>
+      </CopyLinkHeading>
       <AlternatePaths section={section()} base={props.base} />
       <Show when={section().summary}>
         <p class="manual-summary">{section().summary}</p>
       </Show>
+      <SectionPhotos section={section()} />
       <ManualRowContent section={section()} />
       <Show when={camerasDiffer()}>
         <p class="manual-cameras">{section().cameras.join(' · ')} only</p>
@@ -213,6 +277,7 @@ function ManualEntry(props: {
         {(child) => (
           <ManualEntry
             row={child}
+            path={props.path}
             base={props.base}
             cameras={props.cameras}
             depth={props.depth + 1}
@@ -237,7 +302,9 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
           {props.chapter}
         </Show>
       </p>
-      <h1>{props.page.title}</h1>
+      <CopyLinkHeading level="h1" path={props.path}>
+        {props.page.title}
+      </CopyLinkHeading>
       <Show when={layout().base.length}>
         <p class="manual-page-path">
           {layout().base.slice(0, -1).join(' › ')} {' › '}
@@ -252,6 +319,7 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
           {(section) => (
             <>
               <AlternatePaths section={section} base={layout().base} />
+              <SectionPhotos section={section} />
               <ManualRowContent section={section} />
             </>
           )}
@@ -269,7 +337,13 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
       </Show>
       <For each={layout().top}>
         {(row) => (
-          <ManualEntry row={row} base={layout().base} cameras={layout().cameras} depth={0} />
+          <ManualEntry
+            row={row}
+            path={props.path}
+            base={layout().base}
+            cameras={layout().cameras}
+            depth={0}
+          />
         )}
       </For>
     </article>

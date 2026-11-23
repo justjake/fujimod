@@ -12,14 +12,21 @@ export interface SiteInputs {
   media: string;
   sdkDocs: string;
 }
-/** Files of the media for cards the homepage still shows; recordings of removed cards stay behind. */
+/** Files of the media, photographs included, for cards the homepage still shows; recordings of removed cards stay behind. */
 export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<string>) {
   const shown = new Set(shownCards);
   const cards = Object.entries(media.cards)
     .filter(([id]) => shown.has(id))
     .map(([, recording]) => recording);
   return new Set(
-    [...cards, ...Object.values(media.reels ?? {})].flatMap(({ video, still }) => [video, still]),
+    [
+      ...cards.flatMap(({ video, still, photos = [] }) => [
+        video,
+        still,
+        ...photos.flatMap(({ image, full }) => [image, full]),
+      ]),
+      ...Object.values(media.reels ?? {}).flatMap(({ video, still }) => [video, still]),
+    ],
   );
 }
 

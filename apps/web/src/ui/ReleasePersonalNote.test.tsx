@@ -2,7 +2,7 @@ import { render } from '@solidjs/web';
 import { expect, test } from 'vite-plus/test';
 import { ReleasePersonalNote } from './ReleasePersonalNote';
 
-test('renders the release date, elapsed days, and names in the credits hover list', () => {
+test('renders the note’s date, elapsed days, and names in the credits hover list', () => {
   const host = document.createElement('div');
   const dispose = render(
     () => (
@@ -21,8 +21,8 @@ test('renders the release date, elapsed days, and names in the credits hover lis
     host,
   );
   try {
-    expect(host.querySelector('article time')?.textContent).toBe('April 1, 2026');
-    expect(host.querySelector('time')?.dateTime).toBe('2026-04-02T00:05:00Z');
+    expect(host.querySelector('article time')?.textContent).toBe('November 20, 2026');
+    expect(host.querySelector('time')?.dateTime).toBe('2026-11-20');
     expect(host.textContent).toContain('23 days');
     expect(host.textContent).toContain('2 contributors');
     expect(

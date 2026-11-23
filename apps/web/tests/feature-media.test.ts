@@ -10,6 +10,15 @@ const manifest = validateFeatureMedia({
       video: '1'.repeat(24) + '.mp4',
       still: '2'.repeat(24) + '.webp',
       clips: { '65:24': [1, 2.5] },
+      photos: [
+        {
+          label: 'OFF',
+          image: '3'.repeat(24) + '.webp',
+          full: '4'.repeat(24) + '.jpg',
+          width: 6,
+          height: 4,
+        },
+      ],
     },
   },
 });
@@ -25,7 +34,12 @@ test('cards show their newest recording', () => {
 test('deployment stages media for the cards the homepage shows', () => {
   assert.deepEqual(
     [...featureMediaFiles(manifest, ['shape_aspect_item', 'image_size'])],
-    ['1'.repeat(24) + '.mp4', '2'.repeat(24) + '.webp'],
+    [
+      '1'.repeat(24) + '.mp4',
+      '2'.repeat(24) + '.webp',
+      '3'.repeat(24) + '.webp',
+      '4'.repeat(24) + '.jpg',
+    ],
   );
   assert.deepEqual([...featureMediaFiles(manifest, ['image_size'])], []);
   assert.throws(

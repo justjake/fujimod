@@ -9,9 +9,9 @@ const manualPageTitle = import.meta.env.SSR
 
 const pages = {
   '/': {
-    title: 'FujiMod',
+    title: 'Fujimod',
     description:
-      'New films, film effects and more control for Fujifilm X70, X-E2S and X-E2. Explore the FujiMod 0.1.0 preview, including 255 custom settings on X70 and SD boot v2. Features vary by camera.',
+      'New films, film effects and more control for Fujifilm X70, X-E2S and X-E2. Includes 255 custom settings on X70 and SD boot v2. Features vary by camera.',
   },
   '/dev-tools/': {
     title: 'Dev Tools: Camera console',
@@ -29,26 +29,26 @@ const pages = {
   },
   '/dev-tools/state-captures/': {
     title: 'Dev Tools: Capture camera modes',
-    description: 'Collect camera state across operating modes to help expand FujiMod support.',
+    description: 'Collect camera state across operating modes to help expand Fujimod support.',
   },
   '/dev-tools/map-controls/': {
     title: 'Dev Tools: Map controls',
     description:
-      'Record button, dial, and switch changes over USB to help FujiMod identify your camera’s controls.',
+      'Record button, dial, and switch changes over USB to help Fujimod identify your camera’s controls.',
   },
   '/bug/': {
-    title: 'Report a camera bug · FujiMod',
+    title: 'Report a camera bug · Fujimod',
     description:
-      'Retrieve a FujiMod bug report from your camera over USB or from its SD card, then download or submit it.',
+      'Retrieve a Fujimod bug report from your camera over USB or from its SD card, then download or submit it.',
   },
   '/recovery/': {
-    title: 'Recover your camera · FujiMod',
+    title: 'Recover your camera · Fujimod',
     description:
       'Tried making your own mod but bricked your camera? Build a recovery SD card from official Fujifilm firmware to restore your device. This usually works and it’s cheaper than buying a new one.',
   },
   '/device/': {
-    title: 'Camera sign-in · FujiMod',
-    description: 'Approve a FujiMod camera connection with the code shown on the camera.',
+    title: 'Camera sign-in · Fujimod',
+    description: 'Approve a Fujimod camera connection with the code shown on the camera.',
   },
 };
 
@@ -59,7 +59,7 @@ export function pageMetadata(path: string) {
   if (textRoute) {
     const page = textPages[textRoute];
     return {
-      title: `${page.heading} · FujiMod`,
+      title: `${page.heading} · Fujimod`,
       description: page.description,
       canonical: siteOrigin + textRoute,
     };
@@ -67,8 +67,8 @@ export function pageMetadata(path: string) {
   const normalized = path.endsWith('/') ? path : path + '/';
   if (manualPageTitle && isManualPath(normalized))
     return {
-      title: `${manualPageTitle(normalized)} · FujiMod`,
-      description: 'The FujiMod camera manual.',
+      title: `${manualPageTitle(normalized)} · Fujimod`,
+      description: 'The Fujimod camera manual.',
       canonical: siteOrigin + normalized,
     };
   const componentSlug = /^\/docs\/sdk\/focal\/components\/([^/]+)\/$/.exec(normalized)?.[1];
@@ -77,20 +77,20 @@ export function pageMetadata(path: string) {
     : undefined;
   if (component)
     return {
-      title: `${component.title} · FocalUI SDK · FujiMod`,
+      title: `${component.title} · FocalUI SDK · Fujimod`,
       description: component.summary.replace(/\s+/g, ' ').slice(0, 160) ||
         'FocalUI component reference.',
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/')
     return {
-      title: 'Docs · FujiMod',
+      title: 'Docs · Fujimod',
       description: 'The Fujimod camera manual and FocalUI SDK.',
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/sdk/focal/')
     return {
-      title: 'FocalUI SDK · FujiMod',
+      title: 'FocalUI SDK · Fujimod',
       description: 'The FocalUI camera interface toolkit component reference.',
       canonical: siteOrigin + normalized,
     };

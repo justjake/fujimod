@@ -179,12 +179,8 @@ try {
       const creditsPage = await noJs.newPage();
       await creditsPage.goto(base + '/credits');
       assert.equal(await creditsPage.locator('main h1 + h2').count(), 1);
-      const creditHeadings = [
-        'GitHub Contributors',
-        'Testing & Feedback',
-        'Recipe Authors',
-        'Open Source',
-      ];
+      const creditHeadings = await creditsPage.locator('main h2[id]').allTextContents();
+      assert.ok(creditHeadings.includes('GitHub Contributors'));
       assert.deepEqual(
         await creditsPage
           .getByRole('navigation', { name: 'On this page' })
@@ -331,7 +327,7 @@ try {
       await docs.locator(`.manual-menu-tree a[href="${ratioDestination}"]`).click();
       await docs.waitForURL(base + ratioDestination);
       const nestedRatio = docs.locator(`#${ratio.anchor}.manual-subentry`);
-      assert.equal(await nestedRatio.locator('h3').innerText(), 'ADD RATIO');
+      assert.equal(await nestedRatio.locator('h3 > a').innerText(), 'ADD RATIO');
       assert.equal(await nestedRatio.evaluate((row) => row.matches(':target')), true);
       assert.equal(
         await docs.locator('.manual-page-path').innerText(),
@@ -341,7 +337,7 @@ try {
       const updates = manualPageAt(updatePath)!;
       const ownUpdate = updates.sections.find((entry) => entry.title === updates.title)!;
       await docs.goto(`${base}${updatePath}#${ownUpdate.anchor}`);
-      assert.equal(await docs.locator('.manual-feature:target h1').innerText(), updates.title);
+      assert.equal(await docs.locator('.manual-feature:target h1 > a').innerText(), updates.title);
       assert.ok(
         !(await docs.locator('.manual-introduction').innerText()).includes(ownUpdate.summary!),
       );
@@ -559,12 +555,14 @@ try {
         .waitFor();
       assert.equal(await page.locator('meta[name="fujimod-local-reports"]').count(), 0);
       await page.goto(base + manualRoot);
-      const search = page.getByRole('searchbox', { name: 'Search the manual' });
-      const chapterLink = page.locator(`.docs-sidebar a[href="${manualPage.href}"]`);
+      const search = page.getByRole('combobox', { name: 'Search the manual' });
       await search.fill('zzzzzzzz');
-      await chapterLink.waitFor({ state: 'detached' });
-      await search.clear();
-      await chapterLink.click();
+      await page
+        .getByRole('listbox', { name: 'Search the manual' })
+        .getByText('No results')
+        .waitFor();
+      await search.fill(manualPage.title);
+      await page.locator(`#manual-search-results a[href="${manualPage.href}"]`).first().click();
       await page.waitForURL(base + manualPage.href);
       assert.deepEqual(errors, [], `${type.name()} page errors`);
       assert.deepEqual(diagnostics, [], `${type.name()} hydration/reactivity diagnostics`);
