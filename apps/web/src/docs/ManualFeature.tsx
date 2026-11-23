@@ -1,5 +1,5 @@
-import { For, Show, createMemo } from 'solid-js';
-import { Dynamic } from '@solidjs/web';
+import { For, Show, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Dynamic, type JSX } from '@solidjs/web';
 import type { Credits } from '../home/catalog';
 import { Rich } from '../home/catalog-parts';
 import { featureMedia, type Media } from '../home/feature-media';
@@ -187,6 +187,41 @@ function ManualRowContent(props: { section: ManualSection }) {
 
 const rowHeadings = ['h2', 'h3', 'h4', 'h5', 'h6'] as const;
 
+/** A heading that copies a link to itself when clicked. */
+function CopyLinkHeading(props: {
+  level: 'h1' | (typeof rowHeadings)[number];
+  anchor?: string;
+  children: JSX.Element;
+}) {
+  const [copied, setCopied] = createSignal(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const href = () => (props.anchor ? `#${props.anchor}` : location.pathname);
+  const copy = async (event: MouseEvent) => {
+    event.preventDefault();
+    const url = new URL(href(), location.href);
+    history.replaceState(history.state, '', url);
+    await navigator.clipboard.writeText(url.href);
+    setCopied(true);
+    clearTimeout(timer);
+    timer = setTimeout(() => setCopied(false), 1500);
+  };
+  onCleanup(() => clearTimeout(timer));
+  return (
+    <Dynamic component={props.level} class="manual-heading">
+      <a href={props.anchor ? `#${props.anchor}` : ''} onClick={copy}>
+        {props.children}
+      </a>
+      <span
+        class={{ 'manual-link-copied': true, shown: copied() }}
+        role="status"
+        aria-hidden={copied() ? undefined : 'true'}
+      >
+        Link copied
+      </span>
+    </Dynamic>
+  );
+}
+
 function ManualEntry(props: {
   row: ManualRow;
   base: MenuPath;
@@ -198,9 +233,12 @@ function ManualEntry(props: {
     section().cameras.length && section().cameras.length !== props.cameras.length;
   return (
     <section class={['manual-entry', { 'manual-subentry': props.depth > 0 }]} id={section().anchor}>
-      <Dynamic component={rowHeadings[Math.min(props.depth, rowHeadings.length - 1)]}>
+      <CopyLinkHeading
+        level={rowHeadings[Math.min(props.depth, rowHeadings.length - 1)]}
+        anchor={section().anchor}
+      >
         {section().title}
-      </Dynamic>
+      </CopyLinkHeading>
       <AlternatePaths section={section()} base={props.base} />
       <Show when={section().summary}>
         <p class="manual-summary">{section().summary}</p>
@@ -237,7 +275,7 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
           {props.chapter}
         </Show>
       </p>
-      <h1>{props.page.title}</h1>
+      <CopyLinkHeading level="h1">{props.page.title}</CopyLinkHeading>
       <Show when={layout().base.length}>
         <p class="manual-page-path">
           {layout().base.slice(0, -1).join(' › ')} {' › '}

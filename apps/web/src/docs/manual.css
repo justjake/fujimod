@@ -285,3 +285,32 @@
     background: transparent;
   }
 }
+
+/* Clicking a heading copies a link to it. */
+.manual-heading > a {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.manual-heading > a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.manual-link-copied {
+  margin-left: 10px;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  vertical-align: middle;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.manual-link-copied.shown {
+  opacity: 1;
+  transition: none;
+}
