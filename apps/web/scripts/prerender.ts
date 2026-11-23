@@ -16,6 +16,8 @@ export function siteRoutes(client: string) {
     '/bug/',
     '/recovery/',
     '/device/',
+    '/settings/',
+    '/recipe/',
     ...Object.keys(textPages),
     ...manualRoutes(),
     '/docs/',
@@ -48,6 +50,8 @@ export async function prerender(output = 'dist') {
                 '/bug/': 'class="shell bug-report"',
                 '/recovery/': 'class="shell recovery"',
                 '/device/': 'class="shell device"',
+                '/settings/': 'class="shell documents"',
+                '/recipe/': 'class="shell documents"',
                 '/docs/': 'class="shell docs-overview"',
               }[route];
     if (

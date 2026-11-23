@@ -10,6 +10,8 @@ const DevTools = lazy(() => import('./dev-tools/Page'));
 const BugReport = lazy(() => import('./bug/Page'));
 const Recovery = lazy(() => import('./recovery/Page'));
 const Device = lazy(() => import('./device/Page'));
+const Settings = lazy(() => import('./documents/SettingsPage'));
+const Recipe = lazy(() => import('./documents/RecipePage'));
 const ReleasePersonalNotePreview = import.meta.env.DEV
   ? lazy(() => import('./development/release-personal-note'))
   : undefined;
@@ -47,13 +49,17 @@ export default function App() {
         ? Recovery
         : path === '/device/' || path === '/device'
           ? Device
-          : path === '/docs/' || path === '/docs'
-            ? DocsOverview
-            : path.startsWith('/docs/sdk/')
-            ? SdkDocs
-            : isManualPath(path)
-              ? Manual
-              : Home;
+          : path === '/settings/' || path === '/settings'
+            ? Settings
+            : path === '/recipe/' || path === '/recipe'
+              ? Recipe
+              : path === '/docs/' || path === '/docs'
+                ? DocsOverview
+                : path.startsWith('/docs/sdk/')
+                  ? SdkDocs
+                  : isManualPath(path)
+                    ? Manual
+                    : Home;
   return (
     <Loading>
       <Page />

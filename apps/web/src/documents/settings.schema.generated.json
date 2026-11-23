@@ -1,0 +1,4232 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Settings",
+  "x-document": {
+    "id": "settings",
+    "directory": "FUJIMOD",
+    "name": "SETTINGS.JSN"
+  },
+  "x-groups": [
+    {
+      "title": "SHOOTING",
+      "properties": [
+        "recipes",
+        "custom_settings_bkt",
+        "recipe_exif",
+        "grain",
+        "grain_texture",
+        "software_nd",
+        "teleconverter",
+        "snap_focus",
+        "subject_zoom",
+        "movie",
+        "f_log"
+      ]
+    },
+    {
+      "title": "SCREEN SET-UP",
+      "properties": [
+        "screen",
+        "opacity",
+        "film_icons",
+        "hdmi"
+      ]
+    },
+    {
+      "title": "BUTTON/DIAL SETTING",
+      "properties": [
+        "controls"
+      ]
+    },
+    {
+      "title": "SAVE DATA SET-UP",
+      "properties": [
+        "save_data"
+      ]
+    },
+    {
+      "title": "FUJIMOD SET-UP",
+      "properties": [
+        "owner",
+        "appearance",
+        "menu",
+        "animations",
+        "ui",
+        "updates",
+        "welcome_sheet",
+        "bug_report",
+        "dev_tools"
+      ]
+    }
+  ],
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "stock_choices": {
+      "title": "CAMERA SLOT CHOICES",
+      "readOnly": true,
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c1": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c2": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c3": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c4": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c5": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c6": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "c7": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "values": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "setting"
+                ],
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 63
+                  },
+                  "value": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  },
+                  "stock": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65535,
+                    "default": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "f_log": {
+      "title": "F-LOG",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recording": {
+          "title": "F-Log RECORDING",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "movie": {
+      "title": "MOVIE",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "film_simulation": {
+          "title": "MOVIE FILM SIMULATION",
+          "examples": [
+            "Provia",
+            "Velvia",
+            "Astia",
+            "Classic Chrome",
+            "Pro Neg. Hi",
+            "Pro Neg. Std",
+            "Monochrome STD",
+            "Monochrome Yellow",
+            "Monochrome Red",
+            "Monochrome Green",
+            "Sepia",
+            "Eterna",
+            "Classic Negative",
+            "Eterna Bleach",
+            "Nostalgic Negative",
+            "Reala Ace",
+            "Neutral",
+            "Acros",
+            "Acros Yellow",
+            "Acros Red",
+            "Acros Green"
+          ],
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "default": "same_as_stills"
+        }
+      }
+    },
+    "subject_zoom": {
+      "title": "SUBJECT ZOOM",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "zoom": {
+          "title": "ZOOM",
+          "type": "string",
+          "enum": [
+            "off",
+            "press"
+          ],
+          "default": "press"
+        }
+      }
+    },
+    "snap_focus": {
+      "title": "MF SNAP FOCUS",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "distance_m": {
+          "title": "DISTANCE",
+          "x-unit": "m",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 1,
+          "description": "Focus distance in meters; zero means infinity."
+        },
+        "enabled": {
+          "title": "SNAP FOCUS",
+          "type": "boolean",
+          "default": true
+        },
+        "hyperfocal": {
+          "title": "HYPERFOCAL",
+          "type": "boolean",
+          "default": false,
+          "description": "Snap to the hyperfocal distance of the current aperture instead of distance_m."
+        }
+      }
+    },
+    "hdmi": {
+      "title": "HDMI OUTPUT",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "behavior": {
+          "title": "HDMI OUTPUT",
+          "x-enum-titles": {
+            "modded": "FUJIMOD"
+          },
+          "type": "string",
+          "enum": [
+            "stock",
+            "modded"
+          ],
+          "default": "modded"
+        }
+      }
+    },
+    "controls": {
+      "title": "BUTTON/DIAL SETTING",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fn1": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn2": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn3": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn4": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn5": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "selector_up": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "selector_left": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "selector_right": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "selector_down": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn6": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn7": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "fn8": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "ae_af_l": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "t_fn1": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "t_fn2": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "t_fn3": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "t_fn4": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "ae_lock_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "af_on_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "q_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "iso_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "wb_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "rec_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "view_mode_button": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            }
+          },
+          "title": "FUNCTION (Fn) SETTING"
+        },
+        "dial": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exposure_compensation_dial": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "positions": {
+                  "type": "array",
+                  "maxItems": 19,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  }
+                }
+              }
+            },
+            "command_control": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                }
+              }
+            },
+            "control_ring": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                }
+              }
+            },
+            "auto_mode_selector_lever": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "positions": {
+                  "type": "array",
+                  "maxItems": 2,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  }
+                }
+              }
+            },
+            "shutter_speed_dial": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "positions": {
+                  "type": "array",
+                  "maxItems": 16,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  }
+                }
+              }
+            },
+            "aperture_ring": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "positions": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  }
+                }
+              }
+            },
+            "focus_mode_selector": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "positions": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "items": {
+                    "type": "string",
+                    "maxLength": 63,
+                    "default": ""
+                  }
+                }
+              }
+            },
+            "af_ae_lock_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "snap_focus"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "ae_lock_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "af_lock_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "fn1_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "selector_up_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "selector_right_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "selector_down_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "selector_left_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "drive_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "quick_menu_button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "command_control_press": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "hold_ms": {
+              "type": "integer",
+              "minimum": 100,
+              "maximum": 2000,
+              "default": 400
+            },
+            "double_tap_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 300
+            },
+            "command_dial": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                }
+              }
+            },
+            "command_dial_press": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "stock",
+                    "af_mode",
+                    "aperture",
+                    "drange",
+                    "drive",
+                    "exposure_compensation",
+                    "facedetect",
+                    "film_simulation",
+                    "flash",
+                    "flash_com",
+                    "focus_mode",
+                    "highlight",
+                    "iso",
+                    "mf_assist_and_peaking",
+                    "nr",
+                    "photometrymode",
+                    "pixel",
+                    "quality",
+                    "rec_adv_mode_filter",
+                    "selftimer",
+                    "shadow",
+                    "sharpness",
+                    "shutter_speed",
+                    "shutter_type",
+                    "stillcolor",
+                    "teleconverter",
+                    "wb_kelvin",
+                    "wb_tuning_b",
+                    "wb_tuning_r",
+                    "white_balance",
+                    "aspect_ratio",
+                    "digital_focal_length",
+                    "select_recipe",
+                    "set_hyperfocal",
+                    "snap_focus",
+                    "snap_focus_distance",
+                    "software_nd",
+                    "surround_view",
+                    "next_photometry",
+                    "next_framing_guideline",
+                    "raw_view"
+                  ],
+                  "default": "stock"
+                },
+                "action_selected": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3,
+              "default": 0
+            }
+          },
+          "title": "DIALS AND BUTTONS"
+        },
+        "quick_menu": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "1": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "2": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "3": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "4": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "5": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "6": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "7": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "8": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "9": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "10": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "11": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "12": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "13": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "14": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "15": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            },
+            "16": {
+              "type": "string",
+              "enum": [
+                "unset",
+                "af_mode",
+                "aperture",
+                "drange",
+                "drive",
+                "exposure_compensation",
+                "facedetect",
+                "film_simulation",
+                "flash",
+                "flash_com",
+                "focus_mode",
+                "highlight",
+                "iso",
+                "mf_assist_and_peaking",
+                "nr",
+                "photometrymode",
+                "pixel",
+                "quality",
+                "rec_adv_mode_filter",
+                "selftimer",
+                "shadow",
+                "sharpness",
+                "shutter_speed",
+                "shutter_type",
+                "stillcolor",
+                "teleconverter",
+                "wb_kelvin",
+                "wb_tuning_b",
+                "wb_tuning_r",
+                "white_balance",
+                "aspect_ratio",
+                "digital_focal_length",
+                "framing_guideline",
+                "raw_view",
+                "select_recipe",
+                "set_hyperfocal",
+                "snap_focus",
+                "snap_focus_distance",
+                "software_nd",
+                "surround_view",
+                "next_photometry",
+                "next_framing_guideline"
+              ],
+              "default": "unset"
+            }
+          },
+          "title": "EDIT/SAVE QUICK MENU"
+        }
+      }
+    },
+    "menu": {
+      "title": "MENU",
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "style": {
+          "title": "MENU STYLE",
+          "x-enum-titles": {
+            "eva01": "EVA-01"
+          },
+          "type": "string",
+          "enum": [
+            "stock",
+            "x100vi",
+            "cupertino",
+            "teenage",
+            "eva01",
+            "fujimod"
+          ],
+          "default": "fujimod"
+        },
+        "quick_start": {
+          "title": "QUICK START",
+          "examples": [
+            0,
+            10,
+            23
+          ],
+          "x-enum-titles": {
+            "0": "OFF",
+            "10": "10 MIN",
+            "23": "23 MIN"
+          },
+          "description": "QUICK START sleep window in minutes: 0 (OFF), 10 or 23; other values read as OFF",
+          "type": "integer",
+          "default": 0
+        }
+      }
+    },
+    "animations": {
+      "title": "MENU ANIMATIONS",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "title": "MENU ANIMATIONS",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "owner": {
+      "title": "ENTER AUTHOR INFO",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "NAME",
+          "description": "The camera owner's name: the author of recipes made on this camera and the remixed_by of its remixes.",
+          "type": "string",
+          "maxLength": 63,
+          "default": ""
+        },
+        "url": {
+          "title": "URL",
+          "description": "The owner's web address, saved beside the name in recipes: author_url and remixed_by_url.",
+          "type": "string",
+          "maxLength": 63,
+          "default": ""
+        }
+      }
+    },
+    "ui": {
+      "title": "FOCALIZED UI",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "plugin": {
+          "title": "PLUGIN",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 31,
+          "default": "list"
+        },
+        "grouped_shooting_menu": {
+          "title": "GROUPED SHOOTING MENU",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "opacity": {
+      "title": "OPACITY",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "menu": {
+          "title": "MENU OPACITY",
+          "type": "string",
+          "enum": [
+            "25%",
+            "50%",
+            "75%",
+            "100%"
+          ],
+          "default": "100%"
+        },
+        "indicators": {
+          "title": "INDICATOR OPACITY",
+          "type": "string",
+          "enum": [
+            "0%",
+            "25%",
+            "50%",
+            "75%",
+            "100%"
+          ],
+          "default": "100%"
+        }
+      }
+    },
+    "grain": {
+      "title": "GRAIN EFFECT",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roughness": {
+          "title": "STRENGTH",
+          "type": "string",
+          "enum": [
+            "off",
+            "weak",
+            "strong",
+            "auto"
+          ],
+          "default": "off"
+        },
+        "size": {
+          "title": "SIZE",
+          "type": "string",
+          "enum": [
+            "small",
+            "large"
+          ],
+          "default": "small"
+        }
+      }
+    },
+    "grain_texture": {
+      "title": "GRAIN TEXTURE",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "texture": {
+          "title": "TEXTURE",
+          "type": "string",
+          "enum": [
+            "x100vi",
+            "fujimod"
+          ],
+          "default": "x100vi"
+        }
+      }
+    },
+    "screen": {
+      "title": "SHAPE & ASPECT",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aspect_ratio": {
+          "title": "ASPECT RATIO",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 3
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 2
+            }
+          }
+        },
+        "custom_aspect_ratios": {
+          "title": "CUSTOM ASPECT RATIOS",
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "width": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 3
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 2
+              }
+            }
+          }
+        },
+        "disabled_aspect_ratios": {
+          "title": "HIDDEN ASPECT RATIOS",
+          "type": "array",
+          "maxItems": 17,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "width": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 3
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 2
+              }
+            }
+          }
+        },
+        "enabled_aspect_ratios": {
+          "title": "SHOWN ASPECT RATIOS",
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "width": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 3
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 2
+              }
+            }
+          }
+        },
+        "surround": {
+          "title": "SURROUND VIEW",
+          "type": "string",
+          "enum": [
+            "black",
+            "semi_transparent",
+            "line"
+          ],
+          "default": "black"
+        },
+        "desqueeze": {
+          "title": "DESQUEEZE",
+          "x-enum-titles": {
+            "1.25x": "1.25x",
+            "1.33x": "1.33x",
+            "1.5x": "1.5x",
+            "1.6x": "1.6x",
+            "1.8x": "1.8x",
+            "2x": "2x"
+          },
+          "type": "string",
+          "enum": [
+            "off",
+            "1.25x",
+            "1.33x",
+            "1.5x",
+            "1.6x",
+            "1.8x",
+            "2x"
+          ],
+          "default": "off"
+        },
+        "desqueeze_jpeg": {
+          "title": "DESQUEEZE JPEG",
+          "type": "boolean",
+          "default": true
+        },
+        "framing_guideline": {
+          "title": "FRAMING GUIDELINE",
+          "type": "string",
+          "enum": [
+            "off",
+            "grid_9",
+            "hd",
+            "golden_ratio",
+            "golden_spiral_bottom_left",
+            "golden_spiral_bottom_right",
+            "golden_spiral_top_left",
+            "golden_spiral_top_right",
+            "dynamic_symmetry"
+          ],
+          "default": "off"
+        }
+      }
+    },
+    "save_data": {
+      "title": "SAVE DATA SET-UP",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date_folders": {
+          "title": "DATE FOLDERS",
+          "type": "boolean",
+          "default": false
+        },
+        "date_card_name": {
+          "title": "FORMAT CARD NAME",
+          "type": "boolean",
+          "default": true
+        },
+        "raw_crop_file": {
+          "title": "RAW CROP FILE",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "recipes": {
+      "title": "RECIPES",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "title": "ACTIVE SLOT",
+          "readOnly": true,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7,
+          "default": 0
+        },
+        "current": {
+          "title": "CURRENT",
+          "x-reference": "recipe",
+          "description": "Filename of CURRENT; empty when none is selected.",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "auto_update": {
+          "title": "AUTO-UPDATE CURRENT",
+          "description": "AUTO-UPDATE CURRENT.",
+          "type": "boolean",
+          "default": false
+        },
+        "c1": {
+          "title": "C1",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "c2": {
+          "title": "C2",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "c3": {
+          "title": "C3",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "c4": {
+          "title": "C4",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "c5": {
+          "title": "C5",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "c6": {
+          "title": "C6",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "c7": {
+          "title": "C7",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "stock_imported": {
+          "title": "CAMERA SLOTS IMPORTED",
+          "readOnly": true,
+          "type": "boolean",
+          "default": false,
+          "description": "The SD card's first complete catalog read has copied the camera's non-default C slots into CSETTING."
+        }
+      }
+    },
+    "custom_settings_bkt": {
+      "title": "CUSTOM SETTINGS BKT",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slot1": {
+          "title": "CUSTOM 2",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        },
+        "slot2": {
+          "title": "CUSTOM 3",
+          "x-reference": "recipe",
+          "type": "string",
+          "maxLength": 12,
+          "default": ""
+        }
+      }
+    },
+    "recipe_exif": {
+      "title": "RECIPE IN EXIF",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "title": "RECIPE IN EXIF",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "film_icons": {
+      "title": "FILM ICONS",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pack": {
+          "title": "FILM ICONS",
+          "type": "string",
+          "enum": [
+            "stock",
+            "tiles",
+            "frames"
+          ],
+          "default": "stock"
+        }
+      }
+    },
+    "dev_tools": {
+      "title": "DEVTOOLS",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build_overlay": {
+          "title": "BUILD OVERLAY",
+          "type": "boolean",
+          "default": true
+        },
+        "overlay_rendering": {
+          "title": "OVERLAY RENDERING",
+          "type": "string",
+          "enum": [
+            "compositor",
+            "copy",
+            "off"
+          ],
+          "default": "copy"
+        }
+      }
+    },
+    "bug_report": {
+      "title": "BUG REPORT",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shortcut": {
+          "title": "BUG REPORT SHORTCUT",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "software_nd": {
+      "title": "SOFTWARE ND",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strength": {
+          "title": "STRENGTH",
+          "type": "string",
+          "enum": [
+            "auto",
+            "nd2",
+            "nd4",
+            "nd8",
+            "nd16"
+          ],
+          "default": "auto"
+        },
+        "selected": {
+          "title": "SELECTED",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "teleconverter": {
+      "title": "RAW TELECONVERTER",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "focal_length": {
+          "title": "FOCAL LENGTH",
+          "x-enum-titles": {
+            "28mm": "28mm",
+            "35mm": "35mm",
+            "50mm": "50mm"
+          },
+          "type": "string",
+          "enum": [
+            "28mm",
+            "35mm",
+            "50mm"
+          ],
+          "default": "28mm"
+        },
+        "remember_zoom": {
+          "title": "REMEMBER ZOOM",
+          "type": "boolean",
+          "default": false
+        },
+        "upscale_jpeg": {
+          "title": "UPSCALE JPEG",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "welcome_sheet": {
+      "title": "WELCOME SHEET",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "closed_build": {
+          "title": "CLOSED BUILD",
+          "readOnly": true,
+          "type": "string",
+          "maxLength": 63,
+          "default": ""
+        }
+      }
+    },
+    "updates": {
+      "title": "CHECK FOR UPDATES",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "title": "HOST",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "default": "fujimod.com"
+        },
+        "port": {
+          "title": "PORT",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 443
+        },
+        "last_checked": {
+          "title": "LAST CHECKED",
+          "readOnly": true,
+          "description": "UTC seconds of the last completed update check; 0 when never checked",
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      }
+    },
+    "appearance": {
+      "title": "APPEARANCE",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rec": {
+          "title": "REC COLOR",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 11,
+          "default": 0
+        },
+        "setup": {
+          "title": "SET-UP COLOR",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 11,
+          "default": 5
+        },
+        "play": {
+          "title": "PLAY COLOR",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 11,
+          "default": 3
+        },
+        "background": {
+          "title": "BACKGROUND COLOR",
+          "type": "integer",
+          "minimum": -2,
+          "maximum": 47,
+          "default": -1
+        }
+      }
+    }
+  }
+}

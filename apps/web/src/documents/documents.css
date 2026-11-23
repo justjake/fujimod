@@ -1,0 +1,311 @@
+.doc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 15px;
+}
+
+.doc-layout.doc-folder {
+  grid-template-columns: 200px minmax(0, 1fr);
+  max-width: 960px;
+}
+
+.doc-header,
+.doc-error {
+  grid-column: 1 / -1;
+}
+
+.doc-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.doc-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.doc-actions,
+.doc-file-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.doc-layout button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #2c2c2e;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.doc-layout button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.doc-layout button.doc-save {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.doc-layout button.doc-delete,
+.doc-layout button.doc-remove {
+  color: #ff453a;
+}
+
+.doc-card-state.connected::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #30d158;
+  vertical-align: 1px;
+}
+
+.doc-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgb(255 69 58 / 0.15);
+  color: #ff6961;
+}
+
+.doc-files ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-files li button {
+  width: 100%;
+  min-height: 30px;
+  background: none;
+  text-align: left;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+}
+
+.doc-files li button[aria-current] {
+  background: #2c2c2e;
+}
+
+.doc-files .doc-new {
+  width: 100%;
+}
+
+.doc-editor {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.doc-file-bar {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  padding: 10px 0;
+  background: #000;
+}
+
+.doc-file-name {
+  margin-right: auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.doc-status {
+  color: #30d158;
+  font-size: 13px;
+}
+
+.doc-section {
+  display: grid;
+  gap: 12px;
+}
+
+.doc-group-heading {
+  margin: 28px 0 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.doc-section-title {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.doc-section[data-depth='1'] > .doc-section-title {
+  color: #f2f2f7;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+}
+
+.doc-card {
+  border-radius: 12px;
+  background: #1c1c1e;
+  overflow: hidden;
+}
+
+.doc-group-title {
+  margin: 0;
+  padding: 12px 16px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.doc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 16px;
+  border-top: 1px solid #2c2c2e;
+}
+
+.doc-card > .doc-row:first-child,
+.doc-group-title + .doc-row {
+  border-top: 0;
+}
+
+.doc-row label {
+  letter-spacing: 0.02em;
+}
+
+.doc-row select,
+.doc-row input[type='text'],
+.doc-row input[type='number'],
+.doc-row textarea,
+.doc-add-key input {
+  max-width: 240px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid #3a3a3c;
+  border-radius: 7px;
+  background: #2c2c2e;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+
+.doc-row textarea {
+  grid-column: 1 / -1;
+  max-width: none;
+  resize: vertical;
+}
+
+.doc-row input[type='number'] {
+  width: 110px;
+}
+
+.doc-row :disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.doc-row:has(> :disabled) label {
+  color: var(--dim);
+}
+
+.doc-switch {
+  appearance: none;
+  position: relative;
+  width: 51px;
+  height: 31px;
+  margin: 0;
+  border-radius: 16px;
+  background: #39393d;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.doc-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+
+.doc-switch:checked {
+  background: #30d158;
+}
+
+.doc-switch:checked::after {
+  transform: translateX(20px);
+}
+
+.doc-problem {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #ff6961;
+  font-size: 13px;
+}
+
+.doc-entry {
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid #2c2c2e;
+}
+
+.doc-entry .doc-card {
+  background: #2c2c2e;
+}
+
+.doc-entry .doc-row {
+  border-color: #3a3a3c;
+}
+
+.doc-entry > .doc-remove {
+  justify-self: end;
+}
+
+.doc-add,
+.doc-add-key {
+  margin: 8px 12px 12px;
+}
+
+.doc-add-key {
+  display: flex;
+  gap: 8px;
+}
+
+@media (width <= 700px) {
+  .doc-layout.doc-folder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .doc-row select,
+  .doc-row input[type='text'] {
+    max-width: 180px;
+  }
+}

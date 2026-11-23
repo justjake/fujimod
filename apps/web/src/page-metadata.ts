@@ -46,6 +46,15 @@ const pages = {
     description:
       'Tried making your own mod but bricked your camera? Build a recovery SD card from official Fujifilm firmware to restore your device. This usually works and it’s cheaper than buying a new one.',
   },
+  '/settings/': {
+    title: 'Settings · FujiMod',
+    description:
+      'Edit FujiMod settings in SETTINGS.JSN on your SD card, or open and download the file.',
+  },
+  '/recipe/': {
+    title: 'Recipes · FujiMod',
+    description: 'Edit FujiMod recipes on your SD card, or open and download a recipe file.',
+  },
   '/device/': {
     title: 'Camera sign-in · FujiMod',
     description: 'Approve a FujiMod camera connection with the code shown on the camera.',
@@ -78,8 +87,8 @@ export function pageMetadata(path: string) {
   if (component)
     return {
       title: `${component.title} · FocalUI SDK · FujiMod`,
-      description: component.summary.replace(/\s+/g, ' ').slice(0, 160) ||
-        'FocalUI component reference.',
+      description:
+        component.summary.replace(/\s+/g, ' ').slice(0, 160) || 'FocalUI component reference.',
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/')
