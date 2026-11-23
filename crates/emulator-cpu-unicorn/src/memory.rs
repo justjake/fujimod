@@ -108,8 +108,14 @@ impl Iterator for Chunks<'_> {
         None
     }
 }
+// Unicorn's store-watch bitmap uses 1 KiB regions, independent of the
+// 4 KiB backing pages used for code invalidation.
+const WATCH_BYTES: usize = 1024;
+const WATCHES_PER_PAGE: usize = 4096 / WATCH_BYTES;
+
 struct Page {
     bits: Box<[u64; 64]>,
+    watches: u8,
 }
 #[derive(Clone, Copy, PartialEq)]
 struct Invalidation {
@@ -482,8 +488,8 @@ impl Memory {
         };
         // A newly mapped alias must watch code already translated elsewhere.
         let State { pages, watches, .. } = &mut *s;
-        for &page in pages.keys() {
-            Self::aliases(&[view], page, watches);
+        for (&base, page) in pages.iter() {
+            Self::watch_aliases(&[view], base, page.watches, watches);
         }
         s.views.push(view);
         // Translation-time reservation bounds all later code-write queues.
@@ -534,17 +540,21 @@ impl Memory {
             i += 1;
         }
     }
-    fn aliases(views: &[View], page: usize, out: &mut Vec<(usize, u64)>) {
-        for v in views {
-            let begin = page.max(v.pointer);
-            let end = (page + 4096).min(v.pointer + v.bytes);
-            if begin >= end {
+    fn watch_aliases(views: &[View], base: usize, watches: u8, out: &mut Vec<(usize, u64)>) {
+        let granule = WATCH_BYTES as u64;
+        for block in 0..WATCHES_PER_PAGE {
+            if watches & (1 << block) == 0 {
                 continue;
             }
-            let first = (v.address + (begin - v.pointer) as u64) >> 12;
-            let last = (v.address + (end - v.pointer - 1) as u64) >> 12;
-            for p in first..=last {
-                out.push((v.core, p << 12));
+            let start = base + block * WATCH_BYTES;
+            for view in views {
+                let begin = start.max(view.pointer);
+                let end = (start + WATCH_BYTES).min(view.pointer + view.bytes);
+                if begin < end {
+                    let first = (view.address + (begin - view.pointer) as u64) / granule;
+                    let last = (view.address + (end - view.pointer - 1) as u64) / granule;
+                    out.extend((first..=last).map(|page| (view.core, page * granule)));
+                }
             }
         }
     }
@@ -601,7 +611,7 @@ impl Memory {
                 .ok_or("empty exclusive range")??;
             let State { views, watches, .. } = &mut *s;
             for page in ((pointer & !4095)..=((pointer + bytes - 1) & !4095)).step_by(4096) {
-                Self::aliases(views, page, watches);
+                Self::watch_aliases(views, page, (1 << WATCHES_PER_PAGE) - 1, watches);
             }
         }
         self.apply_watches()
@@ -655,26 +665,21 @@ impl Memory {
                 let page_end = end.min(base + 4096);
                 let begin_offset = cursor - base;
                 let end_offset = page_end - base;
-                let inserted = match pages.entry(base) {
-                    std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        Self::mark_code_range(
-                            entry.get_mut().bits.as_mut(),
-                            begin_offset,
-                            end_offset,
-                        );
-                        false
-                    }
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        let mut page = Page {
-                            bits: Box::new([0; 64]),
-                        };
-                        Self::mark_code_range(page.bits.as_mut(), begin_offset, end_offset);
-                        entry.insert(page);
-                        true
-                    }
-                };
-                if inserted {
-                    Self::aliases(views, base, watches);
+                let page_count = pages.len();
+                let page = pages.entry(base).or_insert_with(|| Page {
+                    bits: Box::new([0; 64]),
+                    watches: 0,
+                });
+                Self::mark_code_range(page.bits.as_mut(), begin_offset, end_offset);
+                let first = begin_offset / WATCH_BYTES;
+                let last = (end_offset - 1) / WATCH_BYTES;
+                let mask = ((1 << (last - first + 1)) - 1) << first;
+                let added = mask & !page.watches;
+                if added != 0 {
+                    page.watches |= added;
+                    Self::watch_aliases(views, base, added, watches);
+                }
+                if pages.len() != page_count {
                     let capacity = pages.len() * views.len() * 2;
                     invalidations.reserve(capacity.saturating_sub(invalidations.len()));
                 }
@@ -713,7 +718,7 @@ impl Memory {
                 return Ok(());
             };
             if let Some(core) = core {
-                core.watch_code(page, 4096)?;
+                core.watch_code(page, WATCH_BYTES as u64)?;
             }
         }
     }
@@ -890,6 +895,23 @@ impl Memory {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_code_span_marks_only_the_overlapping_watch_regions_in_each_alias() {
+        let memory = Memory::default();
+        let backing = 0x10_0000;
+        memory.map(0, 0x1000, backing, 4096, None);
+        assert!(memory.note_code(0, 0x13fe, 4).unwrap());
+        assert!(!memory.note_code(0, 0x1400, 2).unwrap());
+        memory.map(1, 0x8400, backing, 4096, None);
+        assert_eq!(
+            memory.state().watches,
+            [(0, 0x1000), (0, 0x1400), (1, 0x8400), (1, 0x8800)]
+        );
+        assert!(!memory.written(1, 0x8c00, 4).unwrap());
+        assert!(memory.written(1, 0x8800, 1).unwrap());
+        assert!(!memory.note_code(0, 0x13fe, 4).unwrap());
+    }
 
     #[test]
     fn stopped_mapping_barrier_accepts_parked_cores_only() {
