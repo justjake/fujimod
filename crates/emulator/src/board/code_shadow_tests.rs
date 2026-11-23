@@ -191,3 +191,24 @@ fn the_interactive_policy_keeps_translations_with_the_same_result() {
         }
     }
 }
+
+#[test]
+fn changed_pages_at_the_stop_pc_are_discarded_individually() {
+    use super::code_shadow::{CodeShadow, Touch};
+    let cpu = fujimod_emulator_cpu_unicorn::Library::linked().unwrap()
+        .open(Model::CortexM4, 1 << 20).unwrap();
+    cpu.map_zeroed(0, 0x4000, 7).unwrap();
+    let mut shadow = CodeShadow::default();
+    let checked = |address| address < 0x4000;
+    assert_eq!(shadow.touch(&cpu, 0x1000, checked), Touch::Proven);
+    shadow.peer_ran();
+    cpu.write_memory(0x1010, &[1]).unwrap();
+    cpu.write_memory(0x2010, &[2]).unwrap();
+    shadow.end_slice(&cpu, Some(0x1000), checked);
+    assert!(!shadow.changed());
+    // The following page still carries the old proof until its own check.
+    assert_eq!(shadow.touch(&cpu, 0x1000, checked), Touch::Changed(0x2000));
+    shadow.invalidate();
+    shadow.end_slice(&cpu, Some(0x1000), checked);
+    assert!(shadow.changed(), "a prior full invalidation must survive");
+}

@@ -205,20 +205,24 @@ impl CodeShadow {
             return Ok(false);
         }
         if let Some(page) = self.resync_page {
-            cpu.invalidate_code(Some((page, page + PAGE)))?;
-            self.pages.remove(&page);
-            self.dirty_pages.retain(|&address| address != page);
-            self.last = None;
+            self.discard_page(cpu, page)?;
             self.changed = false;
             self.resync = false;
             self.resync_page = None;
-            self.changes += 1;
         } else {
             cpu.invalidate_code(None)?;
             self.discarded();
             self.begin_slice();
         }
         Ok(true)
+    }
+    fn discard_page(&mut self, cpu: &dyn Cpu, page: u64) -> Result<(), String> {
+        cpu.invalidate_code(Some((page, page + PAGE)))?;
+        self.pages.remove(&page);
+        self.dirty_pages.retain(|&address| address != page);
+        self.last = None;
+        self.changes += 1;
+        Ok(())
     }
     /// Something other than a peer's or the host's write to RAM may have
     /// outdated the translations: a store this processor made through an
@@ -404,7 +408,14 @@ impl CodeShadow {
         match pc.map(|pc| self.touch(cpu, pc, checked)) {
             Some(Touch::Proven) => (),
             Some(Touch::Unchecked) => self.unproven = true,
-            // An unknown stop PC proves nothing about its translation.
+            // The processor is parked, so overlapping translations can be
+            // removed immediately, just as when its entry observer stops it.
+            // Keep any wider invalidation already requested during the slice.
+            Some(Touch::Changed(page)) if !self.changed && page <= u64::from(u32::MAX) - PAGE => {
+                if self.discard_page(cpu, page).is_err() {
+                    self.invalidate();
+                }
+            }
             Some(Touch::Changed(_)) | None => self.invalidate(),
         }
         for address in self.dirty_pages.drain(..) {
