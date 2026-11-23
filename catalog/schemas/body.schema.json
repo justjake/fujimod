@@ -34,6 +34,1522 @@
       ],
       "type": "object"
     },
+    "BlockDevice": {
+      "description": "Hardware parameters for a SoC block, selected by its model tag.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "DMA channel count and request-multiplexer connection.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "channels": {
+              "description": "Number of DMA channels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "dma",
+              "type": "string"
+            },
+            "native_dependencies": {
+              "description": "Other device models this controller depends on.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "request_mux_block_id": {
+              "description": "Request-multiplexer register block identity.",
+              "type": "string"
+            },
+            "timing": {
+              "description": "Declared transfer timing.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "channels",
+            "request_mux_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-flash controller's memory-mapped aperture.",
+          "properties": {
+            "aperture_block_id": {
+              "description": "Flash aperture block identity.",
+              "type": "string"
+            },
+            "aperture_size": {
+              "description": "Aperture bytes used by the device model, when it differs from the block size.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "serial_flash",
+              "type": "string"
+            },
+            "native_dependencies": {
+              "description": "Other device models this controller depends on.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "timing": {
+              "description": "Declared command timing.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "aperture_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging input buffer's SRAM banks.",
+          "properties": {
+            "bank_bytes": {
+              "description": "Capacity of one SRAM bank.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "imaging_input_buffer",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "description": "Ticks for the input buffer reset.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "sram_region_id": {
+              "description": "SRAM memory-region identity.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "sram_region_id",
+            "bank_bytes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Display-channel pixel packing declared by the controller contract.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "clear_bits": {
+              "description": "Bits a completed output request leaves clear.",
+              "items": {
+                "$ref": "#/$defs/HardwareDisplayStatusBits"
+              },
+              "type": "array"
+            },
+            "frame_basis": {
+              "description": "Frame-law basis, kept separately from the output basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "handshake_ticks": {
+              "description": "Delay of the bit-16 request handshake.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "display",
+              "type": "string"
+            },
+            "order": {
+              "description": "Position of this window in the declared display-output order.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "period_ticks": {
+              "description": "Frame period in device ticks, when the block declares the frame law.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "picture_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PictureLayout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Picture-plane packing, when specified."
+            },
+            "pixel_clock_ticks": {
+              "description": "Pixel-clock ticks per pixel, when declared.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "scanout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HardwareDisplayScanout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "OSD layer capture for this output."
+            },
+            "set_bits": {
+              "description": "Bits a completed output request leaves set.",
+              "items": {
+                "$ref": "#/$defs/HardwareDisplayStatusBits"
+              },
+              "type": "array"
+            },
+            "timing": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HardwareDisplayTimingBanks"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Programmed timing banks, when declared."
+            },
+            "video_layout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/VideoLayout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Video-plane packing, when specified."
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-controller DMA request lines.",
+          "properties": {
+            "model": {
+              "const": "serial_dma",
+              "type": "string"
+            },
+            "receive_request": {
+              "description": "Receive request identifier.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transmit_request": {
+              "description": "Transmit request identifier.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "receive_request",
+            "transmit_request"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DMA interrupt range presented to a companion processor.",
+          "properties": {
+            "companion_irq_base": {
+              "description": "First companion interrupt line for the DMA controller.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "companion_dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "companion_irq_base"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging sensor command window.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "command_ticks": {
+              "description": "Ticks from command to completion.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "sensor_command",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "description": "Ticks for the sensor command window reset.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "command_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging receiver window.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_receiver",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Primary control-bus register offsets and modes.",
+          "properties": {
+            "model": {
+              "const": "control_bus",
+              "type": "string"
+            },
+            "modes": {
+              "description": "Supported bus modes.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "offsets": {
+              "description": "Register offsets inside the block.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "model",
+            "offsets",
+            "modes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Secondary control bus with no extra parameters.",
+          "properties": {
+            "model": {
+              "const": "secondary_bus",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "NAND controller with no extra parameters.",
+          "properties": {
+            "model": {
+              "const": "nand",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Loader DMA controller with no extra parameters.",
+          "properties": {
+            "model": {
+              "const": "loader_dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Streaming decompressor.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "decompressor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "USB core and its fixed interrupt outputs.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "usb",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "USB PHY programming port.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "usb_phy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One SD host clock word.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "sd_host_clock",
+              "type": "string"
+            },
+            "settle_ticks": {
+              "description": "Ticks for the clock to settle.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "settle_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GPIO controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "gpio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ADC or temperature conversion block.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "adc",
+              "type": "string"
+            },
+            "sample_ticks": {
+              "description": "Ticks for one conversion.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "sample_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DMP vector-graphics renderer.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "dmp",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "MOVDC imaging channel.",
+          "properties": {
+            "model": {
+              "const": "movdc",
+              "type": "string"
+            },
+            "reset_ticks": {
+              "description": "Ticks for the block reset.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "reset_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One control-request gate word.",
+          "properties": {
+            "ack_ticks": {
+              "description": "Ticks for the request acknowledge.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "control_request",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "ack_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GPIO group page with no additional parameters.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "io_groups",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "SPI controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "spi",
+              "type": "string"
+            },
+            "parent_clock_ticks": {
+              "description": "Parent-clock ticks per transfer unit.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "parent_clock_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Interval timer.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "clock": {
+              "description": "Declared clock law.",
+              "type": "string"
+            },
+            "layout": {
+              "$ref": "#/$defs/HardwareTimerLayout",
+              "description": "Register layout, which selects the implementation."
+            },
+            "model": {
+              "const": "interval_timer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "layout",
+            "clock",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Generic register block with idle, fixed, command, frame or job behavior.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "commands": {
+              "description": "Command writes that set a status field.",
+              "items": {
+                "$ref": "#/$defs/HardwareRegisterBlockCommand"
+              },
+              "type": "array"
+            },
+            "fixed_words": {
+              "description": "Words that always read a fixed value.",
+              "items": {
+                "$ref": "#/$defs/HardwareRegisterFixedWord"
+              },
+              "type": "array"
+            },
+            "frames": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BlockRegisterBlockFrames"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Frame law, when declared."
+            },
+            "idle_bits": {
+              "description": "Status bits that always read set.",
+              "items": {
+                "$ref": "#/$defs/HardwareRegisterIdleBits"
+              },
+              "type": "array"
+            },
+            "job": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BlockRegisterBlockJob"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Job law, when declared."
+            },
+            "model": {
+              "const": "register_block",
+              "type": "string"
+            },
+            "order": {
+              "description": "Position in the declared register-block order.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "idle_bits",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "PL330 DMA controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "bytes_per_tick": {
+              "description": "Bytes moved per tick.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "pl330",
+              "type": "string"
+            },
+            "setup_ticks": {
+              "description": "Ticks before the first byte moves.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "timing": {
+              "description": "Declared timing qualification.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "setup_ticks",
+            "bytes_per_tick",
+            "timing",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One UART port with no additional parameters.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "serial_port",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "JPEG encoder or decoder.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "jpeg_codec",
+              "type": "string"
+            },
+            "run_ticks": {
+              "description": "Ticks for one run.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "run_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Face detection engine.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "face_detection",
+              "type": "string"
+            },
+            "run_ticks": {
+              "description": "Ticks for one run.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "run_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Standard SDHCI host page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "capabilities": {
+              "description": "Capabilities register.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "capabilities_2": {
+              "description": "Capabilities 2 register.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "clock_ticks": {
+              "description": "Ticks for the clock to settle.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "sd_host",
+              "type": "string"
+            },
+            "slot_and_version": {
+              "description": "Slot status and version word.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transfer_ticks": {
+              "description": "Ticks for one transfer.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "vendor_offsets": {
+              "description": "Vendor words that read back their last write.",
+              "items": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "model",
+            "capabilities",
+            "capabilities_2",
+            "clock_ticks",
+            "slot_and_version",
+            "transfer_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DesignWare USB3 device controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "command_ticks": {
+              "description": "Ticks for one endpoint command.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "xpp_usb",
+              "type": "string"
+            },
+            "transaction_ticks": {
+              "description": "Ticks for one bus transaction.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "command_ticks",
+            "transaction_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One display output window.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "clear_bits": {
+              "description": "Bits a completed request leaves clear.",
+              "items": {
+                "$ref": "#/$defs/HardwareDisplayStatusBits"
+              },
+              "type": "array"
+            },
+            "handshake_ticks": {
+              "description": "Delay of the bit-16 request handshake.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "display_output",
+              "type": "string"
+            },
+            "order": {
+              "description": "Position of this window in the declared display-output order.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "scanout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HardwareDisplayScanout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "OSD layer capture for this output."
+            },
+            "set_bits": {
+              "description": "Bits a completed request leaves set.",
+              "items": {
+                "$ref": "#/$defs/HardwareDisplayStatusBits"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "model",
+            "set_bits",
+            "clear_bits",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Clock bank with PLL lock status.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "lock_ticks": {
+              "description": "Ticks from enable to lock.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "pll_clocks",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "lock_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging control page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_control",
+              "type": "string"
+            },
+            "readout": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BlockSensorReadout"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sensor read-out law, when declared."
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging statistics engine.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_statistics",
+              "type": "string"
+            },
+            "period_ticks": {
+              "description": "Frame period in device ticks.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "period_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "HDMI transmitter with no sink.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "hdmi_tx",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging frame sync and its frame interrupt words.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "interrupts": {
+              "description": "Address of the frame interrupt enable word.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "frame_sync",
+              "type": "string"
+            },
+            "period_ticks": {
+              "description": "Frame period in device ticks.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sources": {
+              "description": "Sources every frame latches.",
+              "items": {
+                "$ref": "#/$defs/BlockFrameSource"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "model",
+            "interrupts",
+            "period_ticks",
+            "sources",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reset and gate controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "reset_gates",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DRAM controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "dram_controller",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Power controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "power_control",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DesignWare I2C bus.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "clock_hz": {
+              "description": "The ic_clk the SCL counts divide.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "fifo_depth": {
+              "description": "TX and RX FIFO depth.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "i2c",
+              "type": "string"
+            },
+            "tick_hz": {
+              "description": "Device ticks per second.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "fifo_depth",
+            "clock_hz",
+            "tick_hz",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "X-Processor Pro SD channel.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "clock_ticks": {
+              "description": "Ticks for the clock to settle.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "xpp_sd",
+              "type": "string"
+            },
+            "register_offset": {
+              "description": "Offset of the SDHCI bank inside the window.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reset_channel": {
+              "description": "SD channel of the reset-gate line.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reset_ticks": {
+              "description": "Ticks for the wrapper reset.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transfer_ticks": {
+              "description": "Ticks for one transfer.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "register_offset",
+            "reset_channel",
+            "transfer_ticks",
+            "clock_ticks",
+            "reset_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "X-Processor Pro H.264 encoder.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "h264_encoder",
+              "type": "string"
+            },
+            "run_ticks": {
+              "description": "Ticks for one run.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "run_ticks",
+            "basis"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "BlockFrameSource": {
+      "additionalProperties": false,
+      "description": "One frame interrupt source; its line is on the block by output name.",
+      "properties": {
+        "status_bit": {
+          "description": "Status and enable bit of the source.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status_bit"
+      ],
+      "type": "object"
+    },
+    "BlockOverride": {
+      "additionalProperties": false,
+      "description": "A body-specific replacement for one processor block's device.",
+      "properties": {
+        "block_id": {
+          "description": "Processor block whose device this body replaces.",
+          "type": "string"
+        },
+        "device": {
+          "$ref": "#/$defs/BlockDevice",
+          "description": "Replacement device model and parameters."
+        }
+      },
+      "required": [
+        "block_id",
+        "device"
+      ],
+      "type": "object"
+    },
+    "BlockRegisterBlockFrames": {
+      "additionalProperties": false,
+      "description": "Frame law of a register block, with its interrupt line on the block.",
+      "properties": {
+        "period_ticks": {
+          "description": "Frame period in device ticks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Start bit."
+        },
+        "stopped": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Bit that reads set while stopped."
+        }
+      },
+      "required": [
+        "start",
+        "stopped",
+        "period_ticks"
+      ],
+      "type": "object"
+    },
+    "BlockRegisterBlockJob": {
+      "additionalProperties": false,
+      "description": "Job law of a register block, with its interrupt line on the block.",
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/HardwareRegisterIdleBits",
+          "description": "Start bit."
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterIdleBits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Status bit the job sets."
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterIdleBits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stop bit."
+        },
+        "ticks": {
+          "description": "Device ticks a job takes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "ticks"
+      ],
+      "type": "object"
+    },
+    "BlockSensorReadout": {
+      "additionalProperties": false,
+      "description": "Sensor read-out law, with its interrupt line on the block.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Channel offset inside the page.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "starts_on_frame": {
+          "description": "The read-out begins on the first frame after its start.",
+          "type": "boolean"
+        },
+        "ticks": {
+          "description": "Device ticks a read-out takes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "offset",
+        "ticks"
+      ],
+      "type": "object"
+    },
     "BlockSignal": {
       "description": "Named control signals carried by SoC blocks.",
       "oneOf": [
@@ -162,6 +1678,13 @@
             }
           ],
           "description": "Declared attachments."
+        },
+        "block_overrides": {
+          "description": "Body-specific device replacements on processor blocks.",
+          "items": {
+            "$ref": "#/$defs/BlockOverride"
+          },
+          "type": "array"
         },
         "card_contacts": {
           "anyOf": [
@@ -324,17 +1847,6 @@
             }
           ],
           "description": "Declared preview activity."
-        },
-        "register_maps": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareRegisterLayouts"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Body-declared register behavior overriding the selected processor defaults."
         },
         "touch": {
           "anyOf": [
@@ -3628,41 +5140,6 @@
       ],
       "type": "object"
     },
-    "HardwareAdc": {
-      "additionalProperties": false,
-      "description": "Declared adc facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "sample_ticks": {
-          "description": "Declared sample ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "sample_ticks",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareAfExtraction": {
       "additionalProperties": false,
       "description": "Declared af extraction facts.",
@@ -3700,41 +5177,6 @@
         "address",
         "basis",
         "reply_model"
-      ],
-      "type": "object"
-    },
-    "HardwareByteI2c": {
-      "additionalProperties": false,
-      "description": "One byte-oriented I2C controller window.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "byte_ticks": {
-          "description": "Virtual ticks per address, data byte or STOP.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq": {
-          "description": "Interrupt line of the controller.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "byte_ticks",
-        "irq"
       ],
       "type": "object"
     },
@@ -4068,37 +5510,6 @@
       ],
       "type": "object"
     },
-    "HardwareControlRequests": {
-      "additionalProperties": false,
-      "description": "Declared control requests facts.",
-      "properties": {
-        "ack_ticks": {
-          "description": "Declared ack ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "registers": {
-          "description": "Declared registers.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "ack_ticks",
-        "basis",
-        "registers"
-      ],
-      "type": "object"
-    },
     "HardwareControllerModels": {
       "additionalProperties": false,
       "description": "Declared controllers facts.",
@@ -4257,38 +5668,6 @@
       ],
       "type": "object"
     },
-    "HardwareDecompressor": {
-      "additionalProperties": false,
-      "description": "Declared decompressor facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "irq_route": {
-          "description": "Declared irq route.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "base"
-      ],
-      "type": "object"
-    },
     "HardwareDeviceChoices": {
       "additionalProperties": false,
       "description": "Declared model choices facts.",
@@ -4372,112 +5751,6 @@
         "dependencies",
         "kind",
         "refs"
-      ],
-      "type": "object"
-    },
-    "HardwareDisplayFrames": {
-      "additionalProperties": false,
-      "description": "Display frame interrupts declared as a law without controller registers.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_routes": {
-          "description": "Lines receiving one edge per frame.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "period_ticks": {
-          "description": "Frame period in guest ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "timing": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDisplayTimingBanks"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Programmed timing banks; absent for a declared free-running frame source."
-        }
-      },
-      "required": [
-        "basis",
-        "irq_routes",
-        "period_ticks"
-      ],
-      "type": "object"
-    },
-    "HardwareDisplayOutput": {
-      "additionalProperties": false,
-      "description": "Register window of one display output with status bits that read fixed.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "clear_bits": {
-          "description": "Bits a completed request leaves clear.",
-          "items": {
-            "$ref": "#/$defs/HardwareDisplayStatusBits"
-          },
-          "type": "array"
-        },
-        "handshake_ticks": {
-          "description": "Delay of the bit-16 request handshake; absent for fixed status bits.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "scanout": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDisplayScanout"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "OSD layer capture, when the output is scanned out."
-        },
-        "set_bits": {
-          "description": "Bits that report a completed request as set.",
-          "items": {
-            "$ref": "#/$defs/HardwareDisplayStatusBits"
-          },
-          "type": "array"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "clear_bits",
-        "set_bits",
-        "size"
       ],
       "type": "object"
     },
@@ -4588,148 +5861,6 @@
       ],
       "type": "object"
     },
-    "HardwareDma": {
-      "additionalProperties": false,
-      "description": "Declared dma facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "channels": {
-          "description": "Declared channels.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq_routes": {
-          "description": "Declared irq routes.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "native_dependencies": {
-          "description": "Declared native dependencies.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "request_mux": {
-          "description": "Declared request mux.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "timing": {
-          "description": "Declared timing.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "channels",
-        "irq_routes",
-        "native_dependencies",
-        "request_mux",
-        "timing"
-      ],
-      "type": "object"
-    },
-    "HardwareDmp": {
-      "additionalProperties": false,
-      "description": "Declared dmp facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Declared irq route.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "irq_route",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareDramAlias": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro read-only DRAM alias: physical `base` onwards returns body\nDRAM from address 0.",
-      "properties": {
-        "base": {
-          "description": "Declared physical base of the alias.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "base",
-        "basis"
-      ],
-      "type": "object"
-    },
-    "HardwareDramController": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro SD channel: wrapper reset at +0, vendor words and a\nrelocated SDHCI bank, with its interrupt and hardware reset line.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareEncoder": {
       "additionalProperties": false,
       "description": "Declared encoders facts.",
@@ -4804,48 +5935,6 @@
       "required": [
         "phase_ticks",
         "rest_phase"
-      ],
-      "type": "object"
-    },
-    "HardwareFaceDetection": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro face detection engine.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the completion status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "run_ticks": {
-          "description": "Time from a start to the completion of its run, in device ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "irq_route",
-        "run_ticks",
-        "size"
       ],
       "type": "object"
     },
@@ -4959,50 +6048,6 @@
       "required": [
         "irq",
         "pixels_per_tick"
-      ],
-      "type": "object"
-    },
-    "HardwareFlashController": {
-      "additionalProperties": false,
-      "description": "Declared memory-mapped flash controller facts.",
-      "properties": {
-        "aperture": {
-          "description": "Read aperture base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "base": {
-          "description": "Controller register base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the controller status, when declared.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "size": {
-          "description": "Read aperture size in bytes.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "aperture",
-        "size",
-        "basis"
       ],
       "type": "object"
     },
@@ -5146,212 +6191,6 @@
       ],
       "type": "object"
     },
-    "HardwareFrameSource": {
-      "additionalProperties": false,
-      "description": "One frame interrupt source of the X-Processor Pro frame sync.",
-      "properties": {
-        "irq_route": {
-          "description": "Interrupt line the source drives.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "status_bit": {
-          "description": "Status and enable bit of the source: 0, 8 or 16.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "irq_route",
-        "status_bit"
-      ],
-      "type": "object"
-    },
-    "HardwareFrameSync": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro imaging frame sync and its frame interrupt words.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "interrupts": {
-          "description": "Address of the frame interrupt enable word; the status word follows.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "period_ticks": {
-          "description": "Frame period in device ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sources": {
-          "description": "Sources every frame latches.",
-          "items": {
-            "$ref": "#/$defs/HardwareFrameSource"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "interrupts",
-        "period_ticks",
-        "size",
-        "sources"
-      ],
-      "type": "object"
-    },
-    "HardwareGic": {
-      "additionalProperties": false,
-      "description": "Declared gic facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "cpu_interface": {
-          "description": "Declared cpu interface.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "distributor": {
-          "description": "Declared distributor.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "lines": {
-          "description": "Declared lines.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "basis",
-        "cpu_interface",
-        "distributor",
-        "lines"
-      ],
-      "type": "object"
-    },
-    "HardwareGpio": {
-      "additionalProperties": false,
-      "description": "Declared gpio facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareH264Encoder": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro movie H.264 encoder.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the completion status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "run_ticks": {
-          "description": "Time from a start to the completion of its run, in device ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "irq_route",
-        "run_ticks",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareHdmiTransmitter": {
-      "additionalProperties": false,
-      "description": "DesignWare HDMI TX controller with no sink attached.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareImaging": {
       "additionalProperties": false,
       "description": "Declared imaging facts.",
@@ -5458,225 +6297,6 @@
       },
       "type": "object"
     },
-    "HardwareImagingControl": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro imaging control page: block stop and register-bus channels.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "readout": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareSensorReadout"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Sensor read-out unit at one of the channel offsets."
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareImagingRegisters": {
-      "additionalProperties": false,
-      "description": "Declared register maps imaging facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "command_base": {
-          "description": "Declared command base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "command_ticks": {
-          "description": "Declared command ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "error_irqs": {
-          "description": "Declared error irqs.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "input_buffer": {
-          "$ref": "#/$defs/HardwareInputBuffer",
-          "description": "Declared input buffer."
-        },
-        "normal_irqs": {
-          "description": "Declared normal irqs.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "raw_dma_irqs": {
-          "description": "Completion interrupt lines of the two RAW read-out DMA channels\n(command window +0x40 and +0xc0). Left out, the channels refuse.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "receiver_base": {
-          "description": "Declared receiver base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reset_ticks": {
-          "description": "Declared reset ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "timing_irqs": {
-          "description": "Declared timing irqs.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "basis",
-        "command_base",
-        "command_ticks",
-        "error_irqs",
-        "input_buffer",
-        "normal_irqs",
-        "receiver_base",
-        "reset_ticks",
-        "timing_irqs"
-      ],
-      "type": "object"
-    },
-    "HardwareImagingStatistics": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro imaging statistics engine.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the completion status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "period_ticks": {
-          "description": "Frame period in device ticks, the frame sync's.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "irq_route",
-        "period_ticks",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareInputBuffer": {
-      "additionalProperties": false,
-      "description": "Declared input buffer facts.",
-      "properties": {
-        "bank_size": {
-          "description": "Declared bank size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq": {
-          "description": "Declared irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reset_ticks": {
-          "description": "Declared reset ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sram_base": {
-          "description": "Declared sram base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "bank_size",
-        "base",
-        "basis",
-        "irq",
-        "reset_ticks",
-        "sram_base"
-      ],
-      "type": "object"
-    },
     "HardwareInputProcessing": {
       "additionalProperties": false,
       "description": "Declared input processing facts.",
@@ -5712,92 +6332,6 @@
       },
       "required": [
         "Core"
-      ],
-      "type": "object"
-    },
-    "HardwareInterrupts": {
-      "additionalProperties": false,
-      "description": "Declared interrupts facts.",
-      "properties": {
-        "bases": {
-          "description": "Declared bases.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "timer_base": {
-          "description": "Declared timer base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "bases",
-        "timer_base"
-      ],
-      "type": "object"
-    },
-    "HardwareIntervalTimer": {
-      "additionalProperties": false,
-      "description": "Declared interval timer facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "clock": {
-          "description": "Declared clock.",
-          "type": "string"
-        },
-        "layout": {
-          "$ref": "#/$defs/HardwareTimerLayout",
-          "description": "Register layout, which selects the timer implementation."
-        },
-        "routes": {
-          "description": "Declared routes.",
-          "items": {
-            "$ref": "#/$defs/HardwareTimerRoute"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "clock",
-        "layout",
-        "routes"
-      ],
-      "type": "object"
-    },
-    "HardwareIoGroups": {
-      "additionalProperties": false,
-      "description": "Declared io groups facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "base",
-        "basis"
       ],
       "type": "object"
     },
@@ -5854,146 +6388,6 @@
       "required": [
         "output",
         "positions"
-      ],
-      "type": "object"
-    },
-    "HardwareJpegCodec": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro JPEG encoder or decoder.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the completion status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "run_ticks": {
-          "description": "Time from a start to the completion of its run, in device ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "irq_route",
-        "run_ticks",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareLcdc": {
-      "additionalProperties": false,
-      "description": "Declared lcdc facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_routes": {
-          "description": "Declared irq routes.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "picture_layout": {
-          "description": "Declared picture layout.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "pixel_clock_ticks": {
-          "description": "Declared pixel clock ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "video_layout": {
-          "description": "Declared video layout.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "irq_routes",
-        "pixel_clock_ticks"
-      ],
-      "type": "object"
-    },
-    "HardwareLoaderDma": {
-      "additionalProperties": false,
-      "description": "Declared loader dma facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base"
-      ],
-      "type": "object"
-    },
-    "HardwareMovdc": {
-      "additionalProperties": false,
-      "description": "Declared movdc facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq": {
-          "description": "Declared irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reset_ticks": {
-          "description": "Declared reset ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "irq",
-        "reset_ticks"
       ],
       "type": "object"
     },
@@ -6147,119 +6541,6 @@
       ],
       "type": "object"
     },
-    "HardwarePl330": {
-      "additionalProperties": false,
-      "description": "Declared PL330 DMA controller facts.",
-      "properties": {
-        "base": {
-          "description": "Register base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "bytes_per_tick": {
-          "description": "Bytes moved per guest tick.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq_routes": {
-          "description": "Interrupt line for each event, by event number.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "setup_ticks": {
-          "description": "Guest ticks before a program's first byte moves.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "timing": {
-          "description": "Declared timing qualification.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "base",
-        "irq_routes",
-        "setup_ticks",
-        "bytes_per_tick",
-        "timing",
-        "basis"
-      ],
-      "type": "object"
-    },
-    "HardwarePllClocks": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro clock bank: dividers, gates and five PLLs with lock status.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "lock_ticks": {
-          "description": "Ticks from a PLL enable to its lock bit.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "lock_ticks",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwarePowerControl": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro power control: supply hold and power domains.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwarePreviewActivity": {
       "additionalProperties": false,
       "description": "Declared preview activity facts.",
@@ -6276,49 +6557,6 @@
       "required": [
         "high",
         "pin"
-      ],
-      "type": "object"
-    },
-    "HardwarePrimaryBusRegisters": {
-      "additionalProperties": false,
-      "description": "Declared register maps control bus0 facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq": {
-          "description": "Declared irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "modes": {
-          "description": "Declared modes.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "offsets": {
-          "description": "Declared offsets.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "base",
-        "irq",
-        "modes",
-        "offsets"
       ],
       "type": "object"
     },
@@ -6569,78 +6807,6 @@
       ],
       "type": "object"
     },
-    "HardwareRegisterBlock": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro register block with no work in flight.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "commands": {
-          "description": "Command writes that set a field of a status word.",
-          "items": {
-            "$ref": "#/$defs/HardwareRegisterBlockCommand"
-          },
-          "type": "array"
-        },
-        "fixed_words": {
-          "description": "Words that always read a fixed value.",
-          "items": {
-            "$ref": "#/$defs/HardwareRegisterFixedWord"
-          },
-          "type": "array"
-        },
-        "frames": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareRegisterBlockFrames"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Frames the block finishes while started."
-        },
-        "idle_bits": {
-          "description": "Status bits that always read set.",
-          "items": {
-            "$ref": "#/$defs/HardwareRegisterIdleBits"
-          },
-          "type": "array"
-        },
-        "job": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareRegisterBlockJob"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "One job per start, finished after the declared ticks."
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "idle_bits",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareRegisterBlockCommand": {
       "additionalProperties": false,
       "description": "Command law of a register block: writing exactly `value` to `word` sets\nthe `mask` field of the `status` word to `state`.",
@@ -6682,89 +6848,6 @@
         "status",
         "value",
         "word"
-      ],
-      "type": "object"
-    },
-    "HardwareRegisterBlockFrames": {
-      "additionalProperties": false,
-      "description": "Frame law of a register block: one interrupt edge per frame period while\nthe start bit is set; the stopped bit reads set only while it is clear.",
-      "properties": {
-        "irq_route": {
-          "description": "Interrupt line of the frame edge.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "period_ticks": {
-          "description": "Frame period in device ticks, the frame sync's.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "start": {
-          "$ref": "#/$defs/HardwareRegisterIdleBits",
-          "description": "Start bit."
-        },
-        "stopped": {
-          "$ref": "#/$defs/HardwareRegisterIdleBits",
-          "description": "Bit that reads set while stopped."
-        }
-      },
-      "required": [
-        "irq_route",
-        "period_ticks",
-        "start",
-        "stopped"
-      ],
-      "type": "object"
-    },
-    "HardwareRegisterBlockJob": {
-      "additionalProperties": false,
-      "description": "Job law of a register block: each start finishes one job after the\ndeclared ticks; the status bit is set and the level interrupt line is high\nuntil the status bit is written.",
-      "properties": {
-        "irq_route": {
-          "description": "Level interrupt line of the job status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "start": {
-          "$ref": "#/$defs/HardwareRegisterIdleBits",
-          "description": "Start bit."
-        },
-        "status": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareRegisterIdleBits"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Status bit the job sets; writing it clears it. Without one the job\nends with an interrupt edge."
-        },
-        "stop": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareRegisterIdleBits"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Bit that stops the block; it reads back clear once written."
-        },
-        "ticks": {
-          "description": "Device ticks a job takes.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "irq_route",
-        "start",
-        "ticks"
       ],
       "type": "object"
     },
@@ -6814,545 +6897,6 @@
       ],
       "type": "object"
     },
-    "HardwareRegisterLayouts": {
-      "additionalProperties": false,
-      "description": "Declared register maps facts.",
-      "properties": {
-        "adc": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareAdc"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared adc."
-        },
-        "byte_i2c": {
-          "additionalProperties": {
-            "$ref": "#/$defs/HardwareByteI2c"
-          },
-          "description": "Declared byte I2C controllers by bus index.",
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "control_bus0": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwarePrimaryBusRegisters"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared control bus0."
-        },
-        "control_bus1": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareSecondaryBusRegistersAddress"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared control bus1."
-        },
-        "control_requests": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareControlRequests"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared control requests."
-        },
-        "decompressor": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDecompressor"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared decompressor."
-        },
-        "display_frames": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDisplayFrames"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared display frame interrupts."
-        },
-        "display_outputs": {
-          "description": "Declared display output register windows.",
-          "items": {
-            "$ref": "#/$defs/HardwareDisplayOutput"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "dma": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDma"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared dma."
-        },
-        "dmp": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDmp"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared dmp."
-        },
-        "dram_alias": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDramAlias"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro read-only DRAM alias."
-        },
-        "dram_controller": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareDramController"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro DRAM controller."
-        },
-        "face_detection": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareFaceDetection"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro face detection engine."
-        },
-        "flash_controller": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareFlashController"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared flash controller."
-        },
-        "frame_sync": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareFrameSync"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro imaging frame sync."
-        },
-        "gic": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareGic"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared gic."
-        },
-        "gpio": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareGpio"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared gpio."
-        },
-        "h264_encoder": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareH264Encoder"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro movie H.264 encoder."
-        },
-        "hdmi_tx": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareHdmiTransmitter"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared HDMI transmitter without a sink."
-        },
-        "imaging": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareImagingRegisters"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared imaging."
-        },
-        "imaging_control": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareImagingControl"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro imaging control page."
-        },
-        "imaging_statistics": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareImagingStatistics"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro imaging statistics engine."
-        },
-        "interrupts": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareInterrupts"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared interrupts."
-        },
-        "interval_timer": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareIntervalTimer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared interval timer."
-        },
-        "io_groups": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareIoGroups"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared io groups."
-        },
-        "jpeg_decoder": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareJpegCodec"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro JPEG decoder."
-        },
-        "jpeg_encoder": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareJpegCodec"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro JPEG encoder."
-        },
-        "lcdc": {
-          "description": "Declared lcdc.",
-          "items": {
-            "$ref": "#/$defs/HardwareLcdc"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "loader_dma": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareLoaderDma"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared loader dma."
-        },
-        "movdc": {
-          "description": "Declared movdc.",
-          "items": {
-            "$ref": "#/$defs/HardwareMovdc"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "nand": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareLoaderDma"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared nand."
-        },
-        "pl330": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwarePl330"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared PL330 DMA controller."
-        },
-        "pll_clocks": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwarePllClocks"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro clock bank."
-        },
-        "power_control": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwarePowerControl"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro power control."
-        },
-        "register_blocks": {
-          "description": "Declared X-Processor Pro register blocks with no work in flight.",
-          "items": {
-            "$ref": "#/$defs/HardwareRegisterBlock"
-          },
-          "type": "array"
-        },
-        "reset_gates": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareResetGates"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro reset and gate controls."
-        },
-        "sd_host_clocks": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareSdHostClocks"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared sd host clocks."
-        },
-        "sd_hosts": {
-          "description": "Declared X-Processor 4 SD hosts.",
-          "items": {
-            "$ref": "#/$defs/HardwareSdHost"
-          },
-          "type": "array"
-        },
-        "serial_flash": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareSerialFlash"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared serial flash."
-        },
-        "serial_ports": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareSerialPorts"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared serial ports."
-        },
-        "spi": {
-          "additionalProperties": {
-            "$ref": "#/$defs/HardwareSpi"
-          },
-          "description": "Declared spi.",
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "temperature": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareAdc"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared temperature."
-        },
-        "usb": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareUsbRegisters"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared usb."
-        },
-        "usb_phy": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareUsbPhy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared XP4 USB PHY programming port."
-        },
-        "xpp_i2c": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareXppI2cBuses"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro DesignWare I2C buses."
-        },
-        "xpp_sd": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareXppSdHost"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro SD channel."
-        },
-        "xpp_usb": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareXppUsb"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared X-Processor Pro USB device controller."
-        }
-      },
-      "type": "object"
-    },
-    "HardwareResetGates": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro reset and gate controls; SD channel reset lines.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareRollingReference": {
       "additionalProperties": false,
       "description": "Declared rolling references facts.",
@@ -7387,118 +6931,6 @@
         "lines",
         "mode",
         "vertical"
-      ],
-      "type": "object"
-    },
-    "HardwareSdHost": {
-      "additionalProperties": false,
-      "description": "X-Processor 4 SD host: one standard SDHCI register bank at the window base.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "capabilities": {
-          "description": "Capabilities register (+0x40).",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "capabilities_2": {
-          "description": "Capabilities 2 register (+0x44).",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "clock_ticks": {
-          "description": "Ticks for the internal clock to report stable.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the SDHCI status, when it is known.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "slot_and_version": {
-          "description": "Slot status halfword (+0xfc) and host controller version (+0xfe).",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "transfer_ticks": {
-          "description": "Ticks of one command or data transfer.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "vendor_offsets": {
-          "description": "Offsets of vendor words beyond the standard bank that read back their\nlast write.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "capabilities",
-        "capabilities_2",
-        "clock_ticks",
-        "size",
-        "slot_and_version",
-        "transfer_ticks"
-      ],
-      "type": "object"
-    },
-    "HardwareSdHostClocks": {
-      "additionalProperties": false,
-      "description": "Declared sd host clocks facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "settle_ticks": {
-          "description": "Declared settle ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "words": {
-          "description": "Declared words.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "basis",
-        "settle_ticks",
-        "words"
       ],
       "type": "object"
     },
@@ -7691,29 +7123,6 @@
       ],
       "type": "object"
     },
-    "HardwareSecondaryBusRegistersAddress": {
-      "additionalProperties": false,
-      "description": "Declared register maps control bus1 facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq": {
-          "description": "Declared irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "irq"
-      ],
-      "type": "object"
-    },
     "HardwareSecondaryControlBus": {
       "additionalProperties": false,
       "description": "Declared control bus1 facts.",
@@ -7792,124 +7201,6 @@
       ],
       "type": "object"
     },
-    "HardwareSensorReadout": {
-      "additionalProperties": false,
-      "description": "Sensor read-out unit of the imaging control page: a started read-out\nfinishes after the declared ticks with its level interrupt, counted from\nthe start or, with `starts_on_frame`, from the next frame of the frame sync.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the read-out status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "offset": {
-          "description": "Channel offset inside the page.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "starts_on_frame": {
-          "description": "The read-out begins at the first frame of the frame sync after its\nstart, and its ticks count from that frame.",
-          "type": "boolean"
-        },
-        "ticks": {
-          "description": "Device ticks a read-out takes.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "basis",
-        "irq_route",
-        "offset",
-        "ticks"
-      ],
-      "type": "object"
-    },
-    "HardwareSerialFlash": {
-      "additionalProperties": false,
-      "description": "Declared serial flash facts.",
-      "properties": {
-        "aperture": {
-          "description": "Declared aperture.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "irq_route": {
-          "description": "Declared irq route.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "native_dependencies": {
-          "description": "Declared native dependencies.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "timing": {
-          "description": "Declared timing.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "aperture",
-        "base",
-        "basis",
-        "irq_route",
-        "native_dependencies",
-        "size",
-        "timing"
-      ],
-      "type": "object"
-    },
-    "HardwareSerialPorts": {
-      "additionalProperties": false,
-      "description": "Declared serial port facts.",
-      "properties": {
-        "bases": {
-          "description": "Register base of each port.",
-          "items": {
-            "format": "uint64",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "bases",
-        "basis"
-      ],
-      "type": "object"
-    },
     "HardwareShutter": {
       "additionalProperties": false,
       "description": "Declared shutter facts.",
@@ -7928,34 +7219,6 @@
       },
       "required": [
         "closing_delay_seconds"
-      ],
-      "type": "object"
-    },
-    "HardwareSpi": {
-      "additionalProperties": false,
-      "description": "Declared spi facts.",
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "parent_clock_ticks": {
-          "description": "Declared parent clock ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "parent_clock_ticks"
       ],
       "type": "object"
     },
@@ -8107,29 +7370,6 @@
         }
       ]
     },
-    "HardwareTimerRoute": {
-      "additionalProperties": false,
-      "description": "Declared routes facts.",
-      "properties": {
-        "channel": {
-          "description": "Declared channel.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq": {
-          "description": "Declared irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "channel",
-        "irq"
-      ],
-      "type": "object"
-    },
     "HardwareTouch": {
       "additionalProperties": false,
       "description": "Declared touch facts.",
@@ -8221,78 +7461,6 @@
       ],
       "type": "object"
     },
-    "HardwareUsbPhy": {
-      "additionalProperties": false,
-      "description": "XP4 USB PHY programming port, separate from the device controller.",
-      "properties": {
-        "base": {
-          "description": "Declared base of the indexed control, parallel and readback words.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareUsbRegisters": {
-      "additionalProperties": false,
-      "description": "Declared register maps usb facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "core": {
-          "description": "Declared core.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "dma_irq": {
-          "description": "Declared dma irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq": {
-          "description": "Declared irq.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "phy": {
-          "description": "Declared phy.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "core",
-        "dma_irq",
-        "irq",
-        "phy"
-      ],
-      "type": "object"
-    },
     "HardwareWindowAnalysis": {
       "additionalProperties": false,
       "description": "Declared window analysis facts.",
@@ -8316,189 +7484,6 @@
         "basis",
         "profile",
         "ticks_per_window"
-      ],
-      "type": "object"
-    },
-    "HardwareXppI2cBuses": {
-      "additionalProperties": false,
-      "properties": {
-        "base": {
-          "description": "Base of bus 0; bus n follows at `base + n * stride`.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "clock_hz": {
-          "description": "The `ic_clk` the SCL high and low counts divide.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "fifo_depth": {
-          "description": "TX and RX FIFO depth in entries.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq_routes": {
-          "description": "Interrupt line of each bus, in bus order.",
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "size": {
-          "description": "Declared size of one bus window.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "stride": {
-          "description": "Distance between bus windows.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "tick_hz": {
-          "description": "Device ticks per second.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "clock_hz",
-        "fifo_depth",
-        "irq_routes",
-        "size",
-        "stride",
-        "tick_hz"
-      ],
-      "type": "object"
-    },
-    "HardwareXppSdHost": {
-      "additionalProperties": false,
-      "properties": {
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "clock_ticks": {
-          "description": "Ticks for the internal clock to report stable.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the SDHCI status.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "register_offset": {
-          "description": "Offset of the SDHCI bank inside the window.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reset_channel": {
-          "description": "SD channel of the reset-gate line that resets this host.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reset_ticks": {
-          "description": "Ticks of the wrapper reset at +0.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "transfer_ticks": {
-          "description": "Ticks of one command or data transfer.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "clock_ticks",
-        "irq_route",
-        "register_offset",
-        "reset_channel",
-        "reset_ticks",
-        "size",
-        "transfer_ticks"
-      ],
-      "type": "object"
-    },
-    "HardwareXppUsb": {
-      "additionalProperties": false,
-      "description": "X-Processor Pro DesignWare USB3 device controller.",
-      "properties": {
-        "base": {
-          "description": "Declared base; the core registers start at +0xc100.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "command_ticks": {
-          "description": "Time an endpoint command takes, in device ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "irq_route": {
-          "description": "Interrupt line of the event buffer.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "transaction_ticks": {
-          "description": "Time a bus transaction takes, in device ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "basis",
-        "command_ticks",
-        "irq_route",
-        "size",
-        "transaction_ticks"
       ],
       "type": "object"
     },
@@ -8773,6 +7758,16 @@
       ],
       "type": "object"
     },
+    "PictureLayout": {
+      "description": "Picture-plane pixel packing declared by a display controller.",
+      "oneOf": [
+        {
+          "const": "abgr8888-straight",
+          "description": "Straight-alpha, blue, green and red bytes, in memory order.",
+          "type": "string"
+        }
+      ]
+    },
     "PowerControlAssembly": {
       "additionalProperties": false,
       "description": "A body-specific attachment for a power-control part.",
@@ -9027,6 +8022,16 @@
         "software"
       ],
       "type": "string"
+    },
+    "VideoLayout": {
+      "description": "Video-plane pixel packing declared by a display controller.",
+      "oneOf": [
+        {
+          "const": "yycbcr422",
+          "description": "Two luma samples followed by shared chroma samples.",
+          "type": "string"
+        }
+      ]
     },
     "WireSignal": {
       "description": "Named physical wire types.",

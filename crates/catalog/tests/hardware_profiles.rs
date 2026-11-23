@@ -120,7 +120,6 @@ fn bus_drain_must_be_aligned_and_name_processors() {
 fn xp4_display_channels_declare_the_same_plane_layouts() {
     let soc: Soc = serde_json::from_str(include_str!("../../../catalog/soc/xp4/soc.json")).unwrap();
     soc.validate(&soc.id).unwrap();
-    let hardware = soc.hardware.as_ref().expect("xp4 declares hardware");
     let block = |id: &str| match soc
         .blocks
         .iter()
@@ -130,6 +129,7 @@ fn xp4_display_channels_declare_the_same_plane_layouts() {
         Some(fujimod_catalog::soc::BlockDevice::Display {
             picture_layout,
             video_layout,
+            ..
         }) => (
             serde_json::to_value(picture_layout).unwrap(),
             serde_json::to_value(video_layout).unwrap(),
@@ -142,21 +142,4 @@ fn xp4_display_channels_declare_the_same_plane_layouts() {
         block("lcdc1"),
         "XP4 retimes either display channel with the same plane packings"
     );
-    let maps = hardware.profiles["xp4"]
-        .register_maps
-        .as_ref()
-        .expect("xp4 declares register maps");
-    let channels = maps.lcdc.as_ref().expect("xp4 declares display channels");
-    assert_eq!(channels.len(), 2, "XP4 has two display channels");
-    for channel in channels {
-        let layouts = (
-            serde_json::to_value(&channel.picture_layout).unwrap(),
-            serde_json::to_value(&channel.video_layout).unwrap(),
-        );
-        assert_eq!(
-            layouts, lcdc0,
-            "display channel 0x{:x} matches the declared block layouts",
-            channel.base
-        );
-    }
 }

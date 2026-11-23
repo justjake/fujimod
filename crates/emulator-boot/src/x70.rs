@@ -8,6 +8,7 @@ use fujimod_catalog::reference::{
     ConnectionSignal, ControlBusChip, LensProtocol, Part, PartModel, ResolvedSelection,
     SensorRadiometry, SocBlock, SocBlockKind,
 };
+use fujimod_catalog::soc::BlockDevice;
 use fujimod_catalog_configuration::{
     Exr2RunInputs, Exr2RunScene, RunBrowserCamera, RunConfiguration, RunPurpose, RunStart,
 };
@@ -1816,7 +1817,6 @@ fn apply_connected_usb(
     recipe: &mut Value,
     name: &str,
     selection: &ResolvedSelection,
-    soc: &fujimod_catalog::profiles::SocProfile,
     body: &fujimod_catalog::profiles::BodyProfile,
 ) -> Result<(), String> {
     /// The largest single endpoint DMA the controller model accepts.
@@ -1825,8 +1825,8 @@ fn apply_connected_usb(
     match name {
         "usb" => {
             let layout = controllers.and_then(|controllers| controllers.usb.as_ref());
-            let registers = soc.register_maps.as_ref().and_then(|maps| maps.usb.as_ref());
-            let (Some(layout), Some(registers)) = (layout, registers) else {
+            let registers = usb_interrupt_lines(&selection.soc);
+            let (Some(layout), Some((irq, dma_irq))) = (layout, registers) else {
                 return Ok(());
             };
             let pairs = |rows: &[Vec<u64>]| -> Result<Vec<(u8, u32)>, String> {
@@ -1848,8 +1848,8 @@ fn apply_connected_usb(
                 "in_endpoints": pairs(&layout.in_endpoints)?,
             });
             recipe["endpoints"] = json!({
-                "irq": {"Core": {"core": 0, "line": registers.irq}},
-                "dma_irq": {"Core": {"core": 0, "line": registers.dma_irq}},
+                "irq": {"Core": {"core": 0, "line": irq}},
+                "dma_irq": {"Core": {"core": 0, "line": dma_irq}},
                 "ram_bytes": selection
                     .body
                     .dram_bytes
@@ -1893,6 +1893,22 @@ fn apply_connected_usb(
         _ => {}
     }
     Ok(())
+}
+
+/// The SoC's USB core interrupt lines: the endpoint engine's `device` output
+/// and the DMA controller's `host` output.
+fn usb_interrupt_lines(soc: &fujimod_catalog::reference::Soc) -> Option<(u32, u32)> {
+    let block = soc.blocks.iter().find(|block| {
+        matches!(block.device, Some(BlockDevice::Usb { .. }))
+    })?;
+    let line = |output: &str| {
+        block
+            .interrupts
+            .iter()
+            .find(|item| item.output == output)
+            .map(|item| item.line)
+    };
+    Some((line("device")?, line("host")?))
 }
 
 fn apply_run_inputs(
@@ -2241,9 +2257,9 @@ pub(super) fn assemble(
             browser.is_some(),
         )?;
         if inputs.usb.connected
-            && let Some((soc, body)) = hardware_profiles(selection, configuration)
+            && let Some((_, body)) = hardware_profiles(selection, configuration)
         {
-            apply_connected_usb(&mut recipe, rule.name, selection, soc, body)?;
+            apply_connected_usb(&mut recipe, rule.name, selection, body)?;
         }
         if rule.name == "statistics"
             && let Some(ticks) = configuration

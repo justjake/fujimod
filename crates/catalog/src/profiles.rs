@@ -966,9 +966,9 @@ pub struct Touch {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct BodyProfile {
-    /// Body-declared register behavior overriding the selected processor defaults.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub register_maps: Option<RegisterLayouts>,
+    /// Body-specific device replacements on processor blocks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub block_overrides: Vec<BlockOverride>,
     /// Firmware descriptor order of body devices; `sensor` refers to the installed sensor endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control_bus_order: Option<Vec<String>>,
@@ -1028,6 +1028,17 @@ pub struct BodyProfile {
     /// Declared touch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub touch: Option<Touch>,
+}
+
+/// A body-specific replacement for one processor block's device.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct BlockOverride {
+    /// Processor block whose device this body replaces.
+    pub block_id: String,
+    /// Replacement device model and parameters.
+    pub device: crate::soc::BlockDevice,
 }
 
 /// Declared boot rom facts.
@@ -1199,7 +1210,7 @@ pub struct DisplayFrames {
 }
 
 /// Register-backed display timing, with phase lines taken from the frame routes.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayTimingBanks"))]
@@ -1211,7 +1222,7 @@ pub struct DisplayTimingBanks {
 }
 
 /// Status bits of one display output register.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayStatusBits"))]
@@ -1247,7 +1258,7 @@ pub struct DisplayOutput {
 }
 
 /// Host output index and capture period of a display output's OSD layers.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayScanout"))]
@@ -1490,7 +1501,7 @@ pub struct ResetGates {
 }
 
 /// Status bits of a register block that always read set.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterIdleBits"))]
@@ -1530,7 +1541,7 @@ pub struct RegisterBlock {
 }
 
 /// A register-block word that always reads one value.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterFixedWord"))]
@@ -1543,7 +1554,7 @@ pub struct RegisterFixedWord {
 
 /// Command law of a register block: writing exactly `value` to `word` sets
 /// the `mask` field of the `status` word to `state`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlockCommand"))]
@@ -2056,7 +2067,7 @@ pub struct UsbRegisters {
 }
 
 /// Declared register maps facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterLayouts"))]
@@ -2411,9 +2422,6 @@ pub struct SocProfile {
     /// Declared private mmio.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_mmio: Option<Vec<CoreWindow>>,
-    /// Declared register maps.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub register_maps: Option<RegisterLayouts>,
     /// Declared reset release.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_release: Option<ResetRelease>,

@@ -225,6 +225,7 @@ impl Soc {
                     crate::soc::BlockDevice::Dma {
                         channels,
                         request_mux_block_id,
+                        ..
                     } => {
                         if !blocks.contains(request_mux_block_id.as_str()) {
                             return Err(format!(
@@ -239,7 +240,7 @@ impl Soc {
                             ));
                         }
                     }
-                    crate::soc::BlockDevice::SerialFlash { aperture_block_id } => {
+                    crate::soc::BlockDevice::SerialFlash { aperture_block_id, .. } => {
                         if !blocks.contains(aperture_block_id.as_str()) {
                             return Err(format!(
                                 "SoC {} serial flash block {} refers to missing aperture {}",
@@ -250,6 +251,7 @@ impl Soc {
                     crate::soc::BlockDevice::ImagingInputBuffer {
                         sram_region_id,
                         bank_bytes,
+                        ..
                     } => {
                         if !self
                             .memory_regions
@@ -265,7 +267,44 @@ impl Soc {
                     }
                     crate::soc::BlockDevice::Display { .. }
                     | crate::soc::BlockDevice::SerialDma { .. }
-                    | crate::soc::BlockDevice::CompanionDma { .. } => {}
+                    | crate::soc::BlockDevice::CompanionDma { .. }
+                    | crate::soc::BlockDevice::SensorCommand { .. }
+                    | crate::soc::BlockDevice::ImagingReceiver { .. }
+                    | crate::soc::BlockDevice::ControlBus { .. }
+                    | crate::soc::BlockDevice::SecondaryBus { .. }
+                    | crate::soc::BlockDevice::Nand { .. }
+                    | crate::soc::BlockDevice::LoaderDma { .. }
+                    | crate::soc::BlockDevice::Decompressor { .. }
+                    | crate::soc::BlockDevice::Usb { .. }
+                    | crate::soc::BlockDevice::UsbPhy { .. }
+                    | crate::soc::BlockDevice::SdHostClock { .. }
+                    | crate::soc::BlockDevice::Gpio { .. }
+                    | crate::soc::BlockDevice::Adc { .. }
+                    | crate::soc::BlockDevice::Dmp { .. }
+                    | crate::soc::BlockDevice::Movdc { .. }
+                    | crate::soc::BlockDevice::ControlRequest { .. }
+                    | crate::soc::BlockDevice::IoGroups { .. }
+                    | crate::soc::BlockDevice::Spi { .. }
+                    | crate::soc::BlockDevice::IntervalTimer { .. }
+                    | crate::soc::BlockDevice::RegisterBlock { .. }
+                    | crate::soc::BlockDevice::Pl330 { .. }
+                    | crate::soc::BlockDevice::SerialPort { .. }
+                    | crate::soc::BlockDevice::JpegCodec { .. }
+                    | crate::soc::BlockDevice::FaceDetection { .. }
+                    | crate::soc::BlockDevice::SdHost { .. }
+                    | crate::soc::BlockDevice::XppUsb { .. }
+                    | crate::soc::BlockDevice::DisplayOutput { .. }
+                    | crate::soc::BlockDevice::PllClocks { .. }
+                    | crate::soc::BlockDevice::ImagingControl { .. }
+                    | crate::soc::BlockDevice::ImagingStatistics { .. }
+                    | crate::soc::BlockDevice::HdmiTx { .. }
+                    | crate::soc::BlockDevice::FrameSync { .. }
+                    | crate::soc::BlockDevice::ResetGates { .. }
+                    | crate::soc::BlockDevice::DramController { .. }
+                    | crate::soc::BlockDevice::PowerControl { .. }
+                    | crate::soc::BlockDevice::I2c { .. }
+                    | crate::soc::BlockDevice::XppSd { .. }
+                    | crate::soc::BlockDevice::H264Encoder { .. } => {}
                 }
             }
         }

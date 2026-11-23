@@ -37,45 +37,39 @@
     "profiles": {
       "gfx50r-discovery": {
         "dram_basis": "Declared discovery input: synthetic 1 GiB physical backing; RAM population is not measured. The shared XPP uncached alias is selected separately.",
-        "register_maps": {
-          "display_frames": {
-            "irq_routes": [
-              112,
-              113,
-              114,
-              117,
-              118,
-              119
-            ],
-            "period_ticks": 16666,
-            "timing": {
-              "bases": [
-                4294287360,
-                4294332416
-              ],
-              "stop_ticks": 16
-            },
-            "basis": "GFX 50R 3.11 timing banks at 0xfff5a000 and 0xfff65000; GIC routes from interrupt table 0xfb93ac rows 0x4c-0x4e and 0x49-0x4b. Frame period 16666 and stop delay 16 are declared guest ticks, not measured camera timing."
-          },
-          "display_outputs": [
-            {
-              "base": 4294283264,
-              "size": 4096,
+        "block_overrides": [
+          {
+            "block_id": "display-output-1",
+            "device": {
+              "model": "display_output",
               "set_bits": [],
               "clear_bits": [],
               "handshake_ticks": 16666,
-              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured."
-            },
-            {
-              "base": 4294328320,
-              "size": 4096,
-              "set_bits": [],
-              "clear_bits": [],
-              "handshake_ticks": 16666,
-              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured."
+              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured.",
+              "order": 0
             }
-          ]
-        }
+          },
+          {
+            "block_id": "display",
+            "device": {
+              "model": "display",
+              "frame_basis": "GFX 50R 3.11 timing banks at 0xfff5a000 and 0xfff65000; GIC routes from interrupt table 0xfb93ac rows 0x4c-0x4e and 0x49-0x4b. Frame period 16666 and stop delay 16 are declared guest ticks, not measured camera timing.",
+              "period_ticks": 16666,
+              "timing": {
+                "bases": [
+                  4294287360,
+                  4294332416
+                ],
+                "stop_ticks": 16
+              },
+              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured.",
+              "set_bits": [],
+              "clear_bits": [],
+              "handshake_ticks": 16666,
+              "order": 1
+            }
+          }
+        ]
       }
     }
   }

@@ -366,21 +366,30 @@
       "base": 4294254592,
       "size": 2304,
       "kind": "nand-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "nand"
+      }
     },
     {
       "id": "decompressor",
       "base": 4294193152,
       "size": 256,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "decompressor"
+      }
     },
     {
       "id": "memory-dma",
       "base": 4293926912,
       "size": 64,
       "kind": "dma",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "loader_dma"
+      }
     },
     {
       "id": "memory-dma-1",
@@ -413,14 +422,20 @@
           "line": 85,
           "core": "core0"
         }
-      ]
+      ],
+      "device": {
+        "model": "usb"
+      }
     },
     {
       "id": "usb-phy",
       "base": 4294266880,
       "size": 4096,
       "kind": "usb-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "usb_phy"
+      }
     },
     {
       "id": "power-peripherals",
@@ -564,7 +579,21 @@
           "line": 101,
           "core": "core0"
         }
-      ]
+      ],
+      "device": {
+        "model": "control_bus",
+        "offsets": [
+          0,
+          4,
+          8,
+          16,
+          24
+        ],
+        "modes": [
+          1,
+          9
+        ]
+      }
     },
     {
       "id": "control-bus1",
@@ -578,7 +607,10 @@
           "line": 102,
           "core": "core0"
         }
-      ]
+      ],
+      "device": {
+        "model": "secondary_bus"
+      }
     },
     {
       "id": "companion-fe80",
@@ -1993,50 +2025,6 @@
       "exr2-service-transports": {
         "cpu_model": "Cortex-R5F proxy for R4",
         "runtime_abi": "exr2-r5f-fixed-map-v1",
-        "register_maps": {
-          "control_bus0": {
-            "base": 4294463488,
-            "offsets": [
-              0,
-              4,
-              8,
-              16,
-              24
-            ],
-            "irq": 101,
-            "modes": [
-              1,
-              9
-            ]
-          },
-          "control_bus1": {
-            "base": 4294463552,
-            "irq": 102
-          },
-          "interrupts": {
-            "bases": [
-              4294651904,
-              4294656000
-            ],
-            "timer_base": 4294512640
-          },
-          "nand": {
-            "base": 4294254592
-          },
-          "loader_dma": {
-            "base": 4293926912
-          },
-          "decompressor": {
-            "base": 4294193152
-          },
-          "usb": {
-            "core": 4294262784,
-            "phy": 4294266880,
-            "basis": "Declared catalog input.",
-            "irq": 84,
-            "dma_irq": 85
-          }
-        },
         "limits": [],
         "tcm": {
           "atcm": {
@@ -2150,49 +2138,6 @@
       "exr2": {
         "cpu_model": "Cortex-R5F proxy for R4",
         "runtime_abi": "exr2-r5f-fixed-map-v1",
-        "register_maps": {
-          "control_bus0": {
-            "base": 4294463488,
-            "offsets": [
-              0,
-              4,
-              8,
-              16,
-              24
-            ],
-            "irq": 101,
-            "modes": [
-              1,
-              9
-            ]
-          },
-          "control_bus1": {
-            "base": 4294463552,
-            "irq": 102
-          },
-          "interrupts": {
-            "bases": [
-              4294651904,
-              4294656000
-            ],
-            "timer_base": 4294512640
-          },
-          "nand": {
-            "base": 4294254592
-          },
-          "loader_dma": {
-            "base": 4293926912
-          },
-          "decompressor": {
-            "base": 4294193152
-          },
-          "usb": {
-            "core": 4294262784,
-            "phy": 4294266880,
-            "irq": 84,
-            "dma_irq": 85
-          }
-        },
         "limits": [],
         "tcm": {
           "atcm": {

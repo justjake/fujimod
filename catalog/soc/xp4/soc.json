@@ -76,21 +76,35 @@
       "base": 4294184960,
       "size": 1024,
       "kind": "gpio",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "gpio",
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "adc",
       "base": 4294180864,
       "size": 72,
       "kind": "adc",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "adc",
+        "sample_ticks": 16,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "temperature",
       "base": 4294211600,
       "size": 68,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "adc",
+        "sample_ticks": 5000,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "dmp",
@@ -103,35 +117,59 @@
           "output": "interrupt",
           "line": 92
         }
-      ]
+      ],
+      "device": {
+        "model": "dmp",
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "sd-host-clock-0",
       "base": 4294721580,
       "size": 2,
       "kind": "clock-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "sd_host_clock",
+        "settle_ticks": 8,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "sd-host-clock-1",
       "base": 4294730284,
       "size": 2,
       "kind": "clock-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "sd_host_clock",
+        "settle_ticks": 8,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "sd-host-clock-2",
       "base": 4294737964,
       "size": 2,
       "kind": "clock-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "sd_host_clock",
+        "settle_ticks": 8,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "sd-host-clock-3",
       "base": 4294746668,
       "size": 2,
       "kind": "clock-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "sd_host_clock",
+        "settle_ticks": 8,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "movdc0",
@@ -144,7 +182,11 @@
           "output": "interrupt",
           "line": 107
         }
-      ]
+      ],
+      "device": {
+        "model": "movdc",
+        "reset_ticks": 8
+      }
     },
     {
       "id": "movdc1",
@@ -157,7 +199,11 @@
           "output": "interrupt",
           "line": 108
         }
-      ]
+      ],
+      "device": {
+        "model": "movdc",
+        "reset_ticks": 8
+      }
     },
     {
       "id": "lcdc0",
@@ -178,7 +224,9 @@
       "device": {
         "model": "display",
         "picture_layout": "abgr8888-straight",
-        "video_layout": "yycbcr422"
+        "video_layout": "yycbcr422",
+        "pixel_clock_ticks": 2,
+        "basis": "Declared catalog input."
       }
     },
     {
@@ -200,7 +248,9 @@
       "device": {
         "model": "display",
         "picture_layout": "abgr8888-straight",
-        "video_layout": "yycbcr422"
+        "video_layout": "yycbcr422",
+        "pixel_clock_ticks": 2,
+        "basis": "Declared catalog input."
       }
     },
     {
@@ -218,7 +268,13 @@
           "output": "timing1",
           "line": 100
         }
-      ]
+      ],
+      "device": {
+        "model": "sensor_command",
+        "command_ticks": 5400,
+        "reset_ticks": 8,
+        "basis": "Declared catalog input. RAW read-out DMA lines: the X-T3 5.11 sensor driver registers RAW DMA channels 2 and 3 on GIC 97 and 98; their handlers acknowledge +0x64 and +0xe4."
+      }
     },
     {
       "id": "imaging-receiver",
@@ -242,8 +298,20 @@
         {
           "output": "error1",
           "line": 297
+        },
+        {
+          "output": "raw-dma-0",
+          "line": 97
+        },
+        {
+          "output": "raw-dma-1",
+          "line": 98
         }
-      ]
+      ],
+      "device": {
+        "model": "imaging_receiver",
+        "basis": "Declared catalog input. RAW read-out DMA lines: the X-T3 5.11 sensor driver registers RAW DMA channels 2 and 3 on GIC 97 and 98; their handlers acknowledge +0x64 and +0xe4."
+      }
     },
     {
       "id": "input-buffer",
@@ -260,7 +328,9 @@
       "device": {
         "model": "imaging_input_buffer",
         "sram_region_id": "input-buffer-sram",
-        "bank_bytes": 28672
+        "bank_bytes": 28672,
+        "reset_ticks": 8,
+        "basis": "Declared catalog input."
       }
     },
     {
@@ -268,98 +338,167 @@
       "base": 4285534336,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-1",
       "base": 4285534848,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-2",
       "base": 4285535360,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-3",
       "base": 4285535872,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-4",
       "base": 4285536384,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-5",
       "base": 4285536896,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-6",
       "base": 4285537408,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-7",
       "base": 4285538432,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-8",
-      "base": 4285542528,
+      "base": 4285538944,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-9",
-      "base": 4285546624,
+      "base": 4285539456,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-10",
-      "base": 4285550720,
+      "base": 4285539968,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-11",
-      "base": 4285554816,
+      "base": 4285540480,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "control-request-12",
-      "base": 4285567104,
+      "base": 4285540992,
       "size": 4,
       "kind": "reset-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
     },
     {
       "id": "io-groups",
       "base": 4294189056,
       "size": 160,
       "kind": "gpio",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "io_groups",
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "decompressor",
@@ -372,28 +511,47 @@
           "output": "interrupt",
           "line": 128
         }
-      ]
+      ],
+      "device": {
+        "model": "decompressor",
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "spi1",
       "base": 4294127616,
       "size": 40,
       "kind": "serial-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "spi",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "spi4",
       "base": 4294139904,
       "size": 40,
       "kind": "serial-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "spi",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "spi5",
       "base": 4294144000,
       "size": 40,
       "kind": "serial-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "spi",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "serial-flash",
@@ -409,7 +567,12 @@
       ],
       "device": {
         "model": "serial_flash",
-        "aperture_block_id": "flash-aperture"
+        "aperture_block_id": "flash-aperture",
+        "timing": "8 guest ticks per command acceptance; functional latency, not measured silicon timing.",
+        "native_dependencies": [
+          "dma"
+        ],
+        "basis": "Declared catalog input."
       }
     },
     {
@@ -494,7 +657,12 @@
       "device": {
         "model": "dma",
         "channels": 16,
-        "request_mux_block_id": "dma-request-mux"
+        "request_mux_block_id": "dma-request-mux",
+        "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing, not measured bus bandwidth.",
+        "native_dependencies": [
+          "serial_flash"
+        ],
+        "basis": "Declared catalog input."
       }
     },
     {
@@ -543,7 +711,13 @@
           "output": "channel7",
           "line": 64
         }
-      ]
+      ],
+      "device": {
+        "model": "interval_timer",
+        "layout": "xp4",
+        "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "jpeg-encoder",
@@ -556,7 +730,948 @@
           "output": "interrupt",
           "line": 135
         }
+      ],
+      "device": {
+        "model": "jpeg_codec",
+        "run_ticks": 108000,
+        "basis": "JPEG encoder of X-T3 5.11, the X-T20 2.11 encoder's register layout. The driver has one accessor per word: +0x44 size, +0x12c origin, +0x130 pitch, +0x100/+0x10c/+0x110 source, destination and limit, +0x84 table loading and +0x8c table words, +0x28 interrupt mask. The driver's start registers its handler on interrupt line 135 (level) before setting +0x00 bit 0. The handler reads the status +0x24, writes it back and takes bit 4 as a finished run, then reads the stream size +0x94. run_ticks (2 ms at 54 MHz) is not measured."
+      }
+    },
+    {
+      "id": "control-request-13",
+      "base": 4285541504,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-14",
+      "base": 4285542016,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-15",
+      "base": 4285542528,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-16",
+      "base": 4285546624,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-17",
+      "base": 4285550720,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-18",
+      "base": 4285554816,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-19",
+      "base": 4285558912,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-20",
+      "base": 4285563008,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-21",
+      "base": 4285567104,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-22",
+      "base": 4285571200,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-23",
+      "base": 4285575296,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-24",
+      "base": 4285579392,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-25",
+      "base": 4285591680,
+      "size": 4,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "control-request-26",
+      "base": 4294631424,
+      "size": 132,
+      "kind": "reset-controller",
+      "clock_id": null,
+      "device": {
+        "model": "control_request",
+        "ack_ticks": 8,
+        "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+      }
+    },
+    {
+      "id": "spi3",
+      "base": 4294135808,
+      "size": 40,
+      "kind": "serial-controller",
+      "clock_id": null,
+      "device": {
+        "model": "spi",
+        "parent_clock_ticks": 1,
+        "basis": "Declared catalog input."
+      }
+    },
+    {
+      "id": "usb",
+      "base": 4289724416,
+      "size": 65536,
+      "kind": "usb-controller",
+      "clock_id": null,
+      "device": {
+        "model": "xpp_usb",
+        "command_ticks": 48,
+        "transaction_ticks": 6000,
+        "basis": "DesignWare USB3 device controller register block; the core registers start at +0xc100. The interrupt line and the command and transaction latencies are declared values for this body. The latencies are not measured."
+      },
+      "interrupts": [
+        {
+          "output": "event",
+          "line": 246
+        }
       ]
+    },
+    {
+      "id": "usb-phy",
+      "base": 4289869824,
+      "size": 4096,
+      "kind": "usb-controller",
+      "clock_id": null,
+      "device": {
+        "model": "usb_phy",
+        "basis": "Indexed USB PHY programming port: a control word at +0x000 (register index in bits 12:8, data in bits 7:0, write strobe at bit 16), a parallel-interface word at +0x004 and the selected register's readback at +0x400. No analog or link-ready behavior is modeled."
+      }
+    },
+    {
+      "id": "sd-host-0",
+      "base": 4294721536,
+      "size": 4096,
+      "kind": "sd-card-controller",
+      "clock_id": null,
+      "device": {
+        "model": "sd_host",
+        "capabilities": 635973808,
+        "capabilities_2": 8311,
+        "clock_ticks": 8,
+        "slot_and_version": 16908288,
+        "transfer_ticks": 4800,
+        "vendor_offsets": [
+          256,
+          264,
+          268,
+          272,
+          276,
+          292,
+          304,
+          336,
+          340,
+          480,
+          484
+        ],
+        "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured."
+      },
+      "interrupts": [
+        {
+          "output": "status",
+          "line": 230
+        }
+      ]
+    },
+    {
+      "id": "sd-host-1",
+      "base": 4294737920,
+      "size": 4096,
+      "kind": "sd-card-controller",
+      "clock_id": null,
+      "device": {
+        "model": "sd_host",
+        "capabilities": 635973808,
+        "capabilities_2": 8311,
+        "clock_ticks": 8,
+        "slot_and_version": 16908288,
+        "transfer_ticks": 4800,
+        "vendor_offsets": [
+          256,
+          264,
+          268,
+          272,
+          276,
+          292,
+          304,
+          336,
+          340,
+          480,
+          484
+        ],
+        "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured."
+      },
+      "interrupts": [
+        {
+          "output": "status",
+          "line": 237
+        }
+      ]
+    },
+    {
+      "id": "jpeg-decoder",
+      "base": 4294578176,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null,
+      "device": {
+        "model": "jpeg_codec",
+        "run_ticks": 54000,
+        "basis": "JPEG decoder of X-T3 5.11, the X-T20 2.11 decoder's register layout, beside the encoder page. Playback initialises it by writing 1 to +0x118 and waits for status +0x04 bit 16. A run programs the stream +0x10c and its size +0x110, the packed 4:2:2 output +0x100 and its limit +0x104, and starts with +0x00 bit 0. The playback client registers its handler on interrupt line 136 (level), from the interrupt source table of the firmware; the handler reads the status +0x04, takes bit 4 as a finished run (it then reads +0x14 and the output end +0x108) and bit 17 as a failure. In emulation with the X-T20 decoder model, one playback decodes a card JPEG's thumbnail, preview and picture. The stream refill (+0x118 = 4) is not seen. run_ticks (1 ms at 54 MHz) is not measured."
+      },
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 136
+        }
+      ]
+    },
+    {
+      "id": "face-detection",
+      "base": 4294426624,
+      "size": 4096,
+      "kind": "imaging-controller",
+      "clock_id": null,
+      "device": {
+        "model": "face_detection",
+        "run_ticks": 108000,
+        "basis": "Face detection engine of X-T3 5.11. The driver has one accessor per word or word group: +0x00 stop (bit 0 written clear, then the word is polled until nonzero), +0x04 start, +0x08 mode (bits 2..0 below 5, flags 4, 8, 12, 16), configuration words +0x0c..+0x5fc, +0x6e0/+0x6e4 and +0x710..+0x71c (read back by the driver), results +0x600..+0x608, channel flags +0x700 bits 0, 4, 8, 16, 20, 24 with fields +0x704 cleared by writing +0x708, finished bit 0 at +0x730 and +0x734 (cleared by writing 1), and channel arming +0x738 bit 0. The driver's open programs the configuration and registers its handler on interrupt line 123. Each live view frame's run writes the mode, arms the channels, polls +0x700 until all six flags are set, clears them and sets +0x04 bit 0; the handler reads +0x730, writes it back to +0x734 and posts the finished run to the face task. No image is read and no face is detected: the result words read zero. Arming completes at once; run_ticks (2 ms at 54 MHz) is not measured. Runs in other modes (mode 4) are refused."
+      },
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 123
+        }
+      ]
+    },
+    {
+      "id": "block-fff83000",
+      "base": 4294455296,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "Parameter page of the X-T3 5.11 still RECC engine (control page 0xfff82000). The driver's setters write words +0x000..+0x6b0 and read only +0x000 and +0x6b0 back for read-modify-write; nothing polls it. Words read back their last write; what they parameterize is not modeled.",
+        "order": 0
+      }
+    },
+    {
+      "id": "block-fff84000",
+      "base": 4294459392,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "Second parameter page of the X-T3 5.11 still RECC engine: the driver's table setters of 0xfff83000 write rows of 0x20 bytes in loops that continue past 0xfff84000, and the still capture writes +0x000 during the RECC init. Words read back their last write; what they parameterize is not modeled.",
+        "order": 1
+      }
+    },
+    {
+      "id": "block-fff85000",
+      "base": 4294463488,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "Parameter page of the X-T3 5.11 still RECC engine (control page 0xfff82000). The driver's setters write words +0x000..+0x0e4 and read only +0x000 back for read-modify-write; nothing polls it. Words read back their last write; what they parameterize is not modeled.",
+        "order": 2
+      }
+    },
+    {
+      "id": "block-fff48000",
+      "base": 4294213632,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 reads/writes 0xfff48000..0xfff48700. Reads return the last write; no arbitration is modeled.",
+        "order": 3
+      }
+    },
+    {
+      "id": "block-fff3e000",
+      "base": 4294172672,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 reads/writes 0xfff3e000..0xfff3e018. Reads return the last write; no arbitration is modeled.",
+        "order": 4
+      }
+    },
+    {
+      "id": "block-ff507000",
+      "base": 4283461632,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 0 command words at 0xff507000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled.",
+        "order": 5,
+        "fixed_words": [
+          {
+            "offset": 3096,
+            "value": 1
+          }
+        ],
+        "commands": [
+          {
+            "word": 864,
+            "value": 4278239245,
+            "status": 868,
+            "mask": 1,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 256,
+            "status": 144,
+            "mask": 255,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 512,
+            "status": 144,
+            "mask": 1,
+            "state": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff604000",
+      "base": 4284497920,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 1648,
+            "mask": 196611
+          },
+          {
+            "offset": 1652,
+            "mask": 196611
+          },
+          {
+            "offset": 1656,
+            "mask": 196611
+          },
+          {
+            "offset": 220,
+            "mask": 768
+          },
+          {
+            "offset": 732,
+            "mask": 768
+          }
+        ],
+        "basis": "X-T3 5.11 DRAM controller channel 0 lock words at 0xff604000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write.",
+        "order": 6
+      }
+    },
+    {
+      "id": "block-ff602000",
+      "base": 4284489728,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 0 request word at 0xff602000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write.",
+        "order": 7,
+        "commands": [
+          {
+            "word": 0,
+            "value": 2817,
+            "status": 272,
+            "mask": 1,
+            "state": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff517000",
+      "base": 4283527168,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 1 command words at 0xff517000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled.",
+        "order": 8,
+        "fixed_words": [
+          {
+            "offset": 3096,
+            "value": 1
+          }
+        ],
+        "commands": [
+          {
+            "word": 864,
+            "value": 4278239245,
+            "status": 868,
+            "mask": 1,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 256,
+            "status": 144,
+            "mask": 255,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 512,
+            "status": 144,
+            "mask": 1,
+            "state": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff614000",
+      "base": 4284563456,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 1648,
+            "mask": 196611
+          },
+          {
+            "offset": 1652,
+            "mask": 196611
+          },
+          {
+            "offset": 1656,
+            "mask": 196611
+          },
+          {
+            "offset": 220,
+            "mask": 768
+          },
+          {
+            "offset": 732,
+            "mask": 768
+          }
+        ],
+        "basis": "X-T3 5.11 DRAM controller channel 1 lock words at 0xff614000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write.",
+        "order": 9
+      }
+    },
+    {
+      "id": "block-ff612000",
+      "base": 4284555264,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 1 request word at 0xff612000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write.",
+        "order": 10,
+        "commands": [
+          {
+            "word": 0,
+            "value": 2817,
+            "status": 272,
+            "mask": 1,
+            "state": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff527000",
+      "base": 4283592704,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 2 command words at 0xff527000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled.",
+        "order": 11,
+        "fixed_words": [
+          {
+            "offset": 3096,
+            "value": 1
+          }
+        ],
+        "commands": [
+          {
+            "word": 864,
+            "value": 4278239245,
+            "status": 868,
+            "mask": 1,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 256,
+            "status": 144,
+            "mask": 255,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 512,
+            "status": 144,
+            "mask": 1,
+            "state": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff624000",
+      "base": 4284628992,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 1648,
+            "mask": 196611
+          },
+          {
+            "offset": 1652,
+            "mask": 196611
+          },
+          {
+            "offset": 1656,
+            "mask": 196611
+          },
+          {
+            "offset": 220,
+            "mask": 768
+          },
+          {
+            "offset": 732,
+            "mask": 768
+          }
+        ],
+        "basis": "X-T3 5.11 DRAM controller channel 2 lock words at 0xff624000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write.",
+        "order": 12
+      }
+    },
+    {
+      "id": "block-ff622000",
+      "base": 4284620800,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 2 request word at 0xff622000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write.",
+        "order": 13,
+        "commands": [
+          {
+            "word": 0,
+            "value": 2817,
+            "status": 272,
+            "mask": 1,
+            "state": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff537000",
+      "base": 4283658240,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 3 command words at 0xff537000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled.",
+        "order": 14,
+        "fixed_words": [
+          {
+            "offset": 3096,
+            "value": 1
+          }
+        ],
+        "commands": [
+          {
+            "word": 864,
+            "value": 4278239245,
+            "status": 868,
+            "mask": 1,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 256,
+            "status": 144,
+            "mask": 255,
+            "state": 1
+          },
+          {
+            "word": 128,
+            "value": 512,
+            "status": 144,
+            "mask": 1,
+            "state": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff634000",
+      "base": 4284694528,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 1648,
+            "mask": 196611
+          },
+          {
+            "offset": 1652,
+            "mask": 196611
+          },
+          {
+            "offset": 1656,
+            "mask": 196611
+          },
+          {
+            "offset": 220,
+            "mask": 768
+          },
+          {
+            "offset": 732,
+            "mask": 768
+          }
+        ],
+        "basis": "X-T3 5.11 DRAM controller channel 3 lock words at 0xff634000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write.",
+        "order": 15
+      }
+    },
+    {
+      "id": "block-ff632000",
+      "base": 4284686336,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 3 request word at 0xff632000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write.",
+        "order": 16,
+        "commands": [
+          {
+            "word": 0,
+            "value": 2817,
+            "status": 272,
+            "mask": 1,
+            "state": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-fff4f000",
+      "base": 4294242304,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 writes 1 to +0x01c and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled.",
+        "order": 17,
+        "fixed_words": [
+          {
+            "offset": 28,
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff505000",
+      "base": 4283453440,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 0 apply word at 0xff505384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write.",
+        "order": 18,
+        "fixed_words": [
+          {
+            "offset": 900,
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff515000",
+      "base": 4283518976,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 1 apply word at 0xff515384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write.",
+        "order": 19,
+        "fixed_words": [
+          {
+            "offset": 900,
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff525000",
+      "base": 4283584512,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 2 apply word at 0xff525384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write.",
+        "order": 20,
+        "fixed_words": [
+          {
+            "offset": 900,
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-ff535000",
+      "base": 4283650048,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [],
+        "basis": "X-T3 5.11 DRAM controller channel 3 apply word at 0xff535384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write.",
+        "order": 21,
+        "fixed_words": [
+          {
+            "offset": 900,
+            "value": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "block-fff50000",
+      "base": 4294246400,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 0,
+            "mask": 1
+          }
+        ],
+        "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. A camera in REC reads 1 there. Other words read back their last write; nothing else in this block is modeled.",
+        "order": 22
+      }
+    },
+    {
+      "id": "block-fff74000",
+      "base": 4294393856,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 0,
+            "mask": 1
+          }
+        ],
+        "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. Other words read back their last write; nothing else in this block is modeled.",
+        "order": 23
+      }
+    },
+    {
+      "id": "block-fffab000",
+      "base": 4294619136,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null,
+      "device": {
+        "model": "register_block",
+        "idle_bits": [
+          {
+            "offset": 0,
+            "mask": 1
+          }
+        ],
+        "basis": "X-T3 5.11 viewfinder output setup, run when VIEW MODE selects the viewfinder: it read-modify-writes +0x004, writes table words to +0x008..+0x014, then writes 0 to +0x000 and waits for bit 0 to read 1; its release sets +0x004 bits 0x1f0fff again. Other words read back their last write; what the words select is not modeled. The viewfinder picture itself is scanned by the rear screen controller at 0xfffa9000, retimed to 1280 columns.",
+        "order": 24
+      }
+    },
+    {
+      "id": "block-fff5a000",
+      "base": 4294287360,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
+    },
+    {
+      "id": "block-fff5b000",
+      "base": 4294291456,
+      "size": 4096,
+      "kind": "address-window",
+      "clock_id": null
     }
   ],
   "clocks": [],
@@ -581,7 +1696,8 @@
       "kind": "gic_v2",
       "distributor_block_id": "gic-distributor",
       "cpu_interface_block_id": "gic-cpu-interface",
-      "lines": 512
+      "lines": 512,
+      "basis": "Declared catalog input."
     },
     "companion": null,
     "profiles": {
@@ -589,794 +1705,6 @@
         "cpu_model": "Cortex-A7",
         "runtime_abi": "armv7a-unicorn-v1",
         "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
-        "register_maps": {
-          "sd_host_clocks": {
-            "words": [
-              4294721580,
-              4294730284,
-              4294737964,
-              4294746668
-            ],
-            "settle_ticks": 8,
-            "basis": "Declared catalog input."
-          },
-          "gpio": {
-            "base": 4294184960,
-            "size": 1024,
-            "basis": "Declared catalog input."
-          },
-          "temperature": {
-            "base": 4294211600,
-            "size": 68,
-            "sample_ticks": 5000,
-            "basis": "Declared catalog input."
-          },
-          "adc": {
-            "base": 4294180864,
-            "size": 72,
-            "sample_ticks": 16,
-            "basis": "Declared catalog input."
-          },
-          "dmp": {
-            "base": 4294770688,
-            "size": 12288,
-            "irq_route": 92,
-            "basis": "Declared catalog input."
-          },
-          "movdc": [
-            {
-              "base": 4294385664,
-              "irq": 107,
-              "reset_ticks": 8
-            },
-            {
-              "base": 4294389760,
-              "irq": 108,
-              "reset_ticks": 8
-            }
-          ],
-          "lcdc": [
-            {
-              "base": 4294418432,
-              "pixel_clock_ticks": 2,
-              "irq_routes": [
-                112,
-                113
-              ],
-              "picture_layout": "abgr8888-straight",
-              "video_layout": "yycbcr422",
-              "basis": "Declared catalog input."
-            },
-            {
-              "base": 4294610944,
-              "pixel_clock_ticks": 2,
-              "irq_routes": [
-                117,
-                118
-              ],
-              "picture_layout": "abgr8888-straight",
-              "video_layout": "yycbcr422",
-              "basis": "Declared catalog input."
-            }
-          ],
-          "imaging": {
-            "command_base": 4294361088,
-            "receiver_base": 4294348800,
-            "normal_irqs": [
-              296,
-              298
-            ],
-            "error_irqs": [
-              297,
-              297
-            ],
-            "timing_irqs": [
-              102,
-              100
-            ],
-            "raw_dma_irqs": [
-              97,
-              98
-            ],
-            "input_buffer": {
-              "base": 4294377472,
-              "irq": 106,
-              "reset_ticks": 8,
-              "sram_base": 4293984256,
-              "bank_size": 28672,
-              "basis": "Declared catalog input."
-            },
-            "command_ticks": 5400,
-            "reset_ticks": 8,
-            "basis": "Declared catalog input. RAW read-out DMA lines: the X-T3 5.11 sensor driver registers RAW DMA channels 2 and 3 on GIC 97 and 98; their handlers acknowledge +0x64 and +0xe4."
-          },
-          "control_requests": {
-            "registers": [
-              4285534336,
-              4285534848,
-              4285535360,
-              4285535872,
-              4285536384,
-              4285536896,
-              4285537408,
-              4285538432,
-              4285538944,
-              4285539456,
-              4285539968,
-              4285540480,
-              4285540992,
-              4285541504,
-              4285542016,
-              4285542528,
-              4285546624,
-              4285550720,
-              4285554816,
-              4285558912,
-              4285563008,
-              4285567104,
-              4285571200,
-              4285575296,
-              4285579392,
-              4285591680,
-              4294631552
-            ],
-            "ack_ticks": 8,
-            "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
-          },
-          "io_groups": {
-            "base": 4294189056,
-            "basis": "Declared catalog input."
-          },
-          "decompressor": {
-            "base": 4294414336,
-            "irq_route": 128,
-            "basis": "Declared catalog input."
-          },
-          "spi": {
-            "1": {
-              "base": 4294127616,
-              "parent_clock_ticks": 1,
-              "basis": "Declared catalog input."
-            },
-            "3": {
-              "base": 4294135808,
-              "parent_clock_ticks": 1,
-              "basis": "Declared catalog input."
-            },
-            "4": {
-              "base": 4294139904,
-              "parent_clock_ticks": 1,
-              "basis": "Declared catalog input."
-            },
-            "5": {
-              "base": 4294144000,
-              "parent_clock_ticks": 1,
-              "basis": "Declared catalog input."
-            }
-          },
-          "serial_flash": {
-            "irq_route": 37,
-            "native_dependencies": [
-              "dma"
-            ],
-            "base": 4294803456,
-            "aperture": 4026531840,
-            "size": 134217728,
-            "timing": "8 guest ticks per command acceptance; functional latency, not measured silicon timing.",
-            "basis": "Declared catalog input."
-          },
-          "dma": {
-            "base": 4294836224,
-            "channels": 16,
-            "request_mux": 4294223104,
-            "native_dependencies": [
-              "serial_flash"
-            ],
-            "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing, not measured bus bandwidth.",
-            "irq_routes": [
-              207,
-              208,
-              209,
-              210,
-              211,
-              212,
-              213,
-              214,
-              215,
-              216,
-              217,
-              218,
-              219,
-              220,
-              221,
-              222
-            ],
-            "basis": "Declared catalog input."
-          },
-          "gic": {
-            "distributor": 4294905856,
-            "cpu_interface": 4294909952,
-            "lines": 512,
-            "basis": "Declared catalog input."
-          },
-          "interval_timer": {
-            "base": 4294165248,
-            "routes": [
-              {
-                "channel": 0,
-                "irq": 57
-              },
-              {
-                "channel": 1,
-                "irq": 58
-              },
-              {
-                "channel": 2,
-                "irq": 59
-              },
-              {
-                "channel": 3,
-                "irq": 60
-              },
-              {
-                "channel": 4,
-                "irq": 61
-              },
-              {
-                "channel": 5,
-                "irq": 62
-              },
-              {
-                "channel": 6,
-                "irq": 63
-              },
-              {
-                "channel": 7,
-                "irq": 64
-              }
-            ],
-            "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
-            "layout": "xp4",
-            "basis": "Declared catalog input."
-          },
-          "register_blocks": [
-            {
-              "base": 4294455296,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "Parameter page of the X-T3 5.11 still RECC engine (control page 0xfff82000). The driver's setters write words +0x000..+0x6b0 and read only +0x000 and +0x6b0 back for read-modify-write; nothing polls it. Words read back their last write; what they parameterize is not modeled."
-            },
-            {
-              "base": 4294459392,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "Second parameter page of the X-T3 5.11 still RECC engine: the driver's table setters of 0xfff83000 write rows of 0x20 bytes in loops that continue past 0xfff84000, and the still capture writes +0x000 during the RECC init. Words read back their last write; what they parameterize is not modeled."
-            },
-            {
-              "base": 4294463488,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "Parameter page of the X-T3 5.11 still RECC engine (control page 0xfff82000). The driver's setters write words +0x000..+0x0e4 and read only +0x000 back for read-modify-write; nothing polls it. Words read back their last write; what they parameterize is not modeled."
-            },
-            {
-              "base": 4294213632,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "X-T3 5.11 reads/writes 0xfff48000..0xfff48700. Reads return the last write; no arbitration is modeled."
-            },
-            {
-              "base": 4294172672,
-              "size": 4096,
-              "idle_bits": [],
-              "basis": "X-T3 5.11 reads/writes 0xfff3e000..0xfff3e018. Reads return the last write; no arbitration is modeled."
-            },
-            {
-              "base": 4283461632,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 3096,
-                  "value": 1
-                }
-              ],
-              "commands": [
-                {
-                  "word": 864,
-                  "value": 4278239245,
-                  "status": 868,
-                  "mask": 1,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 256,
-                  "status": 144,
-                  "mask": 255,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 512,
-                  "status": 144,
-                  "mask": 1,
-                  "state": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 0 command words at 0xff507000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
-            },
-            {
-              "base": 4284497920,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 1648,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1652,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1656,
-                  "mask": 196611
-                },
-                {
-                  "offset": 220,
-                  "mask": 768
-                },
-                {
-                  "offset": 732,
-                  "mask": 768
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 0 lock words at 0xff604000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
-            },
-            {
-              "base": 4284489728,
-              "size": 4096,
-              "idle_bits": [],
-              "commands": [
-                {
-                  "word": 0,
-                  "value": 2817,
-                  "status": 272,
-                  "mask": 1,
-                  "state": 1
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 0 request word at 0xff602000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
-            },
-            {
-              "base": 4283527168,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 3096,
-                  "value": 1
-                }
-              ],
-              "commands": [
-                {
-                  "word": 864,
-                  "value": 4278239245,
-                  "status": 868,
-                  "mask": 1,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 256,
-                  "status": 144,
-                  "mask": 255,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 512,
-                  "status": 144,
-                  "mask": 1,
-                  "state": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 1 command words at 0xff517000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
-            },
-            {
-              "base": 4284563456,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 1648,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1652,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1656,
-                  "mask": 196611
-                },
-                {
-                  "offset": 220,
-                  "mask": 768
-                },
-                {
-                  "offset": 732,
-                  "mask": 768
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 1 lock words at 0xff614000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
-            },
-            {
-              "base": 4284555264,
-              "size": 4096,
-              "idle_bits": [],
-              "commands": [
-                {
-                  "word": 0,
-                  "value": 2817,
-                  "status": 272,
-                  "mask": 1,
-                  "state": 1
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 1 request word at 0xff612000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
-            },
-            {
-              "base": 4283592704,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 3096,
-                  "value": 1
-                }
-              ],
-              "commands": [
-                {
-                  "word": 864,
-                  "value": 4278239245,
-                  "status": 868,
-                  "mask": 1,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 256,
-                  "status": 144,
-                  "mask": 255,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 512,
-                  "status": 144,
-                  "mask": 1,
-                  "state": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 2 command words at 0xff527000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
-            },
-            {
-              "base": 4284628992,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 1648,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1652,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1656,
-                  "mask": 196611
-                },
-                {
-                  "offset": 220,
-                  "mask": 768
-                },
-                {
-                  "offset": 732,
-                  "mask": 768
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 2 lock words at 0xff624000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
-            },
-            {
-              "base": 4284620800,
-              "size": 4096,
-              "idle_bits": [],
-              "commands": [
-                {
-                  "word": 0,
-                  "value": 2817,
-                  "status": 272,
-                  "mask": 1,
-                  "state": 1
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 2 request word at 0xff622000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
-            },
-            {
-              "base": 4283658240,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 3096,
-                  "value": 1
-                }
-              ],
-              "commands": [
-                {
-                  "word": 864,
-                  "value": 4278239245,
-                  "status": 868,
-                  "mask": 1,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 256,
-                  "status": 144,
-                  "mask": 255,
-                  "state": 1
-                },
-                {
-                  "word": 128,
-                  "value": 512,
-                  "status": 144,
-                  "mask": 1,
-                  "state": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 3 command words at 0xff537000. The training routines wait for +0xc18 to read 1 after writing 0x40000000 to it, for +0x364 bit 0 after writing 0xff00c00d to +0x360, and for +0x090 to read 1 after writing 0x100 to +0x080 and bit 0 to read 0 after 0x200. +0x044 bit 0 reads 0. No training or timing is modeled."
-            },
-            {
-              "base": 4284694528,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 1648,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1652,
-                  "mask": 196611
-                },
-                {
-                  "offset": 1656,
-                  "mask": 196611
-                },
-                {
-                  "offset": 220,
-                  "mask": 768
-                },
-                {
-                  "offset": 732,
-                  "mask": 768
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 3 lock words at 0xff634000. The training routines wait for bits 0, 1, 16 and 17 of +0x670, +0x674 and +0x678 and for bits 8 and 9 of +0x0dc and +0x2dc. Other words read back their last write."
-            },
-            {
-              "base": 4284686336,
-              "size": 4096,
-              "idle_bits": [],
-              "commands": [
-                {
-                  "word": 0,
-                  "value": 2817,
-                  "status": 272,
-                  "mask": 1,
-                  "state": 1
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 3 request word at 0xff632000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write."
-            },
-            {
-              "base": 4294242304,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 28,
-                  "value": 0
-                }
-              ],
-              "basis": "X-T3 5.11 writes 1 to +0x01c and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled."
-            },
-            {
-              "base": 4283453440,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 900,
-                  "value": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 0 apply word at 0xff505384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
-            },
-            {
-              "base": 4283518976,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 900,
-                  "value": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 1 apply word at 0xff515384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
-            },
-            {
-              "base": 4283584512,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 900,
-                  "value": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 2 apply word at 0xff525384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
-            },
-            {
-              "base": 4283650048,
-              "size": 4096,
-              "idle_bits": [],
-              "fixed_words": [
-                {
-                  "offset": 900,
-                  "value": 0
-                }
-              ],
-              "basis": "X-T3 5.11 DRAM controller channel 3 apply word at 0xff535384. Each register script of 71 writes ends with 1 written here and the routine waits for it to read 0; the word completes at once and reads 0. Other words read back their last write."
-            },
-            {
-              "base": 4294246400,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 0,
-                  "mask": 1
-                }
-              ],
-              "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. A camera in REC reads 1 there. Other words read back their last write; nothing else in this block is modeled."
-            },
-            {
-              "base": 4294393856,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 0,
-                  "mask": 1
-                }
-              ],
-              "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. Other words read back their last write; nothing else in this block is modeled."
-            },
-            {
-              "base": 4294619136,
-              "size": 4096,
-              "idle_bits": [
-                {
-                  "offset": 0,
-                  "mask": 1
-                }
-              ],
-              "basis": "X-T3 5.11 viewfinder output setup, run when VIEW MODE selects the viewfinder: it read-modify-writes +0x004, writes table words to +0x008..+0x014, then writes 0 to +0x000 and waits for bit 0 to read 1; its release sets +0x004 bits 0x1f0fff again. Other words read back their last write; what the words select is not modeled. The viewfinder picture itself is scanned by the rear screen controller at 0xfffa9000, retimed to 1280 columns."
-            }
-          ],
-          "usb_phy": {
-            "base": 4289869824,
-            "basis": "Indexed USB PHY programming port: a control word at +0x000 (register index in bits 12:8, data in bits 7:0, write strobe at bit 16), a parallel-interface word at +0x004 and the selected register's readback at +0x400. No analog or link-ready behavior is modeled.",
-            "size": 4096
-          },
-          "xpp_usb": {
-            "base": 4289724416,
-            "size": 65536,
-            "irq_route": 246,
-            "command_ticks": 48,
-            "transaction_ticks": 6000,
-            "basis": "DesignWare USB3 device controller register block; the core registers start at +0xc100. The interrupt line and the command and transaction latencies are declared values for this body. The latencies are not measured."
-          },
-          "sd_hosts": [
-            {
-              "base": 4294721536,
-              "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
-              "capabilities": 635973808,
-              "capabilities_2": 8311,
-              "clock_ticks": 8,
-              "size": 4096,
-              "slot_and_version": 16908288,
-              "transfer_ticks": 4800,
-              "vendor_offsets": [
-                256,
-                264,
-                268,
-                272,
-                276,
-                292,
-                304,
-                336,
-                340,
-                480,
-                484
-              ],
-              "irq_route": 230
-            },
-            {
-              "base": 4294737920,
-              "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured.",
-              "capabilities": 635973808,
-              "capabilities_2": 8311,
-              "clock_ticks": 8,
-              "size": 4096,
-              "slot_and_version": 16908288,
-              "transfer_ticks": 4800,
-              "vendor_offsets": [
-                256,
-                264,
-                268,
-                272,
-                276,
-                292,
-                304,
-                336,
-                340,
-                480,
-                484
-              ],
-              "irq_route": 237
-            }
-          ],
-          "jpeg_encoder": {
-            "base": 4294574080,
-            "size": 4096,
-            "irq_route": 135,
-            "run_ticks": 108000,
-            "basis": "JPEG encoder of X-T3 5.11, the X-T20 2.11 encoder's register layout. The driver has one accessor per word: +0x44 size, +0x12c origin, +0x130 pitch, +0x100/+0x10c/+0x110 source, destination and limit, +0x84 table loading and +0x8c table words, +0x28 interrupt mask. The driver's start registers its handler on interrupt line 135 (level) before setting +0x00 bit 0. The handler reads the status +0x24, writes it back and takes bit 4 as a finished run, then reads the stream size +0x94. run_ticks (2 ms at 54 MHz) is not measured."
-          },
-          "jpeg_decoder": {
-            "base": 4294578176,
-            "size": 4096,
-            "irq_route": 136,
-            "run_ticks": 54000,
-            "basis": "JPEG decoder of X-T3 5.11, the X-T20 2.11 decoder's register layout, beside the encoder page. Playback initialises it by writing 1 to +0x118 and waits for status +0x04 bit 16. A run programs the stream +0x10c and its size +0x110, the packed 4:2:2 output +0x100 and its limit +0x104, and starts with +0x00 bit 0. The playback client registers its handler on interrupt line 136 (level), from the interrupt source table of the firmware; the handler reads the status +0x04, takes bit 4 as a finished run (it then reads +0x14 and the output end +0x108) and bit 17 as a failure. In emulation with the X-T20 decoder model, one playback decodes a card JPEG's thumbnail, preview and picture. The stream refill (+0x118 = 4) is not seen. run_ticks (1 ms at 54 MHz) is not measured."
-          },
-          "face_detection": {
-            "base": 4294426624,
-            "size": 4096,
-            "irq_route": 123,
-            "run_ticks": 108000,
-            "basis": "Face detection engine of X-T3 5.11. The driver has one accessor per word or word group: +0x00 stop (bit 0 written clear, then the word is polled until nonzero), +0x04 start, +0x08 mode (bits 2..0 below 5, flags 4, 8, 12, 16), configuration words +0x0c..+0x5fc, +0x6e0/+0x6e4 and +0x710..+0x71c (read back by the driver), results +0x600..+0x608, channel flags +0x700 bits 0, 4, 8, 16, 20, 24 with fields +0x704 cleared by writing +0x708, finished bit 0 at +0x730 and +0x734 (cleared by writing 1), and channel arming +0x738 bit 0. The driver's open programs the configuration and registers its handler on interrupt line 123. Each live view frame's run writes the mode, arms the channels, polls +0x700 until all six flags are set, clears them and sets +0x04 bit 0; the handler reads +0x730, writes it back to +0x734 and posts the finished run to the face task. No image is read and no face is detected: the result words read zero. Arming completes at once; run_ticks (2 ms at 54 MHz) is not measured. Runs in other modes (mode 4) are refused."
-          },
-          "byte_i2c": {
-            "0": {
-              "base": 4294168576,
-              "byte_ticks": 16,
-              "irq": 65,
-              "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
-            },
-            "1": {
-              "base": 4294172672,
-              "byte_ticks": 16,
-              "irq": 66,
-              "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
-            },
-            "2": {
-              "base": 4294176768,
-              "byte_ticks": 16,
-              "irq": 67,
-              "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
-            }
-          }
-        },
         "limits": [],
         "cache_basis": "Declared catalog input."
       }

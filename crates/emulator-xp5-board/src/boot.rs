@@ -146,6 +146,7 @@ pub fn startup_from_profile(
             redistributor_block_id,
             redistributor_stride,
             lines,
+            ..
         }) => {
             let block_base = |id: &str| {
                 soc.blocks
