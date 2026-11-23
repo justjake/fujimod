@@ -29,6 +29,10 @@ pub use native::{PeerSocket, VideoFrame, VideoSender};
 
 #[cfg(all(feature = "signaling", not(target_arch = "wasm32")))]
 pub mod signaling;
+#[cfg(all(feature = "signaling", not(target_arch = "wasm32")))]
+mod loopback;
+#[cfg(all(feature = "signaling", not(target_arch = "wasm32")))]
+pub use loopback::LoopbackRoom;
 
 #[derive(Debug, thiserror::Error)]
 #[error("WebRTC: {0}")]
