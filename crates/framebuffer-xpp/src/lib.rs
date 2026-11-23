@@ -135,6 +135,13 @@ impl Decoder<'_> {
                     .iter_mut()
                     .zip(row.as_chunks::<4>().0)
                 {
+                    if *src == [0; 4] {
+                        continue;
+                    }
+                    if src[3] == 255 {
+                        *out = *src;
+                        continue;
+                    }
                     let keep = 255 - u32::from(src[3]);
                     for n in 0..3 {
                         let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
