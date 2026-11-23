@@ -450,9 +450,8 @@ fn store_observer_counts_explicit_write_watch_hits_at_the_m4_store_hook() {
     program.extend_from_slice(&0x12000u32.to_le_bytes());
     program.extend_from_slice(&0x1234_5678u32.to_le_bytes());
     board.write_physical(0x10100, &program).unwrap();
-    *board.state.borrow().memory.write_watch.borrow_mut() = Some(
-        super::write_watch::Watch::new(&[(0x12000, 4)]).unwrap(),
-    );
+    *board.state.borrow().memory.write_watch.borrow_mut() =
+        Some(super::write_watch::Watch::new(&[(0x12000, 4)]).unwrap());
 
     board.run_until(32, 64).unwrap();
 
