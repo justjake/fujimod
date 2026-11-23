@@ -36,8 +36,9 @@ No Python extension or emulator build is needed.
   32-bit complement of a byte sum over a region the inner header describes:
   the flash image, a table segment and a trailer sum inverted bytes; two small
   segments sum stored bytes. `reseal_update_sums` rewrites them after an edit.
-  Checked on X100V 3.01, where every word matches and resealing the official
-  file is byte-identical. Matching sums do not show that a camera accepts a file.
+  Checked on X100V 3.01, X-E4 2.01, X-T3 5.11, X-T30 2.01 and X-T4 2.12: in
+  each official file every word matches and resealing it is byte-identical.
+  Matching sums do not show that a camera accepts a file.
 - `decode` takes explicit `Mapping` values and returns an `Image` with the
   original file's SHA-256 and named `Unit` values (base, bytes, executable).
   Overlay banks are independent units and may share addresses. Mapping sizes
