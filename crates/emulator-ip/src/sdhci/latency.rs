@@ -14,7 +14,6 @@
 //! Ranges are inclusive [min, max] microseconds, drawn uniformly. The model
 //! state (random stream, busy deadline, statistics) is not checkpointed; a
 //! restored run restarts the stream from `seed`.
-//!
 use serde::{Deserialize, Serialize};
 
 fn d48() -> u64 {
