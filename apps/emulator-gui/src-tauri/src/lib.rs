@@ -48,6 +48,12 @@ struct LaunchRequest {
     configuration: String,
     update: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    boot_rom: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    camera: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    application_plan: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     engine: Option<fujimod_catalog_configuration::RunEngine>,
 }
 
@@ -187,11 +193,11 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 let selection = resolved.reference.clone();
                 let request = fujimod_emulator_boot::Request {
                     update,
-                    boot_rom: None,
+                    boot_rom: request.boot_rom,
                     nand: None,
                     settings: None,
-                    camera: None,
-                    application_plan: None,
+                    camera: request.camera,
+                    application_plan: request.application_plan,
                     card_files: Vec::new(),
                     discovery: false,
                 };
@@ -218,7 +224,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 viewer_port: None,
                 dump: None,
                 hash: None,
-                boot_rom: None,
+                boot_rom: request.boot_rom,
                 card_image: None,
                 card_files: Vec::new(),
                 second_card_image: None,
@@ -394,6 +400,19 @@ fn window_launch() -> Result<WindowLaunch, String> {
                     .map(str::to_owned)
                     .or_else(|| arguments.next())
                     .ok_or("--update needs a value")?;
+            }
+            "--boot-rom" | "--camera" | "--application-plan" => {
+                let value = inline
+                    .map(str::to_owned)
+                    .or_else(|| arguments.next())
+                    .ok_or_else(|| format!("{key} needs a value"))?;
+                let command = launch.command.get_or_insert_with(LaunchRequest::default);
+                let path = Some(PathBuf::from(value));
+                match key {
+                    "--boot-rom" => command.boot_rom = path,
+                    "--camera" => command.camera = path,
+                    _ => command.application_plan = path,
+                }
             }
             "--engine" => {
                 let value = inline
