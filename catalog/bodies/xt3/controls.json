@@ -163,7 +163,9 @@
       "manual_page": 50,
       "face": null,
       "icon": "delete",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-8-5"
+      ],
       "assignable": false,
       "default_function": "Delete pictures during playback.",
       "role": null,
@@ -199,7 +201,9 @@
       "manual_page": 16,
       "face": "DISP/BACK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "default_function": "Control indicators in the viewfinder and LCD; go back in menus.",
       "role": null,
@@ -220,7 +224,9 @@
       "manual_page": 6,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": false,
       "default_function": "Choose the drive mode: movie, bracketing, high-speed burst, low-speed burst, single frame, multiple exposure, advanced filter, or panorama.",
       "role": null,
@@ -350,7 +356,9 @@
       "manual_page": 81,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-7"
+      ],
       "assignable": false,
       "default_function": "Adjust exposure compensation; at C, compensation is adjusted with the front command dial.",
       "role": null,
@@ -480,7 +488,9 @@
       "manual_page": 226,
       "face": "Fn1",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
       "assignable": true,
       "default_function": "Face/eye detection setting.",
       "role": null,
@@ -680,7 +690,9 @@
       "manual_page": 21,
       "face": "MENU/OK",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "default_function": "Open menus and confirm selections.",
       "role": null,
@@ -701,7 +713,9 @@
       "manual_page": 80,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": false,
       "default_function": "Choose how the camera meters exposure.",
       "role": null,
@@ -779,7 +793,9 @@
       "manual_page": 49,
       "face": null,
       "icon": "playback",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-8-6"
+      ],
       "assignable": false,
       "default_function": "Start playback.",
       "role": null,
@@ -846,7 +862,9 @@
       "manual_page": 223,
       "face": "Q",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "default_function": "Open the quick menu.",
       "role": null,
@@ -901,7 +919,9 @@
       "manual_page": 226,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "default_function": "Fn3 default: AF mode; can also be used to highlight items and position the focus area.",
       "role": null,
@@ -969,7 +989,10 @@
       "manual_page": 48,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
       "assignable": false,
       "default_function": "Half-press to focus and lock focus/exposure; press the rest of the way to take a picture.",
       "role": null,
@@ -1005,7 +1028,9 @@
       "manual_page": 61,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "default_function": "Select the shutter speed; A selects auto, T selects time exposure, and B selects bulb exposure.",
       "role": null,
