@@ -122,8 +122,15 @@ footer a {
 .home-release-notes pre {
   white-space: pre-wrap;
 }
-.home-release-history {
-  margin-top: 24px;
+.home-release-scope {
+  margin: 0 0 24px;
+  color: #eee;
+  font-size: 15px;
+}
+.home-release-notes-title {
+  margin: 0 0 8px;
+  color: #eee;
+  font-size: 17px;
 }
 @media (max-width: 900px) {
   .home-release {

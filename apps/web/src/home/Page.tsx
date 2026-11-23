@@ -13,6 +13,7 @@ import owners from '../../devices/owners.json';
 import { ReleaseNotes } from '../cameras/ReleaseNotes';
 import { releaseData, releaseDate } from '../release-data';
 import { SiteFrame } from '../ui/SiteFrame';
+import { manualMenus } from '../docs/manual-routes';
 import { FeatureReels } from './FeatureReels';
 import { SdBootV2Download } from './sd-boot-v2/SdBootV2Download';
 import { recipeCatalog } from './sd-boot-v2/plan';
@@ -85,10 +86,13 @@ export default function Home() {
             <Show when={releaseData.current}>
               {(release) => (
                 <article class="home-release-notes">
-                  <ReleaseNotes title={`Fujimod ${release().version}`} text={release().notes} />
-                  <p class="home-release-history">
-                    <a href="/releases">All releases →</a>
+                  <p class="home-release-scope">
+                    These notes cover changes since the last release.{' '}
+                    <a href="/releases">See all releases</a>.{' '}
+                    <a href={manualMenus}>See the full features list in the manual</a>.
                   </p>
+                  <h3 class="home-release-notes-title">Release Notes</h3>
+                  <ReleaseNotes title={`Fujimod ${release().version}`} text={release().notes} />
                 </article>
               )}
             </Show>
