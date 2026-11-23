@@ -210,7 +210,9 @@ pub(super) fn observe_store(
         None => physical,
     };
     let mut slot = state.memory.write_watch.borrow_mut();
-    let Some(watch) = slot.as_mut() else { return false };
+    let Some(watch) = slot.as_mut() else {
+        return false;
+    };
     if watch.overlap(physical, size as u64).is_none() {
         return false;
     }
