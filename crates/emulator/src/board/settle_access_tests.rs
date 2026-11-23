@@ -438,6 +438,9 @@ fn store_observer_counts_explicit_write_watch_hits_at_the_m4_store_hook() {
         )
         .unwrap();
     board.state.borrow_mut().store_observer = Some(vec![Default::default()]);
+    let callback_service_time = super::callback_timing::new_for_test(1);
+    board.state.borrow_mut().callback_service_time = Some(callback_service_time.clone());
+    board.bindings[0].callback_service_time = Some(callback_service_time);
     board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
     board
         .write_physical(0x10000, &[0x00, 0x70, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00])
@@ -464,6 +467,12 @@ fn store_observer_counts_explicit_write_watch_hits_at_the_m4_store_hook() {
     assert_eq!(observer["callbacks_with_any_observed_reason"], stores);
     assert_eq!(observer["no_recorded_reason"], 0);
     assert_eq!(observer["reason_counts_are_nonexclusive"], true);
+
+    let callback_time = &metrics["cortex_m4_by_core"][0]["callback_service_time"];
+    assert_eq!(callback_time["sampling_probability"]["denominator"], 1024);
+    assert_eq!(callback_time["store"]["samples"], stores);
+    assert_eq!(callback_time["block"]["samples"], 0);
+    assert_eq!(callback_time["mmio"]["samples"], 0);
 
     let mut stored = [0; 4];
     board.read_physical(0x12000, &mut stored).unwrap();

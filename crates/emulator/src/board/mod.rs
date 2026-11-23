@@ -2,6 +2,7 @@
 pub mod aprofile;
 pub mod armv7a;
 pub mod bus;
+mod callback_timing;
 mod code_shadow;
 mod mprofile_blocks;
 mod thumb_accounting;
@@ -318,6 +319,7 @@ struct State {
     mprofile_loops: loops::MProfileLoops,
     access_histogram: Option<access_histogram::SharedStatistics>,
     store_observer: Option<Vec<StoreObserverCounters>>,
+    callback_service_time: Option<callback_timing::SharedStatistics>,
 }
 /// Host-only record that pushing interrupt pins and refreshing processor
 /// deadlines is a fixed point.
@@ -381,6 +383,7 @@ impl Settled {
 }
 struct Binding {
     state: Rc<RefCell<State>>,
+    callback_service_time: Option<callback_timing::SharedStatistics>,
     cpus: Weak<Vec<Rc<dyn Cpu>>>,
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     core: usize,
@@ -390,6 +393,19 @@ struct Binding {
     published_reads: Vec<fujimod_emulator_cpu::FastMmioRead>,
     published_hits: Cell<u64>,
 }
+
+fn callback_service_sample(
+    binding: &Binding,
+    cpus: &[Rc<dyn Cpu>],
+    kind: callback_timing::CallbackKind,
+) -> Option<callback_timing::SampledCallback> {
+    let statistics = binding.callback_service_time.as_ref()?;
+    if cpus[binding.core].model() != fujimod_emulator_cpu::Model::CortexM4 {
+        return None;
+    }
+    callback_timing::count(statistics, binding.core, kind)
+}
+
 /// Devices and callbacks have one owner. Interactive native processors run
 /// concurrently between barriers; exact execution uses ordered slices.
 pub struct Board {
@@ -621,8 +637,10 @@ impl Board {
         let memory = Rc::new(memory);
         let mmio_callback_counts = Rc::new(RefCell::new(vec![0; n]));
         let register_access_histogram = access_histogram::new();
-        let store_observer = std::env::var_os("FUJIMOD_EXECUTION_COUNTERS")
-            .map(|_| vec![StoreObserverCounters::default(); n]);
+        let execution_counters_enabled = std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some();
+        let store_observer =
+            execution_counters_enabled.then(|| vec![StoreObserverCounters::default(); n]);
+        let callback_service_time = execution_counters_enabled.then(|| callback_timing::new(n));
         let continuation = Rc::new(RefCell::new(continuation::Stops::default()));
         let host_pause = Rc::new(Cell::new(false));
         let state = Rc::new(RefCell::new(State {
@@ -682,6 +700,7 @@ impl Board {
             mprofile_loops: loops::MProfileLoops::new(n),
             access_histogram: register_access_histogram.clone(),
             store_observer: store_observer.clone(),
+            callback_service_time: callback_service_time.clone(),
         }));
         let mut board = Self {
             run_wakeup: Default::default(),
@@ -730,6 +749,7 @@ impl Board {
             }
             let binding = Box::new(Binding {
                 state: board.state.clone(),
+                callback_service_time: callback_service_time.clone(),
                 cpus: Rc::downgrade(&board.cpus),
                 mmio_callback_counts: board.mmio_callback_counts.clone(),
                 core,
@@ -1155,6 +1175,7 @@ impl Board {
         };
         let binding = Box::new(Binding {
             state: self.state.clone(),
+            callback_service_time: self.state.borrow().callback_service_time.clone(),
             cpus: Rc::downgrade(&self.cpus),
             mmio_callback_counts: self.mmio_callback_counts.clone(),
             core,
@@ -3783,6 +3804,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Block);
     let core = b.core;
     let result = (|| {
         let cpu = &*cpus[core];
@@ -4021,6 +4043,7 @@ unsafe fn written(
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
+    let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Store);
     let mut diagnostic_m4 = false;
     let mut observed_reasons = 0u8;
     let mut classification_finished = false;
@@ -4178,6 +4201,7 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
     let Some(cpus) = b.cpus.upgrade() else {
         return 0;
     };
+    let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Mmio);
     let result = (|| {
         let address = b.base.checked_add(offset).ok_or("MMIO address overflow")?;
         let size = u8::try_from(size).map_err(|_| "MMIO width overflow")?;
