@@ -386,7 +386,7 @@ fn host_and_model_bus_writes_are_unverifiable() {
         let state = board.state.borrow();
         board
             .physical_memory
-            .write_dma(&board.cpus, &state.exclusive, 0x10088, &[7])
+            .write_dma(&board.cpus, &state.exclusive, 0x10088, &[7], |_, _| {})
             .unwrap();
     }
     let state = preservation.state();
@@ -517,7 +517,7 @@ fn empty_host_writes_stay_clean() {
         let state = board.state.borrow();
         board
             .physical_memory
-            .write_dma(&board.cpus, &state.exclusive, 0x10084, &[])
+            .write_dma(&board.cpus, &state.exclusive, 0x10084, &[], |_, _| {})
             .unwrap();
     }
     let state = preservation.state();

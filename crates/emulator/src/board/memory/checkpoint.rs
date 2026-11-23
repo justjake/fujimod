@@ -129,8 +129,12 @@ mod tests {
         assert_eq!(bytes, [7, 7, 7, 0, 0, 0, 0]);
         target.read_host(0x8000, &mut bytes).unwrap();
         assert_eq!(bytes, [0, 0, 0, 0, 1, 2, 3]);
-        assert!(target.write_dma(&[], &domain, 0x4000, &[9]).is_err());
-        target.write_dma(&[], &domain, 0x1000, &[9]).unwrap();
+        assert!(target
+            .write_dma(&[], &domain, 0x4000, &[9], |_, _| {})
+            .is_err());
+        target
+            .write_dma(&[], &domain, 0x1000, &[9], |_, _| {})
+            .unwrap();
         target.read_host(0x4000, &mut bytes).unwrap();
         assert_eq!(bytes[0], 9);
     }
