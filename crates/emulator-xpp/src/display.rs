@@ -184,10 +184,71 @@ struct Handshake {
     status: bool,
     due: Option<u64>,
 }
+// Store the FNV-1a state after each chunk so an unchanged prefix needs
+// a byte comparison but no hashing. Only the final hash enters checkpoints.
+const DIGEST_CHUNK: usize = 256;
+const FNV_PRIME: u64 = 0x100_0000_01b3;
+const DIGEST_CHUNK_FACTOR: u64 = FNV_PRIME.wrapping_pow(DIGEST_CHUNK as u32);
+
 struct RenderedFrame {
     inputs: fujimod_framebuffer_xpp::Capture,
     rgba: Vec<u8>,
-    hash: u64,
+    digest: Vec<u64>,
+}
+
+impl RenderedFrame {
+    fn digest(extent: (u32, u32), rgba: &[u8], previous: Option<Self>) -> Vec<u64> {
+        let same_extent = previous.filter(|frame| frame.inputs.extent() == extent);
+        let (mut digest, skip) = match same_extent {
+            Some(frame) => {
+                let chunks = rgba
+                    .chunks(DIGEST_CHUNK)
+                    .zip(frame.rgba.chunks(DIGEST_CHUNK))
+                    .take_while(|(new, old)| new == old)
+                    .count();
+                (frame.digest, chunks)
+            }
+            None => {
+                let (width, height) = extent;
+                let header = Self::hash(
+                    Self::hash(0xcbf2_9ce4_8422_2325, &width.to_le_bytes()),
+                    &height.to_le_bytes(),
+                );
+                (vec![header], 0)
+            }
+        };
+        digest.truncate(skip + 1);
+        Self::extend_digest(rgba, &mut digest);
+        digest
+    }
+
+    fn extend_digest(rgba: &[u8], digest: &mut Vec<u64>) {
+        for (index, bytes) in rgba.chunks(DIGEST_CHUNK).enumerate().skip(digest.len() - 1) {
+            let hash = digest[index];
+            let next = if let Some(previous) = index.checked_sub(2)
+                && bytes.len() == DIGEST_CHUNK
+                && digest[previous] as u8 == hash as u8
+                && rgba[previous * DIGEST_CHUNK..][..DIGEST_CHUNK] == *bytes
+            {
+                // For identical bytes and equal low hash bytes, each XOR
+                // preserves the difference between the two states. The FNV
+                // multiply scales that difference once per byte.
+                digest[previous + 1].wrapping_add(
+                    hash.wrapping_sub(digest[previous])
+                        .wrapping_mul(DIGEST_CHUNK_FACTOR),
+                )
+            } else {
+                Self::hash(hash, bytes)
+            };
+            digest.push(next);
+        }
+    }
+
+    fn hash(initial: u64, bytes: &[u8]) -> u64 {
+        bytes.iter().fold(initial, |hash, &byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+        })
+    }
 }
 
 pub struct Output {
@@ -284,23 +345,15 @@ impl Output {
                     return;
                 }
             };
-            // FNV-1a: a stable digest for the image-change sequence.
-            let hash = match &self.last {
-                Some(last) if last.inputs.extent() == (width, height) && last.rgba == rgba => {
-                    last.hash
-                }
-                _ => [width, height]
-                    .iter()
-                    .flat_map(|v| v.to_le_bytes())
-                    .chain(rgba.iter().copied())
-                    .fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-                        (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
-                    }),
-            };
-            self.last = Some(RenderedFrame { inputs, rgba, hash });
+            let digest = RenderedFrame::digest((width, height), &rgba, self.last.take());
+            self.last = Some(RenderedFrame {
+                inputs,
+                rgba,
+                digest,
+            });
         }
-        let RenderedFrame { rgba, hash, .. } = self.last.as_ref().unwrap();
-        let hash = *hash;
+        let RenderedFrame { rgba, digest, .. } = self.last.as_ref().unwrap();
+        let hash = *digest.last().unwrap();
         if self.capture.hash != Some(hash) {
             self.capture.sequence += 1;
             self.capture.hash = Some(hash);
@@ -537,6 +590,23 @@ impl Output {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::{Host, Record};
+
+    #[test]
+    fn digest_replays_repeated_chunks_and_resumes_after_an_unchanged_prefix() {
+        let mut rgba = vec![0; DIGEST_CHUNK * 8 + 11];
+        rgba[DIGEST_CHUNK + 47] = 0xf3;
+        for low in 0..=255 {
+            let start = 0xabcdef_123456_0000 | low;
+            let mut digest = vec![start];
+            RenderedFrame::extend_digest(&rgba, &mut digest);
+            assert_eq!(digest.last(), Some(&RenderedFrame::hash(start, &rgba)));
+
+            rgba[DIGEST_CHUNK * 3 + 5] ^= 0xa5;
+            digest.truncate(4);
+            RenderedFrame::extend_digest(&rgba, &mut digest);
+            assert_eq!(digest.last(), Some(&RenderedFrame::hash(start, &rgba)));
+        }
+    }
 
     #[derive(Default)]
     struct Clock {
