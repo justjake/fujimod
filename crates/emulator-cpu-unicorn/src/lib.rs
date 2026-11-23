@@ -328,7 +328,7 @@ impl Drop for Core {
 }
 struct StoredHook {
     native: usize,
-    _context: Box<HookData>,
+    _context: Option<Box<HookData>>,
 }
 struct HookData {
     hook: Hook,
@@ -1251,7 +1251,42 @@ impl Cpu for Core {
             key,
             StoredHook {
                 native,
-                _context: data,
+                _context: Some(data),
+            },
+        );
+        Ok(HookId {
+            owner: self.identity,
+            key,
+        })
+    }
+    fn install_memory_restart_boundary(&self, span: HookRange) -> Result<HookId, String> {
+        self.check_tlbi_mutation()?;
+        let add = self.api.extensions.add_restart_boundary;
+        if self.api.extensions.features & ffi::FEATURE_NATIVE_RESTART_BOUNDARY == 0
+            || add.is_none()
+        {
+            return unsafe { self.install_hook(Hook::Memory {
+                callback: memory_restart_boundary_noop,
+                data: std::ptr::null_mut(),
+                read: true,
+                write: true,
+                range: span,
+            }) };
+        }
+        let (begin, end) = range(span);
+        let mut native = 0;
+        self.check(unsafe { add.unwrap()(self.raw, &mut native, begin, end) })?;
+        let key = self.next_hook.get();
+        let Some(next) = key.checked_add(1) else {
+            self.check(unsafe { (self.api.uc_hook_del)(self.raw, native) })?;
+            return Err("CPU hook identity overflow".into());
+        };
+        self.next_hook.set(next);
+        self.hooks.borrow_mut().insert(
+            key,
+            StoredHook {
+                native,
+                _context: None,
             },
         );
         Ok(HookId {
@@ -1515,6 +1550,14 @@ unsafe extern "C" fn memory(
             callback(access, address, size, value, data);
         }
     }
+}
+unsafe fn memory_restart_boundary_noop(
+    _: Access,
+    _: u64,
+    _: i32,
+    _: i64,
+    _: *mut c_void,
+) {
 }
 unsafe extern "C" fn fault(
     raw: ffi::Engine,

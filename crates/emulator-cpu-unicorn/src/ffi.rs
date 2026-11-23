@@ -17,6 +17,7 @@ pub const FEATURE_THUMB_BLOCK_ACCOUNTING: u32 = 1 << 10;
 pub const FEATURE_THUMB_BLOCK_RECOVERY: u32 = 1 << 11;
 pub const FEATURE_WATCHED_STORE_COUNTERS: u32 = 1 << 13;
 pub const FEATURE_GUARD_REFUSAL_COUNTERS: u32 = 1 << 14;
+pub const FEATURE_NATIVE_RESTART_BOUNDARY: u32 = 1 << 15;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -89,6 +90,8 @@ pub struct Extensions {
     pub set_entry_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_guard_diagnostics: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    pub add_restart_boundary:
+        Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
@@ -289,6 +292,12 @@ mod linked {
         fn uc_embedder_set_entry_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_guard_diagnostics(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_add_restart_boundary(
+            engine: Engine,
+            hook: *mut usize,
+            begin: u64,
+            end: u64,
+        ) -> Error;
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
@@ -314,6 +323,7 @@ mod linked {
             set_entry_exits: Some(uc_embedder_set_entry_exits),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
             set_guard_diagnostics: Some(uc_embedder_set_guard_diagnostics),
+            add_restart_boundary: Some(uc_embedder_add_restart_boundary),
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
