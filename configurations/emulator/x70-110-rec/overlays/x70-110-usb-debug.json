@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "x70-110-usb-debug",
+  "configuration_id": "x70-110-rec",
+  "change": {
+    "kind": "settings",
+    "requested": {
+      "debug": "on"
+    }
+  }
+}

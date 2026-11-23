@@ -980,6 +980,10 @@ pub enum RunOverlayChange {
     Preset { preset: RunPreset },
     /// Connect or disconnect the declared USB cable.
     UsbConnection { connected: bool },
+    /// Request named camera settings on top of the configuration's own.
+    Settings {
+        requested: std::collections::BTreeMap<String, String>,
+    },
     /// Select another named firmware entry.
     Start { start: RunStart },
     /// Select one named run operation.

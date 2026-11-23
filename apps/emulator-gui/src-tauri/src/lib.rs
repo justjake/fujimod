@@ -213,7 +213,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 return fujimod_emulator_gui::serve(
                     fujimod_emulator_gui::Live::new(camera, selection),
                     room,
-                    &thread_stop,
+                    &mut || !thread_stop.load(std::sync::atomic::Ordering::Acquire),
                 )
                 .inspect_err(|error| log_session(format!("session: {error}")));
             }
@@ -257,7 +257,9 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             let run =
                 RunHost::open(run).inspect_err(|error| log_session(format!("session: {error}")))?;
             log_session("session: camera opened");
-            fujimod_emulator_gui::serve(run, room, &thread_stop)
+            fujimod_emulator_gui::serve(run, room, &mut || {
+                !thread_stop.load(std::sync::atomic::Ordering::Acquire)
+            })
                 .inspect_err(|error| log_session(format!("session: {error}")))
         })
         .map_err(|error| error.to_string())?;

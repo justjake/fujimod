@@ -12,11 +12,7 @@ use openh264::formats::{RgbaSliceU8, YUVBuffer};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::{Arc, mpsc},
     time::{Duration, Instant},
 };
 
@@ -88,8 +84,8 @@ impl Room {
         &self.endpoint
     }
 
-    /// Wait for the first controller to join, then attach the room to `run`.
-    pub fn join(self, stop: &AtomicBool) -> Result<Viewer, String> {
+    /// Wait for the first controller to join. `abandoned` gives up the wait.
+    pub fn join(self, abandoned: &mut dyn FnMut() -> bool) -> Result<Viewer, String> {
         let mut viewer = Viewer {
             room: self,
             joining: Vec::new(),
@@ -103,7 +99,7 @@ impl Room {
             pending_releases: Vec::new(),
         };
         while viewer.joining.is_empty() {
-            if stop.load(Ordering::Acquire) {
+            if abandoned() {
                 return Err("desktop window closed".into());
             }
             match viewer.room.events.recv_timeout(Duration::from_millis(10)) {
@@ -118,10 +114,12 @@ impl Room {
     }
 }
 
-/// Serve `run` in its room until the last controller leaves or `stop` is set.
-pub fn serve<R: Run>(mut run: R, room: Room, stop: &AtomicBool) -> Result<Value, String> {
-    let mut viewer = room.join(stop)?;
-    while !stop.load(Ordering::Acquire) && viewer.service(&mut run)? {
+/// Serve `run` in its room while its host is `open` (for a desktop window,
+/// [`crate::launch::Window::open`]); controllers joining and leaving do not end the run.
+pub fn serve<R: Run>(mut run: R, room: Room, open: &mut dyn FnMut() -> bool) -> Result<Value, String> {
+    let mut viewer = room.join(&mut || !open())?;
+    while open() {
+        viewer.service(&mut run)?;
         run.step()?;
         let frames = run.frames()?;
         viewer.show(&frames)?;
@@ -265,8 +263,8 @@ impl Viewer {
     }
 
     /// Apply the controllers' pending commands to `run` and send them the
-    /// control state. False once every controller has left.
-    pub fn service(&mut self, run: &mut dyn Run) -> Result<bool, String> {
+    /// control state.
+    pub fn service(&mut self, run: &mut dyn Run) -> Result<(), String> {
         while let Ok(event) = self.room.events.try_recv() {
             self.event(event);
         }
@@ -307,7 +305,7 @@ impl Viewer {
             run.session_mut().contact_input(&control, None, true)?;
         }
         self.publish_state(run.session());
-        Ok(!(self.controllers.is_empty() && self.usb_controllers.is_empty() && self.joining.is_empty()))
+        Ok(())
     }
 
     /// Keep the newest of `frames` and encode it for each controller whose

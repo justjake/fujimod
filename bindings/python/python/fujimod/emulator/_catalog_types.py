@@ -5290,6 +5290,7 @@ type RunOverlayChange = (
     | RunOverlayChangeVariant3
     | RunOverlayChangeVariant4
     | RunOverlayChangeVariant5
+    | RunOverlayChangeVariant6
 )
 
 
@@ -5304,21 +5305,26 @@ class RunOverlayChangeVariant1(TypedDict, total=False):
 
 
 class RunOverlayChangeVariant2(TypedDict, total=False):
+    kind: Required[Literal["settings"]]
+    requested: Required[dict[str, str]]
+
+
+class RunOverlayChangeVariant3(TypedDict, total=False):
     kind: Required[Literal["start"]]
     start: Required[RunStart]
 
 
-class RunOverlayChangeVariant3(TypedDict, total=False):
+class RunOverlayChangeVariant4(TypedDict, total=False):
     kind: Required[Literal["purpose"]]
     purpose: Required[RunPurpose]
 
 
-class RunOverlayChangeVariant4(TypedDict, total=False):
+class RunOverlayChangeVariant5(TypedDict, total=False):
     execution: Required[RunExecution]
     kind: Required[Literal["execution"]]
 
 
-class RunOverlayChangeVariant5(TypedDict, total=False):
+class RunOverlayChangeVariant6(TypedDict, total=False):
     browser_camera: Required[RunBrowserCamera]
     kind: Required[Literal["browser_camera"]]
 

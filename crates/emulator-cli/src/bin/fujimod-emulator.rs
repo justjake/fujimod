@@ -617,9 +617,9 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         let room = fujimod_emulator_gui::Room::loopback()?;
         let endpoint = room.endpoint().url.clone();
         let host = xp5::RunHost::open(run)?;
-        let mut app = fujimod_emulator_gui::launch::connect(&endpoint)?;
-        let report = fujimod_emulator_gui::serve(host, room, &std::sync::atomic::AtomicBool::new(false))?;
-        app.wait().map_err(|error| error.to_string())?;
+        let mut window = fujimod_emulator_gui::launch::connect(&endpoint)?;
+        let report = fujimod_emulator_gui::serve(host, room, &mut || window.open())?;
+        window.wait()?;
         println!(
             "{}",
             serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
@@ -834,13 +834,13 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
     let selection = resolved.reference.clone();
     let camera = boot::open_request(resolved, request)?;
     let room = fujimod_emulator_gui::Room::loopback()?;
-    let mut app = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
+    let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
     let report = fujimod_emulator_gui::serve(
         fujimod_emulator_gui::Live::new(camera, selection),
         room,
-        &std::sync::atomic::AtomicBool::new(false),
+        &mut || window.open(),
     )?;
-    app.wait().map_err(|error| error.to_string())?;
+    window.wait()?;
     println!(
         "{}",
         serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?

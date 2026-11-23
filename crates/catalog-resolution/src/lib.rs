@@ -196,6 +196,23 @@ impl ResolvedConfiguration {
                     };
                     inputs.usb.connected = connected;
                 }
+                RunOverlayChange::Settings { requested } => {
+                    let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs else {
+                        return Err(format!(
+                            "run overlay {overlay_id} requires declared EXR2 settings"
+                        ));
+                    };
+                    let settings = inputs.settings.as_mut().ok_or_else(|| {
+                        format!("run overlay {overlay_id} requires declared power-on settings")
+                    })?;
+                    for (name, value) in requested {
+                        if settings.requested.insert(name.clone(), value.clone()).is_some() {
+                            return Err(format!(
+                                "run overlay {overlay_id} requests setting {name} twice"
+                            ));
+                        }
+                    }
+                }
                 RunOverlayChange::Start { start } => {
                     if !changed.insert("start") {
                         return Err("run overlays change the start entry more than once".into());

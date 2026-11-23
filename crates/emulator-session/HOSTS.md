@@ -87,7 +87,12 @@ this one loop; no host keeps its own copy.
   it waits for the bus condition the controller model reports
   (`UsbHostWait`) by advancing guest time, never by reading firmware state.
   A run shares USB only when its configuration models the endpoints (X70:
-  the `x70-110-browser-usb` overlay).
+  the `x70-110-browser-usb` overlay); Dev Tools needs the camera in debug
+  mode (X70: add the `x70-110-usb-debug` overlay, which turns on the stock
+  debug setting).
+- The run lasts as long as its host keeps it open (the desktop window's
+  process, the MCP camera's window); controllers joining and leaving, such as
+  Dev Tools' brief discovery connections, do not end it.
 - Every joined controller may send input. A button is pressed while any
   controller holds it and released when the last one lets go; a dial or
   switch takes the position any controller set most recently.

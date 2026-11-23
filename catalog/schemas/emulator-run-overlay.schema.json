@@ -2827,6 +2827,27 @@
         },
         {
           "additionalProperties": false,
+          "description": "Request named camera settings on top of the configuration's own.",
+          "properties": {
+            "kind": {
+              "const": "settings",
+              "type": "string"
+            },
+            "requested": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "requested"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Select another named firmware entry.",
           "properties": {
             "kind": {

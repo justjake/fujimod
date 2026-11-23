@@ -68,7 +68,7 @@ pub struct Camera {
 
 struct Shown {
     viewer: fujimod_emulator_gui::Viewer,
-    app: std::process::Child,
+    window: fujimod_emulator_gui::launch::Window,
     /// Why live running stopped; the window still shows the last image.
     stopped: Option<String>,
     /// When the LCD was last read for the window.
@@ -273,24 +273,20 @@ impl Camera {
         self.connect()?;
         let room = fujimod_emulator_gui::Room::loopback()?;
         let endpoint = room.endpoint().url.clone();
-        let mut app = fujimod_emulator_gui::launch::connect(&endpoint)?;
+        let mut window = fujimod_emulator_gui::launch::connect(&endpoint)?;
         // The window has 30 seconds to join before the request gives up.
-        let expired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let timer = expired.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(30));
-            timer.store(true, std::sync::atomic::Ordering::Release);
-        });
-        let viewer = match room.join(&expired) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        let joined = room.join(&mut || std::time::Instant::now() >= deadline || !window.open());
+        let viewer = match joined {
             Ok(viewer) => viewer,
             Err(error) => {
-                let _ = app.kill();
+                window.close();
                 return Err(error);
             }
         };
         self.shown = Some(Shown {
             viewer,
-            app,
+            window,
             stopped: None,
             read_at: std::time::Instant::now(),
         });
@@ -328,14 +324,14 @@ impl Camera {
             return;
         };
         let open = match shown.viewer.service(self) {
-            Ok(open) => open,
+            Ok(()) => shown.window.open(),
             Err(error) => {
                 eprintln!("camera window: {error}");
                 false
             }
         };
         if !open {
-            let _ = shown.app.wait();
+            shown.window.close();
             return;
         }
         if shown.stopped.is_none() {
