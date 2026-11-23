@@ -422,7 +422,7 @@ fn nodes(
     if let (Some(gpio), Some(levels)) = (&maps.gpio, &reset.gpio_input) {
         node(
             "gpio".into(),
-            json!({ "kind": "gpio", "base": gpio.base, "inputs": levels.levels }),
+            json!({ "kind": "gpio", "base": gpio.base, "options": { "input_levels": levels.levels } }),
         );
     }
     if let Some(clocks) = &maps.pll_clocks {
@@ -479,8 +479,8 @@ fn nodes(
         node(
             "adc".into(),
             json!({
-                "kind": "adc", "base": adc.base, "samples": samples.samples,
-                "conversion_ticks": adc.sample_ticks,
+                "kind": "adc", "base": adc.base,
+                "options": { "samples": samples.samples, "conversion_ticks": adc.sample_ticks },
             }),
         );
     }

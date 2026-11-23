@@ -74,10 +74,9 @@ impl Gpio {
     pub fn with_interrupts(mut self, interrupts: Vec<InputIrq>) -> Result<Self, String> {
         for (i, irq) in interrupts.iter().enumerate() {
             irq.validate(16)?;
-            if interrupts[..i]
-                .iter()
-                .any(|other| (other.port, other.pin) == (irq.port, irq.pin) || other.line == irq.line)
-            {
+            if interrupts[..i].iter().any(|other| {
+                (other.port, other.pin) == (irq.port, irq.pin) || other.line == irq.line
+            }) {
                 return Err("Duplicate GPIO interrupt route".into());
             }
         }
@@ -104,9 +103,44 @@ impl Gpio {
         Ok(())
     }
 }
+impl fujimod_emulator_devices::capability::GpioInputs for Gpio {
+    fn admit_inputs(
+        &self,
+        changes: &[(fujimod_emulator_devices::parts::pins::Pin, bool)],
+    ) -> Result<(), String> {
+        if changes
+            .iter()
+            .any(|(pin, _)| pin.port >= 16 || pin.pin >= 16)
+        {
+            return Err("Invalid GPIO input pin".into());
+        }
+        Ok(())
+    }
+    fn request_inputs(
+        &mut self,
+        changes: &[(fujimod_emulator_devices::parts::pins::Pin, bool)],
+    ) -> Result<(), String> {
+        self.admit_inputs(changes)?;
+        let mut pins = self.pins.lock().unwrap();
+        for (pin, high) in changes {
+            pins.set_input(usize::from(pin.port), usize::from(pin.pin), *high);
+        }
+        Ok(())
+    }
+}
 impl Device for Gpio {
     fn name(&self) -> &'static str {
         "masked-gpio"
+    }
+    fn gpio_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::GpioInputs + 'static)> {
+        Some(self)
+    }
+    fn gpio_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::GpioInputs + 'static)> {
+        Some(self)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let offset = address.wrapping_sub(self.base) as usize;

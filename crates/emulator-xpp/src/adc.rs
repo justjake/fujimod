@@ -75,9 +75,27 @@ impl Converter {
             .unwrap_or(self.samples[channel])
     }
 }
+impl fujimod_emulator_devices::capability::AnalogInputs for Converter {
+    fn samples(&self) -> Vec<u16> {
+        (0..CHANNELS).map(|channel| self.sample(channel)).collect()
+    }
+    fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
+        self.set_input(channel, value)
+    }
+}
 impl Device for Converter {
     fn name(&self) -> &'static str {
         "xpp-adc"
+    }
+    fn analog_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
+    fn analog_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let o = address - self.base;

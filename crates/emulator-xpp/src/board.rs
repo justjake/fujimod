@@ -1,10 +1,10 @@
 //! X-Processor Pro topology on the shared native execution graph.
 //! The caller supplies checked wiring, assets, and physical contact inputs.
-use fujimod_catalog_configuration::RunEngine;
 use crate::{
-    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, keys,
-    lens, power, resets, sd, serial, shutter, statistics, sync, timer, touch_xt20,
+    adc, blocks, boot, clocks, display, dram, encoder, face, flash, h264, i2c, imaging, keys, lens,
+    power, resets, sd, serial, shutter, statistics, sync, timer, touch_xt20,
 };
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{
     self, Board, InterruptMap, InterruptRegisters,
     bus::{Bus, Mode},
@@ -172,6 +172,21 @@ pub struct BlockCommand {
     pub mask: u32,
     pub state: u32,
 }
+/// Port input levels at reset, one 16-pin bitmap per port.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GpioOptions {
+    pub input_levels: [u16; 16],
+}
+
+/// Idle 10-bit samples per channel and the conversion time.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdcOptions {
+    pub samples: Vec<u16>,
+    pub conversion_ticks: u64,
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 // Deserialized once per board description, so the variant size difference costs nothing.
@@ -179,7 +194,7 @@ pub struct BlockCommand {
 pub enum Model {
     Gpio {
         base: u64,
-        inputs: [u16; 16],
+        options: GpioOptions,
     },
     /// A command dial on declared GPIO pads, its phases emitted at declared
     /// edge times. The X-Processor Pro board has no pulse unit, so a counter
@@ -219,8 +234,7 @@ pub enum Model {
     },
     Adc {
         base: u64,
-        samples: Vec<u16>,
-        conversion_ticks: u64,
+        options: AdcOptions,
     },
     /// The reset/gate bank. SD channels and the lens take its lines, so it
     /// precedes them.
@@ -420,26 +434,52 @@ pub struct Built {
 }
 impl Built {
     /// Adopt the planned device nodes and control wires in the shared session.
-    pub fn into_session(self, definition: Value) -> Result<fujimod_emulator_session::Session, String> {
+    pub fn into_session(
+        self,
+        definition: Value,
+    ) -> Result<fujimod_emulator_session::Session, String> {
         use fujimod_emulator_exr2_resources::{Resources, Wire};
-        let mut resources = Resources { encoders: self.encoders, ..Default::default() };
+        let mut resources = Resources {
+            encoders: self.encoders,
+            ..Default::default()
+        };
         for (name, level, node) in self.inputs {
-            if resources.wires.insert(name.clone(), Wire::LogicLevel(level)).is_some() {
+            if resources
+                .wires
+                .insert(name.clone(), Wire::LogicLevel(level))
+                .is_some()
+            {
                 return Err("repeated X-Processor Pro physical input".into());
             }
             resources.users.entry(name).or_default().insert(node);
         }
         Ok(fujimod_emulator_session::Session {
-            definition, board: self.board, controls: None, contact_driver: None, resources,
-            nodes: self.nodes, contacts: self.contacts, power_cycle: None, window_action: None, recording_frames: Default::default(),
+            definition,
+            board: self.board,
+            controls: None,
+            contact_driver: None,
+            resources,
+            nodes: self.nodes,
+            contacts: self.contacts,
+            power_cycle: None,
+            window_action: None,
+            recording_frames: Default::default(),
         })
     }
 }
 /// Drive a named application GPIO bank through its modeled external pins.
-pub fn gpio_input(session: &mut fujimod_emulator_session::Session, port: u8, pin: u8, high: bool) -> Result<(), String> {
-    session.board.edit_device(session.node("gpio")?, |gpio: &mut fujimod_emulator_ip::socionext::gpio::Gpio| {
-        gpio.set_input(usize::from(port), usize::from(pin), high)
-    })
+pub fn gpio_input(
+    session: &mut fujimod_emulator_session::Session,
+    port: u8,
+    pin: u8,
+    high: bool,
+) -> Result<(), String> {
+    session.board.edit_device(
+        session.node("gpio")?,
+        |gpio: &mut fujimod_emulator_ip::socionext::gpio::Gpio| {
+            gpio.set_input(usize::from(port), usize::from(pin), high)
+        },
+    )
 }
 struct Source(Arc<flash::Aperture>);
 impl pl330::Source for Source {
@@ -718,7 +758,12 @@ pub fn build(
             return Err("Repeated X-Processor Pro node".into());
         }
         let id = match node.model {
-            Model::Gpio { base, inputs } => {
+            Model::Gpio {
+                base,
+                options: GpioOptions {
+                    input_levels: inputs,
+                },
+            } => {
                 if pins.is_some() {
                     return Err("Repeated X-Processor Pro GPIO bank".into());
                 }
@@ -876,8 +921,11 @@ pub fn build(
             }
             Model::Adc {
                 base,
-                samples,
-                conversion_ticks,
+                options:
+                    AdcOptions {
+                        samples,
+                        conversion_ticks,
+                    },
             } => devices.register(
                 base,
                 adc::WINDOW,
@@ -1199,7 +1247,11 @@ pub fn build(
                     )?),
                 )?
             }
-            Model::Xt20TouchI2c { options, parts, touch } => {
+            Model::Xt20TouchI2c {
+                options,
+                parts,
+                touch,
+            } => {
                 let base = options.base;
                 devices.register(
                     base,
@@ -1550,7 +1602,13 @@ mod tests {
             "nodes": nodes
         }))
         .map_err(|e| e.to_string())?;
-        build(graph(), spec, &BTreeMap::new(), Mode::Strict, RunEngine::Unicorn)
+        build(
+            graph(),
+            spec,
+            &BTreeMap::new(),
+            Mode::Strict,
+            RunEngine::Unicorn,
+        )
     }
 
     #[test]
@@ -1573,7 +1631,14 @@ mod tests {
         }))
         .unwrap();
         let assets = BTreeMap::from([("flash".to_string(), vec![0xff; 0x1000])]);
-        let mut built = build(graph_at(0x200), spec, &assets, Mode::Strict, RunEngine::Unicorn).unwrap();
+        let mut built = build(
+            graph_at(0x200),
+            spec,
+            &assets,
+            Mode::Strict,
+            RunEngine::Unicorn,
+        )
+        .unwrap();
         // CPU stores: audio +0x20 = 0x11223344, then DMAGO channel 0 with the
         // program at 0x100, then spin.
         let stub: [u8; 0x60] = [
@@ -1617,7 +1682,14 @@ mod tests {
             ]
         }))
         .unwrap();
-        let mut built = build(graph_at(0x200), spec, &BTreeMap::new(), Mode::Strict, RunEngine::Unicorn).unwrap();
+        let mut built = build(
+            graph_at(0x200),
+            spec,
+            &BTreeMap::new(),
+            Mode::Strict,
+            RunEngine::Unicorn,
+        )
+        .unwrap();
         let id = built.nodes["h264"];
         let registers = built.nodes["movie-registers"];
         let mut packed = Vec::with_capacity(16 * 16 * 2);
@@ -1722,8 +1794,8 @@ mod tests {
         // with a 10-tick edge period so the timeline stays short.
         let built = build_nodes(json!([
             {"name": "gpio", "model": {"kind": "gpio", "base": 0xfff10000_u64,
-                                       "inputs": [0, 4, 0, 0, 0, 0, 0, 0,
-                                                  0, 0, 0, 0, 0, 0, 0, 0]}},
+                                       "options": {"input_levels": [0, 4, 0, 0, 0, 0, 0, 0,
+                                                  0, 0, 0, 0, 0, 0, 0, 0]}}},
             {"name": "dial", "model": {"kind": "encoder", "options": {
                 "pins": [{"port": 1, "pin": 2}, {"port": 1, "pin": 3}],
                 "phase_ticks": 10, "rest_phase": 2}, "counter": null}}
@@ -1764,7 +1836,7 @@ mod tests {
         // X-T20 2.11 values: the idle serial channel 3, the statistics scene
         // and one measured buffer, live-view output unit 1 and the S1/S2 lines.
         let gpio = json!({"name": "gpio", "model": {"kind": "gpio", "base": 0xfff10000_u64,
-                                                    "inputs": ([0_u16; 16])}});
+                                                    "options": {"input_levels": ([0_u16; 16])}}});
         let gates = json!({"name": "resets", "model": {"kind": "reset-gates",
                                                        "base": 0xfff0a000_u64}});
         let keys = json!({"name": "keys", "model": {"kind": "key-lines",

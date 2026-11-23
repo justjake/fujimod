@@ -16,5 +16,12 @@
     }
   },
   "installation": null,
-  "generated_facts": null
+  "generated_facts": {
+    "remote": null,
+    "cfgdata_location": {
+      "kind": "pointer",
+      "address": 16929604
+    },
+    "identity_checks": []
+  }
 }
