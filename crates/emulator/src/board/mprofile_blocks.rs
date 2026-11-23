@@ -269,9 +269,10 @@ fn thumb_size(word: u16) -> usize {
     if word >> 11 >= 0x1d { 4 } else { 2 }
 }
 
-/// Whether a zero-extended 16-bit Thumb instruction transfers one register
-/// to or from memory using an ordinary single-register addressing mode.
-/// Literal loads, multiple transfers and stack push/pop encodings are excluded.
+/// Whether a Thumb instruction transfers one register to or from memory using
+/// an ordinary single-register addressing mode. Literal reads are admitted
+/// only for legal general-register destinations. Multiple transfers and stack
+/// push/pop encodings are excluded.
 pub(super) fn is_single_transfer(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
         let instruction = word as u16;
