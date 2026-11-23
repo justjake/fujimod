@@ -128,6 +128,42 @@ pub fn composite_snapshot(
     }
     let p = s.plane;
     let yuv = matches!(p.order, PixelOrder::YyCbCr);
+    let shown_width = p.work_width.min(width) as usize;
+    if yuv
+        && p.sampling.is_none()
+        && p.source_x == 0
+        && p.work_x == 0
+        && p.work_y == 0
+        && p.source_width == p.work_width
+        && shown_width != 0
+        && shown_width.is_multiple_of(2)
+    {
+        // Packed 4:2:2 pairs share chroma and replace both pixels at full
+        // opacity. Unscaled scanout needs neither coordinate nor blend math.
+        let mut previous: Option<(&[u8], &[u8])> = None;
+        for (row, output) in s.rows.iter().zip(rgba.chunks_exact_mut(width as usize * 4)) {
+            let row = &row[..shown_width * 2];
+            let output = &mut output[..shown_width * 4];
+            if let Some((previous_row, pixels)) = previous
+                && previous_row == row
+            {
+                output.copy_from_slice(pixels);
+            } else {
+                for (pair, pixels) in row
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(output.as_chunks_mut::<8>().0)
+                {
+                    let [left, right, cb, cr] = *pair;
+                    pixels[..4].copy_from_slice(&p.order.rgba(&[left, cb, cr, 0]));
+                    pixels[4..].copy_from_slice(&p.order.rgba(&[right, cb, cr, 0]));
+                }
+            }
+            previous = Some((row, output));
+        }
+        return Ok(());
+    }
     let row_start = if yuv { p.source_x & !1 } else { p.source_x };
     for (n, row) in s.rows.iter().enumerate() {
         let y = p.work_y + n as u32;
@@ -162,4 +198,44 @@ pub fn composite(
     rgba: &mut [u8],
 ) -> Result<(), String> {
     composite_snapshot(&capture(read, plane, width, height)?, width, height, rgba)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unscaled_opaque_yuv_matches_identity_sampling_with_clipping() {
+        let rows = [
+            [8, 235, 190, 64, 82, 120, 15, 218],
+            [15, 16, 30, 211, 39, 70, 221, 29],
+            [15, 16, 30, 211, 39, 70, 221, 29],
+        ];
+        let unscaled = Plane {
+            address: 0,
+            stride: 8,
+            source_x: 0,
+            source_y: 0,
+            source_width: 4,
+            source_height: 3,
+            sampling: None,
+            work_x: 0,
+            work_y: 0,
+            work_width: 4,
+            work_height: 3,
+            order: PixelOrder::YyCbCr,
+        };
+        let read = |at: u64, bytes: usize| Ok(rows[at as usize / 8][..bytes].to_vec());
+        for (width, height) in [(2, 2), (3, 2), (4, 3), (6, 4)] {
+            let mut fast = vec![64; (width * height * 4) as usize];
+            let mut reference = fast.clone();
+            composite(read, unscaled, width, height, &mut fast).unwrap();
+            let sampled = Plane {
+                sampling: Some([4096, 4096]),
+                ..unscaled
+            };
+            composite(read, sampled, width, height, &mut reference).unwrap();
+            assert_eq!(fast, reference);
+        }
+    }
 }

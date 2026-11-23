@@ -66,7 +66,25 @@ impl Profile {
         }
         let mut bytes = [0; 4];
         cpu.read_virtual(pc, Access::Fetch, &mut bytes)?;
-        let word = u32::from_le_bytes(bytes);
+        self.before_word(cpu, pc, now, u32::from_le_bytes(bytes), cpsr)
+    }
+    pub(super) fn before_counted(
+        &mut self,
+        cpu: &dyn Cpu,
+        pc: u64,
+        now: u64,
+        word: u32,
+    ) -> Result<Entry, String> {
+        self.before_word(cpu, pc, now, word, scalar(cpu, arm::CPSR)? as u32)
+    }
+    fn before_word(
+        &mut self,
+        cpu: &dyn Cpu,
+        pc: u64,
+        now: u64,
+        word: u32,
+        cpsr: u32,
+    ) -> Result<Entry, String> {
         let body = word & 0x0fff_ffff;
         if word >> 28 != 15 && !arm::condition_passes(word >> 28, cpsr) {
             return Ok(Entry::Execute);
@@ -191,6 +209,7 @@ impl Board {
         if state.instructions[core] != 0 || state.armv7a[core].is_some() {
             return Err("ARMv7-A reset wiring must be configured once before execution".into());
         }
+        self.cpu(core)?.set_armv7a_affinity(config.mpidr)?;
         state.armv7a[core] = Some(Profile::new(config));
         Ok(())
     }
@@ -340,10 +359,12 @@ mod tests {
             ]),
         )
         .unwrap();
-        // vmov s0, r0; mov r2, #2; wfi.
-        b.write_physical(0x1000, &words(&[0xee000a10, 0xe3a02002, 0xe320f003]))
+        // The engine hardwires MPIDR bit 31, so this profile's zero value
+        // still comes from the board. Then execute vmov; mov r2, #2; wfi.
+        b.write_physical(0x1000, &words(&[0xee101fb0, 0xee000a10, 0xe3a02002, 0xe320f003]))
             .unwrap();
         b.run_for_instructions(100, 10).unwrap();
+        assert_eq!(b.read_register(0, arm::CORE[1]).unwrap(), 0);
         assert_eq!(b.read_register(0, arm::CORE[3]).unwrap(), 1);
         assert_eq!(b.read_register(0, arm::CORE[2]).unwrap(), 2);
         let entries = b.armv7a_exception_entries(0).unwrap();

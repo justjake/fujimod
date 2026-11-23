@@ -1,4 +1,19 @@
 //! Bounded GICv2 register model. No CPU registers, program text or RTOS state.
+/// Pending and active banks are usually sparse. Probe a chunk at a time
+/// before inspecting individual interrupt lines.
+fn asserted_lines(flags: &[bool]) -> impl Iterator<Item = usize> + '_ {
+    flags
+        .chunks(32)
+        .enumerate()
+        .filter(|(_, chunk)| chunk.contains(&true))
+        .flat_map(|(group, chunk)| {
+            chunk
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, &set)| set.then_some(group * 32 + index))
+        })
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Gic {
@@ -98,18 +113,19 @@ impl Gic {
     pub fn set_line(&mut self, line: usize, high: bool) {
         if line >= 32 && line < self.lines {
             let edge = self.config[line / 16] & (2 << (line % 16 * 2)) != 0;
-            if !edge || high && !self.levels[line] {
-                self.pending[0][line] = high;
-            }
+            let update_pending = !edge || high && !self.levels[line];
             self.levels[line] = high;
+            if update_pending && self.pending[0][line] != high {
+                self.pending[0][line] = high;
+                self.refresh();
+            }
         }
-        self.refresh();
     }
     pub fn pulse(&mut self, line: usize) {
-        if line < self.lines && line >= 32 {
+        if line < self.lines && line >= 32 && !self.pending[0][line] {
             self.pending[0][line] = true;
+            self.refresh();
         }
-        self.refresh();
     }
     pub fn next_irq(&self, core: usize) -> Option<usize> {
         self.eligible[core]
@@ -134,16 +150,16 @@ impl Gic {
             return None;
         }
         let group_mask = (0xffu16 << (self.binary_point[core] + 1)) & 0xff;
-        let running = (0..self.lines)
-            .filter(|&line| self.active[core][line])
+        let running = asserted_lines(&self.active[core])
             .map(|line| self.priority[Self::bank(core, line)][line] as u16 & group_mask)
             .min()
             .unwrap_or(256);
-        (0..self.lines)
+        asserted_lines(&self.pending[core][..32])
+            .chain(asserted_lines(&self.pending[0][32..]).map(|line| line + 32))
+            .chain(pulse)
             .filter(|&line| {
                 let bank = Self::bank(core, line);
                 self.enabled[bank][line]
-                    && (self.pending[bank][line] || pulse == Some(line))
                     && if line < 32 {
                         !self.active[core][line]
                     } else {
