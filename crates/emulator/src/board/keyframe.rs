@@ -153,6 +153,7 @@ impl State {
             mprofile_loops: _,
             // Host-only diagnostics; not part of a keyframe.
             access_histogram: _,
+            store_observer: _,
         } = self;
         Saved {
             execution_policy: *execution_policy,
