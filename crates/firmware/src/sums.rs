@@ -3,10 +3,11 @@
 //! Each stored word is the 32-bit complement of a byte sum over one region of
 //! the update. The regions come from the type-6 inner header, so no camera
 //! model is built in. Offsets below are DAT offsets. "Decoded" sums add each
-//! byte XOR 0xff; "raw" sums add the bytes as stored. Verified against X100V
-//! 3.01 `FPUPDATE.DAT`: every stored word matches and a reseal of the
-//! unmodified file is byte-identical. A sum matching does not authenticate a
-//! file or show that a camera accepts it.
+//! byte XOR 0xff; "raw" sums add the bytes as stored. Verified against the
+//! official X100V 3.01, X-E4 2.01, X-T3 5.11, X-T30 2.01 and X-T4 2.12
+//! updates: every stored word matches and a reseal of each unmodified file is
+//! byte-identical. A sum matching does not authenticate a file or show that a
+//! camera accepts it.
 
 use crate::{Result, extent, header_value, word};
 
