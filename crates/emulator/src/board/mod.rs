@@ -177,6 +177,24 @@ enum StoreObserverReason {
     RestartAttempt,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RunCode {
+    Unknown,
+    Running(usize),
+    DmaStopped(usize),
+}
+impl RunCode {
+    fn is_running(self, core: usize) -> bool {
+        self == Self::Running(core)
+    }
+    fn is_dma_stopped(self, core: usize) -> bool {
+        self == Self::DmaStopped(core)
+    }
+    fn keeps_shadow(self, core: usize) -> bool {
+        self.is_running(core) || self.is_dma_stopped(core)
+    }
+}
+
 #[derive(Clone, Default)]
 struct StoreObserverCounters {
     callbacks_total: u64,
@@ -292,12 +310,11 @@ struct State {
     reset_contexts: Vec<Option<Box<dyn fujimod_emulator_cpu::Snapshot>>>,
     exclusive: fujimod_emulator_cpu::exclusive::Shared,
     // Consecutive resumes of this processor share unchanged external backing.
-    // A peer run or host/DMA write requires resynchronizing Unicorn's code cache.
-    code_run: Option<usize>,
-    // Host-only: a device wrote RAM during the running slice, none of it RAM
-    // the running M-profile processor maps. `code_run` is cleared when the
-    // slice ends instead of at the write, so that processor's translations
-    // and page copies, which the write cannot have touched, are kept.
+    // DmaStopped preserves the stop reason for end-of-slice shadow handling,
+    // while remaining a peer boundary for every later reader.
+    code_run: RunCode,
+    // Host-only: Exact can finish a slice after a DMA that touches none of the
+    // running M-profile processor's mapped RAM, then mark the next peer epoch.
     code_write_deferred: bool,
     // Host-only: proves an M-profile processor's translations still match
     // memory after a peer ran, so its code cache survives the peer's slice.
@@ -686,7 +703,7 @@ impl Board {
             processor_generations: vec![0; n],
             reset_contexts,
             exclusive,
-            code_run: None,
+            code_run: RunCode::Unknown,
             code_write_deferred: false,
             code_shadow: (0..n).map(|_| None).collect(),
             blocks: (0..n).map(|_| None).collect(),
@@ -995,13 +1012,13 @@ impl Board {
             return Err("backing restore requires an unexecuted epoch".into());
         }
         let mut state = self.state.borrow_mut();
-        state.code_run = None;
+        state.code_run = RunCode::Unknown;
         self.physical_memory
             .write_backing(&self.cpus, &state.exclusive, address, bytes)
     }
     pub fn write_physical(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let mut state = self.state.borrow_mut();
-        state.code_run = None;
+        state.code_run = RunCode::Unknown;
         self.physical_memory.watch_transfer(
             write_watch::WriteSource::Host,
             address,
@@ -1014,7 +1031,7 @@ impl Board {
     pub fn write_memory(&self, core: usize, address: u64, bytes: &[u8]) -> Result<(), String> {
         self.cpu(core)?.write_memory(address, bytes)?;
         let mut state = self.state.borrow_mut();
-        state.code_run = None;
+        state.code_run = RunCode::Unknown;
         notify_memory(
             &self.cpus,
             &state.mprofile,
@@ -1284,7 +1301,7 @@ impl Board {
         if !self.state.borrow().bus.has_host_requests() {
             self.host_pause.set(false);
         }
-        self.state.borrow_mut().code_run = None;
+        self.state.borrow_mut().code_run = RunCode::Unknown;
         self.state.borrow_mut().clock_limit = until;
         {
             let state = self.state.borrow();
@@ -1485,7 +1502,7 @@ impl Board {
             }
             if s.mprofile[core].as_ref().is_some_and(|p| p.needs_reset) {
                 s.settled.clear();
-                s.code_run = None;
+                s.code_run = RunCode::Unknown;
                 if let Some(shadow) = s.code_shadow[core].as_mut() {
                     shadow.invalidate();
                 }
@@ -1503,14 +1520,14 @@ impl Board {
                 // A peer's guest stores are invisible to this engine, as are
                 // host and DMA writes between its slices. After any of them,
                 // keep the translations only while the shadow can prove
-                // their bytes. A write during this processor's own slice, an
-                // alias store, a decoder change or a reset discards them.
+                // their bytes. DMA invalidates the affected native blocks directly.
+                // An untracked alias store, decoder change or reset discards them.
                 // This holds under either execution policy: a slice on this
                 // path runs alone (a concurrent window never holds a
-                // processor whose slices come here, and it clears `code_run`
-                // when it ends), and the instruction observer runs before
+                // processor whose slices come here, and it changes the code
+                // run reason when it ends), and the instruction observer runs before
                 // every instruction of this engine whatever the policy.
-                let peer_ran = s.code_run != Some(core);
+                let peer_ran = !s.code_run.is_running(core);
                 let shadow = s.code_shadow[core].as_mut();
                 let discard = match &shadow {
                     Some(shadow) => shadow.changed() || peer_ran && shadow.unproven(),
@@ -1528,7 +1545,7 @@ impl Board {
                     shadow.begin_slice();
                 }
             }
-            s.code_run = Some(core);
+            s.code_run = RunCode::Running(core);
             s.code_write_deferred = false;
             let pins_settled = s.mprofile[core].is_some()
                 && self.block_execution.get()
@@ -1622,7 +1639,7 @@ impl Board {
             }
             s.end_code_slice(&**cpu, core);
             if std::mem::take(&mut s.code_write_deferred) {
-                s.code_run = None;
+                s.code_run = RunCode::Unknown;
             }
             s.sync(&**cpu, core)?;
             if let Some(error) = s.error.take() {
@@ -2509,10 +2526,9 @@ impl State {
             shadow.end_slice(cpu, scalar(cpu, Register::Pc).ok().map(|pc| pc & !1), |address| {
                 Self::code_page_checked(profile, address)
             });
-            // The copies just taken include any bytes a device, the host or
-            // an alias store wrote during this slice, which the engine did
-            // not track. Those translations can only be discarded.
-            if *code_run != Some(core) {
+            // DMA invalidated overlapping translated blocks before acknowledging
+            // the write. Other unknown writes can leave stale blocks behind.
+            if !code_run.keeps_shadow(core) {
                 shadow.invalidate();
             }
         }
@@ -2552,7 +2568,7 @@ impl State {
     }
     fn apply_memory(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
         if self.decoders.pending() {
-            self.code_run = None;
+            self.code_run = RunCode::Unknown;
             for shadow in self.code_shadow.iter_mut().flatten() {
                 shadow.invalidate();
             }
@@ -3421,7 +3437,7 @@ struct Services<'a> {
     mprofile: &'a mut [Option<mprofile::Profile>],
     cpus: &'a [Rc<dyn Cpu>],
     exclusive: &'a fujimod_emulator_cpu::exclusive::Shared,
-    code_run: &'a mut Option<usize>,
+    code_run: &'a mut RunCode,
     code_write_deferred: &'a mut bool,
     decoders: &'a mut decoder::Decoders,
     active_core: Option<usize>,
@@ -3449,7 +3465,7 @@ impl Host for Services<'_> {
         if !self.decoders.pending() {
             return Ok(());
         }
-        *self.code_run = None;
+        *self.code_run = RunCode::Unknown;
         if let Some(core) = self.active_core {
             // An MMIO callback is inside the selecting instruction. A raw
             // stop can leave its PC unchanged and replay it on resume.
@@ -3571,26 +3587,34 @@ impl Host for Services<'_> {
         if self.decoders.pending() {
             return Err("DMA requires committed memory decoding".into());
         }
-        // A write that lands during the slice of an M-profile processor and
-        // touches none of the RAM that processor maps cannot change its code
-        // or its page copies. Its slice continues; the mark follows when the
-        // slice ends, where every later reader finds it.
-        let foreign = self.execution_policy == ExecutionPolicy::Exact
-            && self.active_core.is_some_and(|core| {
-                *self.code_run == Some(core)
-                    && self.mprofile[core]
-                        .as_ref()
-                        .is_some_and(|p| !p.maps_physical(address, bytes.len()))
-            });
-        if foreign {
-            *self.code_write_deferred = true;
-        } else {
-            *self.code_run = None;
-        }
         self.memory
             .watch_transfer(write_watch::WriteSource::Dma, address, bytes, self.timeline.now());
-        self.memory
-            .write_dma(self.cpus, self.exclusive, address, bytes)
+        let owner = self.active_core.filter(|&core| {
+            self.code_run.keeps_shadow(core) && self.mprofile[core].is_some()
+        });
+        // Exact execution can complete its existing slice for a foreign write.
+        // Classify the decoded physical chunks under the same mapping as the copy.
+        let profile = owner
+            .filter(|&core| self.execution_policy == ExecutionPolicy::Exact && self.code_run.is_running(core))
+            .and_then(|core| self.mprofile[core].as_ref());
+        let mut can_finish_slice = profile.is_some();
+        let result = self.memory.write_dma(self.cpus, self.exclusive, address, bytes, |physical, size| {
+            if can_finish_slice {
+                can_finish_slice = profile.is_some_and(|p| !p.maps_physical(physical, size));
+            }
+        });
+        if let Err(error) = result {
+            *self.code_run = RunCode::Unknown;
+            return Err(error);
+        }
+        if can_finish_slice {
+            *self.code_write_deferred = true;
+        } else {
+            // Every CPU has acknowledged every changed backing range. Stop before
+            // the next instruction and recheck shadow pages in the next epoch.
+            *self.code_run = owner.map_or(RunCode::Unknown, RunCode::DmaStopped);
+        }
+        Ok(())
     }
     fn scanout(
         &mut self,
@@ -3668,7 +3692,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             cpu.stop()?;
             return Ok(());
         }
-        if s.mprofile[b.core].is_some() && s.code_run != Some(b.core) {
+        if s.mprofile[b.core].is_some() && !s.code_run.is_running(b.core) {
             // A due DMA write may have replaced the instruction in this TB.
             // Restart before counting or executing its stale translation.
             cpu.stop()?;
@@ -3698,7 +3722,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             let ready = p.ready();
             p.take_stopped();
             if p.take_alias_write() {
-                s.code_run = None;
+                s.code_run = RunCode::Unknown;
             }
             let execute = matches!(entry, mprofile::Entry::Execute);
             if !execute {
@@ -3923,7 +3947,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         }
         if s.error.is_some()
             || (!settled && s.scheduler_room(core) == 0)
-            || s.code_run != Some(core)
+            || !s.code_run.is_running(core)
         {
             cpu.stop()?;
             return Ok(());
@@ -3946,7 +3970,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         // other emulated instructions only move the PC.
         let stopped = p.take_stopped();
         if p.take_alias_write() {
-            s.code_run = None;
+            s.code_run = RunCode::Unknown;
         }
         let execute = matches!(entry, mprofile::Entry::Execute);
         if !execute {
@@ -3992,7 +4016,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         // The translated guard admits subsequent eligible blocks on this
         // checked page. Hooked memory accesses settle and disarm the window.
         let inline = settled && s.settled.armed && !ready && fetched.is_some()
-            && s.code_run == Some(core);
+            && s.code_run.is_running(core);
         // Admit the block: its first entry is already debited.
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.room -= entries - 1;
@@ -4153,7 +4177,7 @@ unsafe fn written(
                         state.observe_store_reason(b.core, StoreObserverReason::MProfileAliasWrite);
                         observed_reasons = observed_reasons.saturating_add(1);
                     }
-                    state.code_run = None;
+                    state.code_run = RunCode::Unknown;
                 }
                 if state.execution_policy == ExecutionPolicy::Exact {
                     let code_shadow_active = state.code_shadow[b.core].is_some();

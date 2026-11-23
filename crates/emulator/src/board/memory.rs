@@ -588,9 +588,21 @@ impl Memory {
         bytes: &[u8],
         access: Access,
     ) -> Result<(), String> {
+        self.write_with_ranges(cpus, domain, address, bytes, access, |_, _| {})
+    }
+    fn write_with_ranges(
+        &self,
+        cpus: &[Rc<dyn Cpu>],
+        domain: &exclusive::Shared,
+        address: u64,
+        bytes: &[u8],
+        access: Access,
+        mut on_range: impl FnMut(u64, usize),
+    ) -> Result<(), String> {
         let mut offset = 0;
         for chunk in self.chunks(address, bytes.len(), access)? {
             let (physical, pointer, len) = chunk?;
+            on_range(physical, len);
             self.mark(pointer, len)?;
             unsafe {
                 std::ptr::copy_nonoverlapping(bytes.as_ptr().add(offset), pointer.as_ptr(), len);
@@ -628,13 +640,21 @@ impl Memory {
         domain: &exclusive::Shared,
         address: u64,
         bytes: &[u8],
+        on_range: impl FnMut(u64, usize),
     ) -> Result<(), String> {
         self.observe_preservation_write(
             super::preservation::PreservationBusSource::ModelBusWrite,
             address,
             bytes.len(),
         );
-        self.write(cpus, domain, address, bytes, Access::Write)?;
+        self.write_with_ranges(
+            cpus,
+            domain,
+            address,
+            bytes,
+            Access::Write,
+            on_range,
+        )?;
         self.observe_transfer("model-bus-write", address, bytes.len());
         if let Some(stops) = self
             .continuation
