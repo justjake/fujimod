@@ -1410,6 +1410,7 @@ impl Session {
     ) -> Result<Self, String> {
         let Definition {
             coherent_ranges,
+            counted_execution,
             byte_i2c,
             ram_size,
             cores,
@@ -1624,7 +1625,7 @@ impl Session {
         // Declared coherent ranges select counted execution: the processors
         // hook those ranges and observe data-cache maintenance, which the
         // per-instruction hook path does not.
-        let mut counted = counted::requested() || coherent_ranges.is_some();
+        let mut counted = counted::requested() || coherent_ranges.is_some() || counted_execution;
         if counted
             && let Some(name) = counted::unsupported(
                 boot_rom,
@@ -1635,6 +1636,11 @@ impl Session {
             if coherent_ranges.is_some() {
                 return Err(format!(
                     "Coherent ranges need counted execution, which does not support {name}"
+                ));
+            }
+            if counted_execution {
+                return Err(format!(
+                    "The definition requests counted execution, which does not support {name}"
                 ));
             }
             eprintln!("FUJIMOD_XP4_COUNTED ignored: counted execution does not support {name}");
