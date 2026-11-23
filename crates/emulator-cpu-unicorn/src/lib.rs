@@ -44,6 +44,20 @@ use std::rc::Rc;
 #[cfg(target_os = "emscripten")]
 pub use available_memory::remaining_heap_bytes;
 
+macro_rules! guard_sample_names {
+    ($($slot:literal),*) => {
+        [$(
+            concat!("guard_sample_", stringify!($slot), "_sequence"),
+            concat!("guard_sample_", stringify!($slot), "_pc"),
+            concat!("guard_sample_", stringify!($slot), "_word"),
+        )*]
+    };
+}
+const GUARD_SAMPLE_NAMES: [&str; 96] = guard_sample_names!(
+    00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+);
+
 pub struct Library {
     api: Rc<ffi::Api>,
 }
@@ -1457,18 +1471,29 @@ impl Cpu for Core {
             "guard_page_mismatch_callbacks",
             "guard_budget_callbacks",
             "guard_pause_callbacks",
+            "guard_sample_count",
         ];
         let guard_extra: &[&str] = if self.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0 {
             &guard
         } else {
             &[]
         };
+        let guard_samples: &[&str] =
+            if self.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0 {
+                &GUARD_SAMPLE_NAMES
+            } else {
+                &[]
+            };
         let values = unsafe {
-            std::slice::from_raw_parts(read(self.raw), names.len() + extra.len() + guard_extra.len())
+            std::slice::from_raw_parts(
+                read(self.raw),
+                names.len() + extra.len() + guard_extra.len() + guard_samples.len(),
+            )
         };
         Ok(names.into_iter()
             .chain(extra.iter().copied())
             .chain(guard_extra.iter().copied())
+            .chain(guard_samples.iter().copied())
             .zip(values.iter().copied())
             .collect())
     }
@@ -2070,6 +2095,10 @@ mod tests {
         assert_eq!(blocks.callbacks, callbacks_before_classifier + 1);
         let after_classifier = cpu.exit_counters().unwrap();
         assert!(after_classifier["guard_classifier_slow_callbacks"] > 0);
+        assert_eq!(after_classifier["guard_sample_count"], 1);
+        assert_eq!(after_classifier["guard_sample_00_sequence"], 1);
+        assert_eq!(after_classifier["guard_sample_00_pc"], 0x1000);
+        assert_eq!(after_classifier["guard_sample_00_word"], 0x2001);
     }
     #[test]
     fn thumb_memory_restart_exposes_exact_precharged_mixed_width_span() {
