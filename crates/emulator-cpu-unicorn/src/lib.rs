@@ -57,6 +57,31 @@ const GUARD_SAMPLE_NAMES: [&str; 96] = guard_sample_names!(
     00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 );
+macro_rules! m4_classifier_counter_names {
+    ($($class:literal),* $(,)?) => {
+        [$(
+            concat!("guard_classifier_", $class, "_callbacks"),
+            concat!("guard_classifier_", $class, "_translated_tb_instruction_opportunities"),
+        )*]
+    };
+}
+const M4_CLASSIFIER_COUNTER_NAMES: [&str; 94] = m4_classifier_counter_names!(
+    "thumb16_hi_0", "thumb16_hi_1", "thumb16_hi_2", "thumb16_hi_3",
+    "thumb16_4_register_data", "thumb16_4_bx_blx", "thumb16_4_literal_ldr",
+    "thumb16_hi_5", "thumb16_hi_6", "thumb16_hi_7", "thumb16_hi_8",
+    "thumb16_hi_9", "thumb16_hi_a", "thumb16_b_it_hints", "thumb16_b_push",
+    "thumb16_b_pop", "thumb16_b_cbz_cbnz", "thumb16_b_misc",
+    "thumb16_hi_c", "thumb16_hi_d", "thumb16_hi_e", "thumb16_hi_f",
+    "thumb32_1d_major_0", "thumb32_1d_major_1", "thumb32_1d_major_2",
+    "thumb32_1d_major_3", "thumb32_1d_major_4", "thumb32_1d_major_5",
+    "thumb32_1d_major_6", "thumb32_1d_major_7", "thumb32_1e_major_0",
+    "thumb32_1e_major_1", "thumb32_1e_major_2", "thumb32_1e_major_3",
+    "thumb32_1e_major_4", "thumb32_1e_major_5", "thumb32_1e_major_6",
+    "thumb32_1e_major_7", "thumb32_1f_major_0", "thumb32_1f_major_1",
+    "thumb32_1f_major_2", "thumb32_1f_major_3", "thumb32_1f_major_4",
+    "thumb32_1f_major_5", "thumb32_1f_major_6", "thumb32_1f_major_7",
+    "other_or_non_thumb",
+);
 const TRANSLATION_REPEAT_COUNTER_NAMES: [&str; 24] = [
     "translation_repeat_across_global_flush_count",
     "translation_repeat_across_global_flush_tb_gen_code_elapsed_ns",
@@ -1576,6 +1601,12 @@ impl Cpu for Core {
             } else {
                 &[]
             };
+        let classifier_histogram_extra: &[&str] =
+            if self.api.extensions.features & ffi::FEATURE_M4_CLASSIFIER_HISTOGRAM != 0 {
+                &M4_CLASSIFIER_COUNTER_NAMES
+            } else {
+                &[]
+            };
         let values = unsafe {
             std::slice::from_raw_parts(
                 read(self.raw),
@@ -1583,7 +1614,8 @@ impl Cpu for Core {
                     + extra.len()
                     + guard_extra.len()
                     + guard_samples.len()
-                    + translation_timing_extra.len(),
+                    + translation_timing_extra.len()
+                    + classifier_histogram_extra.len(),
             )
         };
         let mut counters: BTreeMap<_, _> = names.into_iter()
@@ -1591,6 +1623,7 @@ impl Cpu for Core {
             .chain(guard_extra.iter().copied())
             .chain(guard_samples.iter().copied())
             .chain(translation_timing_extra.iter().copied())
+            .chain(classifier_histogram_extra.iter().copied())
             .zip(values.iter().copied())
             .collect();
         if translation_timing_extra.len() == translation_timing.len() {
@@ -1599,6 +1632,19 @@ impl Cpu for Core {
                 .saturating_add(counters["translation_untracked_lookup_key_count"]);
             if classified > counters["translations"] {
                 return Err("translation key classifications exceed translation attempts".into());
+            }
+        }
+        if !classifier_histogram_extra.is_empty() {
+            if !guard_extra.contains(&"guard_classifier_slow_callbacks") {
+                return Err("M4 classifier histogram requires guard refusal counters".into());
+            }
+            let class_callbacks = M4_CLASSIFIER_COUNTER_NAMES
+                .iter()
+                .step_by(2)
+                .map(|name| counters[*name])
+                .fold(0u64, u64::saturating_add);
+            if class_callbacks != counters["guard_classifier_slow_callbacks"] {
+                return Err("M4 classifier buckets do not match guard classifier callbacks".into());
             }
         }
         counters.extend(self.translation_repeat_counter_snapshot()?);
@@ -2410,6 +2456,16 @@ mod tests {
         assert_eq!(after_classifier["guard_sample_00_sequence"], 1);
         assert_eq!(after_classifier["guard_sample_00_pc"], 0x1000);
         assert_eq!(after_classifier["guard_sample_00_word"], 0x2001);
+        assert!(after_classifier["guard_classifier_thumb16_hi_2_callbacks"] > 0);
+        assert!(after_classifier[
+            "guard_classifier_thumb16_hi_2_translated_tb_instruction_opportunities"
+        ] > 0);
+        let class_callbacks = M4_CLASSIFIER_COUNTER_NAMES
+            .iter()
+            .step_by(2)
+            .map(|name| after_classifier[*name])
+            .fold(0u64, u64::saturating_add);
+        assert_eq!(class_callbacks, after_classifier["guard_classifier_slow_callbacks"]);
     }
     #[test]
     fn thumb_memory_restart_exposes_exact_precharged_mixed_width_span() {
