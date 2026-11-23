@@ -57,6 +57,32 @@ const GUARD_SAMPLE_NAMES: [&str; 96] = guard_sample_names!(
     00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 );
+const TRANSLATION_REPEAT_COUNTER_NAMES: [&str; 24] = [
+    "translation_repeat_across_global_flush_count",
+    "translation_repeat_across_global_flush_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_count",
+    "translation_repeat_same_generation_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_unknown_cause_count",
+    "translation_repeat_same_generation_unknown_cause_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_restore_nocache_count",
+    "translation_repeat_same_generation_invalidation_restore_nocache_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_exec_nocache_count",
+    "translation_repeat_same_generation_invalidation_exec_nocache_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_io_recompile_count",
+    "translation_repeat_same_generation_invalidation_io_recompile_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_guest_store_count",
+    "translation_repeat_same_generation_invalidation_guest_store_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_exit_address_count",
+    "translation_repeat_same_generation_invalidation_exit_address_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_embedder_count",
+    "translation_repeat_same_generation_invalidation_embedder_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_watchpoint_count",
+    "translation_repeat_same_generation_invalidation_watchpoint_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_restart_count",
+    "translation_repeat_same_generation_invalidation_restart_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_physical_write_count",
+    "translation_repeat_same_generation_invalidation_physical_write_tb_gen_code_elapsed_ns",
+];
 
 pub struct Library {
     api: Rc<ffi::Api>,
@@ -708,6 +734,42 @@ impl Core {
             return Err("hook belongs to a different CPU or was removed".into());
         }
         Ok(self.hooks.borrow().get(&hook.key).unwrap().native)
+    }
+    fn translation_repeat_counter_snapshot(
+        &self,
+    ) -> Result<BTreeMap<&'static str, u64>, String> {
+        if self.api.extensions.features & ffi::FEATURE_TRANSLATION_REPEAT_DETAILS == 0 {
+            return Ok(BTreeMap::new());
+        }
+        let read = self
+            .api
+            .extensions
+            .translation_repeat_counters
+            .ok_or("CPU backend has no translation repeat counters")?;
+        let mut count = 0;
+        let values = unsafe { read(self.raw, &mut count) };
+        if count != TRANSLATION_REPEAT_COUNTER_NAMES.len() || values.is_null() {
+            return Err(format!(
+                "CPU backend returned {count} translation repeat counters; expected {}",
+                TRANSLATION_REPEAT_COUNTER_NAMES.len()
+            ));
+        }
+        let values = unsafe { std::slice::from_raw_parts(values, count) };
+        let counters: BTreeMap<_, _> = TRANSLATION_REPEAT_COUNTER_NAMES
+            .into_iter()
+            .zip(values.iter().copied())
+            .collect();
+        let attributed_same_generation = std::iter::once(
+            counters["translation_repeat_same_generation_unknown_cause_count"],
+        )
+        .chain((6..TRANSLATION_REPEAT_COUNTER_NAMES.len()).step_by(2).map(|index| values[index]))
+        .fold(0u64, u64::saturating_add);
+        if attributed_same_generation
+            != counters["translation_repeat_same_generation_count"]
+        {
+            return Err("same-generation translation repeat causes do not reconcile".into());
+        }
+        Ok(counters)
     }
 }
 impl Cpu for Core {
@@ -1524,7 +1586,7 @@ impl Cpu for Core {
                     + translation_timing_extra.len(),
             )
         };
-        let counters: BTreeMap<_, _> = names.into_iter()
+        let mut counters: BTreeMap<_, _> = names.into_iter()
             .chain(extra.iter().copied())
             .chain(guard_extra.iter().copied())
             .chain(guard_samples.iter().copied())
@@ -1539,6 +1601,7 @@ impl Cpu for Core {
                 return Err("translation key classifications exceed translation attempts".into());
             }
         }
+        counters.extend(self.translation_repeat_counter_snapshot()?);
         Ok(counters)
     }
 }

@@ -21,6 +21,7 @@ pub const FEATURE_NATIVE_RESTART_BOUNDARY: u32 = 1 << 24;
 pub const FEATURE_THUMB_EXECUTE_END: u32 = 1 << 25;
 pub const FEATURE_THUMB_IT_ACCOUNTING: u32 = 1 << 26;
 pub const FEATURE_TRANSLATION_TIMING_COUNTERS: u32 = 1 << 27;
+pub const FEATURE_TRANSLATION_REPEAT_DETAILS: u32 = 1 << 29;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -106,6 +107,8 @@ pub struct Extensions {
     // uc_embedder_accounting (features bit 2): the engine's accounting record.
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
     pub exit_counters: Option<unsafe extern "C" fn(Engine) -> *const u64>,
+    pub translation_repeat_counters:
+        Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
 }
 
 impl Extensions {
@@ -305,6 +308,10 @@ mod linked {
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
+        fn uc_embedder_translation_repeat_counters(
+            engine: Engine,
+            count: *mut usize,
+        ) -> *const u64;
         fn uc_embedder_features() -> u32;
     }
     pub fn extensions() -> Extensions {
@@ -331,6 +338,7 @@ mod linked {
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
             exit_counters: Some(uc_embedder_exit_counters),
+            translation_repeat_counters: Some(uc_embedder_translation_repeat_counters),
             features: unsafe { uc_embedder_features() },
         }
     }
