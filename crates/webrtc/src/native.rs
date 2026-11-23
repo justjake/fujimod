@@ -240,6 +240,17 @@ impl PeerSocket {
         }
         Err(error("WebRTC connection closed"))
     }
+    /// The next received message if one is waiting: `None` when none is,
+    /// an error once the peer has gone.
+    pub fn try_receive(&mut self) -> Option<Result<Vec<u8>>> {
+        match self.receive.try_recv() {
+            Ok(item) => Some(item),
+            Err(async_channel::TryRecvError::Empty) => None,
+            Err(async_channel::TryRecvError::Closed) => {
+                Some(Err(error("peer disconnected; completion unknown")))
+            }
+        }
+    }
     pub async fn receive(&mut self) -> Result<Vec<u8>> {
         self.receive
             .recv()

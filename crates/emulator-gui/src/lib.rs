@@ -1,15 +1,16 @@
 //! The native session behind the emulator UI.
 //!
-//! The browser and desktop frontends use the same `RemoteEngine` command and
-//! frame protocol. Guest execution stays on the host's session thread; a
-//! [`Viewer`] applies a window's input to any [`Run`] between guest slices and
-//! sends it the latest LCD image.
+//! A camera is served in a share [`Room`]: every controller, the desktop
+//! window included, joins it over WebRTC, sends commands on a data channel
+//! and receives the LCD as video. Guest execution stays on the host's session
+//! thread; a [`Viewer`] applies the controllers' input to any [`Run`] between
+//! guest slices.
 
 pub mod launch;
 mod protocol;
 mod server;
 
-pub use server::{Endpoint, Run, Socket, Viewer, bind, serve};
+pub use server::{Endpoint, Room, Run, Viewer, serve};
 
 use fujimod_emulator_boot::xp5::RunHost;
 

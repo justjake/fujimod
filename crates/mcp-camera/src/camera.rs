@@ -267,8 +267,8 @@ impl Camera {
             return Err("this camera is already shown".into());
         }
         self.connect()?;
-        let socket = fujimod_emulator_gui::bind(std::net::Ipv4Addr::LOCALHOST.into())?;
-        let endpoint = socket.endpoint().url.clone();
+        let room = fujimod_emulator_gui::Room::loopback()?;
+        let endpoint = room.endpoint().url.clone();
         let mut app = fujimod_emulator_gui::launch::connect(&endpoint)?;
         // The window has 30 seconds to join before the request gives up.
         let expired = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -277,7 +277,7 @@ impl Camera {
             std::thread::sleep(std::time::Duration::from_secs(30));
             timer.store(true, std::sync::atomic::Ordering::Release);
         });
-        let viewer = match socket.join(self, &expired) {
+        let viewer = match room.join(self, &expired) {
             Ok(viewer) => viewer,
             Err(error) => {
                 let _ = app.kill();

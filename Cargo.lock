@@ -2818,11 +2818,12 @@ dependencies = [
  "fujimod-emulator-controls",
  "fujimod-emulator-devices",
  "fujimod-emulator-session",
+ "fujimod-webrtc",
  "fujimod-workspace-hack",
- "jpeg-encoder",
+ "futures-lite",
+ "openh264",
  "serde",
  "serde_json",
- "tungstenite 0.30.0",
 ]
 
 [[package]]
@@ -2837,6 +2838,7 @@ dependencies = [
  "fujimod-emulator-gui",
  "fujimod-emulator-models",
  "fujimod-emulator-xp5-board",
+ "fujimod-webrtc",
  "fujimod-workspace-hack",
  "rfd 0.17.2",
  "serde",
@@ -2845,6 +2847,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "url",
 ]
 
 [[package]]
@@ -5218,12 +5221,6 @@ dependencies = [
  "getrandom 0.4.3",
  "libc",
 ]
-
-[[package]]
-name = "jpeg-encoder"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
 
 [[package]]
 name = "js-sys"

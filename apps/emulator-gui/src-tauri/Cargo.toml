@@ -24,6 +24,8 @@ fujimod-emulator-exr2-board = { path = "../../../crates/emulator-exr2-board" }
 fujimod-emulator-gui.workspace = true
 fujimod-emulator-models = { path = "../../../crates/emulator-models" }
 fujimod-emulator-xp5-board.workspace = true
+fujimod-webrtc = { path = "../../../crates/webrtc", features = ["signaling"] }
+url = "2"
 rfd = "0.17"
 serde.workspace = true
 serde_json.workspace = true

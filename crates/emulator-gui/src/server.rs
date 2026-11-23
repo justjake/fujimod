@@ -1,19 +1,28 @@
 use crate::protocol::{Event, Request, command_args};
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_session::Session;
+use fujimod_webrtc::{HostEvent, LoopbackRoom, PeerSocket, VideoFrame, VideoSender};
+use openh264::encoder::{
+    BitRate, Encoder, EncoderConfig, FrameRate, IntraFramePeriod, Profile, RateControlMode,
+    UsageType,
+};
+use openh264::formats::{RgbaSliceU8, YUVBuffer};
 use serde_json::Value;
 use std::{
-    io::ErrorKind,
-    net::{IpAddr, TcpListener, TcpStream},
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
-use tungstenite::{
-    Message, WebSocket,
-    handshake::server::{Request as HttpRequest, Response},
+    collections::{BTreeMap, BTreeSet},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    time::{Duration, Instant},
 };
 
 const MAX_MESSAGES_PER_TICK: usize = 64;
+/// Video target for one controller.
+const VIDEO_BITS_PER_SECOND: u32 = 3_000_000;
+/// A keyframe at least this often lets a controller recover from loss.
+const KEYFRAME_INTERVAL: Duration = Duration::from_secs(1);
 
 /// A camera session a desktop window drives: any processor, any host.
 pub trait Run {
@@ -29,32 +38,82 @@ pub trait Run {
         Self: Sized;
 }
 
-/// Address a desktop webview joins for commands and LCD frames.
+/// The share link a controller opens to join a camera's room.
 #[derive(Clone, Debug)]
 pub struct Endpoint {
     pub url: String,
 }
 
-/// A listener whose endpoint is known before the camera session is opened.
-pub struct Socket {
+/// The share room a camera is served in, known before the camera is opened.
+pub struct Room {
     endpoint: Endpoint,
-    listener: TcpListener,
+    events: mpsc::Receiver<HostEvent>,
+    _room: Arc<LoopbackRoom>,
 }
 
-impl Socket {
+impl Room {
+    /// A room on this machine for the desktop window. Its link names no
+    /// site: the window reads only the ticket in its fragment.
+    pub fn loopback() -> Result<Self, String> {
+        let room =
+            Arc::new(LoopbackRoom::start("http://localhost").map_err(|error| error.to_string())?);
+        let (send, events) = mpsc::channel();
+        let watched = Arc::clone(&room);
+        std::thread::Builder::new()
+            .name("fujimod-viewer-room".into())
+            .spawn(move || {
+                while let Ok(event) =
+                    futures_lite::future::block_on(watched.room().next_event())
+                {
+                    if send.send(event).is_err() {
+                        break;
+                    }
+                }
+            })
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            endpoint: Endpoint {
+                url: room.link().to_owned(),
+            },
+            events,
+            _room: room,
+        })
+    }
+
     pub fn endpoint(&self) -> &Endpoint {
         &self.endpoint
     }
 
-    /// Wait for the desktop window to join, then attach it to `run`.
+    /// Wait for the first controller to join, then attach the room to `run`.
     pub fn join(self, run: &dyn Run, stop: &AtomicBool) -> Result<Viewer, String> {
-        Viewer::open(accept(&self.listener, stop)?, run.session())
+        let mut viewer = Viewer {
+            room: self,
+            controllers: Vec::new(),
+            holds: BTreeMap::new(),
+            latest: None,
+            sequence: 0,
+            catalog: None,
+            pending_releases: Vec::new(),
+        };
+        while viewer.controllers.is_empty() {
+            if stop.load(Ordering::Acquire) {
+                return Err("desktop window closed".into());
+            }
+            match viewer.room.events.recv_timeout(Duration::from_millis(10)) {
+                Ok(event) => viewer.event(event, run.session())?,
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("share room closed".into());
+                }
+            }
+        }
+        Ok(viewer)
     }
 }
 
-/// Serve `run` to its desktop window until the window closes or `stop` is set.
-pub fn serve<R: Run>(mut run: R, socket: Socket, stop: &AtomicBool) -> Result<Value, String> {
-    let mut viewer = socket.join(&run, stop)?;
+/// Serve `run` in its room until the last controller leaves or `stop` is set.
+pub fn serve<R: Run>(mut run: R, room: Room, stop: &AtomicBool) -> Result<Value, String> {
+    let mut viewer = room.join(&run, stop)?;
     while !stop.load(Ordering::Acquire) && viewer.service(&mut run)? {
         run.step()?;
         let frames = run.frames()?;
@@ -63,234 +122,304 @@ pub fn serve<R: Run>(mut run: R, socket: Socket, stop: &AtomicBool) -> Result<Va
     run.finish()
 }
 
-/// Reserve an endpoint before opening the camera.
-pub fn bind(address: IpAddr) -> Result<Socket, String> {
-    let listener = TcpListener::bind((address, 0)).map_err(|error| error.to_string())?;
-    listener
-        .set_nonblocking(true)
-        .map_err(|error| error.to_string())?;
-    let address = listener.local_addr().map_err(|error| error.to_string())?;
-    Ok(Socket {
-        endpoint: Endpoint {
-            url: format!("ws://{address}/emulator"),
-        },
-        listener,
-    })
-}
-
-fn accept(listener: &TcpListener, stop: &AtomicBool) -> Result<WebSocket<TcpStream>, String> {
-    loop {
-        if stop.load(Ordering::Acquire) {
-            return Err("desktop window closed".into());
-        }
-        match listener.accept() {
-            Ok((stream, _)) => {
-                let check = |request: &HttpRequest, response: Response| {
-                    if request.uri().path() == "/emulator" {
-                        Ok(response)
-                    } else {
-                        let mut refusal = tungstenite::handshake::server::ErrorResponse::new(None);
-                        *refusal.status_mut() = tungstenite::http::StatusCode::NOT_FOUND;
-                        Err(refusal)
-                    }
-                };
-                let mut socket =
-                    tungstenite::accept_hdr(stream, check).map_err(|error| error.to_string())?;
-                socket
-                    .get_mut()
-                    .set_nonblocking(true)
-                    .map_err(|error| error.to_string())?;
-                return Ok(socket);
-            }
-            Err(error) if error.kind() == ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-}
-
 fn identity(session: &Session, key: &str) -> String {
     session.definition[key].as_str().unwrap_or_default().to_owned()
 }
 
-/// One joined desktop window. It never owns the session: its host calls
-/// [`Viewer::service`] between guest slices and [`Viewer::show`] with new images.
-pub struct Viewer {
-    socket: WebSocket<TcpStream>,
-    frame_number: u64,
-    last: Option<Frame>,
-    last_state: Option<String>,
+/// One controller's video: its track and its own encoder, so a controller
+/// that joins late starts from a keyframe.
+struct Video {
+    sender: VideoSender,
+    encoder: Encoder,
+    /// Sequence of the last frame encoded for this controller.
+    sent: u64,
+    sent_at: Instant,
+    keyframe_at: Option<Instant>,
+}
+
+struct Controller {
+    id: String,
+    socket: PeerSocket,
+    video: Option<Video>,
     catalog_sent: bool,
+    last_state: Option<String>,
+}
+
+/// The controllers joined to a camera's room. It never owns the session: its
+/// host calls [`Viewer::service`] between guest slices and [`Viewer::show`]
+/// with new images.
+pub struct Viewer {
+    room: Room,
+    controllers: Vec<Controller>,
+    /// For each held button, the controllers holding it.
+    holds: BTreeMap<String, BTreeSet<String>>,
+    /// The newest LCD image, replaced by each changed one.
+    latest: Option<Frame>,
+    sequence: u64,
+    catalog: Option<String>,
+    /// Buttons whose last holder left, released before the next command.
+    pending_releases: Vec<String>,
 }
 
 impl Viewer {
-    fn open(socket: WebSocket<TcpStream>, session: &Session) -> Result<Self, String> {
-        let mut viewer = Self {
-            socket,
-            frame_number: 0,
-            last: None,
-            last_state: None,
-            catalog_sent: false,
-        };
-        viewer.publish_state(session)?;
-        Ok(viewer)
+    fn event(&mut self, event: HostEvent, session: &Session) -> Result<(), String> {
+        match event {
+            HostEvent::Controller(id, socket) => {
+                let video = socket.video().map(|sender| {
+                    Ok::<_, String>(Video {
+                        sender,
+                        encoder: encoder()?,
+                        sent: 0,
+                        sent_at: Instant::now(),
+                        keyframe_at: None,
+                    })
+                });
+                let video = video.transpose()?;
+                self.controllers.push(Controller {
+                    id,
+                    socket,
+                    video,
+                    catalog_sent: false,
+                    last_state: None,
+                });
+                self.publish_state(session);
+            }
+            HostEvent::Left(id) => self.leave(&id),
+        }
+        Ok(())
+    }
+
+    /// A controller has gone: drop it and let go of every button it held.
+    fn leave(&mut self, id: &str) {
+        self.controllers.retain(|controller| controller.id != id);
+        let held: Vec<String> = self
+            .holds
+            .iter_mut()
+            .filter_map(|(control, holders)| {
+                (holders.remove(id) && holders.is_empty()).then(|| control.clone())
+            })
+            .collect();
+        self.pending_releases.extend(held);
     }
 
     /// The control catalog, once the session's controls are connected.
-    fn publish_catalog(&mut self, session: &Session) -> Result<(), String> {
-        let Ok(_) = session.control_state() else {
-            return Ok(());
-        };
-        let firmware = identity(session, "firmware_id");
-        let selection = fujimod_catalog::reference::ReferenceCatalog::bundled()?
-            .resolve_firmware(&firmware)?;
-        let controls = selection.physical_controls.ok_or_else(|| {
-            format!("{} has no physical controls catalog", selection.body.id)
-        })?;
-        self.send_json(Event::Catalog {
-            configuration: identity(session, "configuration_id"),
-            model: selection.body.id.to_uppercase(),
-            body: selection.body.id,
-            firmware,
-            controls,
-        })?;
-        self.catalog_sent = true;
-        Ok(())
-    }
-
-    /// Apply the window's pending commands to `run` and send its control
-    /// state. False once the window has closed.
-    pub fn service(&mut self, run: &mut dyn Run) -> Result<bool, String> {
-        for _ in 0..MAX_MESSAGES_PER_TICK {
-            let message = match self.socket.read() {
-                Ok(message) => message,
-                Err(tungstenite::Error::Io(error)) if error.kind() == ErrorKind::WouldBlock => {
-                    break;
+    fn catalog(&mut self, session: &Session) -> Result<Option<String>, String> {
+        if self.catalog.is_none() && session.control_state().is_ok() {
+            let firmware = identity(session, "firmware_id");
+            let selection = fujimod_catalog::reference::ReferenceCatalog::bundled()?
+                .resolve_firmware(&firmware)?;
+            let controls = selection.physical_controls.ok_or_else(|| {
+                format!("{} has no physical controls catalog", selection.body.id)
+            })?;
+            self.catalog = Some(
+                Event::Catalog {
+                    configuration: identity(session, "configuration_id"),
+                    model: selection.body.id.to_uppercase(),
+                    body: selection.body.id,
+                    firmware,
+                    controls,
                 }
-                Err(tungstenite::Error::ConnectionClosed)
-                | Err(tungstenite::Error::Protocol(
-                    tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
-                )) => return Ok(false),
-                Err(error) => return Err(error.to_string()),
-            };
-            match message {
-                Message::Text(text) => self.receive(run, text.as_str())?,
-                Message::Close(_) => return Ok(false),
-                Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_) => {}
-            }
+                .json()?,
+            );
         }
-        self.publish_state(run.session())?;
-        Ok(true)
+        Ok(self.catalog.clone())
     }
 
-    /// Send the newest of `frames` when it differs from the last image sent.
+    /// Apply the controllers' pending commands to `run` and send them the
+    /// control state. False once every controller has left.
+    pub fn service(&mut self, run: &mut dyn Run) -> Result<bool, String> {
+        while let Ok(event) = self.room.events.try_recv() {
+            self.event(event, run.session())?;
+        }
+        for control in std::mem::take(&mut self.pending_releases) {
+            run.session_mut().contact_input(&control, None, true)?;
+        }
+        let mut gone = Vec::new();
+        for index in 0..self.controllers.len() {
+            for _ in 0..MAX_MESSAGES_PER_TICK {
+                match self.controllers[index].socket.try_receive() {
+                    None => break,
+                    Some(Ok(bytes)) => {
+                        let event = self.receive(run, index, &bytes);
+                        self.send(index, event);
+                    }
+                    Some(Err(_)) => {
+                        gone.push(self.controllers[index].id.clone());
+                        break;
+                    }
+                }
+            }
+        }
+        for id in gone {
+            self.leave(&id);
+        }
+        for control in std::mem::take(&mut self.pending_releases) {
+            run.session_mut().contact_input(&control, None, true)?;
+        }
+        self.publish_state(run.session());
+        Ok(!self.controllers.is_empty())
+    }
+
+    /// Keep the newest of `frames` and encode it for each controller whose
+    /// track has sent the previous frame.
     pub fn show(&mut self, frames: &[Frame]) -> Result<(), String> {
-        let Some(frame) = frames.iter().max_by_key(|frame| frame.sequence) else {
+        if let Some(frame) = frames.iter().max_by_key(|frame| frame.sequence)
+            && self
+                .latest
+                .as_ref()
+                .is_none_or(|latest| latest.rgba != frame.rgba)
+        {
+            self.latest = Some(frame.clone());
+            self.sequence += 1;
+        }
+        let Some(frame) = &self.latest else {
             return Ok(());
         };
-        if self.last.as_ref().is_some_and(|last| last.rgba == frame.rgba) {
-            return Ok(());
+        for controller in &mut self.controllers {
+            let Some(video) = &mut controller.video else {
+                continue;
+            };
+            if video.sent == self.sequence && video.keyframe_at.is_some() {
+                continue;
+            }
+            if !video.sender.wants_frame() {
+                continue;
+            }
+            let now = Instant::now();
+            if video
+                .keyframe_at
+                .is_none_or(|at| now.duration_since(at) >= KEYFRAME_INTERVAL)
+            {
+                video.encoder.force_intra_frame();
+                video.keyframe_at = Some(now);
+            }
+            let data = encode(&mut video.encoder, frame)?;
+            let duration = now.duration_since(video.sent_at);
+            video.sent = self.sequence;
+            video.sent_at = now;
+            // A closed track is reported when the controller leaves.
+            let _ = video.sender.send(VideoFrame { data, duration });
         }
-        let jpeg = encode_jpeg(frame)?;
-        self.frame_number = self.frame_number.saturating_add(1);
-        let mut packet = Vec::with_capacity(20 + jpeg.len());
-        packet.extend_from_slice(b"FJMF");
-        packet.extend_from_slice(&frame.width.to_be_bytes());
-        packet.extend_from_slice(&frame.height.to_be_bytes());
-        packet.extend_from_slice(&self.frame_number.to_be_bytes());
-        packet.extend_from_slice(&jpeg);
-        self.socket
-            .send(Message::Binary(packet.into()))
-            .map_err(|error| error.to_string())?;
-        self.last = Some(frame.clone());
         Ok(())
     }
 
-    fn publish_state(&mut self, session: &Session) -> Result<(), String> {
-        if !self.catalog_sent {
-            self.publish_catalog(session)?;
-            if !self.catalog_sent {
-                return Ok(());
-            }
-        }
-        let state = session.control_state()?;
-        let event = Event::State {
+    fn publish_state(&mut self, session: &Session) {
+        let Ok(Some(catalog)) = self.catalog(session) else {
+            return;
+        };
+        let Ok(state) = session.control_state() else {
+            return;
+        };
+        let Ok(serialized) = (Event::State {
             // A native session has no cold power-off; the firmware reads the power switch.
             powered_on: true,
             inputs: state.inputs,
             positions: state.positions,
+        })
+        .json() else {
+            return;
         };
-        let serialized = serde_json::to_string(&event).map_err(|error| error.to_string())?;
-        if self.last_state.as_deref() != Some(&serialized) {
-            self.socket
-                .send(Message::Text(serialized.clone().into()))
-                .map_err(|error| error.to_string())?;
-            self.last_state = Some(serialized);
+        for index in 0..self.controllers.len() {
+            if !self.controllers[index].catalog_sent {
+                self.send_text(index, catalog.clone());
+                self.controllers[index].catalog_sent = true;
+            }
+            if self.controllers[index].last_state.as_deref() != Some(&serialized) {
+                self.send_text(index, serialized.clone());
+                self.controllers[index].last_state = Some(serialized.clone());
+            }
         }
-        Ok(())
     }
 
-    fn receive(&mut self, run: &mut dyn Run, source: &str) -> Result<(), String> {
+    fn receive(&mut self, run: &mut dyn Run, index: usize, bytes: &[u8]) -> Event {
+        let request = match serde_json::from_slice(bytes) {
+            Ok(request) => request,
+            Err(error) => return Event::error(None, error.to_string()),
+        };
         let Request::Rpc {
             serial,
             action,
             args,
-        } = serde_json::from_str(source).map_err(|error| error.to_string())?;
-        let event = command_args(args)
-            .and_then(|args| command(run.session_mut(), &action, args))
+        } = request;
+        let id = self.controllers[index].id.clone();
+        command_args(args)
+            .and_then(|args| self.command(run.session_mut(), &id, &action, args))
             .map(|value| Event::reply(serial, value))
-            .unwrap_or_else(|error| Event::error(Some(serial), error));
-        self.send_json(event)
+            .unwrap_or_else(|error| Event::error(Some(serial), error))
     }
 
-    fn send_json(&mut self, event: Event) -> Result<(), String> {
-        let text = event.json()?;
-        self.socket
-            .send(Message::Text(text.into()))
-            .map_err(|error| error.to_string())
+    fn send(&mut self, index: usize, event: Event) {
+        if let Ok(text) = event.json() {
+            self.send_text(index, text);
+        }
     }
-}
 
-fn command(session: &mut Session, action: &str, args: Value) -> Result<Value, String> {
-    match action {
-        "boot" => {
-            let state = session.control_state()?;
-            serde_json::to_value(state.inputs).map_err(|error| error.to_string())
+    fn send_text(&mut self, index: usize, text: String) {
+        // A controller that has gone is dropped by the next service.
+        let _ = futures_lite::future::block_on(
+            self.controllers[index].socket.send(text.into_bytes()),
+        );
+    }
+
+    /// One controller's command. A button is pressed while any controller
+    /// holds it; a dial or switch takes the most recent position.
+    fn command(
+        &mut self,
+        session: &mut Session,
+        controller: &str,
+        action: &str,
+        args: Value,
+    ) -> Result<Value, String> {
+        match action {
+            "boot" => {
+                let state = session.control_state()?;
+                serde_json::to_value(state.inputs).map_err(|error| error.to_string())
+            }
+            "press" => {
+                let id = string(&args, "id")?;
+                let stage = args.get("stage").and_then(Value::as_str);
+                let holders = self.holds.entry(id.to_owned()).or_default();
+                // A staged press (half, then full) always reaches the session.
+                if holders.is_empty() || stage.is_some() {
+                    session.contact_input(id, stage, false)?;
+                }
+                holders.insert(controller.to_owned());
+                Ok(Value::Null)
+            }
+            "release" => {
+                let id = string(&args, "id")?;
+                let holders = self.holds.entry(id.to_owned()).or_default();
+                holders.remove(controller);
+                if holders.is_empty() {
+                    self.holds.remove(id);
+                    session.contact_input(id, None, true)?;
+                }
+                Ok(Value::Null)
+            }
+            "set_position" => {
+                session.set_position(string(&args, "id")?, string(&args, "position")?)?;
+                Ok(Value::Null)
+            }
+            "rotate" => {
+                let steps = i32::try_from(integer(&args, "steps")?)
+                    .map_err(|_| "rotate steps exceed i32".to_owned())?;
+                let (node, edges) = session.rotation(string(&args, "id")?, steps)?;
+                session.rotate_edges(&node, edges)?;
+                Ok(Value::Null)
+            }
+            "touch" => {
+                let x = u16::try_from(integer(&args, "x")?)
+                    .map_err(|_| "touch x exceeds 16 bits".to_owned())?;
+                let y = u16::try_from(integer(&args, "y")?)
+                    .map_err(|_| "touch y exceeds 16 bits".to_owned())?;
+                let (node, script) =
+                    session.touch_input(string(&args, "id")?, string(&args, "phase")?, x, y)?;
+                session.touch(&node, &script)?;
+                Ok(Value::Null)
+            }
+            "close" => Ok(Value::Null),
+            other => Err(format!("unknown native command: {other}")),
         }
-        "press" => {
-            let id = string(&args, "id")?;
-            let stage = args.get("stage").and_then(Value::as_str);
-            session.contact_input(id, stage, false)?;
-            Ok(Value::Null)
-        }
-        "release" => {
-            session.contact_input(string(&args, "id")?, None, true)?;
-            Ok(Value::Null)
-        }
-        "set_position" => {
-            session.set_position(string(&args, "id")?, string(&args, "position")?)?;
-            Ok(Value::Null)
-        }
-        "rotate" => {
-            let steps = i32::try_from(integer(&args, "steps")?)
-                .map_err(|_| "rotate steps exceed i32".to_owned())?;
-            let (node, edges) = session.rotation(string(&args, "id")?, steps)?;
-            session.rotate_edges(&node, edges)?;
-            Ok(Value::Null)
-        }
-        "touch" => {
-            let x = u16::try_from(integer(&args, "x")?)
-                .map_err(|_| "touch x exceeds 16 bits".to_owned())?;
-            let y = u16::try_from(integer(&args, "y")?)
-                .map_err(|_| "touch y exceeds 16 bits".to_owned())?;
-            let (node, script) =
-                session.touch_input(string(&args, "id")?, string(&args, "phase")?, x, y)?;
-            session.touch(&node, &script)?;
-            Ok(Value::Null)
-        }
-        "close" => Ok(Value::Null),
-        other => Err(format!("unknown native command: {other}")),
     }
 }
 
@@ -306,17 +435,42 @@ fn integer(args: &Value, key: &str) -> Result<i64, String> {
         .ok_or_else(|| format!("{key} must be an integer"))
 }
 
-fn encode_jpeg(
-    frame: &fujimod_emulator_devices::graphics::scanout::Frame,
-) -> Result<Vec<u8>, String> {
-    let mut bytes = Vec::new();
-    jpeg_encoder::Encoder::new(&mut bytes, 85)
-        .encode(
-            &frame.rgba,
-            u16::try_from(frame.width).map_err(|_| "frame width exceeds JPEG limits")?,
-            u16::try_from(frame.height).map_err(|_| "frame height exceeds JPEG limits")?,
-            jpeg_encoder::ColorType::Rgba,
+/// Screen content at a fixed bitrate: Constrained Baseline, no B-frames, and
+/// keyframes only when the viewer forces them.
+fn encoder() -> Result<Encoder, String> {
+    Encoder::with_api_config(
+        openh264::OpenH264API::from_source(),
+        EncoderConfig::new()
+            .profile(Profile::Baseline)
+            .usage_type(UsageType::ScreenContentRealTime)
+            .rate_control_mode(RateControlMode::Bitrate)
+            .bitrate(BitRate::from_bps(VIDEO_BITS_PER_SECOND))
+            .max_frame_rate(FrameRate::from_hz(60.0))
+            .intra_frame_period(IntraFramePeriod::from_num_frames(u32::MAX))
+            .skip_frames(false),
+    )
+    .map_err(|error| error.to_string())
+}
+
+/// Encode one image; H.264 needs even dimensions, so an odd edge row or
+/// column is left out.
+fn encode(encoder: &mut Encoder, frame: &Frame) -> Result<Vec<u8>, String> {
+    let (width, height) = (frame.width as usize & !1, frame.height as usize & !1);
+    let stride = frame.width as usize * 4;
+    let rgba: std::borrow::Cow<'_, [u8]> = if width * 4 == stride {
+        std::borrow::Cow::Borrowed(&frame.rgba[..stride * height])
+    } else {
+        std::borrow::Cow::Owned(
+            frame
+                .rgba
+                .chunks_exact(stride)
+                .take(height)
+                .flat_map(|row| &row[..width * 4])
+                .copied()
+                .collect(),
         )
-        .map_err(|error| error.to_string())?;
-    Ok(bytes)
+    };
+    let yuv = YUVBuffer::from_rgb_source(RgbaSliceU8::new(&rgba, (width, height)));
+    let stream = encoder.encode(&yuv).map_err(|error| error.to_string())?;
+    Ok(stream.to_vec())
 }

@@ -177,8 +177,8 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     let camera = Configuration::from_resolved(&resolved)?;
     let update = checked_update(&resolved, &request.update)?;
     let output = output_directory(&camera.configuration)?;
-    let socket = fujimod_emulator_gui::bind(std::net::Ipv4Addr::LOCALHOST.into())?;
-    let endpoint = socket.endpoint().url.clone();
+    let room = fujimod_emulator_gui::Room::loopback()?;
+    let endpoint = room.endpoint().url.clone();
     let stop = Arc::new(AtomicBool::new(false));
     let thread_stop = stop.clone();
     let thread = thread::Builder::new()
@@ -212,7 +212,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                 log_session("session: camera opened");
                 return fujimod_emulator_gui::serve(
                     fujimod_emulator_gui::Live::new(camera, selection),
-                    socket,
+                    room,
                     &thread_stop,
                 )
                 .inspect_err(|error| log_session(format!("session: {error}")));
@@ -257,7 +257,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             let run =
                 RunHost::open(run).inspect_err(|error| log_session(format!("session: {error}")))?;
             log_session("session: camera opened");
-            fujimod_emulator_gui::serve(run, socket, &thread_stop)
+            fujimod_emulator_gui::serve(run, room, &thread_stop)
                 .inspect_err(|error| log_session(format!("session: {error}")))
         })
         .map_err(|error| error.to_string())?;
@@ -278,27 +278,15 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     ))
 }
 
-/// Accept a session that another process is already serving on loopback.
+/// Accept a session that another process serves in a loopback share room.
 fn checked_endpoint(endpoint: &str) -> Result<(), String> {
-    let rest = endpoint
-        .strip_prefix("ws://")
-        .ok_or("a session endpoint must use ws://")?;
-    let (authority, path) = rest
-        .split_once('/')
-        .ok_or("a session endpoint needs a path")?;
-    if !matches!(path, "emulator") {
-        return Err("a session endpoint must address /emulator".into());
+    let ticket = fujimod_webrtc::share::Ticket::from_url(endpoint)
+        .map_err(|error| error.to_string())?
+        .ok_or("a session endpoint must be a share link")?;
+    let signal = url::Url::parse(&ticket.signal).map_err(|error| error.to_string())?;
+    if signal.scheme() != "ws" || signal.host_str() != Some("127.0.0.1") {
+        return Err("a session endpoint must be a loopback share room".into());
     }
-    let (host, port) = authority
-        .rsplit_once(':')
-        .ok_or("a session endpoint needs a port")?;
-    if host != "127.0.0.1" {
-        return Err("a session endpoint must use 127.0.0.1".into());
-    }
-    let port = port
-        .parse::<u16>()
-        .map_err(|_| "a session endpoint needs a port")?;
-    let _ = port;
     Ok(())
 }
 
@@ -307,11 +295,11 @@ mod tests {
     use super::checked_endpoint;
 
     #[test]
-    fn a_session_endpoint_is_a_loopback_emulator_socket() {
-        assert!(checked_endpoint("ws://127.0.0.1:48123/emulator").is_ok());
-        assert!(checked_endpoint("ws://example.com:48123/emulator").is_err());
-        assert!(checked_endpoint("http://127.0.0.1:48123/emulator").is_err());
-        assert!(checked_endpoint("ws://127.0.0.1:48123/other").is_err());
+    fn a_session_endpoint_is_a_loopback_share_room() {
+        let room = fujimod_webrtc::LoopbackRoom::start("http://localhost").unwrap();
+        assert!(checked_endpoint(room.link()).is_ok());
+        assert!(checked_endpoint("ws://127.0.0.1:48123/emulator").is_err());
+        assert!(checked_endpoint("https://example.com/").is_err());
     }
 }
 
