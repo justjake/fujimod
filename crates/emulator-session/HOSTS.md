@@ -75,4 +75,16 @@ this one loop; no host keeps its own copy.
   processor-specific control code. Socket reads never block guest execution,
   and an LCD frame is encoded only after it is known to differ from the last
   one sent.
-- The MCP camera module opens every configuration `open` accepts.
+- The MCP camera module opens every configuration `open` accepts, and
+  `camera_show` puts any open camera in the desktop window.
+- `fujimod_emulator_gui::Run` is what a window needs from a host: the
+  session, one guest slice, new LCD frames and a final report. `Live` runs any
+  `Camera`; the XP5 `RunHost` adds its startup actions. `fujimod-emulator
+  --gui` uses `Live` for every processor except XP5 boots, which use
+  `RunHost`.
+
+## Remaining
+
+- Delete the XP5 ladder and resistor key models (`resistor_keys`, the X100VI
+  key inputs and the wasm `Body::Xp5` path) once every XP5 body's controls
+  compile to a panel.

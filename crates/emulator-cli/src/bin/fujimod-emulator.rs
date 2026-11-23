@@ -819,6 +819,34 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     Ok(Outcome { success: true })
 }
 
+/// Open any camera from its files and run it live in the desktop window.
+fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
+    let request = boot::Request {
+        update: options.required("--update")?.into(),
+        boot_rom: options.path("--boot-rom"),
+        nand: options.path("--nand"),
+        settings: options.path("--settings"),
+        camera: options.path("--camera"),
+        application_plan: options.path("--application-plan"),
+        card_files: options.sd_files()?,
+        discovery: options.discovery,
+    };
+    let camera = boot::open_request(resolved, request)?;
+    let socket = fujimod_emulator_gui::bind(std::net::Ipv4Addr::LOCALHOST.into())?;
+    let mut app = fujimod_emulator_gui::launch::connect(&socket.endpoint().url)?;
+    let report = fujimod_emulator_gui::serve(
+        fujimod_emulator_gui::Live::new(camera),
+        socket,
+        &std::sync::atomic::AtomicBool::new(false),
+    )?;
+    app.wait().map_err(|error| error.to_string())?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
+    );
+    Ok(Outcome { success: true })
+}
+
 fn run() -> Result<Outcome, String> {
     let Some(mut boot_options) = parse(std::env::args_os().skip(1))? else {
         print!("{HELP}");
@@ -828,6 +856,9 @@ fn run() -> Result<Outcome, String> {
         .text("--configuration")?
         .ok_or("required option: --configuration")?;
     let resolved = boot_options.resolve(&configuration_id)?;
+    if boot_options.gui && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
+        return run_window(boot_options, resolved);
+    }
     if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") {
         return run_application(boot_options, resolved);
     }
