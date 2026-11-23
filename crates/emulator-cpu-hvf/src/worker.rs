@@ -732,11 +732,19 @@ impl Processor {
         }
     }
     fn translation(&self) -> Result<TranslationState, String> {
+        let sctlr = self.sys(ffi::SCTLR)?;
+        let (tcr, ttbr0, ttbr1) = if sctlr & 1 != 0 {
+            (self.sys(ffi::TCR)?, self.sys(0xc100)?, self.sys(0xc101)?)
+        } else {
+            // With the MMU disabled, walk() checks the exception level and
+            // returns the input address before consulting any table register.
+            (0, 0, 0)
+        };
         Ok(TranslationState {
-            sctlr: self.sys(ffi::SCTLR)?,
-            tcr: self.sys(ffi::TCR)?,
-            ttbr0: self.sys(0xc100)?,
-            ttbr1: self.sys(0xc101)?,
+            sctlr,
+            tcr,
+            ttbr0,
+            ttbr1,
             pstate: self.reg(ffi::PSTATE)?,
         })
     }
@@ -995,7 +1003,11 @@ impl Processor {
             let pc = self.reg(ffi::PC)?;
             access.pc = pc;
             let mut word = [0; 4];
-            let pa = self.translate(pc, Access::Fetch)?;
+            // The vCPU is stopped throughout this decode. The instruction
+            // and its data operands share translation controls, while each
+            // address walk reads its own descriptors and checks permissions.
+            let translation = self.translation()?;
+            let pa = translation.translate(pc, Access::Fetch, |a| self.table_word(a))?;
             self.vm.read(pa, &mut word)?;
             self.vm.check_access(pa, 4, 4)?;
             let decoded = arm64::decode_load_store(u32::from_le_bytes(word), pc, |r| {
@@ -1015,7 +1027,7 @@ impl Processor {
                 Access::Write
             };
             for t in decoded.transfers {
-                let physical = self.translate(t.address, kind)?;
+                let physical = translation.translate(t.address, kind, |a| self.table_word(a))?;
                 let ram = self
                     .vm
                     .overlaps(physical, physical.saturating_add(t.size as u64))?;

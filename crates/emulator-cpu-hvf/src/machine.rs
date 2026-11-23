@@ -206,12 +206,14 @@ impl Machine {
             .collect()
     }
     pub fn overlaps(&self, address: u64, end: u64) -> Result<bool, String> {
+        // Disjoint mappings are ordered by base and by end.
         Ok(self
             .maps
             .lock()
             .map_err(|_| "HVF maps poisoned")?
             .range(..end)
-            .any(|(_, m)| m.end > address))
+            .next_back()
+            .is_some_and(|(_, m)| m.end > address))
     }
     fn segments(&self, address: u64, size: usize) -> Result<Vec<(usize, usize)>, String> {
         let end = address
