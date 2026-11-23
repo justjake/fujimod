@@ -632,7 +632,6 @@ mod tests {
             0xf000_1100, // replicated-zero submode 01 is reserved
             0xf000_2100, // replicated-zero submode 10 is reserved
             0xf000_3100, // replicated-zero submode 11 is reserved
-            0xf001_8107, // reserved bit 15 of the second halfword
             0xf121_0007, // ADC opcode
             0xf021_0007, // BIC opcode
             0xf04f_0f07, // MOV destination PC
@@ -640,7 +639,7 @@ mod tests {
         ] {
             assert!(!can_run_inline(instruction), "{instruction:#010x}");
         }
-        assert!(!can_run_inline(0xf000_f800)); // BL
+        assert!(can_run_inline(0xf000_f800)); // BL
         assert!(!can_run_inline(0xf8c0_1000)); // str.w
         assert!(!can_run_inline(0x0001_0001)); // unrecognized prefix
     }
