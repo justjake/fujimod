@@ -21,6 +21,21 @@ pub fn register_ranges(output: usize) -> Result<Vec<(u64, usize)>, String> {
     Ok(vec![(b, 0x34), (b + 0x200, 0x40)])
 }
 pub const REGISTER_BYTES: usize = 0x240;
+/// Bytes and geometry that determine the rendered pixels.
+#[derive(PartialEq)]
+pub struct Capture {
+    width: u32,
+    height: u32,
+    video: Option<raster::Snapshot>,
+    layers: Vec<Layer>,
+}
+
+#[derive(PartialEq)]
+struct Layer {
+    width: usize,
+    pixels: Vec<u8>,
+}
+
 pub struct Decoder<'a> {
     pub words: &'a BTreeMap<u64, u32>,
 }
@@ -67,6 +82,24 @@ impl Decoder<'_> {
         &self,
         mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
     ) -> Result<Option<(u32, u32, Vec<u8>, u64)>, ()> {
+        let Some((capture, top)) = self.capture(&mut read)? else {
+            return Ok(None);
+        };
+        Ok(Some((
+            capture.width,
+            capture.height,
+            capture.render()?,
+            top,
+        )))
+    }
+
+    /// Sample the planes once. The reported source address is separate from
+    /// the pixel inputs so a buffer flip can reuse identical rendered pixels.
+    #[allow(clippy::result_unit_err)]
+    pub fn capture(
+        &self,
+        mut read: impl FnMut(u64, usize) -> Result<Vec<u8>, String>,
+    ) -> Result<Option<(Capture, u64)>, ()> {
         if self.word(LAYER_ENABLE) & !0xf != 0 {
             return Err(());
         }
@@ -76,10 +109,12 @@ impl Decoder<'_> {
             return Ok(None);
         }
         let (width, height) = Self::extent(self.word(OUTPUT_SIZE)).ok_or(())?;
-        let mut rgba = vec![0; width as usize * height as usize * 4];
-        for pixel in rgba.as_chunks_mut::<4>().0 {
-            pixel[3] = 255;
-        }
+        let mut capture = Capture {
+            width,
+            height,
+            video: None,
+            layers: Vec::new(),
+        };
         let mut top = 0;
         if video {
             let (w, h) = Self::extent(self.word(VIDEO_SIZE)).ok_or(())?;
@@ -97,7 +132,7 @@ impl Decoder<'_> {
             }
             if committed {
                 let plane = Plane {
-                    address: buffer,
+                    address: 0,
                     stride: w * 2,
                     source_x: 0,
                     source_y: 0,
@@ -110,10 +145,15 @@ impl Decoder<'_> {
                     work_height: h,
                     order: PixelOrder::YyCbCr,
                 };
-                raster::composite(&mut read, plane, width, height, &mut rgba).map_err(|_| ())?;
-                for pixel in rgba.as_chunks_mut::<4>().0 {
-                    pixel.swap(0, 2);
-                }
+                capture.video = Some(
+                    raster::capture(
+                        |offset, count| read(buffer + offset, count),
+                        plane,
+                        width,
+                        height,
+                    )
+                    .map_err(|_| ())?,
+                );
                 top = buffer;
             }
         }
@@ -124,9 +164,40 @@ impl Decoder<'_> {
             if self.word(at(LAYER_ORIGIN)) != 0 || buffer & 3 != 0 {
                 return Err(());
             }
-            let (shown_w, shown_h) = (w.min(width) as usize, h.min(height) as usize);
-            let pixels = read(buffer, w as usize * shown_h * 4).map_err(|_| ())?;
-            for (y, row) in pixels.chunks_exact(w as usize * 4).enumerate() {
+            let width = w as usize;
+            let pixels = read(buffer, width * h.min(height) as usize * 4).map_err(|_| ())?;
+            capture.layers.push(Layer { width, pixels });
+            top = buffer;
+        }
+        Ok(Some((capture, top)))
+    }
+}
+
+impl Capture {
+    pub fn extent(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    #[allow(clippy::result_unit_err)]
+    pub fn render(&self) -> Result<Vec<u8>, ()> {
+        let (width, height) = self.extent();
+        let mut rgba = vec![0; width as usize * height as usize * 4];
+        for pixel in rgba.as_chunks_mut::<4>().0 {
+            pixel[3] = 255;
+        }
+        if let Some(video) = &self.video {
+            raster::composite_snapshot(video, width, height, &mut rgba).map_err(|_| ())?;
+            for pixel in rgba.as_chunks_mut::<4>().0 {
+                pixel.swap(0, 2);
+            }
+        }
+        for Layer {
+            width: stride,
+            pixels,
+        } in &self.layers
+        {
+            let shown_w = (*stride).min(width as usize);
+            for (y, row) in pixels.chunks_exact(stride * 4).enumerate() {
                 let row = &row[..shown_w * 4];
                 let line = &mut rgba[y * width as usize * 4..][..shown_w * 4];
                 for (out, src) in line
@@ -149,8 +220,7 @@ impl Decoder<'_> {
                     }
                 }
             }
-            top = buffer;
         }
-        Ok(Some((width, height, rgba, top)))
+        Ok(rgba)
     }
 }
