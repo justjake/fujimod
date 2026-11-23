@@ -2699,7 +2699,7 @@ impl State {
             let result = p.access(&*cpus[core], address, size, value, self.timeline.now())?;
             self.refresh_processors()?;
             self.push_pins(cpus)?;
-            self.settle_access(core)?;
+            self.settle_after_pin_push(core)?;
             self.tighten(&*cpus[core], core)?;
             return Ok(result);
         }
@@ -2721,7 +2721,7 @@ impl State {
         self.refresh_processors()?;
         self.due(cpus)?;
         self.push_pins(cpus)?;
-        self.settle_access(core)?;
+        self.settle_after_pin_push(core)?;
         if value.is_none() {
             self.poll_round(&*cpus[core], core, pc & !1, address, size, result, poll)?;
             self.poll_round_a64(&*cpus[core], core, pc, address, size, result, poll64)?;
@@ -2937,7 +2937,7 @@ impl State {
     /// Called after processor deadlines have been refreshed and pins pushed.
     /// A fixed-point pin push leaves the timer inputs and clock unchanged,
     /// so the next instruction can reuse the refreshed deadlines.
-    fn settle_access(&mut self, core: usize) -> Result<(), String> {
+    fn settle_after_pin_push(&mut self, core: usize) -> Result<(), String> {
         if !self.settled.pass || self.mprofile[core].is_none() || self.decoders.pending() {
             return Ok(());
         }
@@ -3431,10 +3431,22 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         if s.enter_code(cpu, core, pc)? {
             return Ok(());
         }
-        // How many entries may follow without another observation. Nothing
-        // above or here changes state when repeated, so a shortened block
-        // can come back through this point.
-        let settled = s.settled();
+        let was_settled = s.settled();
+        if !was_settled {
+            s.settled.full += 1;
+            if s.push_pins(&cpus)? {
+                return cpu.stop();
+            }
+            if s.settled.pass {
+                // A fixed-point push can establish the window before the
+                // first instruction, avoiding a one-entry translation.
+                s.refresh_processors()?;
+                s.settle_after_pin_push(core)?;
+            }
+        }
+        // A shortened translation can return here before any instruction
+        // executes. Reuse the fixed point established above if it still holds.
+        let settled = was_settled || s.settled();
         let scan = {
             let mut buffer = Vec::new();
             let code = s.block_code(cpu, core, pc, bytes as usize, &mut buffer)?;
@@ -3503,16 +3515,10 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         }
         // From here on, once per entry, in the instruction observer's order.
         let verify = settled && s.settled.verifies();
-        if settled {
+        if was_settled {
             s.settled.skips += 1;
             if verify {
                 s.verify_settled(&cpus, true)?;
-            }
-        } else {
-            s.settled.full += 1;
-            if s.push_pins(&cpus)? {
-                cpu.stop()?;
-                return Ok(());
             }
         }
         if s.error.is_some()
