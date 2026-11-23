@@ -237,7 +237,6 @@ function siteReleaseData(): Plugin {
       const data = await loadReleaseData({
         preview: command === 'serve' || mode === 'local-preview',
         notesDirectory: env.FUJIMOD_RELEASE_NOTES,
-        contributorsDirectory: env.FUJIMOD_CONTRIBUTORS,
         token: process.env.GH_TOKEN || process.env.GITHUB_TOKEN,
       });
       return { define: { __FUJIMOD_RELEASE_DATA__: JSON.stringify(data) } };
